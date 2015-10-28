@@ -16,6 +16,7 @@ fluxmod_LTLIBRARIES = resource-hwloc.la
 
 fluxmod_libadd = \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la
 
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
