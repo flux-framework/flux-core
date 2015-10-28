@@ -36,5 +36,6 @@ barrier_la_LIBADD = $(fluxmod_libadd) $(general_libadd)
 fluxcoreinclude_HEADERS = barrier.h
 fluxlib_LTLIBRARIES = libbarrier.la
 libbarrier_la_SOURCES = libbarrier.c
-libbarrier_la_LDFLAGS = $(general_ldflags) 
+libbarrier_la_LDFLAGS = $(general_ldflags) \
+			-Wl,--no-undefined -export-symbols-regex '^flux_.*'
 libbarrier_la_LIBADD = $(general_libadd) 
