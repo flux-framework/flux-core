@@ -17,12 +17,12 @@ fluxmod_LTLIBRARIES = barrier.la
 fluxmod_libadd = \
 	$(JSON_LIBS) $(ZMQ_LIBS)
 
-general_ldflags = --disable-static -avoid-version -shared -export-dynamic
+general_ldflags = --disable-static -shared -export-dynamic
 
 general_libadd = $(top_builddir)/src/common/libflux-internal.la \
 		  $(top_builddir)/src/common/libflux-core.la
 
-fluxmod_ldflags = -module -Wl,--no-undefined \
+fluxmod_ldflags = -module -Wl,--no-undefined -avoid-version \
 		  -export-symbols-regex '^mod_(main|name)$$' \
 		  $(general_ldflags)
 
