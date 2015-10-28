@@ -40,6 +40,7 @@ luamod_libadd = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \
+	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(LUA_LIB) $(JSON_LIBS) $(ZMQ_LIBS)
