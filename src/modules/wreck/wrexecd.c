@@ -1545,13 +1545,17 @@ int start_trace_task (struct task_info *t)
 int rexecd_init (struct prog_ctx *ctx)
 {
     int errnum;
+    char *name;
+    int rc = asprintf (&name, "lwj.%ju.init", (uintmax_t) ctx->id);
+    if (rc < 0)
+        log_fatal (ctx, 1, "rexecd_init: asprintf: %s", strerror (errno));
 
     lua_stack_call (ctx->lua_stack, "rexecd_init");
 
     /*  Wait for all nodes to finish calling init plugins:
      */
-    if (kvs_fence (ctx->flux, "rexecd_init", ctx->nnodes) < 0)
-        log_fatal (ctx, 1, "kvs_fence");
+    if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
+        log_fatal (ctx, 1, "kvs_fence %s: %s", name, strerror (errno));
 
     /*  Now, check for `fatalerror` key in the kvs, which indicates
      *   one or more nodes encountered a fatal error and we should abort
@@ -1573,6 +1577,7 @@ int rexecd_init (struct prog_ctx *ctx)
          */
         exit (errnum);
     }
+    free (name);
     return (0);
 }
 
