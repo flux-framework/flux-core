@@ -1550,7 +1550,8 @@ int rexecd_init (struct prog_ctx *ctx)
 
     /*  Wait for all nodes to finish calling init plugins:
      */
-    kvs_fence (ctx->flux, "rexecd_init", ctx->nnodes);
+    if (kvs_fence (ctx->flux, "rexecd_init", ctx->nnodes) < 0)
+        log_fatal (ctx, 1, "kvs_fence");
 
     /*  Now, check for `fatalerror` key in the kvs, which indicates
      *   one or more nodes encountered a fatal error and we should abort
