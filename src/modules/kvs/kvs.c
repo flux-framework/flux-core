@@ -1456,7 +1456,9 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         c->fence = xstrdup (fence);
 
     if (ctx->master && c->state != COMMIT_STORE) { /* XXX */
-        flux_log (h, LOG_ERR, "XXX encountered old commit (%d)", c->state);
+        flux_log (h, LOG_ERR, "XXX encountered old commit state=%d"
+                " fence_name=%s",
+                c->state, c->fence ? c->fence : "");
         goto done;
     }
 
