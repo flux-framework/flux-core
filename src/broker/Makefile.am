@@ -37,8 +37,6 @@ flux_broker_SOURCES = \
 
 
 flux_broker_LDADD = \
-	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la 

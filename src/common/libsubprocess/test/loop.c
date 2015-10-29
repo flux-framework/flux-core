@@ -30,7 +30,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/modules/libzio/zio.h"
 
 #include "tap.h"
 #include "subprocess.h"

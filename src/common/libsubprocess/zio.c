@@ -211,11 +211,8 @@ void zio_destroy (zio_t *z)
         cbuf_destroy (z->buf);
     free (z->name);
     free (z->prefix);
-    if (z->srcfd >= 0)
-        close (z->srcfd);
-    if (z->dstfd >= 0)
-        close (z->dstfd);
-    z->srcfd = z->dstfd = -1;
+    zio_close_src_fd (z);
+    zio_close_dst_fd (z);
     flux_watcher_destroy (z->reader);
     flux_watcher_destroy (z->writer);
     assert (z->magic = ~ZIO_MAGIC);
@@ -228,7 +225,9 @@ static int zio_init_buffer (zio_t *zio)
     assert (zio->magic == ZIO_MAGIC);
     assert (zio->buf == NULL);
 
-    if (!(zio->buf = cbuf_create (64, 1638400)))
+    if (zio->buf)
+        cbuf_destroy (zio->buf);
+    if (!(zio->buf = cbuf_create (zio->buffersize, 1638400)))
         return (-1);
 
     cbuf_opt_set (zio->buf, CBUF_OPT_OVERWRITE, CBUF_NO_DROP);
@@ -494,6 +493,30 @@ int zio_closed (zio_t *zio)
     return (0);
 }
 
+int zio_close_src_fd (zio_t *zio)
+{
+    if (zio->srcfd >= 0) {
+        if (close (zio->srcfd) < 0) {
+            zio_debug (zio, "close srcfd: %s", strerror (errno));
+            return -1;
+        }
+        zio->srcfd = -1;
+    }
+    return 0;
+}
+
+int zio_close_dst_fd (zio_t *zio)
+{
+    if (zio->dstfd >= 0) {
+        if (close (zio->dstfd) < 0) {
+            zio_debug (zio, "close srcfd: %s", strerror (errno));
+            return -1;
+        }
+        zio->dstfd = -1;
+    }
+    return 0;
+}
+
 static int zio_close (zio_t *zio)
 {
     if (zio->flags & ZIO_CLOSED) {
@@ -502,13 +525,10 @@ static int zio_close (zio_t *zio)
         return (-1);
     }
     zio_debug (zio, "zio_close\n");
-    if (zio_reader (zio)) {
-        close (zio->srcfd);
-        zio->srcfd = -1;
-    }
+    if (zio_reader (zio))
+        zio_close_src_fd (zio);
     else if (zio_writer (zio)) {
-        close (zio->dstfd);
-        zio->dstfd = -1;
+        zio_close_dst_fd (zio);
         /* For writer zio object, consider close(dstfd)
          *  as "EOF sent"
          */
