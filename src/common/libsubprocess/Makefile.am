@@ -21,7 +21,8 @@ libsubprocess_la_SOURCES = \
 TESTS = \
 	test_subprocess.t \
 	test_loop.t \
-	test_socketpair.t
+	test_socketpair.t \
+	test_zio.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -50,3 +51,7 @@ test_socketpair_t_LDADD = $(test_ldadd)
 test_loop_t_SOURCES = test/loop.c
 test_loop_t_CPPFLAGS = $(test_cppflags)
 test_loop_t_LDADD = $(test_ldadd)
+
+test_zio_t_SOURCES = test/zio.c
+test_zio_t_CPPFLAGS = $(test_cppflags)
+test_zio_t_LDADD = $(test_ldadd)
