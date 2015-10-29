@@ -15,7 +15,9 @@ fluxcoreinclude_HEADERS = jstatctl.h
 libjsc_la_SOURCES = \
 	jstatctl.c \
 	jstatctl.h
-libjsc_la_LDFLAGS = -shared -export-dynamic --disable-static
+libjsc_la_LDFLAGS = $(fluxlib_ldflags) \
+		    -export-symbols-regex '^jsc_.*'
+
 libjsc_la_LIBADD = $(top_builddir)/src/modules/kvs/libkvs.la \
 		   $(top_builddir)/src/common/libflux-internal.la \
 		   $(top_builddir)/src/common/libflux-core.la

@@ -363,7 +363,7 @@ done:
     return rc;
 }
 
-int kvswatch_cb (const char *key, kvsdir_t *dir, void *arg, int errnum)
+static int kvswatch_cb (const char *key, kvsdir_t *dir, void *arg, int errnum)
 {
     kz_t *kz = arg;
 

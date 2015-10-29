@@ -16,13 +16,6 @@ libsubprocess_la_SOURCES = \
 	subprocess.c \
 	subprocess.h
 
-libsubprocess_la_LIBADD = \
-	$(top_builddir)/src/modules/libzio/libzio.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) \
-	$(LIBPTHREAD) $(LIBDL)
-
 TESTS = \
 	test_subprocess.t \
 	test_loop.t \
@@ -31,39 +24,27 @@ TESTS = \
 check_PROGRAMS = \
 	$(TESTS)
 
+test_ldadd = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/modules/libzio/libzio.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+test_cppflags = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libtap
+
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
-test_subprocess_t_CPPFLAGS = \
-	$(AM_CPPFLAGS) \
-	-I$(top_srcdir)/src/common/libtap
-test_subprocess_t_SOURCES = \
-	test/subprocess.c
-test_subprocess_t_LDADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+test_subprocess_t_SOURCES = test/subprocess.c
+test_subprocess_t_CPPFLAGS = $(test_cppflags)
+test_subprocess_t_LDADD = $(test_ldadd)
 
-test_socketpair_t_CPPFLAGS = \
-	$(AM_CPPFLAGS) \
-	-I$(top_srcdir)/src/common/libtap
-test_socketpair_t_SOURCES = \
-	test/socketpair.c
-test_socketpair_t_LDADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+test_socketpair_t_SOURCES = test/socketpair.c
+test_socketpair_t_CPPFLAGS = $(test_cppflags)
+test_socketpair_t_LDADD = $(test_ldadd)
 
-test_loop_t_CPPFLAGS = \
-	$(AM_CPPFLAGS) \
-	-I$(top_srcdir)/src/common/libtap
-test_loop_t_SOURCES = \
-	test/loop.c
-test_loop_t_LDADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+test_loop_t_SOURCES = test/loop.c
+test_loop_t_CPPFLAGS = $(test_cppflags)
+test_loop_t_LDADD =  $(test_ldadd)
