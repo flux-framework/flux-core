@@ -37,6 +37,7 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libpmi-server/simple.h"
+#include "src/common/libsubprocess/inbuf.h"
 #include "src/common/libsubprocess/subprocess.h"
 
 struct pmi_server {
@@ -57,6 +58,8 @@ struct context {
     int count;
     int exit_rc;
     struct pmi_server pmi;
+    char *buf;
+    int buflen;
 };
 
 struct client {
@@ -65,8 +68,6 @@ struct client {
     struct subprocess *p;
     flux_watcher_t *w;
     struct context *ctx;
-    char *buf;
-    int buflen;
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
@@ -253,24 +254,6 @@ char *create_socket_dir (struct context *ctx)
     return sockdir;
 }
 
-static int dgetline (int fd, char *buf, int len)
-{
-    int i = 0;
-    while (i < len - 1) {
-        if (read (fd, &buf[i], 1) <= 0)
-            return -1;
-        if (buf[i] == '\n')
-            break;
-        i++;
-    }
-    if (buf[i] != '\n') {
-        errno = EPROTO;
-        return -1;
-    }
-    buf[i] = '\0';
-    return 0;
-}
-
 static int dputline (int fd, const char *buf)
 {
     int len = strlen (buf);
@@ -288,20 +271,32 @@ void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct client *rcli, *cli = arg;
     struct context *ctx = cli->ctx;
-    int rc;
+    int rc = flux_inbuf_watcher_read (w, ctx->buf, ctx->buflen);
     char *resp;
-    if (dgetline (cli->fd, cli->buf, cli->buflen) < 0)
-        err_exit ("%s", __FUNCTION__);
-    rc = pmi_simple_server_request (ctx->pmi.srv, cli->buf, cli);
+    bool finalize = false;
+
     if (rc < 0)
-        err_exit ("%s", __FUNCTION__);
+        err ("%s[%d] read", __FUNCTION__, cli->rank);
+    if (rc <= 0) {
+        finalize = true;
+        goto done;
+    }
+    if (ctx->buf[rc - 1] == '\n')
+        ctx->buf[rc - 1] = '\0';
+    rc = pmi_simple_server_request (ctx->pmi.srv, ctx->buf, cli);
+    if (rc < 0)
+        err ("%s[%d] pmi_simple_server_request", __FUNCTION__, cli->rank);
+    if (rc == 1)
+        finalize = true;
     while (pmi_simple_server_response (ctx->pmi.srv, &resp, &rcli) == 0) {
         if (dputline (rcli->fd, resp) < 0)
-            err_exit ("%s", __FUNCTION__);
+            err ("%s[%d] write", __FUNCTION__, rcli->rank);
         free (resp);
     }
-    if (rc == 1) {
-        close (cli->fd);
+done:
+    if (finalize) {
+        if (close (cli->fd) < 0)
+            err ("%s[%d] close", __FUNCTION__, cli->rank);
         cli->fd = -1;
         flux_watcher_stop (w);
     }
@@ -347,8 +342,6 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     cli->ctx = ctx;
     if (!(cli->p = subprocess_create (ctx->sm)))
         goto fail;
-    cli->buflen = pmi_simple_server_get_maxrequest (ctx->pmi.srv);
-    cli->buf = xzmalloc (cli->buflen);
     subprocess_set_callback (cli->p, child_exit, cli);
     subprocess_set_status_callback (cli->p, child_report, cli);
     add_arg (cli->p, "%s", ctx->broker_path);
@@ -364,8 +357,9 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     if ((cli->fd = subprocess_socketpair (cli->p, &client_fd)) < 0)
         goto fail;
     subprocess_set_context (cli->p, "client", cli);
-    cli->w = flux_fd_watcher_create (ctx->reactor, cli->fd, FLUX_POLLIN,
-                                     pmi_simple_cb, cli);
+    cli->w = flux_inbuf_watcher_create (ctx->reactor, cli->fd, ctx->buflen,
+                                        INBUF_LINE_BUFFERED,
+                                        pmi_simple_cb, cli);
     if (!cli->w)
         goto fail;
     flux_watcher_start (cli->w);
@@ -383,11 +377,10 @@ void client_destroy (struct client *cli)
     if (cli) {
         flux_watcher_destroy (cli->w);
         if (cli->fd != -1)
-            close (cli->fd);
+            if (close (cli->fd) < 0)
+                err ("%s[%d]: close", __FUNCTION__, cli->rank);
         if (cli->p)
             subprocess_destroy (cli->p);
-        if (cli->buf)
-            free (cli->buf);
         free (cli);
     }
 }
@@ -420,12 +413,16 @@ void pmi_server_initialize (struct context *ctx)
     ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size, "-", ctx);
     if (!ctx->pmi.srv)
         err_exit ("pmi_simple_server_create");
+    ctx->buflen = pmi_simple_server_get_maxrequest (ctx->pmi.srv);
+    ctx->buf = xzmalloc (ctx->buflen);
 }
 
 void pmi_server_finalize (struct context *ctx)
 {
     zhash_destroy (&ctx->pmi.kvs);
     pmi_simple_server_destroy (ctx->pmi.srv);
+    if (ctx->buf)
+        free (ctx->buf);
 }
 
 int client_run (struct client *cli)
