@@ -161,6 +161,7 @@ AC_CONFIG_FILES( \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
+  src/common/libsophia/Makefile \
   src/common/libpmi-client/Makefile \
   src/common/libpmi-server/Makefile \
   src/common/libflux/Makefile \
