@@ -44,12 +44,49 @@ typedef struct
     bool loaded;
 } ctx_t;
 
+int try_hwloc_load (ctx_t *ctx, const char *const path)
+{
+    hwloc_topology_set_flags (ctx->topology, HWLOC_TOPOLOGY_FLAG_WHOLE_IO);
+    if (path) {
+        // load my structure from the hwloc xml file at this path
+        hwloc_topology_set_xml (ctx->topology, path);
+    }
+    return hwloc_topology_load (ctx->topology);
+}
+
 static ctx_t *getctx (flux_t h)
 {
+    flux_conf_t cf = flux_conf_create ();
+    if (kvs_conf_load (h, cf) < 0)
+        err_exit ("could not load config from KVS");
+
+    uint32_t rank;
+    if (flux_get_rank (h, &rank) < 0) {
+        err_exit ("flux_get_rank");
+    }
+
     ctx_t *ctx = xzmalloc (sizeof(ctx_t));
     hwloc_topology_init (&ctx->topology);
-    hwloc_topology_set_flags (ctx->topology, HWLOC_TOPOLOGY_FLAG_WHOLE_IO);
-    hwloc_topology_load (ctx->topology);
+
+    char *conf_path = xasprintf ("resource.hwloc.xml.%" PRIu32, rank);
+    const char *path = flux_conf_get (cf, conf_path);
+    free (conf_path);
+
+    if (!path)
+        path = flux_conf_get (cf, "resource.hwloc.default_xml");
+
+    fprintf(stderr, "rank %u reading from conf %s\n", rank, path);
+    if (path) {
+        if (try_hwloc_load (ctx, path) == 0) {
+            return ctx;
+        } else {
+            err_exit ("hwloc load failed for specified path");
+        }
+    }
+
+    if (try_hwloc_load (ctx, NULL) < 0)
+        err_exit ("hwloc failed to load topology");
+
     ctx->loaded = false;
     return ctx;
 }
