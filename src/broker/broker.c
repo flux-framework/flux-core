@@ -98,7 +98,7 @@ typedef struct {
      */
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
-    char *socket_dir;
+    char *scratch_dir;
     attr_t *attrs;
 
     /* Modules
@@ -171,7 +171,7 @@ static void update_pidfile (ctx_t *ctx);
 static void init_shell (ctx_t *ctx);
 static int init_shell_exit_handler (struct subprocess *p, void *arg);
 
-static int create_socketdir (ctx_t *ctx);
+static int create_scratchdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
 
@@ -207,7 +207,7 @@ static const struct option longopts[] = {
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
-    {"socket-directory",required_argument,  0, 'D'},
+    {"scratch-directory",required_argument,  0, 'D'},
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
@@ -234,7 +234,7 @@ static void usage (void)
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
+" -D,--scratch-directory DIR   Scratch directory for sockets, etc\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -m,--boot-method             Select bootstrap: pmi, single\n"
@@ -355,7 +355,7 @@ int main (int argc, char *argv[])
             case 'g':   /* --shutdown-grace SECS */
                 ctx.shutdown_grace = strtod (optarg, NULL);
                 break;
-            case 'D': { /* --socket-directory DIR */
+            case 'D': { /* --scratch-directory DIR */
                 struct stat sb;
                 if (stat (optarg, &sb) < 0)
                     err_exit ("%s", optarg);
@@ -363,7 +363,7 @@ int main (int argc, char *argv[])
                     msg_exit ("%s: not a directory", optarg);
                 if ((sb.st_mode & S_IRWXU) != S_IRWXU)
                     msg_exit ("%s: invalid mode: 0%o", optarg, sb.st_mode);
-                ctx.socket_dir = xstrdup (optarg);
+                ctx.scratch_dir = xstrdup (optarg);
                 break;
             }
             case 'E': /* --enable-epgm */
@@ -516,8 +516,8 @@ int main (int argc, char *argv[])
      * to this rank that will contain the pidfile and local connector socket.
      * (These may have already been called by boot method)
      */
-    if (create_socketdir (&ctx) < 0)
-        err_exit ("create_socketdir");
+    if (create_scratchdir (&ctx) < 0)
+        err_exit ("create_scratchdir");
     if (create_rankdir (&ctx) < 0)
         err_exit ("create_rankdir");
 
@@ -577,6 +577,8 @@ int main (int argc, char *argv[])
             || attr_add_active_int (ctx.attrs, "tbon-arity", &ctx.k_ary,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add (ctx.attrs, "scratch-directory", ctx.scratch_dir,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0)
         err_exit ("attr_add");
 
@@ -632,7 +634,7 @@ int main (int argc, char *argv[])
      */
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
-    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.socket_dir, ctx.rank);
+    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.scratch_dir, ctx.rank);
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -763,7 +765,7 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_pidfile (ctx_t *ctx)
 {
-    char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->socket_dir, ctx->rank);
+    char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->scratch_dir, ctx->rank);
     FILE *f;
 
     if (!(f = fopen (pidfile, "w+")))
@@ -867,7 +869,7 @@ static int create_dummyattrs (ctx_t *ctx)
 }
 
 /* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
- * It will be created in ctx->socket_dir.
+ * It will be created in ctx->scratch_dir.
  */
 static int create_rankdir (ctx_t *ctx)
 {
@@ -875,12 +877,12 @@ static int create_rankdir (ctx_t *ctx)
     char *uri = NULL;
     int rc = -1;
 
-    if (ctx->rank == FLUX_NODEID_ANY || ctx->socket_dir == NULL) {
+    if (ctx->rank == FLUX_NODEID_ANY || ctx->scratch_dir == NULL) {
         errno = EINVAL;
         goto done;
     }
     if (attr_get (ctx->attrs, "local-uri", NULL, NULL) < 0) {
-        ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
+        ranktmp = xasprintf ("%s/%d", ctx->scratch_dir, ctx->rank);
         if (mkdir (ranktmp, 0700) < 0)
             goto done;
         cleanup_push_string (cleanup_directory, ranktmp);
@@ -899,7 +901,7 @@ done:
     return rc;
 }
 
-static int create_socketdir (ctx_t *ctx)
+static int create_scratchdir (ctx_t *ctx)
 {
     const char *sid;
 
@@ -907,14 +909,14 @@ static int create_socketdir (ctx_t *ctx)
         errno = EINVAL;
         return -1;
     }
-    if (!ctx->socket_dir) {
+    if (!ctx->scratch_dir) {
         char *tmpdir = getenv ("TMPDIR");
         char *template = xasprintf ("%s/flux-%s-XXXXXX",
                                     tmpdir ? tmpdir : "/tmp", sid);
 
-        if (!(ctx->socket_dir = mkdtemp (template)))
+        if (!(ctx->scratch_dir = mkdtemp (template)))
             return -1;
-        cleanup_push_string (cleanup_directory, ctx->socket_dir);
+        cleanup_push_string (cleanup_directory, ctx->scratch_dir);
     }
     return 0;
 }
@@ -984,9 +986,9 @@ static int boot_pmi (ctx_t *ctx)
     /* Set TBON request addr.  We will need any wildcards expanded below.
      */
     if (ctx->shared_ipc_namespace) {
-        if (create_socketdir (ctx) < 0 || create_rankdir (ctx) < 0)
+        if (create_scratchdir (ctx) < 0 || create_rankdir (ctx) < 0)
             goto done;
-        char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
+        char *reqfile = xasprintf ("%s/%d/req", ctx->scratch_dir, ctx->rank);
         overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
         cleanup_push_string (cleanup_file, reqfile);
         free (reqfile);
@@ -1016,7 +1018,7 @@ static int boot_pmi (ctx_t *ctx)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/relay", ctx->socket_dir);
+                char *relayfile = xasprintf ("%s/relay", ctx->scratch_dir);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
@@ -1160,7 +1162,7 @@ static int boot_pmi (ctx_t *ctx)
                                ipaddr, port);
         }
     } else if (ctx->shared_ipc_namespace) {
-        char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
+        char *eventfile = xasprintf ("%s/event", ctx->scratch_dir);
         overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
         if (ctx->rank == 0)
             cleanup_push_string (cleanup_file, eventfile);
