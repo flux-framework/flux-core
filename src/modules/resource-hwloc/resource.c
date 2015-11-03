@@ -75,8 +75,8 @@ static ctx_t *getctx (flux_t h)
     if (!path)
         path = flux_conf_get (cf, "resource.hwloc.default_xml");
 
-    fprintf(stderr, "rank %u reading from conf %s\n", rank, path);
     if (path) {
+        flux_log (h, LOG_INFO, "loading hwloc from %s", path);
         if (try_hwloc_load (ctx, path) == 0) {
             return ctx;
         } else {
