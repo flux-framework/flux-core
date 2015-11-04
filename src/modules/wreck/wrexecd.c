@@ -1539,8 +1539,8 @@ int start_trace_task (struct task_info *t)
 
 int rexecd_init (struct prog_ctx *ctx)
 {
-    int errnum;
-    char *name;
+    int errnum = 0;
+    char *name = NULL;
     int rc = asprintf (&name, "lwj.%ju.init", (uintmax_t) ctx->id);
     if (rc < 0)
         log_fatal (ctx, 1, "rexecd_init: asprintf: %s", strerror (errno));
@@ -1556,6 +1556,7 @@ int rexecd_init (struct prog_ctx *ctx)
      *   one or more nodes encountered a fatal error and we should abort
      */
     if ((kvsdir_get_int (ctx->kvs, "fatalerror", &errnum) < 0) && errno != ENOENT) {
+        errnum = 1;
         log_msg (ctx, "Error: kvsdir_get (fatalerror): %s\n", strerror (errno));
     }
     if (errnum) {
