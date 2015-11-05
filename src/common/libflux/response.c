@@ -33,12 +33,10 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-
-int flux_response_decode (const flux_msg_t *msg, const char **topic,
-                          const char **json_str)
+static int response_decode (const flux_msg_t *msg, const char **topic)
 {
     int type;
-    const char *ts, *js;
+    const char *ts;
     int errnum = 0;
     int rc = -1;
 
@@ -60,6 +58,21 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
     }
     if (flux_msg_get_topic (msg, &ts) < 0)
         goto done;
+    if (topic)
+        *topic = ts;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_response_decode (const flux_msg_t *msg, const char **topic,
+                          const char **json_str)
+{
+    const char *ts, *js;
+    int rc = -1;
+
+    if (response_decode (msg, &ts) < 0)
+        goto done;
     if (flux_msg_get_payload_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
@@ -75,12 +88,42 @@ done:
     return rc;
 }
 
-flux_msg_t *flux_response_encode (const char *topic, int errnum,
-                                  const char *json_str)
+int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
+                              void *data, int *len)
+{
+    const char *ts;
+    void *d = NULL;
+    int l = 0;
+    int flags = 0;
+    int rc = -1;
+
+    if (response_decode (msg, &ts) < 0)
+        goto done;
+    if (flux_msg_get_payload (msg, &flags, &d, &l) < 0) {
+        if (errno != EPROTO)
+            goto done;
+        errno = 0;
+    }
+    if ((data && !d) || (!data && d) || (data && d && flags != 0)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (topic)
+        *topic = ts;
+    if (data)
+        *(void **)data = d;
+    if (len)
+        *len = l;
+    rc = 0;
+done:
+    return rc;
+}
+
+static flux_msg_t *response_encode (const char *topic, int errnum)
 {
     flux_msg_t *msg = NULL;
 
-    if (!topic || (errnum != 0 && json_str != NULL)) {
+    if (!topic) {
         errno = EINVAL;
         goto error;
     }
@@ -92,6 +135,27 @@ flux_msg_t *flux_response_encode (const char *topic, int errnum,
         goto error;
     if (flux_msg_set_errnum (msg, errnum) < 0)
         goto error;
+    return msg;
+error:
+    if (msg) {
+        int saved_errno = errno;
+        flux_msg_destroy (msg);
+        errno = saved_errno;
+    }
+    return NULL;
+}
+
+flux_msg_t *flux_response_encode (const char *topic, int errnum,
+                                  const char *json_str)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = response_encode (topic, errnum)))
+        goto error;
+    if ((errnum != 0 && json_str != NULL)) {
+        errno = EINVAL;
+        goto error;
+    }
     if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
         goto error;
     return msg;
@@ -104,8 +168,31 @@ error:
     return NULL;
 }
 
-int flux_respond (flux_t h, const flux_msg_t *request,
-                  int errnum, const char *json_str)
+flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
+                                      const void *data, int len)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = response_encode (topic, errnum)))
+        goto error;
+    if ((errnum != 0 && data != NULL)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (data && flux_msg_set_payload (msg, 0, data, len) < 0)
+        goto error;
+    return msg;
+error:
+    if (msg) {
+        int saved_errno = errno;
+        flux_msg_destroy (msg);
+        errno = saved_errno;
+    }
+    return NULL;
+}
+
+static flux_msg_t *derive_response (flux_t h, const flux_msg_t *request,
+                                    int errnum)
 {
     flux_msg_t *msg = NULL;
 
@@ -119,6 +206,19 @@ int flux_respond (flux_t h, const flux_msg_t *request,
         goto fatal;
     if (errnum && flux_msg_set_errnum (msg, errnum) < 0)
         goto fatal;
+    return msg;
+fatal:
+    flux_msg_destroy (msg);
+    FLUX_FATAL (h);
+    return NULL;
+}
+
+int flux_respond (flux_t h, const flux_msg_t *request,
+                  int errnum, const char *json_str)
+{
+    flux_msg_t *msg = derive_response (h, request, errnum);
+    if (!msg)
+        goto fatal;
     if (!errnum && json_str && flux_msg_set_payload_json (msg, json_str) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
@@ -126,8 +226,25 @@ int flux_respond (flux_t h, const flux_msg_t *request,
     flux_msg_destroy (msg);
     return 0;
 fatal:
-    if (msg)
-        flux_msg_destroy (msg);
+    flux_msg_destroy (msg);
+    FLUX_FATAL (h);
+    return -1;
+}
+
+int flux_respond_raw (flux_t h, const flux_msg_t *request,
+                      int errnum, const void *data, int len)
+{
+    flux_msg_t *msg = derive_response (h, request, errnum);
+    if (!msg)
+        goto fatal;
+    if (!errnum && data && flux_msg_set_payload (msg, 0, data, len) < 0)
+        goto fatal;
+    if (flux_send (h, msg, 0) < 0)
+        goto fatal;
+    flux_msg_destroy (msg);
+    return 0;
+fatal:
+    flux_msg_destroy (msg);
     FLUX_FATAL (h);
     return -1;
 }

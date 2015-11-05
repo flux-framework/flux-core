@@ -34,11 +34,10 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-int flux_request_decode (const flux_msg_t *msg, const char **topic,
-                         const char **json_str)
+static int request_decode (const flux_msg_t *msg, const char **topic)
 {
     int type;
-    const char *ts, *js;
+    const char *ts;
     int rc = -1;
 
     if (msg == NULL) {
@@ -52,6 +51,21 @@ int flux_request_decode (const flux_msg_t *msg, const char **topic,
         goto done;
     }
     if (flux_msg_get_topic (msg, &ts) < 0)
+        goto done;
+    if (topic)
+        *topic = ts;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_request_decode (const flux_msg_t *msg, const char **topic,
+                         const char **json_str)
+{
+    const char *ts, *js;
+    int rc = -1;
+
+    if (request_decode (msg, &ts) < 0)
         goto done;
     if (flux_msg_get_payload_json (msg, &js) < 0)
         goto done;
@@ -68,7 +82,37 @@ done:
     return rc;
 }
 
-flux_msg_t *flux_request_encode (const char *topic, const char *json_str)
+int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
+                             void *data, int *len)
+{
+    const char *ts;
+    void *d = NULL;
+    int l = 0;
+    int rc = -1;
+
+    if (request_decode (msg, &ts) < 0)
+        goto done;
+    if (flux_msg_get_payload (msg, NULL, &d, &l) < 0) {
+        if (errno != EPROTO)
+            goto done;
+        errno = 0;
+    }
+    if ((data && !d) || (!data && d)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (topic)
+        *topic = ts;
+    if (data)
+        *(void **)data = d;
+    if (len)
+        *len = l;
+    rc = 0;
+done:
+    return rc;
+}
+
+static flux_msg_t *request_encode (const char *topic)
 {
     flux_msg_t *msg = NULL;
 
@@ -82,15 +126,38 @@ flux_msg_t *flux_request_encode (const char *topic, const char *json_str)
         goto error;
     if (flux_msg_enable_route (msg) < 0)
         goto error;
+    return msg;
+error:
+    flux_msg_destroy (msg);
+    return NULL;
+}
+
+flux_msg_t *flux_request_encode (const char *topic, const char *json_str)
+{
+    flux_msg_t *msg = request_encode (topic);
+
+    if (!msg)
+        goto error;
     if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
         goto error;
     return msg;
 error:
-    if (msg) {
-        int saved_errno = errno;
-        flux_msg_destroy (msg);
-        errno = saved_errno;
-    }
+    flux_msg_destroy (msg);
+    return NULL;
+}
+
+flux_msg_t *flux_request_encode_raw (const char *topic,
+                                     const void *data, int len)
+{
+    flux_msg_t *msg = request_encode (topic);
+
+    if (!msg)
+        goto error;
+    if (data && flux_msg_set_payload (msg, 0, data, len) < 0)
+        goto error;
+    return msg;
+error:
+    flux_msg_destroy (msg);
     return NULL;
 }
 
