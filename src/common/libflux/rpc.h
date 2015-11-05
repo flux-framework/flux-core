@@ -12,11 +12,21 @@ enum {
 typedef struct flux_rpc_struct flux_rpc_t;
 typedef void (*flux_then_f)(flux_rpc_t *rpc, void *arg);
 
-/* Send an RPC request to 'nodeid', and return a flux_rpc_t object
- * to allow the response to be handled.  On failure return NULL with errno set.
+/* Send an RPC request to 'nodeid' with optional json payload,
+ * and return a flux_rpc_t object to allow the response to be handled.
+ * On failure return NULL with errno set.
  */
 flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
                       uint32_t nodeid, int flags);
+
+/* Send an RPC request to 'nodeid' with optional raw paylaod,
+ * and return a flux_rpc_t object to allow the response to be handled.
+ * On failure return NULL with errno set.
+ */
+flux_rpc_t *flux_rpc_raw (flux_t h, const char *topic,
+                          const void *data, int len,
+                          uint32_t nodeid, int flags);
+
 /* Destroy an RPC, invalidating previous payload returned by flux_rpc_get().
  */
 void flux_rpc_destroy (flux_rpc_t *rpc);
@@ -31,6 +41,13 @@ bool flux_rpc_check (flux_rpc_t *rpc);
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str);
+
+/* Wait for a response if necessary, then decode it.
+ * Any returned 'data' payload is valid until the next get/check call.
+ * If 'nodeid' is non-NULL, the nodeid that the request was sent to is returned.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid, void *data, int *len);
 
 /* Arrange for reactor to handle response and call 'cb' continuation function
  * when a response is received.  The function must call flux_rpc_get().

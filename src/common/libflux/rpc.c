@@ -121,15 +121,12 @@ static uint32_t lookup_nodeid (flux_rpc_t *rpc, uint32_t matchtag)
     return rpc->nodemap[ix];
 }
 
-static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
-                             const char *json_str, uint32_t nodeid)
+static int rpc_request_prepare (flux_rpc_t *rpc, int n, flux_msg_t *msg,
+                                uint32_t nodeid)
 {
-    flux_msg_t *msg;
     int flags = 0;
     int rc = -1;
 
-    if (!(msg = flux_request_encode (topic, json_str)))
-        goto done;
     if (flux_msg_set_matchtag (msg, rpc->m.matchtag + n) < 0)
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
@@ -138,6 +135,21 @@ static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
             goto done;
     }
     if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
+        goto done;
+    rc = 0;
+done:
+    return rc;
+}
+
+static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
+                             const char *json_str, uint32_t nodeid)
+{
+    flux_msg_t *msg;
+    int rc = -1;
+
+    if (!(msg = flux_request_encode (topic, json_str)))
+        goto done;
+    if (rpc_request_prepare (rpc, n, msg, nodeid) < 0)
         goto done;
     if (flux_send (rpc->h, msg, 0) < 0)
         goto done;
@@ -148,6 +160,24 @@ done:
     return rc;
 }
 
+static int rpc_request_send_raw (flux_rpc_t *rpc, int n, const char *topic,
+                                 const void *data, int len, uint32_t nodeid)
+{
+    flux_msg_t *msg;
+    int rc = -1;
+
+    if (!(msg = flux_request_encode_raw (topic, data, len)))
+        goto done;
+    if (rpc_request_prepare (rpc, n, msg, nodeid) < 0)
+        goto done;
+    if (flux_send (rpc->h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (msg)
+        flux_msg_destroy (msg);
+    return rc;
+}
 
 bool flux_rpc_check (flux_rpc_t *rpc)
 {
@@ -160,7 +190,7 @@ bool flux_rpc_check (flux_rpc_t *rpc)
     return false;
 }
 
-int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
+static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
 {
     int rc = -1;
 
@@ -180,7 +210,31 @@ int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
             goto done;
         *nodeid = lookup_nodeid (rpc, matchtag);
     }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
+{
+    int rc = -1;
+
+    if (rpc_get (rpc, nodeid) < 0)
+        goto done;
     if (flux_response_decode (rpc->rx_msg_consumed, NULL, json_str) < 0)
+        goto done;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid, void *data, int *len)
+{
+    int rc = -1;
+
+    if (rpc_get (rpc, nodeid) < 0)
+        goto done;
+    if (flux_response_decode_raw (rpc->rx_msg_consumed, NULL, data, len) < 0)
         goto done;
     rc = 0;
 done:
@@ -259,9 +313,29 @@ bool flux_rpc_completed (flux_rpc_t *rpc)
 flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
                       uint32_t nodeid, int flags)
 {
-    flux_rpc_t *rpc = rpc_create (h, flags, 1);
+    flux_rpc_t *rpc;
 
+    if (!(rpc = rpc_create (h, flags, 1)))
+        goto error;
     if (rpc_request_send (rpc, 0, topic, json_str, nodeid) < 0)
+        goto error;
+    if (!rpc->oneway)
+        rpc->nodemap[0] = nodeid;
+    return rpc;
+error:
+    flux_rpc_destroy (rpc);
+    return NULL;
+}
+
+flux_rpc_t *flux_rpc_raw (flux_t h, const char *topic,
+                          const void *data, int len,
+                          uint32_t nodeid, int flags)
+{
+    flux_rpc_t *rpc;
+
+    if (!(rpc = rpc_create (h, flags, 1)))
+        goto error;
+    if (rpc_request_send_raw (rpc, 0, topic, data, len, nodeid) < 0)
         goto error;
     if (!rpc->oneway)
         rpc->nodemap[0] = nodeid;
