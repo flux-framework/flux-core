@@ -21,40 +21,34 @@
  * on any waitqueue_t's (its usecount == 0), the handler is restarted.
  */
 
-typedef struct wait_struct *wait_t;
-typedef struct waitqueue_struct *waitqueue_t;
+typedef struct wait_struct wait_t;
+typedef struct waitqueue_struct waitqueue_t;
 
-typedef bool (*WaitCompareFn)(zmsg_t *zmsg, void *arg);
+typedef bool (*wait_compare_f)(const flux_msg_t *msg, void *arg);
 
-/* Create a wait_t.
- * The wait_t takes ownership of zmsg (orig copy will be set to NULL).
+/* Create/destroy a wait_t.
  */
-wait_t wait_create (flux_t h, int typemask, zmsg_t **zmsg,
-                     FluxMsgHandler cb, void *arg);
-
-/* Destroy a wait_t.
- * If zmsg is non-NULL, it is assigned the wait_t's zmsg, if any.
- * Otherwise the zmsg is destroyed.
- */
-void wait_destroy (wait_t w, zmsg_t **zmsg, double *msec);
+wait_t *wait_create (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
+                     flux_msg_handler_f cb, void *arg);
+void wait_destroy (wait_t *wait, double *msec);
 
 /* Create/destroy/get length of a waitqueue_t.
  */
-waitqueue_t wait_queue_create (void);
-void wait_queue_destroy (waitqueue_t q);
-int wait_queue_length (waitqueue_t q);
+waitqueue_t *wait_queue_create (void);
+void wait_queue_destroy (waitqueue_t *q);
+int wait_queue_length (waitqueue_t *q);
 
 /* Add a wait_t to a queue.
  * You may add a wait_t to multiple queues.
  * Each wait_addqueue increases a wait_t's usecount by one.
  */
-void wait_addqueue (waitqueue_t q, wait_t w);
+void wait_addqueue (waitqueue_t *q, wait_t *wait);
 
 /* Run one wait_t.
  * This decreases the wait_t's usecount by one.  If the usecount reaches zero,
  * the message handler is restarted and the wait_t is destroyed.
  */
-void wait_runone (wait_t w);
+void wait_runone (wait_t *wait);
 
 /* Dequeue all wait_t's from the specified queue.
  * This decreases a wait_t's usecount by one.  If the usecount reaches zero,
@@ -63,12 +57,12 @@ void wait_runone (wait_t w);
  * handlers, so it is OK to manipulate the waitqueue_t (for example
  * calling wait_addqueue()) from within a handler that was queued on it.
  */
-void wait_runqueue (waitqueue_t q);
+void wait_runqueue (waitqueue_t *q);
 
 /* Destroy all wait_t's on 'q' containing messages that 'cb' returns true on.
  * Return 0 if at least one wait_t is destroyed, or -1 on error.
  */
-int wait_destroy_match (waitqueue_t q, WaitCompareFn cb, void *arg);
+int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg);
 
 #endif /* !_FLUX_CORE_WAITQUEUE_H */
 

@@ -3,18 +3,17 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 
-int msghand (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void msghand (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg, void *arg)
 {
     int *count = arg;
     (*count)++;
-    return 0;
 }
 
-bool msgcmp (zmsg_t *zmsg, void *arg)
+bool msgcmp (const flux_msg_t *msg, void *arg)
 {
     char *id = NULL;
     bool match = false;
-    if (flux_msg_get_route_first (zmsg, &id) == 0
+    if (flux_msg_get_route_first (msg, &id) == 0
         && (!strcmp (id, "19") || !strcmp (id, "18") || !strcmp (id, "17")))
         match = true;
     if (id)
@@ -22,21 +21,21 @@ bool msgcmp (zmsg_t *zmsg, void *arg)
     return match;
 }
 
-bool msgcmp2 (zmsg_t *zmsg, void *arg)
+bool msgcmp2 (const flux_msg_t *msg, void *arg)
 {
     return true;
 }
 
 int main (int argc, char *argv[])
 {
-    waitqueue_t q;
-    waitqueue_t q2;
-    wait_t w;
-    zmsg_t *zmsg;
+    waitqueue_t *q;
+    waitqueue_t *q2;
+    wait_t *w;
+    flux_msg_t *msg;
     int count = 0;
     int i;
 
-    plan (12);
+    plan (NO_PLAN);
 
     q = wait_queue_create ();
     q2 = wait_queue_create ();
@@ -45,14 +44,13 @@ int main (int argc, char *argv[])
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 0,
         "wait_queue_length on brandnew waitqueue_t returns zero");
 
-    zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-    ok (zmsg != NULL,
+    msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    ok (msg != NULL,
         "flux_msg_create works");
-    w = wait_create (NULL, FLUX_MSGTYPE_REQUEST, &zmsg, msghand, &count);
+    w = wait_create (NULL, NULL, msg, msghand, &count);
     ok (w != NULL,
         "wait_create works");
-    ok (zmsg == NULL,
-        "wait_create sets *zmsg to NULL");
+    flux_msg_destroy (msg);
 
     wait_addqueue (q, w);
     wait_addqueue (q2, w);
@@ -69,13 +67,13 @@ int main (int argc, char *argv[])
 
     for (i = 0; i < 20; i++) {
         char *s = xasprintf ("%d", i);
-        zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
-        if (!zmsg)
-            break; 
-        if (flux_msg_enable_route (zmsg) < 0
-            || flux_msg_push_route (zmsg, s) < 0)
+        msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+        if (!msg)
             break;
-        w = wait_create (NULL, FLUX_MSGTYPE_REQUEST, &zmsg, msghand, &count);
+        if (flux_msg_enable_route (msg) < 0
+            || flux_msg_push_route (msg, s) < 0)
+            break;
+        w = wait_create (NULL, NULL, msg, msghand, &count);
         if (!w)
             break;
         wait_addqueue (q, w);
