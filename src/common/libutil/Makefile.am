@@ -58,7 +58,9 @@ libutil_la_SOURCES = \
 	iterators.h \
 	macros.h \
 	sha1.h \
-	sha1.c
+	sha1.c \
+	shastring.h \
+	shastring.c
 
 EXTRA_DIST = veb_mach.c
 
