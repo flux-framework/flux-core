@@ -36,60 +36,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 
-#if 0
-zlist_t * kvs_jobid_list (plugin_ctx_t *p)
-{
-    zlist_t *zl = NULL;
-    json_object_iter i;
-    json_object *val = NULL;
-    json_object *reply = NULL;
-    json_object *request = util_json_object_new_object ();
-
-    json_object_object_add (request, "lwj.id-list", NULL);
-
-    reply = flux_rpc (p, request, "kvs.get.dir");
-    if (!reply) {
-        err ("kvs_job_list: plugin request failed!");
-        goto done;
-    }
-    if (!(val = json_object_object_get (reply, "lwj.ids"))) {
-        errno = ENOENT;
-        err ("kvs_job_list: %s", strerror (errno));
-        goto done;
-    }
-    if (!(zl = zlist_new ())) {
-        errno = ENOMEM;
-        goto done;
-    }
-
-    json_object_object_foreachC (val, i) {
-        json_object *co;
-        if ((co = json_object_object_get (i.val, "FILEVAL"))) {
-            zlist_append (zl,
-                strdup (json_object_to_json_string_ext (co,
-                            JSON_C_TO_STRING_PLAIN)));
-        }
-    }
-
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-
-    return (zl);
-}
-
-void jobid_list_free (zlist_t *list)
-{
-    void *s;
-    while ((s = zlist_pop (list)))
-        free (s);
-    zlist_destroy (&list);
-}
-
-#endif
-
 static int kvs_job_new (flux_t h, unsigned long jobid)
 {
     int rc;
@@ -120,7 +66,7 @@ static int set_next_jobid (flux_t h, unsigned long jobid)
 }
 
 /*
- *  Get and increment lwj.next-id (called from treeroot only)
+ *  Get and increment lwj.next-id
  */
 static unsigned long increment_jobid (flux_t h)
 {
@@ -131,53 +77,6 @@ static unsigned long increment_jobid (flux_t h)
         ret = 1;
     set_next_jobid (h, ret+1);
     return (unsigned long) ret;
-}
-
-/*
- *  Tree-wide call for lwj_next_id. If not treeroot forward request
- *   up the tree. Otherwise increment jobid and return result.
- */
-static unsigned long lwj_next_id (flux_t h)
-{
-    unsigned long ret;
-    uint32_t rank;
-    if (flux_get_rank (h, &rank) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_rank: %s", strerror (errno));
-        return (0);
-    }
-    if (rank == 0)
-        ret = increment_jobid (h);
-    else {
-        const char *s;
-        json_object *o = NULL;
-        flux_rpc_t *rpc = flux_rpc (h, "job.next-id", NULL, FLUX_NODEID_ANY, 0);
-        if (!rpc) {
-            flux_log (h, LOG_ERR, "flux_rpc: %s", strerror (errno));
-            return (0);
-        }
-        if (flux_rpc_get (rpc, NULL, &s) < 0) {
-            flux_log (h, LOG_ERR, "flux_rpc: %s", strerror (errno));
-            return (0);
-        }
-        o = json_tokener_parse (s);
-        if (!o || util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
-            flux_log (h, LOG_ERR, "lwj_next_id: Bad object!");
-            ret = 0;
-        }
-        if (o)
-            json_object_put (o);
-    }
-    return (ret);
-}
-
-/*
- *  create json object : { id: <int64>id }
- */
-static json_object *json_id (int id)
-{
-    json_object *o = json_object_new_object ();
-    util_json_object_add_int64 (o, "id", id);
-    return (o);
 }
 
 static char * realtime_string (char *buf, size_t sz)
@@ -283,10 +182,6 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
     const char *json_str;
     json_object *o = NULL;
     const char *topic;
-    uint32_t rank;
-
-    if (flux_get_rank (h, &rank) < 0)
-        goto out;
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto out;
     flux_log (h, LOG_INFO, "got request %s", topic);
@@ -297,23 +192,9 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
     if (strcmp (topic, "job.shutdown") == 0) {
         flux_reactor_stop (flux_get_reactor (h));
     }
-    if (strcmp (topic, "job.next-id") == 0) {
-        if (rank == 0) {
-            unsigned long id = lwj_next_id (h);
-            json_object *ox = json_id (id);
-            if (flux_respond (h, msg, 0, json_object_to_json_string (ox)) < 0)
-                flux_log (h, LOG_ERR, "flux_respond (job.next-id): %s", strerror (errno));
-            json_object_put (ox);
-        }
-        else {
-            if (flux_send (h, msg, FLUX_NODEID_ANY) < 0)
-                flux_log (h, LOG_ERR, "error forwarding next-id request: %s",
-                          strerror (errno));
-        }
-    }
     if (strcmp (topic, "job.create") == 0) {
         json_object *jobinfo = NULL;
-        unsigned long id = lwj_next_id (h);
+        unsigned long id = increment_jobid (h);
         bool should_workaround = false;
 
         //"Fix" for Race Condition
