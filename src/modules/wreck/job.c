@@ -180,6 +180,31 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     return rc;
 }
 
+static bool ping_sched (flux_t h)
+{
+    bool retval = false;
+    const char *s;
+    flux_rpc_t *rpc;
+    json_object *o = util_json_object_new_object ();
+    util_json_object_add_int (o, "seq", 0);
+    rpc = flux_rpc (h, "sched.ping",
+                    json_object_to_json_string (o),
+                    FLUX_NODEID_ANY, 0);
+    json_object_put (o);
+    if (flux_rpc_get (rpc, NULL, &s) >= 0)
+        retval = true;
+    flux_rpc_destroy (rpc);
+    return (retval);
+}
+
+static bool sched_loaded (flux_t h)
+{
+    static bool v = false;
+    if (!v && ping_sched (h))
+        v = true;
+    return (v);
+}
+
 static int do_submit_job (flux_t h, unsigned long id)
 {
     if (kvs_job_set_state (h, id, "submitted") < 0) {
@@ -207,7 +232,7 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
         flux_reactor_stop (flux_get_reactor (h));
     }
     if ((strcmp (topic, "job.create") == 0)
-        || (strcmp (topic, "job.submit") == 0)) {
+        || ((strcmp (topic, "job.submit") == 0) && sched_loaded (h))) {
         json_object *jobinfo = NULL;
         unsigned long id = increment_jobid (h);
         bool should_workaround = false;
