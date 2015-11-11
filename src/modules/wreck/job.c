@@ -36,7 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 
-static int kvs_job_new (flux_t h, unsigned long jobid)
+static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
 {
     int rc;
     char *key;
@@ -44,12 +44,17 @@ static int kvs_job_new (flux_t h, unsigned long jobid)
     if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
         return (-1);
 
-    flux_log (h, LOG_INFO, "Setting job %ld to reserved", jobid);
-    rc = kvs_put_string (h, key, "reserved");
+    flux_log (h, LOG_INFO, "Setting job %ld to %s", jobid, state);
+    rc = kvs_put_string (h, key, state);
     kvs_commit (h);
 
     free (key);
     return rc;
+}
+
+static int kvs_job_new (flux_t h, unsigned long jobid)
+{
+    return kvs_job_set_state (h, jobid, "reserved");
 }
 
 /*
