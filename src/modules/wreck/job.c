@@ -93,24 +93,23 @@ static char * realtime_string (char *buf, size_t sz)
     return (buf);
 }
 
-static void wait_for_event (flux_t h, int64_t id)
+static void wait_for_event (flux_t h, int64_t id, char *topic)
 {
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_EVENT,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 0,
-        .topic_glob = "wreck.state.reserved"
     };
+    match.topic_glob = topic;
     flux_msg_t *msg = flux_recv (h, match, 0);
     flux_msg_destroy (msg);
     return;
 }
 
-static void send_create_event (flux_t h, int64_t id)
+static void send_create_event (flux_t h, int64_t id, char *topic)
 {
     flux_msg_t *msg;
     char *json = NULL;
-    const char *topic = "wreck.state.reserved";
 
     if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
         flux_log (h, LOG_ERR, "failed to create state change event: %s",
@@ -129,7 +128,7 @@ static void send_create_event (flux_t h, int64_t id)
     /* Workaround -- wait for our own event to be published with a
      *  blocking recv. XXX: Remove when publish is synchronous.
      */
-    wait_for_event (h, id);
+    wait_for_event (h, id, topic);
 out:
     free (json);
 }
@@ -223,7 +222,7 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
         kvs_commit (h);
 
         /* Send a wreck.state.reserved event for listeners */
-        send_create_event (h, id);
+        send_create_event (h, id, "wreck.state.reserved");
 
         /* Generate reply with new jobid */
         jobinfo = util_json_object_new_object ();
