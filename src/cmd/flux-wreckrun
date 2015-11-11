@@ -71,18 +71,6 @@ local function alloc_tasks (f, wreck, lwj)
     local size = f.size
     local res
 
-    -- If nnodes was provided but -n, --ntasks not set, then
-    --  set ntasks to nnodes
-    if not wreck:getopt ('n') and wreck.nnodes then
-        wreck.ntasks = wreck.nnodes
-    end
-    wreck.ntasks = tonumber (wreck.ntasks)
-
-    -- If nnodes was not provided set it to the lesser of
-    --  session size and ntasks
-    if not wreck.nnodes then
-        wreck.nnodes = math.min (wreck.ntasks, f.size)
-    end
     res = fake_resource_array (wreck, wreck.nnodes or f.size)
     wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
@@ -147,10 +135,6 @@ local sigtimer
 local state = ""
 
 wreck:add_options ({
-    { name = "tasks-per-node", char = "t", arg = "N",
-        usage = "Force number of tasks per node" },
-    { name = "nnodes", char = "N", arg = "N",
-        usage = "Force number of nodes" },
     { name = 'pre-launch-hook', char = "P", arg = "CODE",
         usage = "execute Lua CODE before launch." },
     { name = 'detach', char = "d",
@@ -171,19 +155,10 @@ local tt = timer.new()
 local f, err = flux.new()
 if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
---  Check requested "nnodes" against available:
---
-if wreck.nnodes and wreck.nnodes > f.size then
-    wreck:die ("Error: Requested nodes (%d) exceeds available (%d)\n",
-               wreck.nnodes, f.size)
-end
-
-
 --
 --  Create a job request as Lua table:
 --
-local jobreq = wreck:jobreq()
-
+local jobreq = wreck:jobreq (f)
 wreck:verbose ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
     tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
@@ -213,8 +188,6 @@ if true then
     --
     --  Send event to run the job
     --
-    wreck.nnodes = wreck:getopt ("N")
-    wreck.tasks_per_node = wreck:getopt ("t")
     alloc_tasks (f, wreck, lwj)
     -- Ensure lwj nnodes matches fake allocation
     lwj.nnodes = tonumber (wreck.nnodes)

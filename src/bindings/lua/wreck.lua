@@ -41,6 +41,9 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['nnodes']  = { char = 'N', arg = "N" },
+    ['tasks-per-node']  =
+                   { char = 't', arg = "N" },
     ['walltime'] = { char = "T", arg = "SECONDS" },
     ['output'] =   { char = "O", arg = "FILENAME" },
     ['error'] =    { char = "E", arg = "FILENAME" },
@@ -92,6 +95,8 @@ function wreck:usage()
   -h, --help                 Display this message
   -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
+  -N, --nnodes=N             Force number of nodes
+  -t, --tasks-per-node=N     Force number of tasks per node
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
   -T, --walltime=N[SUFFIX]   Set max job walltime to N seconds. Optional
                              suffix may be 's' for seconds (default), 'm'
@@ -138,7 +143,7 @@ local function get_filtered_env ()
 end
 
 function wreck:add_options (opts)
-    for _,v in pairs (opts) do
+    for k,v in pairs (opts) do
         if not type (v) == "table" then return nil, "Invalid parameter" end
 
         local char = v.char
@@ -199,8 +204,15 @@ function wreck:parse_cmdline (arg)
         os.exit (1)
     end
 
-    self.nnodes = tonumber (self.opts.N) or 1
-    self.ntasks = tonumber (self.opts.n) or 1
+    -- If nnodes was provided but -n, --ntasks not set, then
+    --  set ntasks to nnodes
+    if self.opts.N and not self.opts.n then
+        self.opts.n = self.opts.N
+    end
+
+    self.nnodes = self.opts.N and tonumber (self.opts.N)
+    self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
+    self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
     for i = self.optind, #arg do
@@ -243,13 +255,24 @@ local function inputs_table_from_args (wreck, s)
     return inputs
 end
 
-function wreck:jobreq ()
+local function fixup_nnodes (f, wreck)
+    if not f then return end
+    if not wreck.nnodes then
+        wreck.nnodes = math.min (wreck.ntasks, f.size)
+    elseif wreck.nnodes > f.size then
+        self:die ("Requested nodes (%d) exceeds available (%d)\n",
+                  wreck.nnodes, f.size)
+    end
+end
+
+function wreck:jobreq (f)
     if not self.opts then return nil, "Error: cmdline not parsed" end
-    local nnodes = tonumber (self.opts.N)
-    local ntasks = tonumber (self.opts.n)
+
+    fixup_nnodes (f, self)
+
     local jobreq = {
-        nnodes =  tonumber (self.opts.N) or 1,
-        ntasks =  tonumber (self.opts.n) or 1,
+        nnodes =  self.nnodes,
+        ntasks =  self.ntasks,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),
@@ -320,6 +343,7 @@ function wreck.logstream (arg)
     local f = arg.flux
     if not f then return nil, "flux argument member required" end
     local rc, err = initialize_args (arg)
+    if not arg.nnodes then return nil, "nnodes argument required" end
     if not rc then return nil, err end
     l.watchers = {}
     for i = 0, arg.nnodes - 1 do
