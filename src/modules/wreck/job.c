@@ -180,6 +180,16 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     return rc;
 }
 
+static int do_submit_job (flux_t h, unsigned long id)
+{
+    if (kvs_job_set_state (h, id, "submitted") < 0) {
+        flux_log (h, LOG_ERR, "kvs_job_set_state: %s\n", strerror (errno));
+        return (-1);
+    }
+    send_create_event (h, id, "wreck.state.submitted");
+    return (0);
+}
+
 static void job_request_cb (flux_t h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
@@ -196,10 +206,12 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
     if (strcmp (topic, "job.shutdown") == 0) {
         flux_reactor_stop (flux_get_reactor (h));
     }
-    if (strcmp (topic, "job.create") == 0) {
+    if ((strcmp (topic, "job.create") == 0)
+        || (strcmp (topic, "job.submit") == 0)) {
         json_object *jobinfo = NULL;
         unsigned long id = increment_jobid (h);
         bool should_workaround = false;
+        char *state;
 
         //"Fix" for Race Condition
         if (util_json_object_get_boolean (o, "race_workaround",
@@ -222,11 +234,16 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
         kvs_commit (h);
 
         /* Send a wreck.state.reserved event for listeners */
+        state = "reserved";
         send_create_event (h, id, "wreck.state.reserved");
+        if ((strcmp (topic, "job.submit") == 0)
+            && (do_submit_job (h, id) != -1))
+                state = "submitted";
 
         /* Generate reply with new jobid */
         jobinfo = util_json_object_new_object ();
         util_json_object_add_int64 (jobinfo, "jobid", id);
+        util_json_object_add_string (jobinfo, "state", state);
         flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
         json_object_put (jobinfo);
     }
@@ -262,7 +279,8 @@ int mod_main (flux_t h, int argc, char **argv)
      *
      * XXX: Remove when publish events are synchronous.
      */
-    if (flux_event_subscribe (h, "wreck.state.reserved") < 0) {
+    if ((flux_event_subscribe (h, "wreck.state.reserved") < 0)
+       || (flux_event_subscribe (h, "wreck.state.submitted") < 0)) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
