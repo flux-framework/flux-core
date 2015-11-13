@@ -57,31 +57,33 @@ static int kvs_job_new (flux_t h, unsigned long jobid)
     return kvs_job_set_state (h, jobid, "reserved");
 }
 
-/*
- *  Set a new value for lwj.next-id and commit
- */
-static int set_next_jobid (flux_t h, unsigned long jobid)
+static int64_t next_jobid (flux_t h)
 {
-    int rc;
-    if ((rc = kvs_put_int64 (h, "lwj.next-id", jobid)) < 0) {
-        err ("kvs_put: %s", strerror (errno));
-        return -1;
-    }
-    return kvs_commit (h);
-}
+    int64_t ret = (int64_t) -1;
+    const char *json_str;
+    json_object *req, *resp;
+    flux_rpc_t *rpc;
 
-/*
- *  Get and increment lwj.next-id
- */
-static unsigned long increment_jobid (flux_t h)
-{
-    int64_t ret;
-    int rc;
-    rc = kvs_get_int64 (h, "lwj.next-id", &ret);
-    if (rc < 0 && (errno == ENOENT))
-        ret = 1;
-    set_next_jobid (h, ret+1);
-    return (unsigned long) ret;
+    req = util_json_object_new_object ();
+    util_json_object_add_string (req, "name", "lwj");
+    util_json_object_add_int64 (req, "preincrement", 1);
+    util_json_object_add_int64 (req, "postincrement", 0);
+    util_json_object_add_boolean (req, "create", true);
+    rpc = flux_rpc (h, "cmb.seq.fetch",
+                    json_object_to_json_string (req), 0, 0);
+    json_object_put (req);
+
+    if ((flux_rpc_get (rpc, NULL, &json_str) < 0)
+        || !(resp = json_tokener_parse (json_str))) {
+        flux_log (h, LOG_ERR, "rpc_get: %s\n", strerror (errno));
+        goto out;
+    }
+
+    util_json_object_get_int64 (resp, "value", &ret);
+    json_object_put (resp);
+out:
+    flux_rpc_destroy (rpc);
+    return ret;
 }
 
 static char * realtime_string (char *buf, size_t sz)
@@ -235,9 +237,16 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
             || ((strcmp (topic, "job.submit") == 0)
                  && sched_loaded (h))) {
         json_object *jobinfo = NULL;
-        unsigned long id = increment_jobid (h);
+        int64_t id;
         bool should_workaround = false;
         char *state;
+
+        if ((id = next_jobid (h)) < 0) {
+            if (flux_respond (h, msg, errno, NULL) < 0)
+                flux_log (h, LOG_ERR, "job_request: flux_respond: %s",
+                          strerror (errno));
+            goto out;
+        }
 
         //"Fix" for Race Condition
         if (util_json_object_get_boolean (o, "race_workaround",

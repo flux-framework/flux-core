@@ -12,8 +12,7 @@ test_under_flux ${SIZE}
 
 #  Return the previous jobid
 last_job_id() {
-	local n=$(flux kvs get "lwj.next-id")
-	echo $((n-1))
+	flux wreck last-jobid
 }
 
 test_expect_success 'wreckrun: works' '
