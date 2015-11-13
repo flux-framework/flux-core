@@ -1171,6 +1171,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (flux_json_respond (ctx->h, out, &zcpy) < 0)
             flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
                      __FUNCTION__, strerror (errno));
+        Jput (out);
         zmsg_destroy (&zcpy);
         reply_sent = true;
     }
