@@ -304,46 +304,70 @@ char *kvsdir_key_at (kvsdir_t *dir, const char *name)
  ** GET
  **/
 
-int kvs_get_obj (flux_t h, const char *key, JSON *val)
+int kvs_get (flux_t h, const char *key, char **val)
 {
+    flux_rpc_t *rpc = NULL;
+    const char *json_str;
     char *k = NULL;
     JSON in = NULL;
     JSON out = NULL;
     JSON v;
+    int saved_errno;
     int rc = -1;
 
-    if (!h || !key || !val) {
+    if (!h || !key) {
         errno = EINVAL;
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
     if (!(in = kp_tget_enc (k, false, false)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.get", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
+    /* translates { "key": null } response into failure with errno = ENOENT */
     if (kp_rget_dec (out, &v) < 0)
         goto done;
-    *val = Jget (v);
+    assert (v != NULL);
+    if (val)
+        *val = xstrdup (Jtostr (v));
     rc = 0;
 done:
+    saved_errno = errno;
     Jput (in);
     Jput (out);
     if (k)
         free (k);
+    flux_rpc_destroy (rpc);
+    errno = saved_errno;
     return rc;
 }
 
-int kvs_get (flux_t h, const char *key, char **json_str)
+int kvs_get_obj (flux_t h, const char *key, JSON *val)
 {
-    JSON val = NULL;
+    char *json_str = NULL;
+    json_object *o = NULL;
     int rc = -1;
 
-    if (kvs_get_obj (h, key, &val) < 0)
+    if (kvs_get (h, key, &json_str) < 0)
         goto done;
-    *json_str = val ? xstrdup (Jtostr (val)) : NULL;
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (val)
+        *val = o;
+    else
+        Jput (o);
     rc = 0;
 done:
-    Jput (val);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
@@ -352,6 +376,8 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
     va_list ap;
     char *key = NULL;
     char *k = NULL;
+    const char *json_str;
+    flux_rpc_t *rpc = NULL;
     JSON in = NULL;
     JSON out = NULL;
     JSON v;
@@ -367,8 +393,14 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
     k = pathcat (kvs_getcwd (h), key);
     if (!(in = kp_tget_enc (k, true, false)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.get", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (kp_rget_dec (out, &v) < 0)
         goto done;
     *dir = kvsdir_alloc (h, k, v);
@@ -380,12 +412,15 @@ done:
         free (k);
     if (key)
         free (key);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
 int kvs_get_symlink (flux_t h, const char *key, char **val)
 {
     char *k = NULL;
+    flux_rpc_t *rpc = NULL;
+    const char *json_str;
     JSON in = NULL;
     JSON out = NULL;
     JSON v;
@@ -399,8 +434,14 @@ int kvs_get_symlink (flux_t h, const char *key, char **val)
     k = pathcat (kvs_getcwd (h), key);
     if (!(in = kp_tget_enc (k, false, true)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.get", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (kp_rget_dec (out, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_string
@@ -415,17 +456,23 @@ done:
     Jput (out);
     if (k)
         free (k);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
 int kvs_get_string (flux_t h, const char *key, char **valp)
 {
+    char *json_str = NULL;
     json_object *o = NULL;
     const char *s;
     int rc = -1;
 
-    if (kvs_get_obj (h, key, &o) < 0)
+    if (kvs_get (h, key, &json_str) < 0)
         goto done;
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (json_object_get_type (o) != json_type_string) {
         errno = EINVAL;
         goto done;
@@ -435,18 +482,24 @@ int kvs_get_string (flux_t h, const char *key, char **valp)
         *valp = xstrdup (s);
     rc = 0;
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
 int kvs_get_int (flux_t h, const char *key, int *valp)
 {
+    char *json_str = NULL;
     json_object *o = NULL;
     int rc = -1;
 
-    if (kvs_get_obj (h, key, &o) < 0)
+    if (kvs_get (h, key, &json_str) < 0)
         goto done;
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (json_object_get_type (o) != json_type_int) {
         errno = EINVAL;
         goto done;
@@ -455,18 +508,24 @@ int kvs_get_int (flux_t h, const char *key, int *valp)
         *valp = json_object_get_int (o);
     rc = 0;
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
 int kvs_get_int64 (flux_t h, const char *key, int64_t *valp)
 {
+    char *json_str = NULL;
     json_object *o = NULL;
     int rc = -1;
 
-    if (kvs_get_obj (h, key, &o) < 0)
+    if (kvs_get (h, key, &json_str) < 0)
         goto done;
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (json_object_get_type (o) != json_type_int) {
         errno = EINVAL;
         goto done;
@@ -475,18 +534,24 @@ int kvs_get_int64 (flux_t h, const char *key, int64_t *valp)
         *valp = json_object_get_int64 (o);
     rc = 0;
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
 int kvs_get_double (flux_t h, const char *key, double *valp)
 {
+    char *json_str = NULL;
     json_object *o = NULL;
     int rc = -1;
 
-    if (kvs_get_obj (h, key, &o) < 0)
+    if (kvs_get (h, key, &json_str) < 0)
         goto done;
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (json_object_get_type (o) != json_type_double) {
         errno = EINVAL;
         goto done;
@@ -495,18 +560,24 @@ int kvs_get_double (flux_t h, const char *key, double *valp)
         *valp = json_object_get_double (o);
     rc = 0;
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
 int kvs_get_boolean (flux_t h, const char *key, bool *valp)
 {
+    char *json_str = NULL;
     json_object *o = NULL;
     int rc = -1;
 
-    if (kvs_get_obj (h, key, &o) < 0)
+    if (kvs_get (h, key, &json_str) < 0)
         goto done;
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (json_object_get_type (o) != json_type_boolean) {
         errno = EINVAL;
         goto done;
@@ -515,8 +586,9 @@ int kvs_get_boolean (flux_t h, const char *key, bool *valp)
         *valp = json_object_get_boolean (o);
     rc = 0;
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
@@ -570,12 +642,15 @@ static kvs_watcher_t *lookup_watcher (flux_t h, uint32_t matchtag)
 int kvs_unwatch (flux_t h, const char *key)
 {
     kvsctx_t *ctx = getctx (h);
+    flux_rpc_t *rpc = NULL;
     JSON in = NULL;
     int rc = -1;
 
     if (!(in = kp_tunwatch_enc (key)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.unwatch", in, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.unwatch", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     /* Delete all watchers for the specified key.
      */
@@ -593,6 +668,7 @@ int kvs_unwatch (flux_t h, const char *key)
     rc = 0;
 done:
     Jput (in);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
@@ -656,22 +732,28 @@ static int dispatch_watch (flux_t h, kvs_watcher_t *wp, json_object *val)
 
 static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    const char *json_str;
     JSON out = NULL;
     JSON val;
     uint32_t matchtag;
     kvs_watcher_t *wp;
     int rc = 0;
 
-    if (flux_json_response_decode (*zmsg, &out) < 0)
+    if (flux_response_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
     if (flux_msg_get_matchtag (*zmsg, &matchtag) < 0)
         goto done;
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (kp_rwatch_dec (out, &val) < 0)
         goto done;
     if ((wp = lookup_watcher (h, matchtag)))
         rc = dispatch_watch (h, wp, val);
 done:
     Jput (out);
+    zmsg_destroy (zmsg);
     return rc;
 }
 
@@ -687,7 +769,9 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
                                 .topic_glob = NULL };
     JSON in = NULL;
     JSON out = NULL;
-    zmsg_t *zmsg = NULL;
+    const char *json_str;
+    flux_msg_t *request_msg = NULL;
+    flux_msg_t *response_msg = NULL;
     JSON v = NULL;
     int ret = -1;
 
@@ -702,15 +786,22 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
     if (!(in = kp_twatch_enc (key, *val, once,
                               once ? false : true, directory, false)))
         goto done;
+    if (!(request_msg = flux_request_encode ("kvs.watch", Jtostr (in))))
+        goto done;
+    if (flux_msg_set_matchtag (request_msg, match.matchtag) < 0)
+        goto done;
+    if (flux_send (h, request_msg, 0) < 0)
+        goto done;
     /* Receive the (first) response.
      */
-    if (flux_json_request (h, FLUX_NODEID_ANY, match.matchtag,
-                                                    "kvs.watch", in) < 0)
+    if (!(response_msg = flux_recv (h, match, 0)))
         goto done;
-    if (!(zmsg = flux_recvmsg_match (h, match, false)))
+    if (flux_response_decode (response_msg, NULL, &json_str) < 0)
         goto done;
-    if (flux_json_response_decode (zmsg, &out) < 0)
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
         goto done;
+    }
     if (kp_rwatch_dec (out, &v) < 0) /* v may be NULL (no ENOENT here) */
         goto done;
     *val = Jget (v);
@@ -724,7 +815,8 @@ done:
     }
     Jput (in);
     Jput (out);
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (request_msg);
+    flux_msg_destroy (response_msg);
     return ret;
 }
 
@@ -987,8 +1079,11 @@ done:
  ** PUT
  **/
 
-int kvs_put_obj (flux_t h, const char *key, json_object *val)
+/* N.B. kvs_put() of a NULL value is the same as kvs_unlink().
+ */
+int kvs_put (flux_t h, const char *key, const char *json_str)
 {
+    flux_rpc_t *rpc = NULL;
     JSON in = NULL;
     char *k = NULL;
     int rc = -1;
@@ -998,34 +1093,29 @@ int kvs_put_obj (flux_t h, const char *key, json_object *val)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tput_enc (k, Jget (val), false, false)))
+    if (!(in = kp_tput_enc (k, json_str, false, false)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.put", in, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.put", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
     if (k)
         free (k);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
-int kvs_put (flux_t h, const char *key, const char *json_str)
+int kvs_put_obj (flux_t h, const char *key, json_object *val)
 {
-    JSON val = NULL;
     int rc = -1;
 
-    if (json_str) {
-        if (!(val = Jfromstr (json_str))) {
-            errno = EINVAL;
-            goto done;
-        }
-    }
-    if (kvs_put_obj (h, key, val) < 0)
+    if (kvs_put (h, key, Jtostr (val)) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (val);
     return rc;
 }
 
@@ -1036,7 +1126,7 @@ int kvs_put_string (flux_t h, const char *key, const char *val)
 
     if (val && !(o = json_object_new_string (val)))
         oom ();
-    if (kvs_put_obj (h, key, o) < 0)
+    if (kvs_put (h, key, Jtostr (o)) < 0)
         goto done;
     rc = 0;
 done:
@@ -1052,7 +1142,7 @@ int kvs_put_int (flux_t h, const char *key, int val)
 
     if (!(o = json_object_new_int (val)))
         oom ();
-    if (kvs_put_obj (h, key, o) < 0)
+    if (kvs_put (h, key, Jtostr (o)) < 0)
         goto done;
     rc = 0;
 done:
@@ -1068,7 +1158,7 @@ int kvs_put_int64 (flux_t h, const char *key, int64_t val)
 
     if (!(o = json_object_new_int64 (val)))
         oom ();
-    if (kvs_put_obj (h, key, o) < 0)
+    if (kvs_put (h, key, Jtostr (o)) < 0)
         goto done;
     rc = 0;
 done:
@@ -1084,7 +1174,7 @@ int kvs_put_double (flux_t h, const char *key, double val)
 
     if (!(o = json_object_new_double (val)))
         oom ();
-    if (kvs_put_obj (h, key, o) < 0)
+    if (kvs_put (h, key, Jtostr (o)) < 0)
         goto done;
     rc = 0;
 done:
@@ -1100,7 +1190,7 @@ int kvs_put_boolean (flux_t h, const char *key, bool val)
 
     if (!(o = json_object_new_boolean (val)))
         oom ();
-    if (kvs_put_obj (h, key, o) < 0)
+    if (kvs_put (h, key, Jtostr (o)) < 0)
         goto done;
     rc = 0;
 done:
@@ -1112,13 +1202,14 @@ done:
 
 int kvs_unlink (flux_t h, const char *key)
 {
-    return kvs_put_obj (h, key, NULL);
+    return kvs_put (h, key, NULL);
 }
 
 int kvs_symlink (flux_t h, const char *key, const char *target)
 {
+    flux_rpc_t *rpc = NULL;
     JSON in = NULL;
-    JSON v;
+    JSON val = NULL;
     char *k = NULL;
     int rc = -1;
 
@@ -1127,17 +1218,23 @@ int kvs_symlink (flux_t h, const char *key, const char *target)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(v = json_object_new_string (target)))
-        oom ();
-    if (!(in = kp_tput_enc (k, v, true, false)))
+    if (!(val = json_object_new_string (target))) {
+        errno = ENOMEM;
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.put", in, NULL) < 0)
+    }
+    if (!(in = kp_tput_enc (k, Jtostr (val), true, false)))
+        goto done;
+    if (!(rpc = flux_rpc (h, "kvs.put", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
+    Jput (val);
     if (k)
         free (k);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
@@ -1145,18 +1242,22 @@ int kvs_mkdir (flux_t h, const char *key)
 {
     JSON in = NULL;
     char *k = NULL;
+    flux_rpc_t *rpc = NULL;
     int rc = -1;
 
     k = pathcat (kvs_getcwd (h), key);
     if (!(in = kp_tput_enc (k, NULL, false, true)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.put", in, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.put", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
     if (k)
         free (k);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
@@ -1167,85 +1268,102 @@ done:
 int kvs_commit (flux_t h)
 {
     JSON in = NULL;
-    JSON out = NULL;
+    flux_rpc_t *rpc = NULL;
+    const char *json_str;
     int rc = -1;
 
     if (!(in = kp_tcommit_enc (NULL, NULL, NULL, 0)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.commit", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
-    Jput (out);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
 int kvs_fence (flux_t h, const char *name, int nprocs)
 {
     JSON in = NULL;
-    JSON out = NULL;
+    flux_rpc_t *rpc = NULL;
+    const char *json_str;
     int rc = -1;
 
     if (!(in = kp_tcommit_enc (NULL, NULL, name, nprocs)))
         goto done;
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.commit", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
-    Jput (out);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
 int kvs_get_version (flux_t h, int *versionp)
 {
-    JSON in = Jnew ();
+    flux_rpc_t *rpc;
+    const char *json_str;
     JSON out = NULL;
-    int ret = -1;
     int version;
+    int rc = -1;
 
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.getroot", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (!Jget_int (out, "rootseq", &version)) {
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str)) || !Jget_int (out, "rootseq", &version)) {
         errno = EPROTO;
         goto done;
     }
-    *versionp = version;
-    ret = 0;
+    if (versionp)
+        *versionp = version;
+    rc = 0;
 done:
-    Jput (in);
     Jput (out);
-    return ret;
+    flux_rpc_destroy (rpc);
+    return rc;
 }
 
 int kvs_wait_version (flux_t h, int version)
 {
+    flux_rpc_t *rpc;
+    const char *json_str;
     JSON in = Jnew ();
-    JSON out = NULL;
     int ret = -1;
 
     Jadd_int (in, "rootseq", version);
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.sync", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.sync", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    /* N.B. response contains (rootseq, rootdir) but we don't use it.
+     */
     ret = 0;
 done:
     Jput (in);
-    Jput (out);
+    flux_rpc_destroy (rpc);
     return ret;
 }
 
 int kvs_dropcache (flux_t h)
 {
-    JSON in = Jnew ();
-    int ret = -1;
+    flux_rpc_t *rpc;
+    int rc = -1;
 
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.dropcache", in, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "kvs.dropcache", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    ret = 0;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+        goto done;
+    rc = 0;
 done:
-    Jput (in);
-    return ret;
+    flux_rpc_destroy (rpc);
+    return rc;
 }
 
 
@@ -1255,12 +1373,23 @@ done:
 
 int kvsdir_get_obj (kvsdir_t *dir, const char *name, json_object **valp)
 {
-    int rc;
+    int rc = -1;
+    char *json_str = NULL;
+    JSON out;
 
     kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_obj (dir->handle, name, valp);
+    if (kvs_get (dir->handle, name, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
+    *valp = out;
+    rc = 0;
+done:
     kvs_popd (dir->handle);
-
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
@@ -1366,7 +1495,7 @@ int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
     int rc;
 
     kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_obj (dir->handle, name, val);
+    rc = kvs_put (dir->handle, name, Jtostr (val));
     kvs_popd (dir->handle);
 
     return (rc);
