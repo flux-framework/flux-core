@@ -11,7 +11,7 @@ before other tests that depend on kvs.
 . `dirname $0`/sharness.sh
 
 # Size the session to one more than the number of cores, minimum of 4
-SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
+SIZE=$(($(nproc)+1))
 test ${SIZE} -lt 4 && SIZE=4
 test_under_flux ${SIZE}
 echo "# $0: flux session size will be ${SIZE}"
