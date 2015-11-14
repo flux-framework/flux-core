@@ -304,15 +304,6 @@ struct flux_msg_handler_spec mtab[] = {
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    uint32_t rank;
-    if (flux_get_rank (h, &rank) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_rank: %s", strerror (errno));
-        return (-1);
-    }
-    if (rank != 0) {
-        flux_log (h, LOG_INFO, "job module only runs on rank 0. Exiting...");
-        return (0);
-    }
     if (flux_msg_handler_addvec (h, mtab, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_msg_handler_addvec: %s", strerror (errno));
         return (-1);
