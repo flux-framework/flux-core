@@ -163,24 +163,18 @@ wreck:verbose ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
     tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
 --
---  Send job request message with tag="job.create"
+--  Create a new job in kvs
 --
-local resp, err = f:rpc ('job.create', jobreq)
-if not resp then
-    wreck:die ("job.create: %s. Is the `job' module loaded?\n", err)
-end
+local jobid, err = wreck:createjob ()
+if not jobid then wreck:die ("%s\n", err) end
 
-if resp.errnum then
-    wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
-end
-
-wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
+wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), jobid)
 
 --
 --  Get a handle to this lwj kvsdir:
 --
-local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
-if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
+local lwj, err = f:kvsdir ("lwj.%d", jobid)
+if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", jobid, err) end
 
 --if wreck:getopt ("i") then
 -- Always run in "immediate" mode for now:
@@ -205,10 +199,10 @@ if true then
 
     -- Now send run event:
     wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
-    local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
+    local rc,err = f:sendevent ("wrexec.run.%d", jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
     if wreck.opts.d then
-        print (resp.jobid)
+        print (jobid)
         os.exit(0)
     end
 else
@@ -226,11 +220,11 @@ end
 local function check_job_completed ()
     if state == "failed" then
        log:dump()
-       wreck:die ("job %d failed\n", resp.jobid)
+       wreck:die ("job %d failed\n", jobid)
     end
     if taskio:complete() and
        (state == "complete" or state == "reaped") then
-        local rc = lwj_return_code (f, wreck, resp.jobid)
+        local rc = lwj_return_code (f, wreck, jobid)
         if rc == 0 then
             wreck:verbose ("All tasks completed successfully.\n");
         end
@@ -243,7 +237,7 @@ end
 --
 taskio, err = ioattach {
      flux = f,
-     jobid = resp.jobid,
+     jobid = jobid,
      ntasks = wreck.ntasks,
      labelio = wreck.opts.l,
      on_completion = check_job_completed
@@ -252,7 +246,7 @@ if not taskio then wreck:die ("error opening task io: %s\n", err) end
 
 log, err = logstream {
      flux = f,
-     jobid = resp.jobid,
+     jobid = jobid,
 }
 if not log then wreck:die ("error opening log stream: %s\n", err) end
 
@@ -277,7 +271,7 @@ f:iowatcher {
 --  Finally, a kvswatcher for the LWJ state:
 --
 local kw, err = f:kvswatcher  {
-    key = string.format ("lwj.%d.state", resp.jobid),
+    key = string.format ("lwj.%d.state", jobid),
     handler = function (kw, result)
         if result then
             state = result
@@ -316,8 +310,8 @@ repeat
     --   Check to see if we should terminate the job now:
     --
     if terminate then
-        wreck:verbose ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
-        local rc,err = f:sendevent ("wreck.%d.kill", resp.jobid)
+        wreck:verbose ("%4.03fs: Killing LWJ %d\n", tt:get0(), jobid)
+        local rc,err = f:sendevent ("wreck.%d.kill", jobid)
         if not rc then
             wreck:say ("Error: Failed to send kill event: %s", err)
         end
