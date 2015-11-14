@@ -279,7 +279,9 @@ out:
 }
 
 struct flux_msg_handler_spec mtab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job.*", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
 
