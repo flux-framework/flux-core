@@ -231,8 +231,9 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
     if (strcmp (topic, "job.shutdown") == 0) {
         flux_reactor_stop (flux_get_reactor (h));
     }
-    if ((strcmp (topic, "job.create") == 0)
-        || ((strcmp (topic, "job.submit") == 0) && sched_loaded (h))) {
+    else if ((strcmp (topic, "job.create") == 0)
+            || ((strcmp (topic, "job.submit") == 0)
+                 && sched_loaded (h))) {
         json_object *jobinfo = NULL;
         unsigned long id = increment_jobid (h);
         bool should_workaround = false;
@@ -271,6 +272,13 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
         util_json_object_add_string (jobinfo, "state", state);
         flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
         json_object_put (jobinfo);
+    }
+    else {
+        /* job.submit not functional due to missing sched. Return ENOSYS
+         *  for now
+         */
+        if (flux_respond (h, msg, ENOSYS, NULL) < 0)
+            flux_log (h, LOG_ERR, "flux_respond: %s", strerror (errno));
     }
 
 out:
