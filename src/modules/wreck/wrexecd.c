@@ -1118,6 +1118,9 @@ int exec_command (struct prog_ctx *ctx, int i)
     if (cpid < 0)
         log_fatal (ctx, 1, "fork: %s", strerror (errno));
     if (cpid == 0) {
+        /* give each task its own process group so we can use killpg(2) */
+        setpgrp ();
+
         child_io_setup (t);
 
         if (sigmask_unblock_all () < 0)
@@ -1141,8 +1144,6 @@ int exec_command (struct prog_ctx *ctx, int i)
             ptrace (PTRACE_TRACEME, 0, NULL, 0);
         }
 
-        /* give each task its own process group so we can use killpg(2) */
-        setpgrp();
         /*
          *  Reassign environment:
          */
