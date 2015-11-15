@@ -1118,6 +1118,9 @@ int exec_command (struct prog_ctx *ctx, int i)
     if (cpid < 0)
         log_fatal (ctx, 1, "fork: %s", strerror (errno));
     if (cpid == 0) {
+        /* give each task its own process group so we can use killpg(2) */
+        setpgrp ();
+
         child_io_setup (t);
 
         if (sigmask_unblock_all () < 0)
@@ -1141,8 +1144,6 @@ int exec_command (struct prog_ctx *ctx, int i)
             ptrace (PTRACE_TRACEME, 0, NULL, 0);
         }
 
-        /* give each task its own process group so we can use killpg(2) */
-        setpgrp();
         /*
          *  Reassign environment:
          */
@@ -1649,8 +1650,17 @@ int reap_child (struct prog_ctx *ctx)
 int prog_ctx_signal (struct prog_ctx *ctx, int sig)
 {
     int i;
-    for (i = 0; i < ctx->nprocs; i++)
-        killpg (ctx->task[i]->pid, sig);
+    for (i = 0; i < ctx->nprocs; i++) {
+        pid_t pid = ctx->task[i]->pid;
+        /*  XXX: there is a race between a process starting and
+         *   changing its process group, so killpg(2) may fail here
+         *   if it happens to execute during that window. In that case,
+         *   killing the individual task should work. Therefore,
+         *   attempt kill after killpg.
+         */
+        if ((killpg (pid, sig) < 0) && (kill (pid, sig) < 0))
+            log_err (ctx, "kill (%d): %s", (int) pid, strerror (errno));
+    }
     return (0);
 }
 
