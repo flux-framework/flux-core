@@ -1650,8 +1650,17 @@ int reap_child (struct prog_ctx *ctx)
 int prog_ctx_signal (struct prog_ctx *ctx, int sig)
 {
     int i;
-    for (i = 0; i < ctx->nprocs; i++)
-        killpg (ctx->task[i]->pid, sig);
+    for (i = 0; i < ctx->nprocs; i++) {
+        pid_t pid = ctx->task[i]->pid;
+        /*  XXX: there is a race between a process starting and
+         *   changing its process group, so killpg(2) may fail here
+         *   if it happens to execute during that window. In that case,
+         *   killing the individual task should work. Therefore,
+         *   attempt kill after killpg.
+         */
+        if ((killpg (pid, sig) < 0) && (kill (pid, sig) < 0))
+            log_err (ctx, "kill (%d): %s", (int) pid, strerror (errno));
+    }
     return (0);
 }
 
