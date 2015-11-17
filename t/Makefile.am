@@ -24,6 +24,7 @@ TESTS = \
 	t0001-basic.t \
 	t0002-request.t \
 	t0003-module.t \
+	t0004-event.t \
 	t0005-exec.t \
 	t0006-build-basic.t \
 	t0007-ping.t \
@@ -70,6 +71,7 @@ check_SCRIPTS = \
 	t0001-basic.t \
 	t0002-request.t \
 	t0003-module.t \
+	t0004-event.t \
 	t0005-exec.t \
 	t0006-build-basic.t \
 	t0007-ping.t \
@@ -130,7 +132,8 @@ dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
 	scripts/kvs-watch-until.lua \
 	scripts/cpus-allowed.lua \
-	scripts/waitfile.lua
+	scripts/waitfile.lua \
+	scripts/t0004-event-helper.sh
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
