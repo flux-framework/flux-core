@@ -651,27 +651,21 @@ static bool match_sub (module_t *p, const char *topic)
 int module_event_mcast (modhash_t *mh, const flux_msg_t *msg)
 {
     const char *topic;
-    zlist_t *uuids;
-    char *uuid;
+    module_t *p;
     int rc = -1;
 
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
+    p = zhash_first (mh->zh_byuuid);
+    while (p) {
         if (match_sub (p, topic)) {
             if (module_sendmsg (p, msg) < 0)
                 goto done;
         }
-        uuid = zlist_next (uuids);
+        p = zhash_next (mh->zh_byuuid);
     }
     rc = 0;
 done:
-    zlist_destroy (&uuids);
     return rc;
 }
 
