@@ -139,6 +139,10 @@ static optparse_t *event_sub_get_options (int *argcp, char ***argvp)
          .name = "count", .key = 'c', .group = 1,
          .has_arg = 1, .arginfo = "N",
          .usage = "Process N events then exit" },
+        {
+         .name = "raw", .key = 'r', .group = 1,
+         .has_arg = 0, .arginfo = NULL,
+         .usage = "Dump raw event message" },
         OPTPARSE_TABLE_END
     };
 
@@ -165,7 +169,7 @@ static void event_sub (flux_t h, int argc, char **argv)
     flux_msg_t *msg;
     int n, count;
     optparse_t *p = event_sub_get_options (&argc, &argv);
-
+    bool raw = false;
 
     /* Since output is line-based with undeterministic amount of time
      * between lines, force stdout to be line buffered so our output
@@ -180,14 +184,19 @@ static void event_sub (flux_t h, int argc, char **argv)
 
     n = 0;
     count = optparse_get_int (p, "count", 0);
+    raw = optparse_hasopt (p, "raw");
     while ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0))) {
-        const char *topic;
-        const char *json_str;
-        if (flux_msg_get_topic (msg, &topic) < 0
-                || flux_msg_get_payload_json (msg, &json_str) < 0) {
-            printf ("malformed message ignored\n");
+        if (raw) {
+            flux_msg_fprint (stdout, msg);
         } else {
-            printf ("%s\t%s\n", topic, json_str ? json_str : "");
+            const char *topic;
+            const char *json_str;
+            if (flux_msg_get_topic (msg, &topic) < 0
+                    || flux_msg_get_payload_json (msg, &json_str) < 0) {
+                printf ("malformed message ignored\n");
+            } else {
+                printf ("%s\t%s\n", topic, json_str ? json_str : "");
+            }
         }
         flux_msg_destroy (msg);
 

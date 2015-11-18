@@ -110,7 +110,8 @@ typedef struct {
     pid_t pid;
     char *proctitle;
     flux_conf_t cf;
-    int event_seq;
+    int event_recv_seq;
+    int event_send_seq;
     bool event_active;          /* primary event source is active */
     svchash_t *services;
     svchash_t *eventsvc;
@@ -2342,26 +2343,24 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-/* helper for event_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
+/* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
-    if (ctx->rank > 0) {
-        int i;
-        uint32_t seq;
-        if (flux_msg_get_seq (*zmsg, &seq) < 0) {
-            flux_log (ctx->h, LOG_ERR, "dropping malformed event");
-            return -1;
-        }
-        if (seq <= ctx->event_seq) {
-            //flux_log (ctx->h, LOG_INFO, "duplicate event");
-            return -1;
-        }
-        if (ctx->event_seq > 0) { /* don't log initial missed events */
-            for (i = ctx->event_seq + 1; i < seq; i++)
-                flux_log (ctx->h, LOG_ERR, "lost event %d", i);
-        }
-        ctx->event_seq = seq;
+    int i;
+    uint32_t seq;
+    if (flux_msg_get_seq (*zmsg, &seq) < 0) {
+        flux_log (ctx->h, LOG_ERR, "dropping malformed event");
+        return -1;
     }
+    if (seq <= ctx->event_recv_seq) {
+        //flux_log (ctx->h, LOG_DEBUG, "dropping duplicate event %d", seq);
+        return -1;
+    }
+    if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
+        for (i = ctx->event_recv_seq + 1; i < seq; i++)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+    }
+    ctx->event_recv_seq = seq;
 
     (void)overlay_mcast_child (ctx->overlay, *zmsg);
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
@@ -2579,8 +2578,8 @@ static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 }
 
 /* Events are forwarded up the TBON to rank 0, then published from there.
- * Rank 0 doesn't receive the events it transmits so we have to "loop back"
- * here via handle_event().
+ * Rank 0 doesn't (generally) receive the events it transmits so we have
+ * to "loop back" here via handle_event().
  */
 static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
@@ -2593,7 +2592,7 @@ static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     } else {
         if (flux_msg_clear_route (*zmsg) < 0)
             goto done;
-        if (flux_msg_set_seq (*zmsg, ++ctx->event_seq) < 0)
+        if (flux_msg_set_seq (*zmsg, ++ctx->event_send_seq) < 0)
             goto done;
         if (overlay_sendmsg_event (ctx->overlay, *zmsg) < 0)
             goto done;
