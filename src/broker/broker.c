@@ -1205,20 +1205,18 @@ done:
     return rc;
 }
 
-static bool nodeset_suffix_member (char *name, uint32_t rank)
+static bool nodeset_member (const char *s, uint32_t rank)
 {
-    char *s;
-    nodeset_t *ns;
+    nodeset_t *ns = NULL;
     bool member = true;
 
-    if ((s = strchr (name, '['))) {
+    if (s) {
         if (!(ns = nodeset_create_string (s)))
-            msg_exit ("malformed nodeset suffix in '%s'", name);
-        *s = '\0'; /* side effect: truncate nodeset suffix */
-        if (!nodeset_test_rank (ns, rank))
-            member = false;
-        nodeset_destroy (ns);
+            msg_exit ("malformed nodeset: %s", s);
+        member = nodeset_test_rank (ns, rank);
     }
+    if (ns)
+        nodeset_destroy (ns);
     return member;
 }
 
@@ -1248,8 +1246,12 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
     while (s) {
         char *name = NULL;
         char *path = NULL;
-        if (!nodeset_suffix_member (s, ctx->rank))
-            goto next;
+        char *sp;
+        if ((sp = strchr (s, '['))) {
+            if (!nodeset_member (sp, ctx->rank))
+                goto next;
+            *sp = '\0';
+        }
         if (strchr (s, '/')) {
             if (!(name = flux_modname (s)))
                 msg_exit ("%s", dlerror ());
@@ -1263,7 +1265,8 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
             goto next;
         if (!(p = module_add (ctx->modhash, path)))
             err_exit ("%s: module_add %s", name, path);
-        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p))
+        if (!svc_add (ctx->services, module_get_name (p),
+                                     module_get_service (p), mod_svc_cb, p))
             msg_exit ("could not register service %s", module_get_name (p));
         zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
@@ -1926,7 +1929,8 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto done;
-    if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p)) {
+    if (!svc_add (ctx->services, module_get_name (p),
+                                 module_get_service (p), mod_svc_cb, p)) {
         module_remove (ctx->modhash, p);
         errno = EEXIST;
         goto done;
@@ -2294,42 +2298,63 @@ static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
     return 0;
 }
 
+struct internal_service {
+    const char *topic;
+    const char *nodeset;
+    int (*fun)(zmsg_t **zmsg, void *arg);
+};
+
+static struct internal_service services[] = {
+    { "cmb.attrget",    NULL,   cmb_attrget_cb      },
+    { "cmb.attrset",    NULL,   cmb_attrset_cb      },
+    { "cmb.attrlist",   NULL,   cmb_attrlist_cb     },
+    { "cmb.rusage",     NULL,   cmb_rusage_cb,      },
+    { "cmb.rmmod",      NULL,   cmb_rmmod_cb,       },
+    { "cmb.insmod",     NULL,   cmb_insmod_cb,      },
+    { "cmb.lsmod",      NULL,   cmb_lsmod_cb,       },
+    { "cmb.lspeer",     NULL,   cmb_lspeer_cb,      },
+    { "cmb.ping",       NULL,   cmb_ping_cb,        },
+    { "cmb.reparent",   NULL,   cmb_reparent_cb,    },
+    { "cmb.panic",      NULL,   cmb_panic_cb,       },
+    { "cmb.log",        NULL,   cmb_log_cb,         },
+    { "cmb.dmesg.clear",NULL,   cmb_dmesg_clear_cb, },
+    { "cmb.dmesg",      NULL,   cmb_dmesg_cb,       },
+    { "cmb.event-mute", NULL,   cmb_event_mute_cb,  },
+    { "cmb.exec",       NULL,   cmb_exec_cb,        },
+    { "cmb.exec.signal",NULL,   cmb_signal_cb,      },
+    { "cmb.exec.write", NULL,   cmb_write_cb,       },
+    { "cmb.processes",  NULL,   cmb_ps_cb,          },
+    { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
+    { "cmb.hello",      NULL,   cmb_hello_cb,       },
+    { "cmb.sub",        NULL,   cmb_sub_cb,         },
+    { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
+    { "cmb.seq.fetch",  "[0]",  cmb_seq             },
+    { "cmb.seq.set",    "[0]",  cmb_seq             },
+    { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { NULL, NULL, },
+};
+
+static struct internal_service eventsvc[] = {
+    { "hb",             NULL,   event_hb_cb,        },
+    { "shutdown",       NULL,   event_shutdown_cb,  },
+    { NULL, NULL, },
+};
+
 static void broker_add_services (ctx_t *ctx)
 {
-    if (!svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
-          || !svc_add (ctx->services, "cmb.attrset", cmb_attrset_cb, ctx)
-          || !svc_add (ctx->services, "cmb.attrlist", cmb_attrlist_cb, ctx)
-          || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
-          || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
-          || !svc_add (ctx->services, "cmb.insmod", cmb_insmod_cb, ctx)
-          || !svc_add (ctx->services, "cmb.lsmod", cmb_lsmod_cb, ctx)
-          || !svc_add (ctx->services, "cmb.lspeer", cmb_lspeer_cb, ctx)
-          || !svc_add (ctx->services, "cmb.ping", cmb_ping_cb, ctx)
-          || !svc_add (ctx->services, "cmb.reparent", cmb_reparent_cb, ctx)
-          || !svc_add (ctx->services, "cmb.panic", cmb_panic_cb, ctx)
-          || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
-          || !svc_add (ctx->services, "cmb.dmesg.clear", cmb_dmesg_clear_cb,ctx)
-          || !svc_add (ctx->services, "cmb.dmesg", cmb_dmesg_cb, ctx)
-          || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec.signal", cmb_signal_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec.write", cmb_write_cb, ctx)
-          || !svc_add (ctx->services, "cmb.processes", cmb_ps_cb, ctx)
-          || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
-          || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
-          || !svc_add (ctx->services, "cmb.sub", cmb_sub_cb, ctx)
-          || !svc_add (ctx->services, "cmb.unsub", cmb_unsub_cb, ctx)
-          || !svc_add (ctx->eventsvc, "hb", event_hb_cb, ctx)
-          || !svc_add (ctx->eventsvc, "shutdown", event_shutdown_cb, ctx))
-        err_exit ("can't register internal services");
+    struct internal_service *svc;
 
-    if (ctx->rank == 0) {
-        /* Add rank 0 only services:
-         */
-        if (!svc_add (ctx->services, "cmb.seq.fetch", cmb_seq, ctx)
-                || !svc_add (ctx->services, "cmb.seq.set", cmb_seq, ctx)
-                || !svc_add (ctx->services, "cmb.seq.destroy", cmb_seq, ctx))
-            err_exit ("can't register rank 0 internal services");
+    for (svc = &services[0]; svc->topic != NULL; svc++) {
+        if (!nodeset_member (svc->nodeset, ctx->rank))
+            continue;
+        if (!svc_add (ctx->services, svc->topic, NULL, svc->fun, ctx))
+            err_exit ("error adding handler for %s", svc->topic);
+    }
+    for (svc = &eventsvc[0]; svc->topic != NULL; svc++) {
+        if (!nodeset_member (svc->nodeset, ctx->rank))
+            continue;
+        if (!svc_add (ctx->eventsvc, svc->topic, NULL, svc->fun, ctx))
+            err_exit ("error adding handler for %s", svc->topic);
     }
 }
 
