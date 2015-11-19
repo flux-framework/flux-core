@@ -185,6 +185,7 @@ AC_CONFIG_FILES( \
   src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
   src/modules/content-sophia/Makefile \
+  src/modules/content-sqlite/Makefile \
   src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \
   src/modules/libkz/Makefile \
