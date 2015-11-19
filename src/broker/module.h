@@ -28,11 +28,9 @@ void module_remove (modhash_t *mh, module_t *p);
 void module_set_args (module_t *p, int argc, char * const argv[]);
 void module_add_arg (module_t *p, const char *arg);
 
-/* Get/set module name.
- * If unset, use the value of 'mod_name' compiled into the module .so.
+/* Get module name.
  */
 const char *module_get_name (module_t *p);
-void module_set_name (module_t *p, const char *name);
 
 /* Get module uuid.
  */

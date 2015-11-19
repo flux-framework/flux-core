@@ -156,14 +156,6 @@ const char *module_get_name (module_t *p)
     return p->name;
 }
 
-void module_set_name (module_t *p, const char *name)
-{
-    assert (p->magic == MODULE_MAGIC);
-    if (p->name)
-        free (p->name);
-    p->name = xstrdup (name);
-}
-
 const char *module_get_uuid (module_t *p)
 {
     return zuuid_str (p->uuid);
