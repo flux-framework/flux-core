@@ -28,12 +28,12 @@
 #include <json.h>
 #include <flux/core.h>
 
-/** 
- * Define the job states (an abstraction independent of 
+/**
+ * Define the job states (an abstraction independent of
  * underlying task and program execution services (RFC 8)
- * and scheduler implementation details (e.g., how the 
- * attributes of a job are stored in KVS.) For more details, 
- * please refer to README.md 
+ * and scheduler implementation details (e.g., how the
+ * attributes of a job are stored in KVS.) For more details,
+ * please refer to README.md
  */
 typedef enum {
     J_NULL = 1,  /*!< The state has yet to be assigned */
@@ -41,7 +41,7 @@ typedef enum {
     J_SUBMITTED, /*!< Submitted to the system */
     J_PENDING,   /*!< Pending */
     J_SCHEDREQ,  /*!< Resources requested to be selected */
-    J_SELECTED,  /*!< Assigned to requested resource in RDL */ 
+    J_SELECTED,  /*!< Assigned to requested resource in RDL */
     J_ALLOCATED, /*!< Got allocated/contained by the program executoin service */
     J_RUNREQUEST,/*!< Requested to be executed */
     J_STARTING,  /*!< Starting */
@@ -57,8 +57,8 @@ typedef enum {
 typedef int (*jsc_handler_obj_f)(json_object *base_jcb, void *arg, int errnum);
 typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 
-/* TODO: find a better way to manage this hierarchical 
- * JCB attributes space 
+/* TODO: find a better way to manage this hierarchical
+ * JCB attributes space
  */
 #define JSC_MAX_ATTR_LEN 32
 #define JSC_JOBID "jobid"
@@ -72,6 +72,7 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 #define JSC_RDL "rdl"
 #define JSC_RDL_ALLOC "rdl_alloc"
 # define JSC_RDL_ALLOC_CONTAINED "contained"
+#  define JSC_RDL_ALLOC_CONTAINING_RANK "cmbdrank"
 #  define JSC_RDL_ALLOC_CONTAINED_NCORES "cmbdncores"
 #define JSC_PDESC "pdesc"
 # define JSC_PDESC_SIZE "procsize"
@@ -84,14 +85,14 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 
 /**
  * Register a callback to the asynchronous status change notification service.
- * "callback" will be invoked when the state of a job changes. The "jobid" 
+ * "callback" will be invoked when the state of a job changes. The "jobid"
  * and "state-pair" will be passed as "base_jcb" into the callback.
  * "d" is arbitrary data that will transparently be passed into "callback."
- * However, one should pass its flux_t object as part of this callback data. 
+ * However, one should pass its flux_t object as part of this callback data.
  * Note that the caller must start its reactor to get an asynchronous status
- * change notification via "callback." This is because it uses the KVS-watch 
- * facility which has the same limitation. 
- * One can register mutliple callbacks by calling this function 
+ * change notification via "callback." This is because it uses the KVS-watch
+ * facility which has the same limitation.
+ * One can register mutliple callbacks by calling this function
  * multiple times. The callbacks will be invoked in the order
  * they are registered. Returns 0 on success; otherwise -1.
  */
@@ -101,9 +102,9 @@ int jsc_notify_status (flux_t h, jsc_handler_f callback, void *d);
 
 /**
  * Query the "key" attribute of JCB of "jobid." The JCB info on this attribute
- * will be passed via "jcb." It is the caller's responsibility to release "jcb." 
+ * will be passed via "jcb." It is the caller's responsibility to release "jcb."
  * All of the ownership associated with the sub-attributes in jcb's hierarchy
- * are trasferred to "jcb," so that json_object_put (*jcb) will free this hierarchy 
+ * are trasferred to "jcb," so that json_object_put (*jcb) will free this hierarchy
  * in its entirety.  Returns 0 on success; otherwise -1.
  */
 int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key,
@@ -124,7 +125,7 @@ int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key,
 int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb);
 
 
-/** 
+/**
  * A convenience routine (returning the internal state name correponding to "s.")
  */
 const char *jsc_job_num2state (job_state_t s);
