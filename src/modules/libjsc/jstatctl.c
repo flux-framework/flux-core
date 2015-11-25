@@ -37,6 +37,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/iterators.h"
 #include "src/common/libutil/shortjson.h"
 
 
@@ -591,10 +592,8 @@ static int update_rdl (flux_t h, int64_t j, const char *rs)
     int rc = -1;
     char *key = xasprintf ("lwj.%"PRId64".rdl", j);
     if (kvs_put_string (h, key, rs) < 0)
-    if (kvs_put_string (h, key, rs) < 0) 
         flux_log (h, LOG_ERR, "update %s: %s", key, strerror (errno));
     else if (kvs_commit (h) < 0)
-    else if (kvs_commit (h) < 0) 
         flux_log (h, LOG_ERR, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
@@ -605,20 +604,27 @@ static int update_rdl (flux_t h, int64_t j, const char *rs)
     return rc;
 }
 
-static int update_1ra (flux_t h, int r, int64_t j, JSON o)
+static int update_hash_1ra (flux_t h, int64_t j, JSON o, zhash_t *rtab)
 {
     int rc = 0;
     int64_t ncores = 0;
+    int64_t rank = 0;
+    int64_t *curcnt;
     char *key;
     JSON c = NULL;
 
     if (!Jget_obj (o, JSC_RDL_ALLOC_CONTAINED, &c)) return -1;
+    if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINING_RANK, &rank)) return -1;
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NCORES, &ncores)) return -1;
 
-    key = xasprintf ("lwj.%"PRId64".rank.%"PRId32".cores", j, r);
-    if ( (rc = kvs_put_int64 (h, key, ncores)) < 0) {
-        flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
-    }
+    key = xasprintf ("lwj.%"PRId64".rank.%"PRId64".cores", j, rank);
+    if (!(curcnt = zhash_lookup (rtab, key))) {
+        curcnt = xzmalloc (sizeof (*curcnt));
+        *curcnt = ncores;
+        zhash_insert (rtab, key, curcnt);
+        zhash_freefn (rtab, key, free);
+    } else
+        *curcnt = *curcnt + ncores;
     free (key);
     return rc;
 }
@@ -629,14 +635,32 @@ static int update_rdl_alloc (flux_t h, int64_t j, JSON o)
     int rc = -1;
     int size = 0;
     JSON ra_e = NULL;
+    const char *key = NULL;
+    zhash_t *rtab = NULL;
+    int64_t *ncores = NULL;
 
-    if (!Jget_ar_len (o, &size)) return -1;
+    if (!(rtab = zhash_new ()))
+        oom ();
+    if (!Jget_ar_len (o, &size))
+        goto done;
 
     for (i=0; i < (int) size; ++i) {
         if (!Jget_ar_obj (o, i, &ra_e))
             goto done;
-        if ( (rc = update_1ra (h, i, j, ra_e)) < 0)
+        /* 'o' represents an array of per-node core count to use.
+         * However, becasue the same rank can appear multiple times
+         * in this array in emulation mode, update_hash_1ra is
+         * used to determine the total core count per rank.
+         */
+        if ( (rc = update_hash_1ra (h, j, ra_e, rtab)) < 0)
             goto done;
+    }
+
+    FOREACH_ZHASH (rtab, key, ncores) {
+        if ( (rc = kvs_put_int64 (h, key, *ncores)) < 0) {
+            flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
+            goto done;
+        }
     }
     if (kvs_commit (h) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
@@ -645,6 +669,7 @@ static int update_rdl_alloc (flux_t h, int64_t j, JSON o)
     rc = 0;
 
 done:
+    zhash_destroy (&rtab);
     return rc;
 }
 

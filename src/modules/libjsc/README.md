@@ -73,7 +73,7 @@ service.
 | state-pair | JSC_STATE\_PAIR| dictionary     | A dictionary containing this old and new states of the job. See Table 3-2.     |
 | rdesc      | JSC_RDESC      | dictionary     | Information on the resources owned by this job. See Table 3-3.                 |
 | rdl        | JSC_RDL        | string         | RDL binary string allocated to the job                                         |
-| rdl_alloc  | JSC_RDL\_ALLOC | array of per-cmbd resources | Resource descriptor array (Resources allocated per cmbd - cmbd rank order). See Table 3-4.|
+| rdl_alloc  | JSC_RDL\_ALLOC | array of per-broker resources | Resource descriptor array (Resources allocated per broker - rank order). See Table 3-4.|
 | pdesc      | JSC_PDESC      | dictionary     | Information on the processes spawned by this job. See Table 3-5.               |
 
 **Table 3-1** Keys and values of top-level JCB attributes
@@ -103,9 +103,10 @@ service.
 **Table 3-4** Keys and values of *rdl\_alloc* attribute
 
 
-| Key        | Macro                             | Value Type     | Comment                         |
-|------------|-----------------------------------|----------------|---------------------------------|
-| cmbdncores | JSC_RDL\_ALLOC\_CONTAINED\_NCORES | 64-bit integer | Core count to use for this cmdb |
+| Key        | Macro                             | Value Type     | Comment                           |
+|------------|-----------------------------------|----------------|-----------------------------------|
+| cmbdrank   | JSC_RDL\_ALLOC\_CONTAINING\_RANK  | 64-bit integer | broker rank that manages the cores|
+| cmbdncores | JSC_RDL\_ALLOC\_CONTAINED\_NCORES | 64-bit integer | Core count to use for this broker |
 
 **Table 3-4-1** Keys and values of *rsarray* attribute
 
@@ -113,7 +114,7 @@ service.
 | Key        | Macro                | Value Type                  | Comment                                                             |
 |------------|----------------------|-----------------------------|---------------------------------------------------------------------|
 | procsize   | JSC_PDESC\_SIZE      | 64-bit integer              | Process count                                                       |
-| hostnames  | JSC_PDESC\_HOSTNAMES | array of strings            | Host name array (Names are current home cmbd rank)                  |
+| hostnames  | JSC_PDESC\_HOSTNAMES | array of strings            | Host name array (Names are current home broker rank)                |
 | executables| JSC_PDESC\_EXECS     | array of strings            | Executable name array                                               |
 | pdarray    | JSC_PDESC\_PDARRAY   | array of dictionary objects | Process descriptor array (MPI rank order). See Table 3-6 for each pdarray element |
 

@@ -240,7 +240,7 @@ EOF
 "
 
 test_expect_success 'jstat 13: update rdl_alloc' "
-    flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdncores\": 102}}]}' &&
+    flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdrank\": 0, \"cmbdncores\": 102}}]}' &&
     flux kvs get lwj.1.rank.0.cores > output.13.1 &&
     cat > expected.13.1 <<-EOF &&
 102
