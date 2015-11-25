@@ -32,6 +32,8 @@ flux_broker_SOURCES = \
 	shutdown.c \
 	attr.h \
 	attr.c \
+	sequence.h \
+	sequence.c \
 	log.h \
 	log.c
 

@@ -36,61 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 
-#if 0
-zlist_t * kvs_jobid_list (plugin_ctx_t *p)
-{
-    zlist_t *zl = NULL;
-    json_object_iter i;
-    json_object *val = NULL;
-    json_object *reply = NULL;
-    json_object *request = util_json_object_new_object ();
-
-    json_object_object_add (request, "lwj.id-list", NULL);
-
-    reply = flux_rpc (p, request, "kvs.get.dir");
-    if (!reply) {
-        err ("kvs_job_list: plugin request failed!");
-        goto done;
-    }
-    if (!(val = json_object_object_get (reply, "lwj.ids"))) {
-        errno = ENOENT;
-        err ("kvs_job_list: %s", strerror (errno));
-        goto done;
-    }
-    if (!(zl = zlist_new ())) {
-        errno = ENOMEM;
-        goto done;
-    }
-
-    json_object_object_foreachC (val, i) {
-        json_object *co;
-        if ((co = json_object_object_get (i.val, "FILEVAL"))) {
-            zlist_append (zl,
-                strdup (json_object_to_json_string_ext (co,
-                            JSON_C_TO_STRING_PLAIN)));
-        }
-    }
-
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-
-    return (zl);
-}
-
-void jobid_list_free (zlist_t *list)
-{
-    void *s;
-    while ((s = zlist_pop (list)))
-        free (s);
-    zlist_destroy (&list);
-}
-
-#endif
-
-static int kvs_job_new (flux_t h, unsigned long jobid)
+static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
 {
     int rc;
     char *key;
@@ -98,86 +44,46 @@ static int kvs_job_new (flux_t h, unsigned long jobid)
     if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
         return (-1);
 
-    flux_log (h, LOG_INFO, "Setting job %ld to reserved", jobid);
-    rc = kvs_put_string (h, key, "reserved");
+    flux_log (h, LOG_INFO, "Setting job %ld to %s", jobid, state);
+    rc = kvs_put_string (h, key, state);
     kvs_commit (h);
 
     free (key);
     return rc;
 }
 
-/*
- *  Set a new value for lwj.next-id and commit
- */
-static int set_next_jobid (flux_t h, unsigned long jobid)
+static int kvs_job_new (flux_t h, unsigned long jobid)
 {
-    int rc;
-    if ((rc = kvs_put_int64 (h, "lwj.next-id", jobid)) < 0) {
-        err ("kvs_put: %s", strerror (errno));
-        return -1;
-    }
-    return kvs_commit (h);
+    return kvs_job_set_state (h, jobid, "reserved");
 }
 
-/*
- *  Get and increment lwj.next-id (called from treeroot only)
- */
-static unsigned long increment_jobid (flux_t h)
+static int64_t next_jobid (flux_t h)
 {
-    int64_t ret;
-    int rc;
-    rc = kvs_get_int64 (h, "lwj.next-id", &ret);
-    if (rc < 0 && (errno == ENOENT))
-        ret = 1;
-    set_next_jobid (h, ret+1);
-    return (unsigned long) ret;
-}
+    int64_t ret = (int64_t) -1;
+    const char *json_str;
+    json_object *req, *resp;
+    flux_rpc_t *rpc;
 
-/*
- *  Tree-wide call for lwj_next_id. If not treeroot forward request
- *   up the tree. Otherwise increment jobid and return result.
- */
-static unsigned long lwj_next_id (flux_t h)
-{
-    unsigned long ret;
-    uint32_t rank;
-    if (flux_get_rank (h, &rank) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_rank: %s", strerror (errno));
-        return (0);
-    }
-    if (rank == 0)
-        ret = increment_jobid (h);
-    else {
-        const char *s;
-        json_object *o = NULL;
-        flux_rpc_t *rpc = flux_rpc (h, "job.next-id", NULL, FLUX_NODEID_ANY, 0);
-        if (!rpc) {
-            flux_log (h, LOG_ERR, "flux_rpc: %s", strerror (errno));
-            return (0);
-        }
-        if (flux_rpc_get (rpc, NULL, &s) < 0) {
-            flux_log (h, LOG_ERR, "flux_rpc: %s", strerror (errno));
-            return (0);
-        }
-        o = json_tokener_parse (s);
-        if (!o || util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
-            flux_log (h, LOG_ERR, "lwj_next_id: Bad object!");
-            ret = 0;
-        }
-        if (o)
-            json_object_put (o);
-    }
-    return (ret);
-}
+    req = util_json_object_new_object ();
+    util_json_object_add_string (req, "name", "lwj");
+    util_json_object_add_int64 (req, "preincrement", 1);
+    util_json_object_add_int64 (req, "postincrement", 0);
+    util_json_object_add_boolean (req, "create", true);
+    rpc = flux_rpc (h, "cmb.seq.fetch",
+                    json_object_to_json_string (req), 0, 0);
+    json_object_put (req);
 
-/*
- *  create json object : { id: <int64>id }
- */
-static json_object *json_id (int id)
-{
-    json_object *o = json_object_new_object ();
-    util_json_object_add_int64 (o, "id", id);
-    return (o);
+    if ((flux_rpc_get (rpc, NULL, &json_str) < 0)
+        || !(resp = json_tokener_parse (json_str))) {
+        flux_log (h, LOG_ERR, "rpc_get: %s\n", strerror (errno));
+        goto out;
+    }
+
+    util_json_object_get_int64 (resp, "value", &ret);
+    json_object_put (resp);
+out:
+    flux_rpc_destroy (rpc);
+    return ret;
 }
 
 static char * realtime_string (char *buf, size_t sz)
@@ -189,24 +95,23 @@ static char * realtime_string (char *buf, size_t sz)
     return (buf);
 }
 
-static void wait_for_event (flux_t h, int64_t id)
+static void wait_for_event (flux_t h, int64_t id, char *topic)
 {
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_EVENT,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 0,
-        .topic_glob = "wreck.state.reserved"
     };
+    match.topic_glob = topic;
     flux_msg_t *msg = flux_recv (h, match, 0);
     flux_msg_destroy (msg);
     return;
 }
 
-static void send_create_event (flux_t h, int64_t id)
+static void send_create_event (flux_t h, int64_t id, char *topic)
 {
     flux_msg_t *msg;
     char *json = NULL;
-    const char *topic = "wreck.state.reserved";
 
     if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
         flux_log (h, LOG_ERR, "failed to create state change event: %s",
@@ -225,7 +130,7 @@ static void send_create_event (flux_t h, int64_t id)
     /* Workaround -- wait for our own event to be published with a
      *  blocking recv. XXX: Remove when publish is synchronous.
      */
-    wait_for_event (h, id);
+    wait_for_event (h, id, topic);
 out:
     free (json);
 }
@@ -277,16 +182,47 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     return rc;
 }
 
+static bool ping_sched (flux_t h)
+{
+    bool retval = false;
+    const char *s;
+    flux_rpc_t *rpc;
+    json_object *o = util_json_object_new_object ();
+    util_json_object_add_int (o, "seq", 0);
+    rpc = flux_rpc (h, "sched.ping",
+                    json_object_to_json_string (o),
+                    FLUX_NODEID_ANY, 0);
+    json_object_put (o);
+    if (flux_rpc_get (rpc, NULL, &s) >= 0)
+        retval = true;
+    flux_rpc_destroy (rpc);
+    return (retval);
+}
+
+static bool sched_loaded (flux_t h)
+{
+    static bool v = false;
+    if (!v && ping_sched (h))
+        v = true;
+    return (v);
+}
+
+static int do_submit_job (flux_t h, unsigned long id)
+{
+    if (kvs_job_set_state (h, id, "submitted") < 0) {
+        flux_log (h, LOG_ERR, "kvs_job_set_state: %s\n", strerror (errno));
+        return (-1);
+    }
+    send_create_event (h, id, "wreck.state.submitted");
+    return (0);
+}
+
 static void job_request_cb (flux_t h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     json_object *o = NULL;
     const char *topic;
-    uint32_t rank;
-
-    if (flux_get_rank (h, &rank) < 0)
-        goto out;
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto out;
     flux_log (h, LOG_INFO, "got request %s", topic);
@@ -297,24 +233,20 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
     if (strcmp (topic, "job.shutdown") == 0) {
         flux_reactor_stop (flux_get_reactor (h));
     }
-    if (strcmp (topic, "job.next-id") == 0) {
-        if (rank == 0) {
-            unsigned long id = lwj_next_id (h);
-            json_object *ox = json_id (id);
-            if (flux_respond (h, msg, 0, json_object_to_json_string (ox)) < 0)
-                flux_log (h, LOG_ERR, "flux_respond (job.next-id): %s", strerror (errno));
-            json_object_put (ox);
-        }
-        else {
-            if (flux_send (h, msg, FLUX_NODEID_ANY) < 0)
-                flux_log (h, LOG_ERR, "error forwarding next-id request: %s",
-                          strerror (errno));
-        }
-    }
-    if (strcmp (topic, "job.create") == 0) {
+    else if ((strcmp (topic, "job.create") == 0)
+            || ((strcmp (topic, "job.submit") == 0)
+                 && sched_loaded (h))) {
         json_object *jobinfo = NULL;
-        unsigned long id = lwj_next_id (h);
+        int64_t id;
         bool should_workaround = false;
+        char *state;
+
+        if ((id = next_jobid (h)) < 0) {
+            if (flux_respond (h, msg, errno, NULL) < 0)
+                flux_log (h, LOG_ERR, "job_request: flux_respond: %s",
+                          strerror (errno));
+            goto out;
+        }
 
         //"Fix" for Race Condition
         if (util_json_object_get_boolean (o, "race_workaround",
@@ -337,13 +269,25 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
         kvs_commit (h);
 
         /* Send a wreck.state.reserved event for listeners */
-        send_create_event (h, id);
+        state = "reserved";
+        send_create_event (h, id, "wreck.state.reserved");
+        if ((strcmp (topic, "job.submit") == 0)
+            && (do_submit_job (h, id) != -1))
+                state = "submitted";
 
         /* Generate reply with new jobid */
         jobinfo = util_json_object_new_object ();
         util_json_object_add_int64 (jobinfo, "jobid", id);
+        util_json_object_add_string (jobinfo, "state", state);
         flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
         json_object_put (jobinfo);
+    }
+    else {
+        /* job.submit not functional due to missing sched. Return ENOSYS
+         *  for now
+         */
+        if (flux_respond (h, msg, ENOSYS, NULL) < 0)
+            flux_log (h, LOG_ERR, "flux_respond: %s", strerror (errno));
     }
 
 out:
@@ -352,7 +296,9 @@ out:
 }
 
 struct flux_msg_handler_spec mtab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job.*", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -368,7 +314,8 @@ int mod_main (flux_t h, int argc, char **argv)
      *
      * XXX: Remove when publish events are synchronous.
      */
-    if (flux_event_subscribe (h, "wreck.state.reserved") < 0) {
+    if ((flux_event_subscribe (h, "wreck.state.reserved") < 0)
+       || (flux_event_subscribe (h, "wreck.state.submitted") < 0)) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }

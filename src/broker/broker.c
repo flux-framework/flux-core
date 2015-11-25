@@ -64,6 +64,7 @@
 #include "hello.h"
 #include "shutdown.h"
 #include "attr.h"
+#include "sequence.h"
 #include "log.h"
 
 #ifndef ZMQ_IMMEDIATE
@@ -72,7 +73,7 @@
 #endif
 
 const char *default_modules =
-    "connector-local,modctl,kvs,live,mecho,job[0],wrexec,barrier,resource-hwloc";
+    "connector-local,modctl,kvs,live,mecho,job,wrexec,barrier,resource-hwloc";
 
 const char *default_boot_method = "pmi";
 
@@ -115,6 +116,7 @@ typedef struct {
     bool event_active;          /* primary event source is active */
     svchash_t *services;
     svchash_t *eventsvc;
+    seqhash_t *seq;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
@@ -275,6 +277,8 @@ int main (int argc, char *argv[])
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
     ctx.eventsvc = svchash_create ();
+    if (!(ctx.seq = sequence_hash_create ()))
+	oom ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
@@ -702,6 +706,7 @@ int main (int argc, char *argv[])
     snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
     svchash_destroy (ctx.eventsvc);
+    sequence_hash_destroy (ctx.seq);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
@@ -2259,6 +2264,21 @@ static int event_hb_cb (zmsg_t **zmsg, void *arg)
     return 0;
 }
 
+static int cmb_seq (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON out = NULL;
+    int rc = sequence_request_handler (ctx->seq, (flux_msg_t *) *zmsg, &out);
+
+    if (flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
+        flux_log (ctx->h, LOG_ERR, "cmb.seq: flux_respond: %s\n",
+                  strerror (errno));
+    if (out)
+        Jput (out);
+    zmsg_destroy (zmsg);
+    return (rc);
+}
+
 /* Shutdown:
  * - start the shutdown timer
  * - send shutdown message to all modules
@@ -2300,6 +2320,15 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->eventsvc, "hb", event_hb_cb, ctx)
           || !svc_add (ctx->eventsvc, "shutdown", event_shutdown_cb, ctx))
         err_exit ("can't register internal services");
+
+    if (ctx->rank == 0) {
+        /* Add rank 0 only services:
+         */
+        if (!svc_add (ctx->services, "cmb.seq.fetch", cmb_seq, ctx)
+                || !svc_add (ctx->services, "cmb.seq.set", cmb_seq, ctx)
+                || !svc_add (ctx->services, "cmb.seq.destroy", cmb_seq, ctx))
+            err_exit ("can't register rank 0 internal services");
+    }
 }
 
 /**

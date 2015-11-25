@@ -71,18 +71,6 @@ local function alloc_tasks (f, wreck, lwj)
     local size = f.size
     local res
 
-    -- If nnodes was provided but -n, --ntasks not set, then
-    --  set ntasks to nnodes
-    if not wreck:getopt ('n') and wreck.nnodes then
-        wreck.ntasks = wreck.nnodes
-    end
-    wreck.ntasks = tonumber (wreck.ntasks)
-
-    -- If nnodes was not provided set it to the lesser of
-    --  session size and ntasks
-    if not wreck.nnodes then
-        wreck.nnodes = math.min (wreck.ntasks, f.size)
-    end
     res = fake_resource_array (wreck, wreck.nnodes or f.size)
     wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
@@ -147,10 +135,6 @@ local sigtimer
 local state = ""
 
 wreck:add_options ({
-    { name = "tasks-per-node", char = "t", arg = "N",
-        usage = "Force number of tasks per node" },
-    { name = "nnodes", char = "N", arg = "N",
-        usage = "Force number of nodes" },
     { name = 'pre-launch-hook', char = "P", arg = "CODE",
         usage = "execute Lua CODE before launch." },
     { name = 'detach', char = "d",
@@ -171,41 +155,26 @@ local tt = timer.new()
 local f, err = flux.new()
 if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
---  Check requested "nnodes" against available:
---
-if wreck.nnodes and wreck.nnodes > f.size then
-    wreck:die ("Error: Requested nodes (%d) exceeds available (%d)\n",
-               wreck.nnodes, f.size)
-end
-
-
 --
 --  Create a job request as Lua table:
 --
-local jobreq = wreck:jobreq()
-
+local jobreq = wreck:jobreq (f)
 wreck:verbose ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
     tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
 --
---  Send job request message with tag="job.create"
+--  Create a new job in kvs
 --
-local resp, err = f:rpc ('job.create', jobreq)
-if not resp then
-    wreck:die ("job.create: %s. Is the `job' module loaded?\n", err)
-end
+local jobid, err = wreck:createjob ()
+if not jobid then wreck:die ("%s\n", err) end
 
-if resp.errnum then
-    wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
-end
-
-wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
+wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), jobid)
 
 --
 --  Get a handle to this lwj kvsdir:
 --
-local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
-if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
+local lwj, err = f:kvsdir ("lwj.%d", jobid)
+if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", jobid, err) end
 
 --if wreck:getopt ("i") then
 -- Always run in "immediate" mode for now:
@@ -213,8 +182,6 @@ if true then
     --
     --  Send event to run the job
     --
-    wreck.nnodes = wreck:getopt ("N")
-    wreck.tasks_per_node = wreck:getopt ("t")
     alloc_tasks (f, wreck, lwj)
     -- Ensure lwj nnodes matches fake allocation
     lwj.nnodes = tonumber (wreck.nnodes)
@@ -232,10 +199,10 @@ if true then
 
     -- Now send run event:
     wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
-    local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
+    local rc,err = f:sendevent ("wrexec.run.%d", jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
     if wreck.opts.d then
-        print (resp.jobid)
+        print (jobid)
         os.exit(0)
     end
 else
@@ -253,11 +220,11 @@ end
 local function check_job_completed ()
     if state == "failed" then
        log:dump()
-       wreck:die ("job %d failed\n", resp.jobid)
+       wreck:die ("job %d failed\n", jobid)
     end
     if taskio:complete() and
        (state == "complete" or state == "reaped") then
-        local rc = lwj_return_code (f, wreck, resp.jobid)
+        local rc = lwj_return_code (f, wreck, jobid)
         if rc == 0 then
             wreck:verbose ("All tasks completed successfully.\n");
         end
@@ -270,7 +237,7 @@ end
 --
 taskio, err = ioattach {
      flux = f,
-     jobid = resp.jobid,
+     jobid = jobid,
      ntasks = wreck.ntasks,
      labelio = wreck.opts.l,
      on_completion = check_job_completed
@@ -279,7 +246,7 @@ if not taskio then wreck:die ("error opening task io: %s\n", err) end
 
 log, err = logstream {
      flux = f,
-     jobid = resp.jobid,
+     jobid = jobid,
 }
 if not log then wreck:die ("error opening log stream: %s\n", err) end
 
@@ -304,7 +271,7 @@ f:iowatcher {
 --  Finally, a kvswatcher for the LWJ state:
 --
 local kw, err = f:kvswatcher  {
-    key = string.format ("lwj.%d.state", resp.jobid),
+    key = string.format ("lwj.%d.state", jobid),
     handler = function (kw, result)
         if result then
             state = result
@@ -343,8 +310,8 @@ repeat
     --   Check to see if we should terminate the job now:
     --
     if terminate then
-        wreck:verbose ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
-        local rc,err = f:sendevent ("wreck.%d.kill", resp.jobid)
+        wreck:verbose ("%4.03fs: Killing LWJ %d\n", tt:get0(), jobid)
+        local rc,err = f:sendevent ("wreck.%d.kill", jobid)
         if not rc then
             wreck:say ("Error: Failed to send kill event: %s", err)
         end

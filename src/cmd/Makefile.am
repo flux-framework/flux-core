@@ -34,6 +34,7 @@ bin_PROGRAMS = flux
 #
 
 dist_fluxcmd_SCRIPTS = \
+	flux-submit \
 	flux-wreckrun \
 	flux-wreck \
 	flux-exec \

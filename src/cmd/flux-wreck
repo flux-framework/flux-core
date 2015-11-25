@@ -294,6 +294,25 @@ Command {
  end
 }
 
+Command {
+ name = "last-jobid",
+ description = "Display the last jobid in lwj id sequence",
+ usage = "",
+ handler = function (self, arg)
+    local req = {
+       name = "lwj",
+       preincrement = 0,
+       postincrement = 0,
+       create = false
+    }
+    local resp, err = f:rpc ("cmb.seq.fetch", req)
+    if not resp then
+        die ("No last jobid found: %s", err)
+    end
+    print (resp.value)
+ end
+}
+
 
 local function main_usage ()
     eprintf ("Usage: %s COMMAND [OPTIONS]...\n", prog)

@@ -11,6 +11,7 @@ MAN1_FILES_PRIMARY = \
 	flux-topo.1 \
 	flux-snoop.1 \
 	flux-ping.1 \
+	flux-submit.1 \
 	flux-wreckrun.1 \
 	flux-wreck.1 \
 	flux-start.1 \

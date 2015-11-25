@@ -41,6 +41,9 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['nnodes']  = { char = 'N', arg = "N" },
+    ['tasks-per-node']  =
+                   { char = 't', arg = "N" },
     ['walltime'] = { char = "T", arg = "SECONDS" },
     ['output'] =   { char = "O", arg = "FILENAME" },
     ['error'] =    { char = "E", arg = "FILENAME" },
@@ -92,6 +95,8 @@ function wreck:usage()
   -h, --help                 Display this message
   -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
+  -N, --nnodes=N             Force number of nodes
+  -t, --tasks-per-node=N     Force number of tasks per node
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
   -T, --walltime=N[SUFFIX]   Set max job walltime to N seconds. Optional
                              suffix may be 's' for seconds (default), 'm'
@@ -138,7 +143,7 @@ local function get_filtered_env ()
 end
 
 function wreck:add_options (opts)
-    for _,v in pairs (opts) do
+    for k,v in pairs (opts) do
         if not type (v) == "table" then return nil, "Invalid parameter" end
 
         local char = v.char
@@ -199,8 +204,15 @@ function wreck:parse_cmdline (arg)
         os.exit (1)
     end
 
-    self.nnodes = tonumber (self.opts.N) or 1
-    self.ntasks = tonumber (self.opts.n) or 1
+    -- If nnodes was provided but -n, --ntasks not set, then
+    --  set ntasks to nnodes
+    if self.opts.N and not self.opts.n then
+        self.opts.n = self.opts.N
+    end
+
+    self.nnodes = self.opts.N and tonumber (self.opts.N)
+    self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
+    self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
     for i = self.optind, #arg do
@@ -243,13 +255,23 @@ local function inputs_table_from_args (wreck, s)
     return inputs
 end
 
+local function fixup_nnodes (wreck)
+    if not wreck.flux then return end
+    if not wreck.nnodes then
+        wreck.nnodes = math.min (wreck.ntasks, wreck.flux.size)
+    elseif wreck.nnodes > wreck.flux.size then
+        self:die ("Requested nodes (%d) exceeds available (%d)\n",
+                  wreck.nnodes, f.size)
+    end
+end
+
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
-    local nnodes = tonumber (self.opts.N)
-    local ntasks = tonumber (self.opts.n)
+    fixup_nnodes (self)
+
     local jobreq = {
-        nnodes =  tonumber (self.opts.N) or 1,
-        ntasks =  tonumber (self.opts.n) or 1,
+        nnodes =  self.nnodes,
+        ntasks =  self.ntasks,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),
@@ -271,6 +293,41 @@ function wreck:jobreq ()
     end
     jobreq ["input.config"] = inputs_table_from_args (self, self.opts.i)
     return jobreq
+end
+
+local function send_job_request (self, name)
+    if not self.flux then
+        local f, err = require 'flux'.new ()
+        if not f then return nil, err end
+        self.flux = f
+    end
+    local jobreq, err = self:jobreq ()
+    if not jobreq then
+        return nil, err
+    end
+    local resp, err = self.flux:rpc (name, jobreq)
+    if not resp then
+        return nil, "flux.rpc: "..err
+    end
+    if resp.errnum then
+        return nil, name.." message failed with errnum="..resp.errnum
+    end
+    return resp
+end
+
+function wreck:submit ()
+    local resp, err = send_job_request (self, "job.submit")
+    if not resp then return nil, err end
+    if resp.state ~= "submitted" then
+        return nil, "job submission failure, job left in state="..resp.state
+    end
+    return resp.jobid
+end
+
+function wreck:createjob ()
+    local resp, err = send_job_request (self, "job.create")
+    if not resp then return nil, err end
+    return resp.jobid
 end
 
 local function initialize_args (arg)
@@ -320,6 +377,7 @@ function wreck.logstream (arg)
     local f = arg.flux
     if not f then return nil, "flux argument member required" end
     local rc, err = initialize_args (arg)
+    if not arg.nnodes then return nil, "nnodes argument required" end
     if not rc then return nil, err end
     l.watchers = {}
     for i = 0, arg.nnodes - 1 do
@@ -381,9 +439,16 @@ function wreck.status (arg)
     return max, msgs
 end
 
-function wreck.new (prog)
+local function shortprog ()
+    local prog = string.match (arg[0], "([^/]+)$")
+    return prog:match ("flux%-(.+)$")
+end
+
+function wreck.new (arg)
+    if not arg then arg = {} end
     local w = setmetatable ({extra_options = {}}, wreck) 
-    w.prog = prog
+    w.prog = arg.prog or shortprog ()
+    w.flux = arg.flux
     return w
 end
 

@@ -12,8 +12,7 @@ test_under_flux ${SIZE}
 
 #  Return the previous jobid
 last_job_id() {
-	local n=$(flux kvs get "lwj.next-id")
-	echo $((n-1))
+	flux wreck last-jobid
 }
 
 test_expect_success 'wreckrun: works' '
@@ -348,6 +347,15 @@ test_expect_success 'flux-wreck: kill' '
 test_expect_success 'flux-wreck: ls works' '
 	flux wreckrun -n2 -N2 hostname &&
 	flux wreck ls | tail -1 | grep "hostname$"
+'
+
+flux module list | grep -q sched || test_set_prereq NO_SCHED
+test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded' '
+	test_must_fail flux submit -n2 hostname 2>err.submit &&
+	cat >expected.submit <<-EOF &&
+	submit: flux.rpc: Function not implemented
+	EOF
+	test_cmp expected.submit err.submit
 '
 
 test_debug "flux wreck ls"

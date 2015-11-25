@@ -44,6 +44,12 @@ exit with the highest exit code of all tasks.
 Send SIGTERM to running job 'jobid'. If '--signal' is used, send signal 'N'
 where 'N' may  be a signal number or name such as 'SIGKILL'.
 
+*last-jobid*::
+Return the current value of the 'lwj' sequence number, that is the last
+jobid allocated to a submitted wreck job. Other jobs may be started
+between the time the id is obtained and when it is displayed in this
+command, so 'last-jobid' should not be relied upon during real workloads.
+
 AUTHOR
 ------
 This page is maintained by the Flux community.
