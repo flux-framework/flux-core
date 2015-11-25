@@ -345,11 +345,32 @@ msg (const char *fmt, ...)
 
 int check_int (int res,
                const char *fmt,
-               ...  );
+               ...  )
+{
+    if (res < 0) {
+        va_list ap;
+        va_start (ap, fmt);
+        log_msg (fmt, ap);
+        va_end (ap);
+        exit (1);
+    }
+    return res;
+}
+
 
 void *check_ptr (void *res,
                  const char *fmt,
-                 ... );
+                 ... )
+{
+    if (res == NULL) {
+        va_list ap;
+        va_start (ap, fmt);
+        log_msg (fmt, ap);
+        va_end (ap);
+        exit (1);
+    }
+    return res;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

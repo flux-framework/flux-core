@@ -24,48 +24,27 @@ void msg_exit (const char *fmt, ...)
 void msg (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2)));
 
-__attribute__ ((format (printf, 2, 3)))
-inline int check_int (int res,
+int check_int (int res,
                const char *fmt,
                ...  )
-{
-    if (res < 0) {
-        va_list ap;
-        va_start (ap, fmt);
-        log_msg (fmt, ap);
-        va_end (ap);
-        exit (1);
-    }
-    return res;
-}
-
-__attribute__ ((format (printf, 2, 3)))
-inline void *check_ptr (void *res,
+__attribute__ ((format (printf, 2, 3)));
+void *check_ptr (void *res,
                  const char *fmt,
                  ... )
-{
-    if (res == NULL) {
-        va_list ap;
-        va_start (ap, fmt);
-        log_msg (fmt, ap);
-        va_end (ap);
-        exit (1);
-    }
-    return res;
-}
+__attribute__ ((format (printf, 2, 3)));
 
-#define REAL_STRINGIFY(X) #X
-#define STRINGIFY(X) REAL_STRINGIFY (X)
-#define POSITION __FILE__ ":" STRINGIFY (__LINE__)
+#define LOG_REAL_STRINGIFY(X) #X
+#define LOG_STRINGIFY(X) LOG_REAL_STRINGIFY (X)
+#define LOG_POSITION __FILE__ ":" LOG_STRINGIFY (__LINE__)
 
 // NOTE: FMT string *MUST* be a string literal
-#define CHECK_INT(X, ...) check_int ((X), POSITION \
+#define CHECK_INT(X, ...) check_int ((X), LOG_POSITION \
                                           ":negative integer from:" \
-                                          STRINGIFY (X) ":" \
+                                          LOG_STRINGIFY (X) ":" \
                                           __VA_ARGS__)
-#define CHECK_PTR(X, ...) check_ptr ((X), POSITION \
+#define CHECK_PTR(X, ...) check_ptr ((X), LOG_POSITION \
                                           ":null pointer from:" \
-                                          STRINGIFY (X) ":" \
+                                          LOG_STRINGIFY (X) ":" \
                                           __VA_ARGS__)
 
 #define oom() do { \
