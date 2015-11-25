@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 void log_init (char *p);
 void log_fini (void);
@@ -22,6 +23,50 @@ void msg_exit (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2), noreturn));
 void msg (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2)));
+
+__attribute__ ((format (printf, 2, 3)))
+inline int check_int (int res,
+               const char *fmt,
+               ...  )
+{
+    if (res < 0) {
+        va_list ap;
+        va_start (ap, fmt);
+        log_msg (fmt, ap);
+        va_end (ap);
+        exit (1);
+    }
+    return res;
+}
+
+__attribute__ ((format (printf, 2, 3)))
+inline void *check_ptr (void *res,
+                 const char *fmt,
+                 ... )
+{
+    if (res == NULL) {
+        va_list ap;
+        va_start (ap, fmt);
+        log_msg (fmt, ap);
+        va_end (ap);
+        exit (1);
+    }
+    return res;
+}
+
+#define REAL_STRINGIFY(X) #X
+#define STRINGIFY(X) REAL_STRINGIFY (X)
+#define POSITION __FILE__ ":" STRINGIFY (__LINE__)
+
+// NOTE: FMT string *MUST* be a string literal
+#define CHECK_INT(X, ...) check_int ((X), POSITION \
+                                          ":negative integer from:" \
+                                          STRINGIFY (X) ":" \
+                                          __VA_ARGS__)
+#define CHECK_PTR(X, ...) check_ptr ((X), POSITION \
+                                          ":null pointer from:" \
+                                          STRINGIFY (X) ":" \
+                                          __VA_ARGS__)
 
 #define oom() do { \
   errn_exit (ENOMEM, "%s::%s(), line %d", __FILE__, __FUNCTION__, __LINE__); \

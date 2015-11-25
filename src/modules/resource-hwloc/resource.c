@@ -51,7 +51,8 @@ int try_hwloc_load (ctx_t *ctx, const char *const path)
         // load my structure from the hwloc xml file at this path
         hwloc_topology_set_xml (ctx->topology, path);
     }
-    return hwloc_topology_load (ctx->topology);
+    return CHECK_INT (hwloc_topology_load (ctx->topology),
+                      "failed to load hwloc topology, path=%s", path);
 }
 
 static ctx_t *getctx (flux_t h)

@@ -343,6 +343,14 @@ msg (const char *fmt, ...)
     va_end (ap);
 }
 
+int check_int (int res,
+               const char *fmt,
+               ...  );
+
+void *check_ptr (void *res,
+                 const char *fmt,
+                 ... );
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
