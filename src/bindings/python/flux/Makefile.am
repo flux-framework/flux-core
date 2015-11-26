@@ -19,6 +19,7 @@ _core_build.py: $(MAKE_BINDING)
 	                          --modname _core \
 				  --add_sub '.*va_list.*|||' \
 				  --ignore_header 'handle_impl' \
+				  --ignore_header 'macros' \
 				  --add_long_sub 'FLUX_SEC_TYPE_ALL.*\n.*\),|||FLUX_SEC_TYPE_ALL = 7,'\
 				  flux.h
 

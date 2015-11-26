@@ -5,6 +5,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#include "macros.h"
+
 void log_init (char *p);
 void log_fini (void);
 void log_set_dest (char *dest);
@@ -33,18 +35,16 @@ void *check_ptr (void *res,
                  ... )
 __attribute__ ((format (printf, 2, 3)));
 
-#define LOG_REAL_STRINGIFY(X) #X
-#define LOG_STRINGIFY(X) LOG_REAL_STRINGIFY (X)
-#define LOG_POSITION __FILE__ ":" LOG_STRINGIFY (__LINE__)
+#define LOG_POSITION __FILE__ ":" STRINGIFY (__LINE__)
 
 // NOTE: FMT string *MUST* be a string literal
 #define CHECK_INT(X, ...) check_int ((X), LOG_POSITION \
                                           ":negative integer from:" \
-                                          LOG_STRINGIFY (X) ":" \
+                                          STRINGIFY (X) ":" \
                                           __VA_ARGS__)
 #define CHECK_PTR(X, ...) check_ptr ((X), LOG_POSITION \
                                           ":null pointer from:" \
-                                          LOG_STRINGIFY (X) ":" \
+                                          STRINGIFY (X) ":" \
                                           __VA_ARGS__)
 
 #define oom() do { \

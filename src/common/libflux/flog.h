@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "src/common/libutil/macros.h"
+
 #include "handle.h"
 
 typedef void (*flux_log_f)(const char *facility, int level, uint32_t rank,
@@ -46,18 +48,16 @@ void *flux_log_check_ptr (flux_t h,
                  const char *fmt,
                  ... );
 
-#define FLOG_REAL_STRINGIFY(X) #X
-#define FLOG_STRINGIFY(X) FLOG_REAL_STRINGIFY (X)
-#define FLOG_POSITION __FILE__ ":" FLOG_STRINGIFY (__LINE__)
+#define FLOG_POSITION __FILE__ ":" STRINGIFY (__LINE__)
 
 // NOTE: FMT string *MUST* be a string literal
 #define FLUX_CHECK_INT(H, X, ...) flux_log_check_int ((H), (X), FLOG_POSITION \
                                           ":negative integer from:" \
-                                          FLOG_STRINGIFY (X) ":" \
+                                          STRINGIFY (X) ":" \
                                           __VA_ARGS__)
 #define FLUX_CHECK_PTR(H, X, ...) flux_log_check_ptr ((H), (X), FLOG_POSITION \
                                           ":null pointer from:" \
-                                          FLOG_STRINGIFY (X) ":" \
+                                          STRINGIFY (X) ":" \
                                           __VA_ARGS__)
 
 #define FLUX_LOG_ERROR(h) \
