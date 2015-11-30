@@ -8,7 +8,7 @@ typedef struct kz_struct kz_t;
 
 typedef void (*kz_ready_f) (kz_t *kz, void *arg);
 
-enum {
+enum kz_flags {
     KZ_FLAGS_READ           = 0x0001, /* choose read or write, not both */
     KZ_FLAGS_WRITE          = 0x0002,
     KZ_FLAGS_MODEMASK       = 0x0003,
@@ -43,7 +43,7 @@ kz_t *kz_gopen (flux_t h, const char *grpname, int nprocs,
  */
 int kz_put (kz_t *kz, char *data, int len);
 
-/* Read one block of data to a KVS stream.  Returns the number of bytes
+/* Read one block of data from a KVS stream.  Returns the number of bytes
  * read, 0 on EOF, or -1 on errro with errno set.  If no data is available,
  * kz_get() will return EAGAIN if kz was opened with KZ_FLAGS_NONBLOCK;
  * otherwise it will block until data is available.

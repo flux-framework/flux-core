@@ -259,7 +259,7 @@ class Wrapper(WrapperBase):
             return getattr(self, name)
 
         if not callable(fun): # pragma: no cover
-          return new_fun
+          return fun
 
         new_fun = self.check_wrap(fun, name)
         new_method = MethodType(new_fun, None, self.__class__)
