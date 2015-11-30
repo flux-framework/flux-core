@@ -16,6 +16,8 @@ fluxmod_LTLIBRARIES = kvs.la
 
 kvs_la_SOURCES = \
 	kvs.c \
+	cache.c \
+	cache.h \
 	waitqueue.c \
 	waitqueue.h \
 	proto.c \

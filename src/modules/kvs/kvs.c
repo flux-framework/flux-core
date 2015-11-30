@@ -84,6 +84,7 @@
 
 #include "waitqueue.h"
 #include "proto.h"
+#include "cache.h"
 
 typedef char href_t[41];
 
@@ -96,7 +97,7 @@ typedef char href_t[41];
  */
 #define SYMLINK_CYCLE_LIMIT 10
 
-/* Expire hobj from cache after 'max_lastuse_age' heartbeats.
+/* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
 const int max_lastuse_age = 5;
 
@@ -108,20 +109,6 @@ const double min_commit_window = 1E-3;
 /* Include root directory in kvs.setroot event.
  */
 const bool event_includes_rootdir = true;
-
-/* Hash object in ctx->store by SHA1 key.
- */
-typedef struct {
-    waitqueue_t *waitlist;  /* waiters for HOBJ_COMPLETE */
-    json_object *o;         /* value object */
-    int size;               /* size of value for stats, est by serialization */
-    int lastuse_epoch;      /* time of last use for cache expiry */
-    enum {
-        HOBJ_COMPLETE,      /* nothing in progress, o != NULL */
-        HOBJ_INCOMPLETE,    /* load in progress, o == NULL */
-        HOBJ_DIRTY,         /* store in progress, o != NULL */
-    } state;
-} hobj_t;
 
 typedef struct {
     json_object *dirents;   /* hash key (e.g. a.b.c) => dirent */
@@ -155,7 +142,7 @@ typedef struct {
 } stats_t;
 
 typedef struct {
-    zhash_t *store;         /* hash SHA1 => hobj_t */
+    struct cache *cache;    /* SHA1 => cache_entry */
     href_t rootdir;         /* current root SHA1 */
     int rootseq;            /* current root version (for ordering) */
     zhash_t *commits;       /* hash of pending put/commits by sender name */
@@ -191,7 +178,7 @@ static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
     if (ctx) {
-        zhash_destroy (&ctx->store);
+        cache_destroy (ctx->cache);
         zhash_destroy (&ctx->commits);
         zhash_destroy (&ctx->fences);
         if (ctx->watchlist)
@@ -213,11 +200,11 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         if (!(r = flux_get_reactor (h)))
             goto error;
-        ctx->store = zhash_new ();
+        ctx->cache = cache_create ();
         ctx->commits = zhash_new ();
         ctx->fences = zhash_new ();
         ctx->watchlist = wait_queue_create ();
-        if (!ctx->store || !ctx->commits || !ctx->fences || !ctx->watchlist) {
+        if (!ctx->cache || !ctx->commits || !ctx->fences || !ctx->watchlist) {
             errno = ENOMEM;
             goto error;
         }
@@ -312,39 +299,6 @@ static void fence_destroy (fence_t *f)
     free (f);
 }
 
-static bool hobj_update (ctx_t *ctx, hobj_t *hp, json_object *o)
-{
-    bool noop = false ;
-    if (hp->o) {
-        json_object_put (o);
-        noop = true;
-    } else {
-        hp->o = o;
-        hp->size = util_json_size (hp->o);
-    }
-    return !noop;
-}
-
-static hobj_t *hobj_create (ctx_t *ctx, json_object *o)
-{
-    hobj_t *hp = xzmalloc (sizeof (*hp));
-
-    hp->waitlist = wait_queue_create ();
-    if (o) {
-        hp->o = o;
-        hp->size = util_json_size (hp->o);
-    }
-    return hp;
-}
-
-static void hobj_destroy (hobj_t *hp)
-{
-    if (hp->o)
-        json_object_put (hp->o);
-    wait_queue_destroy (hp->waitlist);
-    free (hp);
-}
-
 static void load_completion (flux_rpc_t *rpc, void *arg)
 {
     ctx_t *ctx = arg;
@@ -392,25 +346,21 @@ error:
 
 static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
 {
-    hobj_t *hp = zhash_lookup (ctx->store, ref);
+    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     bool done = true;
 
-    if (hp)
-        hp->lastuse_epoch = ctx->epoch;
     if (ctx->master) {
         /* FIXME: probably should handle this "can't happen" situation.
          */
-        if (!hp || hp->state != HOBJ_COMPLETE)
+        if (!hp || !cache_entry_get_valid (hp))
             msg_exit ("dangling ref %s", ref);
     }
 
     /* Create an incomplete hash entry if none found.
      */
     if (!hp) {
-        hp = hobj_create (ctx, NULL);
-        zhash_insert (ctx->store, ref, hp);
-        zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
-        hp->state = HOBJ_INCOMPLETE;
+        hp = cache_entry_create (NULL);
+        cache_insert (ctx->cache, ref, hp);
         if (load_request_send (ctx, ref) < 0)
             flux_log_error (ctx->h, "load_request_send");
         ctx->stats.faults++;
@@ -418,18 +368,13 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
     /* If hash entry is incomplete (either created above or earlier),
      * arrange to stall caller if wait_t was provided.
      */
-    if (hp->state == HOBJ_INCOMPLETE) {
-        if (wait)
-            wait_addqueue (hp->waitlist, wait);
+    if (!cache_entry_get_valid (hp)) {
+        cache_entry_wait (hp, wait);
         done = false; /* stall */
     }
 
-    if (done) {
-        FASSERT (ctx->h, hp != NULL);
-        FASSERT (ctx->h, hp->o != NULL);
-        if (op)
-            *op = hp->o;
-    }
+    if (done && op)
+        *op = cache_entry_get_json (hp);
     return done;
 }
 
@@ -437,19 +382,13 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
  */
 static void load_complete (ctx_t *ctx, const href_t ref, json_object *o)
 {
-    hobj_t *hp = zhash_lookup (ctx->store, ref);
+    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
 
     if (hp) {
-        (void)hobj_update (ctx, hp, o);
-        if (hp->state == HOBJ_INCOMPLETE) {
-            hp->state = HOBJ_COMPLETE;
-            wait_runqueue (hp->waitlist);
-        }
+        cache_entry_set_json (hp, o);
     } else {
-        hp = hobj_create (ctx, o);
-        hp->state = HOBJ_COMPLETE;
-        zhash_update (ctx->store, ref, hp);
-        zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
+        hp = cache_entry_create (o);
+        cache_insert (ctx->cache, ref, hp);
     }
 }
 
@@ -501,11 +440,10 @@ error:
  */
 static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t *wait)
 {
-    hobj_t *hp = zhash_lookup (ctx->store, ref);
+    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
 
-    if (hp && hp->state == HOBJ_DIRTY) {
-        if (wait)
-            wait_addqueue (hp->waitlist, wait);
+    if (cache_entry_get_dirty (hp)) {
+        cache_entry_wait (hp, wait);
         return true;
     }
     return false;
@@ -513,7 +451,7 @@ static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t *wait)
 
 static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
-    hobj_t *hp;
+    struct cache_entry *hp;
     zdigest_t *zd;
     const char *s = json_object_to_json_string (o);
     const char *zdstr;
@@ -527,17 +465,17 @@ static void store (ctx_t *ctx, json_object *o, href_t ref)
     memcpy (ref, zdstr, strlen (zdstr) + 1);
     zdigest_destroy (&zd);
 
-    if ((hp = zhash_lookup (ctx->store, ref))) {
-        if (!hobj_update (ctx, hp, o))
+    if ((hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+        if (cache_entry_get_valid (hp)) {
             ctx->stats.noop_stores++;
+            json_object_put (o);
+        } else
+            cache_entry_set_json (hp, o);
     } else {
-        hp = hobj_create (ctx, o);
-        zhash_insert (ctx->store, ref, hp);
-        zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
-        if (ctx->master) {
-            hp->state = HOBJ_COMPLETE;
-        } else {
-            hp->state = HOBJ_DIRTY;
+        hp = cache_entry_create (o);
+        cache_insert (ctx->cache, ref, hp);
+        if (!ctx->master) {
+            cache_entry_set_dirty (hp, true);
             store_request_send (ctx, ref, o);
         }
     }
@@ -547,12 +485,8 @@ static void store (ctx_t *ctx, json_object *o, href_t ref)
  */
 static void store_complete (ctx_t *ctx, href_t ref)
 {
-    hobj_t *hp = zhash_lookup (ctx->store, ref);
-
-    if (hp && hp->state == HOBJ_DIRTY) {
-        hp->state = HOBJ_COMPLETE;
-        wait_runqueue (hp->waitlist);
-    }
+    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
+    cache_entry_set_dirty (hp, false);
 }
 
 static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
@@ -909,31 +843,6 @@ done:
     Jput (out);
 }
 
-static int expire_cache (ctx_t *ctx, int thresh)
-{
-    zlist_t *keys;
-    char *key;
-    hobj_t *hp;
-    int expcount = 0;
-
-    if (!(keys = zhash_keys (ctx->store)))
-        oom ();
-    while ((key = zlist_pop (keys))) {
-        if ((hp = zhash_lookup (ctx->store, key))) {
-            if (hp->lastuse_epoch == 0)
-                hp->lastuse_epoch = ctx->epoch;
-            if (hp->state == HOBJ_COMPLETE
-              && (thresh == 0 || ctx->epoch - hp->lastuse_epoch  > thresh)) {
-                zhash_delete (ctx->store, key);
-                expcount++;
-            }
-        }
-        free (key);
-    }
-    zlist_destroy (&keys);
-    return expcount;
-}
-
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
@@ -947,8 +856,8 @@ static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = EINVAL;
         goto done;
     }
-    size = zhash_size (ctx->store);
-    expcount = expire_cache (ctx, 0);
+    size = cache_count_entries (ctx->cache);
+    expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0);
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
     rc = 0;
 done:
@@ -966,8 +875,8 @@ static void dropcache_event_cb (flux_t h, flux_msg_handler_t *w,
         return;
     if (flux_event_decode (msg, NULL, NULL) < 0)
         return;
-    size = zhash_size (ctx->store);
-    expcount = expire_cache (ctx, 0);
+    size = cache_count_entries (ctx->cache);
+    expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0);
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
 }
 
@@ -988,7 +897,7 @@ static void heartbeat_cb (flux_t h, flux_msg_handler_t *w,
     /* "touch" root */
     (void)load (ctx, ctx->rootdir, NULL, NULL);
 
-    expire_cache (ctx, max_lastuse_age);
+    cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age);
 }
 
 /* Get dirent containing requested key.
@@ -1840,34 +1749,6 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
     free (sender);
 }
 
-static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *ni, int *nd)
-{
-    zlist_t *keys;
-    hobj_t *hp;
-    char *key;
-    int size = 0;
-    int incomplete = 0;
-    int dirty = 0;
-
-    if (!(keys = zhash_keys (ctx->store)))
-        oom ();
-    while ((key = zlist_pop (keys))) {
-        if (!(hp = zhash_lookup (ctx->store, key)) || !hp->o)
-            continue;
-        tstat_push (ts, hp->size);
-        if (hp->state == HOBJ_DIRTY)
-            dirty++;
-        else if (hp->state == HOBJ_INCOMPLETE)
-            incomplete++;
-        size += hp->size;
-        free (key);
-    }
-    zlist_destroy (&keys);
-    *sp = size;
-    *ni = incomplete;
-    *nd = dirty;
-}
-
 static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
@@ -1880,7 +1761,7 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto done;
     memset (&ts, 0, sizeof (ts));
-    stats_cache_objects (ctx, &ts, &size, &incomplete, &dirty);
+    cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty);
     Jadd_double (o, "obj size total (MiB)", (double)size/1048576);
     util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
     Jadd_int (o, "#obj dirty", dirty);
