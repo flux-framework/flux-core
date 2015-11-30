@@ -26,17 +26,16 @@ class Watcher(object):
         if self.handle is not None:
             self.destroy()
 
-    @abc.abstractmethod
     def start(self):
-        pass
+        raw.flux_watcher_start(self.handle)
 
-    @abc.abstractmethod
     def stop(self):
-        pass
+        raw.flux_watcher_stop(self.handle)
 
-    @abc.abstractmethod
     def destroy(self):
-        pass
+        if self.handle is not None:
+            raw.flux_watcher_destroy(self.handle)
+            self.handle = None
 
 
 @ffi.callback('flux_msg_handler_f')
@@ -81,7 +80,6 @@ class MessageWatcher(Watcher):
             raw.flux_handler_destroy(self.handle)
             self.handle = None
 
-
 @ffi.callback('flux_watcher_f')
 def timeout_handler_wrapper(handle_trash, watcher_s, revents,
                             opaque_handle):
@@ -99,25 +97,14 @@ class TimerWatcher(Watcher):
         self.handle = None
         wargs = ffi.new_handle(self)
         self.handle = raw.flux_timer_watcher_create(
-	    raw.flux_get_reactor(flux_handle),
+            raw.flux_get_reactor(flux_handle),
             float(after), float(repeat), timeout_handler_wrapper, wargs)
 
-    def start(self):
-        raw.flux_watcher_start(self.handle)
-
-    def stop(self):
-        raw.flux_watcher_stop(self.handle)
-
-    def destroy(self):
-        if self.handle is not None:
-            raw.flux_watcher_destroy(self.handle)
-            self.handle = None
-
-
-@ffi.callback('flux_fd_watcher_f')
-def fd_handler_wrapper(handle_trash, fd_watcher_s, fd_int, revents,
+@ffi.callback('flux_watcher_f')
+def fd_handler_wrapper(handle_trash, fd_watcher_s, revents,
                        opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
+    fd_int = raw.fd_watcher_get_fd(watcher.handle)
     ret = watcher.cb(watcher.fh, watcher, fd_int, revents, watcher.args)
 
 
@@ -131,15 +118,6 @@ class FDWatcher(Watcher):
         self.handle = None
         wargs = ffi.new_handle(self)
         self.handle = raw.flux_fd_watcher_create(
+            raw.flux_get_reactor(flux_handle),
             self.fd_int, self.events, fd_handler_wrapper, wargs)
 
-    def start(self):
-        raw.flux_fd_watcher_start(self.fh.handle, self.handle)
-
-    def stop(self):
-        raw.flux_fd_watcher_stop(self.fh.handle, self.handle)
-
-    def destroy(self):
-        if self.handle is not None:
-            raw.flux_fd_watcher_destroy(self.handle)
-            self.handle = None
