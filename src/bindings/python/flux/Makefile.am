@@ -7,7 +7,10 @@ AM_LDFLAGS = -avoid-version -module -Wl,--no-undefined  $(PYTHON_LDFLAGS) -Wl,-r
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
 SUFFIXES = _build.py
 
-common_libs = $(top_builddir)/src/common/libflux-core.la  $(JSON_LIBS) $(ZMQ_LIBS)
+common_libs = $(top_builddir)/src/common/libflux-core.la \
+	      $(top_builddir)/src/common/libflux-internal.la \
+	      $(JSON_LIBS) \
+	      $(ZMQ_LIBS)
 
 _build.py.c:
 	$(PYTHON) $*_build.py
@@ -22,7 +25,7 @@ _core_build.py: $(MAKE_BINDING)
 				  --add_long_sub 'FLUX_SEC_TYPE_ALL.*\n.*\),|||FLUX_SEC_TYPE_ALL = 7,'\
 				  flux.h
 
-fluxpy_LTLIBRARIES = _core.la _barrier.la _mrpc.la _kvs.la _jsc.la
+fluxpy_LTLIBRARIES = _core.la _barrier.la _mrpc.la _kvs.la _jsc.la _kz.la
 
 _core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
@@ -76,6 +79,19 @@ _kvs_la_SOURCES = _kvs.c
 _kvs_la_CPPFLAGS = -I$(top_srcdir)/src/modules/kvs
 _kvs_la_LIBADD = $(top_builddir)/src/modules/kvs/libkvs.la $(common_libs)
 _kvs_la_DEPENDENCIES = _kvs_build.py
+
+_kz_build.py: $(top_srcdir)/src/modules/libkz/kz.h $(MAKE_BINDING) _core_build.py
+	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/libkz \
+				  --package flux \
+	                          --modname _kz \
+				  --include_ffi _core_build \
+				  --add_sub '.*KZ_FLAGS_DELAYCOMMIT.*,|||KZ_FLAGS_DELAYCOMMIT = 0x0c00' \
+				  kz.h
+
+_kz_la_SOURCES = _kz.c $(top_srcdir)/src/modules/libkz/kz.h
+_kz_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libkz
+_kz_la_LIBADD = $(top_builddir)/src/modules/libkz/libkz.la $(top_builddir)/src/modules/kvs/libkvs.la  $(common_libs)
+_kz_la_DEPENDENCIES = _kz_build.py
 
 fluxpy_PYTHON=\
 	      __init__.py\
