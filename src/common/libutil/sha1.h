@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+#include <sys/param.h>
+
 typedef struct {
     uint32_t state[5];
     uint32_t count[2];
