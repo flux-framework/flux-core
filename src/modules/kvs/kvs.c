@@ -75,6 +75,8 @@
 #include <fnmatch.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/sha1.h"
+#include "src/common/libutil/shastring.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -86,7 +88,7 @@
 #include "proto.h"
 #include "cache.h"
 
-typedef char href_t[41];
+typedef char href_t[SHA1_STRING_SIZE];
 
 /* Large values are stored in dirents by reference; small values by value.
  *  (-1 = all by reference, 0 = all by value)
@@ -452,18 +454,14 @@ static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t *wait)
 static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
     struct cache_entry *hp;
-    zdigest_t *zd;
+    SHA1_CTX sha1_ctx;
     const char *s = json_object_to_json_string (o);
-    const char *zdstr;
+    uint8_t hash[SHA1_DIGEST_SIZE];
 
-    if (!(zd = zdigest_new ()))
-        oom ();
-    zdigest_update (zd, (byte *)s, strlen (s));
-    zdstr = zdigest_string (zd);
-    assert (zdstr != NULL); /* indicates czmq built without crypto? */
-    assert (sizeof (href_t) == strlen (zdstr) + 1);
-    memcpy (ref, zdstr, strlen (zdstr) + 1);
-    zdigest_destroy (&zd);
+    SHA1_Init (&sha1_ctx);
+    SHA1_Update (&sha1_ctx, (uint8_t *)s, strlen (s));
+    SHA1_Final (&sha1_ctx, hash);
+    sha1_hashtostr (hash, ref);
 
     if ((hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         if (cache_entry_get_valid (hp)) {
