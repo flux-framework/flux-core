@@ -1,4 +1,6 @@
-#include <czmq.h>
+#include <errno.h>
+#include <string.h>
+
 #include "message.h"
 #include "request.h"
 
@@ -6,44 +8,77 @@
 
 int main (int argc, char *argv[])
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
+    char *d, data[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    int l, len = strlen (data);
 
-    plan (8);
+    plan (NO_PLAN);
 
     /* no topic is an error */
     errno = 0;
-    ok ((zmsg = flux_request_encode (NULL, json_str)) == NULL
+    ok ((msg = flux_request_encode (NULL, json_str)) == NULL
         && errno == EINVAL,
         "flux_request_encode returns EINVAL with no topic string");
+    ok ((msg = flux_request_encode_raw (NULL, data, strlen (data))) == NULL
+        && errno == EINVAL,
+        "flux_request_encode_raw returns EINVAL with no topic string");
 
     /* without payload */
-    ok ((zmsg = flux_request_encode ("foo.bar", NULL)) != NULL,
+    ok ((msg = flux_request_encode ("foo.bar", NULL)) != NULL,
         "flux_request_encode works with NULL payload");
     topic = NULL;
-    ok (flux_request_decode (zmsg, &topic, NULL) == 0
+    ok (flux_request_decode (msg, &topic, NULL) == 0
         && topic != NULL && !strcmp (topic, "foo.bar"),
         "flux_request_decode returns encoded topic");
-    ok (flux_request_decode (zmsg, NULL, NULL) == 0,
+    ok (flux_request_decode (msg, NULL, NULL) == 0,
         "flux_request_decode topic is optional");
     errno = 0;
-    ok (flux_request_decode (zmsg, NULL, &s) < 0 && errno == EPROTO,
+    ok (flux_request_decode (msg, NULL, &s) < 0 && errno == EPROTO,
         "flux_request_decode returns EPROTO when expected payload is missing");
-    zmsg_destroy(&zmsg);
+    flux_msg_destroy(msg);
 
-    /* with payload */
-    ok ((zmsg = flux_request_encode ("foo.bar", json_str)) != NULL,
+    /* with JSON payload */
+    ok ((msg = flux_request_encode ("foo.bar", json_str)) != NULL,
         "flux_request_encode works with payload");
 
     s = NULL;
-    ok (flux_request_decode (zmsg, NULL, &s) == 0
+    ok (flux_request_decode (msg, NULL, &s) == 0
         && s != NULL && !strcmp (s, json_str),
         "flux_request_decode returns encoded payload");
     errno = 0;
-    ok (flux_request_decode (zmsg, NULL, NULL) < 0 && errno == EPROTO,
+    ok (flux_request_decode (msg, NULL, NULL) < 0 && errno == EPROTO,
         "flux_request_decode returns EPROTO when payload is unexpected");
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy(msg);
+
+    /* without payload (raw) */
+    ok ((msg = flux_request_encode_raw ("foo.bar", NULL, 0)) != NULL,
+        "flux_request_encode_raw works with NULL payload");
+    topic = NULL;
+    ok (flux_request_decode_raw (msg, &topic, NULL, NULL) == 0
+        && topic != NULL && !strcmp (topic, "foo.bar"),
+        "flux_request_decode_raw returns encoded topic");
+    ok (flux_request_decode_raw (msg, NULL, NULL, NULL) == 0,
+        "flux_request_decode_raw topic is optional");
+    errno = 0;
+    ok (flux_request_decode_raw (msg, NULL, &d, &l) < 0 && errno == EPROTO,
+        "flux_request_decode_raw returns EPROTO when expected payload is missing");
+    flux_msg_destroy(msg);
+
+    /* with raw payload */
+    ok ((msg = flux_request_encode_raw ("foo.bar", data, len)) != NULL,
+        "flux_request_encode_raw works with payload");
+
+    d = NULL;
+    l = 0;
+    ok (flux_request_decode_raw (msg, NULL, &d, &l) == 0
+        && d != NULL && l == len && memcmp (d, data, len) == 0,
+        "flux_request_decode_raw returns encoded payload");
+    errno = 0;
+    ok (flux_request_decode_raw (msg, NULL, NULL, NULL) < 0 && errno == EPROTO,
+        "flux_request_decode_raw returns EPROTO when payload is unexpected");
+    flux_msg_destroy(msg);
 
     done_testing();
     return (0);
