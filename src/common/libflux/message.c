@@ -201,7 +201,7 @@ void flux_msg_destroy (flux_msg_t *msg)
     zmsg_destroy (&msg);
 }
 
-int flux_msg_encode (const flux_msg_t *msg, void **buf, size_t *size)
+int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t *size)
 {
     size_t len;
     byte *buffer;
@@ -211,14 +211,14 @@ int flux_msg_encode (const flux_msg_t *msg, void **buf, size_t *size)
         errno = ENOMEM;
         return -1;
     }
-    *buf = buffer;
+    *(void **)buf = buffer;
     *size = len;
     return 0;
 }
 
-flux_msg_t *flux_msg_decode (void *buf, size_t size)
+flux_msg_t *flux_msg_decode (const void *buf, size_t size)
 {
-    return zmsg_decode (buf, size);
+    return zmsg_decode ((void *)buf, size);
 }
 
 int flux_msg_set_type (zmsg_t *zmsg, int type)
@@ -704,13 +704,13 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
     return buf;
 }
 
-static bool payload_overlap (void *b, zframe_t *zf)
+static bool payload_overlap (const void *b, zframe_t *zf)
 {
     return ((char *)b >= (char *)zframe_data (zf)
          && (char *)b <  (char *)zframe_data (zf) + zframe_size (zf));
 }
 
-int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
+int flux_msg_set_payload (zmsg_t *zmsg, int flags, const void *buf, int size)
 {
     zframe_t *zf;
     uint8_t msgflags;
@@ -777,7 +777,7 @@ done:
     return rc;
 }
 
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void **buf, int *size)
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void *buf, int *size)
 {
     zframe_t *zf;
     uint8_t msgflags;
@@ -803,9 +803,12 @@ int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void **buf, int *si
         errno = EPROTO;
         return -1;
     }
-    *flags = msgflags & FLUX_MSGFLAG_JSON;
-    *buf = zframe_data (zf);
-    *size = zframe_size (zf);
+    if (flags)
+        *flags = msgflags & FLUX_MSGFLAG_JSON;
+    if (buf)
+        *(void **)buf = zframe_data (zf);
+    if (size)
+        *size = zframe_size (zf);
     return 0;
 }
 

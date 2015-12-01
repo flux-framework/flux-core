@@ -7,9 +7,9 @@
 #include "message.h"
 #include "handle.h"
 
-/* Decode a response message.
+/* Decode a response message, with optional json payload.
  * If topic is non-NULL, assign the response topic string.
- * If json_str is non-NULL, assign the payload.  json_str indicates whether
+ * If json_str is non-NULL, assign the payload.  This argument indicates whether
  * payload is expected and it is an EPROTO error if expectations are not met.
  * If response includes a nonzero errnum, errno is set to the errnum value
  * and -1 is returned with no assignments to topic or json_str.
@@ -18,15 +18,36 @@
 int flux_response_decode (const flux_msg_t *msg, const char **topic,
                           const char **json_str);
 
+/* Decode a response message, with optional raw payload.
+ * If topic is non-NULL, assign the response topic string.
+ * If data is non-NULL, assign the payload.  This argument indicates whether
+ * payload is expected and it is an EPROTO error if expectations are not met.
+ * If response includes a nonzero errnum, errno is set to the errnum value
+ * and -1 is returned with no assignments to topic or json_str.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
+                              void *data, int *len);
+
 flux_msg_t *flux_response_encode (const char *topic, int errnum,
                                   const char *json_str);
 
-/* Create a response to the provided request message.
+flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
+                                      const void *data, int len);
+
+/* Create a response to the provided request message with optional json payload.
  * If errnum is nonzero, payload argument is ignored.
  * All errors in this function are fatal - see flux_fatal_set().
  */
 int flux_respond (flux_t h, const flux_msg_t *request,
                   int errnum, const char *json_str);
+
+/* Create a response to the provided request message with optional raw payload.
+ * If errnum is nonzero, payload argument is ignored.
+ * All errors in this function are fatal - see flux_fatal_set().
+ */
+int flux_respond_raw (flux_t h, const flux_msg_t *request,
+                      int errnum, const void *data, int len);
 
 #endif /* !_FLUX_CORE_RESPONSE_H */
 

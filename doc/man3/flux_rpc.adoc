@@ -10,14 +10,16 @@ flux_rpc, flux_rpc_get, flux_rpc_destroy - perform a remote procedure call to a 
 
 SYNOPSIS
 --------
-#include <flux/core.h>
+ #include <flux/core.h>
 
-flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_in,
-                      uint32_t nodeid_in, int flags);
+ flux_rpc_t *flux_rpc (flux_t h, const char *topic,
+                       const char *json_in,
+                       uint32_t nodeid_in, int flags);
 
-void flux_rpc_destroy (flux_rpc_t *rpc);
+ void flux_rpc_destroy (flux_rpc_t *rpc);
 
-int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid_out, const char **json_out);
+ int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid_out,
+                   const char **json_out);
 
 
 DESCRIPTION

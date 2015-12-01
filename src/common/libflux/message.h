@@ -79,13 +79,13 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
  * Returns 0 on success, -1 on failure with errno set.
  * Caller must free buf.
  */
-int flux_msg_encode (const flux_msg_t *msg, void **buf, size_t *size);
+int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t *size);
 
 /* Decode a flux_msg_t from buffer.
  * Returns message on success, NULL on failure with errno set.
  * Caller must destroy message with flux_msg_destroy().
  */
-flux_msg_t *flux_msg_decode (void *buf, size_t size);
+flux_msg_t *flux_msg_decode (const void *buf, size_t size);
 
 /* Send message to file descriptor.
  * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
@@ -139,8 +139,9 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * Get_payload returns pointer to msg-owned buf.
  * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
-int flux_msg_set_payload (flux_msg_t *msg, int flags, void *buf, int size);
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void **buf, int *size);
+int flux_msg_set_payload (flux_msg_t *msg, int flags,
+                          const void *buf, int size);
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void *buf, int *size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
 /* Get/set json string payload.
