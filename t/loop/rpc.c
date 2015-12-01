@@ -48,6 +48,22 @@ done:
     (void)flux_respond (h, msg, errnum, json_str);
 }
 
+/* raw request payload echoed in response */
+void rpctest_rawecho_cb (flux_t h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg, void *arg)
+{
+    int errnum = 0;
+    void *d = NULL;
+    int l = 0;
+
+    if (flux_request_decode_raw (msg, NULL, &d, &l) < 0) {
+        errnum = errno;
+        goto done;
+    }
+done:
+    (void)flux_respond_raw (h, msg, errnum, d, l);
+}
+
 /* no-payload response */
 void rpctest_hello_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
@@ -116,6 +132,20 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
         "flux_rpc_get works and returned expected payload");
     flux_rpc_destroy (r);
 
+    /* working with-payload RPC (raw) */
+    char *d, data[] = "aaaaaaaaaaaaaaaaaaaa";
+    int l, len = strlen (data);
+    ok ((r = flux_rpc_raw (h, "rpctest.rawecho", data, len,
+                          FLUX_NODEID_ANY, 0)) != NULL,
+        "flux_rpc_raw with payload when payload is expected works");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    json_str = NULL;
+    ok (flux_rpc_get_raw (r, NULL, &d, &l) == 0
+        && d != NULL && l == len && memcmp (data, d, len) == 0,
+        "flux_rpc_get_raw works and returned expected payload");
+    flux_rpc_destroy (r);
+
     flux_reactor_stop (flux_get_reactor (h));
 }
 
@@ -150,6 +180,7 @@ static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho",        rpctest_rawecho_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.thenbug",        rpctest_thenbug_cb},
     FLUX_MSGHANDLER_TABLE_END,
@@ -161,7 +192,7 @@ int main (int argc, char *argv[])
     flux_t h;
     flux_reactor_t *reactor;
 
-    plan (34);
+    plan (37);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
