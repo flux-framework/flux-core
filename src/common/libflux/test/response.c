@@ -1,4 +1,6 @@
-#include <czmq.h>
+#include <string.h>
+#include <errno.h>
+
 #include "message.h"
 #include "request.h"
 #include "response.h"
@@ -6,61 +8,113 @@
 
 int main (int argc, char *argv[])
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
+    char *d, data[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    int l, len = strlen (data);
 
-    plan (11);
+    plan (NO_PLAN);
 
     /* no topic is an error */
     errno = 0;
-    ok ((zmsg = flux_response_encode (NULL, 0, json_str)) == NULL
+    ok ((msg = flux_response_encode (NULL, 0, json_str)) == NULL
         && errno == EINVAL,
         "flux_response_encode returns EINVAL with no topic string");
-
-    /* both errnum and json_str is an error */
     errno = 0;
-    ok ((zmsg = flux_response_encode ("foo.bar", 1, json_str)) == NULL
+    ok ((msg = flux_response_encode_raw (NULL, 0, data, len)) == NULL
         && errno == EINVAL,
-        "flux_response_encode returns EINVAL with both json and errnum");
+        "flux_response_encode_raw returns EINVAL with no topic string");
+
+    /* both errnum and payload is an error */
+    errno = 0;
+    ok ((msg = flux_response_encode ("foo.bar", 1, json_str)) == NULL
+        && errno == EINVAL,
+        "flux_response_encode returns EINVAL with both payload and errnum");
+    errno = 0;
+    ok ((msg = flux_response_encode_raw ("foo.bar", 1, data, len)) == NULL
+        && errno == EINVAL,
+        "flux_response_encode_raw returns EINVAL with both payload and errnum");
 
     /* without payload */
-    ok ((zmsg = flux_response_encode ("foo.bar", 0, NULL)) != NULL,
+    ok ((msg = flux_response_encode ("foo.bar", 0, NULL)) != NULL,
         "flux_response_encode works with NULL payload");
 
     topic = NULL;
-    ok (flux_response_decode (zmsg, &topic, NULL) == 0
+    ok (flux_response_decode (msg, &topic, NULL) == 0
         && topic != NULL && !strcmp (topic, "foo.bar"),
         "flux_response_decode returns encoded topic");
-    ok (flux_response_decode (zmsg, NULL, NULL) == 0,
+    ok (flux_response_decode (msg, NULL, NULL) == 0,
         "flux_response_decode topic is optional");
     errno = 0;
-    ok (flux_response_decode (zmsg, NULL, &s) < 0 && errno == EPROTO,
+    ok (flux_response_decode (msg, NULL, &s) < 0 && errno == EPROTO,
         "flux_response_decode returns EPROTO when expected payload is missing");
-    zmsg_destroy(&zmsg);
+    flux_msg_destroy (msg);
 
-    /* with payload */
-    ok ((zmsg = flux_response_encode ("foo.bar", 0, json_str)) != NULL,
+    /* without payload (raw) */
+    ok ((msg = flux_response_encode_raw ("foo.bar", 0, NULL, 0)) != NULL,
+        "flux_response_encode_raw works with NULL payload");
+
+    topic = NULL;
+    ok (flux_response_decode_raw (msg, &topic, NULL, NULL) == 0
+        && topic != NULL && !strcmp (topic, "foo.bar"),
+        "flux_response_decode_raw returns encoded topic");
+    ok (flux_response_decode_raw (msg, NULL, NULL, NULL) == 0,
+        "flux_response_decode_raw topic is optional");
+    errno = 0;
+    ok (flux_response_decode_raw (msg, NULL, &d, &l) < 0 && errno == EPROTO,
+        "flux_response_decode_raw returns EPROTO when expected payload is missing");
+    flux_msg_destroy (msg);
+
+    /* with json payload */
+    ok ((msg = flux_response_encode ("foo.bar", 0, json_str)) != NULL,
         "flux_response_encode works with payload");
 
     s = NULL;
-    ok (flux_response_decode (zmsg, NULL, &s) == 0
+    ok (flux_response_decode (msg, NULL, &s) == 0
         && s != NULL && !strcmp (s, json_str),
         "flux_response_decode returns encoded payload");
     errno = 0;
-    ok (flux_response_decode (zmsg, NULL, NULL) < 0 && errno == EPROTO,
+    ok (flux_response_decode (msg, NULL, NULL) < 0 && errno == EPROTO,
         "flux_response_decode returns EPROTO when payload is unexpected");
-    zmsg_destroy (&zmsg);
+    ok (flux_response_decode_raw (msg, NULL, &d, &l) < 0 && errno == EPROTO,
+        "flux_response_decode_raw returns EPROTO when payload is JSON");
+    flux_msg_destroy (msg);
+
+    /* with raw payload */
+    ok ((msg = flux_response_encode_raw ("foo.bar", 0, data, len)) != NULL,
+        "flux_response_encode_raw works with payload");
+
+    d = NULL;
+    l = 0;
+    ok (flux_response_decode_raw (msg, NULL, &d, &l) == 0
+        && d != NULL && l == len && memcmp (d, data, len) == 0,
+        "flux_response_decode_raw returns encoded payload");
+    errno = 0;
+    ok (flux_response_decode_raw (msg, NULL, NULL, 0) < 0 && errno == EPROTO,
+        "flux_response_decode_raw returns EPROTO when payload is unexpected");
+    flux_msg_destroy (msg);
 
     /* with error */
-    ok ((zmsg = flux_response_encode ("foo.bar", 42, NULL)) != NULL,
+    ok ((msg = flux_response_encode ("foo.bar", 42, NULL)) != NULL,
         "flux_response_encode works with errnum");
     s = NULL;
     errno = 0;
-    ok (flux_response_decode (zmsg, NULL, NULL) < 0
+    ok (flux_response_decode (msg, NULL, NULL) < 0
         && errno == 42,
         "flux_response_decode fails with encoded errnum");
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
+
+    /* with error (raw) */
+    ok ((msg = flux_response_encode_raw ("foo.bar", 42, NULL, 0)) != NULL,
+        "flux_response_encode_raw works with errnum");
+    d = NULL;
+    l = 0;
+    errno = 0;
+    ok (flux_response_decode_raw (msg, NULL, &d, &l) < 0
+        && errno == 42 && d == NULL && l == 0,
+        "flux_response_decode fails with encoded errnum");
+    flux_msg_destroy (msg);
 
     done_testing();
     return (0);
