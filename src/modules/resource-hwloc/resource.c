@@ -36,6 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/modules/kvs/kvs.h"
 #include "src/modules/libmrpc/mrpc.h"
 
 typedef struct
@@ -44,60 +45,76 @@ typedef struct
     bool loaded;
 } ctx_t;
 
-int try_hwloc_load (ctx_t *ctx, const char *const path)
+int try_hwloc_load (flux_t h, ctx_t *ctx, const char *const path)
 {
-    hwloc_topology_set_flags (ctx->topology, HWLOC_TOPOLOGY_FLAG_WHOLE_IO);
+    FLUX_CHECK_INT (h,
+        hwloc_topology_set_flags (ctx->topology, HWLOC_TOPOLOGY_FLAG_WHOLE_IO));
     if (path) {
         // load my structure from the hwloc xml file at this path
-        hwloc_topology_set_xml (ctx->topology, path);
+        FLUX_CHECK_INT (h, hwloc_topology_set_xml (ctx->topology, path));
     }
-    return hwloc_topology_load (ctx->topology);
+    return FLUX_CHECK_INT (h, hwloc_topology_load (ctx->topology),
+                      "failed to load hwloc topology, path=%s", path);
 }
 
-static ctx_t *getctx (flux_t h)
+static void ctx_init (flux_t h, ctx_t *ctx)
 {
-    flux_conf_t cf = flux_conf_create ();
-    if (kvs_conf_load (h, cf) < 0)
-        err_exit ("could not load config from KVS");
-
     uint32_t rank;
     if (flux_get_rank (h, &rank) < 0) {
         err_exit ("flux_get_rank");
     }
 
-    ctx_t *ctx = xzmalloc (sizeof(ctx_t));
-    hwloc_topology_init (&ctx->topology);
+    FLUX_CHECK_INT (h, hwloc_topology_init (&ctx->topology));
 
-    char *conf_path = xasprintf ("resource.hwloc.xml.%" PRIu32, rank);
-    const char *path = flux_conf_get (cf, conf_path);
+    char *path = NULL;
+    char *conf_path =
+        FLUX_CHECK_PTR (h, xasprintf ("config.resource.hwloc.xml.%" PRIu32, rank));
+    kvs_get_string (h, conf_path, &path);
+    CHECK_INT(hwloc_topology_init (&ctx->topology));
     free (conf_path);
 
     if (!path)
-        path = flux_conf_get (cf, "resource.hwloc.default_xml");
+        kvs_get_string (h, "config.resource.hwloc.default_xml", &path);
 
     if (path) {
         flux_log (h, LOG_INFO, "loading hwloc from %s", path);
-        if (try_hwloc_load (ctx, path) == 0) {
-            return ctx;
+        if (try_hwloc_load (h, ctx, path) >= 0) {
+            return;  // Success!
         } else {
             err_exit ("hwloc load failed for specified path");
         }
     }
 
-    if (try_hwloc_load (ctx, NULL) < 0)
+    if (try_hwloc_load (h, ctx, NULL) < 0)
         err_exit ("hwloc failed to load topology");
 
+    if (!path) {  // Only restrict the topology if using the host topology
+        // Mask off hardware that we can't use
+        hwloc_bitmap_t restrictset = FLUX_CHECK_PTR (h, hwloc_bitmap_alloc ());
+        FLUX_CHECK_INT (h, hwloc_get_cpubind (ctx->topology,
+                                      restrictset,
+                                      HWLOC_CPUBIND_PROCESS));
+        int err = hwloc_topology_restrict (ctx->topology, restrictset, 0);
+        if (err) {
+            flux_log (h, LOG_ERR, "Restricting the topology failed");
+        }
+        hwloc_bitmap_free (restrictset);
+    }
     ctx->loaded = false;
-    return ctx;
+    free (path);
 }
 
-#if 0
-static void freectx(ctx_t * ctx)
+static void ctx_deinit (ctx_t *ctx)
 {
-    hwloc_topology_destroy(ctx->topology);
-    free(ctx);
+    hwloc_topology_destroy (ctx->topology);
 }
-#endif
+
+static ctx_t *getctx (flux_t h)
+{
+    ctx_t *ctx = xzmalloc (sizeof(ctx_t));
+    ctx_init (h, ctx);
+    return ctx;
+}
 
 /* Copy input arguments to output arguments and respond to RPC.
 */
@@ -117,6 +134,12 @@ static void get_cb (flux_t h,
     flux_log (h, LOG_ERR, "UNIMPLEMENTED: %s", __FUNCTION__);
 }
 
+void unlink_if_exists (flux_t h, const char *path)
+{
+    if (!kvs_unlink (h, path))  // if the unlink succeeds
+        kvs_commit (h);  // ensure the unlink is committed before proceeding
+}
+
 static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
 {
     char *xml_path = NULL;
@@ -129,6 +152,7 @@ static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
         goto done;
     }
     xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, rank);
+    unlink_if_exists (h, xml_path);
     if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
         flux_log (h, LOG_ERR, "hwloc_topology_export_xmlbuffer");
         goto done;
@@ -252,6 +276,7 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         goto done;
     }
     base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, rank);
+    unlink_if_exists (h, base_path);
     for (i = 0; i < depth; ++i) {
         int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
         hwloc_obj_type_t t = hwloc_get_depth_type (ctx->topology, i);
@@ -274,6 +299,7 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         char *kvs_hostname = escape_kvs_key (hostname);
         char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
         free (kvs_hostname);
+        unlink_if_exists (h, host_path);
         if (walk_topology (h,
                            ctx->topology,
                            hwloc_get_root_obj (ctx->topology),
@@ -281,6 +307,7 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
             flux_log (h, LOG_ERR, "walk_topology");
             goto done;
         }
+        free (host_path);
     }
     ret = 0;
 done:
@@ -305,14 +332,25 @@ static void load_cb (flux_t h,
         return;
     }
     char *completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, rank);
-    kvs_put_int (h, completion_path, 1);
+    FLUX_CHECK_INT (h, kvs_put_int (h, completion_path, 1));
     free (completion_path);
 
-    kvs_fence (h, "resource_hwloc_loaded", size);
+    FLUX_CHECK_INT (h, kvs_fence (h, "resource_hwloc_loaded", size));
 
     flux_log (h, LOG_DEBUG, "loaded");
 
     ctx->loaded = true;
+}
+
+static void reload_cb (flux_t h,
+                       flux_msg_handler_t *watcher,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    ctx_t *ctx = arg;
+    ctx_deinit (ctx);
+    ctx_init (h, ctx);
+    load_cb (h, watcher, msg, arg);
 }
 
 static void topo_cb (flux_t h,
@@ -361,7 +399,7 @@ static void topo_cb (flux_t h,
         hwloc_topology_destroy (rank);
         free (xml);
 
-        flux_log (h, LOG_INFO, "resource_hwloc: loaded from %s", base_key);
+        flux_log (h, LOG_INFO, "resource-hwloc: loaded from %s", base_key);
     }
 
     kvsitr_destroy (base_iter);
@@ -384,24 +422,13 @@ done:
     Jput (out);
 }
 
-static void start_all (flux_t h, ...)
-{
-    flux_msg_handler_t *w;
-    va_list ap;
-    va_start (ap, h);
-    while ((w = va_arg (ap, flux_msg_handler_t *))) {
-        flux_msg_handler_start (w);
-    }
-}
-
-struct
-{
-    flux_msg_handler_t *load;
-    flux_msg_handler_t *query;
-    flux_msg_handler_t *get;
-    flux_msg_handler_t *topo;
-    flux_msg_handler_t *END;
-} handlers = {};
+static struct flux_msg_handler_spec htab[] = {
+    {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_cb, NULL},
+    {FLUX_MSGTYPE_EVENT, "resource-hwloc.reload", reload_cb, NULL},
+    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_cb, NULL},
+    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.query", query_cb, NULL},
+    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.get", get_cb, NULL},
+    FLUX_MSGHANDLER_TABLE_END};
 
 int mod_main (flux_t h, int argc, char **argv)
 {
@@ -415,26 +442,24 @@ int mod_main (flux_t h, int argc, char **argv)
         return -1;
     }
 
-    handlers.load = flux_msg_handler_create (h, FLUX_MATCH_EVENT, load_cb, ctx);
-    flux_msg_handler_start (handlers.load);
-    handlers.query =
-        flux_msg_handler_create (h, FLUX_MATCH_REQUEST, query_cb, ctx);
-    flux_msg_handler_start (handlers.query);
-    handlers.get = flux_msg_handler_create (h, FLUX_MATCH_REQUEST, get_cb, ctx);
-    flux_msg_handler_start (handlers.get);
-    handlers.topo =
-        flux_msg_handler_create (h, FLUX_MATCH_REQUEST, topo_cb, ctx);
-    flux_msg_handler_start (handlers.topo);
+    if (flux_event_subscribe (h, "resource-hwloc.reload") < 0) {
+        flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
+        return -1;
+    }
+
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
+        return -1;
+    }
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
         return -1;
     }
 
-    flux_msg_handler_destroy (handlers.load);
-    flux_msg_handler_destroy (handlers.query);
-    flux_msg_handler_destroy (handlers.get);
-    flux_msg_handler_destroy (handlers.topo);
+    flux_msg_handler_delvec (htab);
+    ctx_deinit (ctx);
+    free (ctx);
 
     return 0;
 }
