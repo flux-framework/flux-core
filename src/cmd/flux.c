@@ -41,8 +41,11 @@
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/optparse.h"
-#include "cmdhelp.h"
+#include "src/common/libutil/sha1.h"
+#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/readall.h"
 
+#include "cmdhelp.h"
 
 bool handle_internal (flux_conf_t cf, int ac, char *av[]);
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
@@ -556,7 +559,7 @@ void internal_lsattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
         while (name) {
             if (optparse_hasopt (p, "values")) {
                 val = flux_attr_get (h, name, NULL);
-                printf ("%-20s%s\n", name, val ? val : "-");
+                printf ("%-40s%s\n", name, val ? val : "-");
             } else {
                 printf ("%s\n", name);
             }
@@ -564,6 +567,219 @@ void internal_lsattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
         }
         flux_close (h);
     } else {
+        optparse_print_usage (p);
+        exit (1);
+    }
+}
+
+void internal_content_load (flux_conf_t cf, optparse_t *orig,
+                            int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        { .name = "bypass-cache",  .key = 'b',  .has_arg = 0,
+          .usage = "Load directly from rank 0 content service", },
+        OPTPARSE_TABLE_END,
+    };
+    optparse_t *p;
+    int n;
+    const char *blobref;
+    uint8_t *data;
+    int size;
+    flux_t h;
+    flux_rpc_t *rpc;
+    const char *topic;
+
+    if (!(p = optparse_create ("flux content load")))
+        err_exit ("optparse_create");
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] BLOBREF");
+    optparse_add_doc (p, "Load blob for digest BLOBREF to stdout", -1);
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        exit (1);
+    if (n != ac - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    blobref = av[n];
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
+    if (optparse_hasopt (p, "bypass-cache"))
+        topic = "content-backing.load";
+    else
+        topic = "content.load";
+    if (!(rpc = flux_rpc_raw (h, topic, blobref, strlen (blobref) + 1, 0, 0)))
+        err_exit ("%s", topic);
+    if (flux_rpc_get_raw (rpc, NULL, &data, &size) < 0)
+        err_exit ("%s", topic);
+    if (write_all (STDOUT_FILENO, data, size) < 0)
+        err_exit ("write");
+    optparse_destroy (p);
+    flux_rpc_destroy (rpc);
+    flux_close (h);
+}
+
+void internal_content_store (flux_conf_t cf, optparse_t *orig,
+                             int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        { .name = "dry-run",  .key = 'd',  .has_arg = 0,
+          .usage = "Compute SHA1 but don't actually store value", },
+        { .name = "bypass-cache",  .key = 'b',  .has_arg = 0,
+          .usage = "Store directly to rank 0 content service", },
+        OPTPARSE_TABLE_END,
+    };
+    const uint32_t blob_size_limit = 1048576; /* RFC 10 */
+    optparse_t *p;
+    int n;
+    uint8_t *data;
+    int size;
+    flux_t h;
+    flux_rpc_t *rpc;
+    const char *topic;
+
+    if (!(p = optparse_create ("flux content store")))
+        err_exit ("optparse_create");
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]");
+    optparse_add_doc (p, "Store blob from stdin, print BLOBREF on stdout", -1);
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        exit (1);
+    if (n != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if ((size = read_all (STDIN_FILENO, &data)) < 0)
+        err_exit ("read");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
+    if (optparse_hasopt (p, "dry-run")) {
+        int flags;
+        const char *hashfun;
+
+        if (size > blob_size_limit)
+            errn_exit (EFBIG, "content-store");
+        if (!(hashfun = flux_attr_get (h, "content-hash", &flags)))
+            err_exit ("flux_attr_get content-hash");
+        if (!strcmp (hashfun, "sha1")) {
+            uint8_t hash[SHA1_DIGEST_SIZE];
+            char hashstr[SHA1_STRING_SIZE];
+            SHA1_CTX sha1_ctx;
+
+            SHA1_Init (&sha1_ctx);
+            SHA1_Update (&sha1_ctx, (uint8_t *)data, size);
+            SHA1_Final (&sha1_ctx, hash);
+            sha1_hashtostr (hash, hashstr);
+            printf ("%s\n", hashstr);
+        } else
+            msg_exit ("content-store: unsupported hash function: %s", hashfun);
+    } else {
+        const char *blobref;
+        int blobref_size;
+        if (optparse_hasopt (p, "bypass-cache"))
+            topic = "content-backing.store";
+        else
+            topic = "content.store";
+        if (!(rpc = flux_rpc_raw (h, topic, data, size, 0, 0)))
+            err_exit ("%s", topic);
+        if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0)
+            err_exit ("%s", topic);
+        if (!blobref || blobref[blobref_size - 1] != '\0')
+            msg_exit ("%s: protocol error", topic);
+        printf ("%s\n", blobref);
+        flux_rpc_destroy (rpc);
+    }
+    optparse_destroy (p);
+    flux_close (h);
+    free (data);
+}
+
+void internal_content_flush (flux_conf_t cf, optparse_t *orig,
+                             int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        OPTPARSE_TABLE_END,
+    };
+    optparse_t *p;
+    int n;
+    flux_t h;
+    flux_rpc_t *rpc = NULL;
+    const char *topic = "content.flush";
+
+    if (!(p = optparse_create ("flux content flush")))
+        err_exit ("optparse_create");
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]");
+    optparse_add_doc (p, "Flush dirty entries from local content cache", -1);
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        exit (1);
+    if (n != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
+    if (!(rpc = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
+        err_exit ("%s", topic);
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+        err_exit ("%s", topic);
+    optparse_destroy (p);
+    flux_rpc_destroy (rpc);
+    flux_close (h);
+}
+
+void internal_content_dropcache (flux_conf_t cf, optparse_t *orig,
+                                 int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        OPTPARSE_TABLE_END,
+    };
+    optparse_t *p;
+    int n;
+    flux_t h;
+    flux_rpc_t *rpc = NULL;
+    const char *topic = "content.dropcache";
+
+    if (!(p = optparse_create ("flux content dropcache")))
+        err_exit ("optparse_create");
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]");
+    optparse_add_doc (p, "Drop non-essential entries from local content cache",
+                                                                        -1);
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        exit (1);
+    if (n != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
+    if (!(rpc = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
+        err_exit ("%s", topic);
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+        err_exit ("%s", topic);
+    optparse_destroy (p);
+    flux_rpc_destroy (rpc);
+    flux_close (h);
+}
+
+void internal_content (flux_conf_t cf, optparse_t *p, int ac, char *av[])
+{
+    if (ac < 2) {
+        optparse_print_usage (p);
+        exit (1);
+    } else if (!strcmp (av[1], "load"))
+        internal_content_load (cf, p, ac - 1, av + 1);
+    else if (!strcmp (av[1], "store"))
+        internal_content_store (cf, p, ac - 1, av + 1);
+    else if (!strcmp (av[1], "dropcache"))
+        internal_content_dropcache (cf, p, ac - 1, av + 1);
+    else if (!strcmp (av[1], "flush"))
+        internal_content_flush (cf, p, ac - 1, av + 1);
+    else {
         optparse_print_usage (p);
         exit (1);
     }
@@ -618,6 +834,12 @@ struct builtin builtin_cmds [] = {
       "Print or control log ring buffer",
       "[OPTIONS...]",
       internal_dmesg
+    },
+    {
+      "content",
+      "Access content store",
+      "[load | store | dropcache | flush] [OPTIONS...]",
+      internal_content,
     },
     { NULL, NULL, NULL, NULL },
 };
