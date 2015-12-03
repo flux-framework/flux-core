@@ -66,6 +66,7 @@
 #include "attr.h"
 #include "sequence.h"
 #include "log.h"
+#include "content-cache.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -121,6 +122,7 @@ typedef struct {
     double shutdown_grace;
     log_t *log;
     zlist_t *subscriptions;     /* subscripts for internal services */
+    content_cache_t *cache;
     /* Bootstrap
      */
     struct boot_method *boot_method;
@@ -129,6 +131,7 @@ typedef struct {
     int k_ary;
     hello_t *hello;
     double hello_timeout;
+    flux_t enclosing_h;
 
     /* Subprocess management
      */
@@ -276,7 +279,7 @@ int main (int argc, char *argv[])
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
     if (!(ctx.seq = sequence_hash_create ()))
-	oom ();
+        oom ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
@@ -287,6 +290,8 @@ int main (int argc, char *argv[])
     ctx.log = log_create ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
+    if (!(ctx.cache = content_cache_create ()))
+        oom();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -415,6 +420,13 @@ int main (int argc, char *argv[])
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
         msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
+    /* Connect to enclosing instance, if any.
+     */
+    if (getenv ("FLUX_URI")) {
+        if (!(ctx.enclosing_h = flux_open (NULL, 0)))
+            err_exit ("flux_open enclosing instance");
+    }
+
     /* Process config from the KVS of enclosing instance (if any)
      * and not forced to use a config file by the command line.
      */
@@ -427,15 +439,11 @@ int main (int argc, char *argv[])
             msg ("Loading config from %s", confdir);
         if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH)
             err_exit ("%s", confdir);
-    } else if (getenv ("FLUX_URI")) {
-        flux_t h;
+    } else if (ctx.enclosing_h) {
         if (ctx.verbose)
             msg ("Loading config from KVS");
-        if (!(h = flux_open (NULL, 0)))
-            err_exit ("flux_open");
-        if (kvs_conf_load (h, ctx.cf) < 0 && errno != ENOENT)
-            err_exit ("could not load config from KVS");
-        flux_close (h);
+        if (kvs_conf_load (ctx.enclosing_h, ctx.cf) < 0 && errno != ENOENT)
+            err_exit ("could not load config from enclosing instance KVS");
     }
 
     /* Arrange to load config entries into kvs config.*
@@ -545,6 +553,13 @@ int main (int argc, char *argv[])
 
     overlay_set_rank (ctx.overlay, ctx.rank);
 
+    /* Registers message handlers and obtains rank.
+     */
+    if (content_cache_set_flux (ctx.cache, ctx.h) < 0)
+        err_exit ("content_cache_set_flux");
+
+    content_cache_set_enclosing_flux (ctx.cache, ctx.enclosing_h);
+
     /* Configure attributes.
      */
     if (attr_add_active (ctx.attrs, "snoop-uri",
@@ -578,7 +593,8 @@ int main (int argc, char *argv[])
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add (ctx.attrs, "scratch-directory", ctx.scratch_dir,
-                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
         err_exit ("attr_add");
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
@@ -696,6 +712,8 @@ int main (int argc, char *argv[])
 
     if (ctx.verbose)
         msg ("cleaning up");
+    if (ctx.enclosing_h)
+        flux_close (ctx.enclosing_h);
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
     zctx_destroy (&ctx.zctx);
@@ -710,6 +728,7 @@ int main (int argc, char *argv[])
     flux_reactor_destroy (ctx.reactor);
     log_destroy (ctx.log);
     zlist_destroy (&ctx.subscriptions);
+    content_cache_destroy (ctx.cache);
     if (log_f)
         fclose (log_f);
 
@@ -2272,6 +2291,15 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
+static int requeue_for_service (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    if (flux_requeue (ctx->h, *zmsg, FLUX_RQ_TAIL) < 0)
+        flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+    zmsg_destroy (zmsg);
+    return 0;
+}
+
 struct internal_service {
     const char *topic;
     const char *nodeset;
@@ -2305,6 +2333,7 @@ static struct internal_service services[] = {
     { "cmb.seq.fetch",  "[0]",  cmb_seq             },
     { "cmb.seq.set",    "[0]",  cmb_seq             },
     { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { "content",        NULL,   requeue_for_service },
     { NULL, NULL, },
 };
 

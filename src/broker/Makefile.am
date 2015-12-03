@@ -35,7 +35,9 @@ flux_broker_SOURCES = \
 	sequence.h \
 	sequence.c \
 	log.h \
-	log.c
+	log.c \
+	content-cache.h \
+	content-cache.c
 
 
 flux_broker_LDADD = \
