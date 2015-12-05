@@ -1,3 +1,4 @@
+// flux-help-include: yes
 FLUX-WRECKRUN(1)
 ================
 :doctype: manpage

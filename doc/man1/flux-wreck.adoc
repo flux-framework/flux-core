@@ -1,3 +1,4 @@
+// flux-help-description: Flux wreck convenience utilities
 FLUX-WRECK(1)
 ===========
 :doctype: manpage

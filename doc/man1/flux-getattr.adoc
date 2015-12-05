@@ -1,3 +1,5 @@
+// flux-help-command: get,set,lsattr
+// flux-help-description: Access, modify, and list broker attributes
 FLUX-GETATTR(1)
 ===============
 :doctype: manpage

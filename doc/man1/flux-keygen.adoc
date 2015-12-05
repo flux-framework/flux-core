@@ -1,3 +1,4 @@
+// flux-help-include: true
 FLUX-KEYGEN(1)
 ==============
 :doctype: manpage

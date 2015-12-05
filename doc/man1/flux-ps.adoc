@@ -1,3 +1,4 @@
+// flux-help-description: List subprocesses managed by brokers
 FLUX-PS(1)
 ============
 :doctype: manpage
