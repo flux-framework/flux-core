@@ -1,3 +1,4 @@
+// flux-help-description: submit job requests to a scheduler
 FLUX-SUBMIT(1)
 ================
 :doctype: manpage
