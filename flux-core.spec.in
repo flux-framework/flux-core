@@ -47,6 +47,9 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 %doc ChangeLog NEWS DISCLAIMER.LLNS COPYING INSTALL README AUTHORS
+%dir %{_datadir}/flux
+%dir %{_datadir}/flux/help.d
+%{_datadir}/flux/help.d/*.json
 %dir %{_libdir}/flux
 %{_libdir}/flux/*.so.*
 %dir %{_libdir}/flux/modules
