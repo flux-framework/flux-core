@@ -150,6 +150,7 @@ SIGINT
 SIGTERM
 signo
 subprocess
+subprocesses
 PID
 ps
 Livermore
