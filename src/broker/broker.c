@@ -2627,9 +2627,15 @@ done:
 
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 {
-    int rc = module_response_sendmsg (ctx->modhash, msg);
-    if (rc < 0 && errno == ENOSYS)
-        rc = overlay_sendmsg_child (ctx->overlay, msg);
+    int rc;
+
+    if (flux_msg_get_route_count (msg) == 0)
+        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+    else {
+        rc = module_response_sendmsg (ctx->modhash, msg);
+        if (rc < 0 && errno == ENOSYS)
+            rc = overlay_sendmsg_child (ctx->overlay, msg);
+    }
     return rc;
 }
 
