@@ -14,6 +14,8 @@ BuildRequires: json-c-devel
 BuildRequires: lua-devel >= 5.1
 BuildRequires: asciidoc aspell
 
+%define flux_pyversion %(python -c "import sys;sys.stdout.write(sys.version[:3])")
+
 %description
 
 %package devel
@@ -56,14 +58,18 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/flux/modules/*.so
 %{_libdir}/flux/connectors/*.so
 %{_libdir}/lua/*/*.so
+%{_libdir}/lua/*/flux/*.so
 %{_prefix}/share/lua/*/*.lua
 %{_prefix}/share/lua/*/flux/*.lua
-%{_prefix}/share/lua/*/flux/*.so
+%{_prefix}/share/lua/*/flux/lustache/*.lua
+%{_prefix}/share/lua/*/wreck/*.lua
+%{_prefix}/lib/python%{flux_pyversion}/*
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
 %{_bindir}/flux
 %{_sysconfdir}/wreck/lua.d
 %{_mandir}/man1/*
+%{_mandir}/man3/*
 
 %files devel
 %defattr(-,root,root)
@@ -78,6 +84,11 @@ if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
+* Tue Dec 08 2015 Mark A. Grondona <mgrondona@llnl.gov>  0.1.0-1
+- Fix paths to binary Lua modules
+- Add man section 3 pages
+- package python bindings
+
 * Wed May 20 2015 Jim Garlick <garlick@llnl.gov> 0.1.0-1
 - Include connector dso's in package
 
