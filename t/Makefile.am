@@ -32,6 +32,7 @@ TESTS = \
 	t0009-dmesg.t \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
+	t0012-content-sqlite.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
@@ -81,6 +82,7 @@ check_SCRIPTS = \
 	t0009-dmesg.t \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
+	t0012-content-sqlite.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
