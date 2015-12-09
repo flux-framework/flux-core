@@ -107,7 +107,7 @@
 #  undef EV_USE_POLL
 #  define EV_USE_POLL 0
 # endif
-   
+
 # if HAVE_EPOLL_CTL && HAVE_SYS_EPOLL_H
 #  ifndef EV_USE_EPOLL
 #   define EV_USE_EPOLL EV_FEATURE_BACKENDS
@@ -116,7 +116,7 @@
 #  undef EV_USE_EPOLL
 #  define EV_USE_EPOLL 0
 # endif
-   
+
 # if HAVE_KQUEUE && HAVE_SYS_EVENT_H
 #  ifndef EV_USE_KQUEUE
 #   define EV_USE_KQUEUE EV_FEATURE_BACKENDS
@@ -125,7 +125,7 @@
 #  undef EV_USE_KQUEUE
 #  define EV_USE_KQUEUE 0
 # endif
-   
+
 # if HAVE_PORT_H && HAVE_PORT_CREATE
 #  ifndef EV_USE_PORT
 #   define EV_USE_PORT EV_FEATURE_BACKENDS
@@ -161,7 +161,7 @@
 #  undef EV_USE_EVENTFD
 #  define EV_USE_EVENTFD 0
 # endif
- 
+
 #endif
 
 #include <stdlib.h>
@@ -942,7 +942,7 @@ ecb_function_ uint8_t  ecb_bitrev8  (uint8_t  x) ecb_const;
 ecb_function_ uint8_t  ecb_bitrev8  (uint8_t  x)
 {
   return (  (x * 0x0802U & 0x22110U)
-          | (x * 0x8020U & 0x88440U)) * 0x10101U >> 16; 
+          | (x * 0x8020U & 0x88440U)) * 0x10101U >> 16;
 }
 
 ecb_function_ uint16_t ecb_bitrev16 (uint16_t x) ecb_const;
@@ -2107,7 +2107,7 @@ downheap (ANHE *heap, int N, int k)
 
       heap [k] = heap [c];
       ev_active (ANHE_w (heap [k])) = k;
-      
+
       k = c;
     }
 
@@ -2181,6 +2181,8 @@ static ANSIG signals [EV_NSIG - 1];
 static void noinline ecb_cold
 evpipe_init (EV_P)
 {
+  int check_fds_directive = 1;
+
   if (!ev_is_active (&pipe_w))
     {
       int fds [2];
@@ -2191,14 +2193,14 @@ evpipe_init (EV_P)
       if (fds [1] < 0 && errno == EINVAL)
         fds [1] = eventfd (0, 0);
 
-      if (fds [1] < 0)
+      check_fds_directive = (fds [1] < 0);
 # endif
-        {
-          while (pipe (fds))
-            ev_syserr ("(libev) error creating signal/async pipe");
+      if (check_fds_directive)  {
+        while (pipe (fds))
+          ev_syserr ("(libev) error creating signal/async pipe");
 
-          fd_intern (fds [0]);
-        }
+        fd_intern (fds [0]);
+      }
 
       evpipe [0] = fds [0];
 
@@ -2527,7 +2529,7 @@ ev_supported_backends (void) EV_THROW
   if (EV_USE_EPOLL ) flags |= EVBACKEND_EPOLL;
   if (EV_USE_POLL  ) flags |= EVBACKEND_POLL;
   if (EV_USE_SELECT) flags |= EVBACKEND_SELECT;
-  
+
   return flags;
 }
 
@@ -4894,4 +4896,3 @@ ev_walk (EV_P_ int types, void (*cb)(EV_P_ int type, void *w)) EV_THROW
 #if EV_MULTIPLICITY
   #include "ev_wrap.h"
 #endif
-

@@ -238,11 +238,13 @@ epoll_poll (EV_P_ ev_tstamp timeout)
 int inline_size
 epoll_init (EV_P_ int flags)
 {
+  int check_backend_fd = 1;
 #ifdef EPOLL_CLOEXEC
   backend_fd = epoll_create1 (EPOLL_CLOEXEC);
 
-  if (backend_fd < 0 && (errno == EINVAL || errno == ENOSYS))
+  check_backend_fd = (backend_fd < 0 && (errno == EINVAL || errno == ENOSYS));
 #endif
+  if (check_backend_fd)
     backend_fd = epoll_create (256);
 
   if (backend_fd < 0)
@@ -279,4 +281,3 @@ epoll_fork (EV_P)
 
   fd_rearm_all (EV_A);
 }
-
