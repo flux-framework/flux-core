@@ -433,7 +433,7 @@ int main (int argc, char *argv[])
             msg ("Loading config from KVS");
         if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
-        if (kvs_conf_load (h, ctx.cf) < 0)
+        if (kvs_conf_load (h, ctx.cf) < 0 && errno != ENOENT)
             err_exit ("could not load config from KVS");
         flux_close (h);
     }
