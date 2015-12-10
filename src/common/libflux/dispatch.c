@@ -114,38 +114,26 @@ static void copy_match (struct flux_match *dst,
     dst->topic_glob = src.topic_glob ? xstrdup (src.topic_glob) : NULL;
 }
 
-static flux_msg_handler_t *find_handler (struct dispatch *d,
-                                         const flux_msg_t *msg)
+static int backlog_append (flux_msg_handler_t *w, const flux_msg_t *msg)
 {
-    flux_msg_handler_t *w = zlist_first (d->handlers);
-    while (w) {
-        if (flux_msg_cmp (msg, w->match))
-            break;
-        w = zlist_next (d->handlers);
-    }
-    return w;
-}
+    flux_msg_t *cpy;
+    int rc = -1;
 
-static flux_msg_handler_t *find_waiting_handler (struct dispatch *d,
-                                                 const flux_msg_t *msg)
-{
-    flux_msg_handler_t *w = zlist_first (d->waiters);
-    while (w) {
-        if (flux_msg_cmp (msg, w->wait_match))
-            break;
-        w = zlist_next (d->waiters);
+    if (!w->backlog && !(w->backlog = zlist_new ())) {
+        errno = ENOMEM;
+        goto done;
     }
-    return w;
-}
-
-static int backlog_append (flux_msg_handler_t *w, flux_msg_t **msg)
-{
-    if (!w->backlog && !(w->backlog = zlist_new ()))
-        oom ();
-    if (zlist_append (w->backlog, *msg) < 0)
-        oom ();
-    *msg = NULL;
-    return 0;
+    if (!(cpy = flux_msg_copy (msg, true))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (zlist_append (w->backlog, cpy) < 0) {
+        flux_msg_destroy (cpy);
+        errno = ENOMEM;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 static int backlog_flush (flux_msg_handler_t *w)
@@ -252,55 +240,107 @@ done:
     return rc;
 }
 
+/* Return value of dispatch_message[_coproc] is:
+ * -1 error, 0 nomatch, or 1 match
+ */
+
+static int dispatch_message_coproc (struct dispatch *d, const flux_msg_t *msg)
+{
+    flux_msg_handler_t *w;
+    bool match = false;
+    int rc = -1;
+
+    /* Message matches a coproc that yielded.
+     * Resume, arranging for msg to be returned next by flux_recv().
+     */
+    w = zlist_first (d->waiters);
+    while (w) {
+        if (flux_msg_cmp (msg, w->wait_match)) {
+            if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
+                goto done;
+            zlist_remove (d->waiters, w);
+            if (resume_coproc (w) < 0)
+                goto done;
+            match = true;
+            break;
+        }
+        w = zlist_next (d->waiters);
+    }
+    /* Message matches a handler.
+     * If coproc already running, queue message as backlog.
+     * Else start coproc.
+     */
+    if (!match) {
+        w = zlist_first (d->handlers);
+        while (w) {
+            if (flux_msg_cmp (msg, w->match)) {
+                if (w->coproc && coproc_started (w->coproc)) {
+                    if (backlog_append (w, msg) < 0)
+                        goto done;
+                } else {
+                    if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
+                        goto done;
+                    if (start_coproc (w) < 0)
+                        goto done;
+                }
+                match = true;
+                break;
+            }
+            w = zlist_next (d->handlers);
+        }
+    }
+    rc = match ? 1 : 0;
+done:
+    return rc;
+}
+
+static int dispatch_message (struct dispatch *d, const flux_msg_t *msg)
+{
+    flux_msg_handler_t *w;
+    bool match = false;
+    int rc = -1;
+
+    w = zlist_first (d->handlers);
+    while (w) {
+        if (flux_msg_cmp (msg, w->match)) {
+            w->fn (d->h, w, msg, w->arg);
+            match = true;
+            break;
+        }
+        w = zlist_next (d->handlers);
+    }
+    rc = match ? 1 : 0;
+    return rc;
+}
+
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
                        int revents, void *arg)
 {
     struct dispatch *d = arg;
-    flux_msg_handler_t *w;
     flux_msg_t *msg = NULL;
-    int type;
+    int rc = -1;
+    int type, match;
 
     if (revents & FLUX_POLLERR)
-        goto fatal;
+        goto done;
     if (!(msg = flux_recv (d->h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK))) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK)
-            goto fatal;
-        else
-            goto done;
+        if (errno == EAGAIN && errno == EWOULDBLOCK)
+            rc = 0; /* ignore spurious wakeup */
+        goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
-    /* Message matches a coproc that yielded.
-     * Resume, arranging for msg to be returned next by flux_recv().
-     */
-    if ((w = find_waiting_handler (d, msg))) {
-        if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
-            goto fatal;
-        zlist_remove (d->waiters, w);
-        if (resume_coproc (w) < 0)
-            goto fatal;
-    /* Message matches a handler.
-     * If coproc already running, queue message as backlog.
-     * Else if FLUX_O_COPROC, start coproc.
-     * If coprocs not enabled, call handler directly.
-     */
-    } else if ((w = find_handler (d, msg))) {
-        if (w->coproc && coproc_started (w->coproc)) {
-            if (backlog_append (w, &msg) < 0) /* msg now property of backlog */
-                goto fatal;
-        } else if ((flux_flags_get (d->h) & FLUX_O_COPROC)) {
-            if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
-                goto fatal;
-            if (start_coproc (w) < 0)
-                goto fatal;
-        } else {
-            w->fn (d->h, w, msg, w->arg);
-        }
+    if ((flux_flags_get (d->h) & FLUX_O_COPROC))
+        match = dispatch_message_coproc (d, msg);
+    else
+        match = dispatch_message (d, msg);
+    if (match < 0)
+        goto done;
     /* Message matched nothing.
      * Respond with ENOSYS if it was a request.
      * Else log it if FLUX_O_TRACE
      */
-    } else {
+    if (match == 0) {
         if (type == FLUX_MSGTYPE_REQUEST) {
             if (flux_respond (d->h, msg, ENOSYS, NULL))
                 goto done;
@@ -311,13 +351,13 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
                      topic ? topic : "");
         }
     }
+    rc = 0;
 done:
+    if (rc < 0) {
+        flux_reactor_stop_error (r);
+        FLUX_FATAL (d->h);
+    }
     flux_msg_destroy (msg);
-    return;
-fatal:
-    flux_msg_destroy (msg);
-    flux_reactor_stop_error (r);
-    FLUX_FATAL (d->h);
 }
 
 void flux_msg_handler_start (flux_msg_handler_t *w)
