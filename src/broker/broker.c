@@ -121,6 +121,7 @@ typedef struct {
     shutdown_t *shutdown;
     double shutdown_grace;
     log_t *log;
+    zlist_t *subscriptions;     /* subscripts for internal services */
     /* Bootstrap
      */
     struct boot_method *boot_method;
@@ -287,6 +288,8 @@ int main (int argc, char *argv[])
     ctx.shutdown = shutdown_create ();
     ctx.attrs = attr_create ();
     ctx.log = log_create ();
+    if (!(ctx.subscriptions = zlist_new ()))
+        oom ();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -714,6 +717,7 @@ int main (int argc, char *argv[])
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     log_destroy (ctx.log);
+    zlist_destroy (&ctx.subscriptions);
     if (log_f)
         fclose (log_f);
 
@@ -2404,7 +2408,9 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     int i;
     uint32_t seq;
-    if (flux_msg_get_seq (*zmsg, &seq) < 0) {
+    const char *topic, *s;
+    if (flux_msg_get_seq (*zmsg, &seq) < 0
+            || flux_msg_get_topic (*zmsg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
@@ -2422,6 +2428,17 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
     (void)svc_sendmsg (ctx->eventsvc, zmsg);
 
+    /* Internal services may install message handlers for events.
+     */
+    s = zlist_first (ctx->subscriptions);
+    while (s) {
+        if (!strncmp (s, topic, strlen (s))) {
+            if (flux_requeue (ctx->h, *zmsg, FLUX_RQ_TAIL) < 0)
+                flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+            break;
+        }
+        s = zlist_next (ctx->subscriptions);
+    }
     return module_event_mcast (ctx->modhash, *zmsg);
 }
 
@@ -2702,8 +2719,32 @@ done:
     return rc;
 }
 
+static int broker_subscribe (void *impl, const char *topic)
+{
+    ctx_t *ctx = impl;
+    if (zlist_append (ctx->subscriptions, xstrdup (topic)))
+        oom();
+    return 0;
+}
+
+static int broker_unsubscribe (void *impl, const char *topic)
+{
+    ctx_t *ctx = impl;
+    char *s = zlist_first (ctx->subscriptions);
+    while (s) {
+        if (!strcmp (s, topic)) {
+            zlist_remove (ctx->subscriptions, s);
+            break;
+        }
+        s = zlist_next (ctx->subscriptions);
+    }
+    return 0;
+}
+
 static const struct flux_handle_ops broker_handle_ops = {
     .send = broker_send,
+    .event_subscribe = broker_subscribe,
+    .event_unsubscribe = broker_unsubscribe,
 };
 
 /*
