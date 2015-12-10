@@ -244,7 +244,8 @@ done:
  * -1 error, 0 nomatch, or 1 match
  */
 
-static int dispatch_message_coproc (struct dispatch *d, const flux_msg_t *msg)
+static int dispatch_message_coproc (struct dispatch *d,
+                                    const flux_msg_t *msg, int type)
 {
     flux_msg_handler_t *w;
     bool match = false;
@@ -262,7 +263,8 @@ static int dispatch_message_coproc (struct dispatch *d, const flux_msg_t *msg)
             if (resume_coproc (w) < 0)
                 goto done;
             match = true;
-            break;
+            if (type != FLUX_MSGTYPE_EVENT)
+                break;
         }
         w = zlist_next (d->waiters);
     }
@@ -270,7 +272,7 @@ static int dispatch_message_coproc (struct dispatch *d, const flux_msg_t *msg)
      * If coproc already running, queue message as backlog.
      * Else start coproc.
      */
-    if (!match) {
+    if (!match || type == FLUX_MSGTYPE_EVENT) {
         w = zlist_first (d->handlers);
         while (w) {
             if (flux_msg_cmp (msg, w->match)) {
@@ -284,7 +286,8 @@ static int dispatch_message_coproc (struct dispatch *d, const flux_msg_t *msg)
                         goto done;
                 }
                 match = true;
-                break;
+                if (type != FLUX_MSGTYPE_EVENT)
+                    break;
             }
             w = zlist_next (d->handlers);
         }
@@ -294,7 +297,8 @@ done:
     return rc;
 }
 
-static int dispatch_message (struct dispatch *d, const flux_msg_t *msg)
+static int dispatch_message (struct dispatch *d,
+                             const flux_msg_t *msg, int type)
 {
     flux_msg_handler_t *w;
     bool match = false;
@@ -305,7 +309,8 @@ static int dispatch_message (struct dispatch *d, const flux_msg_t *msg)
         if (flux_msg_cmp (msg, w->match)) {
             w->fn (d->h, w, msg, w->arg);
             match = true;
-            break;
+            if (type != FLUX_MSGTYPE_EVENT)
+                break;
         }
         w = zlist_next (d->handlers);
     }
@@ -328,12 +333,14 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
             rc = 0; /* ignore spurious wakeup */
         goto done;
     }
-    if (flux_msg_get_type (msg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0) {
+        rc = 0; /* ignore mangled message */
         goto done;
+    }
     if ((flux_flags_get (d->h) & FLUX_O_COPROC))
-        match = dispatch_message_coproc (d, msg);
+        match = dispatch_message_coproc (d, msg, type);
     else
-        match = dispatch_message (d, msg);
+        match = dispatch_message (d, msg, type);
     if (match < 0)
         goto done;
     /* Message matched nothing.
