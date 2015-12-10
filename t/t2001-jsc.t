@@ -267,6 +267,7 @@ test_expect_success 'jstat 15: jstat detects failed state' '
 	starting->failed
 	EOF
     cp output.15 output.15.cp &&
+    kill -INT $p &&
     test_cmp expected15 output.15.cp
 '
 
