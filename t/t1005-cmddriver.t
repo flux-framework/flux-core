@@ -57,11 +57,11 @@ test_expect_success 'cmddriver: --uri fails for non-connector dso' '
 
 # Test flux 'env' builtin
 test_expect_success 'flux env works' '
-	flux env | grep ${FLUX_BUILD_DIR}/src/connectors
+	flux env | grep /connectors
 '
 test_expect_success 'flux env runs argument' "
 	flux env sh -c 'echo \$FLUX_CONNECTOR_PATH' \
-		| grep ${FLUX_BUILD_DIR}/src/connectors
+		| grep /connectors
 "
 test_expect_success 'flux env passes cmddriver options' '
 	flux -F --uri foo://xyz env | grep "^FLUX_URI=foo://xyz"
