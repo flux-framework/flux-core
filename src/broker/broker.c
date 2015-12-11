@@ -115,7 +115,6 @@ typedef struct {
     int event_send_seq;
     bool event_active;          /* primary event source is active */
     svchash_t *services;
-    svchash_t *eventsvc;
     seqhash_t *seq;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
@@ -154,7 +153,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void rmmod_cb (module_t *p, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
-static void shutdown_cb (shutdown_t *s, void *arg);
+static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static void broker_block_signals (void);
@@ -276,7 +275,6 @@ int main (int argc, char *argv[])
     ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
-    ctx.eventsvc = svchash_create ();
     if (!(ctx.seq = sequence_hash_create ()))
 	oom ();
     ctx.overlay = overlay_create ();
@@ -705,7 +703,6 @@ int main (int argc, char *argv[])
     heartbeat_destroy (ctx.heartbeat);
     snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
-    svchash_destroy (ctx.eventsvc);
     sequence_hash_destroy (ctx.seq);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
@@ -744,11 +741,12 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
-static void shutdown_cb (shutdown_t *s, void *arg)
+static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     //ctx_t *ctx = arg;
     int rc = shutdown_get_rc (s);
-    exit (rc);
+    if (expired)
+        exit (rc);
 }
 
 static void update_proctitle (ctx_t *ctx)
@@ -2274,19 +2272,6 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
-/* Shutdown:
- * - start the shutdown timer
- * - send shutdown message to all modules
- */
-static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    shutdown_recvmsg (ctx->shutdown, *zmsg);
-    //if (module_stop_all (ctx->modhash) < 0)
-    //    flux_log (ctx->h, LOG_ERR, "module_stop_all: %s", strerror (errno));
-    return 0;
-}
-
 struct internal_service {
     const char *topic;
     const char *nodeset;
@@ -2323,11 +2308,6 @@ static struct internal_service services[] = {
     { NULL, NULL, },
 };
 
-static struct internal_service eventsvc[] = {
-    { "shutdown",       NULL,   event_shutdown_cb,  },
-    { NULL, NULL, },
-};
-
 static void broker_add_services (ctx_t *ctx)
 {
     struct internal_service *svc;
@@ -2336,12 +2316,6 @@ static void broker_add_services (ctx_t *ctx)
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
         if (!svc_add (ctx->services, svc->topic, NULL, svc->fun, ctx))
-            err_exit ("error adding handler for %s", svc->topic);
-    }
-    for (svc = &eventsvc[0]; svc->topic != NULL; svc++) {
-        if (!nodeset_member (svc->nodeset, ctx->rank))
-            continue;
-        if (!svc_add (ctx->eventsvc, svc->topic, NULL, svc->fun, ctx))
             err_exit ("error adding handler for %s", svc->topic);
     }
 }
@@ -2410,7 +2384,6 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 
     (void)overlay_mcast_child (ctx->overlay, *zmsg);
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
-    (void)svc_sendmsg (ctx->eventsvc, zmsg);
 
     /* Internal services may install message handlers for events.
      */
