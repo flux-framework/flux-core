@@ -293,3 +293,8 @@ dst
 taskid
 taskids
 errnum
+sqlite
+sophia
+sha
+blobref
+blobrefs
