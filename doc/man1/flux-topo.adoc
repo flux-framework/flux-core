@@ -1,3 +1,4 @@
+// flux-help-include: true
 FLUX-TOPO(1)
 ============
 :doctype: manpage

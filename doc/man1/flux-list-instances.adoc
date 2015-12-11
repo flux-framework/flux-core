@@ -1,3 +1,5 @@
+// flux-help-include: true
+// flux-help-description: List local flux instances
 FLUX-LIST-INSTANCES(1)
 ======================
 :doctype: manpage

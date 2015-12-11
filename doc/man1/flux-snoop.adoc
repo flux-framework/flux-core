@@ -1,3 +1,4 @@
+// flux-help-include: true
 FLUX-SNOOP(1)
 =============
 :doctype: manpage

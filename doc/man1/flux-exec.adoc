@@ -1,3 +1,4 @@
+// flux-help-include: true
 FLUX-EXEC(1)
 ============
 :doctype: manpage

@@ -41,6 +41,7 @@
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/optparse.h"
+#include "cmdhelp.h"
 
 
 bool handle_internal (flux_conf_t cf, int ac, char *av[]);
@@ -70,8 +71,25 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
+static char * get_help_pattern ()
+{
+    char *intree = intree_confdir ();
+    char *pattern;
+    if ((pattern = getenv ("FLUX_CMDHELP_PATTERN")))
+        return strdup (pattern);
+    if (intree == NULL)
+        pattern = xasprintf ("%s/flux/help.d/*.json", X_DATADIR);
+    else {
+        pattern = xasprintf ("%s/help.d/*.json", intree);
+        free (intree);
+    }
+    return (pattern);
+}
+
 static void usage (void)
 {
+    char *help_pattern = get_help_pattern ();
+
     fprintf (stderr,
 "Usage: flux [OPTIONS] COMMAND ARGS\n"
 "    -x,--exec-path PATH   prepend PATH to command search path\n"
@@ -87,26 +105,11 @@ static void usage (void)
 "    -S,--secdir DIR       set the directory where CURVE keys will be stored\n"
 "    -u,--uri URI          override default URI to flux broker\n"
 "    -v,--verbose          show FLUX_* environment and command search\n"
-"\n"
-"The flux-core commands are:\n"
-"   help          Display manual for a sub-command\n"
-"   keygen        Generate CURVE keypairs for session security\n"
-"   start         Bootstrap a comms session interactively\n"
-"   kvs           Access the Flux the key-value store\n"
-"   module        Load/unload comms modules\n"
-"   up            Show state of all broker ranks\n"
-"   ping          Time round-trip RPC on the comms rank-request network\n"
-"   mping         Time round-trip group RPC to the mecho comms module\n"
-"   snoop         Snoop on local Flux message broker traffic\n"
-"   event         Publish and subscribe to Flux events\n"
-"   logger        Log a message to Flux logging system\n"
-"   comms         Misc Flux comms session operations\n"
-"   comms-stats   Display comms message counters, etc.\n"
-"   topo          Display current comms topology using graphviz\n"
-"   wreckrun      Execute a Flux lightweight job (LWJ)\n"
-"   zio           Manipulate KVS streams (including LWJ stdio)\n"
-"   config        Manipulate a Flux config file\n"
-);
+"\n");
+    if (help_pattern) {
+        emit_command_help (help_pattern, stderr);
+        free (help_pattern);
+    }
 }
 
 

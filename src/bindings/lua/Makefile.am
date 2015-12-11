@@ -3,24 +3,33 @@ AM_LDFLAGS =	$(CODE_COVERAGE_LDFLAGS)
 AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 		$(LUA_INCLUDE) $(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
-fluxluadir = $(luadir)/flux
+fluxluadir =     $(luadir)/flux
+wreckluadir =    $(luadir)/wreck
+lustachedir =    $(fluxluadir)/lustache
+fluxluaexecdir = $(luaexecdir)/flux
 
 dist_lua_SCRIPTS = \
 	wreck.lua
 
-dist_fluxlua_SCRIPTS = \
+nobase_dist_lua_SCRIPTS = \
 	flux/timer.lua \
 	flux/alt_getopt.lua \
 	flux/posix.lua \
 	flux/base64.lua \
 	flux/lustache.lua \
-	flux/lustache \
 	wreck/io.lua
+
+#  Required because install(1) doesn't seem to preserve
+#   full path when copying to directory:
+dist_lustache_SCRIPTS = \
+	flux/lustache/context.lua \
+	flux/lustache/renderer.lua \
+	flux/lustache/scanner.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la
 
-fluxlua_LTLIBRARIES = \
+fluxluaexec_LTLIBRARIES = \
 	flux/affinity.la \
 	flux/hostlist.la
 
@@ -151,7 +160,7 @@ TESTS_ENVIRONMENT = \
 #
 .PHONY: convenience-link clean-convenience-link
 
-convenience-link: $(luaexec_LTLIBRARIES) $(fluxlua_LTLIBRARIES)
+convenience-link: $(luaexec_LTLIBRARIES) $(fluxluaexec_LTLIBRARIES)
 	@for f in $^; do \
 	  soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
 	  dirname=`dirname $(abs_builddir)/$$f `; \

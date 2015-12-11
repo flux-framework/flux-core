@@ -28,6 +28,10 @@ LDADD = $(fluxcmd_ldadd)
 
 
 bin_PROGRAMS = flux
+flux_SOURCES = \
+	flux.c \
+	cmdhelp.h \
+	cmdhelp.c
 
 #
 # Flux subcommands

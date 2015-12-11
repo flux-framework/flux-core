@@ -1,3 +1,4 @@
+// flux-help-description : Print or run inside a Flux environment
 FLUX-ENV(1)
 ===========
 :doctype: manpage

@@ -1,3 +1,4 @@
+// flux-help-include: true
 FLUX-PING(1)
 ============
 :doctype: manpage

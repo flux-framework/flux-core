@@ -1,3 +1,4 @@
+// flux-help-include: true
 FLUX-LOGGER(1)
 ==============
 :doctype: manpage

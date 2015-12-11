@@ -1,3 +1,5 @@
+// flux-help-include: true
+
 FLUX-CONFIG(1)
 ==============
 :doctype: manpage
