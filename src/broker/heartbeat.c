@@ -38,11 +38,10 @@
 struct heartbeat_struct {
     flux_t h;
     double rate;
-    flux_watcher_t *w;
+    flux_watcher_t *timer;
+    flux_msg_handler_t *handler;
     int send_epoch;
     int epoch;
-    heartbeat_cb_f cb;
-    void *cb_arg;
 };
 
 static const double min_heartrate = 0.01;   /* min seconds */
@@ -108,14 +107,21 @@ int heartbeat_get_epoch (heartbeat_t *hb)
     return hb->epoch;
 }
 
-void heartbeat_set_callback (heartbeat_t *hb, heartbeat_cb_f cb, void *arg)
+static void event_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
-    hb->cb = cb;
-    hb->cb_arg = arg;
+    heartbeat_t *hb = arg;
+    int epoch;
+
+    if (flux_heartbeat_decode (msg, &epoch) < 0)
+        return;
+    if (epoch >= hb->epoch) { /* ensure epoch remains monotonic */
+        hb->epoch = epoch;
+    }
 }
 
-static void heartbeat_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
 {
     heartbeat_t *hb = arg;
     flux_msg_t *msg = NULL;
@@ -135,47 +141,34 @@ done:
 int heartbeat_start (heartbeat_t *hb)
 {
     uint32_t rank;
+    struct flux_match match = FLUX_MATCH_EVENT;
+
     if (!hb->h) {
         errno = EINVAL;
         return -1;
     }
     if (flux_get_rank (hb->h, &rank) < 0)
         return -1;
-    if (rank != 0) {
-        errno = EINVAL;
-        return -1;
+    if (rank == 0) {
+        if (!(hb->timer = flux_timer_watcher_create (flux_get_reactor (hb->h),
+                                                     hb->rate, hb->rate,
+                                                     timer_cb, hb)))
+            return -1;
+        flux_watcher_start (hb->timer);
     }
-    if (!(hb->w = flux_timer_watcher_create (flux_get_reactor (hb->h),
-                                             hb->rate, hb->rate,
-                                             heartbeat_cb, hb)))
+    match.topic_glob = "hb";
+    if (!(hb->handler = flux_msg_handler_create (hb->h, match, event_cb, hb)))
         return -1;
-    flux_watcher_start (hb->w);
+    flux_msg_handler_start (hb->handler);
     return 0;
 }
 
 void heartbeat_stop (heartbeat_t *hb)
 {
-    if (hb->w)
-        flux_watcher_stop (hb->w);
-}
-
-int heartbeat_recvmsg (heartbeat_t *hb, const flux_msg_t *msg)
-{
-    int rc = -1;
-    int epoch;
-
-    if (flux_heartbeat_decode (msg, &epoch) < 0)
-        goto done;
-    if (epoch < hb->epoch) { /* ensure epoch remains monotonic */
-        errno = EPROTO;
-        goto done;
-    }
-    hb->epoch = epoch;
-    if (hb->cb)
-        hb->cb (hb, hb->cb_arg);
-    rc = 0;
-done:
-    return rc;
+    if (hb->timer)
+        flux_watcher_stop (hb->timer);
+    if (hb->handler)
+        flux_msg_handler_stop (hb->handler);
 }
 
 /*

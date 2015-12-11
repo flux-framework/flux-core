@@ -151,7 +151,6 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
-static void heartbeat_cb (heartbeat_t *h, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void rmmod_cb (module_t *p, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
@@ -495,7 +494,6 @@ int main (int argc, char *argv[])
     if (flux_sec_munge_init (ctx.sec) < 0)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
 
-    overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
     overlay_set_flux (ctx.overlay, ctx.h);
@@ -659,14 +657,11 @@ int main (int argc, char *argv[])
     /* install heartbeat (including timer on rank 0)
      */
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
-    heartbeat_set_callback (ctx.heartbeat, heartbeat_cb, &ctx);
-    if (ctx.rank == 0) {
-        if (heartbeat_start (ctx.heartbeat) < 0)
-            err_exit ("heartbeat_start");
-        if (ctx.verbose)
-            msg ("installing session heartbeat: T=%0.1fs",
+    if (heartbeat_start (ctx.heartbeat) < 0)
+        err_exit ("heartbeat_start");
+    if (ctx.rank == 0 && ctx.verbose)
+        msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
-    }
 
     /* Send hello message to parent.
      * Report progress every second.
@@ -2264,16 +2259,6 @@ done:
     return rc;
 }
 
-static int event_hb_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    if (heartbeat_recvmsg (ctx->heartbeat, *zmsg) < 0)
-        flux_log (ctx->h, LOG_ERR, "%s: heartbeat_recvmsg: %s", __FUNCTION__,
-                  strerror (errno));
-    return 0;
-}
-
 static int cmb_seq (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2339,7 +2324,6 @@ static struct internal_service services[] = {
 };
 
 static struct internal_service eventsvc[] = {
-    { "hb",             NULL,   event_hb_cb,        },
     { "shutdown",       NULL,   event_shutdown_cb,  },
     { NULL, NULL, },
 };
@@ -2577,16 +2561,6 @@ static void event_cb (overlay_t *ov, void *sock, void *arg)
     }
 done:
     zmsg_destroy (&zmsg);
-}
-
-/* This is called on each heartbeat (all ranks).
- */
-static void heartbeat_cb (heartbeat_t *h, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    if (ctx->rank > 0)
-        (void) overlay_keepalive_parent (ctx->overlay);
 }
 
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
