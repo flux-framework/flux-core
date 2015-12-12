@@ -44,15 +44,34 @@
 local top_srcdir = "@abs_top_srcdir@"
 local top_builddir = "@abs_top_builddir@"
 
---
--- Append explicit path to lua bindings to package.path and package.cpath
---  to hand down to test scripts
---
---
-package.path = top_srcdir .. "/src/bindings/lua/?.lua" .. ';'
-	.. package.path
-package.cpath = top_builddir .. "/src/bindings/lua/.libs/?.so" .. ';' 
-	.. package.cpath
+if os.getenv ("FLUX_TEST_INSTALLED_PATH") then
+    --
+    --  We are attempting to test against an installed flux(1).
+    --   Therefore, we grab proper LUA_PATH and LUA_CPATH by invoking
+    --   lua(1) under flux-env. We then _append_ in-tree paths so
+    --   that test dependencies can be picked up such as Test/More.lua
+    --   and lalarm.so
+    local path = os.getenv ("FLUX_TEST_INSTALLED_PATH")
+    local flux = path .. "/flux"
+    local read_path = function (v)
+        local cmd = string.format (flux.." env lua -e 'print (package.%s)'", v)
+        local p = io.popen (cmd):read ("*all")
+        return p:match ("^%s*(.-);*%s*$")
+    end
+    package.path = read_path ("path") .. ';' ..
+                     top_srcdir .. "/src/bindings/lua/?.lua"
+    package.cpath = read_path ("cpath") .. ';' ..
+                     top_builddir .. "/src/bindings/lua/.libs/?.so"
+else
+    --
+    -- Testing in-tree, simply append explicit path to lua bindings to
+    --  package.path and package.cpath to hand down to test scripts
+    --
+    package.path = top_srcdir .. "/src/bindings/lua/?.lua" .. ';'
+	    .. package.path
+    package.cpath = top_builddir .. "/src/bindings/lua/.libs/?.so" .. ';' 
+	    .. package.cpath
+end
 
 ---------------------------------------------------------------------------
 local getopt = require 'flux.alt_getopt'.get_opts
