@@ -74,5 +74,5 @@ after_success:
  - if test "$COVERAGE" = "t" ; then coveralls-lcov flux*-coverage.info ; fi
 
 after_failure:
- - find . -name *.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
+ - find . -name t[0-9]*.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - find . -name *.broker.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
