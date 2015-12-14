@@ -217,7 +217,7 @@ int main (int argc, char *argv[])
     } else {
         if (flux_conf_load (cf) == 0) {
             flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", "");
-        } else if (errno != ENOENT || Fopt)
+        } else if (errno != ENOENT)
             err_exit ("%s", flux_conf_get_directory (cf));
     }
 
