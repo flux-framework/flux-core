@@ -32,7 +32,6 @@ finally be disposed of using `flux_rpc_destroy()`.
 The raw RPC functions may be paired with the JSON RPC functions
 `flux_rpc(3)` and `flux_rpc_get(3)`.  That is, it is valid to send
 a JSON request payload and receive a raw response payload, or the reverse.
-Both sets of functions behave identically with respect to NULL payloads.
 
 _topic_ must be set to a topic string representing the Flux
 service that will handle the request.
@@ -62,13 +61,11 @@ and the flux_rpc_t returned by `flux_rpc()` may be immediately destroyed.
 `flux_rpc_get_raw()` blocks until a matching response is received, then
 decodes the result.  For asynchronous response handling, see flux_rpc_then(3).
 
-_data_out_ and _length_out_, if non-NULL, are assigned a pointer to the
-response payload and its length.  It is a protocol error if a payload that is
-expected (signified by a non-NULL _data_out_) does not arrive;
-similarly, it is a protocol error if an unexpected payload (signified
-by a NULL _data_out_) arrives.  The storage associated with _data_out_
-belongs to the flux_rpc_t object and is invalidated when that object is
-destroyed.
+_data_out_ and _length_out_, which must be non-NULL, are assigned a pointer
+to the response payload and its length.  If there is no response payload,
+they will be sent to NULL and zero, respectively.  Any storage associated
+with _data_out_ belongs to the flux_rpc_t object and is invalidated when
+that object is destroyed.
 
 _nodeid_out_, if non-NULL, is set to the _nodeid_in_ argument given
 to `flux_rpc_raw()`.  This is primarily useful with `flux_rpc_multi(3)`.

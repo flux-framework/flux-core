@@ -90,6 +90,10 @@ int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
     int l = 0;
     int rc = -1;
 
+    if (!data || !len) {
+        errno = EINVAL;
+        goto done;
+    }
     if (request_decode (msg, &ts) < 0)
         goto done;
     if (flux_msg_get_payload (msg, NULL, &d, &l) < 0) {
@@ -97,16 +101,10 @@ int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
             goto done;
         errno = 0;
     }
-    if ((data && !d) || (!data && d)) {
-        errno = EPROTO;
-        goto done;
-    }
     if (topic)
         *topic = ts;
-    if (data)
-        *(void **)data = d;
-    if (len)
-        *len = l;
+    *(void **)data = d;
+    *len = l;
     rc = 0;
 done:
     return rc;
