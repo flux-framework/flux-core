@@ -32,12 +32,12 @@
 #include <hwloc.h>
 #include <string.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/modules/kvs/kvs.h"
-#include "src/modules/libmrpc/mrpc.h"
 
 typedef struct
 {
@@ -57,8 +57,9 @@ int try_hwloc_load (flux_t h, ctx_t *ctx, const char *const path)
                       "failed to load hwloc topology, path=%s", path);
 }
 
-static void ctx_init (flux_t h, ctx_t *ctx)
+static int ctx_init (flux_t h, ctx_t *ctx)
 {
+    int ret = -1;
     uint32_t rank;
     if (flux_get_rank (h, &rank) < 0) {
         err_exit ("flux_get_rank");
@@ -79,9 +80,13 @@ static void ctx_init (flux_t h, ctx_t *ctx)
     if (path) {
         flux_log (h, LOG_INFO, "loading hwloc from %s", path);
         if (try_hwloc_load (h, ctx, path) >= 0) {
-            return;  // Success!
+            ret = 0;
+            goto done;
         } else {
-            err_exit ("hwloc load failed for specified path");
+            flux_log (h, LOG_INFO, "hwloc load failed for specified path: %s", path);
+            errno = ENOENT;
+            ret = -1;
+            goto done;
         }
     }
 
@@ -101,7 +106,10 @@ static void ctx_init (flux_t h, ctx_t *ctx)
         hwloc_bitmap_free (restrictset);
     }
     ctx->loaded = false;
+    ret = 0;
+done:
     free (path);
+    return ret;
 }
 
 static void ctx_deinit (ctx_t *ctx)
@@ -112,7 +120,8 @@ static void ctx_deinit (ctx_t *ctx)
 static ctx_t *getctx (flux_t h)
 {
     ctx_t *ctx = xzmalloc (sizeof(ctx_t));
-    ctx_init (h, ctx);
+    if (ctx_init (h, ctx))
+        err_exit ("initial hwloc context could not be created");
     return ctx;
 }
 
@@ -335,7 +344,7 @@ static void load_cb (flux_t h,
     FLUX_CHECK_INT (h, kvs_put_int (h, completion_path, 1));
     free (completion_path);
 
-    FLUX_CHECK_INT (h, kvs_fence (h, "resource_hwloc_loaded", size));
+    FLUX_CHECK_INT (h, kvs_commit (h));
 
     flux_log (h, LOG_DEBUG, "loaded");
 
@@ -349,8 +358,14 @@ static void reload_cb (flux_t h,
 {
     ctx_t *ctx = arg;
     ctx_deinit (ctx);
-    ctx_init (h, ctx);
+    if (ctx_init (h, ctx)) {
+        flux_respond (h, msg, errno, NULL);
+        return;
+    }
     load_cb (h, watcher, msg, arg);
+    json_object *out = Jnew ();
+    flux_respond (h, msg, 0, Jtostr (out));
+    Jput (out);
 }
 
 static void topo_cb (flux_t h,
@@ -424,7 +439,7 @@ done:
 
 static struct flux_msg_handler_spec htab[] = {
     {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_cb, NULL},
-    {FLUX_MSGTYPE_EVENT, "resource-hwloc.reload", reload_cb, NULL},
+    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.query", query_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.get", get_cb, NULL},
@@ -438,11 +453,6 @@ int mod_main (flux_t h, int argc, char **argv)
     load_cb (h, 0, NULL, ctx);
 
     if (flux_event_subscribe (h, "resource-hwloc.load") < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
-        return -1;
-    }
-
-    if (flux_event_subscribe (h, "resource-hwloc.reload") < 0) {
         flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
         return -1;
     }
