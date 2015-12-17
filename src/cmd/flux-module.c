@@ -271,17 +271,26 @@ void mod_insmod (flux_t h, opt_t opt)
             err_exit ("%s", topic);
         while (!flux_rpc_completed (r)) {
             uint32_t nodeid = FLUX_NODEID_ANY;
-            if (flux_rpc_get (r, NULL, NULL) < 0)
-                err_exit ("%s[%d]", topic,
-                          nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
+            if (flux_rpc_get (r, NULL, NULL) < 0) {
+                if (errno == EEXIST)
+                    msg_exit ("%s[%d]: module/service name already in use",
+                            topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
+                    err_exit ("%s[%d]",
+                            topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
+            }
         }
         flux_rpc_destroy (r);
         free (topic);
         free (service);
         free (json_str);
     } else {
-        if (flux_modctl_load (h, opt.nodeset, modpath, opt.argc, opt.argv) < 0)
-            err_exit ("%s", modname);
+        if (flux_modctl_load (h, opt.nodeset, modpath,
+                                                opt.argc, opt.argv) < 0) {
+            if (errno == EEXIST)
+                msg_exit ("%s: module/service name already in use", modname);
+            else
+                err_exit ("%s", modname);
+        }
     }
     if (modpath)
         free (modpath);
