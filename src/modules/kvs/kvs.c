@@ -170,8 +170,6 @@ static int setroot_event_send (ctx_t *ctx, const char *fence);
 static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
                             const char *sender,
                             const char *rootdir, int rootseq);
-static void load_complete (ctx_t *ctx, const href_t ref, json_object *o);
-static void store_complete (ctx_t *ctx, href_t ref);
 
 static void commit_timeout_handler (flux_reactor_t *r, flux_watcher_t *w,
                                     int revents, void *arg);
@@ -219,8 +217,10 @@ static ctx_t *getctx (flux_t h)
                                                 min_commit_window, 0.,
                                                 commit_timeout_handler, ctx)))
             goto error;
-        if (!(ctx->tok = json_tokener_new ()))
-            oom ();
+        if (!(ctx->tok = json_tokener_new ())) {
+            errno = ENOMEM;
+            goto error;
+        }
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
@@ -301,47 +301,55 @@ static void fence_destroy (fence_t *f)
     free (f);
 }
 
-static void load_completion (flux_rpc_t *rpc, void *arg)
+static void content_load_completion (flux_rpc_t *rpc, void *arg)
 {
     ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    json_object_iter iter;
+    json_object *o;
+    const void *data;
+    int size;
+    const char *blobref;
+    struct cache_entry *hp;
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
+    if (flux_rpc_get_raw (rpc, NULL, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    if (!(in = json_tokener_parse_ex (ctx->tok, json_str, strlen (json_str)))) {
+    blobref = flux_rpc_aux_get (rpc);
+    if (!(o = json_tokener_parse_ex (ctx->tok, (char *)data, size))) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         json_tokener_reset (ctx->tok);
         goto done;
     }
-    json_object_object_foreachC (in, iter) {
-        Jget (iter.val);
-        load_complete (ctx, iter.key, iter.val); /* href -> value */
+    if ((hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+        cache_entry_set_json (hp, o);
+    else {
+        hp = cache_entry_create (o);
+        cache_insert (ctx->cache, blobref, hp);
     }
 done:
     flux_rpc_destroy (rpc);
-    Jput (in);
 }
 
-static int load_request_send (ctx_t *ctx, const href_t ref)
+/* If now is true, perform the load rpc synchronously;
+ * otherwise arrange for a continuation to handle the response.
+ */
+static int content_load_request_send (ctx_t *ctx, const href_t ref, bool now)
 {
-    JSON in = Jnew ();
     flux_rpc_t *rpc = NULL;
 
-    Jadd_obj (in, ref, NULL);
-    if (!(rpc = flux_rpc (ctx->h, "kvs.load", Jtostr (in),
-                                            FLUX_NODEID_UPSTREAM, 0)))
+    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
+    if (!(rpc = flux_rpc_raw (ctx->h, "content.load",
+                    ref, SHA1_STRING_SIZE, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_rpc_then (rpc, load_completion, ctx) < 0)
+    flux_rpc_aux_set (rpc, xstrdup (ref), free);
+    if (now) {
+        content_load_completion (rpc, ctx);
+        flux_rpc_destroy (rpc);
+    } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0)
         goto error;
-    Jput (in);
     return 0;
 error:
-    Jput (in);
     flux_rpc_destroy (rpc);
     return -1;
 }
@@ -351,20 +359,13 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     bool done = true;
 
-    if (ctx->master) {
-        /* FIXME: probably should handle this "can't happen" situation.
-         */
-        if (!hp || !cache_entry_get_valid (hp))
-            msg_exit ("dangling ref %s", ref);
-    }
-
     /* Create an incomplete hash entry if none found.
      */
     if (!hp) {
         hp = cache_entry_create (NULL);
         cache_insert (ctx->cache, ref, hp);
-        if (load_request_send (ctx, ref) < 0)
-            flux_log_error (ctx->h, "load_request_send");
+        if (content_load_request_send (ctx, ref, wait ? false : true) < 0)
+            flux_log_error (ctx->h, "content_load_request_send");
         ctx->stats.faults++;
     }
     /* If hash entry is incomplete (either created above or earlier),
@@ -380,60 +381,45 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
     return done;
 }
 
-/* Store the results of a load request.
- */
-static void load_complete (ctx_t *ctx, const href_t ref, json_object *o)
-{
-    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
-
-    if (hp) {
-        cache_entry_set_json (hp, o);
-    } else {
-        hp = cache_entry_create (o);
-        cache_insert (ctx->cache, ref, hp);
-    }
-}
-
-static void store_completion (flux_rpc_t *rpc, void *arg)
+static void content_store_completion (flux_rpc_t *rpc, void *arg)
 {
     ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    json_object_iter iter;
+    struct cache_entry *hp;
+    const char *blobref;
+    int blobref_size;
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
+    if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    if (!(in = Jfromstr (json_str))) {
+    if (!blobref || blobref[blobref_size - 1] != '\0') {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    json_object_object_foreachC (in, iter) {
-        store_complete (ctx, iter.key);
-    }
+    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
+    hp = cache_lookup (ctx->cache, blobref, ctx->epoch);
+    cache_entry_set_dirty (hp, false);
 done:
-    Jput (in);
     flux_rpc_destroy (rpc);
 }
 
-static int store_request_send (ctx_t *ctx, const href_t ref, json_object *val)
+static int content_store_request_send (ctx_t *ctx, const href_t ref,
+                                   json_object *val)
 {
-    JSON in = Jnew ();
     flux_rpc_t *rpc;
+    const char *data = Jtostr (val);
+    int size = strlen (data) + 1;
 
-    Jadd_obj (in, ref, val);
-    if (!(rpc = flux_rpc (ctx->h, "kvs.store", Jtostr (in),
-                                        FLUX_NODEID_UPSTREAM, 0)))
+    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
+    if (!(rpc = flux_rpc_raw (ctx->h, "content.store",
+                              data, size, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_rpc_then (rpc, store_completion, ctx) < 0)
+    if (flux_rpc_then (rpc, content_store_completion, ctx) < 0)
         goto error;
-    Jput (in);
     return 0;
 error:
     flux_rpc_destroy (rpc);
-    Jput (in);
     return -1;
 }
 
@@ -459,7 +445,7 @@ static void store (ctx_t *ctx, json_object *o, href_t ref)
     uint8_t hash[SHA1_DIGEST_SIZE];
 
     SHA1_Init (&sha1_ctx);
-    SHA1_Update (&sha1_ctx, (uint8_t *)s, strlen (s));
+    SHA1_Update (&sha1_ctx, (uint8_t *)s, strlen (s) + 1);
     SHA1_Final (&sha1_ctx, hash);
     sha1_hashtostr (hash, ref);
 
@@ -472,19 +458,10 @@ static void store (ctx_t *ctx, json_object *o, href_t ref)
     } else {
         hp = cache_entry_create (o);
         cache_insert (ctx->cache, ref, hp);
-        if (!ctx->master) {
-            cache_entry_set_dirty (hp, true);
-            store_request_send (ctx, ref, o);
-        }
+        cache_entry_set_dirty (hp, true);
+        if (content_store_request_send (ctx, ref, o) < 0)
+            flux_log_error (ctx->h, "content_store");
     }
-}
-
-/* Update a hash item after its upstream store has completed.
- */
-static void store_complete (ctx_t *ctx, href_t ref)
-{
-    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
-    cache_entry_set_dirty (hp, false);
 }
 
 static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
@@ -772,75 +749,6 @@ static void commit_timeout_handler (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-static void load_request_cb (flux_t h, flux_msg_handler_t *w,
-                             const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    JSON out = Jnew ();
-    JSON val;
-    json_object_iter iter;
-    wait_t *wait = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(wait = wait_create (h, w, msg, load_request_cb, arg)))
-        goto done;
-    json_object_object_foreachC (in, iter) {
-        if (!load (ctx, iter.key, wait, &val))
-            goto stall;
-        Jadd_obj (out, iter.key, val);
-    }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-    if (wait)
-        wait_destroy (wait, NULL);
-stall:
-    Jput (in);
-    Jput (out);
-}
-
-static void store_request_cb (flux_t h, flux_msg_handler_t *w,
-                              const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    JSON out = Jnew ();
-    json_object_iter iter;
-    href_t href;
-    int rc = -1;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = json_tokener_parse_ex (ctx->tok, json_str, strlen (json_str)))) {
-        json_tokener_reset (ctx->tok);
-        errno = EPROTO;
-        goto done;
-    }
-    json_object_object_foreachC (in, iter) {
-        Jget (iter.val);
-        store (ctx, iter.val, href);
-        Jadd_obj (out, iter.key, NULL);
-    }
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-    Jput (in);
-    Jput (out);
-}
-
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
@@ -850,10 +758,6 @@ static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto done;
-    if (ctx->master) {
-        errno = EINVAL;
-        goto done;
-    }
     size = cache_count_entries (ctx->cache);
     expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0);
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
@@ -869,8 +773,6 @@ static void dropcache_event_cb (flux_t h, flux_msg_handler_t *w,
     ctx_t *ctx = arg;
     int size, expcount = 0;
 
-    if (ctx->master)
-        return;
     if (flux_event_decode (msg, NULL, NULL) < 0)
         return;
     size = cache_count_entries (ctx->cache);
@@ -1854,8 +1756,6 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.load",             load_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.store",            store_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
