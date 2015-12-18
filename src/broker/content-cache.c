@@ -185,17 +185,16 @@ static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
 {
     int rc = -1;
 
-    assert (!e->valid);
-    assert (!e->data);
-    assert (e->len == 0);
-
-    if (len > 0 && !(e->data = malloc (len))) {
-        errno = ENOMEM;
-        goto done;
+    if (!e->valid) {
+        assert (!e->data);
+        assert (e->len == 0);
+        if (len > 0 && !(e->data = malloc (len))) {
+            errno = ENOMEM;
+            goto done;
+        }
+        memcpy (e->data, data, len);
+        e->len = len;
     }
-    memcpy (e->data, data, len);
-    e->len = len;
-
     rc = 0;
 done:
     return rc;
