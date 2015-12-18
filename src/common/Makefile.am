@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev libpmi-client libpmi-server \
+SUBDIRS = libtap libev libsophia libpmi-client libpmi-server \
 	  liblsd libutil libflux libsubprocess libcompat
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
@@ -13,6 +13,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
+	$(builddir)/libsophia/libsophia.la \
 	$(builddir)/libpmi-client/libpmi-client.la \
 	$(builddir)/libpmi-server/libpmi-server.la \
 	$(builddir)/libsubprocess/libsubprocess.la \

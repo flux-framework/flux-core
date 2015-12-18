@@ -27,7 +27,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <dirent.h>
+#include <libgen.h>
 #include <unistd.h>
 #include <pthread.h>
 
@@ -39,6 +42,36 @@ struct cleaner {
     cleaner_fun_f * fun;
     void * arg;
 };
+
+static void unlink_recursive (const char *dirpath)
+{
+    DIR *dir;
+    struct dirent *dirent;
+    char path[PATH_MAX + 1];
+    struct stat sb;
+
+    if ((dir = opendir (dirpath))) {
+        while ((dirent = readdir (dir))) {
+            if (!strcmp (dirent->d_name, ".") || !strcmp (dirent->d_name, ".."))
+                continue;
+            snprintf (path, sizeof (path), "%s/%s", dirpath, dirent->d_name);
+            if (lstat (path, &sb) < 0)
+                continue;
+            if (S_ISDIR (sb.st_mode))
+                unlink_recursive (path);
+            else
+                unlink (path);
+        }
+        closedir (dir);
+        rmdir (dirpath);
+    }
+}
+
+void cleanup_directory_recursive (const struct cleaner *c)
+{
+    if (c && c->arg)
+        unlink_recursive (c->arg);
+}
 
 void cleanup_directory (const struct cleaner *c)
 {
@@ -98,3 +131,7 @@ void cleanup_push_string (cleaner_fun_f *fun, const char * path)
 {
     cleanup_push(fun, xstrdup(path));
 }
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

@@ -11,16 +11,6 @@ void fatal_err (const char *message, void *arg)
     BAIL_OUT ("fatal error: %s", message);
 }
 
-void heartbeat_cb (heartbeat_t *hb, void *arg)
-{
-    static int prev_epoch = -1;
-    int epoch = heartbeat_get_epoch (hb);
-
-    ok (prev_epoch == -1 || prev_epoch + 1 == epoch,
-        "heartbeat callback invoked, epoch %d (last %d)", epoch, prev_epoch);
-    prev_epoch = epoch;
-}
-
 void heartbeat_event_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
@@ -28,8 +18,8 @@ void heartbeat_event_cb (flux_t h, flux_msg_handler_t *w,
     int epoch = -1;
     int rc = flux_heartbeat_decode (msg, &epoch);
 
-    ok (rc == 0 && heartbeat_recvmsg (hb, msg) == 0,
-        "flux_heartbeat_recvmsg works, epoch %d", epoch);
+    ok (rc == 0,
+        "received heartbeat event epoch %d", epoch);
     if (epoch == 2) {
         flux_msg_handler_stop (w);
         heartbeat_stop (hb);
@@ -54,7 +44,7 @@ int main (int argc, char **argv)
     heartbeat_t *hb;
     flux_msg_handler_t *w;
 
-    plan (21);
+    plan (18);
 
     check_codec ();
 
@@ -69,7 +59,6 @@ int main (int argc, char **argv)
         "heartbeat_create works");
 
     heartbeat_set_flux (hb, h);
-    heartbeat_set_callback (hb, heartbeat_cb, NULL);
 
     ok (heartbeat_get_rate (hb) == 2.,
         "heartbeat_get_rate returns default of 2s");
@@ -90,7 +79,6 @@ int main (int argc, char **argv)
 
     ok (heartbeat_get_epoch (hb) == 0,
         "heartbeat_get_epoch works, default is zero");
-
 
     w = flux_msg_handler_create (h, FLUX_MATCH_EVENT, heartbeat_event_cb, hb);
     ok (w != NULL,

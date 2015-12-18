@@ -66,6 +66,7 @@
 #include "attr.h"
 #include "sequence.h"
 #include "log.h"
+#include "content-cache.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -98,7 +99,7 @@ typedef struct {
      */
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
-    char *socket_dir;
+    char *scratch_dir;
     attr_t *attrs;
 
     /* Modules
@@ -115,12 +116,13 @@ typedef struct {
     int event_send_seq;
     bool event_active;          /* primary event source is active */
     svchash_t *services;
-    svchash_t *eventsvc;
     seqhash_t *seq;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
     log_t *log;
+    zlist_t *subscriptions;     /* subscripts for internal services */
+    content_cache_t *cache;
     /* Bootstrap
      */
     struct boot_method *boot_method;
@@ -129,6 +131,7 @@ typedef struct {
     int k_ary;
     hello_t *hello;
     double hello_timeout;
+    flux_t enclosing_h;
 
     /* Subprocess management
      */
@@ -150,11 +153,10 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
-static void heartbeat_cb (heartbeat_t *h, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void rmmod_cb (module_t *p, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
-static void shutdown_cb (shutdown_t *s, void *arg);
+static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static void broker_block_signals (void);
@@ -171,7 +173,7 @@ static void update_pidfile (ctx_t *ctx);
 static void init_shell (ctx_t *ctx);
 static int init_shell_exit_handler (struct subprocess *p, void *arg);
 
-static int create_socketdir (ctx_t *ctx);
+static int create_scratchdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
 
@@ -207,7 +209,7 @@ static const struct option longopts[] = {
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
-    {"socket-directory",required_argument,  0, 'D'},
+    {"scratch-directory",required_argument,  0, 'D'},
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
@@ -234,7 +236,7 @@ static void usage (void)
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
+" -D,--scratch-directory DIR   Scratch directory for sockets, etc\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -m,--boot-method             Select bootstrap: pmi, single\n"
@@ -276,9 +278,8 @@ int main (int argc, char *argv[])
     ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
-    ctx.eventsvc = svchash_create ();
     if (!(ctx.seq = sequence_hash_create ()))
-	oom ();
+        oom ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
@@ -287,6 +288,10 @@ int main (int argc, char *argv[])
     ctx.shutdown = shutdown_create ();
     ctx.attrs = attr_create ();
     ctx.log = log_create ();
+    if (!(ctx.subscriptions = zlist_new ()))
+        oom ();
+    if (!(ctx.cache = content_cache_create ()))
+        oom();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -355,7 +360,7 @@ int main (int argc, char *argv[])
             case 'g':   /* --shutdown-grace SECS */
                 ctx.shutdown_grace = strtod (optarg, NULL);
                 break;
-            case 'D': { /* --socket-directory DIR */
+            case 'D': { /* --scratch-directory DIR */
                 struct stat sb;
                 if (stat (optarg, &sb) < 0)
                     err_exit ("%s", optarg);
@@ -363,7 +368,7 @@ int main (int argc, char *argv[])
                     msg_exit ("%s: not a directory", optarg);
                 if ((sb.st_mode & S_IRWXU) != S_IRWXU)
                     msg_exit ("%s: invalid mode: 0%o", optarg, sb.st_mode);
-                ctx.socket_dir = xstrdup (optarg);
+                ctx.scratch_dir = xstrdup (optarg);
                 break;
             }
             case 'E': /* --enable-epgm */
@@ -415,6 +420,13 @@ int main (int argc, char *argv[])
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
         msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
+    /* Connect to enclosing instance, if any.
+     */
+    if (getenv ("FLUX_URI")) {
+        if (!(ctx.enclosing_h = flux_open (NULL, 0)))
+            err_exit ("flux_open enclosing instance");
+    }
+
     /* Process config from the KVS of enclosing instance (if any)
      * and not forced to use a config file by the command line.
      */
@@ -427,15 +439,11 @@ int main (int argc, char *argv[])
             msg ("Loading config from %s", confdir);
         if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH)
             err_exit ("%s", confdir);
-    } else if (getenv ("FLUX_URI")) {
-        flux_t h;
+    } else if (ctx.enclosing_h) {
         if (ctx.verbose)
             msg ("Loading config from KVS");
-        if (!(h = flux_open (NULL, 0)))
-            err_exit ("flux_open");
-        if (kvs_conf_load (h, ctx.cf) < 0 && errno != ENOENT)
-            err_exit ("could not load config from KVS");
-        flux_close (h);
+        if (kvs_conf_load (ctx.enclosing_h, ctx.cf) < 0 && errno != ENOENT)
+            err_exit ("could not load config from enclosing instance KVS");
     }
 
     /* Arrange to load config entries into kvs config.*
@@ -492,7 +500,6 @@ int main (int argc, char *argv[])
     if (flux_sec_munge_init (ctx.sec) < 0)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
 
-    overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
     overlay_set_flux (ctx.overlay, ctx.h);
@@ -516,8 +523,8 @@ int main (int argc, char *argv[])
      * to this rank that will contain the pidfile and local connector socket.
      * (These may have already been called by boot method)
      */
-    if (create_socketdir (&ctx) < 0)
-        err_exit ("create_socketdir");
+    if (create_scratchdir (&ctx) < 0)
+        err_exit ("create_scratchdir");
     if (create_rankdir (&ctx) < 0)
         err_exit ("create_rankdir");
 
@@ -545,6 +552,13 @@ int main (int argc, char *argv[])
         err_exit ("creating dummy attributes");
 
     overlay_set_rank (ctx.overlay, ctx.rank);
+
+    /* Registers message handlers and obtains rank.
+     */
+    if (content_cache_set_flux (ctx.cache, ctx.h) < 0)
+        err_exit ("content_cache_set_flux");
+
+    content_cache_set_enclosing_flux (ctx.cache, ctx.enclosing_h);
 
     /* Configure attributes.
      */
@@ -577,7 +591,10 @@ int main (int argc, char *argv[])
             || attr_add_active_int (ctx.attrs, "tbon-arity", &ctx.k_ary,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
-                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add (ctx.attrs, "scratch-directory", ctx.scratch_dir,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
         err_exit ("attr_add");
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
@@ -632,7 +649,7 @@ int main (int argc, char *argv[])
      */
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
-    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.socket_dir, ctx.rank);
+    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.scratch_dir, ctx.rank);
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -654,14 +671,11 @@ int main (int argc, char *argv[])
     /* install heartbeat (including timer on rank 0)
      */
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
-    heartbeat_set_callback (ctx.heartbeat, heartbeat_cb, &ctx);
-    if (ctx.rank == 0) {
-        if (heartbeat_start (ctx.heartbeat) < 0)
-            err_exit ("heartbeat_start");
-        if (ctx.verbose)
-            msg ("installing session heartbeat: T=%0.1fs",
+    if (heartbeat_start (ctx.heartbeat) < 0)
+        err_exit ("heartbeat_start");
+    if (ctx.rank == 0 && ctx.verbose)
+        msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
-    }
 
     /* Send hello message to parent.
      * Report progress every second.
@@ -698,6 +712,8 @@ int main (int argc, char *argv[])
 
     if (ctx.verbose)
         msg ("cleaning up");
+    if (ctx.enclosing_h)
+        flux_close (ctx.enclosing_h);
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
     zctx_destroy (&ctx.zctx);
@@ -705,13 +721,14 @@ int main (int argc, char *argv[])
     heartbeat_destroy (ctx.heartbeat);
     snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
-    svchash_destroy (ctx.eventsvc);
     sequence_hash_destroy (ctx.seq);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     log_destroy (ctx.log);
+    zlist_destroy (&ctx.subscriptions);
+    content_cache_destroy (ctx.cache);
     if (log_f)
         fclose (log_f);
 
@@ -743,11 +760,12 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
-static void shutdown_cb (shutdown_t *s, void *arg)
+static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     //ctx_t *ctx = arg;
     int rc = shutdown_get_rc (s);
-    exit (rc);
+    if (expired)
+        exit (rc);
 }
 
 static void update_proctitle (ctx_t *ctx)
@@ -763,7 +781,7 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_pidfile (ctx_t *ctx)
 {
-    char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->socket_dir, ctx->rank);
+    char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->scratch_dir, ctx->rank);
     FILE *f;
 
     if (!(f = fopen (pidfile, "w+")))
@@ -867,7 +885,7 @@ static int create_dummyattrs (ctx_t *ctx)
 }
 
 /* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
- * It will be created in ctx->socket_dir.
+ * It will be created in ctx->scratch_dir.
  */
 static int create_rankdir (ctx_t *ctx)
 {
@@ -875,12 +893,12 @@ static int create_rankdir (ctx_t *ctx)
     char *uri = NULL;
     int rc = -1;
 
-    if (ctx->rank == FLUX_NODEID_ANY || ctx->socket_dir == NULL) {
+    if (ctx->rank == FLUX_NODEID_ANY || ctx->scratch_dir == NULL) {
         errno = EINVAL;
         goto done;
     }
     if (attr_get (ctx->attrs, "local-uri", NULL, NULL) < 0) {
-        ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
+        ranktmp = xasprintf ("%s/%d", ctx->scratch_dir, ctx->rank);
         if (mkdir (ranktmp, 0700) < 0)
             goto done;
         cleanup_push_string (cleanup_directory, ranktmp);
@@ -899,7 +917,7 @@ done:
     return rc;
 }
 
-static int create_socketdir (ctx_t *ctx)
+static int create_scratchdir (ctx_t *ctx)
 {
     const char *sid;
 
@@ -907,14 +925,14 @@ static int create_socketdir (ctx_t *ctx)
         errno = EINVAL;
         return -1;
     }
-    if (!ctx->socket_dir) {
+    if (!ctx->scratch_dir) {
         char *tmpdir = getenv ("TMPDIR");
         char *template = xasprintf ("%s/flux-%s-XXXXXX",
                                     tmpdir ? tmpdir : "/tmp", sid);
 
-        if (!(ctx->socket_dir = mkdtemp (template)))
+        if (!(ctx->scratch_dir = mkdtemp (template)))
             return -1;
-        cleanup_push_string (cleanup_directory, ctx->socket_dir);
+        cleanup_push_string (cleanup_directory, ctx->scratch_dir);
     }
     return 0;
 }
@@ -984,9 +1002,9 @@ static int boot_pmi (ctx_t *ctx)
     /* Set TBON request addr.  We will need any wildcards expanded below.
      */
     if (ctx->shared_ipc_namespace) {
-        if (create_socketdir (ctx) < 0 || create_rankdir (ctx) < 0)
+        if (create_scratchdir (ctx) < 0 || create_rankdir (ctx) < 0)
             goto done;
-        char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
+        char *reqfile = xasprintf ("%s/%d/req", ctx->scratch_dir, ctx->rank);
         overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
         cleanup_push_string (cleanup_file, reqfile);
         free (reqfile);
@@ -1016,7 +1034,7 @@ static int boot_pmi (ctx_t *ctx)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/relay", ctx->socket_dir);
+                char *relayfile = xasprintf ("%s/relay", ctx->scratch_dir);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
@@ -1160,7 +1178,7 @@ static int boot_pmi (ctx_t *ctx)
                                ipaddr, port);
         }
     } else if (ctx->shared_ipc_namespace) {
-        char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
+        char *eventfile = xasprintf ("%s/event", ctx->scratch_dir);
         overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
         if (ctx->rank == 0)
             cleanup_push_string (cleanup_file, eventfile);
@@ -1203,20 +1221,18 @@ done:
     return rc;
 }
 
-static bool nodeset_suffix_member (char *name, uint32_t rank)
+static bool nodeset_member (const char *s, uint32_t rank)
 {
-    char *s;
-    nodeset_t *ns;
+    nodeset_t *ns = NULL;
     bool member = true;
 
-    if ((s = strchr (name, '['))) {
+    if (s) {
         if (!(ns = nodeset_create_string (s)))
-            msg_exit ("malformed nodeset suffix in '%s'", name);
-        *s = '\0'; /* side effect: truncate nodeset suffix */
-        if (!nodeset_test_rank (ns, rank))
-            member = false;
-        nodeset_destroy (ns);
+            msg_exit ("malformed nodeset: %s", s);
+        member = nodeset_test_rank (ns, rank);
     }
+    if (ns)
+        nodeset_destroy (ns);
     return member;
 }
 
@@ -1246,8 +1262,12 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
     while (s) {
         char *name = NULL;
         char *path = NULL;
-        if (!nodeset_suffix_member (s, ctx->rank))
-            goto next;
+        char *sp;
+        if ((sp = strchr (s, '['))) {
+            if (!nodeset_member (sp, ctx->rank))
+                goto next;
+            *sp = '\0';
+        }
         if (strchr (s, '/')) {
             if (!(name = flux_modname (s)))
                 msg_exit ("%s", dlerror ());
@@ -1261,7 +1281,8 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
             goto next;
         if (!(p = module_add (ctx->modhash, path)))
             err_exit ("%s: module_add %s", name, path);
-        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p))
+        if (!svc_add (ctx->services, module_get_name (p),
+                                     module_get_service (p), mod_svc_cb, p))
             msg_exit ("could not register service %s", module_get_name (p));
         zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
@@ -1924,7 +1945,8 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto done;
-    if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p)) {
+    if (!svc_add (ctx->services, module_get_name (p),
+                                 module_get_service (p), mod_svc_cb, p)) {
         module_remove (ctx->modhash, p);
         errno = EEXIST;
         goto done;
@@ -2254,16 +2276,6 @@ done:
     return rc;
 }
 
-static int event_hb_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    if (heartbeat_recvmsg (ctx->heartbeat, *zmsg) < 0)
-        flux_log (ctx->h, LOG_ERR, "%s: heartbeat_recvmsg: %s", __FUNCTION__,
-                  strerror (errno));
-    return 0;
-}
-
 static int cmb_seq (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2279,55 +2291,61 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
-/* Shutdown:
- * - start the shutdown timer
- * - send shutdown message to all modules
- */
-static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
+static int requeue_for_service (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    shutdown_recvmsg (ctx->shutdown, *zmsg);
-    //if (module_stop_all (ctx->modhash) < 0)
-    //    flux_log (ctx->h, LOG_ERR, "module_stop_all: %s", strerror (errno));
+    if (flux_requeue (ctx->h, *zmsg, FLUX_RQ_TAIL) < 0)
+        flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
+struct internal_service {
+    const char *topic;
+    const char *nodeset;
+    int (*fun)(zmsg_t **zmsg, void *arg);
+};
+
+static struct internal_service services[] = {
+    { "cmb.attrget",    NULL,   cmb_attrget_cb      },
+    { "cmb.attrset",    NULL,   cmb_attrset_cb      },
+    { "cmb.attrlist",   NULL,   cmb_attrlist_cb     },
+    { "cmb.rusage",     NULL,   cmb_rusage_cb,      },
+    { "cmb.rmmod",      NULL,   cmb_rmmod_cb,       },
+    { "cmb.insmod",     NULL,   cmb_insmod_cb,      },
+    { "cmb.lsmod",      NULL,   cmb_lsmod_cb,       },
+    { "cmb.lspeer",     NULL,   cmb_lspeer_cb,      },
+    { "cmb.ping",       NULL,   cmb_ping_cb,        },
+    { "cmb.reparent",   NULL,   cmb_reparent_cb,    },
+    { "cmb.panic",      NULL,   cmb_panic_cb,       },
+    { "cmb.log",        NULL,   cmb_log_cb,         },
+    { "cmb.dmesg.clear",NULL,   cmb_dmesg_clear_cb, },
+    { "cmb.dmesg",      NULL,   cmb_dmesg_cb,       },
+    { "cmb.event-mute", NULL,   cmb_event_mute_cb,  },
+    { "cmb.exec",       NULL,   cmb_exec_cb,        },
+    { "cmb.exec.signal",NULL,   cmb_signal_cb,      },
+    { "cmb.exec.write", NULL,   cmb_write_cb,       },
+    { "cmb.processes",  NULL,   cmb_ps_cb,          },
+    { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
+    { "cmb.hello",      NULL,   cmb_hello_cb,       },
+    { "cmb.sub",        NULL,   cmb_sub_cb,         },
+    { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
+    { "cmb.seq.fetch",  "[0]",  cmb_seq             },
+    { "cmb.seq.set",    "[0]",  cmb_seq             },
+    { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { "content",        NULL,   requeue_for_service },
+    { NULL, NULL, },
+};
+
 static void broker_add_services (ctx_t *ctx)
 {
-    if (!svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
-          || !svc_add (ctx->services, "cmb.attrset", cmb_attrset_cb, ctx)
-          || !svc_add (ctx->services, "cmb.attrlist", cmb_attrlist_cb, ctx)
-          || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
-          || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
-          || !svc_add (ctx->services, "cmb.insmod", cmb_insmod_cb, ctx)
-          || !svc_add (ctx->services, "cmb.lsmod", cmb_lsmod_cb, ctx)
-          || !svc_add (ctx->services, "cmb.lspeer", cmb_lspeer_cb, ctx)
-          || !svc_add (ctx->services, "cmb.ping", cmb_ping_cb, ctx)
-          || !svc_add (ctx->services, "cmb.reparent", cmb_reparent_cb, ctx)
-          || !svc_add (ctx->services, "cmb.panic", cmb_panic_cb, ctx)
-          || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
-          || !svc_add (ctx->services, "cmb.dmesg.clear", cmb_dmesg_clear_cb,ctx)
-          || !svc_add (ctx->services, "cmb.dmesg", cmb_dmesg_cb, ctx)
-          || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec.signal", cmb_signal_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec.write", cmb_write_cb, ctx)
-          || !svc_add (ctx->services, "cmb.processes", cmb_ps_cb, ctx)
-          || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
-          || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
-          || !svc_add (ctx->services, "cmb.sub", cmb_sub_cb, ctx)
-          || !svc_add (ctx->services, "cmb.unsub", cmb_unsub_cb, ctx)
-          || !svc_add (ctx->eventsvc, "hb", event_hb_cb, ctx)
-          || !svc_add (ctx->eventsvc, "shutdown", event_shutdown_cb, ctx))
-        err_exit ("can't register internal services");
+    struct internal_service *svc;
 
-    if (ctx->rank == 0) {
-        /* Add rank 0 only services:
-         */
-        if (!svc_add (ctx->services, "cmb.seq.fetch", cmb_seq, ctx)
-                || !svc_add (ctx->services, "cmb.seq.set", cmb_seq, ctx)
-                || !svc_add (ctx->services, "cmb.seq.destroy", cmb_seq, ctx))
-            err_exit ("can't register rank 0 internal services");
+    for (svc = &services[0]; svc->topic != NULL; svc++) {
+        if (!nodeset_member (svc->nodeset, ctx->rank))
+            continue;
+        if (!svc_add (ctx->services, svc->topic, NULL, svc->fun, ctx))
+            err_exit ("error adding handler for %s", svc->topic);
     }
 }
 
@@ -2377,7 +2395,9 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     int i;
     uint32_t seq;
-    if (flux_msg_get_seq (*zmsg, &seq) < 0) {
+    const char *topic, *s;
+    if (flux_msg_get_seq (*zmsg, &seq) < 0
+            || flux_msg_get_topic (*zmsg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
@@ -2393,8 +2413,18 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 
     (void)overlay_mcast_child (ctx->overlay, *zmsg);
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
-    (void)svc_sendmsg (ctx->eventsvc, zmsg);
 
+    /* Internal services may install message handlers for events.
+     */
+    s = zlist_first (ctx->subscriptions);
+    while (s) {
+        if (!strncmp (s, topic, strlen (s))) {
+            if (flux_requeue (ctx->h, *zmsg, FLUX_RQ_TAIL) < 0)
+                flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+            break;
+        }
+        s = zlist_next (ctx->subscriptions);
+    }
     return module_event_mcast (ctx->modhash, *zmsg);
 }
 
@@ -2535,16 +2565,6 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-/* This is called on each heartbeat (all ranks).
- */
-static void heartbeat_cb (heartbeat_t *h, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    if (ctx->rank > 0)
-        (void) overlay_keepalive_parent (ctx->overlay);
-}
-
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
@@ -2600,9 +2620,15 @@ done:
 
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 {
-    int rc = module_response_sendmsg (ctx->modhash, msg);
-    if (rc < 0 && errno == ENOSYS)
-        rc = overlay_sendmsg_child (ctx->overlay, msg);
+    int rc;
+
+    if (flux_msg_get_route_count (msg) == 0)
+        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+    else {
+        rc = module_response_sendmsg (ctx->modhash, msg);
+        if (rc < 0 && errno == ENOSYS)
+            rc = overlay_sendmsg_child (ctx->overlay, msg);
+    }
     return rc;
 }
 
@@ -2669,8 +2695,32 @@ done:
     return rc;
 }
 
+static int broker_subscribe (void *impl, const char *topic)
+{
+    ctx_t *ctx = impl;
+    if (zlist_append (ctx->subscriptions, xstrdup (topic)))
+        oom();
+    return 0;
+}
+
+static int broker_unsubscribe (void *impl, const char *topic)
+{
+    ctx_t *ctx = impl;
+    char *s = zlist_first (ctx->subscriptions);
+    while (s) {
+        if (!strcmp (s, topic)) {
+            zlist_remove (ctx->subscriptions, s);
+            break;
+        }
+        s = zlist_next (ctx->subscriptions);
+    }
+    return 0;
+}
+
 static const struct flux_handle_ops broker_handle_ops = {
     .send = broker_send,
+    .event_subscribe = broker_subscribe,
+    .event_unsubscribe = broker_unsubscribe,
 };
 
 /*

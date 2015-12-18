@@ -37,16 +37,20 @@
 struct svc_struct {
     svc_cb_f cb;
     void *cb_arg;
+    char *alias;
 };
 
 struct svchash_struct {
-    zhash_t *zh;
+    zhash_t *services;
+    zhash_t *aliases;
 };
 
 svchash_t *svchash_create (void)
 {
     svchash_t *sh = xzmalloc (sizeof *sh);
-    if (!(sh->zh = zhash_new ()))
+    sh->services = zhash_new ();
+    sh->aliases = zhash_new ();
+    if (!sh->services || !sh->aliases)
         oom ();
     return sh;
 }
@@ -54,14 +58,19 @@ svchash_t *svchash_create (void)
 void svchash_destroy (svchash_t *sh)
 {
     if (sh) {
-        zhash_destroy (&sh->zh);
+        zhash_destroy (&sh->services);
+        zhash_destroy (&sh->aliases);
         free (sh);
     }
 }
 
 static void svc_destroy (svc_t *svc)
 {
-    free (svc);
+    if (svc) {
+        if (svc->alias)
+            free (svc->alias);
+        free (svc);
+    }
 }
 
 static svc_t *svc_create (void)
@@ -72,34 +81,34 @@ static svc_t *svc_create (void)
 
 void svc_remove (svchash_t *sh, const char *name)
 {
-    zhash_delete (sh->zh, name);
+    svc_t *svc = zhash_lookup (sh->services, name);
+    if (svc) {
+        if (svc->alias)
+            zhash_delete (sh->aliases, svc->alias);
+        zhash_delete (sh->services, name);
+    }
 }
 
-svc_t *svc_add (svchash_t *sh, const char *name, svc_cb_f cb, void *arg)
+svc_t *svc_add (svchash_t *sh, const char *name, const char *alias,
+                svc_cb_f cb, void *arg)
 {
-    svc_t *svc = svc_create ();
-    svc->cb = cb;
-    svc->cb_arg = arg;
-    if (zhash_insert (sh->zh, name, svc) < 0) {
-        svc_destroy (svc);
+    svc_t *svc;
+    int rc;
+    if (zhash_lookup (sh->services, name)
+            || (alias && zhash_lookup (sh->aliases, alias))) {
         errno = EEXIST;
         return NULL;
     }
-    zhash_freefn (sh->zh, name, (zhash_free_fn *)svc_destroy);
-    return svc;
-}
-
-static svc_t *svc_lookup (svchash_t *sh, const char *name)
-{
-    svc_t *svc = zhash_lookup (sh->zh, name);
-    if (!svc && strchr (name, '.')) {
-        char *cpy = xstrdup (name);
-        char *p = strchr (cpy, '.');
-        if (p) {
-            *p = '\0';
-            svc = zhash_lookup (sh->zh, cpy);
-        }
-        free (cpy);
+    svc = svc_create ();
+    svc->cb = cb;
+    svc->cb_arg = arg;
+    rc = zhash_insert (sh->services, name, svc);
+    assert (rc == 0);
+    zhash_freefn (sh->services, name, (zhash_free_fn *)svc_destroy);
+    if (alias) {
+        svc->alias = xstrdup (alias);
+        rc = zhash_insert (sh->aliases, alias, svc);
+        assert (rc == 0);
     }
     return svc;
 }
@@ -115,7 +124,17 @@ int svc_sendmsg (svchash_t *sh, zmsg_t **zmsg)
         goto done;
     if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto done;
-    if (!(svc = svc_lookup (sh, topic)) || !svc->cb) {
+    if (!(svc = zhash_lookup (sh->services, topic)))
+        svc = zhash_lookup (sh->aliases, topic);
+    if (!svc && strchr (topic, '.')) {
+        char *p, *short_topic = xstrdup (topic);
+        if ((p = strchr (short_topic, '.')))
+            *p = '\0';
+        if (!(svc = zhash_lookup (sh->services, short_topic)))
+            svc = zhash_lookup (sh->aliases, short_topic);
+        free (short_topic);
+    }
+    if (!svc) {
         errno = ENOSYS;
         goto done;
     }

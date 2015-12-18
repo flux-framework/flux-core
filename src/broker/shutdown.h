@@ -4,33 +4,33 @@
 /* Manage the shutdown process for the comms session.
  *
  * Design:
- * The receipt of a "cmb.shutdown" event simultaneously initiates the
- * clean shutdown path in the broker and arms the shutdown timer here.
- * If the clean shutdown path succeedes, it calls shutdown_disarm() to
- * disarm the timer before exiting.  Otherwise, the timer expires, calling
- * the shutdown callback, which calls exit(3).
+ * The broker registers a shutdown callback.
  *
- * Actual state of affairs:
- * There is no clean shutdown path.  The grace period allows the comms
- * session to propagate the shutdown event, the timer expires, and all
- * ranks exit(3).
+ * On receipt of a "shutdown" event, the grace timer is armed, and
+ * the broker callback is called with 'expired' false.  The broker
+ * should initiate its clean shutdown path.  If the clean shutdown path
+ * succeedes, the broker calls shutdown_disarm() to disarm the timer.
+ *
+ * If the grace timer expires before then, the broker callback
+ * is called with 'exipred' true.
  */
 
 typedef struct shutdown_struct shutdown_t;
-typedef void (*shutdown_cb_f)(shutdown_t *s, void *arg);
+typedef void (*shutdown_cb_f)(shutdown_t *s, bool expired, void *arg);
 
 /* Create/destroy shutdown_t.
  */
 shutdown_t *shutdown_create (void);
 void shutdown_destroy (shutdown_t *s);
 
-/* Set the flux_t handle to be used to configure the grace timer watcher
- * and log the shutdown message.
+/* Set the flux_t handle to be used to configure the event message
+ * handler, grace timer watcher, and log the shutdown message.
  */
 void shutdown_set_handle (shutdown_t *s, flux_t h);
 
-/* Reigster a shutdown callback to be called when the grace timeout
- * expires.  It is expected to call exit(3).
+/* Reigster a shutdown callback to be called
+ * 1) when the grace timeout is armed, and
+ * 2) when the grace timeout expires.
  */
 void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg);
 
@@ -38,12 +38,6 @@ void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg);
  * encoded in the shutdown event.
  */
 int shutdown_get_rc (shutdown_t *s);
-
-/* Call shutdown recvmsg() on receipt of "cmb.shutdown" event.
- * This arms the timer.  On rank 0 it also logs the shutdown message e.g.
- * "broker: shutdown in 2s: reason..."
- */
-int shutdown_recvmsg (shutdown_t *s, const flux_msg_t *msg);
 
 /* Call shutdown_arm() when shutdown should begin.
  * This sends the "cmb.shutdown" event to all ranks.

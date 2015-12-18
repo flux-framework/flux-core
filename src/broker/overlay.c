@@ -46,8 +46,9 @@ struct overlay_struct {
     zctx_t *zctx;
     flux_sec_t sec;
     flux_t h;
-    heartbeat_t *heartbeat;
     zhash_t *children;          /* child_t - by uuid */
+    flux_msg_handler_t *heartbeat;
+    int epoch;
 
     uint32_t rank;
     char rankstr[16];
@@ -76,6 +77,9 @@ typedef struct {
     int lastseen;
     bool mute;
 } child_t;
+
+static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg);
 
 static void endpoint_destroy (struct endpoint *ep)
 {
@@ -116,6 +120,10 @@ void overlay_destroy (overlay_t *ov)
                 endpoint_destroy (ep);
             zlist_destroy (&ov->parents);
         }
+        if (ov->heartbeat)
+            flux_msg_handler_destroy (ov->heartbeat);
+        if (ov->h)
+            (void)flux_event_unsubscribe (ov->h, "hb");
         endpoint_destroy (ov->child);
         endpoint_destroy (ov->right);
         endpoint_destroy (ov->event);
@@ -156,17 +164,21 @@ void overlay_set_rank (overlay_t *ov, uint32_t rank)
 
 void overlay_set_flux (overlay_t *ov, flux_t h)
 {
-    ov->h = h;
-}
+    struct flux_match match = FLUX_MATCH_EVENT;
 
-void overlay_set_heartbeat (overlay_t *ov, heartbeat_t *h)
-{
-    ov->heartbeat = h;
+    ov->h = h;
+
+    match.topic_glob = "hb";
+    if (!(ov->heartbeat = flux_msg_handler_create (ov->h, match,
+                                                   heartbeat_handler, ov)))
+        err_exit ("flux_msg_handler_create");
+    flux_msg_handler_start (ov->heartbeat);
+    if (flux_event_subscribe (ov->h, "hb") < 0)
+        err_exit ("flux_event_subscribe");
 }
 
 json_object *overlay_lspeer_encode (overlay_t *ov)
 {
-    int now = heartbeat_get_epoch (ov->heartbeat);
     JSON out = Jnew ();
     zlist_t *uuids;
     char *uuid;
@@ -178,7 +190,7 @@ json_object *overlay_lspeer_encode (overlay_t *ov)
     while (uuid) {
         if ((child = zhash_lookup (ov->children, uuid))) {
             JSON o = Jnew ();
-            Jadd_int (o, "idle", now - child->lastseen);
+            Jadd_int (o, "idle", ov->epoch - child->lastseen);
             Jadd_obj (out, uuid, o);
             Jput (o);
         }
@@ -197,14 +209,13 @@ void overlay_mute_child (overlay_t *ov, const char *uuid)
 
 void overlay_checkin_child (overlay_t *ov, const char *uuid)
 {
-    int now = heartbeat_get_epoch (ov->heartbeat);
     child_t *child  = zhash_lookup (ov->children, uuid);
     if (!child) {
         child = xzmalloc (sizeof (*child));
         zhash_update (ov->children, uuid, child);
         zhash_freefn (ov->children, uuid, (zhash_free_fn *)free);
     }
-    child->lastseen = now;
+    child->lastseen = ov->epoch;
 }
 
 void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
@@ -241,15 +252,15 @@ int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg)
     }
     rc = flux_msg_sendzsock (ep->zs, msg);
     if (rc == 0)
-        ov->parent_lastsent = heartbeat_get_epoch (ov->heartbeat);
+        ov->parent_lastsent = ov->epoch;
 done:
     return rc;
 }
 
-int overlay_keepalive_parent (overlay_t *ov)
+static int overlay_keepalive_parent (overlay_t *ov)
 {
     struct endpoint *ep = zlist_first (ov->parents);
-    int idle = heartbeat_get_epoch (ov->heartbeat) - ov->parent_lastsent;
+    int idle = ov->epoch - ov->parent_lastsent;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
@@ -263,6 +274,16 @@ int overlay_keepalive_parent (overlay_t *ov)
 done:
     flux_msg_destroy (msg);
     return rc;
+}
+
+static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
+{
+    overlay_t *ov = arg;
+
+    if (flux_heartbeat_decode (msg, &ov->epoch) < 0)
+        return;
+    overlay_keepalive_parent (ov);
 }
 
 void overlay_set_right (overlay_t *ov, const char *fmt, ...)

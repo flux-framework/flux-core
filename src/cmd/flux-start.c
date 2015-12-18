@@ -51,7 +51,7 @@ struct context {
     struct subprocess_manager *sm;
     optparse_t *opts;
     char *session_id;
-    char *socket_dir;
+    char *scratch_dir;
     const char *broker_path;
     int size;
     int count;
@@ -72,7 +72,7 @@ struct client {
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 int start_pmi (struct context *ctx, const char *cmd);
 void remove_corelimit (void);
-char *create_socket_dir (struct context *ctx);
+char *create_scratch_dir (struct context *ctx);
 struct client *client_create (struct context *ctx, int rank, const char *cmd);
 void client_destroy (struct client *cli);
 
@@ -138,7 +138,7 @@ int main (int argc, char *argv[])
     if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
         err_exit ("subprocess_manager_set reactor");
     ctx->session_id = xasprintf ("%d", getpid ());
-    ctx->socket_dir = create_socket_dir (ctx);
+    ctx->scratch_dir = create_scratch_dir (ctx);
 
     status = start_pmi (ctx, command);
 
@@ -147,7 +147,7 @@ int main (int argc, char *argv[])
     flux_reactor_destroy (ctx->reactor);
     subprocess_manager_destroy (ctx->sm);
     free (ctx->session_id);
-    free (ctx->socket_dir);
+    free (ctx->scratch_dir);
     if (command)
         free (command);
 
@@ -241,16 +241,16 @@ void add_args_list (struct subprocess *p, optparse_t *opt, const char *name)
             err_exit ("subprocess_argv_append");
 }
 
-char *create_socket_dir (struct context *ctx)
+char *create_scratch_dir (struct context *ctx)
 {
     char *tmpdir = getenv ("TMPDIR");
-    char *sockdir = xasprintf ("%s/flux-%s-XXXXXX",
-                               tmpdir ? tmpdir : "/tmp", ctx->session_id);
+    char *scratchdir = xasprintf ("%s/flux-%s-XXXXXX",
+                                  tmpdir ? tmpdir : "/tmp", ctx->session_id);
 
-    if (!mkdtemp (sockdir))
-        err_exit ("mkdtemp %s", sockdir);
-    cleanup_push_string (cleanup_directory, sockdir);
-    return sockdir;
+    if (!mkdtemp (scratchdir))
+        err_exit ("mkdtemp %s", scratchdir);
+    cleanup_push_string (cleanup_directory, scratchdir);
+    return scratchdir;
 }
 
 static int dgetline (int fd, char *buf, int len)
@@ -354,7 +354,7 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     add_arg (cli->p, "%s", ctx->broker_path);
     add_arg (cli->p, "--boot-method=PMI");
     add_arg (cli->p, "--shared-ipc-namespace");
-    add_arg (cli->p, "--socket-directory=%s", ctx->socket_dir);
+    add_arg (cli->p, "--scratch-directory=%s", ctx->scratch_dir);
     add_args_list (cli->p, ctx->opts, "broker-opts");
     if (rank == 0 && cmd)
         add_arg (cli->p, "%s", cmd); /* must be last arg */

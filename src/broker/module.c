@@ -69,6 +69,7 @@ struct module_struct {
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
+    char *service;
     void *dso;              /* reference on dlopened module */
     int size;               /* size of .so file for lsmod */
     char *digest;           /* digest of .so file for lsmod */
@@ -156,12 +157,10 @@ const char *module_get_name (module_t *p)
     return p->name;
 }
 
-void module_set_name (module_t *p, const char *name)
+const char *module_get_service (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
-    if (p->name)
-        free (p->name);
-    p->name = xstrdup (name);
+    return p->service;
 }
 
 const char *module_get_uuid (module_t *p)
@@ -283,6 +282,8 @@ static void module_destroy (module_t *p)
         free (p->argz);
     if (p->name)
         free (p->name);
+    if (p->service)
+        free (p->service);
     if (p->rmmod_cb)
         p->rmmod_cb (p, p->rmmod_arg);
     if (p->rmmod) {
@@ -401,6 +402,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     module_t *p;
     void *dso;
     const char **mod_namep;
+    const char **mod_servicep;
     mod_main_f *mod_main;
     zfile_t *zf;
     int rc;
@@ -413,6 +415,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     }
     mod_main = dlsym (dso, "mod_main");
     mod_namep = dlsym (dso, "mod_name");
+    mod_servicep = dlsym (dso, "mod_service");
     if (!mod_main || !mod_namep || !*mod_namep) {
         dlclose (dso);
         errno = ENOENT;
@@ -420,6 +423,8 @@ module_t *module_add (modhash_t *mh, const char *path)
     }
     p = xzmalloc (sizeof (*p));
     p->name = xstrdup (*mod_namep);
+    if (mod_servicep && *mod_servicep)
+        p->service = xstrdup (*mod_servicep);
     p->magic = MODULE_MAGIC;
     p->main = mod_main;
     p->dso = dso;

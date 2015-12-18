@@ -558,10 +558,6 @@ fatal:
 
 int flux_pollfd (flux_t h)
 {
-    if (!h->ops->pollfd) {
-        errno = ENOSYS;
-        goto fatal;
-    }
     if (h->pollfd < 0) {
         struct epoll_event ev = {
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
@@ -574,12 +570,14 @@ int flux_pollfd (flux_t h)
             goto fatal;
         if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
             goto fatal;
-        /* add connector pollfd */
-        ev.data.fd = h->ops->pollfd (h->impl);
-        if (ev.data.fd < 0)
-            goto fatal;
-        if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
-            goto fatal;
+        /* add connector pollfd (if defined) */
+        if (h->ops->pollfd) {
+            ev.data.fd = h->ops->pollfd (h->impl);
+            if (ev.data.fd < 0)
+                goto fatal;
+            if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+                goto fatal;
+        }
     }
     return h->pollfd;
 fatal:
@@ -593,17 +591,19 @@ fatal:
 
 int flux_pollevents (flux_t h)
 {
-    int e, events;
-    if (!h->ops->pollevents) {
-        errno = ENOSYS;
-        goto fatal;
-    }
+    int e, events = 0;
+
+    /* wait for handle event */
     if (h->pollfd >= 0) {
         struct epoll_event ev;
         (void)epoll_wait (h->pollfd, &ev, 1, 0);
     }
-    if ((events = h->ops->pollevents (h->impl)) < 0)
-        goto fatal;
+    /* get connector events (if applicable) */
+    if (h->ops->pollevents) {
+        if ((events = h->ops->pollevents (h->impl)) < 0)
+            goto fatal;
+    }
+    /* get queue events */
     if ((e = msglist_pollevents (h->queue)) < 0)
         goto fatal;
     if ((e & POLLIN))

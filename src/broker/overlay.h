@@ -13,7 +13,6 @@ void overlay_set_sec (overlay_t *ov, flux_sec_t sec);
 void overlay_set_zctx (overlay_t *ov, zctx_t *zctx);
 void overlay_set_rank (overlay_t *ov, uint32_t rank);
 void overlay_set_flux (overlay_t *ov, flux_t h);
-void overlay_set_heartbeat (overlay_t *ov, heartbeat_t *h);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  * Internally there is a stack of parent URI's, with top as primary.
@@ -31,7 +30,6 @@ void overlay_set_right (overlay_t *ov, const char *fmt, ...);
 void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
 int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg);
 int overlay_sendmsg_right (overlay_t *ov, const flux_msg_t *msg);
-int overlay_keepalive_parent (overlay_t *ov);
 
 /* The child is where other ranks connect to send requests.
  * This is the ROUTER side of parent/right sockets described above.

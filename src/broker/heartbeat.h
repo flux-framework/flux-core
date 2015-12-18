@@ -3,21 +3,17 @@
 
 /* Manage the session heartbeat.
  *
- * Rank 0 should call heartbeat_start() to begin sending heartbeat events.
- * This registers a reactor timer watcher.
- *
- * On all ranks, "hb" event messages should be passed to heartbeat_recvmsg(),
- * which will decode the received epoch, set it internally, and call the
- * heartbeat_cb_f, if any.
+ * All ranks should call heartbeat_start() to install reactor watchers.
+ * On rank 0 only, this registers a reactor timer watcher which sends
+ * the reactor event message.
  *
  * The heartbeat_get_epoch() getter obtains the most recently processed epoch.
  *
- * Note: rank 0's epoch update and callback are driven by the receipt of the
+ * Note: rank 0's epoch update is driven by the receipt of the
  * heartbeat event, not its generation.
  */
 
 typedef struct heartbeat_struct heartbeat_t;
-typedef void (*heartbeat_cb_f)(heartbeat_t *hb, void *arg);
 
 heartbeat_t *heartbeat_create (void);
 void heartbeat_destroy (heartbeat_t *hb);
@@ -32,15 +28,12 @@ int heartbeat_set_rate (heartbeat_t *hb, double rate);
 double heartbeat_get_rate (heartbeat_t *hb);
 
 void heartbeat_set_flux (heartbeat_t *hb, flux_t h);
-void heartbeat_set_callback (heartbeat_t *hb, heartbeat_cb_f cb, void *arg);
 
 void heartbeat_set_epoch (heartbeat_t *hb, int epoch);
 int heartbeat_get_epoch (heartbeat_t *hb);
 
 int heartbeat_start (heartbeat_t *hb); /* rank 0 only */
 void heartbeat_stop (heartbeat_t *hb);
-
-int heartbeat_recvmsg (heartbeat_t *hb, const flux_msg_t *msg);
 
 #endif /* !_BROKER_HEARTBEAT_H */
 

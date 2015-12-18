@@ -40,6 +40,8 @@
 struct shutdown_struct {
     flux_t h;
     flux_watcher_t *timer;
+    flux_msg_handler_t *shutdown;
+    uint32_t myrank;
 
     int rc;
     int rank;
@@ -50,6 +52,7 @@ struct shutdown_struct {
     void *arg;
 };
 
+
 shutdown_t *shutdown_create (void)
 {
     shutdown_t *s = xzmalloc (sizeof (*s));
@@ -59,13 +62,71 @@ shutdown_t *shutdown_create (void)
 void shutdown_destroy (shutdown_t *s)
 {
     if (s) {
+        if (s->shutdown)
+            flux_msg_handler_destroy (s->shutdown);
+        if (s->h)
+            (void)flux_event_unsubscribe (s->h, "shutdown");
         free (s);
+    }
+}
+
+/* When the timer expires, call the registered callback.
+ */
+static void timer_handler (flux_reactor_t *r, flux_watcher_t *w,
+                           int revents, void *arg)
+{
+    shutdown_t *s = arg;
+    if (s->shutdown)
+        flux_msg_handler_stop (s->shutdown);
+    if (s->cb)
+        s->cb (s, true, s->arg);
+    else
+        exit (s->rc);
+}
+
+/* On receipt of the shutdown event message, begin the grace timer,
+ * and log the "shutdown in..." message on rank 0.
+ */
+void shutdown_handler (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
+{
+    shutdown_t *s = arg;
+
+    if (!s->timer) {
+        if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
+                             s->reason, sizeof (s->reason)) < 0) {
+            flux_log_error (h, "shutdown event");
+            return;
+        }
+        if (!(s->timer = flux_timer_watcher_create (flux_get_reactor (s->h),
+                                                    s->grace, 0.,
+                                                    timer_handler, s))) {
+            flux_log_error (h, "shutdown timer creation");
+            return;
+        }
+        flux_watcher_start (s->timer);
+        if (s->myrank == 0)
+            flux_log (s->h, LOG_INFO, "shutdown in %.3fs: %s",
+                      s->grace, s->reason);
     }
 }
 
 void shutdown_set_handle (shutdown_t *s, flux_t h)
 {
+    struct flux_match match = FLUX_MATCH_EVENT;
+
     s->h = h;
+
+    match.topic_glob = "shutdown";
+    if (!(s->shutdown = flux_msg_handler_create (s->h, match,
+                                                 shutdown_handler, s)))
+        err_exit ("flux_msg_handler_create");
+    flux_msg_handler_start (s->shutdown);
+    if (flux_event_subscribe (s->h, "shutdown") < 0)
+        err_exit ("flux_event_subscribe");
+
+    if (flux_get_rank (s->h, &s->myrank) < 0)
+        err_exit ("flux_get_rank");
 }
 
 void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg)
@@ -86,14 +147,6 @@ void shutdown_disarm (shutdown_t *s)
         flux_watcher_destroy (s->timer);
         s->timer = NULL;
     }
-}
-
-static void shutdown_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
-{
-    shutdown_t *s = arg;
-    if (s->cb)
-        s->cb (s, s->arg);
 }
 
 flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
@@ -150,44 +203,16 @@ done:
     return rc;
 }
 
-int shutdown_recvmsg (shutdown_t *s, const flux_msg_t *msg)
-{
-    int rc = -1;
-    uint32_t rank;
-
-    if (!s->timer) {
-        if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
-                             s->reason, sizeof (s->reason)) < 0)
-            goto done;
-        if (!(s->timer = flux_timer_watcher_create (flux_get_reactor (s->h),
-                                                    s->grace, 0.,
-                                                    shutdown_cb, s)))
-            goto done;
-        flux_watcher_start (s->timer);
-        if (flux_get_rank (s->h, &rank) < 0)
-            goto done;
-        if (rank == 0)
-            flux_log (s->h, LOG_INFO, "%d: shutdown in %.3fs: %s",
-                      s->rank, s->grace, s->reason);
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 int shutdown_arm (shutdown_t *s, double grace, int exitcode,
                   const char *fmt, ...)
 {
     va_list ap;
     flux_msg_t *msg = NULL;
-    uint32_t rank;
     int rc = -1;
 
     if (!s->timer) {
-        if (flux_get_rank (s->h, &rank) < 0)
-            goto done;
         va_start (ap, fmt);
-        msg = shutdown_vencode (grace, exitcode, rank, fmt, ap);
+        msg = shutdown_vencode (grace, exitcode, s->myrank, fmt, ap);
         va_end (ap);
         if (!msg || flux_send (s->h, msg, 0) < 0)
             goto done;

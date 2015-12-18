@@ -105,6 +105,7 @@ X_AC_MUNGE
 PKG_CHECK_MODULES([JSON], [json], [],
   [PKG_CHECK_MODULES([JSON], [json-c])])
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.4], [], [])
+PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_CODE_COVERAGE
@@ -143,7 +144,7 @@ AC_SUBST(fluxcoreincludedir)
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
-fluxmod_ldflags="-Wl,--no-undefined -avoid-version -export-symbols-regex '^mod_(main|name)\$\$' --disable-static -shared -export-dynamic"
+fluxmod_ldflags="-Wl,--no-undefined -avoid-version -export-symbols-regex '^mod_(main|name|service)\$\$' --disable-static -shared -export-dynamic"
 AC_SUBST(fluxmod_ldflags)
 
 fluxlib_ldflags="-shared -export-dynamic --disable-static -Wl,--no-undefined"
@@ -161,6 +162,7 @@ AC_CONFIG_FILES( \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
+  src/common/libsophia/Makefile \
   src/common/libpmi-client/Makefile \
   src/common/libpmi-server/Makefile \
   src/common/libflux/Makefile \
@@ -182,6 +184,8 @@ AC_CONFIG_FILES( \
   src/modules/Makefile \
   src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
+  src/modules/content-sophia/Makefile \
+  src/modules/content-sqlite/Makefile \
   src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \
   src/modules/libkz/Makefile \

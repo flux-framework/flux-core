@@ -56,14 +56,15 @@ int main (int argc, char *argv[])
     ok ((msg = flux_request_encode_raw ("foo.bar", NULL, 0)) != NULL,
         "flux_request_encode_raw works with NULL payload");
     topic = NULL;
-    ok (flux_request_decode_raw (msg, &topic, NULL, NULL) == 0
+    ok (flux_request_decode_raw (msg, &topic, &d, &l) == 0
         && topic != NULL && !strcmp (topic, "foo.bar"),
         "flux_request_decode_raw returns encoded topic");
-    ok (flux_request_decode_raw (msg, NULL, NULL, NULL) == 0,
+    ok (flux_request_decode_raw (msg, NULL, &d, &l) == 0,
         "flux_request_decode_raw topic is optional");
-    errno = 0;
-    ok (flux_request_decode_raw (msg, NULL, &d, &l) < 0 && errno == EPROTO,
-        "flux_request_decode_raw returns EPROTO when expected payload is missing");
+    d = (char *)&d;
+    l = 1;
+    ok (flux_request_decode_raw (msg, NULL, &d, &l) == 0 && l == 0 && d == NULL,
+        "flux_request_decode_raw returned NULL payload");
     flux_msg_destroy(msg);
 
     /* with raw payload */
@@ -75,9 +76,6 @@ int main (int argc, char *argv[])
     ok (flux_request_decode_raw (msg, NULL, &d, &l) == 0
         && d != NULL && l == len && memcmp (d, data, len) == 0,
         "flux_request_decode_raw returns encoded payload");
-    errno = 0;
-    ok (flux_request_decode_raw (msg, NULL, NULL, NULL) < 0 && errno == EPROTO,
-        "flux_request_decode_raw returns EPROTO when payload is unexpected");
     flux_msg_destroy(msg);
 
     done_testing();
