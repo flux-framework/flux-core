@@ -185,4 +185,11 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value);
 const char *optparse_get_str (optparse_t *p, const char *name,
                               const char *default_value);
 
+/*
+ *   Return optind from previous call to optparse_parse_args ().
+ *    Returns -1 if  args have not yet been parsed, and thus optind is
+ *    not valid.
+ */
+int optparse_optind (optparse_t *p);
+
 #endif /* _UTIL_OPTPARSE_H */

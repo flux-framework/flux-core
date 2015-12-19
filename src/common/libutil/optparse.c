@@ -54,6 +54,8 @@ struct opt_parser {
     opt_fatalerr_f fatalerr_fn;
     void *         fatalerr_handle;
 
+    int            optind;
+
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
@@ -531,6 +533,7 @@ optparse_t *optparse_create (const char *prog)
     p->fatalerr_handle = NULL;
     p->left_margin = 2;
     p->option_width = 25;
+    p->optind = -1;
 
     /*
      *  Register -h, --help
@@ -938,12 +941,18 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
     free (optstring);
 
     argv[0] = saved_argv0;
+    p->optind = optind;
     return (optind);
 }
 
 int optparse_print_usage (optparse_t *p)
 {
     return print_usage (p);
+}
+
+int optparse_optind (optparse_t *p)
+{
+    return (p->optind);
 }
 
 /*
