@@ -28,7 +28,7 @@ declare -A extra_configure_opts=(\
 #  Python pip packages
 #
 pips="\
-cffi \
+cffi>=1.1,<1.4 \
 coverage"
 
 #
