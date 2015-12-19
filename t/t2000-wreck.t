@@ -270,13 +270,13 @@ WAITFILE="$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua"
 
 test_expect_success 'wreckrun: --output supported' '
 	flux wreckrun --output=test1.out echo hello &&
-        $WAITFILE 1 hello test1.out
+        $WAITFILE --timeout=1 --pattern=hello test1.out
 '
 test_expect_success 'wreckrun: --error supported' '
 	flux wreckrun --output=test2.out --error=test2.err \
 	    sh -c "echo >&2 this is stderr; echo this is stdout" &&
-        $WAITFILE 1 "this is stderr" test2.err &&
-        $WAITFILE 1 "this is stdout" test2.out
+        $WAITFILE --timeout=1 -p "this is stderr" test2.err &&
+        $WAITFILE --timeout=1 -p "this is stdout" test2.out
 '
 test_expect_success 'wreckrun: kvs config output for all jobs' '
 	test_when_finished "flux kvs put lwj.output=" &&
@@ -286,8 +286,8 @@ test_expect_success 'wreckrun: kvs config output for all jobs' '
 	for i in $(seq 0 $((${SIZE}-1)))
 		do echo "$i: foo"
 	done >expected.kvsiocfg &&
+        $WAITFILE --count=${SIZE} -t 1 -p ".+" test3.out &&
 	sort -n test3.out >output.kvsiocfg &&
-        $WAITFILE 1 "" output.kvsiocfg &&
 	test_cmp expected.kvsiocfg output.kvsiocfg
 '
 test_expect_success 'flux-wreck: exists in path' '
