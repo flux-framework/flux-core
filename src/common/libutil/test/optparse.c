@@ -185,8 +185,11 @@ void test_convenience_accessors (void)
     rc = optparse_add_option_table (p, opts);
     ok (rc == OPTPARSE_SUCCESS, "register options");
 
+    ok (optparse_optind (p) == -1, "optparse_optind returns -1 before parse");
     optind = optparse_parse_args (p, ac, av);
     ok (optind == ac, "parse options, verify optind");
+
+    ok (optparse_optind (p) == optind, "optparse_optind works after parse");
 
     /* hasopt
      */
@@ -353,7 +356,7 @@ void test_multiret (void)
 int main (int argc, char *argv[])
 {
 
-    plan (81);
+    plan (83);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
