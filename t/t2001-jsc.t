@@ -27,7 +27,7 @@ run_flux_jstat () {
     rm -f ${ofile}
     flux jstat -o ${ofile} notify >/dev/null &
     echo $! &&
-    $SHARNESS_TEST_SRCDIR/scripts/waitfile.lua 2 "" ${ofile} >&2
+    $SHARNESS_TEST_SRCDIR/scripts/waitfile.lua --timeout 2 ${ofile} >&2
 }
 
 overlap_flux_wreckruns () {

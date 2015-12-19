@@ -3,24 +3,51 @@
 --  waitfile.lua : Wait until a named file appears and contains a pattern
 --
 local usage = [[
-Usage: waitfile.lua TIMEOUT PATTERN FILE
+Usage: waitfile.lua [OPTIONS] FILE
 
-Wait up to TIMEOUT seconds for FILE to appear and contain at least
-one line matching PATTERN. PATTERN is a Lua style pattern match.
+Wait for FILE to appear with optional pattern and number of lines.
+
+Options:
+ -h, --help       Display this message
+ -q, --quiet      Do not print file lines on stdout
+ -v, --verbose    Print extra information about program operation
+ -p, --pattern=P  Only match lines with Lua pattern P. Default is the
+                  empty pattern (therefore anything or nothing matches)
+ -c, --count=N    Wait until pattern has matched on N lines (Default: 1)
+ -t, --timeout=T  Timeout and exit with nonzero status after T seconds.
+                  (Default is to wait forever)
 ]]
 
-local flux = require 'flux'
-local posix = require 'flux.posix'
+local getopt = require 'flux.alt_getopt' .get_opts
+local posix  = require 'flux.posix'
+local flux   = require 'flux'
+
+local opts, optind = getopt (arg, "hvqc:t:p:",
+                             { timeout = 't',
+                               pattern = 'p',
+                               count = 'c',
+                               quiet = 'q',
+                               verbose = 'v',
+                               help = 'h'
+                             })
+if opts.h then print (usage); os.exit (0) end
 
 local f, err = flux.new()
 if not f then error (err) end
 
-local timeout = arg[1]
-local pattern = arg[2]
-local file = arg[3]
+local timeout = opts.t or 0
+local pattern = opts.p or ""
+local count = opts.c or 1
+local file = arg[optind]
 
 local function printf (m, ...)
     io.stderr:write (string.format ("waitfile: "..m, ...))
+end
+
+local function log_verbose (m, ...)
+    if opts.v then
+        printf (m, ...)
+    end
 end
 
 if not timeout or not pattern or not file then
@@ -31,15 +58,33 @@ end
 local filewatcher = {}
 filewatcher.__index = filewatcher
 
+function filewatcher:check_line (line)
+    if line:match (self.pattern) then
+        self.nmatch = self.nmatch + 1
+        log_verbose ("Got match (%d/%d)\n", self.nmatch, self.count)
+        return self.nmatch == self.count
+    end
+    return false
+end
+
 function filewatcher:checklines ()
+    if self.st.st_size == 0 then
+        -- Check if empty file is a match
+        return self:check_line ("")
+    end
+
     local fp, err = io.open (self.filename, "r")
     if not fp then return nil, err end
     local p, err = fp:seek ("set", self.position)
+    log_verbose ("%s seek set to %d\n", self.filename, self.position)
     for line in fp:lines() do
         if self.printlines then io.stdout:write (line.."\n") end
-        if line:match (self.pattern) then return true end
+        if self:check_line (line) then
+            return true
+        end
     end
     self.position = fp:seek()
+    log_verbose ("leaving checklines() position=%d\n", self.position)
     return false
 end
 
@@ -55,9 +100,16 @@ local stat = {
 function filewatcher:changed ()
     local st = self.st
     local prev = self.prev
-    if not st then return false end -- No file yet
-    if not prev then return true end
+    if not st then
+        log_verbose ("No file yet\n")
+        return false
+    end
+    if not prev then
+        log_verbose ("File appeared with size %d\n", st.st_size)
+        return true
+    end
     if st.st_mtime > prev.st_mtime then
+        log_verbose ("File changed\n")
         if st.st_size < prev.st_size then
             printf ("truncated!\n")
             self.position = 0 -- reread
@@ -68,11 +120,13 @@ function filewatcher:changed ()
 end
 
 function filewatcher:check ()
-    if self:changed () and (self.pattern == "" or self:checklines ()) then
+    if self:changed () and self:checklines () then
+        log_verbose ("Got match. Calling self:on_match()\n")
         self:on_match ()
         return true
     end
     self.prev = self.st
+    return false
 end
 
 function filewatcher:start ()
@@ -87,6 +141,7 @@ function filewatcher:start ()
             printf ("wakeup\n")
             self.st = setmetatable (st, stat)
             self:check ()
+            log_verbose ("back to sleep\n")
         end
     }
     self:check ()
@@ -103,31 +158,43 @@ setmetatable (filewatcher, { __call = function (t, arg)
         flux =     arg.flux,
         filename = arg.filename,
         pattern  = arg.pattern,
+	count    = tonumber (arg.count) or 1,
         interval = arg.interval and arg.interval or .25,
         on_match = arg.on_match,
         position = 0,
-        printlines = true,
+        nmatch   = 0,
+        printlines =  not arg.quiet,
     }
     setmetatable (w, filewatcher)
     if not w.on_match then
-        w.on_match = function () os.exit (0) end
+        w.on_match = function ()
+	    log_verbose ("Exiting\n")
+            os.exit (0)
+        end
     end
     return w
 end
 })
 
-local fw, err = filewatcher { flux = f, filename = file, pattern = pattern }
+local fw, err = filewatcher { flux = f,
+                              filename = file,
+                              pattern = pattern,
+                              count = count,
+                              quiet = opts.q }
 if not fw then printf ("%s\n", err); os.exit (1) end
 
 -- Exit with non-zero status after timeout:
 --
-f:timer {
-    timeout = timeout * 1000,
-    handler = function ()
+if timeout then
+    f:timer {
+      timeout = timeout * 1000,
+      handler = function ()
         printf ("Timeout after %ds\n", timeout)
+        os.execute ("ls -l "..file)
         os.exit (1)
-    end
-}
+      end
+    }
+end
 
 -- Start reactor to do the work. It is an error if we exit the reactor.
 fw:start ()
