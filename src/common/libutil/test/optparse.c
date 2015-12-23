@@ -353,15 +353,156 @@ void test_multiret (void)
     optparse_destroy (p);
 }
 
+int subcmd (optparse_t *p, int ac, char **av)
+{
+    return (0);
+}
+
+void test_data (void)
+{
+    const char haha[] = "haha";
+    const char hehe[] = "hehe";
+    const char *s;
+    optparse_t *c;
+    optparse_t *p = optparse_create ("data-test");
+    ok (p != NULL, "optparse_create");
+
+    optparse_set_data (p, "foo", (void *)haha);
+
+    s = optparse_get_data (p, "foo");
+    ok (s == haha, "got back correct data");
+    is (s, haha, "got back correct string");
+
+    c = optparse_add_subcommand (p, "test", subcmd);
+    ok (c != NULL, "optparse_add_subcommand");
+    s = optparse_get_data (c, "foo");
+    ok (s == haha, "optparse_get_data recursive lookup in parent works");
+    is (s, haha, "got back correct string");
+
+    optparse_set_data (c, "foo", (void *)hehe);
+    s = optparse_get_data (c, "foo");
+    ok (s == hehe, "child data overrides parent");
+    is (s, hehe, "got back correct string");
+
+    optparse_destroy (p);
+}
+
+int subcmd_one (optparse_t *p, int ac, char **av)
+{
+    int *ip = NULL;
+    ok (p != NULL, "subcmd_one: got valid optparse structure");
+
+    ip = optparse_get_data (p, "called");
+    ok (ip != NULL, "subcmd_one: got data pointer");
+    *ip = 1;
+    return (0);
+}
+
+int subcmd_two (optparse_t *p, int ac, char **av)
+{
+    int *ip = NULL;
+    ok (p != NULL, "subcmd_two: got valid optparse structure");
+
+    ip = optparse_get_data (p, "called");
+    ok (ip != NULL, "subcmd_two: got data pointer");
+
+    *ip = optparse_get_int (p, "test-opt", 2);
+
+    return (0);
+}
+
+
+void test_subcommand (void)
+{
+    optparse_err_t e;
+    int called = 0;
+    int n;
+    optparse_t *b;
+    optparse_t *a = optparse_create ("test");
+
+    ok (a != NULL, "optparse_create");
+    b = optparse_add_subcommand (a, "one", subcmd_one);
+    ok (b != NULL, "optparse_add_subcommand (subcmd_one)");
+    optparse_set_data (b, "called", &called);
+    ok (optparse_get_data (b, "called") == &called, "optparse_set_data ()");
+
+    // Ensure optparse_get_parent/subcommand work:
+    ok (optparse_get_parent (b) == a, "optparse_get_parent works");
+    ok (optparse_get_subcommand (a, "one") == b, "optparse_get_subcommand");
+
+    b = optparse_add_subcommand (a, "two", subcmd_two);
+    ok (b != NULL, "optparse_add_subcommand (subcmd_two)");
+    optparse_set_data (b, "called", &called);
+    ok (optparse_get_data (b, "called") == &called, "optparse_set_data ()");
+
+    e = optparse_set (a, OPTPARSE_LOG_FN, output_f);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (LOG_FN)");
+
+    usage_ok (a, "\
+Usage: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+        "Usage output as expected with subcommands");
+
+    e = optparse_set (b, OPTPARSE_LOG_FN, output_f);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (subcmd, LOG_FN)");
+
+    // Add option to subcommand
+    e = optparse_add_option (b, &(struct optparse_option) {
+          .name = "test-opt", .key = 't', .has_arg = 1,
+          .arginfo = "N",
+          .usage = "Test option with numeric argument N",
+        });
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option");
+
+    usage_ok (b, "\
+Usage: test two [OPTIONS]...\n\
+  -h, --help             Display this message.\n\
+  -t, --test-opt=N       Test option with numeric argument N\n",
+        "Usage output as expected with subcommands");
+
+
+
+    char *av[] = { "test", "one", NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    n = optparse_parse_args (a, ac, av);
+    ok (n == 1, "optparse_parse_args");
+    n = optparse_run_subcommand (a, ac, av);
+    ok (n >= 0, "optparse_run_subcommand");
+    ok (called == 1, "optparse_run_subcommand: called subcmd_one()");
+
+    char *av2[] = { "test", "two", NULL };
+    ac = sizeof (av2) / sizeof (av2[0]) - 1;
+
+    n = optparse_parse_args (a, ac, av2);
+    ok (n == 1, "optparse_parse_args");
+    n = optparse_run_subcommand (a, ac, av2);
+    ok (n >= 0, "optparse_run_subcommand");
+    ok (called == 2, "optparse_run_subcommand: called subcmd_two()");
+
+    char *av3[] = { "test", "two", "--test-opt", "3", NULL };
+    ac = sizeof (av3) / sizeof (av3[0]) - 1;
+
+    // Run subcommand before parse also runs subcommand:
+    //
+    e = optparse_run_subcommand (a, ac, av3);
+    ok (e == OPTPARSE_SUCCESS, "optparse_run_subcommand before parse succeeds");
+    ok (called = 3, "optparse_run_subcmomand: called subcmd_two with correct args");
+    optparse_destroy (a);
+}
+
 int main (int argc, char *argv[])
 {
 
-    plan (83);
+    plan (119);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
+    test_data (); /* 8 tests */
+    test_subcommand (); /* 23 tests */
 
     done_testing ();
     return (0);
