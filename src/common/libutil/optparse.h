@@ -125,6 +125,13 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...);
 
 optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...);
 
+/*   Set and get arbitrary ancillary data associated with an optparse
+ *    object. optparse_get_data () returns NULL if data not found.
+ */
+void optparse_set_data (optparse_t *p, const char *name, void *data);
+
+void * optparse_get_data (optparse_t *p, const char *name);
+
 /*
  *   Print the usage output for program options object [p] using the
  *    registered output function.

@@ -35,6 +35,8 @@
 #include <stdarg.h>
 #include <argz.h>
 
+#include <czmq.h>
+
 #include "src/common/liblsd/list.h"
 #include "optparse.h"
 
@@ -60,6 +62,8 @@ struct opt_parser {
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
     List           option_list;     /* List of options for this program    */
+
+    zhash_t *      dhash;           /* Hash of ancillary data               */
 };
 
 
@@ -518,6 +522,7 @@ void optparse_destroy (optparse_t *p)
     if (p == NULL)
         return;
     list_destroy (p->option_list);
+    zhash_destroy (&p->dhash);
     free (p->program_name);
     free (p->usage);
     free (p);
@@ -545,7 +550,8 @@ optparse_t *optparse_create (const char *prog)
     }
     p->usage = NULL;
     p->option_list = list_create ((ListDelF) option_info_destroy);
-    if (!p->option_list) {
+    p->dhash = zhash_new ();
+    if (!p->option_list || !p->dhash) {
         free (p);
         return NULL;
     }
@@ -787,11 +793,43 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
 
 optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...)
 {
+    optparse_err_t e = OPTPARSE_SUCCESS;
+    va_list vargs;
+
+    if (p == NULL)
+        return OPTPARSE_BAD_ARG;
+
+    va_start (vargs, item);
+    switch (item) {
     /*
      *  Not implemented yet...
      */
-    return OPTPARSE_NOT_IMPL;
+    case OPTPARSE_USAGE:
+    case OPTPARSE_LOG_FN:
+    case OPTPARSE_FATALERR_FN:
+    case OPTPARSE_FATALERR_HANDLE:
+    case OPTPARSE_LEFT_MARGIN:
+    case OPTPARSE_OPTION_WIDTH:
+        e = OPTPARSE_NOT_IMPL;
+        break;
+
+    default:
+        e = OPTPARSE_BAD_ARG;
+    }
+    va_end (vargs);
+    return e;
 }
+
+void optparse_set_data (optparse_t *p, const char *s, void *x)
+{
+    zhash_insert (p->dhash, s, x);
+}
+
+void *optparse_get_data (optparse_t *p, const char *s)
+{
+    return zhash_lookup (p->dhash, s);
+}
+
 static char * optstring_create ()
 {
     char *optstring = malloc (2);
