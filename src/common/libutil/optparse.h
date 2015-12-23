@@ -24,6 +24,12 @@ typedef void (*opt_fatalerr_f) (void *h, int exit_code, const char *fmt, ...);
  */
 typedef int (*optparse_cb_f) (struct optparse_option *,
 			      const char *optarg, void *arg);
+
+/*
+ *  prototype for subcommand callback
+ */
+typedef int (*optparse_subcmd_f) (optparse_t *p, int ac, char **av);
+
 /*
  *  Error codes:
  */
@@ -69,6 +75,19 @@ struct optparse_option {
 
 #define OPTPARSE_TABLE_END { NULL, 0, 0, 0, NULL, NULL, NULL, NULL }
 
+/*
+ *  Description of a subcommand:
+ */
+struct optparse_subcommand {
+    const char *            name;   /* Subcommand name                      */
+    const char *            usage;  /* Usage string                         */
+    const char *            doc;    /* Short documentation string           */
+    optparse_subcmd_f       fn;     /* Subcommand function                  */
+    struct optparse_option *opts;   /* Table of optparse_options            */
+};
+
+#define OPTPARSE_SUBCMD_END { NULL, NULL, NULL, NULL, NULL }
+
 /******************************************************************************
  *  Prototypes:
  *****************************************************************************/
@@ -77,6 +96,56 @@ struct optparse_option {
  *   Create an optparse object for program named [program_name]
  */
 optparse_t *optparse_create (const char *program_name);
+
+
+/*
+ *   Create a subcommand optparse object as a child of [p].
+ *    [name] is subcommand name for subcmd callback [cb].
+ *
+ *   Returns an optparse object for the subcommand, which can be used
+ *    to register subcommand options, set usage, etc.
+ */
+optparse_t *optparse_add_subcommand (optparse_t *p,
+                                     const char *name,
+                                     optparse_subcmd_f cb);
+
+/*
+ *   Get subcommand optparse object from parent [p], or NULL if subcommand
+ *    [name] does not exist.
+ */
+optparse_t *optparse_get_subcommand (optparse_t *p, const char *name);
+
+/*   Get parent optparse object for a subcommand, or NULL if [p] is not
+ *    a subcommand optparse object.
+ */
+optparse_t *optparse_get_parent (optparse_t *p);
+
+/*
+ *   Convenience function like optparse_add_subcommand, additionally
+ *    registering with usage string [usage], documentation blurb [doc] and
+ *    any options from optparse_option table [opts]. Use
+ *    optparse_get_subcommand() to get subcommand optparse handle.
+ *
+ *   Returns OPTPARSE_SUCCESS on successful registration, or an optparse_err_t
+ *    on failure.
+ */
+optparse_err_t optparse_reg_subcommand (optparse_t *p,
+                                     const char *name,
+                                     optparse_subcmd_f cb,
+                                     const char *usage,
+                                     const char *doc,
+                                     struct optparse_option const opts[]);
+
+
+/*
+ *   Register a table of struct optparse_subcommand subcommands in a
+ *    single call.
+ *
+ *   Returns OPTPARSE_SUCCESS if all subcommands registered successfully,
+ *    or optparse_err_t on failure.
+ */
+optparse_err_t optparse_reg_subcommands (optparse_t *p,
+                                     struct optparse_subcommand cmds[]);
 
 /*
  *   Destroy program options handle [p].
@@ -148,6 +217,22 @@ int optparse_print_usage (optparse_t *p);
  *   Returns -1 on failure, first non-option index in argv on success.
  */
 int optparse_parse_args (optparse_t *p, int argc, char *argv[]);
+
+/*
+ *   Run any defined subcommand callback of the optparse object [p]
+ *    using the first non-option argument in [argc,argv]. The callback
+ *    function is passed a reference to its own optparse object, with
+ *    sub-options already processed with optparse_parse_args(), and
+ *    [argc,argv] adjusted for the subcommand (i.e. argv[0] will equal
+ *    the subcommand name).
+ *
+ *   This function can be called either before or after a call to
+ *    optparse_parse_args (p, ...), optparse_run_subcommand() will call
+ *    first-level option processing if [p] has not been initialized by
+ *    a call to optparse_parse_args.
+ *
+ */
+int optparse_run_subcommand (optparse_t *p, int argc, char *argv[]);
 
 /*
  *   After a call to optparse_parse_args (), return the number of times the

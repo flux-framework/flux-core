@@ -64,6 +64,9 @@ struct opt_parser {
     List           option_list;     /* List of options for this program    */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
+
+    optparse_t *   parent;          /* Pointer to parent optparse struct    */
+    zhash_t *      subcommands;     /* Hash of sub-commands                 */
 };
 
 
@@ -483,12 +486,84 @@ static int optparse_print_options (optparse_t *p)
     return (0);
 }
 
+#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3,0,1)
+static bool s_cmp (const char *s1, const char *s2)
+{
+    return (strcmp (s1, s2) > 0);
+}
+#else
+static int s_cmp (const char *s1, const char *s2)
+{
+    return strcmp (s1, s2);
+}
+#endif
+
+static zlist_t *subcmd_list_sorted (optparse_t *p)
+{
+    zlist_t *keys = zhash_keys (p->subcommands);
+    if (keys)
+        zlist_sort (keys, (zlist_compare_fn *) s_cmp);
+    return (keys);
+}
+
+/*
+ *  Print top usage string for optparse object 'parent'.
+ *  Returns number of lines printed, or 0 on error.
+ */
+static int print_usage_with_subcommands (char *name, optparse_t *parent)
+{
+    int lines = 0;
+    const char *cmd;
+    opt_log_f fp = parent->log_fn;
+    zlist_t *keys;
+    int nsubcmds = zhash_size (parent->subcommands);
+    /*
+     *  With subcommands, only print usage line for parent command
+     *   if parent->usage is set, otherwise only print usage line for
+     *   each subcommand.
+     *  If parent->usage is NULL, and there are no subcommands registered,
+     *   then emit a default usage line.
+     */
+    if (parent->usage) {
+        (*fp) ("Usage: %s %s\n", name, parent->usage);
+        lines++;
+    }
+    if (nsubcmds == 0) {
+        if (!parent->usage)
+            (*fp) ("Usage: %s [OPTIONS]...\n", name);
+        return (1);
+    }
+
+    if (!(keys = subcmd_list_sorted (parent)))
+        return (-1);
+
+    cmd = zlist_first (keys);
+    while (cmd) {
+        optparse_t *p = zhash_lookup (parent->subcommands, cmd);;
+        (*fp) ("%5s: %s %s %s\n",
+               ++lines > 1 ? "or" : "Usage",
+               name, p->program_name,
+               p->usage ? p->usage : "[OPTIONS]");
+        cmd = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+    return (lines);
+}
+
+static char * strcat_progname (optparse_t *p, char *buf, size_t n)
+{
+    if (p->parent) {
+        strcat_progname (p->parent, buf, n);
+        strncat (buf, " ", n);
+    }
+    return strncat (buf, p->program_name, n);
+}
+
 static int print_usage (optparse_t *p)
 {
-    if (p->usage)
-        (*p->log_fn) ("Usage: %s %s\n", p->program_name, p->usage);
-    else
-        (*p->log_fn) ("Usage: %s [OPTIONS]...\n", p->program_name);
+    char buf [65] = ""; /* Max name length 64 chars */
+    char *name = strcat_progname (p, buf, sizeof (buf) - 1);
+    print_usage_with_subcommands (name, p);
     return optparse_print_options (p);
 }
 
@@ -510,6 +585,18 @@ static int display_help (struct optparse_option *o, const char *optarg)
     return (0);
 }
 
+static void optparse_child_destroy (void *arg)
+{
+    optparse_t *p = arg;
+    /* Already unlinked from parent -- avoid attempt to re-unlink
+     *  by zeroing out parent pointer
+     */
+    p->parent = NULL;
+    optparse_destroy (p);
+}
+
+
+
 /******************************************************************************
  *  API Functions:
  *****************************************************************************/
@@ -521,8 +608,14 @@ void optparse_destroy (optparse_t *p)
 {
     if (p == NULL)
         return;
+
+    /* Unlink from parent */
+    if (p->parent && p->parent->subcommands)
+        zhash_delete (p->parent->subcommands, p->program_name);
+
     list_destroy (p->option_list);
     zhash_destroy (&p->dhash);
+    zhash_destroy (&p->subcommands);
     free (p->program_name);
     free (p->usage);
     free (p);
@@ -549,9 +642,11 @@ optparse_t *optparse_create (const char *prog)
         return NULL;
     }
     p->usage = NULL;
+    p->parent = NULL;
     p->option_list = list_create ((ListDelF) option_info_destroy);
     p->dhash = zhash_new ();
-    if (!p->option_list || !p->dhash) {
+    p->subcommands = zhash_new ();
+    if (!p->option_list || !p->dhash || !p->subcommands) {
         free (p);
         return NULL;
     }
@@ -574,6 +669,82 @@ optparse_t *optparse_create (const char *prog)
     }
 
     return (p);
+}
+
+optparse_t *optparse_add_subcommand (optparse_t *p,
+                                     const char *name,
+                                     optparse_subcmd_f cb)
+{
+    optparse_t *new;
+
+    if (p == NULL || cb == NULL || name == NULL)
+        return (NULL);
+
+    new = optparse_create (name);
+    if (new == NULL)
+        return (NULL);
+    zhash_update (p->subcommands, name, (void *) new);
+    zhash_freefn (p->subcommands, name, optparse_child_destroy);
+    zhash_update (new->dhash, "optparse::cb", cb);
+    new->parent = p;
+    new->log_fn = p->log_fn;
+    new->fatalerr_fn = p->fatalerr_fn;
+    new->fatalerr_handle = p->fatalerr_handle;
+    new->left_margin = p->left_margin;
+    new->option_width = p->option_width;
+    return (new);
+}
+
+optparse_t *optparse_get_subcommand (optparse_t *p, const char *name)
+{
+    return (optparse_t *) zhash_lookup (p->subcommands, name);
+}
+
+optparse_t *optparse_get_parent (optparse_t *p)
+{
+    return (p->parent);
+}
+
+optparse_err_t optparse_reg_subcommand (optparse_t *p,
+                                        const char *name,
+                                        optparse_subcmd_f cb,
+                                        const char *usage,
+                                        const char *doc,
+                                        struct optparse_option const opts[])
+{
+    optparse_err_t e;
+    optparse_t *new;
+    if (!p || !name || !cb)
+        return OPTPARSE_BAD_ARG;
+
+    new = optparse_add_subcommand (p, name, cb);
+    if (new == NULL)
+        return OPTPARSE_NOMEM;
+    if ((usage &&
+         (e = optparse_set (new, OPTPARSE_USAGE, usage)) != OPTPARSE_SUCCESS)
+     || (doc &&
+         (e = optparse_add_doc (new, doc, -1)) != OPTPARSE_SUCCESS)
+     || (opts &&
+         (e = optparse_add_option_table (new, opts) != OPTPARSE_SUCCESS))) {
+        optparse_destroy (new);
+        return (e);
+    }
+    return OPTPARSE_SUCCESS;
+}
+
+optparse_err_t optparse_reg_subcommands (optparse_t *p,
+                                         struct optparse_subcommand cmds[])
+{
+    optparse_err_t e;
+    struct optparse_subcommand *cmd = &cmds[0];
+    while (cmd->name) {
+        e = optparse_reg_subcommand (p, cmd->name, cmd->fn, cmd->usage,
+                                        cmd->doc, cmd->opts);
+        if (e != OPTPARSE_SUCCESS)
+            return (e);
+        cmd++;
+    }
+    return (OPTPARSE_SUCCESS);
 }
 
 /*
@@ -1003,6 +1174,40 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
     argv[0] = saved_argv0;
     p->optind = optind;
     return (optind);
+}
+
+int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
+{
+    int ac;
+    char **av;
+    optparse_subcmd_f cb;
+    optparse_t *sp;
+
+    if (p->optind == -1) {
+        if (optparse_parse_args (p, argc, argv))
+            exit (1);
+    }
+
+    ac = argc - p->optind;
+    av = argv + p->optind;
+
+    if (ac <= 0)
+        usage_and_exit (p, 1, "%s: missing subcommand\n", p->program_name);
+
+    if (!(sp = zhash_lookup (p->subcommands, av[0]))) {
+        usage_and_exit (p, 1, "%s: Unknown subcommand: %s\n",
+                        p->program_name, av[0]);
+    }
+
+    if (optparse_parse_args (sp, ac, av) < 0)
+        exit (1);
+
+    if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {
+        errno = EINVAL; /* Not a subcommand, huh? */
+        return -1;
+    }
+
+    return ((*cb) (sp, ac, av));
 }
 
 int optparse_print_usage (optparse_t *p)
