@@ -39,7 +39,6 @@
 struct dispatch {
     flux_t h;
     zlist_t *handlers; /* all handlers are on this list */
-    zlist_t *waiters;  /* waiting coproc watchers are also on this list */
     flux_msg_handler_t *current;
     flux_watcher_t *w;
     int usecount;
@@ -53,6 +52,7 @@ struct flux_msg_handler {
     flux_msg_handler_f fn;
     void *arg;
     flux_free_f arg_free;
+    uint8_t waiting:1;		/* coproc waiting on wait_match */
 
     /* coproc */
     coproc_t *coproc;
@@ -68,7 +68,6 @@ static void dispatch_usecount_decr (struct dispatch *d)
     if (d && --d->usecount == 0) {
         flux_watcher_destroy (d->w);
         zlist_destroy (&d->handlers);
-        zlist_destroy (&d->waiters);
         free (d);
     }
 }
@@ -92,8 +91,7 @@ static struct dispatch *dispatch_get (flux_t h)
         flux_reactor_t *r = flux_get_reactor (h);
         d = xzmalloc (sizeof (*d));
         d->handlers = zlist_new ();
-        d->waiters = zlist_new ();
-        if (!d->handlers || !d->waiters)
+        if (!d->handlers)
             oom ();
         d->h = h;
         d->w = flux_handle_watcher_create (r, h, FLUX_POLLIN, handle_cb, d);
@@ -169,8 +167,7 @@ int flux_sleep_on (flux_t h, struct flux_match match)
     }
     flux_msg_handler_t *w = d->current;
     copy_match (&w->wait_match, match);
-    if (zlist_append (d->waiters, w) < 0)
-        oom ();
+    w->waiting = 1;
     if (coproc_yield (w->coproc) < 0)
         goto done;
     rc = 0;
@@ -254,19 +251,19 @@ static int dispatch_message_coproc (struct dispatch *d,
     /* Message matches a coproc that yielded.
      * Resume, arranging for msg to be returned next by flux_recv().
      */
-    w = zlist_first (d->waiters);
+    w = zlist_first (d->handlers);
     while (w) {
-        if (flux_msg_cmp (msg, w->wait_match)) {
+        if (w->waiting && flux_msg_cmp (msg, w->wait_match)) {
             if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
                 goto done;
-            zlist_remove (d->waiters, w);
+            w->waiting = 0;
             if (resume_coproc (w) < 0)
                 goto done;
             match = true;
             if (type != FLUX_MSGTYPE_EVENT)
                 break;
         }
-        w = zlist_next (d->waiters);
+        w = zlist_next (d->handlers);
     }
     /* Message matches a handler.
      * If coproc already running, queue message as backlog.
@@ -382,7 +379,6 @@ void flux_msg_handler_stop (flux_msg_handler_t *w)
     struct dispatch *d = w->d;
 
     assert (w->magic == HANDLER_MAGIC);
-    zlist_remove (d->waiters, w);
     zlist_remove (d->handlers, w);
     if (zlist_size (d->handlers) == 0)
         flux_watcher_stop (d->w);
