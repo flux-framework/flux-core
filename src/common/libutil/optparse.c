@@ -962,6 +962,18 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
     return e;
 }
 
+static void * lookup_recursive (optparse_t *p, const char *key)
+{
+    void *d;
+    do {
+        if ((d = zhash_lookup (p->dhash, key)))
+            return (d);
+        p = p->parent;
+    } while (p);
+    return (NULL);
+}
+
+
 optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...)
 {
     optparse_err_t e = OPTPARSE_SUCCESS;
@@ -998,7 +1010,7 @@ void optparse_set_data (optparse_t *p, const char *s, void *x)
 
 void *optparse_get_data (optparse_t *p, const char *s)
 {
-    return zhash_lookup (p->dhash, s);
+    return lookup_recursive (p, s);
 }
 
 static char * optstring_create ()

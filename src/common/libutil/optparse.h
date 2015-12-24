@@ -196,6 +196,10 @@ optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...);
 
 /*   Set and get arbitrary ancillary data associated with an optparse
  *    object. optparse_get_data () returns NULL if data not found.
+ *
+ *   If [p] is a subcommand and [name] does not exist for the current
+ *    optparse object, optparse_get_data will recursively search parent
+ *    for the named data item.
  */
 void optparse_set_data (optparse_t *p, const char *name, void *data);
 
