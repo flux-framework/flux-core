@@ -34,7 +34,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 
 #define CTX_MAGIC   0xf434aaab
@@ -217,7 +216,11 @@ flux_t connector_init (const char *path, int flags)
         goto error;
     }
 
-    c = xzmalloc (sizeof (*c));
+    if (!(c = malloc (sizeof (*c)))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    memset (c, 0, sizeof (*c));
     c->magic = CTX_MAGIC;
 
     c->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -236,7 +239,8 @@ flux_t connector_init (const char *path, int flags)
     }
     flux_msg_iobuf_init (&c->outbuf);
     flux_msg_iobuf_init (&c->inbuf);
-    c->h = flux_handle_create (c, &handle_ops, flags);
+    if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
+        goto error;
     return c->h;
 error:
     if (c) {

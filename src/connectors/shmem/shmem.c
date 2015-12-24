@@ -31,7 +31,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 
 #define MODHANDLE_MAGIC    0xfeefbe02
@@ -289,20 +288,35 @@ static int connect_socket (ctx_t *ctx)
 
 flux_t connector_init (const char *path, int flags)
 {
-    ctx_t *ctx;
+    ctx_t *ctx = NULL;
     if (!path) {
         errno = EINVAL;
-        return NULL;
+        goto error;
     }
-    ctx = xzmalloc (sizeof (*ctx));
+    if (!(ctx = malloc (sizeof (*ctx)))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    memset (ctx, 0, sizeof (*ctx));
     ctx->magic = MODHANDLE_MAGIC;
-    ctx->uuid = xstrdup (path);
-    ctx->uri = xasprintf ("inproc://%s", ctx->uuid);
-    if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags))) {
-        op_fini (ctx);
-        return NULL;
+    if (!(ctx->uuid = strdup (path))) {
+        errno = ENOMEM;
+        goto error;
     }
+    if (asprintf (&ctx->uri, "inproc://%s", ctx->uuid) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
+        goto error;
     return ctx->h;
+error:
+    if (ctx) {
+        int saved_errno = errno;
+        op_fini (ctx);
+        errno = saved_errno;
+    }
+    return NULL;
 }
 
 static const struct flux_handle_ops handle_ops = {

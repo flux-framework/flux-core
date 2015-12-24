@@ -34,7 +34,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/msglist.h"
 
 #define CTX_MAGIC   0xf434aaa0
@@ -121,11 +120,17 @@ static void op_fini (void *impl)
 
 flux_t connector_init (const char *path, int flags)
 {
-    ctx_t *c = xzmalloc (sizeof (*c));
+    ctx_t *c = malloc (sizeof (*c));
+    if (!c) {
+        errno = ENOMEM;
+        goto error;
+    }
+    memset (c, 0, sizeof (*c));
     c->magic = CTX_MAGIC;
     if (!(c->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         goto error;
-    c->h = flux_handle_create (c, &handle_ops, flags);
+    if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
+        goto error;
     /* Fake out size, rank, tbon-arity attributes for testing.
      */
     if (flux_attr_fake (c->h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0
