@@ -33,7 +33,6 @@
 #include "response.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/coproc.h"
 #include "src/common/libutil/iterators.h"
 
@@ -107,28 +106,40 @@ static struct dispatch *dispatch_get (flux_t h)
     struct dispatch *d = flux_aux_get (h, "flux::dispatch");
     if (!d) {
         flux_reactor_t *r = flux_get_reactor (h);
-        d = xzmalloc (sizeof (*d));
-        d->handlers = zlist_new ();
-        d->handlers_new = zlist_new ();
-        if (!d->handlers || !d->handlers_new)
-            oom ();
+        if (!(d = malloc (sizeof (*d))))
+            goto nomem;
+        memset (d, 0, sizeof (*d));
+        d->usecount = 1;
+        if (!(d->handlers = zlist_new ()))
+            goto nomem;
+        if (!(d->handlers_new = zlist_new ()))
+            goto nomem;
         d->h = h;
         d->w = flux_handle_watcher_create (r, h, FLUX_POLLIN, handle_cb, d);
         if (!d->w)
-            oom ();
-        d->usecount = 1;
+            goto nomem;
         flux_aux_set (h, "flux::dispatch", d, dispatch_destroy);
     }
     return d;
+nomem:
+    dispatch_destroy (d);
+    errno = ENOMEM;
+    return NULL;
 }
 
-static void copy_match (struct flux_match *dst,
-                        const struct flux_match src)
+static int copy_match (struct flux_match *dst,
+                       const struct flux_match src)
 {
     if (dst->topic_glob)
         free (dst->topic_glob);
     *dst = src;
-    dst->topic_glob = src.topic_glob ? xstrdup (src.topic_glob) : NULL;
+    if (src.topic_glob) {
+        if (!(dst->topic_glob = strdup (src.topic_glob))) {
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    return 0;
 }
 
 static int backlog_append (flux_msg_handler_t *w, const flux_msg_t *msg)
@@ -180,12 +191,15 @@ int flux_sleep_on (flux_t h, struct flux_match match)
     struct dispatch *d = dispatch_get (h);
     int rc = -1;
 
+    if (!d)
+        goto done;
     if (!d->current || !d->current->coproc) {
         errno = EINVAL;
         goto done;
     }
     flux_msg_handler_t *w = d->current;
-    copy_match (&w->wait_match, match);
+    if (copy_match (&w->wait_match, match) < 0)
+        goto done;
     w->waiting = 1;
     if (coproc_yield (w->coproc) < 0)
         goto done;
@@ -515,18 +529,28 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
                                              flux_msg_handler_f cb, void *arg)
 {
     struct dispatch *d = dispatch_get (h);
-    flux_msg_handler_t *w = xzmalloc (sizeof (*w));
+    flux_msg_handler_t *w = NULL;
 
+    if (!d)
+        goto nomem;
+    if (!(w = malloc (sizeof (*w))))
+        goto nomem;
+    memset (w, 0, sizeof (*w));
     w->magic = HANDLER_MAGIC;
-    copy_match (&w->match, match);
+    if (copy_match (&w->match, match) < 0)
+        goto nomem;
     w->fn = cb;
     w->arg = arg;
     w->d = d;
     dispatch_usecount_incr (d);
     if (zlist_append (d->handlers_new, w) < 0)
-        oom ();
+        goto nomem;
 
     return w;
+nomem:
+    msg_handler_destroy (w);
+    errno = ENOMEM;
+    return NULL;
 }
 
 int flux_msg_handler_addvec (flux_t h, struct flux_msg_handler_spec tab[],
