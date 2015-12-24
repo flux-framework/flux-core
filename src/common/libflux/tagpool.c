@@ -49,7 +49,6 @@
 #include "tagpool.h"
 #include "message.h"
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/veb.h"
 #include "src/common/libutil/log.h"
 
@@ -68,13 +67,20 @@ struct tagpool_struct {
 
 tagpool_t tagpool_create (void)
 {
-    tagpool_t t = xzmalloc (sizeof (*t));
+    tagpool_t t = malloc (sizeof (*t));
+    if (!t)
+        goto nomem;
+    memset (t, 0, sizeof (*t));
     t->magic = TAGPOOL_MAGIC;
     t->T = vebnew (TAGPOOL_VEBSIZE, 1); /* FIXME make dynamic? */
     if (!t->T.D)
-        oom ();
+        goto nomem;
     vebdel (t->T, FLUX_MATCHTAG_NONE); /* don't allocate that one! */
     return t;
+nomem:
+    tagpool_destroy (t);
+    errno = ENOMEM;
+    return NULL;
 }
 
 void tagpool_destroy (tagpool_t t)
