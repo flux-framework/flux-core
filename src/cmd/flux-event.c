@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <getopt.h>
 #include <libgen.h>
 #include <json.h>
 #include <argz.h>
@@ -36,67 +35,68 @@
 #include "src/common/libutil/optparse.h"
 
 
-static void event_pub (flux_t h, int argc, char **argv);
-static void event_sub (flux_t h, int argc, char **argv);
+static int event_pub (optparse_t *p, int argc, char **argv);
+static int event_sub (optparse_t *p, int argc, char **argv);
 
-#define OPTIONS "+h"
-static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    { 0, 0, 0, 0 },
-};
-
-void usage (void)
-{
-    fprintf (stderr,
-"Usage: flux-event pub topic [json]\n"
-"       flux-event sub [topic...]\n"
-);
-    exit (1);
-}
+static void event_pub_register (optparse_t *p);
+static void event_sub_register (optparse_t *p);
 
 int main (int argc, char *argv[])
 {
+    int n;
+    optparse_t *p;
     flux_t h;
-    int ch;
-    char *cmd;
 
     log_init ("flux-event");
+    if (!(p = optparse_create ("flux-event")))
+        err_exit ("optparse_create");
 
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            default:
-                usage ();
-                break;
-        }
+    event_pub_register (p);
+    event_sub_register (p);
+
+    n = optparse_parse_args (p, argc, argv);
+    if (n == argc || n <= 0) {
+        optparse_print_usage (p);
+        exit (1);
     }
-    if (optind == argc)
-        usage ();
-    cmd = argv[optind];
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
 
-    if (!strcmp (cmd, "pub"))
-        event_pub (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "sub"))
-        event_sub (h, argc - optind, argv + optind);
-    else
-        usage ();
+    optparse_set_data (p, "handle", h);
+    if (optparse_run_subcommand (p, argc, argv) < 0)
+        err_exit ("subcommand");
 
     flux_close (h);
+    optparse_destroy (p);
     log_fini ();
     return 0;
 }
 
-static void event_pub (flux_t h, int argc, char **argv)
+static void event_pub_register (optparse_t *parent)
 {
+    optparse_t *p = optparse_add_subcommand (parent, "pub", event_pub);
+    if (p == NULL)
+        err_exit ("optparse_add_subcommand");
+    if (optparse_set (p, OPTPARSE_USAGE, "topic [json]") != OPTPARSE_SUCCESS)
+        err_exit ("optparse_set (USAGE)");
+}
+
+static int event_pub (optparse_t *p, int argc, char **argv)
+{
+    flux_t h;
     char *topic = argv[1];  /* "pub" should be argv0 */
     flux_msg_t *msg = NULL;
     char *json_str = NULL;
     int e;
+
+    if (!topic) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    if (!(h = optparse_get_data (p, "handle")))
+        err_exit ("failed to get handle");
 
     if (argc > 2) {
         size_t len = 0;
@@ -110,6 +110,7 @@ static void event_pub (flux_t h, int argc, char **argv)
     if (json_str)
         free (json_str);
     flux_msg_destroy (msg);
+    return (0);
 }
 
 static void subscribe_all (flux_t h, int tc, char **tv)
@@ -130,9 +131,9 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
     }
 }
 
-static optparse_t *event_sub_get_options (int *argcp, char ***argvp)
+void event_sub_register (optparse_t *op)
 {
-    int n, e;
+    optparse_err_t e;
     optparse_t *p;
     struct optparse_option opts [] = {
         {
@@ -146,30 +147,26 @@ static optparse_t *event_sub_get_options (int *argcp, char ***argvp)
         OPTPARSE_TABLE_END
     };
 
-    if (!(p = optparse_create ("flux-event sub")))
-        err_exit ("event sub: optparse_create");
+    if (!(p = optparse_add_subcommand (op, "sub", event_sub)))
+        err_exit ("optparse_add_subcommand");
 
-    if ((e = optparse_add_option_table (p, opts)))
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
         err_exit ("event sub: optparse_add_option_table");
 
-    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] [topic...]");
-    if ((n = optparse_parse_args (p, *argcp, *argvp)) < 0)
-	exit (1);
-
-    /* Adjust argc,argv past option fields
-     */
-    (*argcp) -= n;
-    (*argvp) += n;
-
-    return (p);
+    e = optparse_set (p, OPTPARSE_USAGE, "[options] [topic...]");
+    if (e != OPTPARSE_SUCCESS)
+        err_exit ("optparse_set (USAGE) failed");
 }
 
-static void event_sub (flux_t h, int argc, char **argv)
+static int event_sub (optparse_t *p, int argc, char **argv)
 {
+    flux_t h;
     flux_msg_t *msg;
     int n, count;
-    optparse_t *p = event_sub_get_options (&argc, &argv);
     bool raw = false;
+
+    if (!(h = optparse_get_data (p, "handle")))
+        err_exit ("failed to get handle");
 
     /* Since output is line-based with undeterministic amount of time
      * between lines, force stdout to be line buffered so our output
@@ -210,6 +207,7 @@ static void event_sub (flux_t h, int argc, char **argv)
         unsubscribe_all (h, argc, argv);
     else if (flux_event_unsubscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
+    return (0);
 }
 
 
