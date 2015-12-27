@@ -47,6 +47,7 @@ TESTS = \
 	t2003-recurse.t \
 	t2004-hydra.t \
 	t3000-mpi-basic.t \
+	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -98,6 +99,9 @@ check_SCRIPTS = \
 	t2003-recurse.t \
 	t2004-hydra.t \
 	t3000-mpi-basic.t \
+	t4000-issues-test-driver.t \
+        issues/t0441-kvs-put-get.sh \
+        issues/t0505-msg-handler-reg.lua \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
