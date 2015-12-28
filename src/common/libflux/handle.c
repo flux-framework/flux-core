@@ -42,7 +42,6 @@
 #include "dispatch.h" // for flux_sleep_on ()
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/msglist.h"
 
 
@@ -73,59 +72,77 @@ static char *find_file_r (const char *name, const char *dirpath)
     size_t len = sizeof (path);
 
     if (!(dir = opendir (dirpath)))
-        goto done;
+        goto error;
     while (!filepath) {
-        if ((errno = readdir_r (dir, &entry, &dent)) > 0 || dent == NULL)
-            break;
+        if ((errno = readdir_r (dir, &entry, &dent)) != 0)
+            goto error;
+        if (dent == NULL) {
+            errno = ENOENT;
+            goto error;
+        }
         if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
             continue;
-        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len) {
-            errno = EINVAL;
-            break;
-        }
+        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len)
+            continue;
         if (stat (path, &sb) == 0) {
-            if (S_ISDIR (sb.st_mode))
+            if (S_ISDIR (sb.st_mode)) {
                 filepath = find_file_r (name, path);
-            else if (!strcmp (dent->d_name, name)) {
+            } else if (!strcmp (dent->d_name, name)) {
                 if (!(filepath = realpath (path, NULL)))
-                    oom ();
+                    goto error;
             }
         }
     }
     closedir (dir);
-done:
     return filepath;
+error:
+    if (dir) {
+        int saved_errno = errno;
+        closedir (dir);
+        errno = saved_errno;
+    }
+    return NULL;
 }
 
 static char *find_file (const char *name, const char *searchpath)
 {
-    char *cpy = xstrdup (searchpath);
+    char *cpy = strdup (searchpath);
     char *dirpath, *saveptr = NULL, *a1 = cpy;
     char *path = NULL;
 
+    if (!cpy) {
+        errno = ENOMEM;
+        return NULL;
+    }
     while ((dirpath = strtok_r (a1, ":", &saveptr))) {
         if ((path = find_file_r (name, dirpath)))
             break;
         a1 = NULL;
     }
-    free (cpy);
+    if (cpy) {
+        int saved_errno = errno;
+        free (cpy);
+        errno = saved_errno;
+    }
     return path;
 }
 
 static connector_init_f *find_connector (const char *scheme, void **dsop)
 {
-    char *name = xasprintf ("%s.so", scheme);
+    char name[PATH_MAX];
     const char *searchpath = getenv ("FLUX_CONNECTOR_PATH");
     char *path = NULL;
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
 
-    if (!searchpath)
-        searchpath = CONNECTOR_PATH;
-    if (!(path = find_file (name, searchpath))) {
-        errno = ENOENT;
+    if (snprintf (name, sizeof (name), "%s.so", scheme) >= sizeof (name)) {
+        errno = ENAMETOOLONG;
         goto done;
     }
+    if (!searchpath)
+        searchpath = CONNECTOR_PATH;
+    if (!(path = find_file (name, searchpath)))
+        goto done;
     if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
         errno = EINVAL;
         goto done;
@@ -137,9 +154,11 @@ static connector_init_f *find_connector (const char *scheme, void **dsop)
     }
     *dsop = dso;
 done:
-    if (path)
+    if (path) {
+        int saved_errno = errno;
         free (path);
-    free (name);
+        errno = saved_errno;
+    }
     return connector_init;
 }
 
@@ -166,7 +185,10 @@ flux_t flux_open (const char *uri, int flags)
         goto done;
     }
     if (uri) {
-        scheme = xstrdup (uri);
+        if (!(scheme = strdup (uri))) {
+            errno = ENOMEM;
+            goto done;
+        }
         path = strstr (scheme, "://");
         if (path) {
             *path = '\0';
@@ -195,19 +217,27 @@ void flux_close (flux_t h)
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
-    flux_t h = xzmalloc (sizeof (*h));
+    flux_t h = zmalloc (sizeof (*h));
 
+    if (!h)
+        goto nomem;
+    memset (h, 0, sizeof (*h));
+    h->usecount = 1;
     h->flags = flags;
     if (!(h->aux = zhash_new()))
-        oom ();
+        goto nomem;
     h->ops = ops;
     h->impl = impl;
-    h->tagpool = tagpool_create ();
+    if (!(h->tagpool = tagpool_create ()))
+        goto nomem;
     if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
-        oom ();
+        goto nomem;
     h->pollfd = -1;
-    h->usecount = 1;
     return h;
+nomem:
+    flux_handle_destroy (&h);
+    errno = ENOMEM;
+    return NULL;
 }
 
 void flux_handle_destroy (flux_t *hp)
