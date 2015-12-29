@@ -258,6 +258,18 @@ static void log_stderr_exit (void *h, int exit_code, const char *fmt, ...)
     exit (exit_code);
 }
 
+static void optparse_vlog (optparse_t *p, const char *fmt, va_list ap)
+{
+    char buf [4096];
+    int len = sizeof (buf);
+    int rc = vsnprintf (buf, len, fmt, ap);
+    if (rc >= len || rc < 0) {
+        buf [len-2] = '+';
+        buf [len-1] = '\0';
+    }
+    (*p->log_fn) (buf);
+}
+
 static int opt_init (struct option *opt, struct optparse_option *o)
 {
     if (opt == NULL || o == NULL)
@@ -476,13 +488,23 @@ static int print_usage (optparse_t *p)
     return optparse_print_options (p);
 }
 
-static int display_help (struct optparse_option *o, const char *optarg)
+static int usage_and_exit (optparse_t *p, int code, const char *fmt, ...)
 {
-    print_usage (o->arg);
-    exit (0);
+    if (fmt) {
+        va_list ap;
+        optparse_vlog (p, fmt, ap);
+        va_end (ap);
+    }
+    print_usage (p);
+    exit (code);
 }
 
-
+static int display_help (struct optparse_option *o, const char *optarg)
+{
+    usage_and_exit (o->arg, 0, NULL);
+    /* noreturn */
+    return (0);
+}
 
 /******************************************************************************
  *  API Functions:
