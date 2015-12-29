@@ -21,7 +21,9 @@ libkvs_la_SOURCES = \
 	jansson_dirent.h \
 	kvs_commit.c \
 	kvs_txn.c \
-	kvs_txn_private.h
+	kvs_txn_private.h \
+	treeobj.h \
+	treeobj.c
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
