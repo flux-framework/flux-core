@@ -38,7 +38,8 @@ TESTS = \
 	test_jansson_dirent.t \
 	test_kvs_txn.t \
 	test_kvs_lookup.t \
-	test_kvs_dir.t
+	test_kvs_dir.t \
+	test_treeobj.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -73,3 +74,7 @@ test_kvs_lookup_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_dir_t_SOURCES = test/kvs_dir.c
 test_kvs_dir_t_CPPFLAGS = $(test_cppflags)
 test_kvs_dir_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_treeobj_t_SOURCES = test/treeobj.c
+test_treeobj_t_CPPFLAGS = $(test_cppflags)
+test_treeobj_t_LDADD = $(test_ldadd) $(LIBDL)
