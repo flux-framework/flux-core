@@ -256,14 +256,12 @@ static int log_stderr (const char *fmt, ...)
 /*
  * Default fatalerr funciton.
  */
-static void log_stderr_exit (void *h, int exit_code, const char *fmt, ...)
+static int fatal_exit (void *h, int exit_code)
 {
-    va_list ap;
-    va_start (ap, fmt);
-    (void)vfprintf (stderr, fmt, ap);
-    va_end (ap);
     exit (exit_code);
+    // NORETURN
 }
+
 
 static void optparse_vlog (optparse_t *p, const char *fmt, va_list ap)
 {
@@ -275,6 +273,15 @@ static void optparse_vlog (optparse_t *p, const char *fmt, va_list ap)
         buf [len-1] = '\0';
     }
     (*p->log_fn) (buf);
+}
+
+static int optparse_fatalmsg (optparse_t *p, int code, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    optparse_vlog (p, fmt, ap);
+    va_end (ap);
+    return ((*p->fatalerr_fn) (p->fatalerr_handle, code));
 }
 
 static int opt_init (struct option *opt, struct optparse_option *o)
@@ -652,7 +659,7 @@ optparse_t *optparse_create (const char *prog)
     }
 
     p->log_fn = &log_stderr;
-    p->fatalerr_fn = &log_stderr_exit;
+    p->fatalerr_fn = &fatal_exit;
     p->fatalerr_handle = NULL;
     p->left_margin = 2;
     p->option_width = 25;
@@ -774,7 +781,7 @@ bool optparse_hasopt (optparse_t *p, const char *name)
 {
     int n;
     if ((n = optparse_getopt (p, name, NULL)) < 0) {
-        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+        optparse_fatalmsg (p, 1,
                            "%s: optparse error: no such argument '%s'\n",
                            p->program_name, name);
         return false;
@@ -790,7 +797,7 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
     char *endptr;
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+        optparse_fatalmsg (p, 1,
                            "%s: optparse error: no such argument '%s'\n",
                            p->program_name, name);
         return -1;
@@ -804,7 +811,7 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
         goto badarg;
     return l;
 badarg:
-    (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+    optparse_fatalmsg (p, 1,
                        "%s: Option '%s' requires an integer argument\n",
                        p->program_name, name);
     return -1;
@@ -817,7 +824,7 @@ const char *optparse_get_str (optparse_t *p, const char *name,
     const char *s;
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+        optparse_fatalmsg (p, 1,
                            "%s: optparse error: no such argument '%s'\n",
                            p->program_name, name);
         return NULL;
@@ -1123,15 +1130,12 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
         opt->optargs = list_create ((ListDelF) free);
     if (opt->autosplit) {
         if (opt_append_sep (opt, optarg) < 0)
-            (*p->fatalerr_fn) (p->fatalerr_handle, 1,
-                    "%s: append '%s': %s\n", p->program_name,
-                    optarg, strerror (errno));
+            optparse_fatalmsg (p, 1, "%s: append '%s': %s\n", p->program_name,
+                               optarg, strerror (errno));
         return;
     }
     if ((s = strdup (optarg)) == NULL)
-        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
-                           "%s: out of memory\n",
-                           p->program_name);
+        optparse_fatalmsg (p, 1, "%s: out of memory\n", p->program_name);
     list_append (opt->optargs, s);
     opt->optarg = s;
 }

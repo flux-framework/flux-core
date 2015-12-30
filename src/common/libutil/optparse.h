@@ -17,7 +17,7 @@ typedef int (*opt_log_f) (const char *fmt, ...);
 /*
  *  prototype for fatal error function
  */
-typedef void (*opt_fatalerr_f) (void *h, int exit_code, const char *fmt, ...);
+typedef int (*opt_fatalerr_f) (void *h, int exit_code);
 
 /*
  *  prototype for option callback hook
@@ -48,7 +48,7 @@ typedef enum {
 typedef enum {
     OPTPARSE_USAGE,        /* Set usage message in --help output (char *)   */
     OPTPARSE_LOG_FN,       /* Set log function (default fprintf(stderr,..)) */
-    OPTPARSE_FATALERR_FN,  /* Set fatal err function (default stderr, exit))*/
+    OPTPARSE_FATALERR_FN,  /* Set fatal err function (default: exit() )     */
     OPTPARSE_FATALERR_HANDLE,  /* Set handle passed to fatalerr function    */
     OPTPARSE_OPTION_WIDTH, /* Width allotted to options in --help output    */
     OPTPARSE_LEFT_MARGIN,  /* Left pad for option output (default = 2)      */
