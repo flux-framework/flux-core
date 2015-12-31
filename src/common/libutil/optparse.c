@@ -275,13 +275,18 @@ static void optparse_vlog (optparse_t *p, const char *fmt, va_list ap)
     (*p->log_fn) (buf);
 }
 
+static int optparse_fatalerr (optparse_t *p, int code)
+{
+    return ((*p->fatalerr_fn) (p->fatalerr_handle, code));
+}
+
 static int optparse_fatalmsg (optparse_t *p, int code, const char *fmt, ...)
 {
     va_list ap;
     va_start (ap, fmt);
     optparse_vlog (p, fmt, ap);
     va_end (ap);
-    return ((*p->fatalerr_fn) (p->fatalerr_handle, code));
+    return (optparse_fatalerr (p, code));
 }
 
 static int opt_init (struct option *opt, struct optparse_option *o)
@@ -574,20 +579,9 @@ static int print_usage (optparse_t *p)
     return optparse_print_options (p);
 }
 
-static int usage_and_exit (optparse_t *p, int code, const char *fmt, ...)
-{
-    if (fmt) {
-        va_list ap;
-        optparse_vlog (p, fmt, ap);
-        va_end (ap);
-    }
-    print_usage (p);
-    exit (code);
-}
-
 static int display_help (struct optparse_option *o, const char *optarg)
 {
-    usage_and_exit (o->arg, 0, NULL);
+    optparse_fatal_usage (o->arg, 0, NULL);
     /* noreturn */
     return (0);
 }
@@ -1201,26 +1195,27 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
 
     if (p->optind == -1) {
         if (optparse_parse_args (p, argc, argv))
-            exit (1);
+            return optparse_fatalerr (p, 1);
     }
 
     ac = argc - p->optind;
     av = argv + p->optind;
 
     if (ac <= 0)
-        usage_and_exit (p, 1, "%s: missing subcommand\n", p->program_name);
+        return optparse_fatal_usage (p, 1, "%s: missing subcommand\n",
+                p->program_name);
 
     if (!(sp = zhash_lookup (p->subcommands, av[0]))) {
-        usage_and_exit (p, 1, "%s: Unknown subcommand: %s\n",
-                        p->program_name, av[0]);
+        return optparse_fatal_usage (p, 1, "%s: Unknown subcommand: %s\n",
+                p->program_name, av[0]);
     }
 
     if (optparse_parse_args (sp, ac, av) < 0)
-        exit (1);
+        return optparse_fatalerr (p, 1);
 
     if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {
-        errno = EINVAL; /* Not a subcommand, huh? */
-        return -1;
+        return optparse_fatalmsg (p, 1,
+            "subcommand %s: failed to lookup callback!\n");
     }
 
     return ((*cb) (sp, ac, av));
@@ -1230,6 +1225,18 @@ int optparse_print_usage (optparse_t *p)
 {
     return print_usage (p);
 }
+
+int optparse_fatal_usage (optparse_t *p, int code, const char *fmt, ...)
+{
+    if (fmt) {
+        va_list ap;
+        optparse_vlog (p, fmt, ap);
+        va_end (ap);
+    }
+    print_usage (p);
+    return (*p->fatalerr_fn) (p->fatalerr_handle, code);
+}
+
 
 int optparse_optind (optparse_t *p)
 {
