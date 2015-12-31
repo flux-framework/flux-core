@@ -4,9 +4,10 @@
 
 static void *myfatal_h = NULL;
 
-void myfatal (void *h, int exit_code, const char *fmt, ...)
+int myfatal (void *h, int exit_code)
 {
     myfatal_h = h;
+    return (0);
 }
 
 sds usage_out = NULL;
