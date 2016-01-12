@@ -21,6 +21,7 @@
 #include "flog.h"
 #include "conf.h"
 #include "heartbeat.h"
+#include "content.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 
