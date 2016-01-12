@@ -55,16 +55,13 @@ void setup_path (flux_conf_t cf, const char *argv0);
 static void print_environment(flux_conf_t cf, const char * prefix);
 void setup_broker_env (flux_conf_t cf, const char *path_override);
 
-#define OPTIONS "+tx:hM:O:B:vc:L:P:C:FS:u:"
+#define OPTIONS "+tx:hM:O:B:vc:FS:u:"
 static const struct option longopts[] = {
     {"trace-handle",    no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
     {"connector-path",  required_argument,  0, 'O'},
     {"broker-path",     required_argument,  0, 'B'},
-    {"lua-path",        required_argument,  0, 'L'},
-    {"python-path",     required_argument,  0, 'P'},
-    {"lua-cpath",       required_argument,  0, 'C'},
     {"config",          required_argument,  0, 'c'},
     {"secdir",          required_argument,  0, 'S'},
     {"uri",             required_argument,  0, 'u'},
@@ -98,9 +95,6 @@ static void usage (void)
 "    -x,--exec-path PATH   prepend PATH to command search path\n"
 "    -M,--module-path PATH prepend PATH to module search path\n"
 "    -O,--connector-path PATH   prepend PATH to connector search path\n"
-"    -L,--lua-path PATH    prepend PATH to LUA_PATH\n"
-"    -P,--python-path PATH prepend PATH to PYTHONPATH\n"
-"    -C,--lua-cpath PATH   prepend PATH to LUA_CPATH\n"
 "    -t,--trace-handle     set FLUX_HANDLE_TRACE=1 before executing COMMAND\n"
 "    -B,--broker-path FILE override path to flux broker\n"
 "    -c,--config DIR       set path to config directory\n"
@@ -122,11 +116,8 @@ int main (int argc, char *argv[])
     bool vopt = false;
     char *xopt = NULL;
     char *Mopt = NULL;
-    char *Popt = NULL;
     char *Oopt = NULL;
     char *Bopt = NULL;
-    char *Lopt = NULL;
-    char *Copt = NULL;
     bool Fopt = false;
     char *confdir = NULL;
     char *secdir = NULL;
@@ -168,15 +159,6 @@ int main (int argc, char *argv[])
                 break;
             case 'v': /* --verbose */
                 vopt = true;
-                break;
-            case 'L': /* --lua-path PATH */
-                Lopt = optarg;
-                break;
-            case 'P': /* --python-path PATH */
-                Popt = optarg;
-                break;
-            case 'C': /* --lua-cpath PATH */
-                Copt = optarg;
                 break;
             case 'u': /* --uri URI */
                 if (setenv ("FLUX_URI", optarg, 1) < 0)
@@ -248,9 +230,6 @@ int main (int argc, char *argv[])
     flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", Oopt);
     flux_conf_environment_push (cf, "FLUX_EXEC_PATH", xopt);
     flux_conf_environment_push (cf, "FLUX_MODULE_PATH", Mopt);
-    flux_conf_environment_push (cf, "LUA_CPATH", Copt);
-    flux_conf_environment_push (cf, "LUA_PATH", Lopt);
-    flux_conf_environment_push (cf, "PYTHONPATH", Popt);
 
     if (argc == 0) {
         usage ();
