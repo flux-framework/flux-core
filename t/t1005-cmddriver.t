@@ -14,14 +14,14 @@ test_expect_success 'baseline works' '
 	flux comms info
 '
 
-test_expect_success 'flux --module-path prepends to FLUX_MODULE_PATH' '
-	flux -F --module-path /xyz /usr/bin/printenv \
-		| grep "FLUX_MODULE_PATH=/xyz:"
+test_expect_success 'flux prepends to FLUX_MODULE_PATH' '
+	FLUX_MODULE_PATH=/xyz flux -F /usr/bin/printenv \
+		| grep "FLUX_MODULE_PATH=.*:/xyz"
 '
 
-test_expect_success 'flux --connector-path prepends to FLUX_CONNECTOR_PATH' '
-	flux -F --connector-path /xyz /usr/bin/printenv \
-		| grep "FLUX_CONNECTOR_PATH=/xyz:"
+test_expect_success 'flux prepends to FLUX_CONNECTOR_PATH' '
+        FLUX_CONNECTOR_PATH=/xyz flux -F /usr/bin/printenv \
+		| grep "FLUX_CONNECTOR_PATH=.*:/xyz"
 '
 
 test_expect_success 'flux --uri sets FLUX_URI' '
