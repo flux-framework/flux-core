@@ -53,15 +53,14 @@ char *intree_confdir (void);
 void setup_path (flux_conf_t cf, const char *argv0);
 
 static void print_environment(flux_conf_t cf, const char * prefix);
-void setup_broker_env (flux_conf_t cf, const char *path_override);
+void setup_broker_env (flux_conf_t cf);
 
-#define OPTIONS "+tx:hM:O:B:vc:FS:u:"
+#define OPTIONS "+tx:hM:O:vc:FS:u:"
 static const struct option longopts[] = {
     {"trace-handle",    no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
     {"connector-path",  required_argument,  0, 'O'},
-    {"broker-path",     required_argument,  0, 'B'},
     {"config",          required_argument,  0, 'c'},
     {"secdir",          required_argument,  0, 'S'},
     {"uri",             required_argument,  0, 'u'},
@@ -96,7 +95,6 @@ static void usage (void)
 "    -M,--module-path PATH prepend PATH to module search path\n"
 "    -O,--connector-path PATH   prepend PATH to connector search path\n"
 "    -t,--trace-handle     set FLUX_HANDLE_TRACE=1 before executing COMMAND\n"
-"    -B,--broker-path FILE override path to flux broker\n"
 "    -c,--config DIR       set path to config directory\n"
 "    -F,--file-config      force use of config file, even if FLUX_URI is set\n"
 "    -S,--secdir DIR       set the directory where CURVE keys will be stored\n"
@@ -117,7 +115,6 @@ int main (int argc, char *argv[])
     char *xopt = NULL;
     char *Mopt = NULL;
     char *Oopt = NULL;
-    char *Bopt = NULL;
     bool Fopt = false;
     char *confdir = NULL;
     char *secdir = NULL;
@@ -153,9 +150,6 @@ int main (int argc, char *argv[])
                 break;
             case 'x': /* --exec-path PATH */
                 xopt = optarg;
-                break;
-            case 'B': /* --broker-path PATH */
-                Bopt = optarg;
                 break;
             case 'v': /* --verbose */
                 vopt = true;
@@ -209,7 +203,7 @@ int main (int argc, char *argv[])
     /* We share a few environment variables with sub-commands, so
      * that they don't have to reprocess the config.
      */
-    setup_broker_env (cf, Bopt);    /* sets FLUX_BROKER_PATH */
+    setup_broker_env (cf);  /* set FLUX_BROKER_PATH */
 
     /* Add PATH to flux_conf_environment and prepend path to
      *  this executable if necessary.
@@ -322,13 +316,9 @@ void setup_path (flux_conf_t cf, const char *argv0)
 }
 
 
-void setup_broker_env (flux_conf_t cf, const char *path_override)
+void setup_broker_env (flux_conf_t cf)
 {
-    const char *cf_path = flux_conf_get (cf, "general.broker_path");
-    const char *path = path_override;
-
-    if (!path)
-        path = cf_path;
+    const char *path = flux_conf_get (cf, "general.broker_path");
     if (!path)
         path = BROKER_PATH;
     flux_conf_environment_set(cf, "FLUX_BROKER_PATH", path, "");
