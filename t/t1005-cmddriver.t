@@ -24,11 +24,6 @@ test_expect_success 'flux --connector-path prepends to FLUX_CONNECTOR_PATH' '
 		| grep "FLUX_CONNECTOR_PATH=/xyz:"
 '
 
-test_expect_success 'flux --broker-path sets FLUX_BROKER_PATH' '
-	flux -F --broker-path /xyz/flux-broker /usr/bin/printenv \
-		| egrep "^FLUX_BROKER_PATH=/xyz/flux-broker$"
-'
-
 test_expect_success 'flux --uri sets FLUX_URI' '
 	flux -F --uri xyz://foo /usr/bin/printenv \
 		| egrep "^FLUX_URI=xyz://foo$"
