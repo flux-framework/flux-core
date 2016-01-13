@@ -59,8 +59,6 @@ void setup_broker_env (flux_conf_t cf);
 static const struct option longopts[] = {
     {"trace-handle",    no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
-    {"module-path",     required_argument,  0, 'M'},
-    {"connector-path",  required_argument,  0, 'O'},
     {"config",          required_argument,  0, 'c'},
     {"secdir",          required_argument,  0, 'S'},
     {"uri",             required_argument,  0, 'u'},
@@ -92,8 +90,6 @@ static void usage (void)
     fprintf (stderr,
 "Usage: flux [OPTIONS] COMMAND ARGS\n"
 "    -x,--exec-path PATH   prepend PATH to command search path\n"
-"    -M,--module-path PATH prepend PATH to module search path\n"
-"    -O,--connector-path PATH   prepend PATH to connector search path\n"
 "    -t,--trace-handle     set FLUX_HANDLE_TRACE=1 before executing COMMAND\n"
 "    -c,--config DIR       set path to config directory\n"
 "    -F,--file-config      force use of config file, even if FLUX_URI is set\n"
@@ -113,8 +109,6 @@ int main (int argc, char *argv[])
     int ch;
     bool vopt = false;
     char *xopt = NULL;
-    char *Mopt = NULL;
-    char *Oopt = NULL;
     bool Fopt = false;
     char *confdir = NULL;
     char *secdir = NULL;
@@ -141,12 +135,6 @@ int main (int argc, char *argv[])
                 if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
                     err_exit ("setenv");
                 flux_conf_environment_set (cf, "FLUX_HANDLE_TRACE", "1", "");
-                break;
-            case 'M': /* --module-path PATH */
-                Mopt = optarg;
-                break;
-            case 'O': /* --connector-path PATH */
-                Oopt = optarg;
                 break;
             case 'x': /* --exec-path PATH */
                 xopt = optarg;
@@ -221,9 +209,7 @@ int main (int argc, char *argv[])
     flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
 
     /* Prepend to command-line environment variables */
-    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", Oopt);
     flux_conf_environment_push (cf, "FLUX_EXEC_PATH", xopt);
-    flux_conf_environment_push (cf, "FLUX_MODULE_PATH", Mopt);
 
     if (argc == 0) {
         usage ();
