@@ -53,21 +53,6 @@ Trace API socket traffic to 'stderr'.
 Prepend 'PATH' to sub-command executable search path.
 Multiple directories may be specified, separated by colons.
 
-*-M, --module-path*='PATH'::
-Prepend 'PATH' to the comms module search path.
-Multiple directories may be specified, separated by colons.
-
-*-L, --lua-path*='PATH'::
-Prepend 'PATH' to the Lua module search path (LUA_PATH).
-Multiple paths may be specified, separated by semicolon.
-
-*-C, --lua-cpath*='PATH'::
-Prepend 'PATH' to the Lua binary module search path (LUA_CPATH).
-Multiple paths may be specified, separated by semicolon.
-
-*-B, --broker-path*='FILE'::
-Override the path to the Flux communications broker daemon.
-
 
 SUB-COMMAND ENVIRONMENT
 -----------------------
@@ -84,25 +69,30 @@ with the following prototype:
 setenv FLUX_MODULE_PATH::
 Set up broker comms module search path according to:
 
-  [--module-path PATH]:[config.general.module_path]:install-path
+  [config.general.module_path]:install-path:\
+    [getenv FLUX_MODULE_PATH]
+
+setenv FLUX_CONNECTOR_PATH::
+Set up search path for connector modules used by libflux to open a connection
+to the broker
+
+  [config.general.connector_path]:install-path:\
+    [getenv FLUX_CONNECTOR_PATH]
 
 setenv LUA_PATH::
 Set Lua module search path:
 
-  [--lua-path PATH];[config.general.lua_path]; \
-    [getenv LUA_PATH];install-path;;;
+  [config.general.lua_path];[getenv LUA_PATH];install-path;;;
 
 setenv LUA_CPATH::
 Set Lua binary module search path:
 
-  [--lua-cpath PATH];[config.general.lua_cpath]; \
-    [getenv LUA_CPATH];install-path;;;
+  [config.general.lua_cpath];[getenv LUA_CPATH];install-path;;;
 
 setenv FLUX_BROKER_PATH::
 Set the path to the broker executable.  This environment variable is
 used by flux-start(1) and related sub-commands to launch the broker.
 The path may be set by any of the following methods, in decreasing precedence:
-- [--broker-path FILE]
 - [config.general.broker_path]
 - install-path
 
