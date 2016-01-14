@@ -493,33 +493,16 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
     json_object_iter iter;
     json_object *subdir;
     href_t ref;
-    zhash_t *new;
-    zlist_t *keys;
-    char *key, *refcpy;
 
-    if (!(new = zhash_new ()))
-        oom ();
     json_object_object_foreachC (dir, iter) {
         if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
             commit_unroll (ctx, subdir); /* depth first */
             json_object_get (subdir);
             store (ctx, subdir, ref);
-            zhash_insert (new, iter.key, xstrdup (ref));
+            json_object_object_add (dir, iter.key,
+                                    dirent_create ("DIRREF", ref));
         }
     }
-    /* hash contains name => SHA1 ref */
-    if (!(keys = zhash_keys (new)))
-        oom ();
-    while ((key = zlist_pop (keys))) {
-        refcpy = zhash_lookup (new, key);
-        FASSERT (ctx->h, refcpy != NULL);
-        json_object_object_del (dir, key);
-        json_object_object_add (dir, key, dirent_create ("DIRREF", refcpy));
-        free (refcpy);
-        free (key);
-    }
-    zlist_destroy (&keys);
-    zhash_destroy (&new);
 }
 
 /* link (key, dirent) into directory 'dir'.
