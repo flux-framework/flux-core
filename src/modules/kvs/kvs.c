@@ -510,14 +510,15 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
 static void commit_link_dirent (ctx_t *ctx, json_object *dir,
                                 const char *key, json_object *dirent)
 {
-    char *next, *name = xstrdup (key);
+    char *cpy = xstrdup (key);
+    char *next, *name = cpy;
     json_object *o, *subdir = NULL, *subdirent;
 
     /* This is the first part of a key with multiple path components.
      * Make sure that it is a directory in DIRVAL form, then recurse
      * on the remaining path components.
      */
-    if ((next = strchr (name, '.'))) {
+    while ((next = strchr (name, '.'))) {
         *next++ = '\0';
         if (!json_object_object_get_ex (dir, name, &subdirent)) {
             if (!dirent) /* key deletion - it doesn't exist so return */
@@ -531,32 +532,28 @@ static void commit_link_dirent (ctx_t *ctx, json_object *dir,
         } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
             bool stall = !load (ctx, json_object_get_string (o), NULL, &subdir);
             FASSERT (ctx->h, stall == false);
-            json_object_object_del (dir, name);
             subdir = copydir (subdir);/* do not corrupt store by modify orig. */
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
         } else {
             if (!dirent) /* key deletion - it doesn't exist so return */
                 goto done;
-            json_object_object_del (dir, name);
             if (!(subdir = json_object_new_object ()))
                 oom ();
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
         }
-        commit_link_dirent (ctx, subdir, next, dirent);
-
+        name = next;
+        dir = subdir;
+    }
     /* This is the final path component of the key.  Add it to the directory.
      */
-    } else {
+    if (dirent)
+        json_object_object_add (dir, name, json_object_get (dirent));
+    else
         json_object_object_del (dir, name);
-        if (dirent) {
-            json_object_get (dirent);
-            json_object_object_add (dir, name, dirent);
-        }
-    }
 done:
-    free (name);
+    free (cpy);
 }
 
 static json_object *commit_apply_start (ctx_t *ctx)
