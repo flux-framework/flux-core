@@ -44,7 +44,7 @@ static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 static const uint32_t default_cache_purge_old_entry = 5;
 static const uint32_t default_cache_purge_large_entry = 256;
 
-static const uint32_t cache_blob_size_limit = 1048576; /* RFC 10 */
+static const uint32_t default_blob_size_limit = 1048576; /* RFC 10 */
 
 struct cache_entry {
     void *data;
@@ -71,6 +71,8 @@ struct content_cache {
     int store_pending_count;
     zlist_t *flush_requests;
     int epoch;
+
+    uint32_t blob_size_limit;
 
     uint32_t purge_target_entries;
     uint32_t purge_target_size;
@@ -501,7 +503,7 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
 
     if (flux_request_decode_raw (msg, NULL, &data, &len) < 0)
         goto done;
-    if (len > cache_blob_size_limit) {
+    if (len > cache->blob_size_limit) {
         errno = EFBIG;
         goto done;
     }
@@ -886,6 +888,9 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
         return -1;
     /* Misc
      */
+    if (attr_add_active_uint32 (attr, "content-blob-size-limit",
+                &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
     if (attr_add_active (attr, "content-hash", FLUX_ATTRFLAG_IMMUTABLE,
                 content_cache_getattr, NULL, cache) < 0)
         return -1;
@@ -924,6 +929,7 @@ content_cache_t *content_cache_create (void)
         return NULL;
     }
     cache->rank = FLUX_NODEID_ANY;
+    cache->blob_size_limit = default_blob_size_limit;
     cache->purge_target_entries = default_cache_purge_target_entries;
     cache->purge_target_size = default_cache_purge_target_size;
     cache->purge_old_entry = default_cache_purge_old_entry;
