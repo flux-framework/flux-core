@@ -44,7 +44,12 @@ static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 static const uint32_t default_cache_purge_old_entry = 5;
 static const uint32_t default_cache_purge_large_entry = 256;
 
-static const uint32_t default_blob_size_limit = 1048576; /* RFC 10 */
+/* Raise the max blob size value to 1GB so that large KVS values
+ * (including KVS directories) can be supported while the KVS transitions
+ * to the RFC 11 treeobj data representation.
+ */
+//static const uint32_t default_blob_size_limit = 1048576; /* RFC 10 */
+static const uint32_t default_blob_size_limit = 1048576*1024;
 
 struct cache_entry {
     void *data;
