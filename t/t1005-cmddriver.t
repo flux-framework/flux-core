@@ -14,19 +14,14 @@ test_expect_success 'baseline works' '
 	flux comms info
 '
 
-test_expect_success 'flux --module-path prepends to FLUX_MODULE_PATH' '
-	flux -F --module-path /xyz /usr/bin/printenv \
-		| grep "FLUX_MODULE_PATH=/xyz:"
+test_expect_success 'flux prepends to FLUX_MODULE_PATH' '
+	FLUX_MODULE_PATH=/xyz flux -F /usr/bin/printenv \
+		| grep "FLUX_MODULE_PATH=.*:/xyz"
 '
 
-test_expect_success 'flux --connector-path prepends to FLUX_CONNECTOR_PATH' '
-	flux -F --connector-path /xyz /usr/bin/printenv \
-		| grep "FLUX_CONNECTOR_PATH=/xyz:"
-'
-
-test_expect_success 'flux --broker-path sets FLUX_BROKER_PATH' '
-	flux -F --broker-path /xyz/flux-broker /usr/bin/printenv \
-		| egrep "^FLUX_BROKER_PATH=/xyz/flux-broker$"
+test_expect_success 'flux prepends to FLUX_CONNECTOR_PATH' '
+        FLUX_CONNECTOR_PATH=/xyz flux -F /usr/bin/printenv \
+		| grep "FLUX_CONNECTOR_PATH=.*:/xyz"
 '
 
 test_expect_success 'flux --uri sets FLUX_URI' '
@@ -71,26 +66,26 @@ test_expect_success 'flux env passes cmddriver option to argument' "
 		| grep ^foo://xyx$
 "
 # push /foo twice onto PYTHONPATH -- ensure it is leftmost position:
-test_expect_success 'cmddriver pushes dup path elements onto front of PATH' "
-	flux -P /foo env flux -P /bar env flux -P /foo env \
-		sh -c 'echo \$PYTHONPATH' | grep '^/foo'
-"
-# Ensure PATH-style variables are de-duplicated on push
-# Push /foo twice onto PYTHONPATH, ensure it appears only once
-test_expect_success 'cmddriver deduplicates path elements on push' "
-	flux -P /foo env flux -P /foo env sh -c 'echo \$PYTHONPATH' |
-		awk -F '/foo' 'NF-1 != 1 {print; exit 1}'
-"
-# Ensure complex PATH-style variables are de-duplicated on push
-test_expect_success 'cmddriver deduplicates complex path elements on push' "
-	flux -P /foo:/foo:/foo:/bar:/foo:/baz env flux -P /foo env sh -c 'echo \$PYTHONPATH' |
-		awk -F '/foo' 'NF-1 != 1 {print; exit 1}'
-"
-# External user path elements are preserved
-test_expect_success 'cmddriver preserves user path components' "
-	PYTHONPATH=/meh flux env sh -c 'echo \$PYTHONPATH' |
-		awk -F '/meh' 'NF-1 != 1 {print; exit 1}'
-"
+#test_expect_success 'cmddriver pushes dup path elements onto front of PATH' "
+#	flux -P /foo env flux -P /bar env flux -P /foo env \
+#		sh -c 'echo \$PYTHONPATH' | grep '^/foo'
+#"
+## Ensure PATH-style variables are de-duplicated on push
+## Push /foo twice onto PYTHONPATH, ensure it appears only once
+#test_expect_success 'cmddriver deduplicates path elements on push' "
+#	flux -P /foo env flux -P /foo env sh -c 'echo \$PYTHONPATH' |
+#		awk -F '/foo' 'NF-1 != 1 {print; exit 1}'
+#"
+## Ensure complex PATH-style variables are de-duplicated on push
+#test_expect_success 'cmddriver deduplicates complex path elements on push' "
+#	flux -P /foo:/foo:/foo:/bar:/foo:/baz env flux -P /foo env sh -c 'echo \$PYTHONPATH' |
+#		awk -F '/foo' 'NF-1 != 1 {print; exit 1}'
+#"
+## External user path elements are preserved
+#test_expect_success 'cmddriver preserves user path components' "
+#	PYTHONPATH=/meh flux env sh -c 'echo \$PYTHONPATH' |
+#		awk -F '/meh' 'NF-1 != 1 {print; exit 1}'
+#"
 test_expect_success 'cmddriver removes multiple contiguous separators in input' "
 	LUA_PATH='/meh;;;' flux env sh -c 'echo \$LUA_PATH' |
 		grep -v ';;;;'

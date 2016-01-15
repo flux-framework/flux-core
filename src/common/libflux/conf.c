@@ -102,11 +102,14 @@ static void initialize_environment (flux_conf_t cf)
         cf, "LUA_PATH", "", ";"); /* use a null separator to keep it intact */
     flux_conf_environment_no_dedup_push_back (cf, "LUA_PATH", ";;");
     flux_conf_environment_from_env (cf, "PYTHONPATH", "", ":");
+    flux_conf_environment_from_env (cf, "FLUX_CONNECTOR_PATH", "", ":");
+    flux_conf_environment_from_env (cf, "FLUX_EXEC_PATH", "", ":");
+    flux_conf_environment_from_env (cf, "FLUX_MODULE_PATH", "", ":");
 
     // Build paths
-    flux_conf_environment_set (cf, "FLUX_CONNECTOR_PATH", CONNECTOR_PATH, ":");
-    flux_conf_environment_set (cf, "FLUX_EXEC_PATH", EXEC_PATH, ":");
-    flux_conf_environment_set (cf, "FLUX_MODULE_PATH", MODULE_PATH, ":");
+    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", CONNECTOR_PATH);
+    flux_conf_environment_push (cf, "FLUX_EXEC_PATH", EXEC_PATH);
+    flux_conf_environment_push (cf, "FLUX_MODULE_PATH", MODULE_PATH);
     flux_conf_environment_push (cf, "LUA_CPATH", LUA_CPATH_ADD);
     flux_conf_environment_push (cf, "LUA_PATH", LUA_PATH_ADD);
     flux_conf_environment_push (cf, "PYTHONPATH", PYTHON_PATH);
