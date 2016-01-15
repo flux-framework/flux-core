@@ -22,8 +22,8 @@ typedef int (*opt_fatalerr_f) (void *h, int exit_code);
 /*
  *  prototype for option callback hook
  */
-typedef int (*optparse_cb_f) (struct optparse_option *,
-			      const char *optarg, void *arg);
+typedef int (*optparse_cb_f) (optparse_t *p, struct optparse_option *,
+			      const char *optarg);
 
 /*
  *  prototype for subcommand callback
@@ -70,10 +70,9 @@ struct optparse_option {
     const char *  arginfo; /*  arg info displayed after = in help output    */
     const char *  usage;   /*  String for usage/help output                 */
     optparse_cb_f cb;      /*  Callback function                            */
-    void *        arg;     /*  Optional argument passed back to callback    */
 };
 
-#define OPTPARSE_TABLE_END { NULL, 0, 0, 0, NULL, NULL, NULL, NULL }
+#define OPTPARSE_TABLE_END { NULL, 0, 0, 0, NULL, NULL, NULL }
 
 /*
  *  Description of a subcommand:
@@ -249,6 +248,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[]);
  *    first-level option processing if [p] has not been initialized by
  *    a call to optparse_parse_args.
  *
+ *   Returns the value returned by subcommand callback or prints
+ *    error and returns fatalerr() on error.
  */
 int optparse_run_subcommand (optparse_t *p, int argc, char *argv[]);
 

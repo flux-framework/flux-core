@@ -94,7 +94,6 @@ static void optparse_option_destroy (struct optparse_option *o)
 {
     if (o == NULL)
         return;
-    o->arg = NULL;
     free ((void *)o->name);
     free ((void *)o->arginfo);
     free ((void *)o->usage);
@@ -117,7 +116,6 @@ optparse_option_dup (const struct optparse_option *src)
         o->group =   src->group;
         o->has_arg = src->has_arg;
         o->cb  =     src->cb;
-        o->arg =     src->arg;
     }
     return (o);
 }
@@ -579,9 +577,10 @@ static int print_usage (optparse_t *p)
     return optparse_print_options (p);
 }
 
-static int display_help (struct optparse_option *o, const char *optarg)
+static int display_help (optparse_t *p, struct optparse_option *o,
+    const char *optarg)
 {
-    optparse_fatal_usage (o->arg, 0, NULL);
+    optparse_fatal_usage (p, 0, NULL);
     /* noreturn */
     return (0);
 }
@@ -662,7 +661,6 @@ optparse_t *optparse_create (const char *prog)
     /*
      *  Register -h, --help
      */
-    help.arg = (void *) p;
     if (optparse_add_option (p, &help) != OPTPARSE_SUCCESS) {
         fprintf (stderr, "failed to register --help option: %s\n", strerror (errno));
         optparse_destroy (p);
@@ -910,7 +908,6 @@ optparse_err_t optparse_add_doc (optparse_t *p, const char *doc, int group)
 
     o.has_arg = 0;
     o.arginfo = NULL;
-    o.arg   = NULL;
     o.cb    = NULL;
     o.name  = NULL;
     o.key   = 0;
@@ -1171,7 +1168,7 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
             opt_append_optarg (p, opt, optarg);
 
         o = opt->p_opt;
-        if (o->cb && ((o->cb) (o, optarg, o->arg) < 0)) {
+        if (o->cb && ((o->cb) (p, o, optarg) < 0)) {
             fprintf (stderr, "Option \"%s\" failed\n", o->name);
             optind = -1;
             break;
