@@ -178,8 +178,8 @@ done:
         int saved_errno = errno;
         if (rc < 0)
             flux_log (h, LOG_DEBUG, "load: %s %s", blobref, strerror (errno));
-        else
-            flux_log (h, LOG_DEBUG, "load: %s size=%d", blobref, size);
+        //else
+        //    flux_log (h, LOG_DEBUG, "load: %s size=%d", blobref, size);
         errno = saved_errno;
     }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
@@ -238,8 +238,8 @@ done:
         int saved_errno = errno;
         if (rc < 0)
             flux_log (h, LOG_DEBUG, "store: %s %s", blobref, strerror (errno));
-        else
-            flux_log (h, LOG_DEBUG, "store: %s size=%d", blobref, size);
+        //else
+        //    flux_log (h, LOG_DEBUG, "store: %s size=%d", blobref, size);
         errno = saved_errno;
     }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
