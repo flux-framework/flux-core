@@ -222,7 +222,7 @@ EOF
 "
 
 test_expect_success 'jstat 13: update rdl_alloc' "
-    flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdncores\": 102}}]}' &&
+    flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdrank\": 0, \"cmbdncores\": 102}}]}' &&
     flux kvs get lwj.1.rank.0.cores > output.13.1 &&
     cat > expected.13.1 <<-EOF &&
 102
@@ -248,6 +248,7 @@ test_expect_success 'jstat 15: jstat detects failed state' '
 	starting->failed
 	EOF
     cp output.15 output.15.cp &&
+    kill -INT $p &&
     test_cmp expected15 output.15.cp
 '
 
