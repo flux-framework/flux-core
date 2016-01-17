@@ -140,3 +140,8 @@ Github: <http://github.com/flux-framework>
 COPYRIGHT
 ---------
 include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-broker-attributes(7)
