@@ -1,0 +1,146 @@
+flux-broker-attributes(7)
+=========================
+:doctype: manpage
+
+
+NAME
+----
+flux-broker-attributes - overview Flux broker attributes
+
+
+DESCRIPTION
+-----------
+
+Flux broker attributes are parameters that affect how different
+broker systems behave.  Attributes can be listed and manipulated
+with flux-getattr(1), flux-setattr(1), and flux-lsattr(1).
+
+The broker currently exports the following attributes:
+
+SESSION ATTRIBUTES
+------------------
+
+rank::
+The rank of the local broker.
+
+size::
+The number of ranks in the comms session.
+
+session-id::
+The identity of the comms session.
+
+tbon-arity::
+The branching factor of the tree based overlay network.
+
+scratch-directory::
+The temporary directory used for session sockets, content
+backing storage, etc..
+
+SOCKET ATTRIBUTES
+-----------------
+
+tbon-parent-uri::
+The URI of the ZeroMQ endpoint this rank is connected to in the tree
+based overlay network.  This attribute will not be set on rank zero.
+
+tbon-request-uri::
+The URI of the ZeroMQ endpoint this rank is bound to in the tree
+based overlay network.
+
+snoop-uri::
+The URI of the ZeroMQ endpoint that flux-snoop(1) should connect
+to in order to receive copies of messages passing through the broker.
+
+local-uri::
+The Flux URI that should be passed to flux_open(1) to establish
+a connection to the local broker rank.
+
+parent-uri::
+The Flux URI that should be passed to flux_open(1) to establish
+a connection to the enclosing instance.
+
+LOGGING ATTRIBUTES
+------------------
+
+log-bufcount::
+The number of log entries currently stored in the ring buffer.
+
+log-buflimit::
+The maximum number of log entries that can be stored in the ring buffer.
+
+log-count::
+The number of log entries ever stored in the ring buffer.
+
+log-level::
+Log entries at syslog(3) level at or below this value are forwarded
+to rank zero for permanent capture.
+
+
+CONTENT ATTRIBUTES
+------------------
+content-acct-dirty::
+The number of dirty cache entries on this rank.
+
+content-acct-entries::
+The total number of cache entries on this rank.
+
+content-acct-size::
+The estimated total size in bytes consumed by cache entries on
+this rank, excluding overhead.
+
+content-acct-valid::
+The number of valid cache entries on this rank.
+
+content-backing::
+The selected backing store, if any.  This attribute is only
+set on rank 0 where the content backing store is active.
+
+content-blob-size-limit::
+The maximum size of a blob, the basic unit of content storage.
+
+content-flush-batch-count::
+The current number of outstanding store requests, either to the
+backing store (rank 0) or upstream (rank > 0).
+
+content-flush-batch-limit::
+The maximum number of outstanding store requests that will be
+initiated when handling a flush or backing store load operation.
+
+content-hash::
+The selected hash algorithm, default sha1.
+
+content-purge-large-entry::
+When the cache size footprint needs to be reduced, first consider
+purging entries of this size or greater.
+
+content-purge-old-entry::
+When the cache size footprint needs to be reduced, only consider
+purging entries that are older than this number of heartbeats.
+
+content-purge-target-entries::
+If possible, the cache size purged periodically so that the total
+number of entries stays at or below this value.
+
+content-purge-target-size
+If possible, the cache size purged periodically so that the total
+size of the cache stays at or below this value.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-getattr(1), flux_attr_get(3)
