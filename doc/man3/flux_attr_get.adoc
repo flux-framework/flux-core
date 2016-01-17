@@ -57,60 +57,6 @@ If _val_ is NULL, the attribute is unset.
 through the current set of valid attribute names.
 
 
-BROKER ATTRIBUTES
------------------
-
-The broker currently exports the following attributes:
-
-rank::
-The rank of the local broker.  This attribute is normally accessed
-via flux_get_rank(3).
-
-size::
-The number of ranks in the comms session.  This attribute is normally accessed
-via flux_get_size(3).
-
-tbon-arity::
-The branching factor of the tree based overlay network.  This attribute
-is normally accessed via flux_get_arity(3).
-
-session-id::
-The identity of the comms session.
-
-tbon-parent-uri::
-The URI of the ZeroMQ endpoint this rank is connected to in the tree
-based overlay network.  This attribute will not be set on rank zero.
-
-tbon-request-uri::
-The URI of the ZeroMQ endpoint this rank is bound to in the tree
-based overlay network.
-
-snoop-uri::
-The URI of the ZeroMQ endpoint that flux-snoop(1) should connect
-to in order to receive copies of messages passing through the broker.
-
-local-uri::
-The Flux URI that should be passed to flux_open(1) to establish
-a connection to the local broker rank.
-
-parent-uri::
-The Flux URI that should be passed to flux_open(1) to establish
-a connection to the enclosing instance.
-
-log-bufcount::
-The number of log entries currently stored in the ring buffer.
-
-log-buflimit::
-The maximum number of log entries that can be stored in the ring buffer.
-
-log-count::
-The number of log entries ever stored in the ring buffer.
-
-log-level::
-Log entries at syslog(3) level at or below this value are forwarded
-to rank zero for permanent capture.
-
-
 RETURN VALUE
 ------------
 
@@ -155,4 +101,5 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 --------
+flux-lsattr(1), flux-getattr(1), flux-setattr(1), flux-broker-attributes(7),
 https://github.com/flux-framework/rfc/blob/master/spec_3.adoc[RFC 3: CMB1 - Flux Comms Message Broker Protocol]
