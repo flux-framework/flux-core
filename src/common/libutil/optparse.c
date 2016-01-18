@@ -61,6 +61,7 @@ struct opt_parser {
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
+    int            skip_subcmds;    /* Do not Print subcommands in --help   */
     List           option_list;     /* List of options for this program    */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
@@ -538,7 +539,7 @@ static int print_usage_with_subcommands (char *name, optparse_t *parent)
         (*fp) ("Usage: %s %s\n", name, parent->usage);
         lines++;
     }
-    if (nsubcmds == 0) {
+    if (nsubcmds == 0 || parent->skip_subcmds) {
         if (!parent->usage)
             (*fp) ("Usage: %s [OPTIONS]...\n", name);
         return (1);
@@ -952,6 +953,10 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
             e = OPTPARSE_BAD_ARG;
         else
             p->option_width = n;
+        break;
+    case OPTPARSE_PRINT_SUBCMDS:
+        n = va_arg (vargs, int);
+        p->skip_subcmds = !n;
         break;
     default:
         e = OPTPARSE_BAD_ARG;

@@ -52,6 +52,7 @@ typedef enum {
     OPTPARSE_FATALERR_HANDLE,  /* Set handle passed to fatalerr function    */
     OPTPARSE_OPTION_WIDTH, /* Width allotted to options in --help output    */
     OPTPARSE_LEFT_MARGIN,  /* Left pad for option output (default = 2)      */
+    OPTPARSE_PRINT_SUBCMDS,/* Print all subcommands in --help (default = T  */
 } optparse_item_t;
 
 /*
