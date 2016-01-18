@@ -445,6 +445,15 @@ Usage: test one [OPTIONS]\n\
   -h, --help             Display this message.\n",
         "Usage output as expected with subcommands");
 
+    // Set OPTPARSE_PRINT_SUBCMDS false:
+    e = optparse_set (a, OPTPARSE_PRINT_SUBCMDS, 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (PRINT_SUBCMDS, 0)");
+
+    usage_ok (a, "\
+Usage: test [OPTIONS]...\n\
+  -h, --help             Display this message.\n",
+        "Usage output as expected with no print subcmds");
+
     e = optparse_set (b, OPTPARSE_LOG_FN, output_f);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (subcmd, LOG_FN)");
 
@@ -496,14 +505,14 @@ Usage: test two [OPTIONS]...\n\
 int main (int argc, char *argv[])
 {
 
-    plan (119);
+    plan (122);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 23 tests */
+    test_subcommand (); /* 31 tests */
 
     done_testing ();
     return (0);
