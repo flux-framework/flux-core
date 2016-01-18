@@ -44,7 +44,15 @@ static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 static const uint32_t default_cache_purge_old_entry = 5;
 static const uint32_t default_cache_purge_large_entry = 256;
 
-static const uint32_t cache_blob_size_limit = 1048576; /* RFC 10 */
+/* Raise the max blob size value to 1GB so that large KVS values
+ * (including KVS directories) can be supported while the KVS transitions
+ * to the RFC 11 treeobj data representation.
+ */
+//static const uint32_t default_blob_size_limit = 1048576; /* RFC 10 */
+static const uint32_t default_blob_size_limit = 1048576*1024;
+
+static const uint32_t default_flush_batch_limit = 256;
+
 
 struct cache_entry {
     void *data;
@@ -68,9 +76,12 @@ struct content_cache {
     uint8_t backing:1;              /* 'content-backing' service available */
     char *backing_name;
     char *hash_name;
-    int store_pending_count;
     zlist_t *flush_requests;
     int epoch;
+
+    uint32_t blob_size_limit;
+    uint32_t flush_batch_limit;
+    uint32_t flush_batch_count;
 
     uint32_t purge_target_entries;
     uint32_t purge_target_size;
@@ -83,6 +94,7 @@ struct content_cache {
 };
 
 static void flush_respond (content_cache_t *cache);
+static int cache_flush (content_cache_t *cache);
 
 static void message_list_destroy (zlist_t **l)
 {
@@ -185,17 +197,16 @@ static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
 {
     int rc = -1;
 
-    assert (!e->valid);
-    assert (!e->data);
-    assert (e->len == 0);
-
-    if (len > 0 && !(e->data = malloc (len))) {
-        errno = ENOMEM;
-        goto done;
+    if (!e->valid) {
+        assert (!e->data);
+        assert (e->len == 0);
+        if (len > 0 && !(e->data = malloc (len))) {
+            errno = ENOMEM;
+            goto done;
+        }
+        memcpy (e->data, data, len);
+        e->len = len;
     }
-    memcpy (e->data, data, len);
-    e->len = len;
-
     rc = 0;
 done:
     return rc;
@@ -419,8 +430,8 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     int rc = -1;
 
     e->store_pending = 0;
-    cache->store_pending_count--;
-    assert (cache->store_pending_count >= 0);
+    cache->flush_batch_count--;
+    assert (cache->flush_batch_count >= 0);
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         saved_errno = errno;
         flux_log_error (cache->h, "content store");
@@ -447,8 +458,18 @@ done:
                                         e->blobref, strlen (blobref) + 1) < 0)
         flux_log_error (cache->h, "content store");
     flux_rpc_destroy (rpc);
-    if (cache->store_pending_count == 0)
+
+    /* If cache has been flushed, respond to flush requests, if any.
+     * If there are still dirty entries and the number of outstanding
+     * store requests would not exceed the limit, flush more entries.
+     * Optimization: since scanning for dirty entries is a linear search,
+     * only do it when the number of outstanding store requests falls to
+     * a low water mark, here hardwired to be half of the limit.
+     */
+    if (cache->acct_dirty == 0)
         flush_respond (cache);
+    else if (cache->flush_batch_count <= cache->flush_batch_limit / 2)
+        (void)cache_flush (cache); /* resume flushing */
 }
 
 static int cache_store (content_cache_t *cache, struct cache_entry *e)
@@ -480,7 +501,7 @@ static int cache_store (content_cache_t *cache, struct cache_entry *e)
         goto done;
     }
     e->store_pending = 1;
-    cache->store_pending_count++;
+    cache->flush_batch_count++;
     rc = 0;
 done:
     if (rc < 0)
@@ -502,7 +523,7 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
 
     if (flux_request_decode_raw (msg, NULL, &data, &len) < 0)
         goto done;
-    if (len > cache_blob_size_limit) {
+    if (len > cache->blob_size_limit) {
         errno = EFBIG;
         goto done;
     }
@@ -577,6 +598,8 @@ static int cache_flush (content_cache_t *cache)
     int rc = 0;
 
     FOREACH_ZHASH (cache->entries, key, e) {
+        if (cache->flush_batch_count >= cache->flush_batch_limit)
+            break;
         if (e->dirty) {
             if (cache_store (cache, e) < 0) {
                 saved_errno = errno;
@@ -630,7 +653,7 @@ done:
     Jput (in);
 };
 
-/* Forceably drop all entries from the cache that can be dropped
+/* Forcibly drop all entries from the cache that can be dropped
  * without data loss.
  * N.B. this walks the entire cache in one go.
  */
@@ -729,7 +752,7 @@ static void content_flush_request (flux_t h, flux_msg_handler_t *w,
     }
     if (cache_flush (cache) < 0)
         goto done;
-    if (cache->store_pending_count > 0) {
+    if (cache->acct_dirty > 0) {
         if (defer_request (&cache->flush_requests, msg) < 0)
             goto done;
         return;
@@ -887,11 +910,20 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
         return -1;
     /* Misc
      */
+    if (attr_add_active_uint32 (attr, "content-flush-batch-limit",
+                &cache->flush_batch_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    if (attr_add_active_uint32 (attr, "content-blob-size-limit",
+                &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
     if (attr_add_active (attr, "content-hash", FLUX_ATTRFLAG_IMMUTABLE,
                 content_cache_getattr, NULL, cache) < 0)
         return -1;
     if (attr_add_active (attr, "content-backing",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
+        return -1;
+    if (attr_add_active_uint32 (attr, "content-flush-batch-count",
+                &cache->flush_batch_count, 0) < 0)
         return -1;
     return 0;
 }
@@ -925,6 +957,8 @@ content_cache_t *content_cache_create (void)
         return NULL;
     }
     cache->rank = FLUX_NODEID_ANY;
+    cache->blob_size_limit = default_blob_size_limit;
+    cache->flush_batch_limit = default_flush_batch_limit;
     cache->purge_target_entries = default_cache_purge_target_entries;
     cache->purge_target_size = default_cache_purge_target_size;
     cache->purge_old_entry = default_cache_purge_old_entry;

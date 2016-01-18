@@ -53,22 +53,31 @@
 
 /* kvs.put
  */
-JSON kp_tput_enc (const char *key, JSON val, bool link, bool dir)
+JSON kp_tput_enc (const char *key, const char *json_str, bool link, bool dir)
 {
     JSON o = NULL;
+    JSON val = NULL;
 
     if (!key) {
         errno = EINVAL;
-        goto done;
+        goto error;
     }
     o = Jnew ();
+    if (json_str) {
+        if (!(val = Jfromstr (json_str))) {
+            errno = EINVAL;
+            goto error;
+        }
+    }
     json_object_object_add (o, key, val);
     if (dir)
         Jadd_bool (o, ".flag_mkdir", true);
     if (link)
         Jadd_bool (o, ".flag_symlink", true);
-done:
     return o;
+error:
+    Jput (o);
+    return NULL;
 }
 
 int kp_tput_dec (JSON o, const char **key, JSON *val, bool *link, bool *dir)

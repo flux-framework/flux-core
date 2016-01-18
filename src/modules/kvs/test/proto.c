@@ -18,7 +18,7 @@ void test_put (void)
 
     val = Jnew ();
     Jadd_int (val, "i", 2);
-    o = kp_tput_enc ("a", val, false, true);
+    o = kp_tput_enc ("a", Jtostr (val), false, true);
     ok (o != NULL,
         "kp_tput_snec works");
     val = NULL;

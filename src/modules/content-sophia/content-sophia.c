@@ -43,8 +43,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-const uint32_t blob_size_limit = 1048576;
-
 const bool debug_enabled = true;
 
 typedef struct {
@@ -53,6 +51,7 @@ typedef struct {
     void *db;
     flux_t h;
     bool broker_shutdown;
+    uint32_t blob_size_limit;
 } ctx_t;
 
 static void log_sophia_error (ctx_t *ctx, const char *fmt, ...)
@@ -91,6 +90,7 @@ static ctx_t *getctx (flux_t h)
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::content-sophia");
     const char *dir;
     const char *hashfun;
+    const char *tmp;
     int flags;
 
     if (!ctx) {
@@ -105,7 +105,11 @@ static ctx_t *getctx (flux_t h)
             flux_log_error (h, "content-hash %s", hashfun);
             goto error;
         }
-
+        if (!(tmp = flux_attr_get (h, "content-blob-size-limit", NULL))) {
+            flux_log_error (h, "content-blob-size-limit");
+            goto error;
+        }
+        ctx->blob_size_limit = strtoul (tmp, NULL, 10);
         if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
             flux_log_error (h, "scratch-directory");
             goto error;
@@ -174,8 +178,8 @@ done:
         int saved_errno = errno;
         if (rc < 0)
             flux_log (h, LOG_DEBUG, "load: %s %s", blobref, strerror (errno));
-        else
-            flux_log (h, LOG_DEBUG, "load: %s size=%d", blobref, size);
+        //else
+        //    flux_log (h, LOG_DEBUG, "load: %s size=%d", blobref, size);
         errno = saved_errno;
     }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
@@ -201,7 +205,7 @@ void store_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (h, "store: request decode failed");
         goto done;
     }
-    if (size > blob_size_limit) {
+    if (size > ctx->blob_size_limit) {
         errno = EFBIG;
         goto done;
     }
@@ -234,8 +238,8 @@ done:
         int saved_errno = errno;
         if (rc < 0)
             flux_log (h, LOG_DEBUG, "store: %s %s", blobref, strerror (errno));
-        else
-            flux_log (h, LOG_DEBUG, "store: %s size=%d", blobref, size);
+        //else
+        //    flux_log (h, LOG_DEBUG, "store: %s size=%d", blobref, size);
         errno = saved_errno;
     }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,

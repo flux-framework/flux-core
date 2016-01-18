@@ -4,11 +4,18 @@ test_description='Test content-sophia service'
 
 . `dirname $0`/sharness.sh
 
+if test "$TEST_LONG" = "t"; then
+    test_set_prereq LONGTEST
+fi
+
+
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
 test ${SIZE} -lt 4 && SIZE=4
 test_under_flux ${SIZE}
 echo "# $0: flux session size will be ${SIZE}"
+
+MAXBLOB=`flux getattr content-blob-size-limit`
 
 test_expect_success 'load content-sophia module on rank 0' '
 	flux module load --rank 0 --direct content-sophia
@@ -35,8 +42,9 @@ test_expect_success 'store blobs bypassing cache' '
         flux content store --bypass-cache <1m.0.store >1m.0.hash
 '
 
-test_expect_success 'cannot store blob that exceeds max size of 1m' '
-        echo x | cat 1m.0.store - >toobig &&
+test_expect_success LONGTEST "cannot store blob that exceeds max size of $MAXBLOB" '
+        dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
+			skip=$(($MAXBLOB/4096)) >toobig 2>/dev/null &&
         test_must_fail flux content store --bypass-cache <toobig
 '
 

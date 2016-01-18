@@ -207,6 +207,7 @@ AC_CONFIG_FILES( \
   doc/Makefile \
   doc/man1/Makefile \
   doc/man3/Makefile \
+  doc/man7/Makefile \
   doc/test/Makefile \
   t/Makefile \
   t/fluxometer.lua \

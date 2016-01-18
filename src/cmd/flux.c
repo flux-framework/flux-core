@@ -584,7 +584,6 @@ void internal_content_store (flux_conf_t cf, optparse_t *orig,
           .usage = "Store directly to rank 0 content service", },
         OPTPARSE_TABLE_END,
     };
-    const uint32_t blob_size_limit = 1048576; /* RFC 10 */
     optparse_t *p;
     int n;
     uint8_t *data;
@@ -613,8 +612,6 @@ void internal_content_store (flux_conf_t cf, optparse_t *orig,
         int flags;
         const char *hashfun;
 
-        if (size > blob_size_limit)
-            errn_exit (EFBIG, "content-store");
         if (!(hashfun = flux_attr_get (h, "content-hash", &flags)))
             err_exit ("flux_attr_get content-hash");
         if (!strcmp (hashfun, "sha1")) {

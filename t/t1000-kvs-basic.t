@@ -10,8 +10,12 @@ before other tests that depend on kvs.
 
 . `dirname $0`/sharness.sh
 
+if test "$TEST_LONG" = "t"; then
+    test_set_prereq LONGTEST
+fi
+
 # Size the session to one more than the number of cores, minimum of 4
-SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
+SIZE=$(($(nproc)+1))
 test ${SIZE} -lt 4 && SIZE=4
 test_under_flux ${SIZE}
 echo "# $0: flux session size will be ${SIZE}"
@@ -287,4 +291,19 @@ test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
 	${FLUX_BUILD_DIR}/t/kvs/watch unwatchloop $TEST.a &&
 	flux kvs unlink $TEST.a
 '
+
+# large values/dirs
+
+test_expect_success 'kvs: store value exceeding RFC 10 max blob size of 1m' '
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.tortureval --count 1 --size=1048577
+'
+
+test_expect_success 'kvs: store 10,000 keys in one dir' '
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir --count 10000
+'
+
+test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir2 --count 1000000
+'
+
 test_done

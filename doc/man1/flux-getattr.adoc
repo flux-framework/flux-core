@@ -54,4 +54,4 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 --------
-flux_attr_get(3)
+flux_attr_get(3), flux-broker-attributes(7)
