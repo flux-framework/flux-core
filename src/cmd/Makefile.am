@@ -26,12 +26,27 @@ fluxcmd_ldadd = \
 
 LDADD = $(fluxcmd_ldadd)
 
+EXTRA_DIST = \
+	builtin-cmds-list.sh
+CLEANFILES = \
+	builtin-cmds.c
+BUILT_SOURCES = \
+	builtin-cmds.c
 
 bin_PROGRAMS = flux
 flux_SOURCES = \
 	flux.c \
 	cmdhelp.h \
-	cmdhelp.c
+	cmdhelp.c \
+	builtin.h \
+	builtin/attr.c \
+	builtin/broker.c \
+	builtin/help.c \
+	builtin/dmesg.c \
+	builtin/env.c \
+	builtin/content.c
+nodist_flux_SOURCES = \
+	builtin-cmds.c
 
 #
 # Flux subcommands
@@ -84,6 +99,13 @@ flux_jstat_LDADD = \
 	$(top_builddir)/src/modules/libjsc/libjsc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
+
+#
+# Automatically build list of flux(1) builtins from
+#  builtin/*.c:
+builtin-cmds.c : builtin builtin-cmds-list.sh
+	$(AM_V_GEN)$(SHELL) \
+	    $(srcdir)/builtin-cmds-list.sh $(srcdir)/builtin/*.c > $@
 
 #
 # coverage:
