@@ -46,6 +46,7 @@ TESTS = \
 	t2002-pmi.t \
 	t2003-recurse.t \
 	t2004-hydra.t \
+	t2005-hwloc-basic.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
@@ -98,6 +99,7 @@ check_SCRIPTS = \
 	t2002-pmi.t \
 	t2003-recurse.t \
 	t2004-hydra.t \
+	t2005-hwloc-basic.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
         issues/t0441-kvs-put-get.sh \
@@ -139,7 +141,11 @@ dist_check_DATA = \
 	build/hello_czmq.c \
 	build/hello_flux_core.c \
 	build/hello_flux_internal.c \
-	build/hello_jsonc.c
+	build/hello_jsonc.c \
+	hwloc-data/1N/shared/02-brokers/0.xml \
+	hwloc-data/1N/shared/02-brokers/1.xml \
+	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
+	hwloc-data/1N/nonoverlapping/02-brokers/1.xml
 
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \

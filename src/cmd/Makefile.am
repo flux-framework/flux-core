@@ -65,7 +65,8 @@ fluxcmd_PROGRAMS = \
 	flux-kvs \
 	flux-start \
 	flux-config \
-	flux-jstat
+	flux-jstat \
+	flux-hwloc
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
