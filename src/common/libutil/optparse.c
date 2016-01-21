@@ -1145,31 +1145,39 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
     int li;
+    char fullname [128] = "";
     char *saved_argv0;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
 
+    strcat_progname (p, fullname, sizeof (fullname) - 1);
 
     /* Always set optind = 0 here to force internal initialization of
      *  GNU options parser. See getopt_long(3) NOTES section.
      */
     optind = 0;
+    /*
+     * Disable getopt_long(3) printing errors to stderr.
+     */
+    opterr = 0;
     saved_argv0 = argv[0];
-    argv[0] = p->program_name;
+    argv[0] = fullname;
     while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == -1)
             break;
         if (c == '?') {
-            fprintf (stderr, "Unknown option. Try --help\n");
+            (*p->log_fn) ("%s: unrecognized option '%s'\n",
+                          fullname, argv[optind-1]);
+            (*p->log_fn) ("Try `%s --help' for more information.\n", fullname);
             optind = -1;
             break;
         }
 
         opt = list_find_first (p->option_list, (ListFindF) by_val, &c);
         if (opt == NULL) {
-            fprintf (stderr, "ugh, didn't find option associated with char %c\n", c);
+            (*p->log_fn) ("ugh, didn't find option associated with char %c\n", c);
             continue;
         }
 
@@ -1179,7 +1187,7 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 
         o = opt->p_opt;
         if (o->cb && ((o->cb) (p, o, optarg) < 0)) {
-            fprintf (stderr, "Option \"%s\" failed\n", o->name);
+            (*p->log_fn) ("Option \"%s\" failed\n", o->name);
             optind = -1;
             break;
         }
@@ -1218,7 +1226,7 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
     }
 
     if (optparse_parse_args (sp, ac, av) < 0)
-        return optparse_fatalerr (p, 1);
+        return optparse_fatalerr (sp, 1);
 
     if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {
         return optparse_fatalmsg (p, 1,
