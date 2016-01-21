@@ -20,13 +20,18 @@ void output_f (const char *fmt, ...)
     va_end (ap);
 }
 
-void usage_ok (optparse_t *p, const char *expected, const char *msg)
+void usage_output_is (const char *expected, const char *msg)
 {
-    optparse_print_usage (p);
     ok (usage_out != NULL, "optparse_print_usage");
     is (usage_out, expected, msg);
     sdsfree (usage_out);
     usage_out = NULL;
+}
+
+void usage_ok (optparse_t *p, const char *expected, const char *msg)
+{
+    optparse_print_usage (p);
+    usage_output_is (expected, msg);
 }
 
 void test_usage_output (void)
@@ -413,6 +418,11 @@ int subcmd_two (optparse_t *p, int ac, char **av)
 }
 
 
+int do_nothing (void *h, int code)
+{
+    return -code;
+}
+
 void test_subcommand (void)
 {
     optparse_err_t e;
@@ -499,20 +509,35 @@ Usage: test two [OPTIONS]...\n\
     e = optparse_run_subcommand (a, ac, av3);
     ok (e == OPTPARSE_SUCCESS, "optparse_run_subcommand before parse succeeds");
     ok (called = 3, "optparse_run_subcmomand: called subcmd_two with correct args");
+
+    // Test unknown option prints expected error:
+    char *av4[] = { "test", "two", "--unknown", NULL };
+    ac = sizeof (av4) / sizeof (av3[0]) - 1;
+
+    e = optparse_set (b, OPTPARSE_FATALERR_FN, do_nothing);
+
+    n = optparse_run_subcommand (a, ac, av4);
+    ok (n == -1, "optparse_run_subcommand with bad args returns error");
+
+    usage_output_is ("\
+test two: unrecognized option '--unknown'\n\
+Try `test two --help' for more information.\n",
+    "bad argument error message is expected");
+
     optparse_destroy (a);
 }
 
 int main (int argc, char *argv[])
 {
 
-    plan (122);
+    plan (125);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 31 tests */
+    test_subcommand (); /* 34 tests */
 
     done_testing ();
     return (0);
