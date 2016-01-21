@@ -1094,6 +1094,11 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     }
     list_iterator_destroy (i);
 
+    /*
+     *  Initialize final element of option array to zeros:
+     */
+    memset (&opts[j], 0, sizeof (struct option));
+
     return (opts);
 }
 
