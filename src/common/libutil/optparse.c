@@ -1245,6 +1245,7 @@ int optparse_fatal_usage (optparse_t *p, int code, const char *fmt, ...)
 {
     if (fmt) {
         va_list ap;
+        va_start (ap, fmt);
         optparse_vlog (p, fmt, ap);
         va_end (ap);
     }
