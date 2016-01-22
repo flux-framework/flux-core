@@ -47,7 +47,7 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
         exit (1);
     }
     blobref = av[n];
-    if (!(h = flux_open (NULL, 0)))
+    if (!(h = builtin_get_flux_handle (p)))
         err_exit ("flux_open");
     if (optparse_hasopt (p, "bypass-cache"))
         topic = "content-backing.load";
@@ -83,7 +83,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     }
     if ((size = read_all (STDIN_FILENO, &data)) < 0)
         err_exit ("read");
-    if (!(h = flux_open (NULL, 0)))
+    if (!(h = builtin_get_flux_handle (p)))
         err_exit ("flux_open");
     if (optparse_hasopt (p, "dry-run")) {
         int flags;
@@ -140,7 +140,7 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
-    if (!(h = flux_open (NULL, 0)))
+    if (!(h = builtin_get_flux_handle (p)))
         err_exit ("flux_open");
     if (!(rpc = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
         err_exit ("%s", topic);
@@ -165,7 +165,7 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
-    if (!(h = flux_open (NULL, 0)))
+    if (!(h = builtin_get_flux_handle (p)))
         err_exit ("flux_open");
     if (!(rpc = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
         err_exit ("%s", topic);

@@ -150,6 +150,7 @@ int main (int argc, char *argv[])
     char *confdir = NULL;
     const char *secdir = NULL;
     flux_conf_t cf;
+    flux_t h = NULL;
     optparse_t *p;
     const char *searchpath;
     const char *argv0 = argv[0];
@@ -197,13 +198,12 @@ int main (int argc, char *argv[])
      */
     if (!optparse_hasopt (p, "file-config") && getenv ("FLUX_URI")
               && !((argc - optind) > 0 && !strcmp (argv[optind], "start"))) {
-        flux_t h;
         flux_conf_load (cf);
         if (!(h = flux_open (NULL, 0)))     /*   esp. for in-tree */
             err_exit ("flux_open");
         if (kvs_conf_load (h, cf) < 0 && errno != ENOENT)
             err_exit ("could not load config from KVS");
-        flux_close (h);
+        optparse_set_data (p, "flux_t", h);
     } else {
         if (flux_conf_load (cf) == 0) {
             flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", "");
@@ -246,12 +246,16 @@ int main (int argc, char *argv[])
     if (optparse_get_subcommand (p, argv [optind]))
         optparse_run_subcommand (p, argc, argv);
     else {
+        flux_close (h); /* Ensure handle doesn't stay open across exec(2) */
+        h = NULL;
         searchpath = flux_conf_environment_get(cf, "FLUX_EXEC_PATH");
         if (vopt)
             printf ("sub-command search path: %s\n", searchpath);
         exec_subcommand (searchpath, vopt, argv + optind);
     }
 
+    if (h)
+        flux_close (h);
     free (confdir);
     flux_conf_destroy (cf);
     optparse_destroy (p);
@@ -376,6 +380,16 @@ void print_environment (flux_conf_t cf)
         printf("%s=%s\n", key, value);
     }
     fflush(stdout);
+}
+
+flux_t builtin_get_flux_handle (optparse_t *p)
+{
+    flux_t h = NULL;
+    if ((h = optparse_get_data (p, "flux_t")))
+        flux_incref (h);
+    else if ((h = flux_open (NULL, 0)) == NULL)
+        err_exit ("flux_open");
+    return h;
 }
 
 static void register_builtin_subcommands (optparse_t *p)

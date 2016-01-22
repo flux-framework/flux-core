@@ -23,17 +23,6 @@
 \*****************************************************************************/
 #include "builtin.h"
 
-static flux_t get_flux_handle (optparse_t *p)
-{
-    flux_t h = NULL;
-
-    if ((h = optparse_get_data (p, "flux_t")))
-        flux_incref (h);
-    else if ((h = flux_open (NULL, 0)) == NULL)
-        err_exit ("flux_open");
-    return h;
-}
-
 static struct optparse_option setattr_opts[] = {
     { .name = "expunge", .key = 'e', .has_arg = 0,
       .usage = "Unset the specified attribute",
@@ -58,7 +47,7 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
         exit (1);
     }
 
-    h = get_flux_handle (p);
+    h = builtin_get_flux_handle (p);
     if (flux_attr_set (h, name, val) < 0)
         err_exit ("%s", av[1]);
     flux_close (h);
@@ -78,7 +67,7 @@ static int cmd_lsattr (optparse_t *p, int ac, char *av[])
     flux_t h;
     if (optparse_optind (p) != ac)
         optparse_fatal_usage (p, 1, NULL);
-    h = get_flux_handle (p);
+    h = builtin_get_flux_handle (p);
     name = flux_attr_first (h);
     while (name) {
         if (optparse_hasopt (p, "values")) {
@@ -103,7 +92,7 @@ static int cmd_getattr (optparse_t *p, int ac, char *av[])
     if (n != ac - 1)
         optparse_fatal_usage (p, 1, NULL);
 
-    h = get_flux_handle (p);
+    h = builtin_get_flux_handle (p);
     if (!(val = flux_attr_get (h, av[n], &flags)))
         err_exit ("%s", av[n]);
     printf ("%s\n", val);
