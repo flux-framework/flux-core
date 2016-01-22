@@ -512,7 +512,7 @@ Usage: test two [OPTIONS]...\n\
 
     // Test unknown option prints expected error:
     char *av4[] = { "test", "two", "--unknown", NULL };
-    ac = sizeof (av4) / sizeof (av3[0]) - 1;
+    ac = sizeof (av4) / sizeof (av4[0]) - 1;
 
     e = optparse_set (b, OPTPARSE_FATALERR_FN, do_nothing);
 
