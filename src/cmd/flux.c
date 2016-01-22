@@ -136,7 +136,7 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
     register_builtin_subcommands (p);
 
     if (optparse_parse_args (p, argc, argv) < 0)
-        msg_exit ("argument parsing failed");
+        exit (1);
 
     return (p);
 }

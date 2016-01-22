@@ -211,7 +211,6 @@ void * optparse_get_data (optparse_t *p, const char *name);
  */
 int optparse_print_usage (optparse_t *p);
 
-
 /*
  *   Print a message using [fmt, ...] using registered log function,
  *    followed by a the help message for optparse object [p],
@@ -219,6 +218,9 @@ int optparse_print_usage (optparse_t *p);
  *
  *   (By default this function will print the error to stderr, followed
  *    by the help for [p], then exit with exit status [code])
+ *
+ *   Error message, if provided, will always be prefixed with the full
+ *    "program name" for optparse object [p].
  *
  *   Returns the return value of registered fatalerr function, if the
  *    function returns at all.

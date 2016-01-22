@@ -512,7 +512,7 @@ Usage: test two [OPTIONS]...\n\
 
     // Test unknown option prints expected error:
     char *av4[] = { "test", "two", "--unknown", NULL };
-    ac = sizeof (av4) / sizeof (av3[0]) - 1;
+    ac = sizeof (av4) / sizeof (av4[0]) - 1;
 
     e = optparse_set (b, OPTPARSE_FATALERR_FN, do_nothing);
 
@@ -524,20 +524,40 @@ test two: unrecognized option '--unknown'\n\
 Try `test two --help' for more information.\n",
     "bad argument error message is expected");
 
+    // Test no subcommand (and subcommand required) prints error
+    char *av5[] = { "test", NULL };
+    ac = sizeof (av5) / sizeof (av5[0]) - 1;
+
+    // Set OPTPARSE_PRINT_SUBCMDS true:
+    e = optparse_set (a, OPTPARSE_PRINT_SUBCMDS, 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (PRINT_SUBCMDS, 0)");
+    // Don't exit on fatal error:
+    e = optparse_set (a, OPTPARSE_FATALERR_FN, do_nothing);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (FATALERR_FN, do_nothing)");
+    n = optparse_run_subcommand (a, ac, av5);
+    ok (n == -1, "optparse_run_subcommand with no subcommand");
+
+    usage_output_is ("\
+test: missing subcommand\n\
+Usage: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "missing subcommand error message is expected");
+
     optparse_destroy (a);
 }
 
 int main (int argc, char *argv[])
 {
 
-    plan (125);
+    plan (130);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 34 tests */
+    test_subcommand (); /* 39 tests */
 
     done_testing ();
     return (0);
