@@ -49,6 +49,7 @@
  */
 struct opt_parser {
     char *         program_name;
+    char *         fullname;        /* full program name for subcommands    */
     char *         usage;
 
     opt_log_f      log_fn;
@@ -259,6 +260,19 @@ static int fatal_exit (void *h, int exit_code)
 {
     exit (exit_code);
     // NORETURN
+}
+
+static const char * optparse_fullname (optparse_t *p)
+{
+    if (!p->fullname) {
+        char buf [1024];
+        snprintf (buf, sizeof (buf) - 1, "%s%s%s",
+                p->parent ? optparse_fullname (p->parent) :"",
+                p->parent ? " " : "",
+                p->program_name);
+        p->fullname = strdup (buf);
+    }
+    return (p->fullname);
 }
 
 
@@ -521,7 +535,7 @@ static zlist_t *subcmd_list_sorted (optparse_t *p)
  *  Print top usage string for optparse object 'parent'.
  *  Returns number of lines printed, or 0 on error.
  */
-static int print_usage_with_subcommands (char *name, optparse_t *parent)
+static int print_usage_with_subcommands (optparse_t *parent)
 {
     int lines = 0;
     const char *cmd;
@@ -536,12 +550,12 @@ static int print_usage_with_subcommands (char *name, optparse_t *parent)
      *   then emit a default usage line.
      */
     if (parent->usage) {
-        (*fp) ("Usage: %s %s\n", name, parent->usage);
+        (*fp) ("Usage: %s %s\n", optparse_fullname (parent), parent->usage);
         lines++;
     }
     if (nsubcmds == 0 || parent->skip_subcmds) {
         if (!parent->usage)
-            (*fp) ("Usage: %s [OPTIONS]...\n", name);
+            (*fp) ("Usage: %s [OPTIONS]...\n", optparse_fullname (parent));
         return (1);
     }
 
@@ -551,9 +565,9 @@ static int print_usage_with_subcommands (char *name, optparse_t *parent)
     cmd = zlist_first (keys);
     while (cmd) {
         optparse_t *p = zhash_lookup (parent->subcommands, cmd);;
-        (*fp) ("%5s: %s %s %s\n",
+        (*fp) ("%5s: %s %s\n",
                ++lines > 1 ? "or" : "Usage",
-               name, p->program_name,
+               optparse_fullname (p),
                p->usage ? p->usage : "[OPTIONS]");
         cmd = zlist_next (keys);
     }
@@ -561,20 +575,9 @@ static int print_usage_with_subcommands (char *name, optparse_t *parent)
     return (lines);
 }
 
-static char * strcat_progname (optparse_t *p, char *buf, size_t n)
-{
-    if (p->parent) {
-        strcat_progname (p->parent, buf, n);
-        strncat (buf, " ", n);
-    }
-    return strncat (buf, p->program_name, n);
-}
-
 static int print_usage (optparse_t *p)
 {
-    char buf [65] = ""; /* Max name length 64 chars */
-    char *name = strcat_progname (p, buf, sizeof (buf) - 1);
-    print_usage_with_subcommands (name, p);
+    print_usage_with_subcommands (p);
     return optparse_print_options (p);
 }
 
@@ -618,6 +621,7 @@ void optparse_destroy (optparse_t *p)
     zhash_destroy (&p->dhash);
     zhash_destroy (&p->subcommands);
     free (p->program_name);
+    free (p->fullname);
     free (p->usage);
     free (p);
 }
@@ -1147,12 +1151,12 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
     int li;
-    char fullname [128] = "";
+    const char *fullname = NULL;
     char *saved_argv0;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
 
-    strcat_progname (p, fullname, sizeof (fullname) - 1);
+    fullname = optparse_fullname (p);
 
     /* Always set optind = 0 here to force internal initialization of
      *  GNU options parser. See getopt_long(3) NOTES section.
@@ -1163,7 +1167,7 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     opterr = 0;
     saved_argv0 = argv[0];
-    argv[0] = fullname;
+    argv[0] = (char *) fullname;
     while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
         struct option_info *opt;
         struct optparse_option *o;
