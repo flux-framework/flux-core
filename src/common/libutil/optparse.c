@@ -638,6 +638,8 @@ optparse_t *optparse_create (const char *prog)
     if (!p)
         return NULL;
 
+    memset (p, 0, sizeof (*p));
+
     if (!(p->program_name = strdup (prog))) {
         free (p);
         return NULL;
