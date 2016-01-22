@@ -220,6 +220,13 @@ static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
     return (-1);
 }
 
+static int fatalerr (struct prog_ctx *ctx, int code)
+{
+    if (code > 0)
+        exit (code);
+    return (0);
+}
+
 static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
 {
     flux_t c = prog_ctx_flux_handle (ctx);
@@ -1835,7 +1842,7 @@ int main (int ac, char **av)
     };
 
     p = optparse_create (av[0]);
-    if (optparse_set (p, OPTPARSE_FATALERR_FN, log_fatal) != OPTPARSE_SUCCESS)
+    if (optparse_set (p, OPTPARSE_FATALERR_FN, fatalerr) != OPTPARSE_SUCCESS)
         log_fatal (ctx, 1, "optparse_set FATALERR_FN");
     if (optparse_set (p, OPTPARSE_FATALERR_HANDLE, ctx) != OPTPARSE_SUCCESS)
         log_fatal (ctx, 1, "optparse_set FATALERR_HANDLE");
