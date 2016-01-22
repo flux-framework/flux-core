@@ -1211,7 +1211,7 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
     optparse_t *sp;
 
     if (p->optind == -1) {
-        if (optparse_parse_args (p, argc, argv))
+        if (optparse_parse_args (p, argc, argv) < 0)
             return optparse_fatalerr (p, 1);
     }
 
