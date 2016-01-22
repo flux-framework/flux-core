@@ -280,8 +280,17 @@ static void optparse_vlog (optparse_t *p, const char *fmt, va_list ap)
 {
     char buf [4096];
     int len = sizeof (buf);
-    int rc = vsnprintf (buf, len, fmt, ap);
-    if (rc >= len || rc < 0) {
+    int n;
+
+    /* Prefix all 'vlog' messages with full program name */
+    n = snprintf (buf, len, "%s: ", optparse_fullname (p));
+    if (n >= len || n < 0) {
+        (*p->log_fn) ("optparse_vlog: fullname too big!\n");
+        return;
+    }
+    len -= n;
+    n = vsnprintf (buf+n, len, fmt, ap);
+    if (n >= len || n < 0) {
         buf [len-2] = '+';
         buf [len-1] = '\0';
     }
@@ -1223,12 +1232,10 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
     av = argv + p->optind;
 
     if (ac <= 0)
-        return optparse_fatal_usage (p, 1, "%s: missing subcommand\n",
-                p->program_name);
+        return optparse_fatal_usage (p, 1, "missing subcommand\n");
 
     if (!(sp = zhash_lookup (p->subcommands, av[0]))) {
-        return optparse_fatal_usage (p, 1, "%s: Unknown subcommand: %s\n",
-                p->program_name, av[0]);
+        return optparse_fatal_usage (p, 1, "Unknown subcommand: %s\n", av[0]);
     }
 
     if (optparse_parse_args (sp, ac, av) < 0)
