@@ -1161,7 +1161,6 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
     int c;
     int li;
     const char *fullname = NULL;
-    char *saved_argv0;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
 
@@ -1175,8 +1174,7 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      * Disable getopt_long(3) printing errors to stderr.
      */
     opterr = 0;
-    saved_argv0 = argv[0];
-    argv[0] = (char *) fullname;
+
     while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
         struct option_info *opt;
         struct optparse_option *o;
@@ -1210,8 +1208,6 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 
     free (optz);
     free (optstring);
-
-    argv[0] = saved_argv0;
     p->optind = optind;
     return (optind);
 }
