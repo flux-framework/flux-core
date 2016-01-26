@@ -42,6 +42,7 @@
 #include <stdarg.h>
 #include <flux/core.h>
 
+#include "kvs_deprecated.h"
 #include "proto.h"
 
 #include "src/common/libutil/shortjson.h"
