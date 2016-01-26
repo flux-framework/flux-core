@@ -69,12 +69,12 @@ _mrpc_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libmrpc
 _mrpc_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libmrpc.la $(common_libs)
 _mrpc_la_DEPENDENCIES = _mrpc_build.py
 
-_kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs.h $(MAKE_BINDING) _core_build.py
+_kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs_deprecated.h $(MAKE_BINDING) _core_build.py
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/kvs \
 	  			  --package flux \
 	                          --modname _kvs \
 				  --include_ffi _core_build \
-				  kvs.h
+				  kvs_deprecated.h
 
 _kvs_la_SOURCES = _kvs.c
 _kvs_la_CPPFLAGS = -I$(top_srcdir)/src/modules/kvs
