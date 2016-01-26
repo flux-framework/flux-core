@@ -34,6 +34,7 @@
 #include <lauxlib.h>
 
 #include "flux/core.h"
+#include "src/modules/kvs/kvs_deprecated.h"
 
 #include "json-lua.h"
 #include "lutil.h"
