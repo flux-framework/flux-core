@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <flux/core.h>
 
+#include "kvs.h"
+
 typedef int (*kvs_set_obj_f)(const char *key, json_object *val, void *arg,
                              int errnum);
 
