@@ -39,6 +39,7 @@
 
 #include "src/common/libutil/jsonutil.h"
 #include "src/modules/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc_deprecated.h"
 #include "src/modules/libkz/kz.h"
 #include "src/common/libsubprocess/zio.h"
 
