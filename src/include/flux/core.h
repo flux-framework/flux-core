@@ -11,5 +11,7 @@
 #include "src/modules/live/live.h"
 #include "src/modules/barrier/barrier.h"
 #include "src/modules/libjsc/jstatctl.h"
+#include "src/modules/libmrpc/mrpc.h"
+#include "src/modules/modctl/modctl.h"
 
 #endif /* FLUX_CORE_H */
