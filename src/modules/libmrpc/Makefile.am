@@ -15,7 +15,8 @@ fluxinclude_HEADERS = \
 
 libmrpc_la_SOURCES = \
 	mrpc.c \
-	mrpc.h
+	mrpc.h \
+	mrpc_deprecated.h
 
 libmrpc_la_LDFLAGS = $(fluxlib_ldflags) \
 		     -export-symbols-regex '^flux_.*'
