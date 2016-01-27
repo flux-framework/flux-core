@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_KVS_H
 #define _FLUX_CORE_KVS_H
 
-#include <json.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <flux/core.h>
@@ -10,8 +9,6 @@ typedef struct kvsdir_struct kvsdir_t;
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
                          int errnum);
-typedef int (*kvs_set_obj_f)(const char *key, json_object *val, void *arg,
-                             int errnum);
 typedef int (*kvs_set_dir_f)(const char *key, kvsdir_t *dir, void *arg,
                              int errnum);
 typedef int (*kvs_set_string_f)(const char *key, const char *val, void *arg,
@@ -38,8 +35,6 @@ void kvsdir_incref (kvsdir_t *dir);
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (flux_t h, const char *key, char **json_str);
-int kvs_get_obj (flux_t h, const char *key, json_object **valp)
-                 __attribute__ ((deprecated));
 int kvs_get_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...);
 int kvs_get_string (flux_t h, const char *key, char **valp);
 int kvs_get_int (flux_t h, const char *key, int *valp);
@@ -56,8 +51,6 @@ int kvs_get_symlink (flux_t h, const char *key, char **valp);
  * callback gets errnum = ENOENT.
  */
 int kvs_watch (flux_t h, const char *key, kvs_set_f set, void *arg);
-int kvs_watch_obj (flux_t h, const char *key, kvs_set_obj_f set, void *arg)
-                   __attribute__ ((deprecated));
 int kvs_watch_dir (flux_t h, kvs_set_dir_f set, void *arg,
                    const char *fmt, ...);
 int kvs_watch_string (flux_t h, const char *key, kvs_set_string_f set,
@@ -84,8 +77,6 @@ int kvs_unwatch (flux_t h, const char *key);
  * FIXME: add more types.
  */
 int kvs_watch_once (flux_t h, const char *key, char **json_str);
-int kvs_watch_once_obj (flux_t h, const char *key, json_object **valp)
-                        __attribute__ ((deprecated));
 int kvs_watch_once_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...);
 int kvs_watch_once_int (flux_t h, const char *key, int *valp);
 
@@ -94,8 +85,6 @@ int kvs_watch_once_int (flux_t h, const char *key, int *valp);
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_put (flux_t h, const char *key, const char *json_str);
-int kvs_put_obj (flux_t h, const char *key, json_object *val)
-                 __attribute__ ((deprecated));
 int kvs_put_string (flux_t h, const char *key, const char *val);
 int kvs_put_int (flux_t h, const char *key, int val);
 int kvs_put_int64 (flux_t h, const char *key, int64_t val);
@@ -190,8 +179,6 @@ int kvs_dropcache (flux_t h);
  * is resolved relative to the directory.
  */
 int kvsdir_get (kvsdir_t *dir, const char *key, char **json_str);
-int kvsdir_get_obj (kvsdir_t *dir, const char *key, json_object **valp)
-                    __attribute__ ((deprecated));
 int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...);
 int kvsdir_get_string (kvsdir_t *dir, const char *key, char **valp);
 int kvsdir_get_int (kvsdir_t *dir, const char *key, int *valp);
@@ -201,8 +188,6 @@ int kvsdir_get_boolean (kvsdir_t *dir, const char *key, bool *valp);
 int kvsdir_get_symlink (kvsdir_t *dir, const char *key, char **valp);
 
 int kvsdir_put (kvsdir_t *dir, const char *key, const char *json_str);
-int kvsdir_put_obj (kvsdir_t *dir, const char *key, json_object *val)
-                    __attribute__ ((deprecated));
 int kvsdir_put_string (kvsdir_t *dir, const char *key, const char *val);
 int kvsdir_put_int (kvsdir_t *dir, const char *key, int val);
 int kvsdir_put_int64 (kvsdir_t *dir, const char *key, int64_t val);

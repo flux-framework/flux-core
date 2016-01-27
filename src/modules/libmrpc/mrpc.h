@@ -1,7 +1,6 @@
 #ifndef FLUX_MRPC_H
 #define FLUX_MRPC_H
 
-#include <json.h>
 #include <flux/core.h>
 
 typedef struct flux_mrpc_struct flux_mrpc_t;
@@ -24,20 +23,12 @@ typedef struct flux_mrpc_struct flux_mrpc_t;
 flux_mrpc_t *flux_mrpc_create (flux_t h, const char *nodelist);
 void flux_mrpc_destroy (flux_mrpc_t *mrpc);
 
-void flux_mrpc_put_inarg_obj (flux_mrpc_t *mrpc, json_object *val)
-	                      __attribute__ ((deprecated));
 int flux_mrpc_put_inarg (flux_mrpc_t *mrpc, const char *json_str);
 
-int flux_mrpc_get_inarg_obj (flux_mrpc_t *mrpc, json_object **valp)
-	                     __attribute__ ((deprecated));
 int flux_mrpc_get_inarg (flux_mrpc_t *mrpc, char **json_str);
 
-void flux_mrpc_put_outarg_obj (flux_mrpc_t *mrpc, json_object *val)
-	                       __attribute__ ((deprecated));
 int flux_mrpc_put_outarg (flux_mrpc_t *mrpc, const char *json_str);
 
-int flux_mrpc_get_outarg_obj (flux_mrpc_t *mrpc, int nodeid, json_object **val)
-	                      __attribute__ ((deprecated));
 int flux_mrpc_get_outarg (flux_mrpc_t *mrpc, int nodeid, char **json_str);
 
 /* returns nodeid (-1 at end)  */
@@ -47,8 +38,6 @@ void flux_mrpc_rewind_outarg (flux_mrpc_t *mrpc);
 int flux_mrpc (flux_mrpc_t *mrpc, const char *fmt, ...);
 
 /* returns NULL, errno == EINVAL if not addressed to me */
-flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *request)
-	                                    __attribute__ ((deprecated));
 flux_mrpc_t *flux_mrpc_create_fromevent (flux_t h, const char *json_str);
 
 int flux_mrpc_respond (flux_mrpc_t *mrpc);

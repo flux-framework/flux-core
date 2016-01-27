@@ -34,6 +34,7 @@
 #include <flux/core.h>
 
 #include "jstatctl.h"
+#include "jstatctl_deprecated.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"

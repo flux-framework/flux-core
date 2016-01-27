@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <json.h>
 #include <flux/core.h>
+#include "src/modules/kvs/kvs_deprecated.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 #include "kap.h"

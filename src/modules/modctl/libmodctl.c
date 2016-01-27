@@ -40,6 +40,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/modules/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc_deprecated.h"
 
 #include "modctl.h"
 #include "proto.h"

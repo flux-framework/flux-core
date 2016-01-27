@@ -155,7 +155,6 @@ AC_SUBST(fluxlib_ldflags)
 ##
 AC_CONFIG_FILES( \
   Makefile \
-  flux-core.spec \
   src/Makefile \
   src/common/Makefile \
   src/common/libtap/Makefile \

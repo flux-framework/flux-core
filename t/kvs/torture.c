@@ -72,6 +72,7 @@ int main (int argc, char *argv[])
     bool quiet = false;
     struct timespec t0;
     json_object *vo = NULL;
+    char *json_str;
     char *prefix = NULL;
     bool verbose = false;
     const char *s;
@@ -130,7 +131,7 @@ int main (int argc, char *argv[])
             oom ();
         fill (val, i, size);
         vo = json_object_new_string (val);
-        if (kvs_put_obj (h, key, vo) < 0)
+        if (kvs_put (h, key, json_object_to_json_string (vo)) < 0)
             err_exit ("kvs_put %s", key);
         if (verbose)
             msg ("%s = %s", key, val);
@@ -153,8 +154,11 @@ int main (int argc, char *argv[])
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        if (kvs_get_obj (h, key, &vo) < 0)
+        if (kvs_get (h, key, &json_str) < 0)
             err_exit ("kvs_get '%s'", key);
+        if (!(vo = json_tokener_parse (json_str)))
+            msg_exit ("json_tokener_parse");
+        free (json_str);
         s = json_object_get_string (vo);
         if (verbose)
             msg ("%s = %s", key, s);

@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "src/common/libutil/macros.h"
-
 #include "handle.h"
 
 typedef void (*flux_log_f)(const char *facility, int level, uint32_t rank,
@@ -47,6 +45,13 @@ void *flux_log_check_ptr (flux_t h,
                  void *res,
                  const char *fmt,
                  ... );
+
+#ifndef STRINGIFY
+#  ifndef REAL_STRINGIFY
+#    define REAL_STRINGIFY(X) #X
+#  endif
+#  define STRINGIFY(X) REAL_STRINGIFY (X)
+#endif
 
 #define FLOG_POSITION __FILE__ ":" STRINGIFY (__LINE__)
 

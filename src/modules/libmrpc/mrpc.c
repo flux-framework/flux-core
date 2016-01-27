@@ -52,6 +52,8 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "src/modules/kvs/kvs_deprecated.h"
+
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
@@ -59,6 +61,7 @@
 #include "src/common/libutil/nodeset.h"
 
 #include "mrpc.h"
+#include "mrpc_deprecated.h"
 
 #define KVS_CLEANUP 1
 

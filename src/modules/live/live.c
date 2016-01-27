@@ -81,6 +81,8 @@
 #include <ctype.h>
 #include <flux/core.h>
 
+#include "src/modules/kvs/kvs_deprecated.h"
+
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"

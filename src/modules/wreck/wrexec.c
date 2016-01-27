@@ -37,6 +37,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/modules/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc_deprecated.h"
 
 
 struct rexec_ctx {
