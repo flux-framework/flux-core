@@ -184,11 +184,8 @@ int main (int argc, char *argv[])
     */
     if (optparse_getopt (p, "config", &opt))
         confdir = xstrdup (opt);
-    optparse_getopt (p, "secdir", &secdir);
     if (confdir || (confdir = intree_confdir ()))
         flux_conf_set_directory (cf, confdir);
-    flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY",
-                     secdir ? secdir : flux_conf_get_directory (cf), "");
     flux_conf_environment_unset (cf, "FLUX_CONF_USEFILE");
 
     /* Process config from the KVS if not a bootstrap instance, and not
@@ -210,6 +207,13 @@ int main (int argc, char *argv[])
         } else if (errno != ENOENT)
             err_exit ("%s", flux_conf_get_directory (cf));
     }
+
+    /*
+     *  command line options that override environment and config:
+     */
+    if (!optparse_getopt (p, "secdir", &secdir))
+        secdir = flux_conf_get_directory (cf);
+    flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY", secdir, "");
 
     /* We share a few environment variables with sub-commands, so
      * that they don't have to reprocess the config.
