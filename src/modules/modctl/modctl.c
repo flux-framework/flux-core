@@ -41,6 +41,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/modules/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc_deprecated.h"
 
 #include "proto.h"
 
