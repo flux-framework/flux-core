@@ -96,4 +96,11 @@ test_expect_success READLINK 'cmddriver adds its own path to PATH if called with
 	fluxdir=\$(dirname \$fluxcmd) &&
 	PATH='/bin:/usr/bin' \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
 "
+test_expect_success 'flux --secdir overrides config' '
+	umask 077 && tmpkeydir=`mktemp -d` &&
+	flux env flux --secdir="$tmpkeydir" keygen &&
+	ls $tmpkeydir >&2 &&
+	test -f $tmpkeydir/curve/client_secret &&
+	rm -rf $tmpkeydir
+'
 test_done
