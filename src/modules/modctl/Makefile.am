@@ -27,7 +27,7 @@ modctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 #
 # API for module
 #
-fluxinclude_HEADERS = modctl.h
+fluxcoreinclude_HEADERS = modctl.h
 fluxlib_LTLIBRARIES = libmodctl.la
 libmodctl_la_SOURCES = libmodctl.c proto.c
 libmodctl_la_LDFLAGS = $(fluxlib_ldflags) \
