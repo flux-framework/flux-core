@@ -35,6 +35,8 @@
 #include "core/live.h"
 #include "core/barrier.h"
 #include "core/jstatctl.h"
+#include "core/modctl.h"
+#include "core/mrpc.h"
 
 #endif /* !_FLUX_CORE_H */
 
