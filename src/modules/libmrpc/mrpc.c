@@ -61,6 +61,7 @@
 #include "src/common/libutil/nodeset.h"
 
 #include "mrpc.h"
+#include "mrpc_deprecated.h"
 
 #define KVS_CLEANUP 1
 
