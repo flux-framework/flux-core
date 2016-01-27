@@ -36,6 +36,7 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/monotime.h"
 #include "src/modules/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc_deprecated.h"
 
 
 #define OPTIONS "hp:d:c:"
