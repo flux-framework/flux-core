@@ -7,7 +7,6 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-Wno-strict-aliasing \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 noinst_LTLIBRARIES = libpmi-server.la
