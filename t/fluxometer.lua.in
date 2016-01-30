@@ -137,7 +137,7 @@ end
 
 
 function fluxTest:die (...)
-    bail_out (self.prog..": "..string.format (...))
+    BAIL_OUT (self.prog..": "..string.format (...))
 end
 
 
