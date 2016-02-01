@@ -1,13 +1,12 @@
 ##
 # Prologue
 ##
-AC_INIT(m4_esyscmd([awk '/Name:/ {printf "%s",$2; exit}' META]),
-        m4_esyscmd([awk '/Version:/ {printf "%s",$2; exit}' META]))
+AC_INIT([flux-core],
+        m4_esyscmd([git describe | awk '/.*/ {printf "%s",$1; exit}']))
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])
 AC_CONFIG_SRCDIR([NEWS])
 AC_CANONICAL_SYSTEM
-X_AC_META
 X_AC_EXPAND_INSTALL_DIRS
 
 ##

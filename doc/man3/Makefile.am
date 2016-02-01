@@ -101,8 +101,8 @@ stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
 stderr_devnull_0 = 2>/dev/null
 
 .adoc.3:
-	$(AM_V_GEN)$(A2X) --attribute mansource=$(META_NAME) \
-	    --attribute manversion=$(META_VERSION) \
+	$(AM_V_GEN)$(A2X) --attribute mansource=$(PACKAGE_NAME) \
+	    --attribute manversion=$(PACKAGE_VERSION) \
 	    --attribute manmanual="Flux Programming Reference" \
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
