@@ -53,6 +53,7 @@ typedef enum {
     OPTPARSE_OPTION_WIDTH, /* Width allotted to options in --help output    */
     OPTPARSE_LEFT_MARGIN,  /* Left pad for option output (default = 2)      */
     OPTPARSE_PRINT_SUBCMDS,/* Print all subcommands in --help (default = T  */
+    OPTPARSE_SUBCMD_NOOPTS,/* Don't parse options for this subcommand       */
 } optparse_item_t;
 
 /*
@@ -245,6 +246,9 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[]);
  *    sub-options already processed with optparse_parse_args(), and
  *    [argc,argv] adjusted for the subcommand (i.e. argv[0] will equal
  *    the subcommand name).
+ *
+ *   If OPTPARSE_SUBCMD_NOOPTS is set, auto optparse_parse_args()
+ *    for subcommand options is skipped.
  *
  *   This function can be called either before or after a call to
  *    optparse_parse_args (p, ...), optparse_run_subcommand() will call
