@@ -31,7 +31,7 @@ test_expect_success 'Flux libpmi-client wire protocol works with Hydra' '
 '
 
 test_expect_success 'Hydra can launch Flux' '
-	mpiexec.hydra -n 4 ${FLUX_BUILD_DIR}/src/cmd/flux broker \
+	mpiexec.hydra -n 4 flux broker \
 		flux comms info >flux_out &&
 	grep size=4 flux_out
 '

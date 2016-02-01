@@ -44,6 +44,9 @@
 local top_srcdir = "@abs_top_srcdir@"
 local top_builddir = "@abs_top_builddir@"
 
+--  Default path for flux(1) binary
+local fluxbindir = top_builddir .. "/src/cmd"
+
 if os.getenv ("FLUX_TEST_INSTALLED_PATH") then
     --
     --  We are attempting to test against an installed flux(1).
@@ -51,8 +54,10 @@ if os.getenv ("FLUX_TEST_INSTALLED_PATH") then
     --   lua(1) under flux-env. We then _append_ in-tree paths so
     --   that test dependencies can be picked up such as Test/More.lua
     --   and lalarm.so
-    local path = os.getenv ("FLUX_TEST_INSTALLED_PATH")
-    local flux = path .. "/flux"
+    --
+    --  Reset fluxbindir to requested path by env variable:
+    fluxbindir = os.getenv ("FLUX_TEST_INSTALLED_PATH")
+    local flux = fluxbindir .. "/flux"
     local read_path = function (v)
         local cmd = string.format (flux.." env lua -e 'print (package.%s)'", v)
         local p = io.popen (cmd):read ("*all")
@@ -137,7 +142,7 @@ end
 
 
 function fluxTest:die (...)
-    bail_out (self.prog..": "..string.format (...))
+    BAIL_OUT (self.prog..": "..string.format (...))
 end
 
 
@@ -169,11 +174,10 @@ function fluxTest.init (...)
     test.log_file = "lua-"..test.prog..".broker.log"
     test.start_args = { "-o,-q,-L" .. test.log_file }
 
-    local dir = top_builddir.."/src/cmd"
-    local path = dir.."/flux"
+    local path = fluxbindir.."/flux"
     local mode = posix.stat (path, 'mode')
     if mode and mode:match('^rwx') then
-        do_path_prepend (dir)
+        do_path_prepend (fluxbindir)
         test.flux_path = path
     else
         test:die ("Failed to find flux path")
