@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 	-DMODULE_PATH=\"$(fluxmoddir)\" \
 	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\"
 
-fluxlibexec_PROGRAMS = flux-broker
+fluxcmd_PROGRAMS = flux-broker
 
 flux_broker_SOURCES = \
 	broker.c \

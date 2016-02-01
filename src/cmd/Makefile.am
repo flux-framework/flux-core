@@ -11,7 +11,6 @@ AM_CPPFLAGS = \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
         -DCONNECTOR_PATH=\"$(fluxconnectordir)\" \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
-	-DBROKER_PATH=\"$(fluxlibexecdir)/flux-broker\" \
 	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \
 	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
 	-DPYTHON_PATH=\"$(pyexecdir)\" \
@@ -40,7 +39,6 @@ flux_SOURCES = \
 	cmdhelp.c \
 	builtin.h \
 	builtin/attr.c \
-	builtin/broker.c \
 	builtin/help.c \
 	builtin/dmesg.c \
 	builtin/env.c \

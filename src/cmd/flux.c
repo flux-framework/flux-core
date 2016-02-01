@@ -47,7 +47,6 @@
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
 char *intree_confdir (void);
 void setup_path (flux_conf_t cf, const char *argv0);
-void setup_broker_env (flux_conf_t cf);
 static void register_builtin_subcommands (optparse_t *p);
 
 static struct optparse_option opts[] = {
@@ -215,11 +214,6 @@ int main (int argc, char *argv[])
         secdir = flux_conf_get_directory (cf);
     flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY", secdir, "");
 
-    /* We share a few environment variables with sub-commands, so
-     * that they don't have to reprocess the config.
-     */
-    setup_broker_env (cf);  /* set FLUX_BROKER_PATH */
-
     /* Add PATH to flux_conf_environment and prepend path to
      *  this executable if necessary.
      */
@@ -335,14 +329,6 @@ void setup_path (flux_conf_t cf, const char *argv0)
     free (selfdir);
 }
 
-
-void setup_broker_env (flux_conf_t cf)
-{
-    const char *path = flux_conf_get (cf, "general.broker_path");
-    if (!path)
-        path = BROKER_PATH;
-    flux_conf_environment_set(cf, "FLUX_BROKER_PATH", path, "");
-}
 
 void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
         const char *prefix)
