@@ -417,6 +417,18 @@ int subcmd_two (optparse_t *p, int ac, char **av)
     return (0);
 }
 
+int subcmd_three (optparse_t *p, int ac, char **av)
+{
+    int *acptr = NULL;
+    ok (p != NULL, "subcmd_three: got valid optparse structure");
+    acptr = optparse_get_data (p, "argc");
+    ok (acptr != NULL, "subcmd_three: got argc ptr");
+    *acptr = ac;
+
+    is (av[0], "three", "subcmd_three: av[0] == %s (expected 'three')", av[0]);
+    return (0);
+}
+
 
 int do_nothing (void *h, int code)
 {
@@ -544,20 +556,38 @@ Usage: test one [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "missing subcommand error message is expected");
 
+
+    // Test Subcommand without option processing:
+    optparse_t *d = optparse_add_subcommand (a, "three", subcmd_three);
+    ok (d != NULL, "optparse_create()");
+    e = optparse_set (d, OPTPARSE_SUBCMD_NOOPTS, 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_NOOPTS)");
+
+    int value = 0;
+    optparse_set_data (d, "argc", &value);
+
+    char *av6[] = { "test", "three", "--help", NULL };
+    ac = sizeof (av6) / sizeof (av6[0]) - 1;
+
+    n = optparse_run_subcommand (a, ac, av6);
+    ok (n == 0, "optparse_run_subcommand with OPTPARSE_SUBCMD_NOOPTS");
+    ok (value == 2, "optparse_run_subcommand() run with argc = %d (expected 2)", value);
+    ok (optparse_optind (d) == -1, "optparse_run_subcommand: skipped parse_args");
+
     optparse_destroy (a);
 }
 
 int main (int argc, char *argv[])
 {
 
-    plan (130);
+    plan (138);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 39 tests */
+    test_subcommand (); /* 47 tests */
 
     done_testing ();
     return (0);
