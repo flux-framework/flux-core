@@ -62,8 +62,10 @@ struct opt_parser {
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
-    int            skip_subcmds;    /* Do not Print subcommands in --help   */
     List           option_list;     /* List of options for this program    */
+
+    unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
+
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
