@@ -41,6 +41,7 @@
 
 typedef struct
 {
+    uint32_t rank;
     hwloc_topology_t topology;
     bool loaded;
 } ctx_t;
@@ -60,15 +61,11 @@ int try_hwloc_load (flux_t h, ctx_t *ctx, const char *const path)
 static int ctx_init (flux_t h, ctx_t *ctx)
 {
     int ret = -1;
-    uint32_t rank;
-    if (flux_get_rank (h, &rank) < 0) {
-        err_exit ("flux_get_rank");
-    }
 
     FLUX_CHECK_INT (h, hwloc_topology_init (&ctx->topology));
 
     char *path = NULL;
-    char *conf_path = xasprintf ("config.resource.hwloc.xml.%" PRIu32, rank);
+    char *conf_path = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
     kvs_get_string (h, conf_path, &path);
     free (conf_path);
 
@@ -115,12 +112,29 @@ static void ctx_deinit (ctx_t *ctx)
     hwloc_topology_destroy (ctx->topology);
 }
 
+void freectx (ctx_t *ctx)
+{
+    if (ctx) {
+        if (ctx->topology)
+            hwloc_topology_destroy (ctx->topology);
+    }
+}
+
 static ctx_t *getctx (flux_t h)
 {
     ctx_t *ctx = xzmalloc (sizeof(ctx_t));
-    if (ctx_init (h, ctx))
-        err_exit ("initial hwloc context could not be created");
+    if (flux_get_rank (h, &ctx->rank) < 0) {
+        flux_log_error (h, "flux_get_rank");
+        goto error;
+    }
+    if (ctx_init (h, ctx)) {
+        flux_log_error (h, "hwloc context could not be created");
+        goto error;
+    }
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 void unlink_if_exists (flux_t h, const char *path)
@@ -134,13 +148,8 @@ static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
     char *xml_path = NULL;
     char *buffer = NULL;
     int buflen = 0, ret = -1;
-    uint32_t rank;
 
-    if (flux_get_rank (h, &rank) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_rank");
-        goto done;
-    }
-    xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, rank);
+    xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, ctx->rank);
     unlink_if_exists (h, xml_path);
     if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
         flux_log (h, LOG_ERR, "hwloc_topology_export_xmlbuffer");
@@ -258,13 +267,8 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
     char *base_path = NULL;
     int ret = -1, i;
     int depth = hwloc_topology_get_depth (ctx->topology);
-    uint32_t rank;
 
-    if (flux_get_rank (h, &rank) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_rank");
-        goto done;
-    }
-    base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, rank);
+    base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, ctx->rank);
     unlink_if_exists (h, base_path);
     for (i = 0; i < depth; ++i) {
         int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
@@ -310,17 +314,17 @@ static void load_cb (flux_t h,
                      const flux_msg_t *msg,
                      void *arg)
 {
-    uint32_t rank, size;
+    uint32_t size;
     ctx_t *ctx = (ctx_t *)arg;
 
     if (load_xml_to_kvs (h, ctx) < 0 || load_info_to_kvs (h, ctx) < 0) {
         return;
     }
-    if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_rank/size: %s", strerror (errno));
+    if (flux_get_size (h, &size) < 0) {
+        flux_log (h, LOG_ERR, "flux_get_size: %s", strerror (errno));
         return;
     }
-    char *completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, rank);
+    char *completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, ctx->rank);
     FLUX_CHECK_INT (h, kvs_put_int (h, completion_path, 1));
     free (completion_path);
 
@@ -426,6 +430,8 @@ static struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
+    if (!ctx)
+        return -1;
 
     // Load hardware information immediately
     load_cb (h, 0, NULL, ctx);
@@ -447,7 +453,7 @@ int mod_main (flux_t h, int argc, char **argv)
 
     flux_msg_handler_delvec (htab);
     ctx_deinit (ctx);
-    free (ctx);
+    freectx (ctx);
 
     return 0;
 }
