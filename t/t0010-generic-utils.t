@@ -66,4 +66,10 @@ test_expect_success 'snoop: produces output (XXX needs fixing)' '
 	head output_snoop | grep "^flux-snoop: connecting to" &&
 	head output_snoop_long | grep "^flux-snoop: connecting to"
 '
+
+test_expect_success 'version: reports an expected string' '
+        set -x
+	flux version | grep -q "flux-core-[0-9]+\.[0-9]+\.[0-9]"
+	set +x
+'
 test_done
