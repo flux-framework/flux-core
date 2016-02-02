@@ -305,7 +305,8 @@ done:
 
 bool flux_rpc_completed (flux_rpc_t *rpc)
 {
-    if (rpc->oneway || rpc->rx_count == rpc->m.bsize)
+    if (rpc->oneway || rpc->rx_count == rpc->m.bsize
+                    || flux_fatality (rpc->h))
         return true;
     return false;
 }
