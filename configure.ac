@@ -201,7 +201,6 @@ AC_CONFIG_FILES( \
   etc/Makefile \
   etc/flux-core.pc \
   etc/Makefile.inc \
-  etc/flux-libs.conf \
   doc/Makefile \
   doc/man1/Makefile \
   doc/man3/Makefile \
