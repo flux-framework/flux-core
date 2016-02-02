@@ -124,24 +124,6 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
-/* Copy input arguments to output arguments and respond to RPC.
-*/
-static void query_cb (flux_t h,
-                      flux_msg_handler_t *watcher,
-                      const flux_msg_t *msg,
-                      void *arg)
-{
-    flux_log (h, LOG_ERR, "UNIMPLEMENTED: %s", __FUNCTION__);
-}
-
-static void get_cb (flux_t h,
-                    flux_msg_handler_t *watcher,
-                    const flux_msg_t *msg,
-                    void *arg)
-{
-    flux_log (h, LOG_ERR, "UNIMPLEMENTED: %s", __FUNCTION__);
-}
-
 void unlink_if_exists (flux_t h, const char *path)
 {
     if (!kvs_unlink (h, path))  // if the unlink succeeds
@@ -440,8 +422,6 @@ static struct flux_msg_handler_spec htab[] = {
     {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_cb, NULL},
-    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.query", query_cb, NULL},
-    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.get", get_cb, NULL},
     FLUX_MSGHANDLER_TABLE_END};
 
 int mod_main (flux_t h, int argc, char **argv)
