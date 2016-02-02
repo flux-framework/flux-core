@@ -43,7 +43,8 @@ flux_SOURCES = \
 	builtin/dmesg.c \
 	builtin/env.c \
 	builtin/content.c \
-	builtin/version.c
+	builtin/version.c \
+	builtin/hwloc.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
@@ -79,8 +80,7 @@ fluxcmd_PROGRAMS = \
 	flux-kvs \
 	flux-start \
 	flux-config \
-	flux-jstat \
-	flux-hwloc
+	flux-jstat
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
