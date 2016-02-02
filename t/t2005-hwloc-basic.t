@@ -28,11 +28,15 @@ test_expect_success 'hwloc: every rank reloads the same xml of a node' '
 '
 
 test_expect_success 'hwloc: only one rank reloads an xml file' '
-    flux hwloc reload --ranks="[0]" $exclu2
+    flux hwloc reload --rank="[0]" $exclu2
 '
 
 test_expect_success 'hwloc: return an error code on an invalid DIR' '
     test_expect_code 1 flux hwloc reload nonexistence
+'
+
+test_expect_success 'hwloc: return an error code on valid DIR, invalid files' '
+    test_expect_code 1 flux hwloc reload /
 '
 
 test_done
