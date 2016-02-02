@@ -31,10 +31,10 @@ fluxmod_LTLIBRARIES = \
 fluxlibexec_PROGRAMS = \
 	wrexecd
 
-fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libmrpc.la \
+fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 		 $(top_builddir)/src/common/libflux-core.la \
 		 $(top_builddir)/src/common/libflux-internal.la \
-		 $(top_builddir)/src/modules/kvs/libkvs.la
+		 $(top_builddir)/src/modules/kvs/libflux-kvs.la
 
 job_la_SOURCES = job.c
 job_la_LDFLAGS = $(fluxmod_ldflags) -module
@@ -52,11 +52,11 @@ wrexecd_SOURCES = \
 
 wrexecd_LDADD = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
-	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \

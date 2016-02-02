@@ -22,7 +22,7 @@ libflux_internal_la_LIBADD = \
 	$(LIBDL) -lrt
 libflux_internal_la_LDFLAGS = -Wl,--no-undefined
 
-fluxlib_LTLIBRARIES = libflux-core.la
+lib_LTLIBRARIES = libflux-core.la
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \

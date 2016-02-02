@@ -206,19 +206,19 @@ kz_kzutil_SOURCES = kz/kzutil.c
 kz_kzutil_CPPFLAGS = $(test_cppflags)
 kz_kzutil_LDADD = \
 	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
 kvs_torture_LDADD = \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_watch_SOURCES = kvs/watch.c
 kvs_watch_CPPFLAGS = $(test_cppflags)
 kvs_watch_LDADD = \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_hashtest_SOURCES = kvs/hashtest.c

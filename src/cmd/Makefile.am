@@ -19,8 +19,8 @@ AM_CPPFLAGS = \
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(top_builddir)/src/modules/live/liblive.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/live/libflux-live.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 LDADD = $(fluxcmd_ldadd)
@@ -85,16 +85,16 @@ flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \
-	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_module_LDADD = \
-	$(top_builddir)/src/modules/modctl/libmodctl.la \
-	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
+	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_jstat_LDADD = \
-	$(top_builddir)/src/modules/libjsc/libjsc.la \
+	$(top_builddir)/src/modules/libjsc/libflux-jsc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 

@@ -41,7 +41,7 @@ _jsc_build.py: $(top_srcdir)/src/modules/libjsc/jstatctl.h $(MAKE_BINDING) _core
 
 _jsc_la_SOURCES = _jsc.c
 _jsc_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libjsc
-_jsc_la_LIBADD = $(top_builddir)/src/modules/libjsc/libjsc.la $(common_libs)
+_jsc_la_LIBADD = $(top_builddir)/src/modules/libjsc/libflux-jsc.la $(common_libs)
 _jsc_la_DEPENDENCIES = _jsc_build.py
 
 _barrier_build.py: $(top_srcdir)/src/modules/barrier/barrier.h $(MAKE_BINDING) _core_build.py
@@ -53,7 +53,7 @@ _barrier_build.py: $(top_srcdir)/src/modules/barrier/barrier.h $(MAKE_BINDING) _
 
 _barrier_la_SOURCES = _barrier.c
 _barrier_la_CPPFLAGS = -I$(top_srcdir)/src/modules/barrier
-_barrier_la_LIBADD = $(top_builddir)/src/modules/barrier/libbarrier.la $(common_libs)
+_barrier_la_LIBADD = $(top_builddir)/src/modules/barrier/libflux-barrier.la $(common_libs)
 _barrier_la_DEPENDENCIES = _barrier_build.py
 
 
@@ -66,7 +66,7 @@ _mrpc_build.py: $(top_srcdir)/src/modules/libmrpc/mrpc.h $(MAKE_BINDING) _core_b
 
 _mrpc_la_SOURCES = _mrpc.c
 _mrpc_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libmrpc
-_mrpc_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libmrpc.la $(common_libs)
+_mrpc_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la $(common_libs)
 _mrpc_la_DEPENDENCIES = _mrpc_build.py
 
 _kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs_deprecated.h $(MAKE_BINDING) _core_build.py
@@ -78,7 +78,7 @@ _kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs_deprecated.h $(MAKE_BINDING) _c
 
 _kvs_la_SOURCES = _kvs.c
 _kvs_la_CPPFLAGS = -I$(top_srcdir)/src/modules/kvs
-_kvs_la_LIBADD = $(top_builddir)/src/modules/kvs/libkvs.la $(common_libs)
+_kvs_la_LIBADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la $(common_libs)
 _kvs_la_DEPENDENCIES = _kvs_build.py
 
 _kz_build.py: $(top_srcdir)/src/modules/libkz/kz.h $(MAKE_BINDING) _core_build.py
@@ -91,7 +91,7 @@ _kz_build.py: $(top_srcdir)/src/modules/libkz/kz.h $(MAKE_BINDING) _core_build.p
 
 _kz_la_SOURCES = _kz.c $(top_srcdir)/src/modules/libkz/kz.h
 _kz_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libkz
-_kz_la_LIBADD = $(top_builddir)/src/modules/libkz/libkz.la $(top_builddir)/src/modules/kvs/libkvs.la  $(common_libs)
+_kz_la_LIBADD = $(top_builddir)/src/modules/libkz/libkz.la $(top_builddir)/src/modules/kvs/libflux-kvs.la  $(common_libs)
 _kz_la_DEPENDENCIES = _kz_build.py
 
 fluxpy_PYTHON=\

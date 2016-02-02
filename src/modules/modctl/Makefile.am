@@ -21,20 +21,21 @@ modctl_la_SOURCES = \
 modctl_la_LDFLAGS = $(fluxmod_ldflags) -module
 modctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		   $(top_builddir)/src/common/libflux-core.la \
-		   $(top_builddir)/src/modules/libmrpc/libmrpc.la \
+		   $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 		   $(JSON_LIBS) $(ZMQ_LIBS)
 
 #
 # API for module
 #
 fluxcoreinclude_HEADERS = modctl.h
-fluxlib_LTLIBRARIES = libmodctl.la
-libmodctl_la_SOURCES = libmodctl.c proto.c
-libmodctl_la_LDFLAGS = $(fluxlib_ldflags) \
-		       -export-symbols-regex '^flux_.*'
-libmodctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
-		      $(top_builddir)/src/common/libflux-core.la \
-		      $(top_builddir)/src/modules/libmrpc/libmrpc.la
+lib_LTLIBRARIES = libflux-modctl.la
+libflux_modctl_la_SOURCES = libmodctl.c proto.c
+libflux_modctl_la_LDFLAGS = $(fluxlib_ldflags) \
+			    -export-symbols-regex '^flux_.*'
+
+libflux_modctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
+			   $(top_builddir)/src/common/libflux-core.la \
+			   $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la
 
 #
 # Unit tests
@@ -44,7 +45,7 @@ TESTS = \
 
 test_ldadd = \
         $(top_builddir)/src/modules/modctl/proto.o \
-        $(top_builddir)/src/modules/modctl/libmodctl.la \
+        $(top_builddir)/src/modules/modctl/libflux-modctl.la \
 	$(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \

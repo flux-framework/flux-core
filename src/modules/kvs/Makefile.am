@@ -31,17 +31,17 @@ kvs_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 #
 # API for module
 #
-fluxlib_LTLIBRARIES = libkvs.la
+lib_LTLIBRARIES = libflux-kvs.la
 fluxcoreinclude_HEADERS = kvs.h
-libkvs_la_SOURCES = \
+libflux_kvs_la_SOURCES = \
 	libkvs.c \
 	conf.c \
 	proto.c \
 	kvs_deprecated.h
-libkvs_la_LDFLAGS = $(fluxlib_ldflags) \
-		    -export-symbols-regex '^(kvs|kvsdir|kvsitr)_.*'
-libkvs_la_LIBADD =  $(top_builddir)/src/common/libflux-internal.la \
-		    $(top_builddir)/src/common/libflux-core.la
+libflux_kvs_la_LDFLAGS = $(fluxlib_ldflags) \
+			 -export-symbols-regex '^(kvs|kvsdir|kvsitr)_.*'
+libflux_kvs_la_LIBADD =  $(top_builddir)/src/common/libflux-internal.la \
+			 $(top_builddir)/src/common/libflux-core.la
 
 TESTS = \
 	test_waitqueue.t \
@@ -50,7 +50,7 @@ TESTS = \
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/proto.o \
-        $(top_builddir)/src/modules/kvs/libkvs.la \
+        $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \

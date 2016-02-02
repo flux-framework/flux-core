@@ -16,6 +16,6 @@ fluxmod_LTLIBRARIES = mecho.la
 
 mecho_la_SOURCES = mecho.c
 mecho_la_LDFLAGS = $(fluxmod_ldflags) -module
-mecho_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libmrpc.la \
+mecho_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 		  $(top_builddir)/src/common/libflux-core.la \
 		  $(top_builddir)/src/common/libflux-internal.la
