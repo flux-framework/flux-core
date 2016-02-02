@@ -75,13 +75,17 @@ int flux_opt_get (flux_t h, const char *option, void *val, size_t len);
  */
 void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg);
 
-/* Call the user's fatal error handler, if any.
- * If no handler is registered, this is a no-op.
+/* Set the fatality bit and call the user's fatal error handler, if any.
+ * The fatal error handler will only be called once.
  */
 void flux_fatal_error (flux_t h, const char *fun, const char *msg);
 #define FLUX_FATAL(h) do { \
     flux_fatal_error((h),__FUNCTION__,(strerror (errno))); \
 } while (0)
+
+/* Return true if the handle 'h' has encountered a fatal error.
+ */
+bool flux_fatality (flux_t h);
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
  * handle by name.  The flux_free_f, if non-NULL, will be called

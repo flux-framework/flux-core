@@ -58,7 +58,7 @@ struct flux_handle_struct {
     flux_msgcounters_t msgcounters;
     flux_fatal_f    fatal;
     void            *fatal_arg;
-    bool            fatal_called;
+    bool            fatality;
     int             usecount;
 };
 
@@ -217,8 +217,7 @@ void flux_close (flux_t h)
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
-    flux_t h = zmalloc (sizeof (*h));
-
+    flux_t h = malloc (sizeof (*h));
     if (!h)
         goto nomem;
     memset (h, 0, sizeof (*h));
@@ -314,17 +313,24 @@ void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg)
 {
     h->fatal = fun;
     h->fatal_arg = arg;
-    h->fatal_called = false;
+    h->fatality = false;
 }
 
 void flux_fatal_error (flux_t h, const char *fun, const char *msg)
 {
-    if (h->fatal && !h->fatal_called) {
-        char buf[256];
-        snprintf (buf, sizeof (buf), "%s: %s", fun, msg);
-        h->fatal_called = true;
-        h->fatal (buf, h->fatal_arg);
+    if (!h->fatality) {
+        h->fatality = true;
+        if (h->fatal) {
+            char buf[256];
+            snprintf (buf, sizeof (buf), "%s: %s", fun, msg);
+            h->fatal (buf, h->fatal_arg);
+        }
     }
+}
+
+bool flux_fatality (flux_t h)
+{
+    return h->fatality;
 }
 
 void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs)
