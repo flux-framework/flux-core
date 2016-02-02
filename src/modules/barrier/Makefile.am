@@ -25,10 +25,10 @@ barrier_la_LIBADD = $(fluxmod_libadd) \
 # API for module
 #
 fluxcoreinclude_HEADERS = barrier.h
-fluxlib_LTLIBRARIES = libbarrier.la
-libbarrier_la_SOURCES = libbarrier.c
-libbarrier_la_LDFLAGS = $(fluxlib_ldflags) \
-			-export-symbols-regex '^flux_.*'
-libbarrier_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
-		       $(top_builddir)/src/common/libflux-core.la \
-		       $(JSON_LIBS) $(ZMQ_LIBS)
+lib_LTLIBRARIES = libflux-barrier.la
+libflux_barrier_la_SOURCES = libbarrier.c
+libflux_barrier_la_LDFLAGS = $(fluxlib_ldflags) \
+			     -export-symbols-regex '^flux_.*'
+libflux_barrier_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
+			    $(top_builddir)/src/common/libflux-core.la \
+			    $(JSON_LIBS) $(ZMQ_LIBS)

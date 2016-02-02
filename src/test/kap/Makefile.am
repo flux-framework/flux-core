@@ -10,8 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 LDADD = \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(top_builddir)/src/modules/barrier/libbarrier.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libflux-internal.la \
         $(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) \

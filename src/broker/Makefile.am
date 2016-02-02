@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 	-DMODULE_PATH=\"$(fluxmoddir)\" \
 	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\"
 
-fluxlibexec_PROGRAMS = flux-broker
+fluxcmd_PROGRAMS = flux-broker
 
 flux_broker_SOURCES = \
 	broker.c \
@@ -41,7 +41,7 @@ flux_broker_SOURCES = \
 
 
 flux_broker_LDADD = \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la 
 

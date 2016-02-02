@@ -18,18 +18,22 @@ live_la_SOURCES = live.c
 live_la_LDFLAGS = $(fluxmod_ldflags) -module
 live_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		 $(top_builddir)/src/common/libflux-core.la \
-		 $(top_builddir)/src/modules/kvs/libkvs.la \
+		 $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 		 $(JSON_LIBS) $(ZMQ_LIBS)
 
 #
 # API for module
 #
 fluxcoreinclude_HEADERS = live.h
-fluxlib_LTLIBRARIES = liblive.la
-liblive_la_SOURCES = liblive.c
-liblive_la_LDFLAGS = $(fluxlib_ldflags) \
-		     -export-symbols-regex '^flux_.*'
-liblive_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
-		    $(top_builddir)/src/common/libflux-core.la \
-		    $(top_builddir)/src/modules/kvs/libkvs.la \
-		    $(JSON_LIBS) $(ZMQ_LIBS)
+
+lib_LTLIBRARIES = libflux-live.la
+
+libflux_live_la_SOURCES = liblive.c
+
+libflux_live_la_LDFLAGS = $(fluxlib_ldflags) \
+			  -export-symbols-regex '^flux_.*'
+
+libflux_live_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
+			 $(top_builddir)/src/common/libflux-core.la \
+			 $(top_builddir)/src/modules/kvs/libflux-kvs.la \
+			 $(JSON_LIBS) $(ZMQ_LIBS)

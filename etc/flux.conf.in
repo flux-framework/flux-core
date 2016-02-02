@@ -2,8 +2,7 @@
 # flux.conf - used for in-tree tests
 #
 general
-    exec_path = @abs_top_builddir@/src/cmd:@abs_top_srcdir@/src/cmd
-    broker_path = @abs_top_builddir@/src/broker/flux-broker
+    exec_path = @abs_top_builddir@/src/cmd:@abs_top_srcdir@/src/cmd:@abs_top_builddir@/src/broker
     lua_cpath = @abs_top_builddir@/src/bindings/lua/?.so
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
     python_path = @abs_top_builddir@/src/bindings/python:@abs_top_srcdir@/src/bindings/python/pycotap

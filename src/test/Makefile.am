@@ -21,8 +21,8 @@ if HAVE_MPI
 SUBDIRS += kap
 endif
 
-LDADD = $(top_builddir)/src/modules/kvs/libkvs.la \
-	$(top_builddir)/src/modules/barrier/libbarrier.la \
+LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)

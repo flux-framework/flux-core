@@ -52,7 +52,7 @@ struct context {
     optparse_t *opts;
     char *session_id;
     char *scratch_dir;
-    const char *broker_path;
+    char *broker_path;
     int size;
     int count;
     int exit_rc;
@@ -75,6 +75,7 @@ void remove_corelimit (void);
 char *create_scratch_dir (struct context *ctx);
 struct client *client_create (struct context *ctx, int rank, const char *cmd);
 void client_destroy (struct client *cli);
+char *find_broker (const char *searchpath);
 
 const char *default_killer_timeout = "1.0";
 
@@ -102,6 +103,7 @@ int main (int argc, char *argv[])
     size_t len = 0;
     struct context *ctx = xzmalloc (sizeof (*ctx));
     double killer_timeout;
+    const char *searchpath;
 
     log_init ("flux-start");
 
@@ -119,8 +121,10 @@ int main (int argc, char *argv[])
     }
     remove_corelimit ();
 
-    if (!(ctx->broker_path = getenv ("FLUX_BROKER_PATH")))
-        msg_exit ("FLUX_BROKER_PATH is not set");
+    if (!(searchpath = getenv ("FLUX_EXEC_PATH")))
+        msg_exit ("FLUX_EXEC_PATH is not set");
+    if (!(ctx->broker_path = find_broker (searchpath)))
+        msg_exit ("Could not locate broker in %s", searchpath);
 
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
     if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
@@ -148,6 +152,9 @@ int main (int argc, char *argv[])
     subprocess_manager_destroy (ctx->sm);
     free (ctx->session_id);
     free (ctx->scratch_dir);
+    free (ctx->broker_path);
+    free (ctx);
+
     if (command)
         free (command);
 
@@ -163,6 +170,22 @@ void remove_corelimit (void)
     rl.rlim_max = RLIM_INFINITY;
     if (setrlimit (RLIMIT_CORE, &rl) < 0)
         err ("setrlimit: could not remove core file size limit");
+}
+
+char *find_broker (const char *searchpath)
+{
+    char *cpy = xstrdup (searchpath);
+    char *dir, *saveptr = NULL, *a1 = cpy;
+    char path[PATH_MAX];
+
+    while ((dir = strtok_r (a1, ":", &saveptr))) {
+        snprintf (path, sizeof (path), "%s/flux-broker", dir);
+        if (access (path, X_OK) == 0)
+            break;
+        a1 = NULL;
+    }
+    free (cpy);
+    return dir ? xstrdup (path) : NULL;
 }
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
