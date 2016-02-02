@@ -18,15 +18,16 @@ static uint32_t fake_size = 1;
 
 /* request nodeid and flags returned in response */
 static int nodeid_fake_error = -1;
-int rpctest_nodeid_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_nodeid_cb (flux_t h, flux_msg_handler_t *w,
+                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
     uint32_t nodeid;
     JSON o = NULL;
     int flags;
 
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0
-            || flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0) {
+    if (flux_request_decode (msg, NULL, NULL) < 0
+            || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
         errnum = errno;
         goto done;
     }
@@ -39,43 +40,39 @@ int rpctest_nodeid_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     Jadd_int (o, "nodeid", nodeid);
     Jadd_int (o, "flags", flags);
 done:
-    (void)flux_respond (h, *zmsg, errnum, Jtostr (o));
+    (void)flux_respond (h, msg, errnum, Jtostr (o));
     Jput (o);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
 /* request payload echoed in response */
-int rpctest_echo_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_echo_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
     const char *json_str;
 
-    if (flux_request_decode (*zmsg, NULL, &json_str) < 0) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
         errnum = errno;
         goto done;
     }
 done:
-    (void)flux_respond (h, *zmsg, errnum, json_str);
-    zmsg_destroy (zmsg);
-    return 0;
+    (void)flux_respond (h, msg, errnum, json_str);
 }
 
 /* no-payload response */
 static int hello_count = 0;
-int rpctest_hello_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_hello_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
 
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0) {
+    if (flux_request_decode (msg, NULL, NULL) < 0) {
         errnum = errno;
         goto done;
     }
     hello_count++;
 done:
-    (void)flux_respond (h, *zmsg, errnum, NULL);
-    zmsg_destroy (zmsg);
-    return 0;
+    (void)flux_respond (h, msg, errnum, NULL);
 }
 
 /* then test - add nodeid to 'then_ns' */
@@ -94,7 +91,17 @@ static void then_cb (flux_rpc_t *r, void *arg)
     }
 }
 
-int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+static bool fatal_tested = false;
+static void fatal_err (const char *message, void *arg)
+{
+    if (fatal_tested)
+        BAIL_OUT ("fatal error: %s", message);
+    else
+        fatal_tested = true;
+}
+
+void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
     int i, errors;
@@ -154,6 +161,8 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
         fake_size - 1);
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
+    ok (flux_rpc_completed (r) == false,
+        "flux_rpc_completed is false");
     errors = 0;
     for (i = 0; i < fake_size; i++)
         if (flux_rpc_get (r, NULL, NULL) < 0)
@@ -163,6 +172,8 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 
     cmp_ok (hello_count - old_count, "==", fake_size,
         "rpc was called %d times", fake_size);
+    ok (flux_rpc_completed (r) == true,
+        "flux_rpc_completed is true");
     flux_rpc_destroy (r);
 
     /* same with a subset */
@@ -181,6 +192,8 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 
     cmp_ok (hello_count - old_count, "==", 64,
         "rpc was called %d times", 64);
+    ok (flux_rpc_completed (r) == true,
+        "flux_rpc_completed is true");
     flux_rpc_destroy (r);
 
     /* same with echo payload */
@@ -197,21 +210,46 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     }
     ok (errors == 0,
         "flux_rpc_get succeded %d times, with correct return payload", 64);
+    ok (flux_rpc_completed (r) == true,
+        "flux_rpc_completed is true");
     flux_rpc_destroy (r);
 
-    /* detect partial failure without mresponse */
+    /* detect partial failure without response */
     nodeid_fake_error = 20;
     ok ((r = flux_rpc_multi (h, "rpctest.nodeid", NULL, "[0-63]", 0)) != NULL,
         "flux_rpc_multi [0-%d] ok",
         64 - 1);
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
+    int fail_count = 0;
+    uint32_t fail_nodeid_last = FLUX_NODEID_ANY;
+    int fail_errno_last = 0;
     for (i = 0; i < 64; i++) {
-        if (flux_rpc_get (r, &nodeid, &json_str) < 0)
-            break;
+        if (flux_rpc_get (r, &nodeid, &json_str) < 0) {
+            fail_errno_last = errno;
+            fail_nodeid_last = nodeid;
+            fail_count++;
+        }
     }
-    ok (i == 20 && errno == EPERM,
+    ok (fail_count == 1 && fail_nodeid_last == 20 && fail_errno_last == EPERM,
         "flux_rpc_get correctly reports single error");
+    ok (flux_rpc_completed (r) == true,
+        "flux_rpc_completed is true, even when there was an error (issue 517)");
+    flux_rpc_destroy (r);
+
+    /* test that a fatal handle error causes flux_rpc_completed() to be true */
+    flux_fatal_set (h, NULL, NULL); /* reset handler and flag */
+    ok (flux_fatality (h) == false,
+        "flux_fatality says all is well");
+    ok ((r = flux_rpc_multi (h, "rpctest.nodeid", NULL, "[0]", 0)) != NULL,
+        "flux_rpc_multi [0] ok",
+        64 - 1);
+    flux_fatal_error (h, __FUNCTION__, "Foo");
+    ok (flux_fatality (h) == true,
+        "flux_fatality shows simulated failure");
+    ok (flux_rpc_completed (r) == true,
+        "flux_rpc_completed is true with fatal error");
+    flux_fatal_set (h, fatal_err, NULL); /* reset handler and flag  */
     flux_rpc_destroy (r);
 
     /* test _then (still at fake session size of 128) */
@@ -220,24 +258,14 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     ok (flux_rpc_then (then_r, then_cb, h) == 0,
         "flux_rpc_then works");
     /* then_cb stops reactor; results reported, then_r destroyed in main() */
-
-    return 0;
 }
 
-static bool fatal_tested = false;
-static void fatal_err (const char *message, void *arg)
-{
-    if (fatal_tested)
-        BAIL_OUT ("fatal error: %s", message);
-    else
-        fatal_tested = true;
-}
-
-static msghandler_t htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
+    FLUX_MSGHANDLER_TABLE_END,
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -247,7 +275,7 @@ int main (int argc, char *argv[])
     flux_t h;
     flux_reactor_t *reactor;
 
-    plan (35);
+    plan (NO_PLAN);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
@@ -263,12 +291,13 @@ int main (int argc, char *argv[])
     flux_fatal_error (h, __FUNCTION__, "Foo");
     ok (fatal_tested == true,
         "flux_fatal function is called on fatal error");
+    flux_fatal_set (h, fatal_err, NULL); /* reset */
 
     /* create nodeset for last _then test */
     ok ((then_ns = nodeset_create ()) != NULL,
         "nodeset created ok");
 
-    ok (flux_msghandler_addvec (h, htab, htablen, NULL) == 0,
+    ok (flux_msg_handler_addvec (h, htab, NULL) == 0,
         "registered message handlers");
     /* test continues in rpctest_begin_cb() so that rpc calls
      * can sleep while we answer them
@@ -286,6 +315,7 @@ int main (int argc, char *argv[])
     nodeset_destroy (then_ns);
     flux_rpc_destroy (then_r);
 
+    flux_msg_handler_delvec (htab);
     flux_close (h);
 
     done_testing();
