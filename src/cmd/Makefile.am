@@ -42,7 +42,8 @@ flux_SOURCES = \
 	builtin/help.c \
 	builtin/dmesg.c \
 	builtin/env.c \
-	builtin/content.c
+	builtin/content.c \
+	builtin/version.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
