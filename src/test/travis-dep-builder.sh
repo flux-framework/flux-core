@@ -143,7 +143,7 @@ for pkg in $downloads; do
     mkdir -p ${name}  || die "Failed to mkdir ${name}"
     (
       cd ${name} &&
-      wget ${pkg} || die "Failed to download ${pkg}"
+      wget --no-check-certificate ${pkg} || die "Failed to download ${pkg}"
       tar --strip-components=1 -xf *.tar.gz || die "Failed to un-tar ${name}"
       test -x configure && CC=gcc ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
