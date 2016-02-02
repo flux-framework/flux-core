@@ -62,8 +62,10 @@ struct opt_parser {
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
-    int            skip_subcmds;    /* Do not Print subcommands in --help   */
     List           option_list;     /* List of options for this program    */
+
+    unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
+    unsigned int   no_options:1;    /* Skip option processing for subcmd    */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -973,6 +975,10 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
         n = va_arg (vargs, int);
         p->skip_subcmds = !n;
         break;
+    case OPTPARSE_SUBCMD_NOOPTS:
+        n = va_arg (vargs, int);
+        p->no_options = n;
+        break;
     default:
         e = OPTPARSE_BAD_ARG;
     }
@@ -1234,7 +1240,7 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
         return optparse_fatal_usage (p, 1, "Unknown subcommand: %s\n", av[0]);
     }
 
-    if (optparse_parse_args (sp, ac, av) < 0)
+    if (!sp->no_options && (optparse_parse_args (sp, ac, av) < 0))
         return optparse_fatalerr (sp, 1);
 
     if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {

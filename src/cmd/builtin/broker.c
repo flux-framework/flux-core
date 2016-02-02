@@ -43,7 +43,16 @@ int subcommand_broker_register (optparse_t *p)
         "[OPTIONS...] [COMMAND...]",
         "Run the flux broker",
         NULL);
-    return (e == OPTPARSE_SUCCESS ? 0 : -1);
+
+    if (e != OPTPARSE_SUCCESS)
+        return (-1);
+
+    /* Do not parse options before calling cmd_broker:
+     */
+    optparse_set (optparse_get_subcommand (p, "broker"),
+                  OPTPARSE_SUBCMD_NOOPTS, 1);
+
+    return (0);
 }
 
 /*
