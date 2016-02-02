@@ -68,8 +68,7 @@ static int ctx_init (flux_t h, ctx_t *ctx)
     FLUX_CHECK_INT (h, hwloc_topology_init (&ctx->topology));
 
     char *path = NULL;
-    char *conf_path =
-        FLUX_CHECK_PTR (h, xasprintf ("config.resource.hwloc.xml.%" PRIu32, rank));
+    char *conf_path = xasprintf ("config.resource.hwloc.xml.%" PRIu32, rank);
     kvs_get_string (h, conf_path, &path);
     free (conf_path);
 
