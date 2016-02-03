@@ -261,45 +261,44 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
     return (1);
 }
 
-static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void event_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct rexec_ctx *ctx = arg;
     const char *topic;
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
-        goto done;
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (h, "event_cb: flux_msg_get_topic");
+        return;
+    }
     if (strncmp (topic, "wrexec.run", 10) == 0) {
         int64_t id = id_from_tag (topic + 11, NULL);
         if (id < 0)
-            err ("Invalid rexec tag `%s'", topic);
+            flux_log (h, LOG_ERR, "Invalid rexec tag `%s'", topic);
         if (lwj_targets_this_node (ctx, id))
             spawn_exec_handler (ctx, id);
     }
-done:
-    if (zmsg && *zmsg)
-        zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void request_cb (flux_t h,
+			flux_msg_handler_t *w,
+			const flux_msg_t *msg,
+			void *arg)
 {
     const char *topic;
-
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
-        goto done;
-    if (!strcmp (topic, "wrexec.shutdown")) {
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        flux_log_error (h, "request_cb: flux_msg_get_topic");
+    else if (!strcmp (topic, "wrexec.shutdown")) {
         flux_reactor_stop (flux_get_reactor (h));
-        return 0;
+        return;
     }
-done:
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static msghandler_t htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "*",          request_cb },
-    { FLUX_MSGTYPE_EVENT,     "wrexec.*", event_cb },
+struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "*",        request_cb, NULL },
+    { FLUX_MSGTYPE_EVENT,     "wrexec.*", event_cb,   NULL },
+    FLUX_MSGHANDLER_TABLE_END
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
@@ -309,11 +308,11 @@ int mod_main (flux_t h, int argc, char **argv)
 
     flux_event_subscribe (h, "wrexec.run.");
 
-    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log_error (h, "flux_msghandler_addvec");
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+        flux_log_error (h, "flux_msg_handler_addvec");
         return -1;
     }
-    if (flux_reactor_start (h) < 0) {
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_start");
         return -1;
     }
