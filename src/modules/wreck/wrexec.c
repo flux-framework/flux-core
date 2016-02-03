@@ -36,8 +36,6 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/modules/libmrpc/mrpc.h"
-#include "src/modules/libmrpc/mrpc_deprecated.h"
 
 
 struct rexec_ctx {
@@ -244,74 +242,6 @@ static int64_t id_from_tag (const char *tag, char **endp)
     return l;
 }
 
-static int mrpc_respond_errnum (flux_mrpc_t *mrpc, int errnum)
-{
-    json_object *o = json_object_new_object ();
-    util_json_object_add_int (o, "errnum", errnum);
-    flux_mrpc_put_outarg_obj (mrpc, o);
-    json_object_put (o);
-    return (0);
-}
-
-static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
-{
-    int64_t id;
-    const char *method;
-    const char *json_str;
-    json_object *inarg = NULL;
-    json_object *request = NULL;
-    int rc = -1;
-    flux_t f = ctx->h;
-    flux_mrpc_t *mrpc;
-
-    if (flux_event_decode (zmsg, NULL, &json_str) < 0
-                || !(request = Jfromstr (json_str)) ) {
-        flux_log (f, LOG_ERR, "flux_event_decode: %s", strerror (errno));
-        return (0);
-    }
-    mrpc = flux_mrpc_create_fromevent_obj (f, request);
-    if (mrpc == NULL) {
-        if (errno != EINVAL) /* EINVAL == not addressed to me */
-            flux_log (f, LOG_ERR, "flux_mrpc_create_fromevent: %s",
-                      strerror (errno));
-        return (0);
-    }
-    if (flux_mrpc_get_inarg_obj (mrpc, &inarg) < 0) {
-        flux_log (f, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
-        goto done;
-    }
-    if (util_json_object_get_int64 (inarg, "id", &id) < 0) {
-        mrpc_respond_errnum (mrpc, errno);
-        flux_log (f, LOG_ERR, "wrexec mrpc failed to get arg `id'");
-        goto done;
-    }
-    if (util_json_object_get_string (inarg, "method", &method) < 0) {
-        mrpc_respond_errnum (mrpc, errno);
-        flux_log (f, LOG_ERR, "wrexec mrpc failed to get arg `id'");
-        goto done;
-    }
-
-    if (strcmp (method, "run") == 0) {
-        rc = spawn_exec_handler (ctx, id);
-    }
-    else {
-        mrpc_respond_errnum (mrpc, EINVAL);
-        flux_log (f, LOG_ERR, "rexec mrpc failed to get arg `id'");
-    }
-
-done:
-    flux_mrpc_respond (mrpc);
-    flux_mrpc_destroy (mrpc);
-
-    if (request)
-        json_object_put (request);
-    if (inarg)
-        json_object_put (inarg);
-    if (mrpc)
-        flux_mrpc_destroy (mrpc);
-    return (rc);
-}
-
 int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
 {
     kvsdir_t *tmp;
@@ -343,9 +273,6 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             err ("Invalid rexec tag `%s'", topic);
         if (lwj_targets_this_node (ctx, id))
             spawn_exec_handler (ctx, id);
-    }
-    else if (strncmp (topic, "mrpc.wrexec", 11) == 0) {
-        mrpc_handler (ctx, *zmsg);
     }
 done:
     if (zmsg && *zmsg)
@@ -381,7 +308,6 @@ int mod_main (flux_t h, int argc, char **argv)
         return -1;
 
     flux_event_subscribe (h, "wrexec.run.");
-    flux_event_subscribe (h, "mrpc.wrexec");
 
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log_error (h, "flux_msghandler_addvec");
