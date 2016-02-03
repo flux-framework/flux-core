@@ -60,7 +60,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    int rank = -1; /* local */
+    uint32_t rank = FLUX_NODEID_ANY; /* local */
     char *cmd;
     int e;
 

@@ -29,41 +29,48 @@
 
 #include "src/common/libutil/shortjson.h"
 
-int flux_failover (flux_t h, int rank)
+int flux_failover (flux_t h, uint32_t rank)
 {
-    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    JSON response = NULL;
+    flux_rpc_t *rpc;
     int rc = -1;
 
-    if (flux_json_rpc (h, nodeid, "live.failover", NULL, &response) < 0)
+    if (!(rpc = flux_rpc (h, "live.failover", NULL, rank, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (response);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
-int flux_recover (flux_t h, int rank)
+int flux_recover (flux_t h, uint32_t rank)
 {
-    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    JSON response = NULL;
+    flux_rpc_t *rpc;
     int rc = -1;
 
-    if (flux_json_rpc (h, nodeid, "live.recover", NULL, &response) < 0)
+    if (!(rpc = flux_rpc (h, "live.recover", NULL, rank, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (response);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
 int flux_recover_all (flux_t h)
 {
-    zmsg_t *zmsg = flux_event_encode ("live.recover", NULL);
-    if (!zmsg)
-        return -1;
-    int rc = flux_sendmsg (h, &zmsg);
-    zmsg_destroy (&zmsg);
+    int rc = -1;
+    flux_msg_t *msg;
+
+    if (!(msg  = flux_event_encode ("live.recover", NULL)))
+        goto done;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
     return rc;
 }
 

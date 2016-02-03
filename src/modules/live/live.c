@@ -106,7 +106,7 @@ typedef struct {
 
 typedef struct {
     uint32_t rank;
-    char *rankstr;
+    char rankstr[16];
     cstate_t state;
 } child_t;
 
@@ -115,7 +115,7 @@ typedef struct {
     int slow_idle;
     int epoch;
     uint32_t rank;
-    char *rankstr;
+    char rankstr[16];
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
@@ -128,7 +128,7 @@ typedef struct {
 static void parent_destroy (parent_t *p);
 static void child_destroy (child_t *c);
 static int hello (ctx_t *ctx);
-static int goodbye (ctx_t *ctx, int parent_rank);
+static void goodbye (ctx_t *ctx, int parent_rank);
 static void manage_subscriptions (ctx_t *ctx);
 
 static const int default_max_idle = 5;
@@ -156,55 +156,68 @@ static void freectx (void *arg)
     ctx_t *ctx = arg;
     parent_t *p;
 
-    while ((p = zlist_pop (ctx->parents)))
-        parent_destroy (p);
-    zlist_destroy (&ctx->parents);
-    zhash_destroy (&ctx->children);
-    flux_reduce_destroy (ctx->r);
-    Jput (ctx->topo);
-    free (ctx->rankstr);
-    free (ctx);
+    if (ctx) {
+        if (ctx->parents) {
+            while ((p = zlist_pop (ctx->parents)))
+                parent_destroy (p);
+            zlist_destroy (&ctx->parents);
+        }
+        zhash_destroy (&ctx->children);
+        flux_reduce_destroy (ctx->r);
+        if (ctx->topo)
+            Jput (ctx->topo);
+        free (ctx);
+    }
 }
 
 static ctx_t *getctx (flux_t h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "livesrv");
+    ctx_t *ctx = flux_aux_get (h, "flux::live");
+    int n;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->max_idle = default_max_idle;
         ctx->slow_idle = default_slow_idle;
-        if (flux_get_rank (h, &ctx->rank) < 0)
-            err_exit ("flux_get_rank");
-        if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
-            oom ();
-        if (!(ctx->parents = zlist_new ()))
-            oom ();
-        if (!(ctx->children = zhash_new ()))
-            oom ();
+        if (flux_get_rank (h, &ctx->rank) < 0) {
+            flux_log_error (h, "flux_get_rank");
+            goto error;
+        }
+        n = snprintf (ctx->rankstr, sizeof (ctx->rankstr), "%d", ctx->rank);
+        assert (n < sizeof (ctx->rankstr));
+        if (!(ctx->parents = zlist_new ()) || !(ctx->children = zhash_new ())) {
+            flux_log_error (h, "zlist_new/zhash_new");
+            goto error;
+        }
         ctx->r = flux_reduce_create (h, hello_ops,
                                      reduce_timeout, ctx,
                                      FLUX_REDUCE_TIMEDFLUSH);
-        if (!ctx->r)
-            err_exit ("flux_reduce_create");
+        if (!ctx->r) {
+            flux_log_error (h, "flux_reduce_create");
+            goto error;
+        }
         ctx->h = h;
-        flux_aux_set (h, "livesrv", ctx, freectx);
+        flux_aux_set (h, "flux::live", ctx, freectx);
     }
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 static void child_destroy (child_t *c)
 {
-    free (c->rankstr);
     free (c);
 }
 
 static child_t *child_create (int rank)
 {
     child_t *c = xzmalloc (sizeof (*c));
+    int n;
+
     c->rank = rank;
-    if (asprintf (&c->rankstr, "%d", rank) < 0)
-        oom ();
+    n = snprintf (c->rankstr, sizeof (c->rankstr), "%d", rank);
+    assert (n < sizeof (c->rankstr));
     return c;
 }
 
@@ -350,16 +363,16 @@ static int recover (ctx_t *ctx)
     return reparent (ctx, oldrank, newp);
 }
 
-static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void cstate_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     JSON event = NULL;
     int epoch, parent, rank;
     cstate_t ostate, nstate;
-    int rc = 0;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+    if (flux_event_decode (msg, NULL, &json_str) < 0
             || !(event = Jfromstr (json_str))
             || !Jget_int (event, "epoch", &epoch)
             || !Jget_int (event, "parent", &parent)
@@ -397,13 +410,12 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
 done:
     Jput (event);
-    return rc;
 }
 
 static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 {
     JSON event = Jnew ();
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg;
 
     Jadd_int (event, "rank", c->rank);
     Jadd_int (event, "ostate", c->state);
@@ -411,11 +423,11 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
     Jadd_int (event, "nstate", c->state);
     Jadd_int (event, "parent", ctx->rank);
     Jadd_int (event, "epoch", ctx->epoch);
-    if (!(zmsg = flux_event_encode ("live.cstate", Jtostr (event)))
-              || flux_sendmsg (ctx->h, &zmsg) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: error sending event", __FUNCTION__);
+    if (!(msg = flux_event_encode ("live.cstate", Jtostr (event)))
+              || flux_send (ctx->h, msg, 0) < 0) {
+        flux_log_error (ctx->h, "%s: error sending event", __FUNCTION__);
     }
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     Jput (event);
 }
 
@@ -424,7 +436,8 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
  * which is indexed by peer socket id.
  * The socket id is the stringified rank for cmbds.
  */
-static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void hb_cb (flux_t h, flux_msg_handler_t *w,
+                   const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     char *peers_str = NULL;
@@ -432,7 +445,7 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     zlist_t *keys = NULL;
     char *key;
 
-    if (flux_heartbeat_decode (*zmsg, &ctx->epoch) < 0) {
+    if (flux_heartbeat_decode (msg, &ctx->epoch) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -481,9 +494,6 @@ done:
     Jput (peers);
     if (peers_str)
         free (peers_str);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return 0;
 }
 
 static void manage_subscriptions (ctx_t *ctx)
@@ -527,52 +537,52 @@ static int slow_idle_cb (const char *key, int val, void *arg, int errnum)
     return 0;
 }
 
-static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+/* Goodbye request is fire and forget.
+ */
+static void goodbye_request_cb (flux_t h, flux_msg_handler_t *w,
+                                const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON request = NULL;
-    int rank, prank;
-    char *rankstr = NULL;
+    const char *json_str;
+    JSON in = NULL;
+    int n, rank, prank;
+    char rankstr[16];
 
-    if (flux_json_request_decode (*zmsg, &request) < 0
-                            || !Jget_int (request, "parent-rank", &prank)
-                            || !Jget_int (request, "rank", &rank)) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (h, "%s: request decode", __FUNCTION__);
+        goto done;
+    }
+    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "parent-rank", &prank)
+                                    || !Jget_int (in, "rank", &rank)) {
+        errno = EPROTO;
+        flux_log_error (h, "%s: request decode", __FUNCTION__);
         goto done;
     }
     if (prank != ctx->rank) { /* in case misdirected to new parent */
-        flux_err_respond (h, EINVAL, zmsg);
+        errno = EPROTO;
+        flux_log_error (h, "%s: misdirected request", __FUNCTION__);
         goto done;
     }
-    if (asprintf (&rankstr, "%d", rank) < 0)
-        oom ();
+    n = snprintf (rankstr, sizeof (rankstr), "%d", rank);
+    assert (n < sizeof (rankstr));
     zhash_delete (ctx->children, rankstr);
     manage_subscriptions (ctx);
-    flux_err_respond (h, 0, zmsg);
 done:
-    if (rankstr)
-        free (rankstr);
-    Jput (request);
-    return 0;
+    Jput (in);
 }
 
-static int goodbye (ctx_t *ctx, int parent_rank)
+static void goodbye (ctx_t *ctx, int parent_rank)
 {
     JSON in = Jnew ();
-    int rc = -1;
+    flux_rpc_t *rpc;
 
     Jadd_int (in, "rank", ctx->rank);
     Jadd_int (in, "parent-rank", parent_rank);
-    if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
-                                   FLUX_MATCHTAG_NONE, "live.goodbye", in) < 0){
-        flux_log (ctx->h, LOG_ERR, "%s: flux_json_send %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
-    }
-    rc = 0;
-done:
+    if (!(rpc = flux_rpc (ctx->h, "live.goodbye", Jtostr (in),
+                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
+        flux_log_error (ctx->h, "%s: flux_rpc", __FUNCTION__);
+    flux_rpc_destroy (rpc);
     Jput (in);
-    return rc;
 }
 
 static void ns_destroy (ns_t *ns)
@@ -633,7 +643,7 @@ static int ns_tokvs (ctx_t *ctx)
     JSON o = ns_tojson (ctx->ns);
     int rc = -1;
 
-    if (kvs_put_obj (ctx->h, "conf.live.status", o) < 0)
+    if (kvs_put (ctx->h, "conf.live.status", Jtostr (o)) < 0)
         goto done;
     if (kvs_commit (ctx->h) < 0)
         goto done;
@@ -645,14 +655,18 @@ done:
 
 static int ns_fromkvs (ctx_t *ctx)
 {
+    char *json_str = NULL;
     JSON o = NULL;
     int rc = -1;
 
-    if (kvs_get_obj (ctx->h, "conf.live.status", &o) < 0)
+    if (kvs_get (ctx->h, "conf.live.status", &json_str) < 0
+                                        || !(o = Jfromstr (json_str)))
         goto done;
     ctx->ns = ns_fromjson (o);
     rc = 0;
 done:
+    if (json_str)
+        free (json_str);
     Jput (o);
     return rc;
 }
@@ -742,22 +756,22 @@ static void ns_chg_hello (ctx_t *ctx, JSON a)
  */
 static int topo_fromkvs (ctx_t *ctx)
 {
+    char *json_str = NULL;
     JSON car, ar = NULL, topo = NULL;
     int rc = -1;
-    int len, i;
-    char *prank;
+    int n, len, i;
+    char prank[16];
 
-    if (kvs_get_obj (ctx->h, "conf.live.topology", &ar) < 0)
+    if (kvs_get (ctx->h, "conf.live.topology", &json_str) < 0)
         goto done;
-    if (!Jget_ar_len (ar, &len))
+    if (!(ar = Jfromstr (json_str)) || !Jget_ar_len (ar, &len))
         goto done;
     topo = Jnew ();
     for (i = 0; i < len; i++) {
         if (Jget_ar_obj (ar, i, &car)) {
-            if (asprintf (&prank, "%d", i) < 0)
-                oom ();
+            n = snprintf (prank, sizeof (prank), "%d", i);
+            assert (n < sizeof (prank));
             Jadd_obj (topo, prank, car);
-            free (prank);
         }
     }
     ctx->topo = Jget (topo);
@@ -765,6 +779,8 @@ static int topo_fromkvs (ctx_t *ctx)
 done:
     Jput (ar);
     Jput (topo);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
@@ -778,7 +794,7 @@ static int topo_tokvs (ctx_t *ctx)
         int prank = strtoul (iter.key, NULL, 10);
         Jput_ar_obj (ar, prank, iter.val);
     }
-    if (kvs_put_obj (ctx->h, "conf.live.topology", ar) < 0)
+    if (kvs_put (ctx->h, "conf.live.topology", Jtostr (ar)) < 0)
         goto done;
     if (kvs_commit (ctx->h) < 0)
         goto done;
@@ -856,13 +872,15 @@ static void hello_destroy (void *arg)
 static void hello_forward (flux_reduce_t *r, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
+    flux_rpc_t *rpc;
     JSON o;
 
     while ((o = flux_reduce_pop (r))) {
-        if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
-                                       FLUX_MATCHTAG_NONE, "live.push", o) < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: flux_request_send: %s",
-                      __FUNCTION__, strerror (errno));
+        if (!(rpc = flux_rpc (ctx->h, "live.push", Jtostr (o),
+                              FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
+            flux_log_error (ctx->h, "%s: flux_rpc", __FUNCTION__);
+        else
+            flux_rpc_destroy (rpc);
         Jput (o);
     }
 }
@@ -913,36 +931,51 @@ static void hello_source (ctx_t *ctx, const char *prank, int crank)
     flux_reduce_append (ctx->r, a, 0);
 }
 
-static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+/* push request is fire and forget.
+ */
+static void push_request_cb (flux_t h, flux_msg_handler_t *w,
+                             const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON request = NULL;
+    const char *json_str;
+    JSON in = NULL;
 
-    if (flux_json_request_decode (*zmsg, &request) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (ctx->h, "%s: reuqest decode", __FUNCTION__);
         goto done;
     }
-    flux_reduce_append (ctx->r, Jget (request), 0);
+    if (!(in = Jfromstr (json_str))) {
+        errno = EPROTO;
+        flux_log_error (ctx->h, "%s: reuqest decode", __FUNCTION__);
+        goto done;
+    }
+    flux_reduce_append (ctx->r, Jget (in), 0);
 done:
-    Jput (request);
-    zmsg_destroy (zmsg);
-    return 0;
+    Jput (in);
 }
 
 /* hello: parents discover their children, and children discover their
  * grandparents which are potential failover candidates.
  */
-static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void hello_request_cb (flux_t h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON request = NULL;
-    JSON response = NULL;
-    int rank;
+    const char *json_str;
+    JSON in = NULL;
+    JSON out = NULL;
+    int saved_errno;
+    int rank, rc = -1;
     child_t *c;
 
-    if (flux_json_request_decode (*zmsg, &request) < 0
-                            || !Jget_int (request, "rank", &rank)) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = EPROTO;
+        flux_log_error (h, "%s: request decode", __FUNCTION__);
+        goto done;
+    }
+    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "rank", &rank)) {
+        saved_errno = errno = EPROTO;
+        flux_log_error (h, "%s: request decode", __FUNCTION__);
         goto done;
     }
     /* Create a record for this child, unless already seen.
@@ -960,62 +993,88 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      */
     if (zlist_push (ctx->parents, parent_create (ctx->rank, NULL)) < 0)
         oom ();
-    response = parents_tojson (ctx);
+    out = parents_tojson (ctx);
     parent_destroy (zlist_pop (ctx->parents));
-
-    flux_json_respond (h, response, zmsg);
+    rc = 0;
 done:
-    Jput (request);
-    Jput (response);
-    return 0;
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
+                              rc < 0 ? NULL : Jtostr (out)) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    Jput (in);
+    Jput (out);
 }
 
 static int hello (ctx_t *ctx)
 {
-    JSON request = Jnew ();
-    JSON response = NULL;
+    const char *json_str;
+    JSON in = Jnew ();
+    JSON out = NULL;
+    flux_rpc_t *rpc;
     int rc = -1;
 
-    Jadd_int (request, "rank", ctx->rank);
-    if (flux_json_rpc (ctx->h, FLUX_NODEID_UPSTREAM, "live.hello",
-                       request, &response) < 0) {
-        flux_log (ctx->h, LOG_ERR, "flux_json_rpc: %s", strerror (errno));
+    Jadd_int (in, "rank", ctx->rank);
+    if (!(rpc = flux_rpc (ctx->h, "live.hello", Jtostr (in),
+                          FLUX_NODEID_UPSTREAM, 0))) {
+        flux_log_error (ctx->h, "%s: flux_rpc", __FUNCTION__);
+        goto done;
+    }
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
+        flux_log_error (ctx->h, "live.hello");
+        goto done;
+    }
+    if (!(out = Jfromstr (json_str))) {
+        errno = EPROTO;
+        flux_log_error (ctx->h, "live.hello");
         goto done;
     }
     if (zlist_size (ctx->parents) == 0) /* don't redo on failover */
-        parents_fromjson (ctx, response);
+        parents_fromjson (ctx, out);
     rc = 0;
 done:
-    Jput (request);
-    Jput (response);
+    flux_rpc_destroy (rpc);
+    Jput (in);
+    Jput (out);
     return rc;
 }
 
-static int failover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
+static void failover_request_cb (flux_t h, flux_msg_handler_t *w,
+                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
+    int rc = -1;
 
+    if (flux_request_decode (msg, NULL, NULL) < 0) {
+        flux_log_error (h, "%s: request decode", __FUNCTION__);
+        goto done;
+    }
     if (failover (ctx) < 0)
-        flux_err_respond (h, errno, zmsg);
-    else
-        flux_err_respond (h, 0, zmsg);
-
-    return 0;
+        goto done; /* ESRCH (no failover candidate */
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int recover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
+static void recover_request_cb (flux_t h, flux_msg_handler_t *w,
+                                const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
+    int rc = -1;
 
+    if (flux_request_decode (msg, NULL, NULL) < 0) {
+        flux_log_error (h, "%s: request decode", __FUNCTION__);
+        goto done;
+    }
     if (recover (ctx) < 0)
-        flux_err_respond (h, errno, zmsg);
-    else
-        flux_err_respond (h, 0, zmsg);
-
-    return 0;
+        goto done;
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int recover_event_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
+static void recover_event_cb (flux_t h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
 
@@ -1025,11 +1084,9 @@ static int recover_event_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
         else
             flux_log (h, LOG_ERR, "recover: %s", strerror (errno));
     }
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static msghandler_t htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
     { FLUX_MSGTYPE_EVENT,       "live.cstate",         cstate_cb },
     { FLUX_MSGTYPE_EVENT,       "live.recover",        recover_event_cb },
@@ -1038,51 +1095,56 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,     "live.push",           push_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.failover",       failover_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.recover",        recover_request_cb},
+    FLUX_MSGHANDLER_TABLE_END,
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, zhash_t *args)
 {
+    int rc = -1;
     ctx_t *ctx = getctx (h);
+
+    if (!ctx)
+        goto done;
 
     if (ctx->rank == 0) {
         if (ns_sync (ctx) < 0) {
-            flux_log (h, LOG_ERR, "ns_sync: %s", strerror (errno));
-            return -1;
+            flux_log_error (h, "ns_sync");
+            goto done;
         }
         if (topo_sync (ctx) < 0) {
-            flux_log (h, LOG_ERR, "topo_sync: %s", strerror (errno));
-            return -1;
+            flux_log_error (h, "topo_sync");
+            goto done;
         }
     } else {
         if (hello (ctx) < 0)
-            return -1;
+            goto done;
     }
     if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
-                  strerror (errno));
-        return -1;
+        flux_log_error (h, "kvs_watch_int %s", "conf.live.max-idle");
+        goto done;
     }
     if (kvs_watch_int (h, "conf.live.slow-idle", slow_idle_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.slow-idle",
-                  strerror (errno));
-        return -1;
+        flux_log_error (h, "kvs_watch_int %s", "conf.live.slow-idle");
+        goto done;
     }
     if (flux_event_subscribe (h, "live.cstate") < 0
-     || flux_event_subscribe (h, "live.recover") < 0) {
-        flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
-                  strerror (errno));
-        return -1;
+                       || flux_event_subscribe (h, "live.recover") < 0) {
+        flux_log_error (h, "flux_event_subscribe");
+        goto done;
     }
-    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
-        return -1;
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+        flux_log_error (h, "flux_msg_handler_advec");
+        goto done;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_run");
+        goto done_delvec;
     }
-    return 0;
+    rc = 0;
+done_delvec:
+    flux_msg_handler_delvec (htab);
+done:
+    return rc;
 }
 
 MOD_NAME ("live");

@@ -150,38 +150,6 @@ int flux_log_error (flux_t h, const char *fmt, ...)
     return rc;
 }
 
-// Instantiate inline flux_log_check functions, this is *necessary* for
-// linking to work under C99 rules
-int flux_log_check_int (flux_t h,
-               int res,
-               const char *fmt,
-               ...  )
-{
-    if (res < 0) {
-        va_list ap;
-        va_start (ap, fmt);
-        flux_log_verror (h, fmt, ap);
-        va_end (ap);
-        exit (errno);
-    }
-    return res;
-}
-
-void *flux_log_check_ptr (flux_t h,
-                 void *res,
-                 const char *fmt,
-                 ... )
-{
-    if (res == NULL) {
-        va_list ap;
-        va_start (ap, fmt);
-        flux_log_verror (h, fmt, ap);
-        va_end (ap);
-        exit (errno);
-    }
-    return res;
-}
-
 static int dmesg_clear (flux_t h, int seq)
 {
     flux_rpc_t *rpc;
