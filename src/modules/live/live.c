@@ -106,7 +106,7 @@ typedef struct {
 
 typedef struct {
     uint32_t rank;
-    char *rankstr;
+    char rankstr[16];
     cstate_t state;
 } child_t;
 
@@ -115,7 +115,7 @@ typedef struct {
     int slow_idle;
     int epoch;
     uint32_t rank;
-    char *rankstr;
+    char rankstr[16];
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
@@ -166,15 +166,14 @@ static void freectx (void *arg)
         flux_reduce_destroy (ctx->r);
         if (ctx->topo)
             Jput (ctx->topo);
-        if (ctx->rankstr)
-            free (ctx->rankstr);
         free (ctx);
     }
 }
 
 static ctx_t *getctx (flux_t h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::live");
+    ctx_t *ctx = flux_aux_get (h, "flux::live");
+    int n;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -184,10 +183,10 @@ static ctx_t *getctx (flux_t h)
             flux_log_error (h, "flux_get_rank");
             goto error;
         }
-        if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0
-                || !(ctx->parents = zlist_new ())
-                || !(ctx->children = zhash_new ())) {
-            flux_log_error (h, "asprintf/zlist_new/zhash_new");
+        n = snprintf (ctx->rankstr, sizeof (ctx->rankstr), "%d", ctx->rank);
+        assert (n < sizeof (ctx->rankstr));
+        if (!(ctx->parents = zlist_new ()) || !(ctx->children = zhash_new ())) {
+            flux_log_error (h, "zlist_new/zhash_new");
             goto error;
         }
         ctx->r = flux_reduce_create (h, hello_ops,
@@ -208,16 +207,17 @@ error:
 
 static void child_destroy (child_t *c)
 {
-    free (c->rankstr);
     free (c);
 }
 
 static child_t *child_create (int rank)
 {
     child_t *c = xzmalloc (sizeof (*c));
+    int n;
+
     c->rank = rank;
-    if (asprintf (&c->rankstr, "%d", rank) < 0)
-        oom ();
+    n = snprintf (c->rankstr, sizeof (c->rankstr), "%d", rank);
+    assert (n < sizeof (c->rankstr));
     return c;
 }
 
