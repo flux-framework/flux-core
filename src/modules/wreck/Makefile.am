@@ -37,11 +37,11 @@ fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 		 $(top_builddir)/src/modules/kvs/libflux-kvs.la
 
 job_la_SOURCES = job.c
-job_la_LDFLAGS = $(fluxmod_ldflags) -module
+job_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 job_la_LIBADD = $(fluxmod_libadd)
 
 wrexec_la_SOURCES = wrexec.c
-wrexec_la_LDFLAGS = $(fluxmod_ldflags) -module
+wrexec_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 wrexec_la_LIBADD = $(fluxmod_libadd)
 wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
 
