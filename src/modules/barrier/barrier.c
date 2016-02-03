@@ -62,25 +62,33 @@ static int timeout_cb (flux_t h, void *arg);
 static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
-    zhash_destroy (&ctx->barriers);
-    free (ctx);
+    if (ctx) {
+        zhash_destroy (&ctx->barriers);
+        free (ctx);
+    }
 }
 
 static ctx_t *getctx (flux_t h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "barriersrv");
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::barrier");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->barriers = zhash_new ()))
-            oom ();
-        if (flux_get_rank (h, &ctx->rank) < 0)
-            err_exit ("flux_get_rank");
+        if (!(ctx->barriers = zhash_new ())) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (flux_get_rank (h, &ctx->rank) < 0) {
+            flux_log_error (h, "flux_get_rank");
+            goto error;
+        }
         ctx->h = h;
-        flux_aux_set (h, "barriersrv", ctx, freectx);
+        flux_aux_set (h, "flux::barrier", ctx, freectx);
     }
-
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 static void barrier_destroy (void *arg)
@@ -333,21 +341,26 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
+    int rc = -1;
     ctx_t *ctx = getctx (h);
 
+    if (!ctx)
+        goto done;
     if (flux_event_subscribe (h, "barrier.") < 0) {
-        err ("%s: flux_event_subscribe", __FUNCTION__);
-        return -1;
+        flux_log_error (h, "flux_event_subscribe");
+        goto done;
     }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
-        return -1;
+        flux_log_error (h, "flux_msghandler_addvec");
+        goto done;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_run");
+        goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 MOD_NAME ("barrier");
