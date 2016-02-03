@@ -58,9 +58,14 @@ int try_hwloc_load (flux_t h, ctx_t *ctx, const char *const path)
                       "failed to load hwloc topology, path=%s", path);
 }
 
-static int ctx_init (flux_t h, ctx_t *ctx)
+static int ctx_hwloc_init (flux_t h, ctx_t *ctx)
 {
     int ret = -1;
+
+    if (ctx->topology) {
+        hwloc_topology_destroy (ctx->topology);
+        ctx->topology = NULL;
+    }
 
     FLUX_CHECK_INT (h, hwloc_topology_init (&ctx->topology));
 
@@ -107,11 +112,6 @@ done:
     return ret;
 }
 
-static void ctx_deinit (ctx_t *ctx)
-{
-    hwloc_topology_destroy (ctx->topology);
-}
-
 void freectx (ctx_t *ctx)
 {
     if (ctx) {
@@ -127,7 +127,7 @@ static ctx_t *getctx (flux_t h)
         flux_log_error (h, "flux_get_rank");
         goto error;
     }
-    if (ctx_init (h, ctx)) {
+    if (ctx_hwloc_init (h, ctx)) {
         flux_log_error (h, "hwloc context could not be created");
         goto error;
     }
@@ -341,8 +341,7 @@ static void reload_cb (flux_t h,
                        void *arg)
 {
     ctx_t *ctx = arg;
-    ctx_deinit (ctx);
-    if (ctx_init (h, ctx)) {
+    if (ctx_hwloc_init (h, ctx)) {
         flux_respond (h, msg, errno, NULL);
         return;
     }
@@ -452,7 +451,6 @@ int mod_main (flux_t h, int argc, char **argv)
     }
 
     flux_msg_handler_delvec (htab);
-    ctx_deinit (ctx);
     freectx (ctx);
 
     return 0;
