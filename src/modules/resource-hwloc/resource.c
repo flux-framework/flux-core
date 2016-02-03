@@ -357,7 +357,7 @@ static void reload_request_cb (flux_t h,
                                void *arg)
 {
     ctx_t *ctx = arg;
-    int rc, errnum = 0;
+    int errnum = 0;
 
     if (ctx_hwloc_init (h, ctx) < 0 || load_hwloc (h, ctx) < 0)
         errnum = errno;
