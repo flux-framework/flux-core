@@ -309,52 +309,65 @@ done:
     return ret;
 }
 
-static void load_cb (flux_t h,
-                     flux_msg_handler_t *watcher,
-                     const flux_msg_t *msg,
-                     void *arg)
+static int load_hwloc (flux_t h, ctx_t *ctx)
 {
     uint32_t size;
-    ctx_t *ctx = (ctx_t *)arg;
+    char *completion_path = NULL;
+    int rc = -1;
 
     if (load_xml_to_kvs (h, ctx) < 0 || load_info_to_kvs (h, ctx) < 0) {
-        return;
+        flux_log_error (h, "%s: failed to load xml/info to kvs", __FUNCTION__);
+        goto done;
     }
     if (flux_get_size (h, &size) < 0) {
-        flux_log (h, LOG_ERR, "flux_get_size: %s", strerror (errno));
-        return;
+        flux_log_error (h, "%s: flux_get_size", __FUNCTION__);
+        goto done;
     }
-    char *completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, ctx->rank);
-    FLUX_CHECK_INT (h, kvs_put_int (h, completion_path, 1));
-    free (completion_path);
-
-    FLUX_CHECK_INT (h, kvs_commit (h));
-
+    completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, ctx->rank);
+    if (kvs_put_int (h, completion_path, 1) < 0) {
+        flux_log_error (h, "%s: kvs_put_int", __FUNCTION__);
+        goto done;
+    }
+    if (kvs_commit (h) < 0) {
+        flux_log_error (h, "%s: kvs_commit", __FUNCTION__);
+        goto done;
+    }
     flux_log (h, LOG_DEBUG, "loaded");
-
     ctx->loaded = true;
+    rc = 0;
+done:
+    if (completion_path)
+        free (completion_path);
+    return rc;
 }
 
-static void reload_cb (flux_t h,
-                       flux_msg_handler_t *watcher,
-                       const flux_msg_t *msg,
-                       void *arg)
+static void load_event_cb (flux_t h,
+                           flux_msg_handler_t *watcher,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     ctx_t *ctx = arg;
-    if (ctx_hwloc_init (h, ctx)) {
-        flux_respond (h, msg, errno, NULL);
-        return;
-    }
-    load_cb (h, watcher, msg, arg);
-    json_object *out = Jnew ();
-    flux_respond (h, msg, 0, Jtostr (out));
-    Jput (out);
+    (void)load_hwloc (h, ctx);
 }
 
-static void topo_cb (flux_t h,
-                     flux_msg_handler_t *watcher,
-                     const flux_msg_t *msg,
-                     void *arg)
+static void reload_request_cb (flux_t h,
+                               flux_msg_handler_t *watcher,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    ctx_t *ctx = arg;
+    int rc, errnum = 0;
+
+    if (ctx_hwloc_init (h, ctx) < 0 || load_hwloc (h, ctx) < 0)
+        errnum = errno;
+    if (flux_respond (h, msg, errnum, "{}") < 0)
+        flux_log_error (h, "flux_respond");
+}
+
+static void topo_request_cb (flux_t h,
+                             flux_msg_handler_t *watcher,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     ctx_t *ctx = (ctx_t *)arg;
     kvsdir_t *kd = NULL;
@@ -421,9 +434,9 @@ done:
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_cb, NULL},
-    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_cb, NULL},
-    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_cb, NULL},
+    {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_event_cb, NULL},
+    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb, NULL},
+    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb, NULL},
     FLUX_MSGHANDLER_TABLE_END};
 
 int mod_main (flux_t h, int argc, char **argv)
@@ -435,7 +448,8 @@ int mod_main (flux_t h, int argc, char **argv)
         goto done;
 
     // Load hardware information immediately
-    load_cb (h, 0, NULL, ctx);
+    if (load_hwloc (h, ctx) < 0)
+        goto done;
 
     if (flux_event_subscribe (h, "resource-hwloc.load") < 0) {
         flux_log_error (h, "flux_event_subscribe");
