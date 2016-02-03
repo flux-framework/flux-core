@@ -82,16 +82,27 @@ static struct rexec_ctx *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
-        if (flux_get_rank (h, &ctx->nodeid) < 0)
-            err_exit ("flux_get_rank");
-        if (!(ctx->local_uri = flux_attr_get (h, "local-uri", NULL)))
-            err_exit ("flux_attr_get local-uri");
+        if (flux_get_rank (h, &ctx->nodeid) < 0) {
+            flux_log_error (h, "getctx: flux_get_rank");
+            goto fail;
+        }
+        if (!(ctx->local_uri = flux_attr_get (h, "local-uri", NULL))) {
+            flux_log_error (h, "getctx: flux_attr_get local-uri");
+            goto fail;
+        }
         flux_aux_set (h, "wrexec", ctx, freectx);
-        kvs_watch_string (h, "config.wrexec.wrexecd_path",
-            wrexec_path_set, (void *) ctx);
+        if (kvs_watch_string (h, "config.wrexec.wrexecd_path",
+             wrexec_path_set, (void *) ctx) < 0) {
+            flux_log_error (h, "getctx: kvs_watch_string");
+            goto fail;
+        }
+
     }
 
     return ctx;
+fail:
+    free (ctx);
+    return (NULL);
 }
 
 static void closeall (int fd)
@@ -183,13 +194,18 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     char c;
     int n;
     int status;
+    int rc = 0;
     pid_t pid;
 
     if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) < 0)
         return (-1);
 
-    if ((pid = fork ()) < 0)
-        err_exit ("fork");
+    if ((pid = fork ()) < 0) {
+        flux_log_error (ctx->h, "spawn_exec_handler: fork");
+        close (fds[0]);
+        close (fds[1]);
+        return (-1);
+    }
 
     if (pid == 0)
         exec_handler (ctx, id, fds);
@@ -208,11 +224,11 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     /* Blocking wait for exec helper to close fd */
     n = read (fds[1], &c, 1);
     if (n < 1) {
-        msg ("Error reading status from rexecd: %s", strerror (errno));
-        return (-1);
+        flux_log_error (ctx->h, "reading status from rexecd (n=%d)", n);
+        rc = -1;
     }
     close (fds[1]);
-    return (0);
+    return (rc);
 }
 
 static int64_t id_from_tag (const char *tag, char **endp)
@@ -361,16 +377,18 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 int mod_main (flux_t h, int argc, char **argv)
 {
     struct rexec_ctx *ctx = getctx (h);
+    if (ctx == NULL)
+        return -1;
 
     flux_event_subscribe (h, "wrexec.run.");
     flux_event_subscribe (h, "mrpc.wrexec");
 
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
+        flux_log_error (h, "flux_msghandler_addvec");
         return -1;
     }
     if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        flux_log_error (h, "flux_reactor_start");
         return -1;
     }
     return 0;
