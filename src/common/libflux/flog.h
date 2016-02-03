@@ -32,39 +32,6 @@ int flux_log_verror (flux_t h, const char *fmt, va_list ap);
 int flux_log_error (flux_t h, const char *fmt, ...)
                  __attribute__ ((format (printf, 2, 3)));
 
-/* Check for error return codes, if one is found log an error with log_error
- * and die with error code errno */
-__attribute__ ((format (printf, 3, 4)))
-int flux_log_check_int (flux_t h,
-               int res,
-               const char *fmt,
-               ...  );
-
-__attribute__ ((format (printf, 3, 4)))
-void *flux_log_check_ptr (flux_t h,
-                 void *res,
-                 const char *fmt,
-                 ... );
-
-#ifndef STRINGIFY
-#  ifndef REAL_STRINGIFY
-#    define REAL_STRINGIFY(X) #X
-#  endif
-#  define STRINGIFY(X) REAL_STRINGIFY (X)
-#endif
-
-#define FLOG_POSITION __FILE__ ":" STRINGIFY (__LINE__)
-
-// NOTE: FMT string *MUST* be a string literal
-#define FLUX_CHECK_INT(H, X, ...) flux_log_check_int ((H), (X), FLOG_POSITION \
-                                          ":negative integer from:" \
-                                          STRINGIFY (X) ":" \
-                                          __VA_ARGS__)
-#define FLUX_CHECK_PTR(H, X, ...) flux_log_check_ptr ((H), (X), FLOG_POSITION \
-                                          ":null pointer from:" \
-                                          STRINGIFY (X) ":" \
-                                          __VA_ARGS__)
-
 #define FLUX_LOG_ERROR(h) \
     (void)flux_log_error ((h), "%s::%d[%s]", __FILE__, __LINE__, __FUNCTION__)
 
