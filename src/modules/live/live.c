@@ -156,41 +156,54 @@ static void freectx (void *arg)
     ctx_t *ctx = arg;
     parent_t *p;
 
-    while ((p = zlist_pop (ctx->parents)))
-        parent_destroy (p);
-    zlist_destroy (&ctx->parents);
-    zhash_destroy (&ctx->children);
-    flux_reduce_destroy (ctx->r);
-    Jput (ctx->topo);
-    free (ctx->rankstr);
-    free (ctx);
+    if (ctx) {
+        if (ctx->parents) {
+            while ((p = zlist_pop (ctx->parents)))
+                parent_destroy (p);
+            zlist_destroy (&ctx->parents);
+        }
+        zhash_destroy (&ctx->children);
+        flux_reduce_destroy (ctx->r);
+        if (ctx->topo)
+            Jput (ctx->topo);
+        if (ctx->rankstr)
+            free (ctx->rankstr);
+        free (ctx);
+    }
 }
 
 static ctx_t *getctx (flux_t h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "livesrv");
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::live");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->max_idle = default_max_idle;
         ctx->slow_idle = default_slow_idle;
-        if (flux_get_rank (h, &ctx->rank) < 0)
-            err_exit ("flux_get_rank");
-        if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
-            oom ();
-        if (!(ctx->parents = zlist_new ()))
-            oom ();
-        if (!(ctx->children = zhash_new ()))
-            oom ();
+        if (flux_get_rank (h, &ctx->rank) < 0) {
+            flux_log_error (h, "flux_get_rank");
+            goto error;
+        }
+        if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0
+                || !(ctx->parents = zlist_new ())
+                || !(ctx->children = zhash_new ())) {
+            flux_log_error (h, "asprintf/zlist_new/zhash_new");
+            goto error;
+        }
         ctx->r = flux_reduce_create (h, hello_ops,
                                      reduce_timeout, ctx,
                                      FLUX_REDUCE_TIMEDFLUSH);
-        if (!ctx->r)
-            err_exit ("flux_reduce_create");
+        if (!ctx->r) {
+            flux_log_error (h, "flux_reduce_create");
+            goto error;
+        }
         ctx->h = h;
-        flux_aux_set (h, "livesrv", ctx, freectx);
+        flux_aux_set (h, "flux::live", ctx, freectx);
     }
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 static void child_destroy (child_t *c)
@@ -1043,46 +1056,49 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, zhash_t *args)
 {
+    int rc = -1;
     ctx_t *ctx = getctx (h);
+
+    if (!ctx)
+        goto done;
 
     if (ctx->rank == 0) {
         if (ns_sync (ctx) < 0) {
-            flux_log (h, LOG_ERR, "ns_sync: %s", strerror (errno));
-            return -1;
+            flux_log_error (h, "ns_sync");
+            goto done;
         }
         if (topo_sync (ctx) < 0) {
-            flux_log (h, LOG_ERR, "topo_sync: %s", strerror (errno));
-            return -1;
+            flux_log_error (h, "topo_sync");
+            goto done;
         }
     } else {
         if (hello (ctx) < 0)
-            return -1;
+            goto done;
     }
     if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
-                  strerror (errno));
-        return -1;
+        flux_log_error (h, "kvs_watch_int %s", "conf.live.max-idle");
+        goto done;
     }
     if (kvs_watch_int (h, "conf.live.slow-idle", slow_idle_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.slow-idle",
-                  strerror (errno));
-        return -1;
+        flux_log_error (h, "kvs_watch_int %s", "conf.live.slow-idle");
+        goto done;
     }
     if (flux_event_subscribe (h, "live.cstate") < 0
-     || flux_event_subscribe (h, "live.recover") < 0) {
-        flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
-                  strerror (errno));
-        return -1;
+                       || flux_event_subscribe (h, "live.recover") < 0) {
+        flux_log_error (h, "flux_event_subscribe");
+        goto done;
     }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
-        return -1;
+        flux_log_error (h, "flux_msghandler_addvec");
+        goto done;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_run");
+        goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 MOD_NAME ("live");
