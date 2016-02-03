@@ -428,32 +428,35 @@ static struct flux_msg_handler_spec htab[] = {
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    ctx_t *ctx = getctx (h);
-    if (!ctx)
-        return -1;
+    int rc = -1;
+    ctx_t *ctx;
+
+    if (!(ctx = getctx (h)))
+        goto done;
 
     // Load hardware information immediately
     load_cb (h, 0, NULL, ctx);
 
     if (flux_event_subscribe (h, "resource-hwloc.load") < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
-        return -1;
+        flux_log_error (h, "flux_event_subscribe");
+        goto done;
     }
 
     if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
-        return -1;
+        flux_log_error (h, "flux_msghandler_add");
+        goto done;
     }
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
-        return -1;
+        flux_log_error (h, "flux_reactor_run");
+        goto done_delvec;
     }
-
+    rc = 0;
+done_delvec:
     flux_msg_handler_delvec (htab);
+done:
     freectx (ctx);
-
-    return 0;
+    return rc;
 }
 
 MOD_NAME ("resource-hwloc");
