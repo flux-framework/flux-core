@@ -46,69 +46,69 @@ typedef struct
     bool loaded;
 } ctx_t;
 
-int try_hwloc_load (flux_t h, ctx_t *ctx, const char *const path)
-{
-    FLUX_CHECK_INT (h,
-        hwloc_topology_set_flags (ctx->topology, HWLOC_TOPOLOGY_FLAG_WHOLE_IO));
-    if (path) {
-        // load my structure from the hwloc xml file at this path
-        FLUX_CHECK_INT (h, hwloc_topology_set_xml (ctx->topology, path));
-    }
-    return FLUX_CHECK_INT (h, hwloc_topology_load (ctx->topology),
-                      "failed to load hwloc topology, path=%s", path);
-}
-
 static int ctx_hwloc_init (flux_t h, ctx_t *ctx)
 {
     int ret = -1;
+    char *key, *path = NULL;
+    hwloc_bitmap_t restrictset = NULL;
 
     if (ctx->topology) {
         hwloc_topology_destroy (ctx->topology);
         ctx->topology = NULL;
     }
+    if (hwloc_topology_init (&ctx->topology) < 0) {
+        flux_log_error (h, "flux_topology_init");
+        goto done;
+    }
+    if (hwloc_topology_set_flags (ctx->topology,
+                                HWLOC_TOPOLOGY_FLAG_WHOLE_IO) < 0) {
+        flux_log_error (h, "hwloc_topology_set_flags");
+        goto done;
+    }
 
-    FLUX_CHECK_INT (h, hwloc_topology_init (&ctx->topology));
-
-    char *path = NULL;
-    char *conf_path = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
-    kvs_get_string (h, conf_path, &path);
-    free (conf_path);
-
+    key = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
+    (void)kvs_get_string (h, key, &path);
+    free (key);
     if (!path)
-        kvs_get_string (h, "config.resource.hwloc.default_xml", &path);
+        (void)kvs_get_string (h, "config.resource.hwloc.default_xml", &path);
 
     if (path) {
         flux_log (h, LOG_INFO, "loading hwloc from %s", path);
-        if (try_hwloc_load (h, ctx, path) >= 0) {
-            ret = 0;
-            goto done;
-        } else {
-            flux_log (h, LOG_INFO, "hwloc load failed for specified path: %s", path);
-            errno = ENOENT;
-            ret = -1;
+        if (hwloc_topology_set_xml (ctx->topology, path) < 0) {
+            flux_log_error (h, "hwloc_topology_set_xml");
             goto done;
         }
     }
-
-    if (try_hwloc_load (h, ctx, NULL) < 0)
-        err_exit ("hwloc failed to load topology");
+    if (hwloc_topology_load (ctx->topology) < 0) {
+        flux_log_error (h, "hwloc_topology_load");
+        if (path)
+            errno = ENOENT;
+        goto done;
+    }
 
     if (!path) {  // Only restrict the topology if using the host topology
         // Mask off hardware that we can't use
-        hwloc_bitmap_t restrictset = FLUX_CHECK_PTR (h, hwloc_bitmap_alloc ());
-        FLUX_CHECK_INT (h, hwloc_get_cpubind (ctx->topology,
-                                      restrictset,
-                                      HWLOC_CPUBIND_PROCESS));
-        int err = hwloc_topology_restrict (ctx->topology, restrictset, 0);
-        if (err) {
-            flux_log (h, LOG_ERR, "Restricting the topology failed");
+        if (!(restrictset = hwloc_bitmap_alloc ())) {
+            flux_log_error (h, "hwloc_bitmap_alloc");
+            goto done;
         }
-        hwloc_bitmap_free (restrictset);
+        if (hwloc_get_cpubind (ctx->topology, restrictset,
+                               HWLOC_CPUBIND_PROCESS) < 0) {
+            flux_log_error (h, "hwloc_get_cpubind");
+            goto done;
+        }
+        if (hwloc_topology_restrict (ctx->topology, restrictset, 0) < 0) {
+            flux_log_error (h, "hwloc_topology_restrict");
+            goto done;
+        }
     }
     ctx->loaded = false;
     ret = 0;
 done:
-    free (path);
+    if (path)
+        free (path);
+    if (restrictset)
+        hwloc_bitmap_free (restrictset);
     return ret;
 }
 
