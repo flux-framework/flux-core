@@ -117,6 +117,7 @@ void freectx (ctx_t *ctx)
     if (ctx) {
         if (ctx->topology)
             hwloc_topology_destroy (ctx->topology);
+        free (ctx);
     }
 }
 
