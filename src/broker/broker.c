@@ -74,7 +74,7 @@
 #endif
 
 const char *default_modules =
-    "connector-local,modctl,kvs,live,mecho,job,wrexec,barrier,resource-hwloc";
+    "connector-local,modctl,kvs,content-sqlite[0],live,mecho,job,wrexec,barrier,resource-hwloc";
 
 const char *default_boot_method = "pmi";
 
