@@ -1034,7 +1034,8 @@ static int boot_pmi (ctx_t *ctx)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/relay", ctx->scratch_dir);
+                char *relayfile = xasprintf ("%s/%d/relay",
+                                             ctx->scratch_dir, rank);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
