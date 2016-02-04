@@ -565,6 +565,15 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
                 return;
             }
         }
+    } else {
+        /* When a backing store module is unloaded, it will clear
+         * cache->backing then attempt to store all its blobs.  Any of
+         * those still in cache need to be marked dirty.
+         */
+        if (cache->rank == 0 && !cache->backing) {
+            e->dirty = 1;
+            cache->acct_dirty++;
+        }
     }
     rc = 0;
 done:
