@@ -135,24 +135,36 @@ out:
     free (json);
 }
 
-static void add_jobinfo (flux_t h, int64_t id, json_object *req)
+static int add_jobinfo (flux_t h, int64_t id, json_object *req)
 {
+    int rc = 0;
     char buf [64];
     json_object_iter i;
     json_object *o;
     kvsdir_t *dir;
 
-    if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0)
-        err_exit ("kvs_get_dir (id=%lu)", id);
+    if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0) {
+        flux_log_error (h, "kvs_get_dir (id=%lu)", id);
+        return (-1);
+    }
 
-    json_object_object_foreachC (req, i)
-        kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
+    json_object_object_foreachC (req, i) {
+        rc = kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
+        if (rc < 0) {
+            flux_log_error (h, "addd_jobinfo: kvsdir_put (key=%s)", i.key);
+            goto out;
+        }
+    }
 
     o = json_object_new_string (realtime_string (buf, sizeof (buf)));
-    kvsdir_put (dir, "create-time", json_object_to_json_string (o));
+    /* Not a fatal error if create-time addition fails */
+    if (kvsdir_put (dir, "create-time", json_object_to_json_string (o)) < 0)
+        flux_log_error (h, "add_jobinfo: kvsdir_put (create-time)");
     json_object_put (o);
 
+out:
     kvsdir_destroy (dir);
+    return (rc);
 }
 
 static int wait_for_lwj_watch_init (flux_t h, int64_t id)
@@ -259,12 +271,11 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
             }
         }
 
-        int rc = kvs_job_new (h, id);
-        if (rc < 0) {
+        if ( (kvs_job_new (h, id) < 0)
+          || (add_jobinfo (h, id, o) < 0)) {
             flux_respond (h, msg, errno, NULL);
             goto out;
         }
-        add_jobinfo (h, id, o);
 
         kvs_commit (h);
 

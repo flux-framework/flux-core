@@ -36,8 +36,6 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/modules/libmrpc/mrpc.h"
-#include "src/modules/libmrpc/mrpc_deprecated.h"
 
 
 struct rexec_ctx {
@@ -82,16 +80,27 @@ static struct rexec_ctx *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
-        if (flux_get_rank (h, &ctx->nodeid) < 0)
-            err_exit ("flux_get_rank");
-        if (!(ctx->local_uri = flux_attr_get (h, "local-uri", NULL)))
-            err_exit ("flux_attr_get local-uri");
+        if (flux_get_rank (h, &ctx->nodeid) < 0) {
+            flux_log_error (h, "getctx: flux_get_rank");
+            goto fail;
+        }
+        if (!(ctx->local_uri = flux_attr_get (h, "local-uri", NULL))) {
+            flux_log_error (h, "getctx: flux_attr_get local-uri");
+            goto fail;
+        }
         flux_aux_set (h, "wrexec", ctx, freectx);
-        kvs_watch_string (h, "config.wrexec.wrexecd_path",
-            wrexec_path_set, (void *) ctx);
+        if (kvs_watch_string (h, "config.wrexec.wrexecd_path",
+             wrexec_path_set, (void *) ctx) < 0) {
+            flux_log_error (h, "getctx: kvs_watch_string");
+            goto fail;
+        }
+
     }
 
     return ctx;
+fail:
+    free (ctx);
+    return (NULL);
 }
 
 static void closeall (int fd)
@@ -183,13 +192,18 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     char c;
     int n;
     int status;
+    int rc = 0;
     pid_t pid;
 
     if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) < 0)
         return (-1);
 
-    if ((pid = fork ()) < 0)
-        err_exit ("fork");
+    if ((pid = fork ()) < 0) {
+        flux_log_error (ctx->h, "spawn_exec_handler: fork");
+        close (fds[0]);
+        close (fds[1]);
+        return (-1);
+    }
 
     if (pid == 0)
         exec_handler (ctx, id, fds);
@@ -208,11 +222,11 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     /* Blocking wait for exec helper to close fd */
     n = read (fds[1], &c, 1);
     if (n < 1) {
-        msg ("Error reading status from rexecd: %s", strerror (errno));
-        return (-1);
+        flux_log_error (ctx->h, "reading status from rexecd (n=%d)", n);
+        rc = -1;
     }
     close (fds[1]);
-    return (0);
+    return (rc);
 }
 
 static int64_t id_from_tag (const char *tag, char **endp)
@@ -226,74 +240,6 @@ static int64_t id_from_tag (const char *tag, char **endp)
     else if (l == ULONG_MAX && errno == ERANGE)
         return (-1);
     return l;
-}
-
-static int mrpc_respond_errnum (flux_mrpc_t *mrpc, int errnum)
-{
-    json_object *o = json_object_new_object ();
-    util_json_object_add_int (o, "errnum", errnum);
-    flux_mrpc_put_outarg_obj (mrpc, o);
-    json_object_put (o);
-    return (0);
-}
-
-static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
-{
-    int64_t id;
-    const char *method;
-    const char *json_str;
-    json_object *inarg = NULL;
-    json_object *request = NULL;
-    int rc = -1;
-    flux_t f = ctx->h;
-    flux_mrpc_t *mrpc;
-
-    if (flux_event_decode (zmsg, NULL, &json_str) < 0
-                || !(request = Jfromstr (json_str)) ) {
-        flux_log (f, LOG_ERR, "flux_event_decode: %s", strerror (errno));
-        return (0);
-    }
-    mrpc = flux_mrpc_create_fromevent_obj (f, request);
-    if (mrpc == NULL) {
-        if (errno != EINVAL) /* EINVAL == not addressed to me */
-            flux_log (f, LOG_ERR, "flux_mrpc_create_fromevent: %s",
-                      strerror (errno));
-        return (0);
-    }
-    if (flux_mrpc_get_inarg_obj (mrpc, &inarg) < 0) {
-        flux_log (f, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
-        goto done;
-    }
-    if (util_json_object_get_int64 (inarg, "id", &id) < 0) {
-        mrpc_respond_errnum (mrpc, errno);
-        flux_log (f, LOG_ERR, "wrexec mrpc failed to get arg `id'");
-        goto done;
-    }
-    if (util_json_object_get_string (inarg, "method", &method) < 0) {
-        mrpc_respond_errnum (mrpc, errno);
-        flux_log (f, LOG_ERR, "wrexec mrpc failed to get arg `id'");
-        goto done;
-    }
-
-    if (strcmp (method, "run") == 0) {
-        rc = spawn_exec_handler (ctx, id);
-    }
-    else {
-        mrpc_respond_errnum (mrpc, EINVAL);
-        flux_log (f, LOG_ERR, "rexec mrpc failed to get arg `id'");
-    }
-
-done:
-    flux_mrpc_respond (mrpc);
-    flux_mrpc_destroy (mrpc);
-
-    if (request)
-        json_object_put (request);
-    if (inarg)
-        json_object_put (inarg);
-    if (mrpc)
-        flux_mrpc_destroy (mrpc);
-    return (rc);
 }
 
 int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
@@ -315,62 +261,59 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
     return (1);
 }
 
-static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void event_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct rexec_ctx *ctx = arg;
     const char *topic;
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
-        goto done;
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (h, "event_cb: flux_msg_get_topic");
+        return;
+    }
     if (strncmp (topic, "wrexec.run", 10) == 0) {
         int64_t id = id_from_tag (topic + 11, NULL);
         if (id < 0)
-            err ("Invalid rexec tag `%s'", topic);
+            flux_log (h, LOG_ERR, "Invalid rexec tag `%s'", topic);
         if (lwj_targets_this_node (ctx, id))
             spawn_exec_handler (ctx, id);
     }
-    else if (strncmp (topic, "mrpc.wrexec", 11) == 0) {
-        mrpc_handler (ctx, *zmsg);
-    }
-done:
-    if (zmsg && *zmsg)
-        zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void request_cb (flux_t h,
+			flux_msg_handler_t *w,
+			const flux_msg_t *msg,
+			void *arg)
 {
     const char *topic;
-
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
-        goto done;
-    if (!strcmp (topic, "wrexec.shutdown")) {
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        flux_log_error (h, "request_cb: flux_msg_get_topic");
+    else if (!strcmp (topic, "wrexec.shutdown")) {
         flux_reactor_stop (flux_get_reactor (h));
-        return 0;
+        return;
     }
-done:
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static msghandler_t htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "*",          request_cb },
-    { FLUX_MSGTYPE_EVENT,     "wrexec.*", event_cb },
+struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "*",        request_cb, NULL },
+    { FLUX_MSGTYPE_EVENT,     "wrexec.*", event_cb,   NULL },
+    FLUX_MSGHANDLER_TABLE_END
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
     struct rexec_ctx *ctx = getctx (h);
+    if (ctx == NULL)
+        return -1;
 
     flux_event_subscribe (h, "wrexec.run.");
-    flux_event_subscribe (h, "mrpc.wrexec");
 
-    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+        flux_log_error (h, "flux_msg_handler_addvec");
         return -1;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_start");
         return -1;
     }
     return 0;

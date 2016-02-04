@@ -37,11 +37,11 @@ fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 		 $(top_builddir)/src/modules/kvs/libflux-kvs.la
 
 job_la_SOURCES = job.c
-job_la_LDFLAGS = $(fluxmod_ldflags) -module
+job_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 job_la_LIBADD = $(fluxmod_libadd)
 
 wrexec_la_SOURCES = wrexec.c
-wrexec_la_LDFLAGS = $(fluxmod_ldflags) -module
+wrexec_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 wrexec_la_LIBADD = $(fluxmod_libadd)
 wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
 
@@ -50,13 +50,16 @@ wrexecd_SOURCES = \
 	luastack.c \
 	luastack.h
 
-wrexecd_LDADD = \
+wrexecd_libs = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la
+
+wrexecd_LDADD = \
+	$(wrexecd_libs) \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \
@@ -68,5 +71,5 @@ dist_wreckscripts_SCRIPTS = \
    
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
 #
-$(wrexecd_LDADD):
+$(wrexecd_libs):
 	@cd `dirname $@` && $(MAKE) `basename $@`
