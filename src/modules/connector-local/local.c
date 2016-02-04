@@ -593,8 +593,14 @@ static void response_cb (flux_t h, flux_msg_handler_t *w,
     while (c) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
             if (client_send_nocopy (c, &cpy) < 0) { /* FIXME handle errors */
-                flux_log (h, LOG_ERR, "%s: client_send %s: %s",
-                          __FUNCTION__, zuuid_str (c->uuid), strerror (errno));
+                int type = FLUX_MSGTYPE_ANY;
+                const char *topic = "unknown";
+                (void)flux_msg_get_type (msg, &type);
+                (void)flux_msg_get_topic (msg, &topic);
+                flux_log (h, LOG_ERR, "send %s %s to client %.*s: %s",
+                          topic, flux_msg_typestr (type),
+                          5, zuuid_str (c->uuid),
+                          strerror (errno));
                 errno = 0;
             }
             break;
@@ -627,8 +633,14 @@ static void event_cb (flux_t h, flux_msg_handler_t *w,
     while (c) {
         if (client_is_subscribed (c, topic)) {
             if (client_send (c, msg) < 0) { /* FIXME handle errors */
-                flux_log (h, LOG_ERR, "%s: client_send %s: %s",
-                          __FUNCTION__, zuuid_str (c->uuid), strerror (errno));
+                int type = FLUX_MSGTYPE_ANY;
+                const char *topic = "unknown";
+                (void)flux_msg_get_type (msg, &type);
+                (void)flux_msg_get_topic (msg, &topic);
+                flux_log (h, LOG_ERR, "send %s %s to client %.*s: %s",
+                          topic, flux_msg_typestr (type),
+                          5, zuuid_str (c->uuid),
+                          strerror (errno));
                 errno = 0;
             }
             count++;
