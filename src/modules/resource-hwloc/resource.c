@@ -411,7 +411,7 @@ static void topo_request_cb (flux_t h,
         hwloc_topology_destroy (rank);
         free (xml);
 
-        flux_log (h, LOG_INFO, "resource-hwloc: loaded from %s", base_key);
+        flux_log (h, LOG_DEBUG, "resource-hwloc: loaded from %s", base_key);
     }
 
     kvsitr_destroy (base_iter);
