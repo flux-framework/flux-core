@@ -39,4 +39,14 @@ test_expect_success 'hwloc: return an error code on valid DIR, invalid files' '
     test_expect_code 1 flux hwloc reload /
 '
 
+test_expect_success 'hwloc: lstopo works' '
+    flux hwloc reload $exclu2 &&
+    flux hwloc lstopo > lstopo.out1 &&
+    sed -n 1p lstopo.out1 | grep "^System (32G.*"
+'
+
+test_expect_success 'hwloc: lstopo subcommand passes options to lstopo' '
+    flux hwloc lstopo --help | grep ^Usage
+'
+
 test_done
