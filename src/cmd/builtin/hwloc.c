@@ -190,6 +190,14 @@ static int cmd_lstopo (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int cmd_topology (optparse_t *p, int ac, char *av[])
+{
+    struct hwloc_topo *t = hwloc_topo_create (p);
+    puts (hwloc_topo_topology (t));
+    hwloc_topo_destroy (t);
+    return (0);
+}
+
 static void config_hwloc_paths (flux_t h, const char *dirpath)
 {
     uint32_t size, rank;
@@ -283,6 +291,12 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       "[lstopo-OPTIONS]",
       "Show hwloc topology of the system",
       cmd_lstopo,
+      NULL,
+    },
+    { "topology",
+      NULL,
+      "Dump system topology XML to stdout",
+      cmd_topology,
       NULL,
     },
     OPTPARSE_SUBCMD_END,
