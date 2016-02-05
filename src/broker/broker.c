@@ -396,7 +396,8 @@ int main (int argc, char *argv[])
         for (m = &boot_table[0]; m->name != NULL; m++)
             if (!strcasecmp (m->name, boot_method))
                 break;
-        ctx.boot_method = m;
+        if (m->name != NULL)
+            ctx.boot_method = m;
     }
     if (!ctx.boot_method)
         msg_exit ("invalid boot method: %s", boot_method ? boot_method
