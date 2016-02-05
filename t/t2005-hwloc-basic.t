@@ -49,4 +49,11 @@ test_expect_success 'hwloc: lstopo subcommand passes options to lstopo' '
     flux hwloc lstopo --help | grep ^Usage
 '
 
+test_expect_success 'hwloc: topology subcommand works' '
+    flux hwloc topology > topology.out2 &&
+    flux hwloc lstopo > lstopo.out2 &&
+    lstopo --if xml -i topology.out2 --of console > lstopo.out3 &&
+    test_cmp lstopo.out2 lstopo.out3
+'
+
 test_done
