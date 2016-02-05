@@ -220,7 +220,7 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-broker OPTIONS [module:key=val ...]\n"
+"Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
 " -N,--sid NAME                Set session id\n"
