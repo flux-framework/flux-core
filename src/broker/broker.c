@@ -194,7 +194,7 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:L:N:k:s:H:O:x:T:g:D:Em:l:I"
+#define OPTIONS "+vqM:X:L:N:k:s:H:O:x:T:g:D:Em:l:IS:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
@@ -214,6 +214,7 @@ static const struct option longopts[] = {
     {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
     {"log-level",       required_argument,  0, 'l'},
+    {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
 
@@ -240,6 +241,7 @@ static void usage (void)
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -m,--boot-method             Select bootstrap: pmi, single\n"
+" -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
     exit (1);
 }
@@ -379,6 +381,15 @@ int main (int argc, char *argv[])
                 break;
             case 'm': { /* --boot-method */
                 boot_method = optarg;
+                break;
+            }
+            case 'S': { /* --setattr ATTR=VAL */
+                char *val, *attr = xstrdup (optarg);
+                if ((val = strchr (attr, '=')))
+                    *val++ = '\0';
+                if (attr_add (ctx.attrs, attr, val, 0) < 0)
+                    err_exit ("setattr %s=%s", attr, val);
+                free (attr);
                 break;
             }
             default:
