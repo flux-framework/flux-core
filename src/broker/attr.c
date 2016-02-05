@@ -203,6 +203,21 @@ done:
     return rc;
 }
 
+int attr_set_flags (attr_t *attrs, const char *name, int flags)
+{
+    struct entry *e;
+    int rc = -1;
+
+    if (!(e = zhash_lookup (attrs->hash, name))) {
+        errno = ENOENT;
+        goto done;
+    }
+    e->flags = flags;
+    rc = 0;
+done:
+    return rc;
+}
+
 static int get_int (const char *name, const char **val, void *arg)
 {
     int *i = arg;
