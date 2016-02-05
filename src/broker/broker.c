@@ -890,39 +890,62 @@ static int create_dummyattrs (ctx_t *ctx)
     return 0;
 }
 
-/* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
- * It will be created in ctx->scratch_dir.
+/* If user set the 'scratch-directory-rank' attribute on the command line,
+ * validate the directory and its permissions, and set the immutable flag
+ * ont the attribute.  If unset, create it within 'scratch-directory'.
+ * If we created the directory, arrange to remove it on exit.
+ * This function is idempotent.
  */
 static int create_rankdir (ctx_t *ctx)
 {
-    const char *scratch_dir;
-    char *ranktmp = NULL;
+    const char *attr = "scratch-directory-rank";
+    const char *rank_dir, *scratch_dir, *local_uri;
+    char *dir = NULL;
     char *uri = NULL;
     int rc = -1;
 
-    if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (ctx->rank == FLUX_NODEID_ANY) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (attr_get (ctx->attrs, "local-uri", NULL, NULL) < 0) {
-        ranktmp = xasprintf ("%s/%d", scratch_dir, ctx->rank);
-        if (mkdir (ranktmp, 0700) < 0)
+    if (attr_get (ctx->attrs, attr, &rank_dir, NULL) == 0) {
+        struct stat sb;
+        if (stat (rank_dir, &sb) < 0)
             goto done;
-        cleanup_push_string (cleanup_directory, ranktmp);
-
-        uri = xasprintf ("local://%s", ranktmp);
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    } else {
+        if (attr_get (ctx->attrs, "scratch-directory",
+                                                &scratch_dir, NULL) < 0) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (ctx->rank == FLUX_NODEID_ANY) {
+            errno = EINVAL;
+            goto done;
+        }
+        dir = xasprintf ("%s/%d", scratch_dir, ctx->rank);
+        if (mkdir (dir, 0700) < 0)
+            goto done;
+        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        cleanup_push_string (cleanup_directory, dir);
+        rank_dir = dir;
+    }
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
+        uri = xasprintf ("local://%s", rank_dir);
         if (attr_add (ctx->attrs, "local-uri", uri,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
     rc = 0;
 done:
-    if (ranktmp)
-        free (ranktmp);
+    if (dir)
+        free (dir);
     if (uri)
         free (uri);
     return rc;
@@ -933,6 +956,7 @@ done:
  * ont the attribute.  If unset, create it in TMPDIR such that it will
  * be unique in the enclosing instance, and in a hierarchy of instances.
  * If we created the directory, arrange to remove it on exit.
+ * This function is idempotent.
  */
 static int create_scratchdir (ctx_t *ctx)
 {
