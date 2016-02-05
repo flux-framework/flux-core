@@ -209,12 +209,18 @@ static void config_hwloc_paths (flux_t h, const char *dirpath)
     if (flux_get_size (h, &size) < 0)
         err_exit ("flux_get_size");
     for (rank = 0; rank < size; rank++) {
+        n = snprintf (key, sizeof (key), "%s.%"PRIu32, key_prefix, rank);
+        assert (n < sizeof (key));
+        if (dirpath == NULL) {
+            /* Remove any per rank xml and reload default xml */
+            if (kvs_unlink (h, key) < 0)
+                err_exit ("kvs_unlink");
+            continue;
+        }
         n = snprintf (path, sizeof (path), "%s/%"PRIu32".xml", dirpath, rank);
         assert (n < sizeof (path));
         if (access (path, R_OK) < 0)
             err_exit ("%s", path);
-        n = snprintf (key, sizeof (key), "%s.%"PRIu32, key_prefix, rank);
-        assert (n < sizeof (key));
         if (kvs_put_string (h, key, path) < 0)
             err_exit ("kvs_put_string");
     }
@@ -247,16 +253,12 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     int n = optparse_optind (p);
     const char *default_nodeset = "all";
     const char *nodeset = optparse_get_str (p, "rank", default_nodeset);
-    char *dirpath;
+    char *dirpath = NULL;
     flux_t h;
 
-    if (n != ac - 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
     if (!(h = builtin_get_flux_handle (p)))
         err_exit ("flux_open");
-    if (!(dirpath = realpath (av[n], NULL)))
+    if (av[n] && !(dirpath = realpath (av[n], NULL)))
         err_exit ("%s", av[n]);
 
     config_hwloc_paths (h, dirpath);
@@ -282,8 +284,8 @@ static struct optparse_option reload_opts[] = {
 
 static struct optparse_subcommand hwloc_subcmds[] = {
     { "reload",
-      "[OPTIONS] DIR",
-      "Reload XML from DIR/<rank>.xml files",
+      "[OPTIONS] [DIR]",
+      "Reload hwloc XML, optionally from DIR/<rank>.xml files",
       internal_hwloc_reload,
       reload_opts,
     },
