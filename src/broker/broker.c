@@ -172,6 +172,7 @@ static void update_pidfile (ctx_t *ctx);
 static void init_shell (ctx_t *ctx);
 static int init_shell_exit_handler (struct subprocess *p, void *arg);
 
+static int create_persistdir (ctx_t *ctx);
 static int create_scratchdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
@@ -193,9 +194,8 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:L:N:k:s:H:O:x:T:g:Em:l:IS:"
+#define OPTIONS "+vqM:X:L:k:s:H:O:x:T:g:Em:l:IS:"
 static const struct option longopts[] = {
-    {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
@@ -222,7 +222,6 @@ static void usage (void)
 "Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
-" -N,--sid NAME                Set session id\n"
 " -M,--module NAME             Load module NAME (may be repeated)\n"
 " -x,--exclude NAME            Exclude module NAME\n"
 " -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
@@ -302,11 +301,6 @@ int main (int argc, char *argv[])
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-            case 'N':   /* --sid NAME */
-                if (attr_add (ctx.attrs, "session-id", optarg,
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
-                    err_exit ("attr_add session-id");
-                break;
             case 's':   /* --security=MODE */
                 if (!strcmp (optarg, "none"))
                     security_clr = FLUX_SEC_TYPE_ALL;
@@ -516,15 +510,21 @@ int main (int argc, char *argv[])
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
+    if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        err_exit ("attr_set_flags session-id");
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
      * (These may have already been called by boot method)
+     * If persist-filesystem or persist-directory are set, initialize those,
+     * but only on rank 0.
      */
     if (create_scratchdir (&ctx) < 0)
         err_exit ("create_scratchdir");
     if (create_rankdir (&ctx) < 0)
         err_exit ("create_rankdir");
+    if (create_persistdir (&ctx) < 0)
+        err_exit ("create_persistdir");
 
     /* Initialize logging.
      */
@@ -892,7 +892,7 @@ static int create_dummyattrs (ctx_t *ctx)
 
 /* If user set the 'scratch-directory-rank' attribute on the command line,
  * validate the directory and its permissions, and set the immutable flag
- * ont the attribute.  If unset, create it within 'scratch-directory'.
+ * on the attribute.  If unset, create it within 'scratch-directory'.
  * If we created the directory, arrange to remove it on exit.
  * This function is idempotent.
  */
@@ -953,7 +953,7 @@ done:
 
 /* If user set the 'scratch-directory' attribute on the command line,
  * validate the directory and its permissions, and set the immutable flag
- * ont the attribute.  If unset, create it in TMPDIR such that it will
+ * on the attribute.  If unset, create it in TMPDIR such that it will
  * be unique in the enclosing instance, and in a hierarchy of instances.
  * If we created the directory, arrange to remove it on exit.
  * This function is idempotent.
@@ -991,6 +991,83 @@ static int create_scratchdir (ctx_t *ctx)
         if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         cleanup_push_string (cleanup_directory, dir);
+    }
+    rc = 0;
+done:
+    if (tmpl)
+        free (tmpl);
+    return rc;
+}
+
+/* If 'persist-directory' set, validate it, make it immutable, done.
+ * If 'persist-filesystem' set, validate it, make it immutable, then:
+ * Create 'persist-directory' beneath it such that it is both unique and
+ * a different basename than 'scratch-directory' (in case persist-filesystem
+ * is set to TMPDIR).
+ */
+static int create_persistdir (ctx_t *ctx)
+{
+    struct stat sb;
+    const char *attr = "persist-directory";
+    const char *sid, *persist_dir, *persist_fs;
+    char *dir, *tmpl = NULL;
+    int rc = -1;
+
+    if (ctx->rank > 0) {
+        (void) attr_delete (ctx->attrs, "persist-filesystem", true);
+        (void) attr_delete (ctx->attrs, "persist-directory", true);
+        goto done_success;
+    }
+    if (attr_get (ctx->attrs, attr, &persist_dir, NULL) == 0) {
+        if (stat (persist_dir, &sb) < 0)
+            goto done;
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    } else {
+        if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (attr_get (ctx->attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
+            goto done_success;
+        }
+        if (stat (persist_fs, &sb) < 0)
+            goto done;
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, "persist-filesystem",
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        tmpl = xasprintf ("%s/fluxP-%s-XXXXXX", persist_fs, sid);
+        if (!(dir = mkdtemp (tmpl)))
+            goto done;
+        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    }
+done_success:
+    if (attr_get (ctx->attrs, "persist-filesystem", NULL, NULL) < 0) {
+        if (attr_add (ctx->attrs, "persist-filesystem", NULL,
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    }
+    if (attr_get (ctx->attrs, "persist-directory", NULL, NULL) < 0) {
+        if (attr_add (ctx->attrs, "persist-directory", NULL,
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
     }
     rc = 0;
 done:
@@ -1048,18 +1125,20 @@ static int boot_pmi (ctx_t *ctx)
 
     /* Get id string.
      */
-    e = pmi_get_id_length_max (pmi, &id_len);
-    if (e == PMI_SUCCESS) {
-        id = xzmalloc (id_len);
-        if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
-            msg ("pmi_get_rank: %s", pmi_strerror (e));
-            goto done;
+    if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
+        e = pmi_get_id_length_max (pmi, &id_len);
+        if (e == PMI_SUCCESS) {
+            id = xzmalloc (id_len);
+            if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
+                msg ("pmi_get_rank: %s", pmi_strerror (e));
+                goto done;
+            }
+        } else { /* No pmi_get_id() available? */
+            id = xasprintf ("%d", appnum);
         }
-    } else { /* No pmi_get_id() available? */
-        id = xasprintf ("simple-%d", appnum);
+        if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
     }
-    if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        goto done;
 
     /* Initialize scratch-directory/rankdir
      */
@@ -1287,9 +1366,11 @@ static int boot_single (ctx_t *ctx)
     ctx->rank = 0;
     ctx->size = 1;
 
-    if (attr_add (ctx->attrs, "session-id", sid,
-                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
+        if (attr_add (ctx->attrs, "session-id", sid,
+                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
         goto done;
+    }
     rc = 0;
 done:
     free (sid);
