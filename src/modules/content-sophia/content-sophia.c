@@ -91,6 +91,7 @@ static ctx_t *getctx (flux_t h)
     const char *dir;
     const char *hashfun;
     const char *tmp;
+    bool cleanup = false;
     int flags;
 
     if (!ctx) {
@@ -110,9 +111,12 @@ static ctx_t *getctx (flux_t h)
             goto error;
         }
         ctx->blob_size_limit = strtoul (tmp, NULL, 10);
-        if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
-            flux_log_error (h, "scratch-directory");
-            goto error;
+        if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
+            if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
+                flux_log_error (h, "scratch-directory");
+                goto error;
+            }
+            cleanup = true;
         }
         ctx->dir = xasprintf ("%s/content", dir);
         if (!(ctx->env = sp_env ())
@@ -125,7 +129,8 @@ static ctx_t *getctx (flux_t h)
             log_sophia_error (ctx, "initialization");
             goto error;
         }
-        cleanup_push_string (cleanup_directory_recursive, ctx->dir);
+        if (cleanup)
+            cleanup_push_string (cleanup_directory_recursive, ctx->dir);
         flux_aux_set (h, "flux::content-sophia", ctx, freectx);
     }
     return ctx;
