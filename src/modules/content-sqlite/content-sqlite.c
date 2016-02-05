@@ -98,9 +98,10 @@ static void freectx (void *arg)
 static ctx_t *getctx (flux_t h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::content-sqlite");
-    const char *scratchdir;
+    const char *dir;
     const char *hashfun;
     const char *tmp;
+    bool cleanup = false;
     int flags;
 
     if (!ctx) {
@@ -120,16 +121,21 @@ static ctx_t *getctx (flux_t h)
             goto error;
         }
         ctx->blob_size_limit = strtoul (tmp, NULL, 10);
-        if (!(scratchdir = flux_attr_get (h, "scratch-directory", NULL))) {
-            flux_log_error (h, "scratch-directory");
-            goto error;
+
+        if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
+            if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
+                flux_log_error (h, "scratch-directory");
+                goto error;
+            }
+            cleanup = true;
         }
-        ctx->dbdir = xasprintf ("%s/content", scratchdir);
+        ctx->dbdir = xasprintf ("%s/content", dir);
         if (mkdir (ctx->dbdir, 0755) < 0) {
             flux_log_error (h, "mkdir %s", ctx->dbdir);
             goto error;
         }
-        cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
+        if (cleanup)
+            cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
         ctx->dbfile = xasprintf ("%s/sqlite", ctx->dbdir);
 
         if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
