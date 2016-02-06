@@ -33,8 +33,7 @@ test_expect_success 'flux lsattr works' '
 	! grep -q attrtest.foo lsattr_out
 '
 test_expect_success 'flux lsattr -v works' '
-	flux lsattr -v | sed -e "s/[\ ]\+/\	/g" >lsattr_v_out &&
-	ATTR_VAL=`grep rank lsattr_v_out | cut -f2` &&
+	ATTR_VAL=$(flux lsattr -v | awk "/^rank / { print \$2 }") &&
 	test "${ATTR_VAL}" -eq 0
 '
 
