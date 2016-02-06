@@ -368,7 +368,8 @@ int main (int argc, char *argv[])
                 if ((val = strchr (attr, '=')))
                     *val++ = '\0';
                 if (attr_add (ctx.attrs, attr, val, 0) < 0)
-                    err_exit ("setattr %s=%s", attr, val);
+                    if (attr_set (ctx.attrs, attr, val, true) < 0)
+                        err_exit ("setattr %s=%s", attr, val);
                 free (attr);
                 break;
             }
