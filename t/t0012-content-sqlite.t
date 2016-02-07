@@ -108,7 +108,7 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 # Verify content is not lost
 
 test_expect_success 'flush rank 0 cache' '
-        flux content flush &&
+        run_timeout 10 flux content flush &&
 	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
 	test $NDIRTY -eq 0
 '
@@ -155,7 +155,7 @@ test_expect_success 'load content-sqlite module on rank 0' '
 '
 
 test_expect_success 'flush rank 0 cache' '
-        flux content flush &&
+        run_timeout 10 flux content flush &&
 	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
 	test $NDIRTY -eq 0
 '
