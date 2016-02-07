@@ -183,9 +183,6 @@ static int boot_single (ctx_t *ctx);
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
-static int attr_get_log (const char *name, const char **val, void *arg);
-static int attr_set_log (const char *name, const char *val, void *arg);
-
 static const struct flux_handle_ops broker_handle_ops;
 
 static struct boot_method boot_table[] = {
@@ -254,9 +251,6 @@ int main (int argc, char *argv[])
     int security_set = 0;
     const char *secdir = NULL;
     char *boot_method = "pmi";
-    char *log_filename = NULL;
-    FILE *log_f = NULL;
-    int log_level = LOG_INFO;
     int e;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -332,11 +326,14 @@ int main (int argc, char *argv[])
                 modpath = optarg;
                 break;
             case 'L':   /* --logdest DEST */
-                log_filename = optarg;
+                if (attr_add (ctx.attrs, "log-filename", optarg, 0) < 0)
+                    if (attr_set (ctx.attrs, "log-filename", optarg, true) < 0)
+                        err_exit ("setattr %s=%s", "log-filename", optarg);
                 break;
             case 'l':   /* --log-level 0-7 */
-                if ((log_level = log_strtolevel (optarg)) < 0)
-                    log_level = strtol (optarg, NULL, 10);
+                if (attr_add (ctx.attrs, "log-forward-level", optarg, 0) < 0)
+                    if (attr_set (ctx.attrs, "log-forward-level", optarg, true) < 0)
+                        err_exit ("setattr %s=%s", "log-forward-level", optarg);
                 break;
             case 'k':   /* --k-ary k */
                 ctx.k_ary = strtoul (optarg, NULL, 10);
@@ -528,21 +525,15 @@ int main (int argc, char *argv[])
         err_exit ("create_persistdir");
 
     /* Initialize logging.
+     * First establish a redirect callback that forces all logs
+     * to ctx.h to go to our local log class rather than be sent
+     * as a "cmb.log" request message.  Next, provide the handle
+     * and rank to the log class.
      */
     flux_log_set_facility (ctx.h, "broker");
     flux_log_set_redirect (ctx.h, log_append_redirect, ctx.log);
     log_set_flux (ctx.log, ctx.h);
     log_set_rank (ctx.log, ctx.rank);
-    log_set_buflimit (ctx.log, 1024); /* adjust by attribute */
-    if (log_set_level (ctx.log, log_level) < 0)
-        err_exit ("invalid log level: %d", log_level);
-    if (ctx.rank == 0 && log_filename) {
-        if (!strcmp (log_filename, "stderr"))
-            log_f = stderr;
-        else if (!(log_f = fopen (log_filename, "a")))
-            err_exit ("%s", log_filename);
-        log_set_file (ctx.log, log_f);
-    }
 
     /* Dummy up cached attributes on the broker's handle so logging's
      * use of flux_get_rank() etc will work despite limitations.
@@ -575,14 +566,6 @@ int main (int argc, char *argv[])
             || attr_add_active (ctx.attrs, "event-relay-uri",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "log-level", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
-            || attr_add_active (ctx.attrs, "log-buflimit", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
-            || attr_add_active (ctx.attrs, "log-bufcount", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
-            || attr_add_active (ctx.attrs, "log-count", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
             || attr_add_active_uint32 (ctx.attrs, "rank", &ctx.rank,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add_active_uint32 (ctx.attrs, "size", &ctx.size,
@@ -591,8 +574,9 @@ int main (int argc, char *argv[])
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || log_register_attrs (ctx.log, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
-        err_exit ("attr_add");
+        err_exit ("configuring attributes");
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
@@ -732,8 +716,6 @@ int main (int argc, char *argv[])
     log_destroy (ctx.log);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
-    if (log_f)
-        fclose (log_f);
 
     zlist_destroy (&modules);       /* autofree set */
     zlist_destroy (&modopts);       /* autofree set */
@@ -1867,56 +1849,6 @@ static int attr_get_snoop (const char *name, const char **val, void *arg)
     snoop_t *snoop = arg;
     *val = snoop_get_uri (snoop);
     return 0;
-}
-
-static int attr_get_log (const char *name, const char **val, void *arg)
-{
-    log_t *log = arg;
-    static char s[32];
-    int n, rc = -1;
-
-    if (!strcmp (name, "log-level")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_level (log));
-        assert (n < sizeof (s));
-    } else if (!strcmp (name, "log-buflimit")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_buflimit (log));
-        assert (n < sizeof (s));
-    } else if (!strcmp (name, "log-bufcount")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_bufcount (log));
-        assert (n < sizeof (s));
-    } else if (!strcmp (name, "log-count")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_count (log));
-        assert (n < sizeof (s));
-    } else {
-        errno = ENOENT;
-        goto done;
-    }
-    *val = s;
-    rc = 0;
-done:
-    return rc;
-}
-
-static int attr_set_log (const char *name, const char *val, void *arg)
-{
-    log_t *log = arg;
-    int rc = -1;
-
-    if (!strcmp (name, "log-level")) {
-        int level = strtol (val, NULL, 10);
-        if (log_set_level (log, level) < 0)
-            goto done;
-    } else if (!strcmp (name, "log-buflimit")) {
-        int limit = strtol (val, NULL, 10);
-        if (log_set_buflimit (log, limit) < 0)
-            goto done;
-    } else {
-        errno = ENOENT;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
 }
 
 static int attr_get_overlay (const char *name, const char **val, void *arg)
