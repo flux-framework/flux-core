@@ -59,6 +59,8 @@ local kw, err = f:kvswatcher {
                     timer:get0(),
                     key, tostring (result))
         end
+        -- Do not pass nil result to callback:
+        if result == nil then return end
         local ok, rv = pcall (cb, result)
         if not ok then error (rv) end
         if ok and rv then
