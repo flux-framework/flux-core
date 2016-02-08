@@ -31,6 +31,11 @@ while ! flux hwloc lstopo > lstopo.system; do
    test $count -eq 5 && break
 done
 
+#  Set path to lstopo or lstopo-no-graphics command:
+#
+lstopo=$(which lstopo 2>/dev/null || which lstopo-no-graphics 2>/dev/null)
+test -n "$lstopo" && test_set_prereq HAVE_LSTOPO
+
 test_expect_success 'hwloc: ensure we have system lstopo output' '
     test -f lstopo.system &&
     test -s lstopo.system &&
@@ -67,10 +72,10 @@ test_expect_success 'hwloc: lstopo subcommand passes options to lstopo' '
     flux hwloc lstopo --help | grep ^Usage
 '
 
-test_expect_success 'hwloc: topology subcommand works' '
+test_expect_success HAVE_LSTOPO 'hwloc: topology subcommand works' '
     flux hwloc topology > topology.out2 &&
     flux hwloc lstopo > lstopo.out2 &&
-    lstopo --if xml -i topology.out2 --of console > lstopo.out3 &&
+    $lstopo --if xml -i topology.out2 --of console > lstopo.out3 &&
     test_cmp lstopo.out2 lstopo.out3
 '
 
