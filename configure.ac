@@ -140,6 +140,10 @@ AC_SUBST(fluxincludedir)
 AS_VAR_SET(fluxcoreincludedir, $includedir/flux/core)
 AC_SUBST(fluxcoreincludedir)
 
+adl_RECURSIVE_EVAL([$bindir], fluxbindir)
+AS_VAR_SET(fluxbindir, $fluxbindir)
+AC_SUBST(fluxbindir)
+
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
