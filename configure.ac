@@ -211,7 +211,11 @@ AC_CONFIG_FILES( \
   doc/man7/Makefile \
   doc/test/Makefile \
   t/Makefile \
-  t/fluxometer.lua \
+  t/fluxometer/conf.lua \
 )
+
+AC_CONFIG_LINKS([ \
+  t/fluxometer.lua:t/fluxometer.lua \
+])
 
 AC_OUTPUT
