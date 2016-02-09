@@ -191,7 +191,7 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:L:k:s:H:O:x:T:g:Em:l:IS:"
+#define OPTIONS "+vqM:X:k:s:H:O:x:T:g:Em:IS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
@@ -200,7 +200,6 @@ static const struct option longopts[] = {
     {"exclude",         required_argument,  0, 'x'},
     {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
-    {"logdest",         required_argument,  0, 'L'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
@@ -208,7 +207,6 @@ static const struct option longopts[] = {
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
-    {"log-level",       required_argument,  0, 'l'},
     {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
@@ -223,9 +221,6 @@ static void usage (void)
 " -x,--exclude NAME            Exclude module NAME\n"
 " -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
-" -L,--logdest FILE            Redirect log output to specified file\n"
-" -l,--log-level LEVEL         Set log level (default: 6/info)\n"
-"          [0=emerg 1=alert 2=crit 3=err 4=warning 5=notice 6=info 7=debug]\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
@@ -324,16 +319,6 @@ int main (int argc, char *argv[])
                 break;
             case 'X':   /* --module-path PATH */
                 modpath = optarg;
-                break;
-            case 'L':   /* --logdest DEST */
-                if (attr_add (ctx.attrs, "log-filename", optarg, 0) < 0)
-                    if (attr_set (ctx.attrs, "log-filename", optarg, true) < 0)
-                        err_exit ("setattr %s=%s", "log-filename", optarg);
-                break;
-            case 'l':   /* --log-level 0-7 */
-                if (attr_add (ctx.attrs, "log-forward-level", optarg, 0) < 0)
-                    if (attr_set (ctx.attrs, "log-forward-level", optarg, true) < 0)
-                        err_exit ("setattr %s=%s", "log-forward-level", optarg);
                 break;
             case 'k':   /* --k-ary k */
                 ctx.k_ary = strtoul (optarg, NULL, 10);
