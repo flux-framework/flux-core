@@ -131,8 +131,12 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     int rc = -1;
 
     if ((e = zhash_lookup (attrs->hash, name))) {
-        errno = EEXIST;
-        goto done;
+        if (!set) {
+            errno = EEXIST;
+            goto done;
+        }
+        if (set (name, e->val, arg) < 0)
+            goto done;
     }
     e = entry_create (name, NULL, flags);
     e->set = set;
