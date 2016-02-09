@@ -85,4 +85,8 @@ test_expect_success 'hwloc: reload with no args reloads system topology' '
     test_cmp lstopo.system lstopo.out4
 '
 
+test_expect_success 'hwloc: test failure of lstopo command' '
+    test_must_fail flux hwloc lstopo --input f:g:y
+'
+
 test_done
