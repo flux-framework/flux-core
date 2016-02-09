@@ -12,30 +12,30 @@ test_expect_success 'flux getattr log-count counts log messages' '
 	NEW_VAL=`flux getattr log-count` &&
 	test "${OLD_VAL}" -lt "${NEW_VAL}"
 '
-test_expect_success 'flux getattr log-bufcount counts log messages' '
-	OLD_VAL=`flux getattr log-bufcount` &&
+test_expect_success 'flux getattr log-ring-used counts log messages' '
+	OLD_VAL=`flux getattr log-ring-used` &&
 	flux logger --priority test.debug hello &&
-	NEW_VAL=`flux getattr log-bufcount` &&
+	NEW_VAL=`flux getattr log-ring-used` &&
 	test "${OLD_VAL}" -lt "${NEW_VAL}"
 '
 test_expect_success 'flux dmesg -C clears, no print' '
 	flux logger --priority test.debug hello &&
-	OLD_VAL=`flux getattr log-bufcount` &&
+	OLD_VAL=`flux getattr log-ring-used` &&
 	test "${OLD_VAL}" -gt 0 &&
 	flux dmesg -C > dmesg.out &&
 	! grep -q hello_dmesg dmesg.out &&
-	NEW_VAL=`flux getattr log-bufcount` &&
+	NEW_VAL=`flux getattr log-ring-used` &&
 	test "${NEW_VAL}" -eq 0
 '
-test_expect_success 'flux setattr log-buflimit trims ring buffer' '
+test_expect_success 'flux setattr log-ring-size trims ring buffer' '
 	flux logger --priority test.debug hello &&
 	flux logger --priority test.debug hello &&
 	flux logger --priority test.debug hello &&
 	flux logger --priority test.debug hello &&
-	OLD_VAL=`flux getattr log-bufcount` &&
+	OLD_VAL=`flux getattr log-ring-used` &&
 	test "${OLD_VAL}" -ge 4 &&
-	flux setattr log-buflimit 4 &&
-	NEW_VAL=`flux getattr log-bufcount` &&
+	flux setattr log-ring-size 4 &&
+	NEW_VAL=`flux getattr log-ring-used` &&
 	test "${NEW_VAL}" -eq 4
 '
 test_expect_success 'flux dmesg prints, no clear' '
@@ -53,11 +53,11 @@ test_expect_success 'flux dmesg -c prints and clears' '
 	! grep -q hello_dmesg dmesg.out
 '
 test_expect_success 'ring buffer wraps over old entries' '
-	flux setattr log-buflimit 2 &&
+	flux setattr log-ring-size 2 &&
 	flux logger --priority test.debug hello1 &&
 	flux logger --priority test.debug hello2 &&
 	flux logger --priority test.debug hello3 &&
-	ATTR_VAL=`flux getattr log-bufcount` &&
+	ATTR_VAL=`flux getattr log-ring-used` &&
 	test "${ATTR_VAL}" -eq 2 &&
 	flux dmesg >dmesg.out &&
 	! grep -q hello1 dmesg.out &&
