@@ -271,6 +271,7 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
 
 int cmd_hwloc (optparse_t *p, int ac, char *av[])
 {
+    log_init ("flux-hwloc");
     if (optparse_run_subcommand (p, ac, av) != OPTPARSE_SUCCESS)
         exit (1);
     return (0);
