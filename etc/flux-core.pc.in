@@ -1,6 +1,6 @@
 prefix=@prefix@
 exec_prefix=@exec_prefix@
-libdir=@libdir@/flux
+libdir=@libdir@
 includedir=@includedir@
 
 Name: flux-core
