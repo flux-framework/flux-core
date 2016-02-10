@@ -43,21 +43,6 @@ To dump the ring buffer on all ranks
   $ flux exec flux dmesg | sort
 
 
-BROKER ATTRIBUTES
------------------
-
-Ring buffer parameters may be accessed via the following broker attributes:
-
-log-bufcount (read-only)::
-The number of log entries currently stored in the ring buffer.
-
-log-buflimit (read-write)::
-The maximum number of log entries that can be stored in the ring buffer.
-
-log-count (read-only)::
-The number of log entries ever stored in the ring buffer.
-
-
 AUTHOR
 ------
 This page is maintained by the Flux community.
@@ -75,4 +60,4 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 --------
-flux-setattr(1)
+flux-setattr(1), flux-broker-attributes(7)
