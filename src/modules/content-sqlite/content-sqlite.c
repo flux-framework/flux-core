@@ -38,7 +38,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-const bool debug_enabled = true;
+const bool debug_enabled = false;
 
 const char *sql_create_table = "CREATE TABLE objects("
                                "  hash CHAR(20) PRIMARY KEY,"
