@@ -43,6 +43,14 @@
 --  fluxometer.conf initializes package.path and cpath, so this must
 --  remain the first line in this file!
 --
+--  If FLUXOMETER_LUA_PATH is set, place this path at the front of
+--  package.path so we load the same fluxometer.conf as before.
+--
+local fpath = os.getenv ("FLUXOMETER_LUA_PATH")
+if fpath then
+    package.path = fpath .. ';' .. package.path
+end
+
 local fluxTest = require 'fluxometer.conf'
 fluxTest.__index = fluxTest
 
@@ -85,9 +93,9 @@ function fluxTest:start_session (t)
 
     table.insert (cmd, self.arg0)
 
-    -- Adjust package.path so we find fluxometer.lua
-    local p = self.src_dir..'/?.lua;'..package.path
-    posix.setenv ("LUA_PATH", p)
+    -- Set FLUXOMETER_LUA_PATH to ensure we load the same fluxometer.conf
+    --  after `flux start ...`
+    posix.setenv ("FLUXOMETER_LUA_PATH", self.src_dir..'/?.lua')
 
     -- reexec script under flux-start if necessary:
     --  (does not return)
