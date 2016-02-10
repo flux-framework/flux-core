@@ -24,7 +24,6 @@
 --
 --  Test harness configuration for build-tree:
 --
-require 'Test.More'
 
 local top_srcdir = "@abs_top_srcdir@"
 local top_builddir = "@abs_top_builddir@"
@@ -63,9 +62,12 @@ else
 	    .. package.cpath
 end
 
+require 'Test.More'
+
 return  {
     top_srcdir = top_srcdir,
-    top_builddir = top_builddir
+    top_builddir = top_builddir,
+    fluxbindir = fluxbindir
 }
 
 -- vi: ts=4 sw=4 expandtab
