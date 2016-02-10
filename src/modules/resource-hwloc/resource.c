@@ -377,7 +377,14 @@ static void topo_request_cb (flux_t h,
     int buflen;
     hwloc_topology_t global;
     hwloc_topology_init (&global);
+    int count = 0;
+    uint32_t size;
 
+    if (flux_get_size (h, &size) < 0) {
+        flux_respond (h, msg, errno, NULL);
+        flux_log_error (h, "%s: flux_get_size", __FUNCTION__);
+        goto done;
+    }
     if (!ctx->loaded) {
         flux_log (h,
                   LOG_ERR,
@@ -399,19 +406,31 @@ static void topo_request_cb (flux_t h,
     while ((base_key = kvsitr_next (base_iter))) {
         char *xml = NULL;
         hwloc_topology_t rank;
-        kvsdir_get_string (kd, base_key, &xml);
-
-        hwloc_topology_init (&rank);
-        hwloc_topology_set_xmlbuffer (rank, xml, strlen (xml));
-        hwloc_topology_load (rank);
-        hwloc_custom_insert_topology (global,
+        if (kvsdir_get_string (kd, base_key, &xml) < 0) {
+            flux_log_error (h, "%s", base_key);
+            continue;
+        }
+        if (hwloc_topology_init (&rank) < 0) {
+            flux_log_error (h, "%s: hwloc_topology_init", base_key);
+            free (xml);
+            continue;
+        }
+        if (hwloc_topology_set_xmlbuffer (rank, xml, strlen (xml)) < 0
+                || hwloc_topology_load (rank) < 0
+                || hwloc_custom_insert_topology (global,
                                       hwloc_get_root_obj (global),
                                       rank,
-                                      NULL);
+                                      NULL) < 0) {
+            flux_log_error (h, "%s: hlwoc_set/load/insert", base_key);
+            hwloc_topology_destroy (rank);
+            free (xml);
+            continue;
+        }
         hwloc_topology_destroy (rank);
         free (xml);
 
-        flux_log (h, LOG_INFO, "resource-hwloc: loaded from %s", base_key);
+        flux_log (h, LOG_DEBUG, "%s: loaded", base_key);
+        count++;
     }
 
     kvsitr_destroy (base_iter);
@@ -426,9 +445,12 @@ static void topo_request_cb (flux_t h,
     }
     Jadd_str (out, "topology", buffer);
     hwloc_free_xmlbuffer (global, buffer);
-
-    flux_respond (h, msg, 0, Jtostr (out));
-
+    if (count < size) {
+        flux_log (h, LOG_ERR, "only got %d out of %d ranks aggregated",
+                count, size);
+        flux_respond (h, msg, EAGAIN, NULL);
+    } else
+        flux_respond (h, msg, 0, Jtostr (out));
 done:
     hwloc_topology_destroy (global);
     Jput (out);
