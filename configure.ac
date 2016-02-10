@@ -144,6 +144,10 @@ adl_RECURSIVE_EVAL([$bindir], fluxbindir)
 AS_VAR_SET(fluxbindir, $fluxbindir)
 AC_SUBST(fluxbindir)
 
+adl_RECURSIVE_EVAL([$luadir], fluxluadir)
+AS_VAR_SET(fluxluadir, $fluxluadir)
+AC_SUBST(fluxluadir)
+
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
