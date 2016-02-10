@@ -43,7 +43,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-const bool debug_enabled = true;
+const bool debug_enabled = false;
 
 typedef struct {
     char *dir;
