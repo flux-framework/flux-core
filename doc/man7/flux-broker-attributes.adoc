@@ -82,18 +82,27 @@ a connection to the enclosing instance.
 LOGGING ATTRIBUTES
 ------------------
 
-log-bufcount::
+log-ring-used::
 The number of log entries currently stored in the ring buffer.
 
-log-buflimit::
+log-ring-size::
 The maximum number of log entries that can be stored in the ring buffer.
 
 log-count::
 The number of log entries ever stored in the ring buffer.
 
-log-level::
+log-forward-level::
 Log entries at syslog(3) level at or below this value are forwarded
 to rank zero for permanent capture.
+
+log-critical-level::
+Log entries at syslog(3) level at or below this value are copied
+to stderr on the logging rank, for capture by the enclosing instance.
+
+log-filename::
+If set on rank zero, forwarded log entries are directed to this file.
+If the file name is set to "stderr", forwarded log entries are directed
+to standard error of the rank zero broker.
 
 
 CONTENT ATTRIBUTES
