@@ -13,6 +13,16 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 
+lua_SCRIPTS = \
+	fluxometer.lua
+
+install-data-local:
+	$(INSTALL) -m644 fluxometer/conf.lua.installed \
+		$(DESTDIR)$(luadir)/fluxometer/conf.lua
+uninstall-local:
+	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
+
+
 TESTS = \
 	loop/handle.t \
 	loop/reactor.t \

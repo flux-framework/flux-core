@@ -36,59 +36,27 @@
  --  test:die ()  -- bail out of tests
  --
  ---------------------------------------------------------------------------
- --
 ---------------------------------------------------------------------------
 --
---  Test harness configuration:
+--  Initialize fluxTest object with fluxometer configuration.
 --
-local top_srcdir = "@abs_top_srcdir@"
-local top_builddir = "@abs_top_builddir@"
-
---  Default path for flux(1) binary
-local fluxbindir = top_builddir .. "/src/cmd"
-
-if os.getenv ("FLUX_TEST_INSTALLED_PATH") then
-    --
-    --  We are attempting to test against an installed flux(1).
-    --   Therefore, we grab proper LUA_PATH and LUA_CPATH by invoking
-    --   lua(1) under flux-env. We then _append_ in-tree paths so
-    --   that test dependencies can be picked up such as Test/More.lua
-    --   and lalarm.so
-    --
-    --  Reset fluxbindir to requested path by env variable:
-    fluxbindir = os.getenv ("FLUX_TEST_INSTALLED_PATH")
-    local flux = fluxbindir .. "/flux"
-    local read_path = function (v)
-        local cmd = string.format (flux.." env lua -e 'print (package.%s)'", v)
-        local p = io.popen (cmd):read ("*all")
-        return p:match ("^%s*(.-);*%s*$")
-    end
-    package.path = read_path ("path") .. ';' ..
-                     top_srcdir .. "/src/bindings/lua/?.lua"
-    package.cpath = read_path ("cpath") .. ';' ..
-                     top_builddir .. "/src/bindings/lua/.libs/?.so"
-else
-    --
-    -- Testing in-tree, simply append explicit path to lua bindings to
-    --  package.path and package.cpath to hand down to test scripts
-    --
-    package.path = top_srcdir .. "/src/bindings/lua/?.lua" .. ';'
-	    .. package.path
-    package.cpath = top_builddir .. "/src/bindings/lua/.libs/?.so" .. ';' 
-	    .. package.cpath
+--  fluxometer.conf initializes package.path and cpath, so this must
+--  remain the first line in this file!
+--
+--  If FLUXOMETER_LUA_PATH is set, place this path at the front of
+--  package.path so we load the same fluxometer.conf as before.
+--
+local fpath = os.getenv ("FLUXOMETER_LUA_PATH")
+if fpath then
+    package.path = fpath .. ';' .. package.path
 end
 
----------------------------------------------------------------------------
+local fluxTest = require 'fluxometer.conf'
+fluxTest.__index = fluxTest
+
+--  Load other requirements:
 local getopt = require 'flux.alt_getopt'.get_opts
 local posix = require 'flux.posix'
-require 'Test.More'
-
----------------------------------------------------------------------------
-local fluxTest = {
-    top_srcdir = top_srcdir,
-    top_builddir = top_builddir
-}
-fluxTest.__index = fluxTest
 
 --  Options:
 local cmdline_opts = {
@@ -125,9 +93,9 @@ function fluxTest:start_session (t)
 
     table.insert (cmd, self.arg0)
 
-    -- Adjust package.path so we find fluxometer.lua
-    local p = self.src_dir..'/?.lua;'..package.path
-    posix.setenv ("LUA_PATH", p)
+    -- Set FLUXOMETER_LUA_PATH to ensure we load the same fluxometer.conf
+    --  after `flux start ...`
+    posix.setenv ("FLUXOMETER_LUA_PATH", self.src_dir..'/?.lua')
 
     -- reexec script under flux-start if necessary:
     --  (does not return)
@@ -174,10 +142,10 @@ function fluxTest.init (...)
     test.log_file = "lua-"..test.prog..".broker.log"
     test.start_args = { "-o,-q,-L" .. test.log_file }
 
-    local path = fluxbindir.."/flux"
+    local path = fluxTest.fluxbindir .. "/flux"
     local mode = posix.stat (path, 'mode')
     if mode and mode:match('^rwx') then
-        do_path_prepend (fluxbindir)
+        do_path_prepend (fluxTest.fluxbindir)
         test.flux_path = path
     else
         test:die ("Failed to find flux path")

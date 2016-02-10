@@ -140,6 +140,14 @@ AC_SUBST(fluxincludedir)
 AS_VAR_SET(fluxcoreincludedir, $includedir/flux/core)
 AC_SUBST(fluxcoreincludedir)
 
+adl_RECURSIVE_EVAL([$bindir], fluxbindir)
+AS_VAR_SET(fluxbindir, $fluxbindir)
+AC_SUBST(fluxbindir)
+
+adl_RECURSIVE_EVAL([$luadir], fluxluadir)
+AS_VAR_SET(fluxluadir, $fluxluadir)
+AC_SUBST(fluxluadir)
+
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
@@ -207,7 +215,12 @@ AC_CONFIG_FILES( \
   doc/man7/Makefile \
   doc/test/Makefile \
   t/Makefile \
-  t/fluxometer.lua \
+  t/fluxometer/conf.lua \
+  t/fluxometer/conf.lua.installed \
 )
+
+AC_CONFIG_LINKS([ \
+  t/fluxometer.lua:t/fluxometer.lua \
+])
 
 AC_OUTPUT

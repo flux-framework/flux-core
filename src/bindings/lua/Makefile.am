@@ -4,6 +4,7 @@ AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 		$(LUA_INCLUDE) $(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 fluxluadir =     $(luadir)/flux
+fluxometerdir =  $(luadir)/fluxometer
 wreckluadir =    $(luadir)/wreck
 lustachedir =    $(fluxluadir)/lustache
 fluxluaexecdir = $(luaexecdir)/flux
@@ -25,6 +26,14 @@ dist_lustache_SCRIPTS = \
 	flux/lustache/context.lua \
 	flux/lustache/renderer.lua \
 	flux/lustache/scanner.lua
+
+nobase_dist_fluxometer_SCRIPTS = \
+	Test/Builder/NoOutput.lua \
+	Test/Builder/SocketOutput.lua \
+	Test/Builder/Tester.lua \
+	Test/Builder/Tester/File.lua \
+	Test/Builder.lua \
+	Test/More.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la
