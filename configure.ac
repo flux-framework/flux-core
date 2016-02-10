@@ -216,6 +216,7 @@ AC_CONFIG_FILES( \
   doc/test/Makefile \
   t/Makefile \
   t/fluxometer/conf.lua \
+  t/fluxometer/conf.lua.installed \
 )
 
 AC_CONFIG_LINKS([ \
