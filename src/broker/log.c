@@ -34,8 +34,9 @@
 #include "log.h"
 
 static const int default_ring_size = 1024;
-static const int default_forward_level = LOG_ERR;
+static const int default_forward_level = LOG_DEBUG;
 static const int default_critical_level = LOG_CRIT;
+static const int default_stderr_level = LOG_ERR;
 
 #define LOG_MAGIC 0xe1e2e3e4
 struct log_struct {
@@ -46,6 +47,7 @@ struct log_struct {
     FILE *f;
     int forward_level;
     int critical_level;
+    int stderr_level;
     zlist_t *buf;
     int ring_size;
     int seq;
@@ -218,6 +220,7 @@ log_t *log_create (void)
     log->magic = LOG_MAGIC;
     log->forward_level = default_forward_level;
     log->critical_level = default_critical_level;
+    log->stderr_level = default_stderr_level;
     log->ring_size = default_ring_size;
     if (!(log->buf = zlist_new ()))
         oom();
@@ -280,6 +283,16 @@ static int log_set_critical_level (log_t *log, int level)
     return 0;
 }
 
+static int log_set_stderr_level (log_t *log, int level)
+{
+    if (level < LOG_EMERG || level > LOG_DEBUG) {
+        errno = EINVAL;
+        return -1;
+    }
+    log->stderr_level = level;
+    return 0;
+}
+
 static int log_set_ring_size (log_t *log, int size)
 {
     if (size < 0) {
@@ -325,6 +338,10 @@ static int attr_get_log (const char *name, const char **val, void *arg)
         n = snprintf (s, sizeof (s), "%d", log->critical_level);
         assert (n < sizeof (s));
         *val = s;
+    } else if (!strcmp (name, "log-stderr-level")) {
+        n = snprintf (s, sizeof (s), "%d", log->stderr_level);
+        assert (n < sizeof (s));
+        *val = s;
     } else if (!strcmp (name, "log-ring-size")) {
         n = snprintf (s, sizeof (s), "%d", log->ring_size);
         assert (n < sizeof (s));
@@ -360,6 +377,10 @@ static int attr_set_log (const char *name, const char *val, void *arg)
     } else if (!strcmp (name, "log-critical-level")) {
         int level = strtol (val, NULL, 10);
         if (log_set_critical_level (log, level) < 0)
+            goto done;
+    } else if (!strcmp (name, "log-stderr-level")) {
+        int level = strtol (val, NULL, 10);
+        if (log_set_stderr_level (log, level) < 0)
             goto done;
     } else if (!strcmp (name, "log-ring-size")) {
         int size = strtol (val, NULL, 10);
@@ -402,9 +423,15 @@ int log_register_attrs (log_t *log, attr_t *attrs)
         if (attr_add_active (attrs, "log-filename", 0,
                              attr_get_log, attr_set_log, log) < 0)
             goto done;
+        if (attr_add_active (attrs, "log-stderr-level", 0,
+		                 attr_get_log, attr_set_log, log) < 0)
+            goto done;
     } else {
         (void)attr_delete (attrs, "log-filename", true);
         if (attr_add (attrs, "log-filename", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        (void)attr_delete (attrs, "log-stderr-level", true);
+        if (attr_add (attrs, "log-stderr-level", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
 
@@ -456,22 +483,27 @@ int log_append (log_t *log, const char *facility, int level, uint32_t rank,
                 struct timeval tv, const char *message)
 {
     assert (log->magic == LOG_MAGIC);
+    bool logged_stderr = false;
     int rc = 0;
 
     if (rank == log->rank) {
         if (log_buf_append (log, facility, level, rank, tv, message) < 0)
             rc = -1;
+	if (level <= log->critical_level) {
+	    flux_log_fprint (facility, level, rank, tv, message, stderr);
+            logged_stderr = true;
+        }
     }
-    if (level <= log->critical_level)
-        flux_log_fprint (facility, level, rank, tv, message, stderr);
     if (level <= log->forward_level) {
         if (log->rank == 0) {
             flux_log_fprint (facility, level, rank, tv, message, log->f);
         } else {
             if (log_forward (log, facility, level, rank, tv, message) < 0)
                 rc = -1;
-       }
+        }
     }
+    if (!logged_stderr && level <= log->stderr_level && log->rank == 0)
+        flux_log_fprint (facility, level, rank, tv, message, stderr);
     return rc;
 }
 
