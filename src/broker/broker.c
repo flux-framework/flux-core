@@ -719,7 +719,7 @@ static void hello_update_cb (hello_t *hello, void *arg)
         if (ctx->init_shell)
             init_shell (ctx);
     } else  {
-        flux_log (ctx->h, LOG_ERR, "nodeset: %s (incomplete)",
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
                   hello_get_nodeset (hello));
     }
     if (ctx->hello_timeout != 0
