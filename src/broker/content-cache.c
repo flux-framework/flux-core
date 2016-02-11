@@ -486,6 +486,8 @@ static int cache_store (content_cache_t *cache, struct cache_entry *e)
         rpc = flux_rpc_raw (cache->h, "content.store",
                             e->data, e->len, FLUX_NODEID_UPSTREAM, 0);
     } else {
+        if (cache->flush_batch_count >= cache->flush_batch_limit)
+            return 0;
         rpc = flux_rpc_raw (cache->h, "content-backing.store",
                             e->data, e->len, FLUX_NODEID_ANY, 0);
     }
