@@ -22,11 +22,6 @@ install-data-local:
 uninstall-local:
 	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
 
-AM_TESTS_ENVIRONMENT = \
-	PYTHONPATH=$(top_builddir)/src/bindings/python:$(top_srcdir)/src/bindings/python/pycotap:$(top_srcdir)/src/bindings/python/:$$PYTHONPATH \
-	CHECK_BUILDDIR=$(top_builddir) \
-        FLUX_CONNECTOR_PATH="$(top_builddir)/src/connectors"
-
 TESTS = \
 	loop/handle.t \
 	loop/reactor.t \
@@ -75,7 +70,7 @@ TESTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
-	$(top_builddir)/src/bindings/python/test_commands/test_runner.t
+	$(top_builddir)/t/t9990-python-tests.t
 
 EXTRA_DIST= \
 	$(check_SCRIPTS) \
@@ -131,7 +126,7 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t \
-	$(top_builddir)/src/bindings/python/test_commands/test_runner.t
+	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
 	loop/handle.t \
