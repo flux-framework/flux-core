@@ -102,21 +102,24 @@ static ctx_t *getctx (flux_t h)
     const char *hashfun;
     const char *tmp;
     bool cleanup = false;
+    int saved_errno;
     int flags;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         if (!(hashfun = flux_attr_get (h, "content-hash", &flags))) {
+            saved_errno = errno;
             flux_log_error (h, "content-hash");
             goto error;
         }
         if (strcmp (hashfun, "sha1") != 0) {
-            errno = EINVAL;
+            saved_errno = errno = EINVAL;
             flux_log_error (h, "content-hash: %s", hashfun);
             goto error;
         }
         if (!(tmp = flux_attr_get (h, "content-blob-size-limit", NULL))) {
+            saved_errno = errno;
             flux_log_error (h, "content-blob-size-limit");
             goto error;
         }
@@ -124,6 +127,7 @@ static ctx_t *getctx (flux_t h)
 
         if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
             if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
+                saved_errno = errno;
                 flux_log_error (h, "scratch-directory");
                 goto error;
             }
@@ -131,6 +135,7 @@ static ctx_t *getctx (flux_t h)
         }
         ctx->dbdir = xasprintf ("%s/content", dir);
         if (mkdir (ctx->dbdir, 0755) < 0) {
+            saved_errno = errno;
             flux_log_error (h, "mkdir %s", ctx->dbdir);
             goto error;
         }
@@ -139,6 +144,7 @@ static ctx_t *getctx (flux_t h)
         ctx->dbfile = xasprintf ("%s/sqlite", ctx->dbdir);
 
         if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
+            saved_errno = errno;
             flux_log_error (h, "sqlite3_open %s", ctx->dbfile);
             goto error;
         }
@@ -148,26 +154,31 @@ static ctx_t *getctx (flux_t h)
                                             NULL, NULL, NULL) != SQLITE_OK
                 || sqlite3_exec (ctx->db, "PRAGMA locking_mode=EXCLUSIVE",
                                             NULL, NULL, NULL) != SQLITE_OK) {
+            saved_errno = EINVAL;
             log_sqlite_error (ctx, "setting sqlite pragmas");
             goto error;
         }
         if (sqlite3_exec (ctx->db, sql_create_table,
                                             NULL, NULL, NULL) != SQLITE_OK) {
+            saved_errno = EINVAL;
             log_sqlite_error (ctx, "creating table");
             goto error;
         }
         if (sqlite3_prepare_v2 (ctx->db, sql_load, -1, &ctx->load_stmt,
                                             NULL) != SQLITE_OK) {
+            saved_errno = EINVAL;
             log_sqlite_error (ctx, "preparing load stmt");
             goto error;
         }
         if (sqlite3_prepare_v2 (ctx->db, sql_store, -1, &ctx->store_stmt,
                                             NULL) != SQLITE_OK) {
+            saved_errno = EINVAL;
             log_sqlite_error (ctx, "preparing store stmt");
             goto error;
         }
         if (sqlite3_prepare_v2 (ctx->db, sql_dump, -1, &ctx->dump_stmt,
                                             NULL) != SQLITE_OK) {
+            saved_errno = EINVAL;
             log_sqlite_error (ctx, "preparing dump stmt");
             goto error;
         }
@@ -176,6 +187,7 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 error:
     freectx (ctx);
+    errno = saved_errno;
     return NULL;
 }
 
