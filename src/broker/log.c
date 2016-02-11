@@ -36,7 +36,6 @@
 static const int default_ring_size = 1024;
 static const int default_forward_level = LOG_ERR;
 static const int default_critical_level = LOG_CRIT;
-static const char *default_filename = "stderr";
 
 #define LOG_MAGIC 0xe1e2e3e4
 struct log_struct {
@@ -242,7 +241,7 @@ void log_destroy (log_t *log)
                 sleeper_destroy (s);
             zlist_destroy (&log->sleepers);
         }
-        if (log->f && log->f != stderr)
+        if (log->f)
             (void)fclose (log->f);
         if (log->filename)
             free (log->filename);
@@ -301,13 +300,11 @@ static int log_set_filename (log_t *log, const char *destination)
     FILE *f;
     if (log->rank > 0)
         return 0;
-    if (!strcmp (destination, "stderr"))
-        f = stderr;
-    else if (!(f = fopen (destination, "a")))
+    if (!(f = fopen (destination, "a")))
         return -1;
     if (log->filename)
         free (log->filename);
-    if (log->f && log->f != stderr)
+    if (log->f)
         fclose (log->f);
     log->filename = xstrdup (destination);
     log->f = f;
@@ -383,7 +380,7 @@ done:
 int log_register_attrs (log_t *log, attr_t *attrs)
 {
     char s[PATH_MAX];
-    const char *val, *log_filename = NULL;
+    const char *val;
     int rc = -1;
 
     /* log-filename
@@ -391,17 +388,13 @@ int log_register_attrs (log_t *log, attr_t *attrs)
      * If unset, and persist-directory is set, make it ${persist-directory}/log
      */
     if (log->rank == 0) {
-        if (attr_get (attrs, "log-filename", NULL, NULL) < 0) {
-            if (attr_get (attrs, "persist-directory", &val, NULL) == 0 && val) {
-                if (snprintf (s, sizeof (s), "%s/log", val) >= sizeof (s)) {
-                    err ("log-filename truncated");
-                    goto done;
-                }
-                log_filename = s;
+        if (attr_get (attrs, "log-filename", NULL, NULL) < 0
+          && attr_get (attrs, "persist-directory", &val, NULL) == 0 && val) {
+            if (snprintf (s, sizeof (s), "%s/log", val) >= sizeof (s)) {
+                err ("log-filename truncated");
+                goto done;
             }
-            if (attr_add (attrs, "log-filename",
-                          log_filename ? log_filename
-                                       : default_filename, 0) < 0) {
+            if (attr_add (attrs, "log-filename", s, 0) < 0) {
                 err ("could not initialize log-filename");
                 goto done;
             }
