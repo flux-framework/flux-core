@@ -2571,6 +2571,7 @@ static void module_cb (module_t *p, void *arg)
         goto done;
     if (zmsg_content_size (zmsg) == 0) { /* EOF - safe to pthread_join */
         svc_remove (ctx->services, module_get_name (p));
+        flux_log (ctx->h, LOG_INFO, "module %s exited", module_get_name (p));
         module_remove (ctx->modhash, p);
         goto done;
     }
