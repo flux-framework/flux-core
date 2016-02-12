@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <sys/param.h>
 #include <glob.h>
+#include <assert.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
