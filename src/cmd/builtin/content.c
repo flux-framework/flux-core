@@ -23,6 +23,8 @@
 \*****************************************************************************/
 #include "builtin.h"
 
+#include <unistd.h>
+
 #include "src/common/libutil/sha1.h"
 #include "src/common/libutil/shastring.h"
 #include "src/common/libutil/readall.h"

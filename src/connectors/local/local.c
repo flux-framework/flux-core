@@ -28,9 +28,14 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/param.h>
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <signal.h>
 #include <poll.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"

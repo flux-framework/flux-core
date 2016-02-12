@@ -41,6 +41,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "kvs_deprecated.h"
 #include "proto.h"
@@ -82,22 +83,30 @@ typedef struct {
     zhash_t *watchers; /* kvs_watch_t hashed by stringified matchtag */
     char *cwd;
     zlist_t *dirstack;
+    flux_msg_handler_t *w;
 } kvsctx_t;
 
-static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg);
+static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg);
 
 static void freectx (void *arg)
 {
     kvsctx_t *ctx = arg;
-    zhash_destroy (&ctx->watchers);
-    zlist_destroy (&ctx->dirstack);
-    free (ctx->cwd);
-    free (ctx);
+    if (ctx) {
+        zhash_destroy (&ctx->watchers);
+        zlist_destroy (&ctx->dirstack);
+        if (ctx->w)
+            flux_msg_handler_destroy (ctx->w);
+        if (ctx->cwd)
+            free (ctx->cwd);
+        free (ctx);
+    }
 }
 
 static kvsctx_t *getctx (flux_t h)
 {
     kvsctx_t *ctx = (kvsctx_t *)flux_aux_get (h, "kvscli");
+    struct flux_match match = FLUX_MATCH_RESPONSE;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -106,6 +115,10 @@ static kvsctx_t *getctx (flux_t h)
         if (!(ctx->dirstack = zlist_new ()))
             oom ();
         if (!(ctx->cwd = xstrdup (".")))
+            oom ();
+        match.topic_glob = "kvs.watch";
+        if (!(ctx->w = flux_msg_handler_create (h, match, watch_response_cb,
+                                                                ctx)))
             oom ();
         flux_aux_set (h, "kvscli", ctx, freectx);
     }
@@ -626,8 +639,7 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
     free (k);
 
     if (lastcount == 0)
-        (void)flux_msghandler_add (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch",
-                                   watch_rep_cb, ctx);
+        flux_msg_handler_start (ctx->w);
     return wp;
 }
 
@@ -665,7 +677,7 @@ int kvs_unwatch (flux_t h, const char *key)
     }
     zlist_destroy (&hashkeys);
     if (zhash_size (ctx->watchers) == 0)
-        flux_msghandler_remove (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch");
+        flux_msg_handler_stop (ctx->w);
     rc = 0;
 done:
     Jput (in);
@@ -731,18 +743,18 @@ static int dispatch_watch (flux_t h, kvs_watcher_t *wp, json_object *val)
     return rc;
 }
 
-static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     JSON out = NULL;
     JSON val;
     uint32_t matchtag;
     kvs_watcher_t *wp;
-    int rc = 0;
 
-    if (flux_response_decode (*zmsg, NULL, &json_str) < 0)
+    if (flux_response_decode (msg, NULL, &json_str) < 0)
         goto done;
-    if (flux_msg_get_matchtag (*zmsg, &matchtag) < 0)
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0)
         goto done;
     if (!(out = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -751,11 +763,10 @@ static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (kp_rwatch_dec (out, &val) < 0)
         goto done;
     if ((wp = lookup_watcher (h, matchtag)))
-        rc = dispatch_watch (h, wp, val);
+        if (dispatch_watch (h, wp, val) < 0)
+            flux_reactor_stop_error (flux_get_reactor (h));
 done:
     Jput (out);
-    zmsg_destroy (zmsg);
-    return rc;
 }
 
 /* Not strictly an RPC since multiple replies are possible.

@@ -186,8 +186,8 @@ static int handle_notify_req (flux_t h, const char *ofn)
         flux_log (h, LOG_ERR, "failed to reg a job status change CB");
         return -1; 
     }
-    if (flux_reactor_start (h) < 0) 
-        flux_log (h, LOG_ERR, "error in flux_reactor_start");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) 
+        flux_log (h, LOG_ERR, "error in flux_reactor_run");
 
     return 0;
 }

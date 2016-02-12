@@ -2,6 +2,8 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <czmq.h>
+#include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"

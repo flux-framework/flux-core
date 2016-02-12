@@ -57,8 +57,9 @@ static ctx_t *getctx (flux_t h)
 
 int flux_barrier (flux_t h, const char *name, int nprocs)
 {
-    JSON request = Jnew ();
+    JSON in = Jnew ();
     char *s = NULL;
+    flux_rpc_t *rpc = NULL;
     int ret = -1;
 
     if (!name) {
@@ -69,17 +70,20 @@ int flux_barrier (flux_t h, const char *name, int nprocs)
         }
         name = s = xasprintf ("%s%d", ctx->id, ctx->seq++);
     }
-    Jadd_str (request, "name", name);
-    Jadd_int (request, "count", 1);
-    Jadd_int (request, "nprocs", nprocs);
+    Jadd_str (in, "name", name);
+    Jadd_int (in, "count", 1);
+    Jadd_int (in, "nprocs", nprocs);
 
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "barrier.enter", request, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "barrier.enter", Jtostr (in), FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     ret = 0;
 done:
     if (s)
         free (s);
-    Jput (request);
+    Jput (in);
+    flux_rpc_destroy (rpc);
     return ret;
 }
 

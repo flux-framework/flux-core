@@ -1,3 +1,4 @@
+#include <sys/param.h>
 #include <stdio.h>
 
 #include "attr.h"

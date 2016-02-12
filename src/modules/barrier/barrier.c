@@ -32,18 +32,20 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 
-const int barrier_reduction_timeout_msec = 1;
+const double barrier_reduction_timeout_sec = 0.001;
 
 typedef struct {
     zhash_t *barriers;
     flux_t h;
     bool timer_armed;
+    flux_watcher_t *timer;
     uint32_t rank;
 } ctx_t;
 
@@ -57,13 +59,16 @@ typedef struct _barrier_struct {
 } barrier_t;
 
 static int exit_event_send (flux_t h, const char *name, int errnum);
-static int timeout_cb (flux_t h, void *arg);
+static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg);
 
 static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
     if (ctx) {
         zhash_destroy (&ctx->barriers);
+        if (ctx->timer)
+            flux_watcher_destroy (ctx->timer);
         free (ctx);
     }
 }
@@ -80,6 +85,11 @@ static ctx_t *getctx (flux_t h)
         }
         if (flux_get_rank (h, &ctx->rank) < 0) {
             flux_log_error (h, "flux_get_rank");
+            goto error;
+        }
+        if (!(ctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
+                       barrier_reduction_timeout_sec, 0., timeout_cb, ctx) )) {
+            flux_log_error (h, "flux_timer_watacher_create");
             goto error;
         }
         ctx->h = h;
@@ -117,32 +127,33 @@ static barrier_t *barrier_create (ctx_t *ctx, const char *name, int nprocs)
     return b;
 }
 
-static void free_zmsg (zmsg_t *zmsg)
+static int barrier_add_client (barrier_t *b, char *sender, const flux_msg_t *msg)
 {
-    zmsg_destroy (&zmsg);
-}
-
-static int barrier_add_client (barrier_t *b, char *sender, zmsg_t **zmsg)
-{
-    if (zhash_insert (b->clients, sender, *zmsg) < 0)
+    flux_msg_t *cpy = flux_msg_copy (msg, true);
+    if (!cpy || zhash_insert (b->clients, sender, cpy) < 0)
         return -1;
-    zhash_freefn (b->clients, sender, (zhash_free_fn *)free_zmsg);
-    *zmsg = NULL; /* list owns it now */
+    zhash_freefn (b->clients, sender, (zhash_free_fn *)flux_msg_destroy);
     return 0;
 }
 
 static void send_enter_request (ctx_t *ctx, barrier_t *b)
 {
     json_object *o = util_json_object_new_object ();
+    flux_rpc_t *rpc;
 
     util_json_object_add_string (o, "name", b->name);
     util_json_object_add_int (o, "count", b->count);
     util_json_object_add_int (o, "nprocs", b->nprocs);
     util_json_object_add_int (o, "hopcount", 1);
-    if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
-                                   FLUX_MATCHTAG_NONE, "barrier.enter", o) < 0)
-        flux_log (ctx->h, LOG_ERR, "%s: flux_json_request: %s",
-                  __FUNCTION__, strerror (errno));
+   
+    if (!(rpc = flux_rpc (ctx->h, "barrier.enter", Jtostr (o),
+                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE))) {
+        flux_log_error (ctx->h, "sending barrier.enter request"); 
+        goto done;
+    }
+done:
+    if (rpc)
+        flux_rpc_destroy (rpc);
     json_object_put (o);
 }
 
@@ -168,7 +179,8 @@ static int timeout_reduction (const char *key, void *item, void *arg)
  * notification upon barrier termination.
  */
 
-static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void enter_request_cb (flux_t h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     barrier_t *b;
@@ -176,13 +188,19 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *sender = NULL;
     const char *name;
     int count, nprocs, hopcount;
+    const char *json_str;
 
-    if (flux_json_request_decode (*zmsg, &o) < 0
-     || flux_msg_get_route_first (*zmsg, &sender) < 0
-     || util_json_object_get_string (o, "name", &name) < 0
-     || util_json_object_get_int (o, "count", &count) < 0
-     || util_json_object_get_int (o, "nprocs", &nprocs) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: ignoring bad message", __FUNCTION__);
+    if (flux_request_decode (msg, NULL, &json_str) < 0
+     		|| flux_msg_get_route_first (msg, &sender) < 0) {
+        flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
+        goto done;
+    }
+    if (!(o = Jfromstr (json_str))
+     	        || !Jget_str (o, "name", &name)
+     	        || !Jget_int (o, "count", &count)
+     	        || !Jget_int (o, "nprocs", &nprocs)) {
+        errno = EPROTO;
+        flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         goto done;
     }
 
@@ -192,9 +210,9 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
      * A client, distinguished by hopcount > 0, can only enter barrier once.
      */
-    if (util_json_object_get_int (o, "hopcount", &hopcount) < 0) {
-        if (barrier_add_client (b, sender, zmsg) < 0) {
-            flux_err_respond (ctx->h, EEXIST, zmsg);
+    if (!Jget_int (o, "hopcount", &hopcount)) {
+        if (barrier_add_client (b, sender, msg) < 0) {
+            flux_respond (ctx->h, msg, EEXIST, NULL);
             flux_log (ctx->h, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
@@ -212,21 +230,15 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
     } else if (ctx->rank > 0 && !ctx->timer_armed) {
-        if (flux_tmouthandler_add (h, barrier_reduction_timeout_msec,
-                                   true, timeout_cb, ctx) < 0) {
-            flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s",strerror (errno));
-            goto done;
-        }
+        flux_timer_watcher_reset (ctx->timer, barrier_reduction_timeout_sec, 0.);
+        flux_watcher_start (ctx->timer);
         ctx->timer_armed = true;
     }
 done:
     if (o)
         json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
     if (sender)
         free (sender);
-    return 0;
 }
 
 /* Upon client disconnect, abort any pending barriers it was
@@ -246,53 +258,48 @@ static int disconnect (const char *key, void *item, void *arg)
     return 0;
 }
 
-static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
-                                  void *arg)
+static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
+                                   const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     char *sender;
 
-    if (flux_msg_get_route_first (*zmsg, &sender) < 0)
-        goto done;
+    if (flux_msg_get_route_first (msg, &sender) < 0)
+        return;
     zhash_foreach (ctx->barriers, disconnect, sender);
     free (sender);
-done:
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
 static int send_enter_response (const char *key, void *item, void *arg)
 {
-    zmsg_t *zmsg = item;
+    flux_msg_t *msg = item;
     barrier_t *b = arg;
-    zmsg_t *cpy;
 
-    if (!(cpy = zmsg_dup (zmsg)))
-        oom ();
-    flux_err_respond (b->ctx->h, b->errnum, &cpy);
+    flux_respond (b->ctx->h, msg, b->errnum, NULL);
     return 0;
 }
 
 static int exit_event_send (flux_t h, const char *name, int errnum)
 {
     JSON o = Jnew ();
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
     int rc = -1;
 
     Jadd_str (o, "name", name);
     Jadd_int (o, "errnum", errnum);
-    if (!(zmsg = flux_event_encode ("barrier.exit", Jtostr (o))))
+    if (!(msg = flux_event_encode ("barrier.exit", Jtostr (o))))
         goto done;
-    if (flux_sendmsg (h, &zmsg) < 0)
+    if (flux_send (h, msg, 0) < 0)
         goto done;
     rc = 0;
 done:
     Jput (o);
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
-static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void exit_event_cb (flux_t h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     barrier_t *b;
@@ -301,11 +308,15 @@ static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *name;
     int errnum;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
-            || !(o = Jfromstr (json_str))
-            || util_json_object_get_string (o, "name", &name) < 0
-            || util_json_object_get_int (o, "errnum", &errnum) < 0) {
-        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_event_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (h, "%s: decoding event", __FUNCTION__);
+        goto done;
+    }
+    if (!(o = Jfromstr (json_str))
+                || !Jget_str (o, "name", &name)
+                || !Jget_int (o, "errnum", &errnum)) {
+        errno = EPROTO;
+        flux_log_error (h, "%s: decoding event", __FUNCTION__);
         goto done;
     }
     if ((b = zhash_lookup (ctx->barriers, name))) {
@@ -314,14 +325,11 @@ static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         zhash_delete (ctx->barriers, name);
     }
 done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return 0;
+    Jput (o);
 }
 
-static int timeout_cb (flux_t h, void *arg)
+static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
 {
     ctx_t *ctx = arg;
 
@@ -329,15 +337,14 @@ static int timeout_cb (flux_t h, void *arg)
     ctx->timer_armed = false; /* one shot */
 
     zhash_foreach (ctx->barriers, timeout_reduction, ctx);
-    return 0;
 }
 
-static msghandler_t htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,     "barrier.enter",       enter_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "barrier.disconnect",  disconnect_request_cb },
     { FLUX_MSGTYPE_EVENT,       "barrier.exit",        exit_event_cb },
+    FLUX_MSGHANDLER_TABLE_END,
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
@@ -350,15 +357,17 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         goto done;
     }
-    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log_error (h, "flux_msghandler_addvec");
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+        flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done;
+        goto done_unreg;
     }
     rc = 0;
+done_unreg:
+    flux_msg_handler_delvec (htab);
 done:
     return rc;
 }

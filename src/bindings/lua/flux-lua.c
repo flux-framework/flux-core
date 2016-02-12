@@ -36,6 +36,7 @@
 #include <lauxlib.h>
 
 #include "flux/core.h"
+#include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/jsonutil.h"
 #include "src/modules/libmrpc/mrpc.h"

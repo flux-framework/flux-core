@@ -28,6 +28,8 @@
 #include <getopt.h>
 #include <json.h>
 #include <flux/core.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"

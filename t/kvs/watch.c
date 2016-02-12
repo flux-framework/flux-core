@@ -35,7 +35,9 @@
 #endif
 #include <json.h>
 #include <flux/core.h>
+#include <pthread.h>
 
+#include "src/common/libcompat/compat.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"

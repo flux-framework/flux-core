@@ -45,7 +45,8 @@
 
 #include "proto.h"
 
-static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void unload_mrpc_cb (flux_t h, flux_msg_handler_t *w,
+                            const flux_msg_t *msg, void *arg)
 {
     JSON o = NULL;
     flux_mrpc_t *mrpc = NULL;
@@ -55,9 +56,8 @@ static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *modname;
     int errnum = 0;
     uint32_t rank;
-    int rc = 0;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+    if (flux_event_decode (msg, NULL, &json_str) < 0
                 || !(o = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "%s: flux_event_decode: %s", __FUNCTION__,
                   strerror (errno));
@@ -95,11 +95,10 @@ done:
     Jput (out);
     if (mrpc)
         flux_mrpc_destroy (mrpc);
-    zmsg_destroy (zmsg);
-    return rc;
 }
 
-static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void load_mrpc_cb (flux_t h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     JSON o = NULL;
     flux_mrpc_t *mrpc = NULL;
@@ -111,9 +110,8 @@ static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char **argv = NULL;
     int errnum = 0;
     uint32_t rank;
-    int rc = 0;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+    if (flux_event_decode (msg, NULL, &json_str) < 0
                 || !(o = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "%s: flux_event_decode: %s", __FUNCTION__,
                   strerror (errno));
@@ -151,8 +149,6 @@ done:
     if (argv)
         free (argv);
     Jput (out);
-    zmsg_destroy (zmsg);
-    return rc;
 }
 
 static int lsmod_cb (const char *name, int size, const char *digest, int idle,
@@ -162,7 +158,8 @@ static int lsmod_cb (const char *name, int size, const char *digest, int idle,
     return modctl_rlist_enc_add (o, name, size, digest, idle);
 }
 
-static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void list_mrpc_cb (flux_t h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     JSON o = NULL;
     flux_mrpc_t *mrpc = NULL;
@@ -172,9 +169,8 @@ static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *svc;
     uint32_t rank;
     int errnum = 0;
-    int rc = 0;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+    if (flux_event_decode (msg, NULL, &json_str) < 0
                 || !(o = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "%s: flux_event_decode: %s", __FUNCTION__,
                   strerror (errno));
@@ -212,36 +208,38 @@ done:
         flux_mrpc_destroy (mrpc);
     Jput (in);
     Jput (out);
-    zmsg_destroy (zmsg);
-    return rc;
 }
 
-static msghandler_t htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,   "mrpc.modctl.unload",       unload_mrpc_cb },
     { FLUX_MSGTYPE_EVENT,   "mrpc.modctl.load",         load_mrpc_cb },
     { FLUX_MSGTYPE_EVENT,   "mrpc.modctl.list",         list_mrpc_cb },
+    FLUX_MSGHANDLER_TABLE_END,
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    if (flux_msghandler_addvec (h, htab, htablen, NULL) < 0) {
+    int rc = -1;
+
+    if (flux_event_subscribe (h, "modctl.") < 0
+            || flux_event_subscribe (h, "mrpc.modctl.") < 0) {
+        flux_log_error (h, "flux_event_subscribe");
+        goto done;
+    }
+    if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
-        return -1;
+        goto done;
     }
-    if (flux_event_subscribe (h, "modctl.") < 0) {
-        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
-        return -1;
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_run");
+        goto done_unreg;
     }
-    if (flux_event_subscribe (h, "mrpc.modctl.") < 0) {
-        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
-        return -1;
-    }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
-    }
-    return 0;
+    rc = 0;
+done_unreg:
+    flux_msg_handler_delvec (htab);
+done:
+    return rc;
 }
 
 MOD_NAME ("modctl");

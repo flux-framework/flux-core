@@ -25,6 +25,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/param.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>

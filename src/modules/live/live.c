@@ -80,6 +80,7 @@
 #include <sys/time.h>
 #include <ctype.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "src/modules/kvs/kvs_deprecated.h"
 
