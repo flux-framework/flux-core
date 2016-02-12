@@ -32,6 +32,8 @@
 #include <czmq.h>
 #include <pthread.h>
 #include <flux/core.h>
+#include <czmq.h>
+#include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
