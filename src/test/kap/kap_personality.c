@@ -10,6 +10,9 @@
 #include <json.h>
 #include <mpi.h>
 #include <flux/core.h>
+#include <math.h>
+#include <values.h>
+#include <unistd.h>
 
 #include "kap.h"
 
