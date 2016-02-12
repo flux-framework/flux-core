@@ -1,5 +1,6 @@
 #include <math.h>
 #include <flux/core.h>
+#include <inttypes.h>
 #include "src/common/libutil/log.h"
 
 int tree_height (uint32_t n, int k)
