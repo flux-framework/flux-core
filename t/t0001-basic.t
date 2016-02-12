@@ -66,7 +66,43 @@ test_expect_success 'test_under_flux works' '
 	) &&
 	grep "size=2" test-under-flux/out
 '
-
+test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes' '
+	ATTR_VAL=`flux start -o,--setattr=foo-test=42 flux getattr foo-test` &&
+	test $ATTR_VAL -eq 42
+'
+test_expect_success 'broker scratch-directory override works' '
+	SCRATCHDIR=`mktemp -d` &&
+	DIR=`flux start -o,--setattr=scratch-directory=$SCRATCHDIR flux getattr scratch-directory` &&
+	test "$DIR" = "$SCRATCHDIR" &&
+	test -d $SCRATCHDIR &&
+	rmdir $SCRATCHDIR
+'
+test_expect_success 'broker persist-directory works' '
+	PERSISTDIR=`mktemp -d` &&
+	flux start -o,--setattr=persist-directory=$PERSISTDIR /bin/true &&
+	test -d $PERSISTDIR &&
+	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
+	rm -rf $PERSISTDIR
+'
+test_expect_success 'broker persist-filesystem works' '
+	PERSISTFS=`mktemp -d` &&
+	PERSISTDIR=`flux start -o,--setattr=persist-filesystem=$PERSISTFS flux getattr persist-directory` &&
+	test -d $PERSISTDIR &&
+	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
+	rm -rf $PERSISTDIR &&
+	test -d $PERSISTFS &&
+	rmdir $PERSISTFS
+'
+test_expect_success 'broker persist-filesystem is ignored if persist-directory set' '
+	PERSISTFS=`mktemp -d` &&
+	PERSISTDIR=`mktemp -d` &&
+	DIR=`flux start -o,--setattr=persist-filesystem=$PERSISTFS,--setattr=persist-directory=$PERSISTDIR \
+		flux getattr persist-directory` &&
+	test "$DIR" = "$PERSISTDIR" &&
+	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
+	rmdir $PERSISTFS &&
+	rm -rf $PERSISTDIR
+'
 test_expect_success 'flux-help command list can be extended' '
 	mkdir help.d &&
 	cat <<-EOF  > help.d/test.json &&

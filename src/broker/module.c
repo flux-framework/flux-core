@@ -138,7 +138,7 @@ static void *module_thread (void *arg)
     av = xzmalloc (sizeof (av[0]) * (ac + 1));
     argz_extract (p->argz, p->argz_len, av);
     if (p->main(p->h, ac, av) < 0) {
-        err ("%s: mod_main returned error", p->name);
+        flux_log (p->h, LOG_CRIT, "fatal error: %s", strerror (errno));
         goto done;
     }
 done:

@@ -16,6 +16,11 @@ echo "# $0: flux session size will be ${SIZE}"
 
 MAXBLOB=`flux getattr content-blob-size-limit`
 
+test_expect_success 'unload backing store module if loaded' '
+	! flux getattr content-backing 2>/dev/null \
+	    || flux module remove -d `flux getattr content-backing`
+'
+
 test_expect_success 'store 100 blobs on rank 0' '
         for i in `seq 0 99`; do echo test$i | \
             flux content store >/dev/null; done &&

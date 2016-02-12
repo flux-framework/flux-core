@@ -57,11 +57,17 @@ locally and displayed on standard output, but the blob is not stored.
 
 BACKING STORE
 -------------
-The rank 0 cache, by default, must retain all content,
-unless a module providing the "content-backing" service is loaded
-which can offload content to some other place.  Examples
-of modules providing this service are *content-sqlite* and
-*content-sophia*.
+The rank 0 cache retains all content until a module providing
+the "content-backing" service is loaded which can offload content
+to some other place.  Examples of modules providing this service
+are *content-sqlite* and *content-sophia*.  The *content-sqlite*
+module is loaded by default.
+
+Content database files are stored persistently on rank 0 if the
+persist-directory broker attribute is set to a directory name for
+the session.  Otherwise they are stored in the directory defined
+by the scratch-directory attribute and are cleaned up when the
+instance terminates.
 
 When one of these modules is loaded, it informs the rank 0
 cache of its availability, which triggers the cache to begin

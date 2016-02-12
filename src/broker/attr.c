@@ -131,8 +131,12 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     int rc = -1;
 
     if ((e = zhash_lookup (attrs->hash, name))) {
-        errno = EEXIST;
-        goto done;
+        if (!set) {
+            errno = EEXIST;
+            goto done;
+        }
+        if (set (name, e->val, arg) < 0)
+            goto done;
     }
     e = entry_create (name, NULL, flags);
     e->set = set;
@@ -198,6 +202,21 @@ int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
     if (e->val)
         free (e->val);
     e->val = val ? xstrdup (val) : NULL;
+    rc = 0;
+done:
+    return rc;
+}
+
+int attr_set_flags (attr_t *attrs, const char *name, int flags)
+{
+    struct entry *e;
+    int rc = -1;
+
+    if (!(e = zhash_lookup (attrs->hash, name))) {
+        errno = ENOENT;
+        goto done;
+    }
+    e->flags = flags;
     rc = 0;
 done:
     return rc;

@@ -43,7 +43,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-const bool debug_enabled = true;
+const bool debug_enabled = false;
 
 typedef struct {
     char *dir;
@@ -91,28 +91,36 @@ static ctx_t *getctx (flux_t h)
     const char *dir;
     const char *hashfun;
     const char *tmp;
+    bool cleanup = false;
+    int saved_errno;
     int flags;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         if (!(hashfun = flux_attr_get (h, "content-hash", &flags))) {
+            saved_errno = errno;
             flux_log_error (h, "content-hash");
             goto error;
         }
         if (strcmp (hashfun, "sha1") != 0) {
-            errno = EINVAL;
+            saved_errno = errno = EINVAL;
             flux_log_error (h, "content-hash %s", hashfun);
             goto error;
         }
         if (!(tmp = flux_attr_get (h, "content-blob-size-limit", NULL))) {
+            saved_errno = errno;
             flux_log_error (h, "content-blob-size-limit");
             goto error;
         }
         ctx->blob_size_limit = strtoul (tmp, NULL, 10);
-        if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
-            flux_log_error (h, "scratch-directory");
-            goto error;
+        if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
+            if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
+                saved_errno = errno;
+                flux_log_error (h, "scratch-directory");
+                goto error;
+            }
+            cleanup = true;
         }
         ctx->dir = xasprintf ("%s/content", dir);
         if (!(ctx->env = sp_env ())
@@ -122,15 +130,18 @@ static ctx_t *getctx (flux_t h)
                                                     "string", 0) < 0
                 || sp_open (ctx->env) < 0
                 || !(ctx->db = sp_getobject (ctx->env, "db.content"))) {
+            saved_errno = EINVAL;
             log_sophia_error (ctx, "initialization");
             goto error;
         }
-        cleanup_push_string (cleanup_directory_recursive, ctx->dir);
+        if (cleanup)
+            cleanup_push_string (cleanup_directory_recursive, ctx->dir);
         flux_aux_set (h, "flux::content-sophia", ctx, freectx);
     }
     return ctx;
 error:
     freectx (ctx);
+    errno = saved_errno;
     return NULL;
 }
 

@@ -486,6 +486,8 @@ static int cache_store (content_cache_t *cache, struct cache_entry *e)
         rpc = flux_rpc_raw (cache->h, "content.store",
                             e->data, e->len, FLUX_NODEID_UPSTREAM, 0);
     } else {
+        if (cache->flush_batch_count >= cache->flush_batch_limit)
+            return 0;
         rpc = flux_rpc_raw (cache->h, "content-backing.store",
                             e->data, e->len, FLUX_NODEID_ANY, 0);
     }
@@ -564,6 +566,15 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
                     goto done;
                 return;
             }
+        }
+    } else {
+        /* When a backing store module is unloaded, it will clear
+         * cache->backing then attempt to store all its blobs.  Any of
+         * those still in cache need to be marked dirty.
+         */
+        if (cache->rank == 0 && !cache->backing) {
+            e->dirty = 1;
+            cache->acct_dirty++;
         }
     }
     rc = 0;

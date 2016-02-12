@@ -53,8 +53,8 @@ Be annoyingly chatty.
 *-q, --quiet*::
 Suppress messages intended for interactive users.
 
-*-N, --sid*='NAME'::
-Set the session id of this session.
+*-S, --setattr*='ATTR=VAL'::
+Set initial value for broker attribute.
 
 *-k, --k-ary*='N'::
 Set the branching factor of this comms session's tree based overlay
@@ -63,15 +63,6 @@ network (default: 2).
 *-H, --heartrate*='N.N'::
 Set the session heartrate in seconds.  The valid range is 0.01 to 30.0
 (default: 2.0).
-
-*-L, --logdest*='DEST'::
-Set log destination.  DEST may be 'stderr' or a file name (default: stderr).
-
-*-l, --log-level*='LEVEL'::
-Log messages of LEVEL or below are forwarded to rank 0 and sent to the
-configured log destination.  LEVEL may be an integer (0-7) or the name
-of a syslog(3) level, e.g.  0=emerg, 1=alert, 2=crit, 3=err, 4=warning,
-5=notice, 6=info, 7=debug (default: 6).
 
 *-M, --module*='NAME[nodeset]'::
 Load the specified comms module.  '[nodeset]' optionally limits the
@@ -117,10 +108,6 @@ hardwired to 239.192.1.1.
 Enable the use of ipc:// sockets for the tree-based overlay network
 and event distribution.  This may be set if all ranks of a comms
 session share a common $TMPDIR namespace.
-
-*-D, --scratch-directory*='DIR'::
-Create ipc:// sockets in this directory.  If unspecified, ranks co-located
-in the same $TMPDIR namespace will use unique scratch directories.
 
 *-g, --shutdown-grace*='SECS'::
 Specify the shutdown grace period, in seconds (default: guess based

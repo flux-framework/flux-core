@@ -50,7 +50,7 @@ class SideFlux(object):
 
     def start(self):
         flux_command = [flux_exe, 'start', '--size={}'.format(self.size), '-o',
-                        '-L,stderr,--scratch-directory,' + self.tmpdir , 'bash']
+                        '-Slog-forward-level=7,-Sscratch-directory=' + self.tmpdir , 'bash']
         # print ' '.join(flux_command)
         FNULL = open(os.devnull, 'w+')
         self.subenv = os.environ.copy()
