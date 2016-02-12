@@ -41,6 +41,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "kvs_deprecated.h"
 #include "proto.h"
