@@ -675,7 +675,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
         if (zlist_append (ctx->clients, c) < 0)
             oom ();
     }
-    if (revents & ZMQ_POLLERR) {
+    if (revents & FLUX_POLLERR) {
         flux_log (h, LOG_ERR, "poll listen fd: %s", strerror (errno));
     }
 done:
