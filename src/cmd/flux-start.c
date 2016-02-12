@@ -31,6 +31,7 @@
 #include <libgen.h>
 #include <argz.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
