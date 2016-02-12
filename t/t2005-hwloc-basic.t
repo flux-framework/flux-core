@@ -21,11 +21,11 @@ test_debug '
 
 #
 #  Ensure resource-hwloc is initialized here. There is currently no
-#   way to synchronize, so we run `flux hwloc lstopo` repeatedly
+#   way to synchronize, so we run `flux hwloc topology` repeatedly
 #   until it succeeds.
 #
 count=0
-while ! flux hwloc lstopo > lstopo.system; do
+while ! flux hwloc topology > system.xml; do
    sleep 0.5
    count=$(expr $count + 1)
    test $count -eq 5 && break
@@ -37,9 +37,9 @@ lstopo=$(which lstopo 2>/dev/null || which lstopo-no-graphics 2>/dev/null)
 test -n "$lstopo" && test_set_prereq HAVE_LSTOPO
 
 test_expect_success 'hwloc: ensure we have system lstopo output' '
-    test -f lstopo.system &&
-    test -s lstopo.system &&
-    head -1 lstopo.system | grep ^System
+    test -f system.xml &&
+    test -s system.xml &&
+    grep "<object type=\"System\" os_index=\"0\">" system.xml
 '
 
 test_expect_success 'hwloc: each rank reloads a non-overlapping set of a node ' '
@@ -62,13 +62,13 @@ test_expect_success 'hwloc: return an error code on valid DIR, invalid files' '
     test_expect_code 1 flux hwloc reload /
 '
 
-test_expect_success 'hwloc: lstopo works' '
+test_expect_success HAVE_LSTOPO 'hwloc: lstopo works' '
     flux hwloc reload $exclu2 &&
     flux hwloc lstopo > lstopo.out1 &&
     sed -n 1p lstopo.out1 | grep "^System (32G.*"
 '
 
-test_expect_success 'hwloc: lstopo subcommand passes options to lstopo' '
+test_expect_success HAVE_LSTOPO 'hwloc: lstopo subcommand passes options to lstopo' '
     flux hwloc lstopo --help | grep ^Usage
 '
 
@@ -81,11 +81,11 @@ test_expect_success HAVE_LSTOPO 'hwloc: topology subcommand works' '
 
 test_expect_success 'hwloc: reload with no args reloads system topology' '
     flux hwloc reload &&
-    flux hwloc lstopo > lstopo.out4 &&
-    test_cmp lstopo.system lstopo.out4
+    flux hwloc topology > system.out4 &&
+    test_cmp system.xml system.out4
 '
 
-test_expect_success 'hwloc: test failure of lstopo command' '
+test_expect_success HAVE_LSTOPO 'hwloc: test failure of lstopo command' '
     test_must_fail flux hwloc lstopo --input f:g:y
 '
 
