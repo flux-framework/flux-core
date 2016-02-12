@@ -2022,6 +2022,8 @@ static int l_flux_reactor_start (lua_State *L)
 {
     int rc;
     const char *arg;
+    const char *reason;
+    flux_t h;
     int mode = 0;
     if ((lua_gettop (L) > 1) && (arg = lua_tostring (L, 2))) {
         if (strcmp (arg, "once") == 0)
@@ -2031,7 +2033,13 @@ static int l_flux_reactor_start (lua_State *L)
         else
             return lua_pusherror (L, "flux_reactor: Invalid argument");
     }
-    rc = flux_reactor_run (flux_get_reactor (lua_get_flux (L, 1)), mode);
+    h = lua_get_flux (L, 1);
+    rc = flux_reactor_run (flux_get_reactor (h), mode);
+    if (rc < 0 && (reason = flux_aux_get (h, "lua::reason"))) {
+        lua_pushnil (L);
+        lua_pushstring (L, reason);
+        return (2);
+    }
     return (l_pushresult (L, rc));
 }
 
@@ -2043,7 +2051,12 @@ static int l_flux_reactor_stop (lua_State *L)
 
 static int l_flux_reactor_stop_error (lua_State *L)
 {
-    flux_reactor_stop_error (flux_get_reactor (lua_get_flux (L, 1)));
+    const char *reason;
+    flux_t h = lua_get_flux (L, 1);
+    if ((lua_gettop (L) > 1) && (reason = lua_tostring (L, 2))) {
+        flux_aux_set (h, "lua::reason", strdup (reason), free);
+    }
+    flux_reactor_stop_error (flux_get_reactor (h));
     return 0;
 }
 
