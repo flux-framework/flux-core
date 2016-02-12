@@ -15,8 +15,7 @@ if test "$TEST_LONG" = "t"; then
 fi
 
 # Size the session to one more than the number of cores, minimum of 4
-SIZE=$(($(nproc)+1))
-test ${SIZE} -lt 4 && SIZE=4
+SIZE=$(test_size_large)
 test_under_flux ${SIZE}
 echo "# $0: flux session size will be ${SIZE}"
 
