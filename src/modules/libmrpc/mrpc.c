@@ -288,7 +288,7 @@ int flux_mrpc (flux_mrpc_t *f, const char *fmt, ...)
     char *topic = NULL, *s = NULL;
     va_list ap;
     JSON o = NULL;
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
     va_start (ap, fmt);
     s = xvasprintf (fmt, ap);
@@ -304,9 +304,9 @@ int flux_mrpc (flux_mrpc_t *f, const char *fmt, ...)
     Jadd_int (o, "sender", f->sender);
     Jadd_str (o, "path", f->path);
     topic = xasprintf ("mrpc.%s", s);
-    if (!(zmsg = flux_event_encode (topic, Jtostr (o))))
+    if (!(msg = flux_event_encode (topic, Jtostr (o))))
         goto done;
-    if (flux_sendmsg (f->h, &zmsg) < 0)
+    if (flux_send (f->h, msg, 0) < 0)
         goto done;
     if (kvs_fence (f->h, f->path, f->nprocs + 1) < 0)
         goto done;
@@ -317,7 +317,8 @@ done:
     if (topic)
         free (topic);
     Jput (o);
-    zmsg_destroy (&zmsg);
+    if (msg)
+        flux_msg_destroy (msg);
     return rc;
 }
 
