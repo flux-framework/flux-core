@@ -22,10 +22,16 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+#include "builtin.h"
+
 #include <sys/types.h> /* WIFEXTED */
+#include <sys/wait.h>
+#include <sys/param.h>
+#include <unistd.h>
+#include <signal.h>
+#include <assert.h>
 #include <argz.h>
 
-#include "builtin.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/sds.h"
 
