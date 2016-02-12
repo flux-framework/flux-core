@@ -30,6 +30,7 @@
 #include <dlfcn.h>
 #include <json.h>
 #include <flux/core.h>
+#include <czmq.h>
 #include <assert.h>
 
 #include "src/modules/modctl/modctl.h"
