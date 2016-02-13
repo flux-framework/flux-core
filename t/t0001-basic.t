@@ -126,4 +126,13 @@ test_expect_success 'flux-help command list can be extended' '
 	test_cmp help.expected help.out
 '
 
+test_expect_success 'builtin test_size_large () works' '
+    size=$(test_size_large)  &&
+    test -n "$size" &&
+    size=$(FLUX_TEST_SIZE_MAX=2 test_size_large) &&
+    test "$size" = "2" &&
+    size=$(FLUX_TEST_SIZE_MIN=123 FLUX_TEST_SIZE_MAX=1000 test_size_large) &&
+    test "$size" = "123"
+'
+
 test_done

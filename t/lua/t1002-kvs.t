@@ -157,10 +157,10 @@ is (kw.testkey, 'foo', "Can set arbitrary members of kvswatcher object")
 os.execute (string.format ("flux kvs put %s=%s", data.key, data.value))
 
 local to = f:timer {
-    timeout = 250,
+    timeout = 1500,
     oneshot = true,
     handler = function (f, to)
-        f:reactor_stop_error ()
+        f:reactor_stop_error ("Timed out after 1.5s!")
     end
 }
 local r, err = f:reactor()

@@ -59,6 +59,11 @@ script:
  - export CC="ccache $CC"
  - export MAKECMDS="make distcheck"
 
+ # Travis has limited resources, even though number of processors might
+ #  might appear to be large. Limit session size for testing to 5 to avoid
+ #  spurious timeouts.
+ - export FLUX_TEST_SIZE_MAX=5
+
  # Enable coverage for $CC-coverage build
  # We can't use distcheck here, it doesn't play well with coverage testing:
  - if test "$COVERAGE" = "t" ; then ARGS="--enable-code-coverage"; MAKECMDS="make && make check-code-coverage && lcov -l flux*-coverage.info"; fi

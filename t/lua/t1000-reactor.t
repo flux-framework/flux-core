@@ -111,6 +111,16 @@ is (first_msghandler, true, "Message passed to first msghadler")
 todo ("All zmsgs consumed by first handler in lua code")
 is (second_msghandler, true, "Message passed to second msghadler")
 
+-- Test for setting reason on reactor_stop_error()
+local t, err = f:timer {
+    timeout = 1,
+    handler = function (f, to) return f:reactor_stop_error ("because") end
+}
+
+local r, err = f:reactor()
+is (r, nil, "reactor returned nil")
+is (err, "because", "got expected reason from reactor_stop_error()")
+
 done_testing ()
 
 -- vi: ts=4 sw=4 expandtab

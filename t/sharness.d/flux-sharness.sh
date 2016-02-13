@@ -40,6 +40,20 @@ run_timeout() {
 }
 
 #
+#  Echo on stdout a reasonable size for a large test session,
+#   controllable test-wide via env vars FLUX_TEST_SIZE_MIN and
+#   FLUX_TEST_SIZE_MAX.
+#
+test_size_large() {
+    min=${FLUX_TEST_SIZE_MIN:-4}
+    max=${FLUX_TEST_SIZE_MAX:-17}
+    size=$(($(nproc)+1))
+    test ${size} -lt ${min} && size=$min
+    test ${size} -gt ${max} && size=$max
+    echo ${size}
+}
+
+#
 #  Reinvoke a test file under a flux comms instance
 #
 #  Usage: test_under_flux <size>
