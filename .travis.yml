@@ -55,6 +55,11 @@ before_install:
   # coveralls-lcov required only for coveralls upload:
   - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
 
+  # Ensure we always use internal <flux/core.h> by placing a dummy file
+  #  in the same path as ZMQ_FLAGS:
+  - mkdir -p $HOME/local/include/flux
+  - echo '#error Non-build-tree flux/core.h!' > $HOME/local/include/flux/core.h
+
 script:
  - export CC="ccache $CC"
  - export MAKECMDS="make distcheck"
