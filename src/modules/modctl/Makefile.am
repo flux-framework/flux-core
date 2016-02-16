@@ -6,8 +6,8 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 #
 # Comms module
@@ -52,8 +52,8 @@ test_ldadd = \
 	$(LIBDL) $(LIBRT)
 
 test_cppflags = \
-        -I$(top_srcdir)/src/common/libtap \
-        $(AM_CPPFLAGS)
+        $(AM_CPPFLAGS) \
+        -I$(top_srcdir)/src/common/libtap
 
 check_PROGRAMS = $(TESTS)
 

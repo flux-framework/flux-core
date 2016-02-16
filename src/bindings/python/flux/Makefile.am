@@ -1,8 +1,15 @@
 
-AM_CFLAGS =	@GCCWARN@ -I$(top_srcdir) -I$(top_srcdir)/src/include -I$(top_srcdir)/src/common/libflux \
-		$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) $(CODE_COVERAGE_CFLAGS)
-AM_LDFLAGS = -avoid-version -module -Wl,--no-undefined  $(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib \
-		$(CODE_COVERAGE_LDFLAGS)
+AM_CPPFLAGS = \
+	@GCCWARN@ \
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	-I$(top_srcdir)/src/common/libflux \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
+	$(CODE_COVERAGE_CFLAGS)
+
+AM_LDFLAGS = \
+	-avoid-version -module -Wl,--no-undefined \
+	$(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib \
+	$(CODE_COVERAGE_LDFLAGS)
 
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
 SUFFIXES = _build.py
@@ -40,7 +47,7 @@ _jsc_build.py: $(top_srcdir)/src/modules/libjsc/jstatctl.h $(MAKE_BINDING) _core
 				  jstatctl.h
 
 _jsc_la_SOURCES = _jsc.c
-_jsc_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libjsc
+_jsc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libjsc
 _jsc_la_LIBADD = $(top_builddir)/src/modules/libjsc/libflux-jsc.la $(common_libs)
 _jsc_la_DEPENDENCIES = _jsc_build.py
 
@@ -52,7 +59,7 @@ _barrier_build.py: $(top_srcdir)/src/modules/barrier/barrier.h $(MAKE_BINDING) _
 				  barrier.h
 
 _barrier_la_SOURCES = _barrier.c
-_barrier_la_CPPFLAGS = -I$(top_srcdir)/src/modules/barrier
+_barrier_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/barrier
 _barrier_la_LIBADD = $(top_builddir)/src/modules/barrier/libflux-barrier.la $(common_libs)
 _barrier_la_DEPENDENCIES = _barrier_build.py
 
@@ -65,7 +72,7 @@ _mrpc_build.py: $(top_srcdir)/src/modules/libmrpc/mrpc.h $(MAKE_BINDING) _core_b
 				  mrpc.h
 
 _mrpc_la_SOURCES = _mrpc.c
-_mrpc_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libmrpc
+_mrpc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libmrpc
 _mrpc_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la $(common_libs)
 _mrpc_la_DEPENDENCIES = _mrpc_build.py
 
@@ -77,7 +84,7 @@ _kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs_deprecated.h $(MAKE_BINDING) _c
 				  kvs_deprecated.h
 
 _kvs_la_SOURCES = _kvs.c
-_kvs_la_CPPFLAGS = -I$(top_srcdir)/src/modules/kvs
+_kvs_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/kvs
 _kvs_la_LIBADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la $(common_libs)
 _kvs_la_DEPENDENCIES = _kvs_build.py
 
@@ -90,7 +97,7 @@ _kz_build.py: $(top_srcdir)/src/modules/libkz/kz.h $(MAKE_BINDING) _core_build.p
 				  kz.h
 
 _kz_la_SOURCES = _kz.c $(top_srcdir)/src/modules/libkz/kz.h
-_kz_la_CPPFLAGS = -I$(top_srcdir)/src/modules/libkz
+_kz_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libkz
 _kz_la_LIBADD = $(top_builddir)/src/modules/libkz/libkz.la $(top_builddir)/src/modules/kvs/libflux-kvs.la  $(common_libs)
 _kz_la_DEPENDENCIES = _kz_build.py
 
