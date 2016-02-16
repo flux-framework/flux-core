@@ -22,7 +22,6 @@ install-data-local:
 uninstall-local:
 	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
 
-
 TESTS = \
 	loop/handle.t \
 	loop/reactor.t \
@@ -70,7 +69,8 @@ TESTS = \
 	lua/t1002-kvs.t \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t
+	lua/t1005-fdwatcher.t \
+	$(top_builddir)/t/t9990-python-tests.t
 
 EXTRA_DIST= \
 	$(check_SCRIPTS) \
@@ -125,7 +125,8 @@ check_SCRIPTS = \
 	lua/t1002-kvs.t \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t
+	lua/t1005-fdwatcher.t \
+	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
 	loop/handle.t \

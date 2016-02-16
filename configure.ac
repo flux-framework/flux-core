@@ -219,6 +219,11 @@ AC_CONFIG_FILES( \
   t/fluxometer/conf.lua.installed \
 )
 
+AC_CONFIG_FILES(
+  [t/t9990-python-tests.t:t/t9990-python-tests.t.in],
+  [chmod +x t/t9990-python-tests.t]
+                )
+
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \
 ])
