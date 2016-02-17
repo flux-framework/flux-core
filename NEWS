@@ -1,0 +1,26 @@
+=========================================================================
+Release Notes for flux-core version 0.2.0                     16 Feb 2016
+=========================================================================
+
+* Avoid putting the Flux libpmi.so in the system ld.so path on systems
+  where Flux is installed to the default system prefix, as this could
+  interfere with MPI runtimes under other resource managers.
+
+* Enable the SQLite backing store for the KVS by default, which
+  addresses unchecked memory growth in the rank 0 broker.
+
+* Stability and usability improvements to the flux-hwloc subcommand,
+  and resource-hwloc comms module.
+
+* Added the flux-version subcommand.
+
+* Build system fixes.
+
+* Test suite fixes.
+
+=========================================================================
+Release Notes for flux-core version 0.1.0                     27 Jan 2016
+=========================================================================
+
+Initial release for build testing only.
+
