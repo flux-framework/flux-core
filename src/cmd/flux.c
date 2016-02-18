@@ -167,6 +167,7 @@ int main (int argc, char *argv[])
         usage (p);
         exit (0);
     }
+    vopt = optparse_hasopt (p, "verbose");
     if (optparse_hasopt (p, "trace-handle")) {
         if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
             err_exit ("setenv");
