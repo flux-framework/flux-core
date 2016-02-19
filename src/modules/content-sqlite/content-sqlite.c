@@ -332,13 +332,15 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     flux_rpc_t *rpc;
+    int count = 0;
 
+    flux_log (h, LOG_DEBUG, "shutdown: begin");
     if (register_backing_store (h, false, "content-sqlite") < 0) {
-        flux_log_error (h, "dump: unregistering backing store");
+        flux_log_error (h, "shutdown: unregistering backing store");
         goto done;
     }
     if (ctx->broker_shutdown) {
-        flux_log (h, LOG_INFO, "dump: skipping");
+        flux_log (h, LOG_INFO, "shutdown: skipping");
         goto done;
     }
     while (sqlite3_step (ctx->dump_stmt) == SQLITE_ROW) {
@@ -348,29 +350,31 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
         int size = sqlite3_column_bytes (ctx->dump_stmt, 0);
         if (sqlite3_column_type (ctx->dump_stmt, 0) != SQLITE_BLOB
                                                             && size > 0) {
-            flux_log (h, LOG_ERR, "dump: encountered non-blob value");
+            flux_log (h, LOG_ERR, "shutdown: encountered non-blob value");
             continue;
         }
         data = sqlite3_column_blob (ctx->dump_stmt, 0);
 
         if (!(rpc = flux_rpc_raw (h, "content.store", data, size,
                                                         FLUX_NODEID_ANY, 0))) {
-            flux_log_error (h, "dump: store");
+            flux_log_error (h, "shutdown: store");
             continue;
         }
         if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
-            flux_log_error (h, "dump: store");
+            flux_log_error (h, "shutdown: store");
             flux_rpc_destroy (rpc);
             continue;
         }
         if (!blobref || blobref[blobref_size - 1] != '\0') {
-            flux_log (h, LOG_ERR, "dump: store returned malformed blobref");
+            flux_log (h, LOG_ERR, "shutdown: store returned malformed blobref");
             flux_rpc_destroy (rpc);
             continue;
         }
         flux_rpc_destroy (rpc);
+        count++;
     }
     (void )sqlite3_reset (ctx->load_stmt);
+    flux_log (h, LOG_DEBUG, "shutdown: %d entries returned to cache", count);
 done:
     flux_reactor_stop (flux_get_reactor (h));
 }
