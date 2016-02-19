@@ -468,7 +468,8 @@ done:
      */
     if (cache->acct_dirty == 0)
         flush_respond (cache);
-    else if (cache->flush_batch_count <= cache->flush_batch_limit / 2)
+    else if (cache->acct_dirty - cache->flush_batch_count > 0
+            && cache->flush_batch_count <= cache->flush_batch_limit / 2)
         (void)cache_flush (cache); /* resume flushing */
 }
 
