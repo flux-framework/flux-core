@@ -38,8 +38,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-const bool debug_enabled = false;
-
 const char *sql_create_table = "CREATE TABLE objects("
                                "  hash CHAR(20) PRIMARY KEY,"
                                "  object BLOB"
@@ -236,14 +234,6 @@ void load_cb (flux_t h, flux_msg_handler_t *w,
     data = sqlite3_column_blob (ctx->load_stmt, 0);
     rc = 0;
 done:
-    if (debug_enabled) {
-        int saved_errno = errno;
-        if (rc < 0)
-            flux_log (h, LOG_DEBUG, "load: %s %s", blobref, strerror (errno));
-        //else
-        //    flux_log (h, LOG_DEBUG, "load: %s size=%d", blobref, size);
-        errno = saved_errno;
-    }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0, data, size) < 0)
         flux_log_error (h, "load: flux_respond");
     (void )sqlite3_reset (ctx->load_stmt);
@@ -293,14 +283,6 @@ void store_cb (flux_t h, flux_msg_handler_t *w,
     }
     rc = 0;
 done:
-    if (debug_enabled) {
-        int saved_errno = errno;
-        if (rc < 0)
-            flux_log (h, LOG_DEBUG, "store: %s %s", blobref, strerror (errno));
-        //else
-        //    flux_log (h, LOG_DEBUG, "store: %s size=%d", blobref, size);
-        errno = saved_errno;
-    }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
                                         blobref, SHA1_STRING_SIZE) < 0)
         flux_log_error (h, "store: flux_respond");
@@ -385,9 +367,6 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
             flux_log (h, LOG_ERR, "dump: store returned malformed blobref");
             flux_rpc_destroy (rpc);
             continue;
-        }
-        if (debug_enabled) {
-            flux_log (h, LOG_DEBUG, "dump: %s", blobref);
         }
         flux_rpc_destroy (rpc);
     }
