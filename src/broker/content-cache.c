@@ -607,18 +607,27 @@ static int cache_flush (content_cache_t *cache)
     struct cache_entry *e;
     const char *key;
     int saved_errno = 0;
+    int count = 0;
     int rc = 0;
 
+    if (cache->acct_dirty - cache->flush_batch_count == 0
+            || cache->flush_batch_count >= cache->flush_batch_limit)
+        return 0;
+
+    flux_log (cache->h, LOG_DEBUG, "content flush begin");
     FOREACH_ZHASH (cache->entries, key, e) {
+        if (!e->dirty || e->store_pending)
+            continue;
+        if (cache_store (cache, e) < 0) {
+            saved_errno = errno;
+            rc = -1;
+        }
+        count++;
         if (cache->flush_batch_count >= cache->flush_batch_limit)
             break;
-        if (e->dirty) {
-            if (cache_store (cache, e) < 0) {
-                saved_errno = errno;
-                rc = -1;
-            }
-        }
     }
+    flux_log (cache->h, LOG_DEBUG, "content flush +%d (dirty=%d pending=%d)",
+              count, cache->acct_dirty, cache->flush_batch_count);
     if (rc < 0)
         errno = saved_errno;
     return rc;
