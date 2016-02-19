@@ -43,8 +43,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
-const bool debug_enabled = false;
-
 typedef struct {
     char *dir;
     void *env;
@@ -185,14 +183,6 @@ void load_cb (flux_t h, flux_msg_handler_t *w,
     data = sp_getstring (result, "value", &size);
     rc = 0;
 done:
-    if (debug_enabled) {
-        int saved_errno = errno;
-        if (rc < 0)
-            flux_log (h, LOG_DEBUG, "load: %s %s", blobref, strerror (errno));
-        //else
-        //    flux_log (h, LOG_DEBUG, "load: %s size=%d", blobref, size);
-        errno = saved_errno;
-    }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
                                   rc < 0 ? NULL : data, size) < 0)
         flux_log_error (h, "flux_respond");
@@ -245,14 +235,6 @@ void store_cb (flux_t h, flux_msg_handler_t *w,
     }
     rc = 0;
 done:
-    if (debug_enabled) {
-        int saved_errno = errno;
-        if (rc < 0)
-            flux_log (h, LOG_DEBUG, "store: %s %s", blobref, strerror (errno));
-        //else
-        //    flux_log (h, LOG_DEBUG, "store: %s size=%d", blobref, size);
-        errno = saved_errno;
-    }
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
                                   blobref, SHA1_STRING_SIZE) < 0)
         flux_log_error (h, "flux_respond");
@@ -336,21 +318,23 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
     void *cursor = NULL;
     void *o;
     flux_rpc_t *rpc;
+    int count = 0;
 
+    flux_log (h, LOG_DEBUG, "shutdown: begin");
     if (register_backing_store (h, false, "content-sophia") < 0) {
         flux_log_error (h, "dump: unregistering backing store");
         goto done;
     }
     if (ctx->broker_shutdown) {
-        flux_log (h, LOG_INFO, "dump: skipping");
+        flux_log (h, LOG_DEBUG, "shutdown: skipping due to broker shutdown");
         goto done;
     }
     if (!(cursor = sp_cursor (ctx->env))) {
-        log_sophia_error (ctx, "dump: sp_cursor");
+        log_sophia_error (ctx, "shutdown: sp_cursor");
         goto done;
     }
     if (!(o = sp_object (ctx->db))) {
-        log_sophia_error (ctx, "dump: sp_object");
+        log_sophia_error (ctx, "shutdown: sp_object");
         goto done;
     }
     sp_setstring (o, "order", ">=", 0);
@@ -362,24 +346,23 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
         data = sp_getstring (o, "value", &size);
         if (!(rpc = flux_rpc_raw (h, "content.store", data, size,
                                                     FLUX_NODEID_ANY, 0))) {
-            flux_log_error (ctx->h, "dump: store");
+            flux_log_error (ctx->h, "shutdown: store");
             continue;
         }
         if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
-            flux_log_error (h, "dump: store");
+            flux_log_error (h, "shutdown: store");
             flux_rpc_destroy (rpc);
             continue;
         }
         if (!blobref || blobref[blobref_size - 1] != '\0') {
-            flux_log (h, LOG_ERR, "dump: store returned malformed blobref");
+            flux_log (h, LOG_ERR, "shutdown: store returned malformed blobref");
             flux_rpc_destroy (rpc);
             continue;
         }
-        if (debug_enabled) {
-            flux_log (h, LOG_DEBUG, "dump: %s", blobref);
-        }
         flux_rpc_destroy (rpc);
+        count++;
     }
+    flux_log (h, LOG_DEBUG, "shutdown: %d entries returned to cache", count);
 done:
     if (cursor)
         sp_destroy (cursor);
