@@ -318,21 +318,23 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
     void *cursor = NULL;
     void *o;
     flux_rpc_t *rpc;
+    int count = 0;
 
+    flux_log (h, LOG_DEBUG, "shutdown: begin");
     if (register_backing_store (h, false, "content-sophia") < 0) {
         flux_log_error (h, "dump: unregistering backing store");
         goto done;
     }
     if (ctx->broker_shutdown) {
-        flux_log (h, LOG_INFO, "dump: skipping");
+        flux_log (h, LOG_DEBUG, "shutdown: skipping due to broker shutdown");
         goto done;
     }
     if (!(cursor = sp_cursor (ctx->env))) {
-        log_sophia_error (ctx, "dump: sp_cursor");
+        log_sophia_error (ctx, "shutdown: sp_cursor");
         goto done;
     }
     if (!(o = sp_object (ctx->db))) {
-        log_sophia_error (ctx, "dump: sp_object");
+        log_sophia_error (ctx, "shutdown: sp_object");
         goto done;
     }
     sp_setstring (o, "order", ">=", 0);
@@ -344,21 +346,23 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
         data = sp_getstring (o, "value", &size);
         if (!(rpc = flux_rpc_raw (h, "content.store", data, size,
                                                     FLUX_NODEID_ANY, 0))) {
-            flux_log_error (ctx->h, "dump: store");
+            flux_log_error (ctx->h, "shutdown: store");
             continue;
         }
         if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
-            flux_log_error (h, "dump: store");
+            flux_log_error (h, "shutdown: store");
             flux_rpc_destroy (rpc);
             continue;
         }
         if (!blobref || blobref[blobref_size - 1] != '\0') {
-            flux_log (h, LOG_ERR, "dump: store returned malformed blobref");
+            flux_log (h, LOG_ERR, "shutdown: store returned malformed blobref");
             flux_rpc_destroy (rpc);
             continue;
         }
         flux_rpc_destroy (rpc);
+        count++;
     }
+    flux_log (h, LOG_DEBUG, "shutdown: %d entries returned to cache", count);
 done:
     if (cursor)
         sp_destroy (cursor);
