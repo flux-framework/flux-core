@@ -49,10 +49,6 @@ Set the URI used to connect to flux-broker.
 *-t, --trace-apisock*::
 Trace API socket traffic to 'stderr'.
 
-*-x, --exec-path*='PATH'::
-Prepend 'PATH' to sub-command executable search path.
-Multiple directories may be specified, separated by colons.
-
 
 SUB-COMMAND ENVIRONMENT
 -----------------------
@@ -64,7 +60,7 @@ Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed
 with the following prototype:
 
-  [--exec-path PATH]:[config.general.exec_path]:install-path
+  [config.general.exec_path]:install-path:[getenv FLUX_EXEC_PATH]
 
 setenv FLUX_MODULE_PATH::
 Set up broker comms module search path according to:
