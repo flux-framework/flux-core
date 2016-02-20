@@ -226,6 +226,20 @@ int main (int argc, char *argv[])
     flux_conf_environment_push (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"));
     flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
 
+    /* Prepend if FLUX_*_PATH_PREPEND is set */
+    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH",
+                                getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
+    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",
+                                getenv ("FLUX_EXEC_PATH_PREPEND"));
+    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",
+                                getenv ("FLUX_MODULE_PATH_PREPEND"));
+    flux_conf_environment_push (cf, "LUA_CPATH",
+                                getenv ("FLUX_LUA_CPATH_PREPEND"));
+    flux_conf_environment_push (cf, "LUA_PATH",
+                                getenv ("FLUX_LUA_PATH_PREPEND"));
+    flux_conf_environment_push (cf, "PYTHONPATH",
+                                getenv ("FLUX_PYTHONPATH_PREPEND"));
+
     if (argc - optind == 0) {
         usage (p);
         exit (1);
