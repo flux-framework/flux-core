@@ -59,7 +59,7 @@ test_expect_success 'flux env runs argument' "
 		| grep /connectors
 "
 test_expect_success 'flux env passes cmddriver options' '
-	flux -F --uri foo://xyz env | grep "^FLUX_URI=foo://xyz"
+	flux -F --uri foo://xyz env | grep "^export FLUX_URI=\"foo://xyz"
 '
 test_expect_success 'flux env passes cmddriver option to argument' "
 	flux -F --uri foo://xyx env sh -c 'echo \$FLUX_URI' \
@@ -106,16 +106,19 @@ test_expect_success 'flux --secdir overrides config' '
 
 test_expect_success 'FLUX_*_PREPEND environment variables work' '
 	FLUX_CONNECTOR_PATH_PREPEND=/foo \
-	  flux env | grep "^FLUX_CONNECTOR_PATH=/foo" &&
+	  flux /usr/bin/printenv | grep "FLUX_CONNECTOR_PATH=/foo" &&
 	FLUX_EXEC_PATH_PREPEND=/foo \
-	  flux env | grep "^FLUX_EXEC_PATH=/foo" &&
+	  flux /usr/bin/printenv | grep "FLUX_EXEC_PATH=/foo" &&
 	FLUX_MODULE_PATH_PREPEND=/foo \
-	  flux env | grep "^FLUX_MODULE_PATH=/foo" &&
+	  flux /usr/bin/printenv | grep "FLUX_MODULE_PATH=/foo" &&
 	FLUX_LUA_PATH_PREPEND=/foo \
-	  flux env | grep "^LUA_PATH=/foo" &&
+	  flux /usr/bin/printenv | grep "LUA_PATH=/foo" &&
 	FLUX_LUA_CPATH_PREPEND=/foo \
-	  flux env | grep "^LUA_CPATH=/foo" &&
+	  flux /usr/bin/printenv | grep "LUA_CPATH=/foo" &&
 	FLUX_PYTHONPATH_PREPEND=/foo \
-	  flux env | grep "^PYTHONPATH=/foo"
+	  flux /usr/bin/printenv | grep "PYTHONPATH=/foo"
+'
+test_expect_success 'flux-env output can be passed to eval' '
+    eval $(flux env)
 '
 test_done
