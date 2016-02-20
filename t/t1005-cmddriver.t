@@ -103,4 +103,19 @@ test_expect_success 'flux --secdir overrides config' '
 	test -f $tmpkeydir/curve/client_secret &&
 	rm -rf $tmpkeydir
 '
+
+test_expect_success 'FLUX_*_PREPEND environment variables work' '
+	FLUX_CONNECTOR_PATH_PREPEND=/foo \
+	  flux env | grep "^FLUX_CONNECTOR_PATH=/foo" &&
+	FLUX_EXEC_PATH_PREPEND=/foo \
+	  flux env | grep "^FLUX_EXEC_PATH=/foo" &&
+	FLUX_MODULE_PATH_PREPEND=/foo \
+	  flux env | grep "^FLUX_MODULE_PATH=/foo" &&
+	FLUX_LUA_PATH_PREPEND=/foo \
+	  flux env | grep "^LUA_PATH=/foo" &&
+	FLUX_LUA_CPATH_PREPEND=/foo \
+	  flux env | grep "^LUA_CPATH=/foo" &&
+	FLUX_PYTHONPATH_PREPEND=/foo \
+	  flux env | grep "^PYTHONPATH=/foo"
+'
 test_done
