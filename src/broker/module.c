@@ -106,6 +106,7 @@ static void *module_thread (void *arg)
     char **av = NULL;
     char *rankstr = NULL;
     int ac;
+    flux_msg_t *msg;
 
     assert (p->zctx);
 
@@ -137,9 +138,18 @@ static void *module_thread (void *arg)
     ac = argz_count (p->argz, p->argz_len);
     av = xzmalloc (sizeof (av[0]) * (ac + 1));
     argz_extract (p->argz, p->argz_len, av);
-    if (p->main(p->h, ac, av) < 0) {
+    if (p->main(p->h, ac, av) < 0)
         flux_log (p->h, LOG_CRIT, "fatal error: %s", strerror (errno));
-        goto done;
+    /* If any unhandled requests were received during shutdown,
+     * respond to them now with ENOSYS.
+     */
+    while ((msg = flux_recv (p->h, FLUX_MATCH_REQUEST, FLUX_O_NONBLOCK))) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        flux_log (p->h, LOG_DEBUG, "responding to post-shutdown %s", topic);
+        if (flux_respond (p->h, msg, ENOSYS, NULL) < 0)
+            flux_log_error (p->h, "responding to post-shutdown %s", topic);
+        flux_msg_destroy (msg);
     }
 done:
     if (rankstr)
