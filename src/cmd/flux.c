@@ -48,6 +48,7 @@
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
 char *intree_confdir (void);
 void setup_path (flux_conf_t cf, const char *argv0);
+static void print_environment (flux_conf_t cf);
 static void register_builtin_subcommands (optparse_t *p);
 
 static struct optparse_option opts[] = {
@@ -369,7 +370,7 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
     }
 }
 
-void print_environment (flux_conf_t cf)
+static void print_environment (flux_conf_t cf)
 {
     const char *key, *value;
     for (value = (char*)flux_conf_environment_first(cf), key = (char*)flux_conf_environment_cursor(cf);

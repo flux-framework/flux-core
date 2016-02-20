@@ -35,5 +35,4 @@ struct builtin_cmd {
 };
 
 void usage (optparse_t *p);
-void print_environment (flux_conf_t cf);
 flux_t builtin_get_flux_handle (optparse_t *p);
