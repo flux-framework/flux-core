@@ -54,10 +54,6 @@ static struct optparse_option opts[] = {
     { .name = "trace-handle",    .key = 't', .has_arg = 0,
       .usage = "Set FLUX_HANDLE_TRACE=1 before executing COMMAND"
     },
-    { .name = "exec-path",       .key = 'x', .has_arg = 1,
-      .arginfo = "PATH",
-      .usage = "Prepend PATH to command search path",
-    },
     { .name = "config",          .key = 'c', .has_arg = 1,
       .arginfo = "DIR",
       .usage = "Set path to config directory"
@@ -146,7 +142,6 @@ int main (int argc, char *argv[])
 {
     const char *opt;
     bool vopt = false;
-    char *xopt = NULL;
     char *confdir = NULL;
     const char *secdir = NULL;
     flux_conf_t cf;
@@ -230,9 +225,6 @@ int main (int argc, char *argv[])
     flux_conf_environment_push (cf, "LUA_CPATH",           flux_conf_get(cf, "general.lua_cpath"));
     flux_conf_environment_push (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"));
     flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
-
-    /* Prepend to command-line environment variables */
-    flux_conf_environment_push (cf, "FLUX_EXEC_PATH", xopt);
 
     if (argc - optind == 0) {
         usage (p);
