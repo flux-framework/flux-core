@@ -138,10 +138,11 @@ static flux_msg_t *op_recv (void *impl, int flags)
         goto done;
     if ((flags & FLUX_O_NONBLOCK)) {
         int n;
-        if ((n = zmq_poll (&zp, 1, 0L)) < 0)
-            goto done; /* likely: EWOULDBLOCK | EAGAIN */
-        assert (n == 1);
-        assert (zp.revents == ZMQ_POLLIN);
+        if ((n = zmq_poll (&zp, 1, 0L)) <= 0) {
+            if (n == 0)
+                errno = EWOULDBLOCK;
+            goto done;
+        }
     }
     msg = zmsg_recv (ctx->sock);
 done:
