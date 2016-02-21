@@ -25,6 +25,18 @@
 
 #include "builtin.h"
 
+static void print_environment (flux_conf_t cf)
+{
+    const char *key, *value;
+    for (value = (char*)flux_conf_environment_first (cf),
+         key = (char*)flux_conf_environment_cursor(cf);
+         value != NULL;
+         value = flux_conf_environment_next(cf), key = flux_conf_environment_cursor(cf)) {
+        printf ("export %s=\"%s\"\n", key, value);
+    }
+    fflush (stdout);
+}
+
 static int cmd_env (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_optind (p);

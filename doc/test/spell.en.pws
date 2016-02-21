@@ -302,3 +302,4 @@ lstopo
 xml
 filesystem
 filename
+PYTHONPATH
