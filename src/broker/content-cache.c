@@ -466,7 +466,7 @@ done:
      * only do it when the number of outstanding store requests falls to
      * a low water mark, here hardwired to be half of the limit.
      */
-    if (cache->acct_dirty == 0)
+    if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
     else if (cache->acct_dirty - cache->flush_batch_count > 0
             && cache->flush_batch_count <= cache->flush_batch_limit / 2)
@@ -753,9 +753,16 @@ done:
 /* This is called when outstanding store ops have completed.  */
 static void flush_respond (content_cache_t *cache)
 {
+    int errnum = 0;
+
+    if (cache->acct_dirty){
+        errnum = EIO;
+        if (cache->rank == 0 && !cache->backing)
+            errnum = ENOSYS;
+    }
     if (respond_requests_raw (&cache->flush_requests, cache->h,
-                                cache->acct_dirty > 0 ? EIO : 0, NULL, 0) < 0)
-        flux_log_error (cache->h, "content flush");
+                              errnum, NULL, 0) < 0)
+        flux_log_error (cache->h, "content flush response");
 }
 
 static void content_flush_request (flux_t h, flux_msg_handler_t *w,
