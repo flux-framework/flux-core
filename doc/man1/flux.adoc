@@ -60,30 +60,33 @@ Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed
 with the following prototype:
 
-  [config.general.exec_path]:install-path:[getenv FLUX_EXEC_PATH]
+  [getenv FLUX_EXEC_PATH_PREPEND]:[config.general.exec_path]:install-path:\
+    [getenv FLUX_EXEC_PATH]
 
 setenv FLUX_MODULE_PATH::
 Set up broker comms module search path according to:
 
-  [config.general.module_path]:install-path:\
+  [getenv FLUX_MODULE_PATH_PREPEND]:[config.general.module_path]:install-path:\
     [getenv FLUX_MODULE_PATH]
 
 setenv FLUX_CONNECTOR_PATH::
 Set up search path for connector modules used by libflux to open a connection
 to the broker
 
-  [config.general.connector_path]:install-path:\
-    [getenv FLUX_CONNECTOR_PATH]
+  [getenv FLUX_CONNECTOR_PATH_PREPEND]:[config.general.connector_path]:\
+    install-path:[getenv FLUX_CONNECTOR_PATH]
 
 setenv LUA_PATH::
 Set Lua module search path:
 
-  [config.general.lua_path];[getenv LUA_PATH];install-path;;;
+  [getenv FLUX_LUA_PATH_PREPEND]:[config.general.lua_path];[getenv LUA_PATH];\
+    install-path;;;
 
 setenv LUA_CPATH::
 Set Lua binary module search path:
 
-  [config.general.lua_cpath];[getenv LUA_CPATH];install-path;;;
+  [getenv FLUX_LUA_CPATH_PREPEND];[config.general.lua_cpath];\
+    [getenv LUA_CPATH];install-path;;;
 
 setenv FLUX_BROKER_PATH::
 Set the path to the broker executable.  This environment variable is
