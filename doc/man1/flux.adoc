@@ -88,6 +88,12 @@ Set Lua binary module search path:
   [getenv FLUX_LUA_CPATH_PREPEND];[config.general.lua_cpath];\
     [getenv LUA_CPATH];install-path;;;
 
+setenv PYTHONPATH::
+Set Python module search path:
+
+  [getenv FLUX_PYTHONPATH_PREPEND]:[config.general.python_path]:\
+    [getenv PYTHONPATH];install-path
+
 setenv FLUX_BROKER_PATH::
 Set the path to the broker executable.  This environment variable is
 used by flux-start(1) and related sub-commands to launch the broker.
