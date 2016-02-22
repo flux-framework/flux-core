@@ -35,7 +35,7 @@ if opts.h then print (usage); os.exit (0) end
 local f, err = flux.new()
 if not f then error (err) end
 
-local timeout = opts.t or 0
+local timeout = tonumber (opts.t or 0)
 local pattern = opts.p or ""
 local count = opts.c or 1
 local file = arg[optind]
@@ -185,7 +185,7 @@ if not fw then printf ("%s\n", err); os.exit (1) end
 
 -- Exit with non-zero status after timeout:
 --
-if timeout then
+if timeout > 0 then
     f:timer {
       timeout = timeout * 1000,
       handler = function ()
