@@ -23,13 +23,9 @@ store_junk() {
     done
 }
 
-test_expect_success 'unload backing store module if loaded' '
-        ! flux getattr content-backing 2>/dev/null \
-            || flux module remove -d `flux getattr content-backing`
-'
 
-test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load --rank 0 --direct content-sqlite
+test_expect_success 'verify that content-sqlite module is loaded' '
+	flux module list --direct --rank 0 | grep -q content-sqlite
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
