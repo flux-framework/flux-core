@@ -108,15 +108,12 @@ function filewatcher:changed ()
         log_verbose ("File appeared with size %d\n", st.st_size)
         return true
     end
-    if st.st_mtime > prev.st_mtime then
-        log_verbose ("File changed\n")
-        if st.st_size < prev.st_size then
-            printf ("truncated!\n")
-            self.position = 0 -- reread
-        end
-        return true
+    log_verbose ("File changed\n")
+    if st.st_size < prev.st_size then
+        printf ("truncated!\n")
+        self.position = 0 -- reread
     end
-    return false
+    return true
 end
 
 function filewatcher:check ()
