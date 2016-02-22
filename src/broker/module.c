@@ -152,8 +152,7 @@ static void *module_thread (void *arg)
         flux_msg_destroy (msg);
     }
 done:
-    if (rankstr)
-        free (rankstr);
+    free (rankstr);
     if (av)
         free (av);
     flux_close (p->h);
