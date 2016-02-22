@@ -430,8 +430,8 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     int rc = -1;
 
     e->store_pending = 0;
+    assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
-    assert (cache->flush_batch_count >= 0);
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         saved_errno = errno;
         if (cache->rank == 0 && errno == ENOSYS)
