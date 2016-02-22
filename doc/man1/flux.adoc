@@ -94,13 +94,6 @@ Set Python module search path:
   [getenv FLUX_PYTHONPATH_PREPEND]:[config.general.python_path]:\
     [getenv PYTHONPATH];install-path
 
-setenv FLUX_BROKER_PATH::
-Set the path to the broker executable.  This environment variable is
-used by flux-start(1) and related sub-commands to launch the broker.
-The path may be set by any of the following methods, in decreasing precedence:
-- [config.general.broker_path]
-- install-path
-
 setenv FLUX_CONF_DIRECTORY::
 Set the path to the Flux config directory, which contains a config
 file and long term keys.  The path may be set by any of the following
