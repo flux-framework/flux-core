@@ -434,7 +434,11 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     assert (cache->flush_batch_count >= 0);
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         saved_errno = errno;
-        flux_log_error (cache->h, "content store");
+        if (cache->rank == 0 && errno == ENOSYS)
+            flux_log (cache->h, LOG_DEBUG, "content store: %s",
+                      "backing store service unavailable");
+        else
+            flux_log_error (cache->h, "content store");
         goto done;
     }
     if (!blobref || blobref[blobref_size - 1] != '\0') {
