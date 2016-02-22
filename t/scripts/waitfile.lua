@@ -135,7 +135,7 @@ function filewatcher:start ()
         path = self.filename,
         interval = self.interval,
         handler = function (w, st, prev)
-            printf ("wakeup\n")
+            log_verbose ("wakeup\n")
             self.st = setmetatable (st, stat)
             self:check ()
             log_verbose ("back to sleep\n")
