@@ -939,7 +939,7 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     /* Misc
      */
     if (attr_add_active_uint32 (attr, "content-flush-batch-limit",
-                &cache->flush_batch_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                &cache->flush_batch_limit, 0) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content-blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
