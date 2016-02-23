@@ -66,7 +66,7 @@ static int64_t * seq_new (void)
 static int64_t * seq_create (seqhash_t *s, const char *name)
 {
     int rc;
-    int64_t *v = seq_new ();
+    int64_t *v;
 
     if (zhash_lookup (s->vhash, name)) {
         errno = EEXIST;

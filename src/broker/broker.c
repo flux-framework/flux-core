@@ -1755,10 +1755,10 @@ out_free:
 
 static char *subprocess_sender (struct subprocess *p)
 {
-    char *sender = NULL;
+    char *sender;
     zmsg_t *zmsg = subprocess_get_context (p, "zmsg");
-    if (zmsg)
-        flux_msg_get_route_first (zmsg, &sender);
+    if (!zmsg || flux_msg_get_route_first (zmsg, &sender) < 0)
+        return NULL;
     return (sender);
 }
 

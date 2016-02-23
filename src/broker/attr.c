@@ -239,12 +239,16 @@ static int set_int (const char *name, const char *val, void *arg)
     char *endptr;
     long n;
 
+    if (!val) {
+        errno = EINVAL;
+        return -1;
+    }
     n = strtol (val, &endptr, 0);
     if (n <= INT_MIN || n >= INT_MAX) {
         errno = ERANGE;
         return -1;
     }
-    if (val && *endptr != '\0') {
+    if (*endptr != '\0') {
         errno = EINVAL;
         return -1;
     }
