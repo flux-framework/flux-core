@@ -256,7 +256,7 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/src/test/tcommit ${THREADS} 100 \
+	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
@@ -264,7 +264,7 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/src/test/tcommit \
+	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
 		--fence $((${SIZE}*${THREADS})) ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '

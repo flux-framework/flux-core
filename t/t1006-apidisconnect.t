@@ -8,17 +8,28 @@ test_description='Test api disconnect generation
 SIZE=4
 test_under_flux ${SIZE}
 
+# Usage: check_watchers #expected #tries
+check_kvs_watchers() {
+	local i n
+	for i in `seq 1 $2`; do
+	    n=`flux comms-stats --parse "#watchers" kvs`
+	    echo "Try $i: $n"
+	    test $n -eq $1 && return 0
+	    sleep 1
+	done
+	return 1
+}
+
+
 test_expect_success 'kvs watcher gets disconnected on client exit' '
 	before_watchers=`flux comms-stats --parse "#watchers" kvs` &&
-	echo "before: $before_watchers" &&
+	echo "waiters before test: $before_watchers" &&
 	test_expect_code 142 run_timeout 1 flux kvs watch noexist &&
-	after_watchers=`flux comms-stats --parse "#watchers" kvs`
-	echo "after: $after_watchers" &&
-	test $before_watchers -eq $after_watchers
+	check_kvs_watchers $before_watchers 3
 '
 
 test_expect_success 'multi-node kvs watcher gets disconnected on client exit' '
-	${FLUX_BUILD_DIR}/src/test/tdisconnect
+	${FLUX_BUILD_DIR}/t/kvs/watch_disconnect
 '
 
 

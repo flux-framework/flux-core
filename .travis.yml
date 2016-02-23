@@ -61,6 +61,9 @@ before_install:
   - echo '#error Non-build-tree flux/core.h!' > $HOME/local/include/flux/core.h
 
 script:
+ - export LD_PRELOAD=libSegFault.so
+ - export SEGFAULT_USE_ALTSTACK=1
+ - export LIBC_FATAL_STDERR_=1
  - export CC="ccache $CC"
  - export MAKECMDS="make distcheck"
 
