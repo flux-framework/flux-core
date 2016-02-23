@@ -13,8 +13,7 @@ check_PROGRAMS = \
 	tasyncsock \
 	tcommit \
 	tmunge \
-	tbarrier \
-	tdisconnect
+	tbarrier
 
 SUBDIRS = request module
 if HAVE_MPI
