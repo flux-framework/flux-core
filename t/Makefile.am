@@ -141,7 +141,8 @@ check_PROGRAMS = \
 	kvs/torture \
 	kvs/hashtest \
 	kvs/watch \
-	kvs/watch_disconnect
+	kvs/watch_disconnect \
+	kvs/commit
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -230,6 +231,12 @@ kvs_torture_LDADD = \
 kvs_watch_SOURCES = kvs/watch.c
 kvs_watch_CPPFLAGS = $(test_cppflags)
 kvs_watch_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_commit_SOURCES = kvs/commit.c
+kvs_commit_CPPFLAGS = $(test_cppflags)
+kvs_commit_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 

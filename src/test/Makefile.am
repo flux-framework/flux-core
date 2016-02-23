@@ -11,7 +11,6 @@ AM_CPPFLAGS = \
 
 check_PROGRAMS = \
 	tasyncsock \
-	tcommit \
 	tmunge \
 	tbarrier
 
