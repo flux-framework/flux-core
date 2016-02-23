@@ -455,7 +455,7 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
 done:
     if (respond_requests_raw (&e->store_requests, cache->h,
                                         rc < 0 ? saved_errno : 0,
-                                        e->blobref, strlen (blobref) + 1) < 0)
+                                        blobref, blobref_size) < 0)
         flux_log_error (cache->h, "content store");
     flux_rpc_destroy (rpc);
 
