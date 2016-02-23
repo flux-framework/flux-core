@@ -434,7 +434,11 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     assert (cache->flush_batch_count >= 0);
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         saved_errno = errno;
-        flux_log_error (cache->h, "content store");
+        if (cache->rank == 0 && errno == ENOSYS)
+            flux_log (cache->h, LOG_DEBUG, "content store: %s",
+                      "backing store service unavailable");
+        else
+            flux_log_error (cache->h, "content store");
         goto done;
     }
     if (!blobref || blobref[blobref_size - 1] != '\0') {
@@ -455,7 +459,7 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
 done:
     if (respond_requests_raw (&e->store_requests, cache->h,
                                         rc < 0 ? saved_errno : 0,
-                                        e->blobref, strlen (blobref) + 1) < 0)
+                                        blobref, blobref_size) < 0)
         flux_log_error (cache->h, "content store");
     flux_rpc_destroy (rpc);
 
@@ -466,7 +470,7 @@ done:
      * only do it when the number of outstanding store requests falls to
      * a low water mark, here hardwired to be half of the limit.
      */
-    if (cache->acct_dirty == 0)
+    if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
     else if (cache->acct_dirty - cache->flush_batch_count > 0
             && cache->flush_batch_count <= cache->flush_batch_limit / 2)
@@ -753,9 +757,16 @@ done:
 /* This is called when outstanding store ops have completed.  */
 static void flush_respond (content_cache_t *cache)
 {
+    int errnum = 0;
+
+    if (cache->acct_dirty){
+        errnum = EIO;
+        if (cache->rank == 0 && !cache->backing)
+            errnum = ENOSYS;
+    }
     if (respond_requests_raw (&cache->flush_requests, cache->h,
-                                cache->acct_dirty > 0 ? EIO : 0, NULL, 0) < 0)
-        flux_log_error (cache->h, "content flush");
+                              errnum, NULL, 0) < 0)
+        flux_log_error (cache->h, "content flush response");
 }
 
 static void content_flush_request (flux_t h, flux_msg_handler_t *w,
@@ -932,7 +943,7 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     /* Misc
      */
     if (attr_add_active_uint32 (attr, "content-flush-batch-limit",
-                &cache->flush_batch_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                &cache->flush_batch_limit, 0) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content-blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)

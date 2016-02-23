@@ -121,6 +121,7 @@ static ctx_t *getctx (flux_t h)
             cleanup = true;
         }
         ctx->dir = xasprintf ("%s/content", dir);
+        flux_log (h, LOG_DEBUG, "database start");
         if (!(ctx->env = sp_env ())
                 || sp_setstring (ctx->env, "sophia.path", ctx->dir, 0) < 0
                 || sp_setstring (ctx->env, "db", "content", 0) < 0
@@ -132,6 +133,7 @@ static ctx_t *getctx (flux_t h)
             log_sophia_error (ctx, "initialization");
             goto error;
         }
+        flux_log (h, LOG_DEBUG, "database ready");
         if (cleanup)
             cleanup_push_string (cleanup_directory_recursive, ctx->dir);
         flux_aux_set (h, "flux::content-sophia", ctx, freectx);

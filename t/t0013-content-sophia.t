@@ -16,9 +16,8 @@ echo "# $0: flux session size will be ${SIZE}"
 
 MAXBLOB=`flux getattr content-blob-size-limit`
 
-test_expect_success 'unload backing store module if loaded' '
-        ! flux getattr content-backing 2>/dev/null \
-            || flux module remove -d `flux getattr content-backing`
+test_expect_success 'unload backing store module' '
+        flux module remove --rank 0 --direct content-sqlite
 '
 
 test_expect_success 'load content-sophia module on rank 0' '
