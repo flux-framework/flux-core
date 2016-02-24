@@ -21,6 +21,7 @@ Options:
 local getopt = require 'flux.alt_getopt' .get_opts
 local posix  = require 'flux.posix'
 local flux   = require 'flux'
+local timer  = require 'flux.timer'
 
 local opts, optind = getopt (arg, "hvqc:t:p:",
                              { timeout = 't',
@@ -35,13 +36,15 @@ if opts.h then print (usage); os.exit (0) end
 local f, err = flux.new()
 if not f then error (err) end
 
-local timeout = opts.t or 0
+local timeout = tonumber (opts.t or 0)
 local pattern = opts.p or ""
 local count = opts.c or 1
 local file = arg[optind]
 
+local tt = timer.new()
+
 local function printf (m, ...)
-    io.stderr:write (string.format ("waitfile: "..m, ...))
+    io.stderr:write (string.format ("waitfile: %4.03fs: "..m, tt:get0(), ...))
 end
 
 local function log_verbose (m, ...)
@@ -108,15 +111,12 @@ function filewatcher:changed ()
         log_verbose ("File appeared with size %d\n", st.st_size)
         return true
     end
-    if st.st_mtime > prev.st_mtime then
-        log_verbose ("File changed\n")
-        if st.st_size < prev.st_size then
-            printf ("truncated!\n")
-            self.position = 0 -- reread
-        end
-        return true
+    log_verbose ("File changed size %d\n", st.st_size)
+    if st.st_size < prev.st_size then
+        printf ("truncated!\n")
+        self.position = 0 -- reread
     end
-    return false
+    return true
 end
 
 function filewatcher:check ()
@@ -138,7 +138,7 @@ function filewatcher:start ()
         path = self.filename,
         interval = self.interval,
         handler = function (w, st, prev)
-            printf ("wakeup\n")
+            log_verbose ("wakeup\n")
             self.st = setmetatable (st, stat)
             self:check ()
             log_verbose ("back to sleep\n")
@@ -158,7 +158,7 @@ setmetatable (filewatcher, { __call = function (t, arg)
         flux =     arg.flux,
         filename = arg.filename,
         pattern  = arg.pattern,
-	count    = tonumber (arg.count) or 1,
+	    count    = tonumber (arg.count) or 1,
         interval = arg.interval and arg.interval or .25,
         on_match = arg.on_match,
         position = 0,
@@ -185,7 +185,7 @@ if not fw then printf ("%s\n", err); os.exit (1) end
 
 -- Exit with non-zero status after timeout:
 --
-if timeout then
+if timeout > 0 then
     f:timer {
       timeout = timeout * 1000,
       handler = function ()
