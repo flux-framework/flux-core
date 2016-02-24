@@ -135,4 +135,31 @@ test_expect_success 'builtin test_size_large () works' '
     test "$size" = "123"
 '
 
+waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
+test_expect_success 'scripts/waitfile works' '
+    flux start $waitfile -v -t 5 -p "hello" waitfile.test.1 &
+    p=$! &&
+    echo "hello" > waitfile.test.1 &&
+    wait $p
+'
+
+test_expect_success 'scripts/waitfile works after <1s' '
+    flux start $waitfile -v -t 5 -p "hello" waitfile.test.2 &
+    p=$! &&
+    echo > waitfile.test.2 &&
+    sleep 1 &&
+    echo "hello" >> waitfile.test.2 &&
+    wait $p
+'
+
+test_expect_success 'scripts/waitfile works after 1s' '
+    flux start $waitfile -v -t 5 -p "hello" waitfile.test.3 &
+    p=$! &&
+    echo > waitfile.test.3 &&
+    sync &&
+    sleep 2 &&
+    echo "hello" >> waitfile.test.3 &&
+    wait $p
+'
+
 test_done
