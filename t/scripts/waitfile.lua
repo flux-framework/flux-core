@@ -21,6 +21,7 @@ Options:
 local getopt = require 'flux.alt_getopt' .get_opts
 local posix  = require 'flux.posix'
 local flux   = require 'flux'
+local timer  = require 'flux.timer'
 
 local opts, optind = getopt (arg, "hvqc:t:p:",
                              { timeout = 't',
@@ -40,8 +41,10 @@ local pattern = opts.p or ""
 local count = opts.c or 1
 local file = arg[optind]
 
+local tt = timer.new()
+
 local function printf (m, ...)
-    io.stderr:write (string.format ("waitfile: "..m, ...))
+    io.stderr:write (string.format ("waitfile: %4.03fs: "..m, tt:get0(), ...))
 end
 
 local function log_verbose (m, ...)
@@ -108,7 +111,7 @@ function filewatcher:changed ()
         log_verbose ("File appeared with size %d\n", st.st_size)
         return true
     end
-    log_verbose ("File changed\n")
+    log_verbose ("File changed size %d\n", st.st_size)
     if st.st_size < prev.st_size then
         printf ("truncated!\n")
         self.position = 0 -- reread
@@ -155,7 +158,7 @@ setmetatable (filewatcher, { __call = function (t, arg)
         flux =     arg.flux,
         filename = arg.filename,
         pattern  = arg.pattern,
-	count    = tonumber (arg.count) or 1,
+	    count    = tonumber (arg.count) or 1,
         interval = arg.interval and arg.interval or .25,
         on_match = arg.on_match,
         position = 0,
