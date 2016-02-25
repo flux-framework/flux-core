@@ -319,7 +319,7 @@ int flux_msg_set_errnum (zmsg_t *zmsg, int e)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_RESPONSE
+            || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_set_bigint (zframe_data (zf), zframe_size (zf), e) < 0) {
         errno = EINVAL;
         return -1;
@@ -334,7 +334,7 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
     uint32_t xe;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_RESPONSE
+            || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_get_bigint (zframe_data (zf), zframe_size (zf), &xe) < 0) {
         errno = EPROTO;
         return -1;

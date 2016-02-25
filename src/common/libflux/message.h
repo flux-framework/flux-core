@@ -161,7 +161,7 @@ int flux_msg_get_payload_json (const flux_msg_t *msg, const char **json_str);
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags);
 int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags);
 
-/* Get/set errnum (response only)
+/* Get/set errnum (response/keepalive only)
  */
 int flux_msg_set_errnum (flux_msg_t *msg, int errnum);
 int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum);
