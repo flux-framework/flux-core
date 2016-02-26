@@ -75,6 +75,7 @@ struct module_struct {
     char *digest;           /* digest of .so file for lsmod */
     size_t argz_len;
     char *argz;
+    int status;
 
     modpoller_cb_f poller_cb;
     void *poller_arg;
@@ -410,6 +411,18 @@ void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg)
     p->rmmod_arg = arg;
 }
 
+void module_set_status (module_t *p, int status)
+{
+    assert (p->magic == MODULE_MAGIC);
+    p->status = status;
+}
+
+int module_get_status (module_t *p)
+{
+    assert (p->magic == MODULE_MAGIC);
+    return p->status;
+}
+
 flux_msg_t *module_pop_rmmod (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
@@ -542,7 +555,8 @@ flux_modlist_t module_get_modlist (modhash_t *mh)
         p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (flux_modlist_append (mods, module_get_name (p), p->size,
-                                 p->digest, module_get_idle (p)) < 0) {
+                                 p->digest, module_get_idle (p),
+                                                        p->status) < 0) {
             flux_modlist_destroy (mods);
             mods = NULL;
             goto done;

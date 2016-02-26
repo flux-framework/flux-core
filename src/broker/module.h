@@ -67,6 +67,11 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic);
 void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg);
 flux_msg_t *module_pop_rmmod (module_t *p);
 
+/* Get/set module status.
+ */
+void module_set_status (module_t *p, int status);
+int module_get_status (module_t *p);
+
 /* Send a response message to the module whose uuid matches the
  * next hop in the routing stack.
  */

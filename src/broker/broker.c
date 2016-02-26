@@ -2596,6 +2596,7 @@ static void module_cb (module_t *p, void *arg)
                                 module_get_name (p));
                 break;
             }
+            module_set_status (p, ka_status);
             if (ka_status == FLUX_MODSTATE_EXITED) {
                 svc_remove (ctx->services, module_get_name (p));
                 flux_log (ctx->h, LOG_INFO, "module %s exited",
