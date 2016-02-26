@@ -51,6 +51,8 @@ typedef struct {
     int size;
     char *digest;
     int idle;
+    int status;
+    int status_hist[8];
     nodeset_t *nodeset;
 } module_t;
 
@@ -66,7 +68,7 @@ static void module_destroy (module_t *m)
 }
 
 static module_t *module_create (const char *name, int size, const char *digest,
-                                int idle, uint32_t nodeid)
+                                int idle, int status, uint32_t nodeid)
 {
     module_t *m = xzmalloc (sizeof (*m));
 
@@ -74,6 +76,8 @@ static module_t *module_create (const char *name, int size, const char *digest,
     m->size = size;
     m->digest = xstrdup (digest);
     m->idle = idle;
+    m->status_hist[abs (status) % 8]++;
+
     if (!(m->nodeset = nodeset_create_rank (nodeid))) {
         module_destroy (m);
         errno = EPROTO;
@@ -82,10 +86,12 @@ static module_t *module_create (const char *name, int size, const char *digest,
     return m;
 }
 
-static int module_update (module_t *m, int idle, uint32_t nodeid)
+static int module_update (module_t *m, int idle, int status,
+                          uint32_t nodeid)
 {
     if (idle < m->idle)
         m->idle = idle;
+    m->status_hist[abs (status) % 8]++;
     if (!nodeset_add_rank (m->nodeset, nodeid)) {
         errno = EPROTO;
         return -1;
@@ -100,6 +106,7 @@ static int get_rlist_result (zhash_t *mods, flux_mrpc_t *mrpc,
     int rc = -1;
     const char *name, *digest;
     int i, len, errnum, size, idle;
+    int status;
     module_t *m;
 
     if (flux_mrpc_get_outarg_obj (mrpc, nodeid, &o) < 0)
@@ -107,14 +114,15 @@ static int get_rlist_result (zhash_t *mods, flux_mrpc_t *mrpc,
     if (modctl_rlist_dec (o, &errnum, &len) < 0)
         goto done;
     for (i = 0; i < len; i++) {
-        if (modctl_rlist_dec_nth (o, i, &name, &size, &digest, &idle) < 0)
+        if (modctl_rlist_dec_nth (o, i, &name, &size, &digest, &idle,
+                                                               &status) < 0)
             goto done;
         if (!(m = zhash_lookup (mods, digest))) {
-            if (!(m = module_create (name, size, digest, idle, nodeid)))
+            if (!(m = module_create (name, size, digest, idle, status, nodeid)))
                 goto done;
             zhash_update (mods, digest, m);
             zhash_freefn (mods, digest, (zhash_free_fn *)module_destroy);
-        } else if (module_update (m, idle, nodeid) < 0)
+        } else if (module_update (m, idle, status, nodeid) < 0)
             goto done;
     }
     *ep = errnum;
@@ -139,7 +147,17 @@ static int cb_rlist_result (zhash_t *mods, flux_lsmod_f cb, void *arg)
         module_t *m = zhash_lookup (mods, key);
         if (m) {
             const char *ns = nodeset_string (m->nodeset);
-            if (cb (m->name, m->size, m->digest, m->idle, ns, arg) < 0)
+            if (m->status_hist[FLUX_MODSTATE_INIT] > 0)
+                m->status = FLUX_MODSTATE_INIT;
+            else if (m->status_hist[FLUX_MODSTATE_FINALIZING] > 0)
+                m->status = FLUX_MODSTATE_FINALIZING;
+            else if (m->status_hist[FLUX_MODSTATE_RUNNING] > 0)
+                m->status = FLUX_MODSTATE_RUNNING;
+            else if (m->status_hist[FLUX_MODSTATE_EXITED] > 0)
+                m->status = FLUX_MODSTATE_EXITED;
+            else
+                m->status = FLUX_MODSTATE_SLEEPING;
+            if (cb (m->name, m->size, m->digest, m->idle, m->status, ns, arg) < 0)
                 goto done;
         }
         key = zlist_next (keys);

@@ -21,12 +21,13 @@ int modctl_tlist_dec (json_object *o, const char **svc);
 
 json_object *modctl_rlist_enc (void);
 int modctl_rlist_enc_add (json_object *o, const char *name, int size,
-                          const char *digest, int idle);
+                          const char *digest, int idle, int status);
 int modctl_rlist_enc_errnum (json_object *o, int errnum);
 
 int modctl_rlist_dec (json_object *o, int *errnum, int *len);
 int modctl_rlist_dec_nth (json_object *o, int n, const char **name,
-                                 int *size, const char **digest, int *idle);
+                                 int *size, const char **digest, int *idle,
+                                 int *status);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

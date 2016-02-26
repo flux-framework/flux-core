@@ -27,6 +27,7 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
 #include <libgen.h>
@@ -152,10 +153,10 @@ done:
 }
 
 static int lsmod_cb (const char *name, int size, const char *digest, int idle,
-                     const char *nodeset, void *arg)
+                     int status, const char *nodeset, void *arg)
 {
     JSON o = arg;
-    return modctl_rlist_enc_add (o, name, size, digest, idle);
+    return modctl_rlist_enc_add (o, name, size, digest, idle, status);
 }
 
 static void list_mrpc_cb (flux_t h, flux_msg_handler_t *w,

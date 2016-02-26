@@ -218,7 +218,7 @@ JSON modctl_rlist_enc (void)
 }
 
 int modctl_rlist_enc_add (JSON o, const char *name, int size,
-                          const char *digest, int idle)
+                          const char *digest, int idle, int status)
 {
     JSON mods, mod;
     int rc = -1;
@@ -236,6 +236,7 @@ int modctl_rlist_enc_add (JSON o, const char *name, int size,
     Jadd_int (mod, "size", size);
     Jadd_str (mod, "digest", digest);
     Jadd_int (mod, "idle", idle);
+    Jadd_int (mod, "status", status);
     Jadd_ar_obj (mods, mod); /* takes ref on mod */
     Jput (mod);
     rc = 0;
@@ -269,7 +270,8 @@ done:
 }
 
 int modctl_rlist_dec_nth (JSON o, int n, const char **name,
-                          int *size, const char **digest, int *idle)
+                          int *size, const char **digest, int *idle,
+                          int *status)
 {
     JSON el, mods;
     int rc = -1;
@@ -292,7 +294,8 @@ int modctl_rlist_dec_nth (JSON o, int n, const char **name,
         goto done;
     }
     if (!Jget_str (el, "name", name) || !Jget_int (el, "size", size)
-        || !Jget_str (el, "digest", digest) || !Jget_int (el, "idle", idle)) {
+        || !Jget_str (el, "digest", digest) || !Jget_int (el, "idle", idle)
+        || !Jget_int (el, "status", status)) {
         errno = EPROTO;
         goto done;
     }
