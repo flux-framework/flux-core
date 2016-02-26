@@ -2595,6 +2595,8 @@ static void module_cb (module_t *p, void *arg)
                           flux_msg_typestr (type), strerror (errno));
             }
             break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
                       __FUNCTION__, module_get_name (p),
