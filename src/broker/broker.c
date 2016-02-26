@@ -2566,36 +2566,42 @@ done:
 static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg = module_recvmsg (p);
+    flux_msg_t *msg = module_recvmsg (p);
     int type, rc;
+    int ka_errnum, ka_status;
 
-    if (!zmsg)
+    if (!msg)
         goto done;
-    if (zmsg_content_size (zmsg) == 0) { /* EOF - safe to pthread_join */
-        svc_remove (ctx->services, module_get_name (p));
-        flux_log (ctx->h, LOG_INFO, "module %s exited", module_get_name (p));
-        module_remove (ctx->modhash, p);
-        goto done;
-    }
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            (void)broker_response_sendmsg (ctx, zmsg);
+            (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &zmsg);
-            if (zmsg)
-                flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
+            rc = broker_request_sendmsg (ctx, &msg);
+            if (msg)
+                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, &zmsg) < 0) {
+            if (broker_event_sendmsg (ctx, &msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "%s(%s): broker_event_sendmsg %s: %s",
                           __FUNCTION__, module_get_name (p),
                           flux_msg_typestr (type), strerror (errno));
             }
             break;
         case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
+                flux_log_error (ctx->h, "%s: flux_keepalive_decode",
+                                module_get_name (p));
+                break;
+            }
+            if (ka_status == FLUX_MODSTATE_EXITED) {
+                svc_remove (ctx->services, module_get_name (p));
+                flux_log (ctx->h, LOG_INFO, "module %s exited",
+                          module_get_name (p));
+                module_remove (ctx->modhash, p);
+            }
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
@@ -2604,7 +2610,7 @@ static void module_cb (module_t *p, void *arg)
             break;
     }
 done:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
 }
 
 static void rmmod_cb (module_t *p, void *arg)
