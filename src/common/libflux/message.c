@@ -399,6 +399,36 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
     return 0;
 }
 
+int flux_msg_set_status (zmsg_t *zmsg, int s)
+{
+    zframe_t *zf = zmsg_last (zmsg);
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_KEEPALIVE
+            || proto_set_bigint2 (zframe_data (zf), zframe_size (zf), s) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_status (const flux_msg_t *msg, int *s)
+{
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
+    int type;
+    uint32_t u;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_KEEPALIVE
+            || proto_get_bigint2 (zframe_data (zf), zframe_size (zf), &u) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    *s = u;
+    return 0;
+}
+
 bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
 {
     uint32_t t;

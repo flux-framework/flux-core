@@ -171,6 +171,11 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum);
 int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq);
 int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq);
 
+/* Get/set status (keepalive only)
+ */
+int flux_msg_set_status (flux_msg_t *msg, int status);
+int flux_msg_get_status (const flux_msg_t *msg, int *status);
+
 /* Get/set/compare match tag (request/response only)
  */
 #define FLUX_MATCHTAG_NONE (0)
