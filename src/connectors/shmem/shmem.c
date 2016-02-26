@@ -112,6 +112,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
                 goto done;
             break;
         case FLUX_MSGTYPE_RESPONSE:
+        case FLUX_MSGTYPE_KEEPALIVE:
             if (flux_msg_sendzsock (ctx->sock, msg) < 0)
                 goto done;
             break;
