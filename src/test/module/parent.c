@@ -20,6 +20,7 @@ typedef struct {
     int size;
     char *digest;
     int idle;
+    int status;
     void *dso;
     mod_main_f *main;
 } module_t;
@@ -103,7 +104,8 @@ static flux_modlist_t module_list (void)
     while (name) {
         m = zhash_lookup (modules, name);
         assert (m != NULL);
-        rc = flux_modlist_append (mods, m->name, m->size, m->digest, m->idle);
+        rc = flux_modlist_append (mods, m->name, m->size, m->digest, m->status,
+                                                                     m->idle);
         assert (rc == 0);
         name = zlist_next (keys);
     }
