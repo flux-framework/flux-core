@@ -95,27 +95,28 @@ void test_rlist (void)
     JSON o;
     const char *name, *digest;
     int len, errnum, size, idle;
+    int status;
 
     o = modctl_rlist_enc ();
     ok (o != NULL,
         "modctl_rlist_enc works");
-    ok (modctl_rlist_enc_add (o, "foo", 42, "abba", 6) == 0,
+    ok (modctl_rlist_enc_add (o, "foo", 42, "abba", 6, 1) == 0,
         "modctl_rlist_enc_add works 0th time");
-    ok (modctl_rlist_enc_add (o, "bar", 69, "argh", 19) == 0,
+    ok (modctl_rlist_enc_add (o, "bar", 69, "argh", 19, 2) == 0,
         "modctl_rlist_enc_add works 1st time");
     ok (modctl_rlist_enc_errnum (o, 0) == 0,
         "modctl_rlist_enc_errnum works");
     ok (modctl_rlist_dec (o, &errnum, &len) == 0 && errnum == 0 && len == 2,
         "modctl_rlist_dec works");
-    ok (modctl_rlist_dec_nth (o, 0, &name, &size, &digest, &idle) == 0
-        && name && size == 42 && digest && idle == 6,
+    ok (modctl_rlist_dec_nth (o, 0, &name, &size, &digest, &idle, &status) == 0
+        && name && size == 42 && digest && idle == 6 && status == 1,
         "modctl_rlist_dec_nth(0) works and returns correct scalar vals");
     like (name, "^foo$",
         "modctl_rlist_dec_nth(0) returns encoded name");
     like (digest, "^abba$",
         "modctl_rlist_dec_nth(0) returns encoded digest");
-    ok (modctl_rlist_dec_nth (o, 1, &name, &size, &digest, &idle) == 0
-        && name && size == 69 && digest && idle == 19,
+    ok (modctl_rlist_dec_nth (o, 1, &name, &size, &digest, &idle, &status) == 0
+        && name && size == 69 && digest && idle == 19 && status == 2,
         "modctl_rlist_dec_nth(1) works and returns correct scalar vals");
     like (name, "^bar$",
         "modctl_rlist_dec_nth(1) returns encoded name");
