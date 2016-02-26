@@ -134,7 +134,7 @@ char *flux_rmmod_json_encode (const char *name)
 }
 
 int flux_modlist_get (flux_modlist_t mods, int n, const char **name, int *size,
-                                const char **digest, int *idle)
+                      const char **digest, int *idle, int *status)
 {
     JSON o;
     int rc = -1;
@@ -142,7 +142,8 @@ int flux_modlist_get (flux_modlist_t mods, int n, const char **name, int *size,
     if (!Jget_ar_obj (mods->a, n, &o) || !Jget_str (o, "name", name)
                                       || !Jget_int (o, "size", size)
                                       || !Jget_str (o, "digest", digest)
-                                      || !Jget_int (o, "idle", idle)) {
+                                      || !Jget_int (o, "idle", idle)
+                                      || !Jget_int (o, "status", status)) {
         errno = EPROTO;
         goto done;
     }
@@ -163,13 +164,14 @@ int flux_modlist_count (flux_modlist_t mods)
 }
 
 int flux_modlist_append (flux_modlist_t mods, const char *name, int size,
-                            const char *digest, int idle)
+                            const char *digest, int idle, int status)
 {
     JSON o = Jnew ();
     Jadd_str (o, "name", name);
     Jadd_int (o, "size", size);
     Jadd_str (o, "digest", digest);
     Jadd_int (o, "idle", idle);
+    Jadd_int (o, "status", status);
     Jadd_ar_obj (mods->a, o); /* takes a ref on o */
     Jput (o);
     return 0;
@@ -347,10 +349,11 @@ int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
         goto done;
     for (i = 0; i < len; i++) {
         const char *name, *digest;
-        int size, idle;
-        if (flux_modlist_get (mods, i, &name, &size, &digest, &idle) < 0)
+        int size, idle, status;
+        if (flux_modlist_get (mods, i, &name, &size, &digest, &idle,
+                                                              &status) < 0)
             goto done;
-        if (cb (name, size, digest, idle, NULL, arg) < 0)
+        if (cb (name, size, digest, idle, status, NULL, arg) < 0)
             goto done;
     }
     rc = 0;
