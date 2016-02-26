@@ -55,6 +55,8 @@ typedef struct {
     flux_t h;
     module_t *p;
     zlist_t *handlers;
+    flux_watcher_t *w_prepare;
+    flux_watcher_t *w_check;
 } ctx_t;
 
 static void freectx (void *arg)
@@ -64,6 +66,8 @@ static void freectx (void *arg)
     while ((w = zlist_pop (ctx->handlers)))
         flux_msg_handler_destroy (w);
     zlist_destroy (&ctx->handlers);
+    flux_watcher_destroy (ctx->w_prepare);
+    flux_watcher_destroy (ctx->w_check);
     free (ctx);
 }
 
@@ -179,6 +183,29 @@ static void shutdown_cb (flux_t h, flux_msg_handler_t *w,
     flux_reactor_stop (flux_get_reactor (h));
 }
 
+/* Reactor loop is about to block.
+ */
+static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
+{
+    ctx_t *ctx = arg;
+    flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_SLEEPING);
+    if (!msg || flux_send (ctx->h, msg, 0) < 0)
+        flux_log_error (ctx->h, "error sending keepalive");
+    flux_msg_destroy (msg);
+}
+
+/* Reactor loop just unblocked.
+ */
+static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    ctx_t *ctx = arg;
+    flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING);
+    if (!msg || flux_send (ctx->h, msg, 0) < 0)
+        flux_log_error (ctx->h, "error sending keepalive");
+}
+
 static void register_event (ctx_t *ctx, const char *name,
                             flux_msg_handler_f cb)
 {
@@ -215,6 +242,7 @@ static void register_request (ctx_t *ctx, const char *name,
 void modservice_register (flux_t h, module_t *p)
 {
     ctx_t *ctx = getctx (h, p);
+    flux_reactor_t *r = flux_get_reactor (h);
 
     register_request (ctx, "shutdown", shutdown_cb);
     register_request (ctx, "ping", ping_cb);
@@ -223,6 +251,13 @@ void modservice_register (flux_t h, module_t *p)
     register_request (ctx, "rusage", rusage_cb);
 
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
+
+    if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx)))
+        err_exit ("flux_prepare_watcher_create");
+    if (!(ctx->w_check = flux_check_watcher_create (r, check_cb, ctx)))
+        err_exit ("flux_check_watcher_create");
+    flux_watcher_start (ctx->w_prepare);
+    flux_watcher_start (ctx->w_check);
 }
 
 /*
