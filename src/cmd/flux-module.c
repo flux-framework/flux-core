@@ -330,17 +330,38 @@ void mod_rmmod (flux_t h, opt_t opt)
 }
 
 int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
-                    const char *nodeset, void *arg)
+                    int status, const char *nodeset, void *arg)
 {
     int digest_len = strlen (digest);
     char idle_str[16];
+    char S;
     if (idle <= max_idle)
         snprintf (idle_str, sizeof (idle_str), "%d", idle);
     else
         strncpy (idle_str, "idle", sizeof (idle_str));
-    printf ("%-20.20s %6d %7s %4s %s\n", name, size,
+    switch (status) {
+        case FLUX_MODSTATE_INIT:
+            S ='I';
+            break;
+        case FLUX_MODSTATE_SLEEPING:
+            S ='S';
+            break;
+        case FLUX_MODSTATE_RUNNING:
+            S ='R';
+            break;
+        case FLUX_MODSTATE_FINALIZING:
+            S ='F';
+            break;
+        case FLUX_MODSTATE_EXITED:
+            S ='X';
+            break;
+        default:
+            S = '?';
+            break;
+    }
+    printf ("%-20.20s %7d %7s %4s  %c  %s\n", name, size,
             digest_len > 7 ? digest + digest_len - 7 : digest,
-            idle_str, nodeset ? nodeset : "");
+            idle_str, S, nodeset ? nodeset : "");
     return 0;
 }
 
@@ -349,6 +370,7 @@ typedef struct {
     int size;
     char *digest;
     int idle;
+    int status;
     nodeset_t *nodeset;
 } mod_t;
 
@@ -361,13 +383,14 @@ void mod_destroy (mod_t *m)
 }
 
 mod_t *mod_create (const char *name, int size, const char *digest,
-                          int idle, uint32_t nodeid)
+                   int idle, int status, uint32_t nodeid)
 {
     mod_t *m = xzmalloc (sizeof (*m));
     m->name = xstrdup (name);
     m->size = size;
     m->digest = xstrdup (digest);
     m->idle = idle;
+    m->status = status;
     if (!(m->nodeset = nodeset_create_rank (nodeid)))
         oom ();
     return m;
@@ -385,7 +408,7 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
     key = zlist_first (keys);
     while (key != NULL) {
         if ((m = zhash_lookup (mods, key))) {
-            if (cb (m->name, m->size, m->digest, m->idle,
+            if (cb (m->name, m->size, m->digest, m->idle, m->status,
                                        nodeset_string (m->nodeset), arg) < 0) {
                 if (errno > errnum)
                     errnum = errno;
@@ -403,6 +426,7 @@ int lsmod_hash_cb (uint32_t nodeid, const char *json_str, zhash_t *mods)
     int i, len;
     const char *name, *digest;
     int size, idle;
+    int status;
     int rc = -1;
 
     if (!(modlist = flux_lsmod_json_decode (json_str)))
@@ -410,15 +434,17 @@ int lsmod_hash_cb (uint32_t nodeid, const char *json_str, zhash_t *mods)
     if ((len = flux_modlist_count (modlist)) == -1)
         goto done;
     for (i = 0; i < len; i++) {
-        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle) < 0)
+        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle,
+                                                                 &status) < 0)
             goto done;
         if ((m = zhash_lookup (mods, digest))) {
             if (idle < m->idle)
                 m->idle = idle;
+            m->status = status;
             if (!nodeset_add_rank (m->nodeset, nodeid))
                 oom ();
         } else {
-            m = mod_create (name, size, digest, idle, nodeid);
+            m = mod_create (name, size, digest, idle, status, nodeid);
             zhash_update (mods, digest, m);
             zhash_freefn (mods, digest, (zhash_free_fn *)mod_destroy);
         }
@@ -438,8 +464,8 @@ void mod_lsmod (flux_t h, opt_t opt)
         usage ();
     if (opt.argc == 1)
         service = opt.argv[0];
-    printf ("%-20s %6s %7s %4s %s\n",
-            "Module", "Size", "Digest", "Idle", "Nodeset");
+    printf ("%-20s %-7s %-7s %4s  %c  %s\n",
+            "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
     if (opt.direct) {
         zhash_t *mods = zhash_new ();
         if (!mods)
