@@ -9,6 +9,16 @@
 
 #include "handle.h"
 
+/* Module states, for embedding in keepalive messages (rfc 5)
+ */
+enum {
+    FLUX_MODSTATE_INIT           = 0,
+    FLUX_MODSTATE_SLEEPING       = 1,
+    FLUX_MODSTATE_RUNNING        = 2,
+    FLUX_MODSTATE_FINALIZING     = 3,
+    FLUX_MODSTATE_EXITED         = 4,
+};
+
 /**
  ** High level module management functions
  **/
