@@ -44,18 +44,16 @@
 const int max_idle = 99;
 
 typedef struct {
-    int fanout;
     bool direct;
     char *nodeset;
     int argc;
     char **argv;
 } opt_t;
 
-#define OPTIONS "+hr:df:"
+#define OPTIONS "+hr:d"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
-    {"fanout",     required_argument,  0, 'f'},
     {"direct",     no_argument,        0, 'd'},
     { 0, 0, 0, 0 },
 };
@@ -96,7 +94,6 @@ void usage (void)
 "where OPTIONS are:\n"
 "       -r,--rank=[ns|all]  specify nodeset where op will be performed\n"
 "       -d,--direct         bypass modctl and KVS, with decreased scalability\n"
-"       -f,--fanout N       specify max concurrency in direct mode (def: 1024)\n"
 );
     exit (1);
 }
@@ -108,7 +105,6 @@ int main (int argc, char *argv[])
     char *cmd;
     func_t *f;
     opt_t opt = {
-        .fanout = 1024,
         .nodeset = NULL,
     };
     uint32_t rank, size;
@@ -133,9 +129,6 @@ int main (int argc, char *argv[])
                 break;
             case 'd': /* --direct */
                 opt.direct = true;
-                break;
-            case 'f': /* --fanout */
-                opt.fanout = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
