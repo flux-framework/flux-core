@@ -59,12 +59,9 @@ int module_event_mcast (modhash_t *mh, const flux_msg_t *msg);
 int module_subscribe (modhash_t *mh, const char *uuid, const char *topic);
 int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic);
 
-/* The rmmod callback is called as part of module destruction,
- * after the thread has been joined, so that module_pop_rmmod() can
- * be called to obtain any queued rmmod requests that now need
- * their replies.
- */
 void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg);
+
+int module_push_rmmod (module_t *p, const flux_msg_t *msg);
 flux_msg_t *module_pop_rmmod (module_t *p);
 
 /* Get/set module status.
@@ -88,10 +85,8 @@ int module_start (module_t *p);
 int module_start_all (modhash_t *mh);
 
 /* Stop module thread by sending a shutdown request.
- * If stop was instigated by an rmmod request, queue the request here
- * for reply once the module actually stops.
  */
-int module_stop (module_t *p, const flux_msg_t *msg);
+int module_stop (module_t *p);
 int module_stop_all (modhash_t *mh);
 
 /* Prepare an 'lsmod' response payload.

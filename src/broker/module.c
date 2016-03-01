@@ -324,7 +324,7 @@ static void module_destroy (module_t *p)
 
 /* Send shutdown request, broker to module.
  */
-int module_stop (module_t *p, const flux_msg_t *rmmod)
+int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
@@ -337,11 +337,6 @@ int module_stop (module_t *p, const flux_msg_t *rmmod)
         goto done;
     if (flux_msg_sendzsock (p->sock, msg) < 0)
         goto done;
-    if (rmmod) {
-        flux_msg_t *cpy = flux_msg_copy (rmmod, true);
-        if (!cpy || zlist_append (p->rmmod, cpy) < 0)
-            oom ();
-    }
     rc = 0;
 done:
     free (topic);
@@ -421,6 +416,18 @@ int module_get_status (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     return p->status;
+}
+
+int module_push_rmmod (module_t *p, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy = flux_msg_copy (msg, true);
+    if (!cpy)
+        return -1;
+    if (zlist_push (p->rmmod, cpy) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
 }
 
 flux_msg_t *module_pop_rmmod (module_t *p)
@@ -580,7 +587,7 @@ int module_stop_all (modhash_t *mh)
     while (uuid) {
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
-        if (module_stop (p, NULL) < 0)
+        if (module_stop (p) < 0)
             goto done;
         uuid = zlist_next (uuids);
     }

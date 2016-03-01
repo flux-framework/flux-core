@@ -1989,9 +1989,11 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     /* N.B. can't remove 'service' entry here as distributed
      * module shutdown may require inter-rank module communication.
      */
-    if (module_stop (p, *zmsg) < 0)
+    if (module_push_rmmod (p, *zmsg) < 0)
         goto done;
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
+    if (module_stop (p) < 0)
+        goto done;
     flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
     rc = 0;
 done:
