@@ -14,7 +14,7 @@ check_PROGRAMS = \
 	tmunge \
 	tbarrier
 
-SUBDIRS = request module
+SUBDIRS = request
 if HAVE_MPI
 SUBDIRS += kap
 endif

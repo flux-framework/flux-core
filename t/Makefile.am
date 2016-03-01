@@ -45,7 +45,6 @@ TESTS = \
 	t0013-content-sophia.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
-	t1002-modctl.t \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
@@ -99,7 +98,6 @@ check_SCRIPTS = \
 	t0013-content-sophia.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
-	t1002-modctl.t \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
@@ -143,6 +141,10 @@ check_PROGRAMS = \
 	kvs/watch \
 	kvs/watch_disconnect \
 	kvs/commit
+
+check_LTLIBRARIES = \
+	module/parent.la \
+	module/child.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -250,3 +252,15 @@ kvs_hashtest_SOURCES = kvs/hashtest.c
 kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
+
+module_parent_la_SOURCES = module/parent.c
+module_parent_la_CPPFLAGS = $(test_cppflags)
+module_parent_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_parent_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+module_child_la_SOURCES = module/child.c
+module_child_la_CPPFLAGS = $(test_cppflags)
+module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_child_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)

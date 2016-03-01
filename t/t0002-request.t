@@ -23,13 +23,13 @@ test_expect_success 'flux_rpc_multi(3) example runs' '
 '
 
 test_expect_success 'request: load req module on rank 0' '
-	flux module load -d --rank=0 \
+	flux module load --rank=0 \
 		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
 '
 
 # FIXME: uses rank-addressed requests which we test below
 test_expect_success 'request: load req module on rank 1' '
-	flux module load -d --rank=1 \
+	flux module load --rank=1 \
 		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
 '
 
@@ -88,7 +88,7 @@ test_expect_success 'request: proxy ping upstream from 1 is 4 hop' '
 # Coproc test
 
 test_expect_success 'request: load coproc module on rank 0' '
-	flux module load -d --rank=0 \
+	flux module load --rank=0 \
 		${FLUX_BUILD_DIR}/src/test/request/.libs/coproc.so
 '
 
@@ -97,7 +97,7 @@ test_expect_success 'request: FLUX_O_COPROC works' '
 '
 
 test_expect_success 'request: unloaded coproc module on rank 0' '
-	flux module remove -d --rank=0 coproc
+	flux module remove --rank=0 coproc
 '
 
 # FIXME: test doesn't handle this and leaves RPC unanswered
@@ -106,11 +106,11 @@ test_expect_success 'request: unloaded coproc module on rank 0' '
 #'
 
 test_expect_success 'request: unloaded req module on rank 1' '
-	flux module remove -d --rank=1 req
+	flux module remove --rank=1 req
 '
 
 test_expect_success 'request: unloaded req module on rank 0' '
-	flux module remove -d --rank=0 req
+	flux module remove --rank=0 req
 '
 
 test_done
