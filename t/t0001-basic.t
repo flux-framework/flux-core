@@ -139,29 +139,41 @@ test_expect_success 'builtin test_size_large () works' '
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 test_expect_success 'scripts/waitfile works' '
-    flux start $waitfile -v -t 5 -p "hello" waitfile.test.1 &
-    p=$! &&
-    echo "hello" > waitfile.test.1 &&
-    wait $p
+	flux start $waitfile -v -t 5 -p "hello" waitfile.test.1 &
+	p=$! &&
+	echo "hello" > waitfile.test.1 &&
+	wait $p
 '
 
 test_expect_success 'scripts/waitfile works after <1s' '
-    flux start $waitfile -v -t 5 -p "hello" waitfile.test.2 &
-    p=$! &&
-    echo > waitfile.test.2 &&
-    sleep 1 &&
-    echo "hello" >> waitfile.test.2 &&
-    wait $p
+	flux start $waitfile -v -t 2 -p "hello" -P- waitfile.test.2 <<-EOF &
+	-- open file at 250ms, write pattern at 500ms
+	f:timer{ timeout = 250,
+	         handler = function () tf = io.open ("waitfile.test.2", "w") end
+	}
+	f:timer{ timeout = 500,
+	         handler = function () tf:write ("hello\n"); tf:flush() end
+	}
+	EOF
+	p=$! &&
+	wait $p
 '
 
 test_expect_success 'scripts/waitfile works after 1s' '
-    flux start $waitfile -v -t 5 -p "hello" waitfile.test.3 &
-    p=$! &&
-    echo > waitfile.test.3 &&
-    sync &&
-    sleep 2 &&
-    echo "hello" >> waitfile.test.3 &&
-    wait $p
+	flux start $waitfile -v -t 5 -p "hello" -P- waitfile.test.3 <<-EOF &
+	-- Wait 250ms and create file, at .5s write a line, at 1.1s write pattern:
+	f:timer{ timeout = 250,
+	         handler = function () tf = io.open ("waitfile.test.3", "w") end
+               }
+	f:timer{ timeout = 500,
+	         handler = function () tf:write ("line one"); tf:flush()  end
+	       }
+	f:timer{ timeout = 1100,
+	         handler = function () tf:write ("hello\n"); tf:flush() end
+	       }
+	EOF
+	p=$! &&
+	wait $p
 '
 
 test_done
