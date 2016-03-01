@@ -8,6 +8,8 @@ This suite verifies functionality that may be assumed working by
 other tests.
 '
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
 test_expect_success 'TEST_NAME is set' '
