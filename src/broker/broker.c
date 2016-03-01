@@ -2036,8 +2036,15 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     }
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
-    if (module_start (p) < 0)
+    if (module_push_insmod (p, *zmsg) < 0) {
+        module_remove (ctx->modhash, p);
         goto done;
+    }
+    if (module_start (p) < 0) {
+        module_remove (ctx->modhash, p);
+        goto done;
+    }
+    zmsg_destroy (zmsg); /* zmsg will be replied to later */
     flux_log (ctx->h, LOG_INFO, "insmod %s", name);
     rc = 0;
 done:
@@ -2598,6 +2605,8 @@ static void module_cb (module_t *p, void *arg)
                                 module_get_name (p));
                 break;
             }
+            if (ka_status == FLUX_MODSTATE_EXITED)
+                module_set_errnum (p, ka_errnum);
             module_set_status (p, ka_status);
             break;
         default:
@@ -2616,6 +2625,21 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     flux_msg_t *msg;
     int status = module_get_status (p);
     const char *name = module_get_name (p);
+
+    /* Transition from INIT
+     * Respond to insmod request, if any.
+     * If transitioning to EXITED, return error to insmod if mod_main() = -1
+     */
+    if (prev_status == FLUX_MODSTATE_INIT) {
+        if ((msg = module_pop_insmod (p))) {
+            int errnum = 0;
+            if (status == FLUX_MODSTATE_EXITED)
+                errnum = module_get_errnum (p);
+            if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
+                flux_log_error (ctx->h, "flux_repond to insmod %s", name);
+            flux_msg_destroy (msg);
+        }
+    }
 
     /* Transition to EXITED
      * Remove service routes, respond to rmmod request(s), if any,

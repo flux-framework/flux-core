@@ -76,6 +76,7 @@ struct module_struct {
     size_t argz_len;
     char *argz;
     int status;
+    int errnum;
 
     modpoller_cb_f poller_cb;
     void *poller_arg;
@@ -83,6 +84,7 @@ struct module_struct {
     void *status_arg;
 
     zlist_t *rmmod;
+    flux_msg_t *insmod;
 
     flux_t h;               /* module's handle */
 
@@ -142,6 +144,8 @@ static void *module_thread (void *arg)
     argz_extract (p->argz, p->argz_len, av);
     if (p->main(p->h, ac, av) < 0) {
         mod_main_errno = errno;
+        if (mod_main_errno == 0)
+            mod_main_errno = ECONNRESET;
         flux_log (p->h, LOG_CRIT, "fatal error: %s", strerror (errno));
     }
     /* If any unhandled requests were received during shutdown,
@@ -309,6 +313,7 @@ static void module_destroy (module_t *p)
         while ((msg = zlist_pop (p->rmmod)))
             flux_msg_destroy (msg);
     }
+    flux_msg_destroy (p->insmod);
     if (p->subs) {
         char *s;
         while ((s = zlist_pop (p->subs)))
@@ -422,9 +427,21 @@ int module_get_status (module_t *p)
     return p->status;
 }
 
+void module_set_errnum (module_t *p, int errnum)
+{
+    assert (p->magic == MODULE_MAGIC);
+    p->errnum = errnum;
+}
+
+int module_get_errnum (module_t *p)
+{
+    assert (p->magic == MODULE_MAGIC);
+    return p->errnum;
+}
+
 int module_push_rmmod (module_t *p, const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = flux_msg_copy (msg, true);
+    flux_msg_t *cpy = flux_msg_copy (msg, false);
     if (!cpy)
         return -1;
     if (zlist_push (p->rmmod, cpy) < 0) {
@@ -438,6 +455,27 @@ flux_msg_t *module_pop_rmmod (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     return zlist_pop (p->rmmod);
+}
+
+/* There can be only one.
+ */
+int module_push_insmod (module_t *p, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy = flux_msg_copy (msg, false);
+    if (!cpy)
+        return -1;
+    if (p->insmod)
+        flux_msg_destroy (p->insmod);
+    p->insmod = cpy;
+    return 0;
+}
+
+flux_msg_t *module_pop_insmod (module_t *p)
+{
+    assert (p->magic == MODULE_MAGIC);
+    flux_msg_t *msg = p->insmod;
+    p->insmod = NULL;
+    return msg;
 }
 
 module_t *module_add (modhash_t *mh, const char *path)

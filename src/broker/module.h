@@ -61,12 +61,17 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic);
 
 int module_push_rmmod (module_t *p, const flux_msg_t *msg);
 flux_msg_t *module_pop_rmmod (module_t *p);
+int module_push_insmod (module_t *p, const flux_msg_t *msg);
+flux_msg_t *module_pop_insmod (module_t *p);
 
 /* Get/set module status.
  */
 void module_set_status (module_t *p, int status);
 int module_get_status (module_t *p);
 void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg);
+
+int module_get_errnum (module_t *p);
+void module_set_errnum (module_t *p, int errnum);
 
 /* Send a response message to the module whose uuid matches the
  * next hop in the routing stack.
