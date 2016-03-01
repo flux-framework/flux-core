@@ -6,7 +6,7 @@
 typedef struct module_struct module_t;
 typedef struct modhash_struct modhash_t;
 typedef void (*modpoller_cb_f)(module_t *p, void *arg);
-typedef void (*rmmod_cb_f)(module_t *p, void *arg);
+typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
 
 /* Hash-o-modules, keyed by uuid
  */
@@ -59,8 +59,6 @@ int module_event_mcast (modhash_t *mh, const flux_msg_t *msg);
 int module_subscribe (modhash_t *mh, const char *uuid, const char *topic);
 int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic);
 
-void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg);
-
 int module_push_rmmod (module_t *p, const flux_msg_t *msg);
 flux_msg_t *module_pop_rmmod (module_t *p);
 
@@ -68,6 +66,7 @@ flux_msg_t *module_pop_rmmod (module_t *p);
  */
 void module_set_status (module_t *p, int status);
 int module_get_status (module_t *p);
+void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg);
 
 /* Send a response message to the module whose uuid matches the
  * next hop in the routing stack.

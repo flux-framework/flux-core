@@ -154,7 +154,7 @@ static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
-static void rmmod_cb (module_t *p, void *arg);
+static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -1412,7 +1412,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
             msg_exit ("could not register service %s", module_get_name (p));
         zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
-        module_set_rmmod_cb (p, rmmod_cb, ctx);
+        module_set_status_cb (p, module_status_cb, ctx);
 next:
         if (name != s)
             free (name);
@@ -2035,7 +2035,7 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
         arg = argz_next (argz, argz_len, arg);
     }
     module_set_poller_cb (p, module_cb, ctx);
-    module_set_rmmod_cb (p, rmmod_cb, ctx);
+    module_set_status_cb (p, module_status_cb, ctx);
     if (module_start (p) < 0)
         goto done;
     flux_log (ctx->h, LOG_INFO, "insmod %s", name);
@@ -2599,12 +2599,6 @@ static void module_cb (module_t *p, void *arg)
                 break;
             }
             module_set_status (p, ka_status);
-            if (ka_status == FLUX_MODSTATE_EXITED) {
-                svc_remove (ctx->services, module_get_name (p));
-                flux_log (ctx->h, LOG_INFO, "module %s exited",
-                          module_get_name (p));
-                module_remove (ctx->modhash, p);
-            }
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
@@ -2616,15 +2610,26 @@ done:
     flux_msg_destroy (msg);
 }
 
-static void rmmod_cb (module_t *p, void *arg)
+static void module_status_cb (module_t *p, int prev_status, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
+    int status = module_get_status (p);
+    const char *name = module_get_name (p);
 
-    while ((zmsg = module_pop_rmmod (p))) {
-        if (flux_respond (ctx->h, zmsg, 0, NULL) < 0)
-            err ("%s: flux_respond", __FUNCTION__);
-        zmsg_destroy (&zmsg);
+    /* Transition to EXITED
+     * Remove service routes, respond to rmmod request(s), if any,
+     * and remove the module (which calls pthread_join).
+     */
+    if (status == FLUX_MODSTATE_EXITED) {
+        flux_log (ctx->h, LOG_INFO, "module %s exited", name);
+        svc_remove (ctx->services, module_get_name (p));
+        while ((msg = module_pop_rmmod (p))) {
+            if (flux_respond (ctx->h, msg, 0, NULL) < 0)
+                flux_log_error (ctx->h, "flux_repond to rmmod %s", name);
+            flux_msg_destroy (msg);
+        }
+        module_remove (ctx->modhash, p);
     }
 }
 

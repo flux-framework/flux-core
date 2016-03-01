@@ -79,8 +79,8 @@ struct module_struct {
 
     modpoller_cb_f poller_cb;
     void *poller_arg;
-    rmmod_cb_f rmmod_cb;
-    void *rmmod_arg;
+    module_status_cb_f status_cb;
+    void *status_arg;
 
     zlist_t *rmmod;
 
@@ -304,8 +304,6 @@ static void module_destroy (module_t *p)
         free (p->name);
     if (p->service)
         free (p->service);
-    if (p->rmmod_cb)
-        p->rmmod_cb (p, p->rmmod_arg);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))
@@ -399,17 +397,23 @@ void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
     p->poller_arg = arg;
 }
 
-void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg)
+void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg)
 {
     assert (p->magic == MODULE_MAGIC);
-    p->rmmod_cb = cb;
-    p->rmmod_arg = arg;
+    p->status_cb = cb;
+    p->status_arg = arg;
 }
 
-void module_set_status (module_t *p, int status)
+void module_set_status (module_t *p, int new_status)
 {
     assert (p->magic == MODULE_MAGIC);
-    p->status = status;
+    assert (p->status != new_status);
+    assert (new_status != FLUX_MODSTATE_INIT);  /* illegal state transition */
+    assert (p->status != FLUX_MODSTATE_EXITED); /* illegal state transition */
+    int prev_status = p->status;
+    p->status = new_status;
+    if (p->status_cb)
+        p->status_cb (p, prev_status, p->status_arg);
 }
 
 int module_get_status (module_t *p)
