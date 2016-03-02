@@ -10,10 +10,8 @@
 #include <flux/core.h>
 #include <czmq.h>
 
-#include "src/common/libcompat/compat.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 typedef struct {
     char *name;
@@ -113,115 +111,129 @@ static flux_modlist_t module_list (void)
     return mods;
 }
 
-static int insmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void insmod_request_cb (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
     module_t *m = NULL;
-    int errnum;
+    int rc = -1, saved_errno;
 
-    if (flux_request_decode (*zmsg, NULL, &json_str) < 0
-            || flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
-        errnum = errno;
-    else if (!(m = module_create (path, argz, argz_len)))
-        errnum = errno;
-    else {
-        flux_log (h, LOG_DEBUG, "insmod %s", m->name);
-        errnum = 0;
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = errno;
+        goto done;
     }
-    if (flux_err_respond (h, errnum, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0) {
+        saved_errno = errno;
+        goto done;
     }
+    if (!(m = module_create (path, argz, argz_len))) {
+        saved_errno = errno;
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "insmod %s", m->name);
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     if (path)
         free (path);
     if (argz)
         free (argz);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int rmmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void rmmod_request_cb (flux_t h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     char *name = NULL;
-    int errnum;
+    int rc = -1, saved_errno;
 
-    if (flux_request_decode (*zmsg, NULL, &json_str) < 0
-            || flux_rmmod_json_decode (json_str, &name) < 0)
-        errnum = errno;
-    else if (!zhash_lookup (modules, name))
-        errnum = ENOENT;
-    else {
-        zhash_delete (modules, name);
-        flux_log (h, LOG_DEBUG, "rmmod %s", name);
-        errnum = 0;
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = errno;
+        goto done;
     }
-    if (flux_err_respond (h, errnum, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    if (flux_rmmod_json_decode (json_str, &name) < 0) {
+        saved_errno = errno;
+        goto done;
     }
+    if (!zhash_lookup (modules, name)) {
+        saved_errno = errno = ENOENT;
+        goto done;
+    }
+    zhash_delete (modules, name);
+    flux_log (h, LOG_DEBUG, "rmmod %s", name);
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     if (name)
         free (name);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int lsmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void lsmod_request_cb (flux_t h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
 {
-    JSON out = NULL;
     flux_modlist_t mods = NULL;
-    int errnum;
+    char *json_str = NULL;
+    int rc = -1, saved_errno;
 
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0)
-        errnum = errno;
-    else if (!(mods = module_list ()))
-        errnum = errno;
-    else
-        errnum = 0;
-    if (errnum) {
-        if (flux_err_respond (h, errnum, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-    } else {
-        char *json_str = flux_lsmod_json_encode (mods);
-        assert (json_str != NULL);
-        out = Jfromstr (json_str);
-        assert (out != NULL);
-        if (flux_json_respond (h, out, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
-                      strerror (errno));
+    if (flux_request_decode (msg, NULL, NULL) < 0) {
+        saved_errno = errno;
+        goto done;
     }
-    Jput (out);
-    zmsg_destroy (zmsg);
+    if (!(mods = module_list ())) {
+        saved_errno = errno;
+        goto done;
+    }
+    if (!(json_str = flux_lsmod_json_encode (mods))) {
+        saved_errno = errno;
+        goto done;
+    }
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
+                              rc < 0 ? NULL : json_str) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (json_str)
+        free (json_str);
     if (mods)
         flux_modlist_destroy (mods);
-    return 0;
 }
 
-static msghandler_t htab[] = {
+struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "parent.insmod",         insmod_request_cb },
     { FLUX_MSGTYPE_REQUEST, "parent.rmmod",          rmmod_request_cb },
     { FLUX_MSGTYPE_REQUEST, "parent.lsmod",          lsmod_request_cb },
+    FLUX_MSGHANDLER_TABLE_END,
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    if (!(modules = zhash_new ()))
-        oom ();
-    if (flux_msghandler_addvec (h, htab, htablen, NULL) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
-        return -1;
+    int saved_errno;
+
+    if (!(modules = zhash_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
+    if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "flux_msghandler_addvec");
+        goto error;
+    }
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "flux_reactor_run");
+        goto error;
     }
     zhash_destroy (&modules);
     return 0;
+error:
+    zhash_destroy (&modules);
+    errno = saved_errno;
+    return -1;
 }
 
 MOD_NAME ("parent");
