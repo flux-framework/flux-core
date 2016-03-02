@@ -145,7 +145,7 @@ void flux_conf_environment_no_dedup_push_back (flux_conf_t cf,
 void flux_conf_environment_set (flux_conf_t cf,
                                 const char *key,
                                 const char *value,
-                                const char *separator);
+                                char separator);
 /**
  * @brief Explicitly unset the environment variable "key," this will cause the
  * variable to be cleared when this environment spec is applied.
@@ -167,7 +167,7 @@ void flux_conf_environment_unset (flux_conf_t cf, const char *key);
 void flux_conf_environment_from_env (flux_conf_t cf,
                                      const char *key,
                                      const char *default_base,
-                                     const char *separator);
+                                     char separator);
 /**
  * @brief Set the separator for a given environment variable.
  *
@@ -178,7 +178,7 @@ void flux_conf_environment_from_env (flux_conf_t cf,
  */
 void flux_conf_environment_set_separator (flux_conf_t cf,
                                           const char *key,
-                                          const char *separator);
+                                          char separator);
 
 /**
  * @brief Get the value of a given environment variable by name.

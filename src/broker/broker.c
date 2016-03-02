@@ -413,8 +413,9 @@ int main (int argc, char *argv[])
     if (getenv ("FLUX_CONF_USEFILE")) {
         if (ctx.verbose)
             msg ("Loading config from %s", confdir);
-        if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH)
-            err_exit ("%s", confdir);
+        if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH) {
+            msg("Configuration failed to load: %s, falling back", confdir);
+        }
     } else if (ctx.enclosing_h) {
         if (ctx.verbose)
             msg ("Loading config from KVS");

@@ -51,10 +51,6 @@ libutil_la_SOURCES = \
 	sds.c \
 	sds.h \
 	sdsalloc.h \
-	vec.c \
-	vec.h \
-	usa.c \
-	usa.h \
 	iterators.h \
 	macros.h \
 	sha1.h \

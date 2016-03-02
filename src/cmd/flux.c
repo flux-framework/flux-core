@@ -167,12 +167,12 @@ int main (int argc, char *argv[])
     if (optparse_hasopt (p, "trace-handle")) {
         if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
             err_exit ("setenv");
-        flux_conf_environment_set (cf, "FLUX_HANDLE_TRACE", "1", "");
+        flux_conf_environment_set (cf, "FLUX_HANDLE_TRACE", "1", 0);
     }
     if (optparse_getopt (p, "uri", &opt)) {
         if (setenv ("FLUX_URI", opt, 1) < 0)
             err_exit ("setenv");
-        flux_conf_environment_set(cf, "FLUX_URI", opt, "");
+        flux_conf_environment_set(cf, "FLUX_URI", opt, 0);
     }
 
     optind = optparse_optind (p);
@@ -200,7 +200,7 @@ int main (int argc, char *argv[])
         optparse_set_data (p, "flux_t", h);
     } else {
         if (flux_conf_load (cf) == 0) {
-            flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", "");
+            flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", 0);
         } else if (errno != ENOENT)
             err_exit ("%s", flux_conf_get_directory (cf));
     }
@@ -210,7 +210,7 @@ int main (int argc, char *argv[])
      */
     if (!optparse_getopt (p, "secdir", &secdir))
         secdir = flux_conf_get_directory (cf);
-    flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY", secdir, "");
+    flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY", secdir, 0);
 
     /* Add PATH to flux_conf_environment and prepend path to
      *  this executable if necessary.
@@ -332,7 +332,7 @@ void setup_path (flux_conf_t cf, const char *argv0)
     /*  If argv[0] was explicitly "flux" then assume PATH is already set */
     if (strcmp (argv0, "flux") == 0)
         return;
-    flux_conf_environment_from_env (cf, "PATH", "/bin:/usr/bin", ":");
+    flux_conf_environment_from_env (cf, "PATH", "/bin:/usr/bin", ':');
     selfdir = dir_self ();
     flux_conf_environment_push (cf, "PATH", selfdir);
     free (selfdir);
