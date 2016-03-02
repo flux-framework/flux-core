@@ -31,13 +31,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <czmq.h>
+#include <argz.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
-#include "src/common/libutil/sds.h"
-#include "src/common/libutil/vec.h"
-#include "src/common/libutil/usa.h"
+
 
 #include "conf.h"
 
@@ -96,15 +95,15 @@ static void initialize_environment (flux_conf_t cf)
 {
     // Defaults from the environment
     flux_conf_environment_from_env (
-        cf, "LUA_CPATH", "", ";"); /* Lua replaces ;; with the default path */
+        cf, "LUA_CPATH", "", ';'); /* Lua replaces ;; with the default path */
     flux_conf_environment_no_dedup_push_back (cf, "LUA_CPATH", ";;");
     flux_conf_environment_from_env (
-        cf, "LUA_PATH", "", ";"); /* use a null separator to keep it intact */
+        cf, "LUA_PATH", "", ';'); /* use a null separator to keep it intact */
     flux_conf_environment_no_dedup_push_back (cf, "LUA_PATH", ";;");
-    flux_conf_environment_from_env (cf, "PYTHONPATH", "", ":");
-    flux_conf_environment_from_env (cf, "FLUX_CONNECTOR_PATH", "", ":");
-    flux_conf_environment_from_env (cf, "FLUX_EXEC_PATH", "", ":");
-    flux_conf_environment_from_env (cf, "FLUX_MODULE_PATH", "", ":");
+    flux_conf_environment_from_env (cf, "PYTHONPATH", "", ':');
+    flux_conf_environment_from_env (cf, "FLUX_CONNECTOR_PATH", "", ':');
+    flux_conf_environment_from_env (cf, "FLUX_EXEC_PATH", "", ':');
+    flux_conf_environment_from_env (cf, "FLUX_MODULE_PATH", "", ':');
 
     // Build paths
     flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", CONNECTOR_PATH);
@@ -123,7 +122,7 @@ const char *flux_conf_get_directory (flux_conf_t cf)
 void flux_conf_set_directory (flux_conf_t cf, const char *path)
 {
     free (cf->confdir);
-    flux_conf_environment_set (cf, "FLUX_CONF_DIRECTORY", path, "");
+    flux_conf_environment_set (cf, "FLUX_CONF_DIRECTORY", path, ':');
     cf->confdir = xstrdup (path);
 }
 
@@ -290,38 +289,84 @@ const char *flux_conf_next (flux_conf_itr_t itr)
     return item;
 }
 
+struct env_item {
+    char *argz;
+    size_t argz_len;
+    char sep;
+    _Bool clean;
+    _Bool unset;
+    char *str_cache;
+};
+
+struct env_item * new_env_item(){
+    return calloc (1, sizeof(struct env_item));
+}
+void free_env_item(struct env_item *i)
+{
+    free (i->argz);
+    free (i->str_cache);
+    free (i);
+}
+
+char *find_env_item(struct env_item *i, const char *s)
+{
+    char *entry = 0;
+    while ((entry = argz_next (i->argz, i->argz_len, entry))) {
+        if (!strcmp(entry, s))
+            return entry;
+    }
+    return NULL;
+}
+
+static const char *stringify_env_item (struct env_item *item)
+{
+    if (!item)
+        return NULL;
+    if (!item->argz)
+        return "";
+    if (item->clean)
+        return item->str_cache;
+
+    free(item->str_cache);
+    item->str_cache = malloc(item->argz_len);
+    memcpy(item->str_cache, item->argz, item->argz_len);
+    argz_stringify(item->str_cache, item->argz_len, item->sep);
+
+    return item->str_cache;
+}
+
 const char *flux_conf_environment_get (flux_conf_t cf, const char *key)
 {
-    return usa_get_joined (zhash_lookup (cf->environment, key));
+    struct env_item *item = zhash_lookup (cf->environment, key);
+    return stringify_env_item(item);
 }
 
 static void flux_conf_environment_set_inner (flux_conf_t cf,
                                              const char *key,
-                                             const sds value,
-                                             const char *separator)
+                                             const char *value,
+                                             char separator)
 {
-    unique_string_array_t *item = usa_new ();
-    usa_set_separator (item, separator);
+    struct env_item *item = new_env_item();
     item->clean = false;
-    if (sdslen (item->sep))
-        usa_split_and_push (item, value, false);
-    else
-        usa_push (item, value);
+    item->unset = (value == NULL);
+    item->sep = separator;
     zhash_update (cf->environment, key, (void *)item);
-    zhash_freefn (cf->environment, key, (zhash_free_fn *)usa_destroy);
+    zhash_freefn (cf->environment, key, (zhash_free_fn *)free_env_item);
+
+    flux_conf_environment_push_back(cf, key, value);
 }
 
 void flux_conf_environment_set (flux_conf_t cf,
                                 const char *key,
                                 const char *value,
-                                const char *separator)
+                                char separator)
 {
-    flux_conf_environment_set_inner (cf, key, sdsnew (value), separator);
+    flux_conf_environment_set_inner (cf, key, value, separator);
 }
 
 void flux_conf_environment_unset (flux_conf_t cf, const char *key)
 {
-    flux_conf_environment_set_inner (cf, key, sdsempty (), "");
+    flux_conf_environment_set_inner (cf, key, NULL, 0);
 }
 
 static void flux_conf_environment_push_inner (flux_conf_t cf,
@@ -333,17 +378,33 @@ static void flux_conf_environment_push_inner (flux_conf_t cf,
     if (!value || strlen (value) == 0)
         return;
 
-    unique_string_array_t *item = zhash_lookup (cf->environment, key);
-    if (!item)
-        item = usa_new ();
+    struct env_item *item = zhash_lookup (cf->environment, key);
+    if (!item) {
+        item = new_env_item();
+        zhash_update (cf->environment, key, (void *)item);
+        zhash_freefn (cf->environment, key, (zhash_free_fn *)free_env_item);
+    }
 
     if (split) {
-        usa_split_and_push (item, value, before);
+        char *split_value = NULL;
+        size_t split_value_len = 0;
+        argz_create_sep (value, item->sep, &split_value, &split_value_len);
+        char *entry = 0;
+        while((entry = argz_next (split_value, split_value_len, entry))) {
+            if ((!strlen(entry)) || find_env_item(item, entry))
+                continue;
+            if (before) {
+                argz_insert (&item->argz, &item->argz_len, item->argz, entry);
+            } else {
+                argz_add(&item->argz, &item->argz_len, entry);
+            }
+        }
+        free(split_value);
     } else {
         if (before) {
-            usa_push (item, value);
+            argz_insert (&item->argz, &item->argz_len, item->argz, value);
         } else {
-            usa_push_back (item, value);
+            argz_add (&item->argz, &item->argz_len, value);
         }
     }
 }
@@ -379,7 +440,7 @@ void flux_conf_environment_no_dedup_push_back (flux_conf_t cf,
 void flux_conf_environment_from_env (flux_conf_t cf,
                                      const char *key,
                                      const char *default_base,
-                                     const char *separator)
+                                     char separator)
 {
     const char *env = getenv (key);
     if (!env)
@@ -389,19 +450,21 @@ void flux_conf_environment_from_env (flux_conf_t cf,
 
 void flux_conf_environment_set_separator (flux_conf_t cf,
                                           const char *key,
-                                          const char *separator)
+                                          char separator)
 {
-    usa_set_separator (zhash_lookup (cf->environment, key), separator);
+    struct env_item *item = zhash_lookup (cf->environment, key);
+    if (item)
+        item->sep = separator;
 }
 
 const char *flux_conf_environment_first (flux_conf_t cf)
 {
-    return usa_get_joined (zhash_first (cf->environment));
+    return stringify_env_item (zhash_first (cf->environment));
 }
 
 const char *flux_conf_environment_next (flux_conf_t cf)
 {
-    return usa_get_joined (zhash_next (cf->environment));
+    return stringify_env_item (zhash_next (cf->environment));
 }
 
 const char *flux_conf_environment_cursor (flux_conf_t cf)
@@ -411,17 +474,17 @@ const char *flux_conf_environment_cursor (flux_conf_t cf)
 
 void flux_conf_environment_apply (flux_conf_t cf)
 {
-    const char *key, *value;
-    unique_string_array_t *item;
+    const char *key;
+    struct env_item *item;
     FOREACH_ZHASH (cf->environment, key, item)
     {
-        value = usa_get_joined (item);
-        if (sdslen ((sds)value)) {
+        if (item->unset) {
+            if (unsetenv (key))
+                err_exit ("unsetenv: %s", key);
+        } else {
+            const char *value = stringify_env_item (item);
             if (setenv (key, value, 1) < 0)
                 err_exit ("setenv: %s=%s", key, value);
-        } else {
-            if (unsetenv (key))
-                err_exit ("unsetenv: %s=%s", key, value);
         }
     }
 }
