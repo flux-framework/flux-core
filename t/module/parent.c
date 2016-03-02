@@ -214,6 +214,11 @@ int mod_main (flux_t h, int argc, char **argv)
 {
     int saved_errno;
 
+    if (argc == 1 && !strcmp (argv[0], "--init-failure")) {
+        flux_log (h, LOG_INFO, "aborting during init per test request");
+        saved_errno = EIO;
+        goto error;
+    }
     if (!(modules = zhash_new ())) {
         saved_errno = ENOMEM;
         goto error;
