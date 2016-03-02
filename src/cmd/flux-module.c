@@ -257,7 +257,7 @@ void mod_insmod (flux_t h, opt_t opt)
             err_exit ("%s", topic);
         while (!flux_rpc_completed (r)) {
             uint32_t nodeid = FLUX_NODEID_ANY;
-            if (flux_rpc_get (r, NULL, NULL) < 0) {
+            if (flux_rpc_get (r, &nodeid, NULL) < 0) {
                 if (errno == EEXIST)
                     msg_exit ("%s[%d]: module/service name already in use",
                             topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
