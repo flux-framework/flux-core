@@ -60,4 +60,13 @@ test_expect_success 'module: lsmod does not show submodule (all ranks)' '
 	! flux module list -r all parent | grep parent.child
 '
 
+test_expect_success 'module: unload test module (all ranks)' '
+	flux module remove -r all parent
+'
+
+test_expect_success 'module: insmod returns initialization error' '
+	test_must_fail flux module load \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
+'
+
 test_done
