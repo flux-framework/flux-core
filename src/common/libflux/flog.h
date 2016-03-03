@@ -20,16 +20,16 @@ void flux_log_set_facility (flux_t h, const char *facility);
 
 /* Log a message at the specified level, as defined for syslog(3).
  */
-int flux_vlog (flux_t h, int level, const char *fmt, va_list ap);
-int flux_log (flux_t h, int level, const char *fmt, ...)
+void flux_vlog (flux_t h, int level, const char *fmt, va_list ap);
+void flux_log (flux_t h, int level, const char *fmt, ...)
               __attribute__ ((format (printf, 3, 4)));
 
 /* Log a message at LOG_ERR level, appending a colon, space, and error string.
  * The system 'errno' is assumed to be valid and contain an error code
  * that can be decoded with zmq_strerror(3).
  */
-int flux_log_verror (flux_t h, const char *fmt, va_list ap);
-int flux_log_error (flux_t h, const char *fmt, ...)
+void flux_log_verror (flux_t h, const char *fmt, va_list ap);
+void flux_log_error (flux_t h, const char *fmt, ...)
                  __attribute__ ((format (printf, 2, 3)));
 
 #define FLUX_LOG_ERROR(h) \
