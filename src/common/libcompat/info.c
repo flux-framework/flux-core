@@ -37,25 +37,6 @@
 #include "info.h"
 #include "compat.h"
 
-bool flux_treeroot (flux_t h)
-{
-    uint32_t rank;
-    if (flux_get_rank (h, &rank) == 0 && rank == 0)
-        return true;
-    return false;
-}
-
-int flux_info (flux_t h, uint32_t *rank, uint32_t *size, int *arity)
-{
-    if (rank && flux_get_rank (h, rank) < 0)
-        return -1;
-    if (size && flux_get_size (h, size) < 0)
-        return -1;
-    if (arity && flux_get_arity (h, arity) < 0)
-        return -1;
-    return 0;
-}
-
 int flux_rank (flux_t h)
 {
     uint32_t rank;
