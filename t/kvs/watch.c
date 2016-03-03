@@ -37,7 +37,6 @@
 #include <flux/core.h>
 #include <pthread.h>
 
-#include "src/common/libcompat/compat.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -167,8 +166,8 @@ void *thread (void *arg)
         err ("%d: kvs_watch_int", t->n);
         goto done;
     }
-    if (flux_reactor_start (t->h) < 0) {
-        err ("%d: flux_reactor_start", t->n);
+    if (flux_reactor_run (flux_get_reactor (t->h), 0) < 0) {
+        err ("%d: flux_reactor_run", t->n);
         goto done;
     }
 done:
@@ -304,7 +303,7 @@ void test_selfmod (int argc, char **argv)
         err_exit ("kvs_watch_int");
 
     msg ("reactor: start");
-    flux_reactor_start (h);
+    flux_reactor_run (flux_get_reactor (h), 0);
     msg ("reactor: end");
 
     flux_close (h);
@@ -317,20 +316,26 @@ static int unwatch_watch_cb (const char *key, int val, void *arg, int errnum)
     return 0;
 }
 
-static int unwatch_timer_cb (flux_t h, void *arg)
+struct timer_ctx {
+    flux_t h;
+    char *key;
+};
+
+static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                              int revents, void *arg)
 {
+    struct timer_ctx *ctx = arg;
     static int count = 0;
-    const char *key = arg;
-    if (kvs_put_int (h, key, count++) < 0)
+    msg ("%s", __FUNCTION__);
+    if (kvs_put_int (ctx->h, ctx->key, count++) < 0)
         err_exit ("%s: kvs_put_int", __FUNCTION__);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (ctx->h) < 0)
         err_exit ("%s: kvs_commit", __FUNCTION__);
     if (count == 10) {
-        if (kvs_unwatch (h, key) < 0)
+        if (kvs_unwatch (ctx->h, ctx->key) < 0)
             err_exit ("%s: kvs_unwatch", __FUNCTION__);
     } else if (count == 20)
-        flux_reactor_stop (flux_get_reactor (h));
-    return 0;
+        flux_reactor_stop (r);
 }
 
 /* Timer pops every 1 ms, writing a new value to key.
@@ -340,26 +345,31 @@ static int unwatch_timer_cb (flux_t h, void *arg)
  */
 void test_unwatch (int argc, char **argv)
 {
-    flux_t h;
-    char *key;
+    struct timer_ctx ctx;
+    flux_reactor_t *r;
     int count = 0;
+    flux_watcher_t *timer;
 
     if (argc != 1) {
         fprintf (stderr, "Usage: unwatch key\n");
         exit (1);
     }
-    key = argv[0];
-    if (!(h = flux_open (NULL, 0)))
+    ctx.key = argv[0];
+    if (!(ctx.h = flux_open (NULL, 0)))
         err_exit ("flux_open");
-    if (kvs_watch_int (h, key, unwatch_watch_cb, &count) < 0)
-        err_exit ("kvs_watch_int %s", key);
-    if (flux_tmouthandler_add (h, 1, false, unwatch_timer_cb, key) < 0)
-        err_exit ("flux_tmouthandler_add");
-    if (flux_reactor_start (h) < 0)
-        err_exit ("flux_reactor_start");
+    r = flux_get_reactor (ctx.h);
+    if (kvs_watch_int (ctx.h, ctx.key, unwatch_watch_cb, &count) < 0)
+        err_exit ("kvs_watch_int %s", ctx.key);
+    if (!(timer = flux_timer_watcher_create (r, 0.001, 0.001,
+                                             unwatch_timer_cb, &ctx)))
+        err_exit ("flux_timer_watcher_create");
+    flux_watcher_start (timer);
+    if (flux_reactor_run (r, 0) < 0)
+        err_exit ("flux_reactor_run");
     if (count != 10)
         msg_exit ("watch called %d times (should be 10)", count);
-    flux_close (h);
+    flux_watcher_destroy (timer);
+    flux_close (ctx.h);
 }
 
 static int unwatchloop_cb (const char *key, int val, void *arg, int errnum)
