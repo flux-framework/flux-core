@@ -16,6 +16,8 @@ Options:
  -c, --count=N    Wait until pattern has matched on N lines (Default: 1)
  -t, --timeout=T  Timeout and exit with nonzero status after T seconds.
                   (Default is to wait forever)
+ -P, --plugin=F   Load a plugin from file F or stdin if F is `-'. The plugin
+                  can register its own callbacks with flux handle `f'
 ]]
 
 local getopt = require 'flux.alt_getopt' .get_opts
@@ -23,9 +25,10 @@ local posix  = require 'flux.posix'
 local flux   = require 'flux'
 local timer  = require 'flux.timer'
 
-local opts, optind = getopt (arg, "hvqc:t:p:",
+local opts, optind = getopt (arg, "hvqc:t:p:P:",
                              { timeout = 't',
                                pattern = 'p',
+                               plugin = 'P',
                                count = 'c',
                                quiet = 'q',
                                verbose = 'v',
@@ -40,6 +43,7 @@ local timeout = tonumber (opts.t or 0)
 local pattern = opts.p or ""
 local count = opts.c or 1
 local file = arg[optind]
+local plugin = opts.P
 
 local tt = timer.new()
 
@@ -194,6 +198,25 @@ if timeout > 0 then
         os.exit (1)
       end
     }
+end
+
+
+-- open and execute a plugin file provided on cmdline
+if plugin then
+    local file
+    if plugin == "-" then
+        file = io.stdin
+    else
+        local f,err = io.open (plugin, "r")
+        if not f then error (err) end
+        file = f
+    end
+    local code = file:read ("*a")
+    local fn, err = loadstring ("local f, printf = ...; " .. code);
+    if not fn then error (err) end
+    setfenv (fn, _G)
+    local r, v = pcall (fn, f, printf)
+    if not r then error (v) end
 end
 
 -- Start reactor to do the work. It is an error if we exit the reactor.
