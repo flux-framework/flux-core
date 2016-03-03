@@ -89,8 +89,7 @@ int main (int argc, char *argv[])
     if (parse_logstr (priority, &level, &facility) < 0)
         msg_exit ("bad priority argument");
     flux_log_set_facility (h, facility);
-    if (flux_log (h, level, "%s", message) < 0)
-        err_exit ("flux_log");
+    flux_log (h, level, "%s", message);
 
     flux_close (h);
 
