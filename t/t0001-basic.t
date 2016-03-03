@@ -127,7 +127,25 @@ test_expect_success 'flux-help command list can be extended' '
 	FLUX_CMDHELP_PATTERN="help.d/*" flux help 2>&1 | sed "0,/^$/d" > help.out &&
 	test_cmp help.expected help.out
 '
-
+test_expect_success 'flux-help command can display manpages for subcommands' '
+	PWD=$(pwd) &&
+	cat <<-EOF >config &&
+	general
+	    man_path = ${PWD}/man
+	EOF
+	mkdir -p man/man1 &&
+	cat <<-EOF > man/man1/flux-foo.1 &&
+	.TH FOO "1" "January 1962" "Foo utils" "User Commands"
+	.SH NAME
+	foo \- foo bar baz
+	EOF
+	flux -Fc . help foo | grep "^FOO(1)"
+'
+test_expect_success 'flux-help returns nonzero exit code from man(1)' '
+        man notacommand >/dev/null 2>&1
+        code=$?
+        test_expect_code $code flux help notacommand
+'
 test_expect_success 'builtin test_size_large () works' '
     size=$(test_size_large)  &&
     test -n "$size" &&
