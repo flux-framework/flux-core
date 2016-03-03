@@ -1,17 +1,8 @@
 #include <czmq.h>
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/handle.h"
-#include "src/common/libflux/rpc.h"
-#include "src/common/libflux/request.h"
-#include "src/common/libflux/response.h"
-#include "src/common/libflux/reactor.h"
-#include "src/common/libflux/info.h"
-#include "src/common/libflux/attr.h"
+#include <flux/core.h>
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libcompat/compat.h"
-
 #include "src/common/libtap/tap.h"
 
 static uint32_t fake_size = 1;
