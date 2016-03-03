@@ -21,6 +21,8 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
+#include <stdlib.h>
+
 #include "src/common/libutil/setenvf.h"
 #include "builtin.h"
 
@@ -36,13 +38,18 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
     if (n < ac) {
         const char *cf_path = flux_conf_get (cf, "general.man_path");
         const char *topic = av [n];
+        int rc;
         if (cf_path)
             setenvf ("MANPATH", 1, "%s:%s", cf_path, MANDIR);
         else
             setenv ("MANPATH", MANDIR, 1);
         cmd = xasprintf ("man flux-%s %s", topic, topic);
-        if (system (cmd) < 0)
+        if ((rc = system (cmd)) < 0)
             err_exit ("man");
+        else if (WIFEXITED (rc) && ((rc = WEXITSTATUS (rc)) != 0))
+            exit (rc);
+        else if (WIFSIGNALED (rc))
+            errn_exit (1, "man: %s\n", strsignal (WTERMSIG (rc)));
         free (cmd);
     } else
         usage (optparse_get_parent (p));
