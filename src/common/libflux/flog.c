@@ -84,6 +84,7 @@ void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg)
 
 void flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
 {
+    int saved_errno = errno;
     logctx_t *ctx = getctx (h);
     char *message = xvasprintf (fmt, ap);
     struct timeval tv = { 0, 0 };
@@ -111,6 +112,7 @@ done:
     flux_rpc_destroy (rpc);
     Jput (o);
     free (message);
+    errno = saved_errno;
 }
 
 void flux_log (flux_t h, int lev, const char *fmt, ...)
@@ -124,10 +126,12 @@ void flux_log (flux_t h, int lev, const char *fmt, ...)
 
 void flux_log_verror (flux_t h, const char *fmt, va_list ap)
 {
+    int saved_errno = errno;
     char *s = xvasprintf (fmt, ap);
 
     flux_log (h, LOG_ERR, "%s: %s", s, zmq_strerror (errno));
     free (s);
+    errno = saved_errno;
 }
 
 void flux_log_error (flux_t h, const char *fmt, ...)
