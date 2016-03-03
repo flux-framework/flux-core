@@ -33,7 +33,6 @@
 #include <pthread.h>
 #include <flux/core.h>
 #include <czmq.h>
-#include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
@@ -139,80 +138,102 @@ int main (int argc, char *argv[])
 
 void test_null (flux_t h, uint32_t nodeid)
 {
-    if (flux_json_rpc (h, nodeid, "req.null", NULL, NULL) < 0)
+    flux_rpc_t *rpc;
+
+    if (!(rpc = flux_rpc (h, "req.null", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("req.null");
+    flux_rpc_destroy (rpc);
 }
 
 void test_echo (flux_t h, uint32_t nodeid)
 {
     JSON in = Jnew ();
     JSON out = NULL;
+    const char *json_str;
     const char *s;
+    flux_rpc_t *rpc;
 
     Jadd_str (in, "mumble", "burble");
-    if (flux_json_rpc (h, nodeid, "req.echo", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "req.echo", Jtostr (in), nodeid, 0))
+             || flux_rpc_get (rpc, NULL, &json_str) < 0)
         err_exit ("%s", __FUNCTION__);
-    if (!out)
-        msg_exit ("%s: no JSON returned", __FUNCTION__);
-    if (!Jget_str (out, "mumble", &s) || strcmp (s, "burble") != 0)
-        msg_exit ("%s: returned JSON wasn't an echo", __FUNCTION__);
+    if (!(out = Jfromstr (json_str)) || !Jget_str (out, "mumble", &s)
+                                     || strcmp (s, "burble") != 0)
+        msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
     Jput (in);
     Jput (out);
+    flux_rpc_destroy (rpc);
 }
 
 void test_err (flux_t h, uint32_t nodeid)
 {
-    if (flux_json_rpc (h, nodeid, "req.err", NULL, NULL) == 0)
+    flux_rpc_t *rpc;
+
+    if (!(rpc = flux_rpc (h, "req.err", NULL, nodeid, 0)))
+        err_exit ("error sending request");
+    if (flux_rpc_get (rpc, NULL, NULL) == 0)
         msg_exit ("%s: succeeded when should've failed", __FUNCTION__);
     if (errno != 42)
         msg_exit ("%s: got errno %d instead of 42", __FUNCTION__, errno);
+    flux_rpc_destroy (rpc);
 }
 
 void test_src (flux_t h, uint32_t nodeid)
 {
+    flux_rpc_t *rpc;
+    const char *json_str;
     JSON out = NULL;
     int i;
-    if (flux_json_rpc (h, nodeid, "req.src", NULL, &out) < 0)
+
+    if (!(rpc = flux_rpc (h, "req.src", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, &json_str) < 0)
         err_exit ("%s", __FUNCTION__);
-    if (!out)
-        msg_exit ("%s: no JSON returned", __FUNCTION__);
-    if (!Jget_int (out, "wormz", &i) || i != 42)
-        msg_exit ("%s: didn't get expected JSON", __FUNCTION__);
+    if (!(out = Jfromstr (json_str)) || !Jget_int (out, "wormz", &i) || i != 42)
+        msg_exit ("%s: didn't get expected payload", __FUNCTION__);
     Jput (out);
+    flux_rpc_destroy (rpc);
 }
 
 void test_sink (flux_t h, uint32_t nodeid)
 {
+    flux_rpc_t *rpc;
     JSON in = Jnew();
+
     Jadd_double (in, "pi", 3.14);
-    if (flux_json_rpc (h, nodeid, "req.sink", in, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "req.sink", Jtostr (in), nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("%s", __FUNCTION__);
     Jput (in);
+    flux_rpc_destroy (rpc);
 }
 
 void test_nsrc (flux_t h, uint32_t nodeid)
 {
+    flux_rpc_t *rpc;
     const int count = 10000;
     JSON in = Jnew ();
+    const char *json_str;
     JSON out = NULL;
     int i, seq;
 
     Jadd_int (in, "count", count);
-    if (flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, "req.nsrc", in) < 0)
+    if (!(rpc = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
+                                                      FLUX_RPC_NORESPONSE)))
         err_exit ("%s", __FUNCTION__);
 
     for (i = 0; i < count; i++) {
-        zmsg_t *zmsg = flux_recvmsg (h, false);
-        if (!zmsg)
+        flux_msg_t *msg = flux_recv (h, FLUX_MATCH_ANY, 0);
+        if (!msg)
             err_exit ("%s", __FUNCTION__);
-        if (flux_json_response_decode (zmsg, &out) < 0)
+        if (flux_response_decode (msg, NULL, &json_str) < 0)
             msg_exit ("%s: decode %d", __FUNCTION__, i);
-        if (!Jget_int (out, "seq", &seq))
-            msg_exit ("%s: decode %d - no seq", __FUNCTION__, i);
+        if (!(out = Jfromstr (json_str)) || !Jget_int (out, "seq", &seq))
+            msg_exit ("%s: decode %d payload", __FUNCTION__, i);
         if (seq != i)
             msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
         Jput (out);
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
     }
 }
 
@@ -223,6 +244,8 @@ void test_nsrc (flux_t h, uint32_t nodeid)
  */
 void test_putmsg (flux_t h, uint32_t nodeid)
 {
+    flux_rpc_t *rpc;
+    const char *json_str;
     const int count = 10000;
     const int defer_start = 5000;
     const int defer_count = 500;
@@ -231,31 +254,33 @@ void test_putmsg (flux_t h, uint32_t nodeid)
     int seq, myseq = 0;
     zlist_t *defer = zlist_new ();
     bool popped = false;
-    zmsg_t *z;
+    flux_msg_t *z;
 
     if (!defer)
         oom ();
 
     Jadd_int (in, "count", count);
-    if (flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, "req.nsrc", in) < 0)
+    if (!(rpc = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
+                                                      FLUX_RPC_NORESPONSE)))
         err_exit ("%s", __FUNCTION__);
+    flux_rpc_destroy (rpc);
     do {
-        zmsg_t *zmsg = flux_recvmsg (h, false);
-        if (!zmsg)
+        flux_msg_t *msg = flux_recv (h, FLUX_MATCH_ANY, 0);
+        if (!msg)
             err_exit ("%s", __FUNCTION__);
-        if (flux_json_response_decode (zmsg, &out) < 0)
+        if (flux_response_decode (msg, NULL, &json_str) < 0)
             msg_exit ("%s: decode", __FUNCTION__);
-        if (!Jget_int (out, "seq", &seq))
-            msg_exit ("%s: decode - no seq", __FUNCTION__);
+        if (!(out = Jfromstr (json_str)) || !Jget_int (out, "seq", &seq))
+            msg_exit ("%s: decode - payload", __FUNCTION__);
         Jput (out);
         if (seq >= defer_start && seq < defer_start + defer_count && !popped) {
-            if (zlist_append (defer, zmsg) < 0)
+            if (zlist_append (defer, msg) < 0)
                 oom ();
             if (seq == defer_start + defer_count - 1) {
                 while ((z = zlist_pop (defer))) {
                     if (flux_requeue (h, z, FLUX_RQ_TAIL) < 0)
                         err_exit ("%s: flux_requeue", __FUNCTION__);
-                    zmsg_destroy (&z);
+                    flux_msg_destroy (z);
                 }
                 popped = true;
             }
@@ -264,7 +289,7 @@ void test_putmsg (flux_t h, uint32_t nodeid)
         if (seq != myseq)
             msg_exit ("%s: expected %d got %d", __FUNCTION__, myseq, seq);
         myseq++;
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
     } while (myseq < count);
     zlist_destroy (&defer);
 }
@@ -284,19 +309,23 @@ static int count_hops (const char *s)
 
 static void xping (flux_t h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
 {
+    flux_rpc_t *rpc;
+    const char *json_str;
     JSON in = Jnew ();
     JSON out = NULL;
     const char *route;
 
     Jadd_int (in, "rank", xnodeid);
     Jadd_str (in, "service", svc);
-    if (flux_json_rpc (h, nodeid, "req.xping", in, &out) < 0)
+    if (!(rpc = flux_rpc (h, "req.xping", Jtostr (in), nodeid, 0))
+            || flux_rpc_get (rpc, NULL, &json_str) < 0)
         err_exit ("req.xping");
-    if (!Jget_str (out, "route", &route))
+    if (!(out = Jfromstr (json_str)) || !Jget_str (out, "route", &route))
         errn_exit (EPROTO, "req.xping");
     printf ("hops=%d\n", count_hops (route));
     Jput (out);
     Jput (in);
+    flux_rpc_destroy (rpc);
 }
 
 void test_pingzero (flux_t h, uint32_t nodeid)
@@ -316,14 +345,20 @@ void test_pingself (flux_t h, uint32_t nodeid)
 
 void test_flush (flux_t h, uint32_t nodeid)
 {
-    if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
+    flux_rpc_t *rpc;
+    if (!(rpc = flux_rpc (h, "req.flush", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("req.flush");
+    flux_rpc_destroy (rpc);
 }
 
 void test_clog (flux_t h, uint32_t nodeid)
 {
-    if (flux_json_rpc (h, nodeid, "req.clog", NULL, NULL) < 0)
+    flux_rpc_t *rpc;
+    if (!(rpc = flux_rpc (h, "req.clog", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("req.clog");
+    flux_rpc_destroy (rpc);
 }
 
 /* Coprocess test: requires 'req' and 'coproc' modules loaded
@@ -336,33 +371,40 @@ void test_clog (flux_t h, uint32_t nodeid)
 
 void *thd (void *arg)
 {
+    flux_rpc_t *rpc;
     uint32_t *nodeid = arg;
     flux_t h;
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
 
-    if (flux_json_rpc (h, *nodeid, "coproc.stuck", NULL, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "coproc.stuck", NULL, *nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("coproc.stuck");
 
+    flux_rpc_destroy (rpc);
     flux_close (h);
     return NULL;
 }
 
 int req_count (flux_t h, uint32_t nodeid)
 {
+    flux_rpc_t *rpc;
+    const char *json_str;
     JSON out = NULL;
     int rc = -1;
     int count;
 
-    if (flux_json_rpc (h, nodeid, "req.count", NULL, &out) < 0)
+    if (!(rpc = flux_rpc (h, "req.count", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, &json_str) < 0)
         goto done;
-    if (!Jget_int (out, "count", &count)) {
+    if (!(out = Jfromstr (json_str)) || !Jget_int (out, "count", &count)) {
         errno = EPROTO;
         goto done;
     }
     rc = count;
 done:
+    flux_rpc_destroy (rpc);
     Jput (out);
     return rc;
 }
@@ -372,6 +414,7 @@ void test_coproc (flux_t h, uint32_t nodeid)
     pthread_t t;
     int rc;
     int count, count0;
+    flux_rpc_t *rpc;
 
     if ((count0 = req_count (h, nodeid)) < 0)
         err_exit ("req.count");
@@ -386,12 +429,16 @@ void test_coproc (flux_t h, uint32_t nodeid)
     } while (count - count0 < 1);
     msg ("%d requests are stuck", count - count0);
 
-    if (flux_json_rpc (h, nodeid, "coproc.hi", NULL, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "coproc.hi", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("coproc.hi");
+    flux_rpc_destroy (rpc);
     msg ("hi request was answered");
 
-    if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
+    if (!(rpc = flux_rpc (h, "req.flush", NULL, nodeid, 0))
+             || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("req.flush");
+    flux_rpc_destroy (rpc);
     if ((count = req_count (h, nodeid)) < 0)
         err_exit ("req.count");
     if (count != 0)

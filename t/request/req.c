@@ -3,7 +3,6 @@
 #endif
 #include <flux/core.h>
 #include <czmq.h>
-#include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -14,365 +13,364 @@ typedef struct {
     zhash_t *ping_requests;
     int ping_seq;
     zlist_t *clog_requests;
+    uint32_t rank;
 } ctx_t;
 
 static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
-    zlist_t *keys = zhash_keys (ctx->ping_requests);
-    char *key = zlist_first (keys);
-    while (key) {
-        zmsg_t *zmsg = zhash_lookup (ctx->ping_requests, key);
-        zmsg_destroy (&zmsg);
-        key = zlist_next (keys);
+    flux_msg_t *msg;
+
+    if (ctx) {
+        zhash_destroy (&ctx->ping_requests);
+        if (ctx->clog_requests) {
+            while ((msg = zlist_pop (ctx->clog_requests)))
+                flux_msg_destroy (msg);
+            zlist_destroy (&ctx->clog_requests);
+        }
+        free (ctx);
     }
-    zlist_destroy (&keys);
-    zhash_destroy (&ctx->ping_requests);
-
-    zmsg_t *zmsg;
-    while ((zmsg = zlist_pop (ctx->clog_requests)))
-        zmsg_destroy (&zmsg);
-    zlist_destroy (&ctx->clog_requests);
-
-    free (ctx);
 }
 
 static ctx_t *getctx (flux_t h)
 {
+    int saved_errno;
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "req");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
-        if (!(ctx->ping_requests = zhash_new ()))
-            oom ();
-        if (!(ctx->clog_requests = zlist_new ()))
-            oom ();
+        ctx->ping_requests = zhash_new ();
+        ctx->clog_requests = zlist_new ();
+        if (!ctx->clog_requests || !ctx->ping_requests) {
+            saved_errno = ENOMEM;
+            goto error; 
+        }
+        if (flux_get_rank (h, &ctx->rank) < 0) {
+            saved_errno = errno;
+            goto error;
+        }
         flux_aux_set (h, "req", ctx, freectx);
     }
     return ctx;
+error:
+    freectx (ctx);
+    errno = saved_errno;
+    return NULL;
 }
 
 /* Return number of queued clog requests
  */
-static int count_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void count_request_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
     JSON o = Jnew ();
 
     Jadd_int (o, "count", zlist_size (ctx->clog_requests));
-    if (flux_json_respond (h, o, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
+        flux_log_error (h, "%s: flux_json_respond", __FUNCTION__);
     Jput (o);
-    return 0;
 }
 
 /* Don't reply to request - just queue it for later.
  */
-static int clog_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void clog_request_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
+    flux_msg_t *cpy = flux_msg_copy (msg, true);
 
-    if (zlist_push (ctx->clog_requests, *zmsg) < 0)
+    if (zlist_push (ctx->clog_requests, cpy) < 0)
         oom ();
-    *zmsg = NULL;
-    return 0;
 }
 
 /* Reply to all queued requests.
  */
-static int flush_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void flush_request_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
-    zmsg_t *z;
+    flux_msg_t *req;
 
-    while ((z = zlist_pop (ctx->clog_requests))) {
+    while ((req = zlist_pop (ctx->clog_requests))) {
         /* send clog response */
-        if (flux_err_respond (h, 0, &z) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                          strerror (errno));
+        if (flux_respond (h, req, 0, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     /* send flush response */
-    if (flux_err_respond (h, 0, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-    return 0;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 /* Accept a json payload, verify it and return error if it doesn't
  * match expected.
  */
-static int sink_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void sink_request_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
+    const char *json_str;
+    int saved_errno;
     JSON o = NULL;
     double d;
+    int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &o) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = errno;
         goto done;
     }
-    if (!Jget_double (o, "pi", &d) || d != 3.14) {
-        if (flux_err_respond (h, EPROTO, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
+    if (!(o = Jfromstr (json_str)) || !Jget_double (o, "pi", &d)
+                                   || d != 3.14) {
+        saved_errno = errno = EPROTO;
         goto done;
     }
-    if (flux_err_respond (h, 0, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    rc = 0;
 done:
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (o);
-    return 0;
 }
 
 /* Return a fixed json payload
  */
-static int src_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void src_request_cb (flux_t h, flux_msg_handler_t *w,
+                     const flux_msg_t *msg, void *arg)
 {
     JSON o = Jnew ();
 
     Jadd_int (o, "wormz", 42);
-    if (flux_json_respond (h, o, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (o);
-    return 0;
 }
 
 /* Return 'n' sequenced responses.
  */
-static int nsrc_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void nsrc_request_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
+    const char *json_str;
+    int saved_errno;
     JSON o = Jnew ();
     int i, count;
+    int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &o) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = errno;
         goto done;
     }
-    if (!Jget_int (o, "count", &count)) {
-        if (flux_err_respond (h, EPROTO, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
+    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "count", &count)) {
+        saved_errno = errno = EPROTO;
         goto done;
     }
     for (i = 0; i < count; i++) {
-        zmsg_t *cpy = zmsg_dup (*zmsg);
-        if (!cpy)
-            oom ();
         Jadd_int (o, "seq", i);
-        if (flux_json_respond (h, o, &cpy) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
-                      strerror (errno));
-        zmsg_destroy (&cpy);
+        if (flux_respond (h, msg, 0, Jtostr (o)) < 0) {
+            saved_errno = errno;
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+            goto done;
+        }
     }
-    zmsg_destroy (zmsg);
+    rc = 0;
 done:
+    if (rc < 0) {
+        if (flux_respond (h, msg, saved_errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    }
     Jput (o);
-    return 0;
 }
 
 /* Always return an error 42
  */
-static int err_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void err_request_cb (flux_t h, flux_msg_handler_t *w,
+                     const flux_msg_t *msg, void *arg)
 {
-    if (flux_err_respond (h, 42, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
-    return 0;
+    if (flux_respond (h, msg, 42, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 /* Echo a json payload back to requestor.
  */
-static int echo_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void echo_request_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
-    JSON o = NULL;
+    const char *json_str;
+    int saved_errno;
+    int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &o) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = errno;
         goto done;
     }
-    if (flux_json_respond (h, o, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
-    }
+    rc = 0;
 done:
-    Jput (o);
-    return 0;
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
+                              rc < 0 ? NULL : json_str) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 /* Proxy ping.
  */
-static int xping_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void xping_request_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
+    int saved_errno;
     int rank, seq = ctx->ping_seq++;
     const char *service;
     char *hashkey = NULL;
     JSON in = Jnew ();
     JSON o = NULL;
+    flux_msg_t *cpy;
 
-    if (flux_json_request_decode (*zmsg, &o) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        saved_errno = errno;
+        goto error;
     }
-    if (!Jget_int (o, "rank", &rank) || !Jget_str (o, "service", &service)) {
-        if (flux_err_respond (h, EPROTO, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-        goto done;
+    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "rank", &rank)
+                                   || !Jget_str (o, "service", &service)) {
+        saved_errno = errno = EPROTO;
+        goto error;
     }
     flux_log (h, LOG_DEBUG, "Rxping rank=%d service=%s", rank, service);
 
     Jadd_int (in, "seq", seq);
     flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
-    if (flux_json_request (h, rank, 0, service, in) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-        goto done;
+
+    flux_rpc_t *rpc;
+    if (!(rpc = flux_rpc (h, service, Jtostr (in), rank,
+                                            FLUX_RPC_NORESPONSE))) {
+        saved_errno = errno;
+        goto error;
+    }
+    flux_rpc_destroy (rpc);
+    if (!(cpy = flux_msg_copy (msg, true))) {
+        saved_errno = errno;
+        goto error;
     }
     hashkey = xasprintf ("%d", seq);
-    zhash_update (ctx->ping_requests, hashkey, *zmsg);
-    *zmsg = NULL;
-done:
+    zhash_update (ctx->ping_requests, hashkey, cpy);
+    zhash_freefn (ctx->ping_requests, hashkey, (zhash_free_fn *)flux_msg_destroy);
     Jput (o);
     Jput (in);
     if (hashkey)
         free (hashkey);
-    return 0;
+    return;
+error:
+    if (flux_respond (h, msg, saved_errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    Jput (o);
+    Jput (in);
 }
 
 /* Handle ping response for proxy ping.
+ * Match it with a request and respond to that request.
  */
-static int ping_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void ping_response_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
     JSON o = NULL;
     JSON out = Jnew ();;
     int seq;
     const char *route;
-    zmsg_t *zreq = NULL;
+    flux_msg_t *req = NULL;
     char *hashkey = NULL;
 
-    if (flux_json_response_decode (*zmsg, &o) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_json_response_decode: %s",
-                  __FUNCTION__, strerror (errno));
+    if (flux_response_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (h, "%s: flux_response_decode", __FUNCTION__);
         goto done;
     }
-    if (!Jget_int (o, "seq", &seq) || !Jget_str (o, "route", &route)) {
-        flux_log (h, LOG_ERR, "%s: protocol error", __FUNCTION__);
+    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "seq", &seq)
+                                   || !Jget_str (o, "route", &route)) {
+        errno = EPROTO;
+        flux_log_error (h, "%s: payload", __FUNCTION__);
         goto done;
     }
     flux_log (h, LOG_DEBUG, "Rping seq=%d %s", seq, route);
     hashkey = xasprintf ("%d", seq);
-    if (!(zreq = zhash_lookup (ctx->ping_requests, hashkey))) {
-        flux_log (h, LOG_ERR, "%s: unsolicited ping response: %s",
-                  __FUNCTION__, hashkey);
+    if (!(req = zhash_lookup (ctx->ping_requests, hashkey))) {
+        flux_log_error (h, "%s: unsolicited ping response", __FUNCTION__);
         goto done;
     }
-    zhash_delete (ctx->ping_requests, hashkey);
     flux_log (h, LOG_DEBUG, "Txping seq=%d %s", seq, route);
     Jadd_str (out, "route", route);
-    if (flux_json_respond (h, out, &zreq) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s",
-                  __FUNCTION__, strerror (errno));
-        goto done;
-    }
+    if (flux_respond (h, req, 0, Jtostr (out)) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    zhash_delete (ctx->ping_requests, hashkey);
 done:
     if (hashkey)
         free (hashkey);
     Jput (o);
     Jput (out);
-    //zmsg_destroy (zmsg);
-    zmsg_destroy (&zreq);
-    return 0;
 }
 
 /* Handle the simplest possible request.
  * Verify that everything is as expected; log it and stop the reactor if not.
  */
-static int null_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void null_request_cb (flux_t h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
-    //ctx_t *ctx = arg;
+    ctx_t *ctx = arg;
     const char *topic;
-    int type, size, flags;
-    int rc = -1;
+    int type, size;
     void *buf;
     uint32_t nodeid;
-    uint32_t rank;
+    int flags;
 
-    if (!zmsg || !*zmsg) {
-        flux_log (h, LOG_ERR, "%s: got NULL zmsg!", __FUNCTION__);
-        goto done;
+    if (!msg) {
+        flux_log (h, LOG_ERR, "%s: got NULL msg!", __FUNCTION__);
+        goto error;
     }
-    if (flux_msg_get_type (*zmsg, &type) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_msg_get_type: %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
+    if (flux_msg_get_type (msg, &type) < 0) {
+        flux_log_error (h, "%s: flux_msg_get_type", __FUNCTION__);
+        goto error;
     }
     if (type != FLUX_MSGTYPE_REQUEST) {
         flux_log (h, LOG_ERR, "%s: unexpected type %s", __FUNCTION__,
                   flux_msg_typestr (type));
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_msg_get_nodeid: %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
+    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
+        flux_log_error (h, "%s: flux_msg_get_nodeid", __FUNCTION__);
+        goto error;
     }
-    if (flux_get_rank (h, &rank) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_get_rank: %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
-    }
-    if (nodeid != FLUX_NODEID_ANY && nodeid != rank) {
+    if (nodeid != ctx->rank && nodeid != FLUX_NODEID_ANY) {
         flux_log (h, LOG_ERR, "%s: unexpected nodeid: %"PRIu32"", __FUNCTION__,
                   nodeid);
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_topic (*zmsg, &topic) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_msg_get_topic: %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (h, "%s: flux_msg_get_topic", __FUNCTION__);
+        goto error;
     }
     if (strcmp (topic, "req.null") != 0) {
         flux_log (h, LOG_ERR, "%s: unexpected topic: %s", __FUNCTION__,
                   topic);
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_payload (*zmsg, &flags, &buf, &size) == 0) {
+    if (flux_msg_get_payload (msg, &flags, &buf, &size) == 0) {
         flux_log (h, LOG_ERR, "%s: unexpected payload size %d", __FUNCTION__,
                   size);
-        goto done;
+        goto error;
     }
     if (errno != EPROTO) {
         flux_log (h, LOG_ERR, "%s: get nonexistent payload: %s", __FUNCTION__,
                   strerror (errno));
-        goto done;
+        goto error;
     }
-    errno = 0;
-    if (flux_err_respond (h, 0, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
-        goto done;
+    if (flux_respond (h, msg, 0, NULL) < 0) {
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        goto error;
     }
-    rc = 0;
-done:
-    return rc;
+    return;
+error:
+    flux_reactor_stop_error (flux_get_reactor (h));
 }
 
-static msghandler_t htab[] = {
+struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "req.null",              null_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.echo",              echo_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.err",               err_request_cb },
@@ -384,22 +382,35 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.count",             count_request_cb },
+    FLUX_MSGHANDLER_TABLE_END,
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
+    int saved_errno;
     ctx_t *ctx = getctx (h);
 
-    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
-        return -1;
+    if (!ctx) {
+        saved_errno = errno;
+        flux_log_error (h, "error allocating context");
+        goto error;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "flux_msg_handler_addvec");
+        goto error;
     }
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "flux_reactor_run");
+        flux_msg_handler_delvec (htab);
+        goto error;
+    }
+    flux_msg_handler_delvec (htab);
     return 0;
+error:
+    errno = saved_errno;
+    return -1;
 }
 
 MOD_NAME ("req");

@@ -3,7 +3,6 @@
 #endif
 #include <flux/core.h>
 #include <czmq.h>
-#include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -11,51 +10,65 @@
 
 /* The req.clog request will not be answered until req.flush is called.
  */
-static int stuck_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void stuck_request_cb (flux_t h, flux_msg_handler_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "req.clog", NULL, NULL) < 0) {
-        flux_log (h, LOG_ERR, "%s: req.clog RPC: %s", __FUNCTION__,
-                  strerror (errno));
-        return -1;
+    flux_rpc_t *rpc;
+    int saved_errno, rc = -1;
+
+    if (!(rpc = flux_rpc (h, "req.clog", NULL, FLUX_NODEID_ANY, 0))) {
+        saved_errno = errno;
+        flux_log_error (h, "%s: req.clog request", __FUNCTION__);
+        goto done;
     }
-    if (flux_err_respond (h, 0, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: responding: %s", __FUNCTION__,
-                  strerror (errno));
-        return -1;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "%s: req.clog response", __FUNCTION__);
+        goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
+        flux_log_error (h, "%s: responding", __FUNCTION__);
+    flux_rpc_destroy (rpc);
 }
 
-static int hi_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+void hi_request_cb (flux_t h, flux_msg_handler_t *w,
+                    const flux_msg_t *msg, void *arg)
 {
-    if (flux_err_respond (h, 0, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: responding: %s", __FUNCTION__,
-                  strerror (errno));
-        return -1;
-    }
-    return 0;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: responding", __FUNCTION__);
 }
 
 
-static msghandler_t htab[] = {
+struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "coproc.stuck",           stuck_request_cb },
     { FLUX_MSGTYPE_REQUEST, "coproc.hi",              hi_request_cb },
+    FLUX_MSGHANDLER_TABLE_END,
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, int argc, char **argv)
 {
+    int saved_errno;
     flux_flags_set (h, FLUX_O_COPROC);
 
-    if (flux_msghandler_addvec (h, htab, htablen, NULL) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
-        return -1;
+    if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "flux_msg_handler_addvec");
+        goto error;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
-        return -1;
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "flux_reactor_start");
+        flux_msg_handler_delvec (htab);
+        goto error;
     }
+    flux_msg_handler_delvec (htab);
     return 0;
+error:
+    errno = saved_errno;
+    return -1;
 }
 
 MOD_NAME ("coproc");
