@@ -9,6 +9,16 @@
 
 #include "handle.h"
 
+/* Module states, for embedding in keepalive messages (rfc 5)
+ */
+enum {
+    FLUX_MODSTATE_INIT           = 0,
+    FLUX_MODSTATE_SLEEPING       = 1,
+    FLUX_MODSTATE_RUNNING        = 2,
+    FLUX_MODSTATE_FINALIZING     = 3,
+    FLUX_MODSTATE_EXITED         = 4,
+};
+
 /**
  ** High level module management functions
  **/
@@ -18,7 +28,8 @@
  * Note: 'nodeset' will be NULL when called from flux_lsmod().
  */
 typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
-                           int idle, const char *nodeset, void *arg);
+                           int idle, int status,
+                           const char *nodeset, void *arg);
 
 /* Send a request to 'service' to list loaded modules (null for comms mods).
  * On success, the 'cb' function is called for each module with 'arg'.
@@ -76,10 +87,11 @@ typedef struct flux_modlist_struct *flux_modlist_t;
 flux_modlist_t flux_modlist_create (void);
 void flux_modlist_destroy (flux_modlist_t mods);
 int flux_modlist_append (flux_modlist_t mods, const char *name, int size,
-                            const char *digest, int idle);
+                            const char *digest, int idle, int status);
 int flux_modlist_count (flux_modlist_t mods);
 int flux_modlist_get (flux_modlist_t mods, int idx, const char **name,
-                                int *size, const char **digest, int *idle);
+                                int *size, const char **digest, int *idle,
+                                int *status);
 
 char *flux_lsmod_json_encode (flux_modlist_t mods);
 flux_modlist_t flux_lsmod_json_decode (const char *json_str);

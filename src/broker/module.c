@@ -75,13 +75,16 @@ struct module_struct {
     char *digest;           /* digest of .so file for lsmod */
     size_t argz_len;
     char *argz;
+    int status;
+    int errnum;
 
     modpoller_cb_f poller_cb;
     void *poller_arg;
-    rmmod_cb_f rmmod_cb;
-    void *rmmod_arg;
+    module_status_cb_f status_cb;
+    void *status_arg;
 
     zlist_t *rmmod;
+    flux_msg_t *insmod;
 
     flux_t h;               /* module's handle */
 
@@ -106,6 +109,7 @@ static void *module_thread (void *arg)
     char **av = NULL;
     char *rankstr = NULL;
     int ac;
+    int mod_main_errno = 0;
     flux_msg_t *msg;
 
     assert (p->zctx);
@@ -138,8 +142,12 @@ static void *module_thread (void *arg)
     ac = argz_count (p->argz, p->argz_len);
     av = xzmalloc (sizeof (av[0]) * (ac + 1));
     argz_extract (p->argz, p->argz_len, av);
-    if (p->main(p->h, ac, av) < 0)
+    if (p->main(p->h, ac, av) < 0) {
+        mod_main_errno = errno;
+        if (mod_main_errno == 0)
+            mod_main_errno = ECONNRESET;
         flux_log (p->h, LOG_CRIT, "fatal error: %s", strerror (errno));
+    }
     /* If any unhandled requests were received during shutdown,
      * respond to them now with ENOSYS.
      */
@@ -151,6 +159,13 @@ static void *module_thread (void *arg)
             flux_log_error (p->h, "responding to post-shutdown %s", topic);
         flux_msg_destroy (msg);
     }
+    if (!(msg = flux_keepalive_encode (mod_main_errno, FLUX_MODSTATE_EXITED))) {
+        flux_log_error (p->h, "flux_keepalive_encode");
+        goto done;
+    }
+    if (flux_send (p->h, msg, 0) < 0)
+        flux_log_error (p->h, "flux_send");
+    flux_msg_destroy (msg);
 done:
     free (rankstr);
     if (av)
@@ -293,13 +308,12 @@ static void module_destroy (module_t *p)
         free (p->name);
     if (p->service)
         free (p->service);
-    if (p->rmmod_cb)
-        p->rmmod_cb (p, p->rmmod_arg);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))
             flux_msg_destroy (msg);
     }
+    flux_msg_destroy (p->insmod);
     if (p->subs) {
         char *s;
         while ((s = zlist_pop (p->subs)))
@@ -313,7 +327,7 @@ static void module_destroy (module_t *p)
 
 /* Send shutdown request, broker to module.
  */
-int module_stop (module_t *p, const flux_msg_t *rmmod)
+int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
@@ -326,11 +340,6 @@ int module_stop (module_t *p, const flux_msg_t *rmmod)
         goto done;
     if (flux_msg_sendzsock (p->sock, msg) < 0)
         goto done;
-    if (rmmod) {
-        flux_msg_t *cpy = flux_msg_copy (rmmod, true);
-        if (!cpy || zlist_append (p->rmmod, cpy) < 0)
-            oom ();
-    }
     rc = 0;
 done:
     free (topic);
@@ -393,17 +402,80 @@ void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
     p->poller_arg = arg;
 }
 
-void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg)
+void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg)
 {
     assert (p->magic == MODULE_MAGIC);
-    p->rmmod_cb = cb;
-    p->rmmod_arg = arg;
+    p->status_cb = cb;
+    p->status_arg = arg;
+}
+
+void module_set_status (module_t *p, int new_status)
+{
+    assert (p->magic == MODULE_MAGIC);
+    assert (p->status != new_status);
+    assert (new_status != FLUX_MODSTATE_INIT);  /* illegal state transition */
+    assert (p->status != FLUX_MODSTATE_EXITED); /* illegal state transition */
+    int prev_status = p->status;
+    p->status = new_status;
+    if (p->status_cb)
+        p->status_cb (p, prev_status, p->status_arg);
+}
+
+int module_get_status (module_t *p)
+{
+    assert (p->magic == MODULE_MAGIC);
+    return p->status;
+}
+
+void module_set_errnum (module_t *p, int errnum)
+{
+    assert (p->magic == MODULE_MAGIC);
+    p->errnum = errnum;
+}
+
+int module_get_errnum (module_t *p)
+{
+    assert (p->magic == MODULE_MAGIC);
+    return p->errnum;
+}
+
+int module_push_rmmod (module_t *p, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy = flux_msg_copy (msg, false);
+    if (!cpy)
+        return -1;
+    if (zlist_push (p->rmmod, cpy) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
 }
 
 flux_msg_t *module_pop_rmmod (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     return zlist_pop (p->rmmod);
+}
+
+/* There can be only one.
+ */
+int module_push_insmod (module_t *p, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy = flux_msg_copy (msg, false);
+    if (!cpy)
+        return -1;
+    if (p->insmod)
+        flux_msg_destroy (p->insmod);
+    p->insmod = cpy;
+    return 0;
+}
+
+flux_msg_t *module_pop_insmod (module_t *p)
+{
+    assert (p->magic == MODULE_MAGIC);
+    flux_msg_t *msg = p->insmod;
+    p->insmod = NULL;
+    return msg;
 }
 
 module_t *module_add (modhash_t *mh, const char *path)
@@ -532,7 +604,8 @@ flux_modlist_t module_get_modlist (modhash_t *mh)
         p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (flux_modlist_append (mods, module_get_name (p), p->size,
-                                 p->digest, module_get_idle (p)) < 0) {
+                                 p->digest, module_get_idle (p),
+                                                        p->status) < 0) {
             flux_modlist_destroy (mods);
             mods = NULL;
             goto done;
@@ -556,7 +629,7 @@ int module_stop_all (modhash_t *mh)
     while (uuid) {
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
-        if (module_stop (p, NULL) < 0)
+        if (module_stop (p) < 0)
             goto done;
         uuid = zlist_next (uuids);
     }

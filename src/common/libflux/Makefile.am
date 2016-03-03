@@ -26,6 +26,7 @@ fluxcoreinclude_HEADERS = \
 	security.h \
 	message.h \
 	request.h \
+	keepalive.h \
 	response.h \
 	rpc.h \
 	panic.h \
@@ -63,7 +64,8 @@ libflux_la_SOURCES = \
 	tagpool.c \
 	ev_flux.h \
 	ev_flux.c \
-	heartbeat.c
+	heartbeat.c \
+	keepalive.c
 
 libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 

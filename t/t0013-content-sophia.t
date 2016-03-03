@@ -17,11 +17,11 @@ echo "# $0: flux session size will be ${SIZE}"
 MAXBLOB=`flux getattr content-blob-size-limit`
 
 test_expect_success 'unload backing store module' '
-        flux module remove --rank 0 --direct content-sqlite
+        flux module remove --rank 0 content-sqlite
 '
 
 test_expect_success 'load content-sophia module on rank 0' '
-	flux module load --rank 0 --direct content-sophia
+	flux module load --rank 0 content-sophia
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
@@ -119,7 +119,7 @@ test_expect_success 'drop rank 0 cache' '
 '
 
 test_expect_success 'unload content-sophia module' '
-        flux module remove --rank 0 --direct content-sophia
+        flux module remove --rank 0 content-sophia
 '
 
 test_expect_success 'check that content returned dirty' '
@@ -150,7 +150,7 @@ test_expect_success 'load 1m blob' '
 # Verify content is transferred to store
 
 test_expect_success 'load content-sophia module on rank 0' '
-        flux module load --rank 0 --direct content-sophia
+        flux module load --rank 0 content-sophia
 '
 
 test_expect_success 'flush rank 0 cache' '

@@ -25,7 +25,7 @@ store_junk() {
 
 
 test_expect_success 'verify that content-sqlite module is loaded' '
-	flux module list --direct --rank 0 | grep -q content-sqlite
+	flux module list --rank 0 | grep -q content-sqlite
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
@@ -122,7 +122,7 @@ test_expect_success 'drop rank 0 cache' '
 '
 
 test_expect_success 'unload content-sqlite module' '
-	flux module remove --rank 0 --direct content-sqlite
+	flux module remove --rank 0 content-sqlite
 '
 
 test_expect_success 'check that content returned dirty' '
@@ -153,7 +153,7 @@ test_expect_success 'load 1m blob' '
 # Verify content is transferred to store
 
 test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load --rank 0 --direct content-sqlite
+	flux module load --rank 0 content-sqlite
 '
 
 test_expect_success 'flush rank 0 cache' '
@@ -190,12 +190,12 @@ test_expect_success 'exercise batching of synchronous flush to backing store' '
 
 test_expect_success 'exercise batching of asynchronous flush to backing store' '
         OLD_COUNT=`flux comms-stats --type int --parse count content` &&
-	flux module remove --rank 0 --direct content-sqlite &&
-	flux module load --rank 0 --direct content-sqlite &&
-	flux module remove --rank 0 --direct content-sqlite &&
-	flux module load --rank 0 --direct content-sqlite &&
-	flux module remove --rank 0 --direct content-sqlite &&
-	flux module load --rank 0 --direct content-sqlite &&
+	flux module remove --rank 0 content-sqlite &&
+	flux module load --rank 0 content-sqlite &&
+	flux module remove --rank 0 content-sqlite &&
+	flux module load --rank 0 content-sqlite &&
+	flux module remove --rank 0 content-sqlite &&
+	flux module load --rank 0 content-sqlite &&
         NEW_COUNT=`flux comms-stats --type int --parse count content` &&
 	test $OLD_COUNT -le $NEW_COUNT
 '

@@ -16,7 +16,7 @@ echo "# $0: flux session size will be ${SIZE}"
 MAXBLOB=`flux getattr content-blob-size-limit`
 
 test_expect_success 'unload backing store module' '
-	flux module remove --rank 0 --direct content-sqlite
+	flux module remove --rank 0 content-sqlite
 '
 
 test_expect_success 'store 100 blobs on rank 0' '

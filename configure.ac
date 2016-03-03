@@ -192,7 +192,6 @@ AC_CONFIG_FILES( \
   src/modules/kvs/Makefile \
   src/modules/content-sophia/Makefile \
   src/modules/content-sqlite/Makefile \
-  src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \
   src/modules/libkz/Makefile \
   src/modules/libjsc/Makefile \
@@ -205,7 +204,6 @@ AC_CONFIG_FILES( \
   src/test/Makefile \
   src/test/kap/Makefile \
   src/test/request/Makefile \
-  src/test/module/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
   etc/Makefile.inc \

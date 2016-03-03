@@ -60,22 +60,23 @@ void test_lsmod_codec (void)
     int idle, size;
     const char *name, *digest;
     char *json_str;
+    int status;
 
     mods = flux_modlist_create ();
     ok (mods != NULL,
         "flux_modlist_create works");
-    ok (flux_modlist_append (mods, "foo", 42, "aa", 3) == 0,
+    ok (flux_modlist_append (mods, "foo", 42, "aa", 3, 0) == 0,
         "first flux_modlist_append works");
-    ok (flux_modlist_append (mods, "bar", 43, "bb", 2) == 0,
+    ok (flux_modlist_append (mods, "bar", 43, "bb", 2, 1) == 0,
         "second flux_modlist_append works");
     ok (flux_modlist_count (mods) == 2,
         "flux_modlist_count works");
-    ok (flux_modlist_get (mods, 0, &name, &size, &digest, &idle) == 0
-        && name && size == 42 && digest && idle == 3
+    ok (flux_modlist_get (mods, 0, &name, &size, &digest, &idle, &status) == 0
+        && name && size == 42 && digest && idle == 3 && status == 0
         && !strcmp (name, "foo") && !strcmp (digest, "aa"),
         "flux_modlist_get(0) works");
-    ok (flux_modlist_get (mods, 1, &name, &size, &digest, &idle) == 0
-        && name && size == 43 && digest && idle == 2
+    ok (flux_modlist_get (mods, 1, &name, &size, &digest, &idle, &status) == 0
+        && name && size == 43 && digest && idle == 2 && status == 1
         && !strcmp (name, "bar") && !strcmp (digest, "bb"),
         "flux_modlist_get(1) works");
 
@@ -87,12 +88,12 @@ void test_lsmod_codec (void)
         "flux_lsmod_json_decode works");
     ok (flux_modlist_count (mods) == 2,
         "flux_modlist_count still works");
-    ok (flux_modlist_get (mods, 0, &name, &size, &digest, &idle) == 0
-        && name && size == 42 && digest && idle == 3
+    ok (flux_modlist_get (mods, 0, &name, &size, &digest, &idle, &status) == 0
+        && name && size == 42 && digest && idle == 3 && status == 0
         && !strcmp (name, "foo") && !strcmp (digest, "aa"),
         "flux_modlist_get(0) still works");
-    ok (flux_modlist_get (mods, 1, &name, &size, &digest, &idle) == 0
-        && name && size == 43 && digest && idle == 2
+    ok (flux_modlist_get (mods, 1, &name, &size, &digest, &idle, &status) == 0
+        && name && size == 43 && digest && idle == 2 && status == 1
         && !strcmp (name, "bar") && !strcmp (digest, "bb"),
         "flux_modlist_get(1) still works");
 

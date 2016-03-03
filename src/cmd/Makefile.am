@@ -88,11 +88,6 @@ flux_mping_LDADD = \
 	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
-flux_module_LDADD = \
-	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
-	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
-	$(fluxcmd_ldadd) \
-	$(LIBUTIL)
 flux_jstat_LDADD = \
 	$(top_builddir)/src/modules/libjsc/libflux-jsc.la \
 	$(fluxcmd_ldadd) \

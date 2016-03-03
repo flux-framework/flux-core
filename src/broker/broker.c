@@ -75,7 +75,7 @@
 #endif
 
 const char *default_modules =
-    "connector-local,modctl,kvs,content-sqlite[0],live,mecho,job,wrexec,barrier,resource-hwloc";
+    "connector-local,kvs,content-sqlite[0],live,mecho,job,wrexec,barrier,resource-hwloc";
 
 const char *default_boot_method = "pmi";
 
@@ -154,7 +154,7 @@ static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
-static void rmmod_cb (module_t *p, void *arg);
+static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -1412,7 +1412,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
             msg_exit ("could not register service %s", module_get_name (p));
         zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
-        module_set_rmmod_cb (p, rmmod_cb, ctx);
+        module_set_status_cb (p, module_status_cb, ctx);
 next:
         if (name != s)
             free (name);
@@ -1989,9 +1989,11 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     /* N.B. can't remove 'service' entry here as distributed
      * module shutdown may require inter-rank module communication.
      */
-    if (module_stop (p, *zmsg) < 0)
+    if (module_push_rmmod (p, *zmsg) < 0)
         goto done;
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
+    if (module_stop (p) < 0)
+        goto done;
     flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
     rc = 0;
 done:
@@ -2033,9 +2035,16 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
         arg = argz_next (argz, argz_len, arg);
     }
     module_set_poller_cb (p, module_cb, ctx);
-    module_set_rmmod_cb (p, rmmod_cb, ctx);
-    if (module_start (p) < 0)
+    module_set_status_cb (p, module_status_cb, ctx);
+    if (module_push_insmod (p, *zmsg) < 0) {
+        module_remove (ctx->modhash, p);
         goto done;
+    }
+    if (module_start (p) < 0) {
+        module_remove (ctx->modhash, p);
+        goto done;
+    }
+    zmsg_destroy (zmsg); /* zmsg will be replied to later */
     flux_log (ctx->h, LOG_INFO, "insmod %s", name);
     rc = 0;
 done:
@@ -2566,34 +2575,39 @@ done:
 static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg = module_recvmsg (p);
+    flux_msg_t *msg = module_recvmsg (p);
     int type, rc;
+    int ka_errnum, ka_status;
 
-    if (!zmsg)
+    if (!msg)
         goto done;
-    if (zmsg_content_size (zmsg) == 0) { /* EOF - safe to pthread_join */
-        svc_remove (ctx->services, module_get_name (p));
-        flux_log (ctx->h, LOG_INFO, "module %s exited", module_get_name (p));
-        module_remove (ctx->modhash, p);
-        goto done;
-    }
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            (void)broker_response_sendmsg (ctx, zmsg);
+            (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &zmsg);
-            if (zmsg)
-                flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
+            rc = broker_request_sendmsg (ctx, &msg);
+            if (msg)
+                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, &zmsg) < 0) {
+            if (broker_event_sendmsg (ctx, &msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "%s(%s): broker_event_sendmsg %s: %s",
                           __FUNCTION__, module_get_name (p),
                           flux_msg_typestr (type), strerror (errno));
             }
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
+                flux_log_error (ctx->h, "%s: flux_keepalive_decode",
+                                module_get_name (p));
+                break;
+            }
+            if (ka_status == FLUX_MODSTATE_EXITED)
+                module_set_errnum (p, ka_errnum);
+            module_set_status (p, ka_status);
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
@@ -2602,18 +2616,44 @@ static void module_cb (module_t *p, void *arg)
             break;
     }
 done:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
 }
 
-static void rmmod_cb (module_t *p, void *arg)
+static void module_status_cb (module_t *p, int prev_status, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
+    int status = module_get_status (p);
+    const char *name = module_get_name (p);
 
-    while ((zmsg = module_pop_rmmod (p))) {
-        if (flux_respond (ctx->h, zmsg, 0, NULL) < 0)
-            err ("%s: flux_respond", __FUNCTION__);
-        zmsg_destroy (&zmsg);
+    /* Transition from INIT
+     * Respond to insmod request, if any.
+     * If transitioning to EXITED, return error to insmod if mod_main() = -1
+     */
+    if (prev_status == FLUX_MODSTATE_INIT) {
+        if ((msg = module_pop_insmod (p))) {
+            int errnum = 0;
+            if (status == FLUX_MODSTATE_EXITED)
+                errnum = module_get_errnum (p);
+            if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
+                flux_log_error (ctx->h, "flux_repond to insmod %s", name);
+            flux_msg_destroy (msg);
+        }
+    }
+
+    /* Transition to EXITED
+     * Remove service routes, respond to rmmod request(s), if any,
+     * and remove the module (which calls pthread_join).
+     */
+    if (status == FLUX_MODSTATE_EXITED) {
+        flux_log (ctx->h, LOG_INFO, "module %s exited", name);
+        svc_remove (ctx->services, module_get_name (p));
+        while ((msg = module_pop_rmmod (p))) {
+            if (flux_respond (ctx->h, msg, 0, NULL) < 0)
+                flux_log_error (ctx->h, "flux_repond to rmmod %s", name);
+            flux_msg_destroy (msg);
+        }
+        module_remove (ctx->modhash, p);
     }
 }
 
