@@ -28,6 +28,7 @@ TESTS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t \
+	loop/log.t \
 	pmi/simple.t \
 	t0000-sharness.t \
 	t0001-basic.t \
@@ -132,6 +133,7 @@ check_PROGRAMS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t \
+	loop/log.t \
 	pmi/kvstest \
 	pmi/simple.t \
 	pmi/pminfo \
@@ -184,6 +186,10 @@ test_cppflags = \
 loop_handle_t_SOURCES = loop/handle.c
 loop_handle_t_CPPFLAGS = $(test_cppflags)
 loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_log_t_SOURCES = loop/log.c
+loop_log_t_CPPFLAGS = $(test_cppflags)
+loop_log_t_LDADD = $(test_ldadd) $(LIBDL)
 
 loop_reactor_t_SOURCES = loop/reactor.c
 loop_reactor_t_CPPFLAGS = $(test_cppflags)
