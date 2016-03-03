@@ -234,7 +234,7 @@ void mod_insmod (flux_t h, opt_t opt)
         usage ();
     if (strchr (opt.argv[0], '/')) {
         if (!(modpath = realpath (opt.argv[0], NULL)))
-            oom ();
+            err_exit ("%s", opt.argv[0]);
         if (!(modname = flux_modname (modpath)))
             msg_exit ("%s", dlerror ());
     } else {
