@@ -14,9 +14,8 @@ check_PROGRAMS = \
 	tmunge \
 	tbarrier
 
-SUBDIRS = request
 if HAVE_MPI
-SUBDIRS += kap
+SUBDIRS = kap
 endif
 
 LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \

@@ -142,11 +142,14 @@ check_PROGRAMS = \
 	kvs/hashtest \
 	kvs/watch \
 	kvs/watch_disconnect \
-	kvs/commit
+	kvs/commit \
+	request/treq
 
 check_LTLIBRARIES = \
 	module/parent.la \
-	module/child.la
+	module/child.la \
+	request/req.la \
+	request/coproc.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -259,6 +262,11 @@ kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
 
+request_treq_SOURCES = request/treq.c
+request_treq_CPPFLAGS = $(test_cppflags)
+request_treq_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
 module_parent_la_SOURCES = module/parent.c
 module_parent_la_CPPFLAGS = $(test_cppflags)
 module_parent_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
@@ -269,4 +277,16 @@ module_child_la_SOURCES = module/child.c
 module_child_la_CPPFLAGS = $(test_cppflags)
 module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_child_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+request_coproc_la_SOURCES = request/coproc.c
+request_coproc_la_CPPFLAGS = $(test_cppflags)
+request_coproc_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+request_coproc_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+request_req_la_SOURCES = request/req.c
+request_req_la_CPPFLAGS = $(test_cppflags)
+request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+request_req_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)

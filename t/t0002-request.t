@@ -24,76 +24,76 @@ test_expect_success 'flux_rpc_multi(3) example runs' '
 
 test_expect_success 'request: load req module on rank 0' '
 	flux module load --rank=0 \
-		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
+		${FLUX_BUILD_DIR}/t/request/.libs/req.so
 '
 
 # FIXME: uses rank-addressed requests which we test below
 test_expect_success 'request: load req module on rank 1' '
 	flux module load --rank=1 \
-		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
+		${FLUX_BUILD_DIR}/t/request/.libs/req.so
 '
 
 test_expect_success 'request: simple rpc with no payload' '
-	${FLUX_BUILD_DIR}/src/test/request/treq null
+	${FLUX_BUILD_DIR}/t/request/treq null
 '
 
 test_expect_success 'request: simple rpc to rank 0' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 null
+	${FLUX_BUILD_DIR}/t/request/treq --rank 0 null
 '
 
 test_expect_success 'request: simple rpc to rank 1' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 null
+	${FLUX_BUILD_DIR}/t/request/treq --rank 1 null
 '
 
 test_expect_success 'request: rpc that echos back json payload' '
-	${FLUX_BUILD_DIR}/src/test/request/treq echo
+	${FLUX_BUILD_DIR}/t/request/treq echo
 '
 
 test_expect_success 'request: rpc returns expected error' '
-	${FLUX_BUILD_DIR}/src/test/request/treq err
+	${FLUX_BUILD_DIR}/t/request/treq err
 '
 
 test_expect_success 'request: rpc returns expected json' '
-	${FLUX_BUILD_DIR}/src/test/request/treq src 
+	${FLUX_BUILD_DIR}/t/request/treq src 
 '
 
 test_expect_success 'request: rpc accepts expected json' '
-	${FLUX_BUILD_DIR}/src/test/request/treq sink
+	${FLUX_BUILD_DIR}/t/request/treq sink
 '
 
 test_expect_success 'request: 10K responses received in order' '
-	${FLUX_BUILD_DIR}/src/test/request/treq nsrc
+	${FLUX_BUILD_DIR}/t/request/treq nsrc
 '
 
 test_expect_success 'request: 10K responses received in order, with deferrals' '
-	${FLUX_BUILD_DIR}/src/test/request/treq putmsg 
+	${FLUX_BUILD_DIR}/t/request/treq putmsg 
 '
 
 test_expect_success 'request: proxy ping 0 from 1 is 4 hops' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingzero | grep hops=4
+	${FLUX_BUILD_DIR}/t/request/treq --rank 1 pingzero | grep hops=4
 '
 
 test_expect_success 'request: proxy ping 0 from 0 is 3 hops' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingzero | grep hops=3
+	${FLUX_BUILD_DIR}/t/request/treq --rank 0 pingzero | grep hops=3
 '
 
 test_expect_success 'request: proxy ping 1 from 1 is 3 hops' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingself | grep hops=3
+	${FLUX_BUILD_DIR}/t/request/treq --rank 1 pingself | grep hops=3
 '
 
 test_expect_success 'request: proxy ping upstream from 1 is 4 hop' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingupstream | grep hops=4
+	${FLUX_BUILD_DIR}/t/request/treq --rank 1 pingupstream | grep hops=4
 '
 
 # Coproc test
 
 test_expect_success 'request: load coproc module on rank 0' '
 	flux module load --rank=0 \
-		${FLUX_BUILD_DIR}/src/test/request/.libs/coproc.so
+		${FLUX_BUILD_DIR}/t/request/.libs/coproc.so
 '
 
 test_expect_success 'request: FLUX_O_COPROC works' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 coproc
+	${FLUX_BUILD_DIR}/t/request/treq --rank 0 coproc
 '
 
 test_expect_success 'request: unloaded coproc module on rank 0' '
