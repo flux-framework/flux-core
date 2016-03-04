@@ -68,6 +68,7 @@
 #include "sequence.h"
 #include "log.h"
 #include "content-cache.h"
+#include "runlevel.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -76,7 +77,6 @@
 
 const char *default_modules =
     "connector-local,kvs,content-sqlite[0],live,mecho,job,wrexec,barrier,resource-hwloc";
-
 const char *default_boot_method = "pmi";
 
 typedef struct {
@@ -132,6 +132,7 @@ typedef struct {
     hello_t *hello;
     double hello_timeout;
     flux_t enclosing_h;
+    runlevel_t *runlevel;
 
     /* Subprocess management
      */
@@ -170,8 +171,10 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
-static void init_shell (ctx_t *ctx);
-static int init_shell_exit_handler (struct subprocess *p, void *arg);
+static void runlevel_cb (runlevel_t *r, int level, int rc,
+                         const char *state, void *arg);
+static void runlevel_io_cb (runlevel_t *r, const char *name,
+                            const char *msg, void *arg);
 
 static int create_persistdir (ctx_t *ctx);
 static int create_scratchdir (ctx_t *ctx);
@@ -279,7 +282,9 @@ int main (int argc, char *argv[])
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
-        oom();
+        oom ();
+    if (!(ctx.runlevel = runlevel_create ()))
+        oom ();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -555,8 +560,14 @@ int main (int argc, char *argv[])
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || log_register_attrs (ctx.log, ctx.attrs) < 0
-            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
+            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         err_exit ("configuring attributes");
+    }
+
+    if (ctx.rank == 0) {
+        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
+            err_exit ("configuring runlevel attributes");
+    }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
@@ -593,8 +604,33 @@ int main (int argc, char *argv[])
     update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
-        ctx.init_shell = subprocess_create (ctx.sm);
-        subprocess_set_callback (ctx.init_shell, init_shell_exit_handler, &ctx);
+        const char *ldpath = flux_conf_get (ctx.cf,
+                                            "general.program_library_path");
+        const char *rc1 = getenv ("FLUX_RC1_PATH");
+        const char *rc3 = getenv ("FLUX_RC3_PATH");
+        const char *local_uri;
+
+        runlevel_set_size (ctx.runlevel, ctx.size);
+        runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
+        runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
+        runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
+
+        if (attr_get (ctx.attrs, "local-uri", &local_uri, NULL) < 0)
+            err_exit ("local-uri is not set");
+        if (!rc1)
+            rc1 = flux_conf_get (ctx.cf, "general.rc1_path");
+        if (!rc3)
+            rc3 = flux_conf_get (ctx.cf, "general.rc3_path");
+
+        if (runlevel_set_rc (ctx.runlevel, 1, rc1 ? rc1 : RC1,
+                             local_uri, ldpath) < 0)
+            err_exit ("runlevel_set_rc 1");
+        if (runlevel_set_rc (ctx.runlevel, 2, ctx.init_shell_cmd,
+                             local_uri, ldpath) < 0)
+            err_exit ("runlevel_set_rc 2");
+        if (runlevel_set_rc (ctx.runlevel, 3, rc3 ? rc3 : RC3,
+                             local_uri, ldpath) < 0)
+            err_exit ("runlevel_set_rc 3");
     }
 
     /* Wire up the overlay.
@@ -696,6 +732,7 @@ int main (int argc, char *argv[])
     log_destroy (ctx.log);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
+    runlevel_destroy (ctx.runlevel);
 
     zlist_destroy (&modules);       /* autofree set */
     zlist_destroy (&modopts);       /* autofree set */
@@ -711,8 +748,9 @@ static void hello_update_cb (hello_t *hello, void *arg)
     if (hello_complete (hello)) {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
                   hello_get_nodeset (hello));
-        if (ctx->init_shell)
-            init_shell (ctx);
+        flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
+        if (runlevel_set_level (ctx->runlevel, 1) < 0)
+            err_exit ("runlevel_set_level 1");
     } else  {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
                   hello_get_nodeset (hello));
@@ -763,78 +801,51 @@ static void update_pidfile (ctx_t *ctx)
     free (pidfile);
 }
 
-/* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
- * Section 2.8.2 Exit status for shell commands (page 2315)
+/* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static int init_shell_exit_handler (struct subprocess *p, void *arg)
+static void runlevel_io_cb (runlevel_t *r, const char *name,
+                            const char *msg, void *arg)
 {
-    int rc = subprocess_exit_code (p);
-    ctx_t *ctx = (ctx_t *) arg;
-    assert (ctx != NULL);
+    ctx_t *ctx = arg;
+    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
+    int runlevel = runlevel_get_level (r);
 
-    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, rc,
-                  "%s", subprocess_state_string (p));
-    subprocess_destroy (p);
-    return 0;
+    flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);
 }
 
-static void path_prepend (char **s1, const char *s2)
+/* Handle completion of runlevel subprocess.
+ */
+static void runlevel_cb (runlevel_t *r, int level, int rc,
+                         const char *exit_string, void *arg)
 {
-    char *p;
+    ctx_t *ctx = arg;
+    int new_level = -1;
 
-    if (!s2)
-        ;
-    else if (!*s1)
-        *s1 = xstrdup (s2);
-    else if ((p = strstr (*s1, s2))) {
-        int s2_len = strlen (s2);
-        memmove (p, p + s2_len, strlen (p + s2_len) + 1);
-        if (*p == ':')
-            memmove (p, p + 1, strlen (p + 1) + 1);
-        path_prepend (s1, s2);
-    } else {
-        p = xasprintf ("%s:%s", s2, *s1);
-        free (*s1);
-        *s1 = p;
+    flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
+              "Run level %d %s (rc=%d)", level, exit_string, rc);
+
+    switch (level) {
+        case 1: /* init completed */
+            if (rc != 0) {
+                new_level = 3;
+                shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
+                              rc, "run level 1 %s", exit_string);
+            } else
+                new_level = 2;
+            break;
+        case 2: /* initial program completed */
+            new_level = 3;
+            shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
+                          rc, "run level 2 %s", exit_string);
+            break;
+        case 3: /* finalization completed */
+            break;
     }
-}
-
-static void init_shell (ctx_t *ctx)
-{
-    const char *shell = getenv ("SHELL");
-    char *ldpath = NULL;
-    const char *local_uri;
-
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
-        err_exit ("%s: local_uri is not set", __FUNCTION__);
-    if (!shell)
-        shell = "/bin/bash";
-
-    subprocess_argv_append (ctx->init_shell, shell);
-    if (ctx->init_shell_cmd) {
-        subprocess_argv_append (ctx->init_shell, "-c");
-        subprocess_argv_append (ctx->init_shell, ctx->init_shell_cmd);
+    if (new_level != -1) {
+        flux_log (ctx->h, LOG_INFO, "Run level %d starting", new_level);
+        if (runlevel_set_level (r, new_level) < 0)
+            err_exit ("runlevel_set_level %d", new_level);
     }
-    subprocess_set_environ (ctx->init_shell, environ);
-    subprocess_setenv (ctx->init_shell, "FLUX_URI", local_uri, 1);
-    path_prepend (&ldpath, subprocess_getenv (ctx->init_shell,
-                                              "LD_LIBRARY_PATH"));
-    path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
-    path_prepend (&ldpath, flux_conf_get (ctx->cf,
-                                            "general.program_library_path"));
-    if (ldpath) {
-        subprocess_setenv (ctx->init_shell, "LD_LIBRARY_PATH", ldpath, 1);
-        free (ldpath);
-    }
-    subprocess_unsetenv (ctx->init_shell, "PMI_FD");
-    subprocess_unsetenv (ctx->init_shell, "PMI_RANK");
-    subprocess_unsetenv (ctx->init_shell, "PMI_SIZE");
-
-
-    if (!ctx->quiet)
-        flux_log (ctx->h, LOG_INFO, "starting initial program");
-
-    subprocess_run (ctx->init_shell);
 }
 
 static int create_dummyattrs (ctx_t *ctx)
