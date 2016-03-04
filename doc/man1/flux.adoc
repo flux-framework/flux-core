@@ -102,9 +102,6 @@ methods, in descending precedence:
 - [$(top_builddir)/etc/flux, if being run from flux-core repo]
 - [$HOME/.flux/config]
 
-setenv FLUX_CONF_USEFILE::
-Set to 1 if configuration was obtained from a file.
-
 setenv FLUX_TRACE_APISOCK::
 Set to "1" if --trace-apisock was specified.  This causes the FLUX_FLAGS_TRACE
 flag to be set when an API socket is established by a sub-command.
