@@ -70,9 +70,6 @@ static struct optparse_option opts[] = {
     { .name = "verbose",         .key = 'v', .has_arg = 0,
       .usage = "Be verbose about environment and command search",
     },
-    { .name = "file-config",     .key = 'F', .has_arg = 0,
-      .usage = "Force use of config file, even if FLUX_URI is set",
-    },
     OPTPARSE_TABLE_END
 };
 
