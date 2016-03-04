@@ -36,9 +36,6 @@ Display command environment, and the path search for 'CMD'.
 *-c, --config*='DIR'::
 Set the directory to be used for configuration.  The default is $HOME/.flux.
 
-*-F, --file-config*::
-Force configuration from file instead of KVS.
-
 *-S, --secdir*='DIR'::
 Set the directory to be used long-term keys.
 The default is to use the config directory.
