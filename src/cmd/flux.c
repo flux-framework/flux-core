@@ -180,17 +180,13 @@ int main (int argc, char *argv[])
         confdir = xstrdup (opt);
     if (confdir || (confdir = intree_confdir ()))
         flux_conf_set_directory (cf, confdir);
-    flux_conf_environment_unset (cf, "FLUX_CONF_USEFILE");
 
 
     /* Process configuration.
      * If not found, use compiled-in defaults.
      */
-    if (flux_conf_load (cf) == 0) {
-        flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", 0);
-    } else if (errno != ENOENT) {
+    if (flux_conf_load (cf) < 0 && (errno != ENOENT))
         err_exit ("%s", flux_conf_get_directory (cf));
-    }
 
     /*
      *  command line options that override environment and config:
