@@ -35,7 +35,6 @@ lib_LTLIBRARIES = libflux-kvs.la
 fluxcoreinclude_HEADERS = kvs.h
 libflux_kvs_la_SOURCES = \
 	libkvs.c \
-	conf.c \
 	proto.c \
 	kvs_deprecated.h
 libflux_kvs_la_LDFLAGS = $(fluxlib_ldflags) \
