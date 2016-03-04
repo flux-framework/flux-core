@@ -403,24 +403,16 @@ int main (int argc, char *argv[])
             err_exit ("flux_open enclosing instance");
     }
 
-    /* Process config from the KVS of enclosing instance (if any)
-     * and not forced to use a config file by the command line.
+    /* Process configuration.
      */
     ctx.cf = flux_conf_create ();
     if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
         msg_exit ("FLUX_CONF_DIRECTORY is not set");
     flux_conf_set_directory (ctx.cf, confdir);
-    if (getenv ("FLUX_CONF_USEFILE")) {
-        if (ctx.verbose)
-            msg ("Loading config from %s", confdir);
-        if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH) {
-            msg("Configuration failed to load: %s, falling back", confdir);
-        }
-    } else if (ctx.enclosing_h) {
-        if (ctx.verbose)
-            msg ("Loading config from KVS");
-        if (kvs_conf_load (ctx.enclosing_h, ctx.cf) < 0 && errno != ENOENT)
-            err_exit ("could not load config from enclosing instance KVS");
+    if (ctx.verbose)
+        msg ("Loading config from %s", confdir);
+    if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH) {
+        msg("Configuration failed to load: %s, falling back", confdir);
     }
 
     /* Arrange to load config entries into kvs config.*

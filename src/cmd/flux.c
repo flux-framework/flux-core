@@ -185,24 +185,24 @@ int main (int argc, char *argv[])
         flux_conf_set_directory (cf, confdir);
     flux_conf_environment_unset (cf, "FLUX_CONF_USEFILE");
 
-    /* Process config from the KVS if not a bootstrap instance, and not
-     * forced to use a config file by the command line.
-     * It is not an error if config is not foud in either place, we will
-     * try to make do with compiled-in defaults.
+
+    /* Get a broker handle if possible
+     * Subcommands may need this.
      */
-    if (!optparse_hasopt (p, "file-config") && getenv ("FLUX_URI")
-              && !((argc - optind) > 0 && !strcmp (argv[optind], "start"))) {
-        flux_conf_load (cf);
-        if (!(h = flux_open (NULL, 0)))     /*   esp. for in-tree */
+    if (getenv ("FLUX_URI") && !((argc - optind) > 0
+                            && !strcmp (argv[optind], "start"))) {
+        if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
-        if (kvs_conf_load (h, cf) < 0 && errno != ENOENT)
-            err_exit ("could not load config from KVS");
         optparse_set_data (p, "flux_t", h);
-    } else {
-        if (flux_conf_load (cf) == 0) {
-            flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", 0);
-        } else if (errno != ENOENT)
-            err_exit ("%s", flux_conf_get_directory (cf));
+    }
+
+    /* Process configuration.
+     * If not found, use compiled-in defaults.
+     */
+    if (flux_conf_load (cf) == 0) {
+        flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", 0);
+    } else if (errno != ENOENT) {
+        err_exit ("%s", flux_conf_get_directory (cf));
     }
 
     /*
