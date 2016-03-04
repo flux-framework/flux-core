@@ -186,16 +186,6 @@ int main (int argc, char *argv[])
     flux_conf_environment_unset (cf, "FLUX_CONF_USEFILE");
 
 
-    /* Get a broker handle if possible
-     * Subcommands may need this.
-     */
-    if (getenv ("FLUX_URI") && !((argc - optind) > 0
-                            && !strcmp (argv[optind], "start"))) {
-        if (!(h = flux_open (NULL, 0)))
-            err_exit ("flux_open");
-        optparse_set_data (p, "flux_t", h);
-    }
-
     /* Process configuration.
      * If not found, use compiled-in defaults.
      */
