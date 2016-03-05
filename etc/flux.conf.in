@@ -10,6 +10,8 @@ general
     program_library_path = @abs_top_builddir@/src/lib/libpmi/.libs:@abs_top_builddir@/src/common/.libs
     connector_path = @abs_top_builddir@/src/connectors
     man_path = @abs_top_builddir@/doc
+    rc1_path = @abs_top_srcdir@/etc/rc1
+    rc3_path = @abs_top_srcdir@/etc/rc3
 wrexec
     wrexecd_path = @abs_top_builddir@/src/modules/wreck/wrexecd
     lua_pattern = @abs_top_srcdir@/src/modules/wreck/lua.d/*.lua
