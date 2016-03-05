@@ -75,8 +75,7 @@
 #define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
 #endif
 
-const char *default_modules =
-    "connector-local,kvs,content-sqlite[0],live,mecho,job,wrexec,barrier,resource-hwloc";
+const char *default_modules = "connector-local";
 const char *default_boot_method = "pmi";
 
 typedef struct {
