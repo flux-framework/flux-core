@@ -139,7 +139,7 @@ test_expect_success 'flux-help command can display manpages for subcommands' '
 	.SH NAME
 	foo \- foo bar baz
 	EOF
-	flux -Fc . help foo | grep "^FOO(1)"
+	flux -c . help foo | grep "^FOO(1)"
 '
 test_expect_success 'flux-help returns nonzero exit code from man(1)' '
         man notacommand >/dev/null 2>&1
