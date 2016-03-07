@@ -29,14 +29,6 @@ test_expect_success 'flux-keygen works' '
 	flux --secdir $tmpkeydir keygen --force &&
 	rm -rf $tmpkeydir
 '
-test_expect_success 'flux-config works' '
-	flux config get general.exec_path
-	if test $? != 0; then
-           # XXX: May be no KVS config, we have to fake it:
-           flux env sh -c "flux config put general.exec_path=\${FLUX_EXEC_PATH}"
-	   flux config get general.exec_path
-	fi
-'
 test_expect_success 'flux-start works' "
 	flux start --size=2 'flux comms info' | grep 'size=2'
 "

@@ -53,11 +53,10 @@ ok 1 - TEST_NAME is set
 ok 2 - run_timeout works
 ok 3 - we can find a flux binary
 ok 4 - flux-keygen works
-ok 5 - flux-config works
-ok 6 - path to broker is sane
-ok 7 - flux-start works
-# passed all 7 test(s)
-1..7
+ok 5 - path to broker is sane
+ok 6 - flux-start works
+# passed all 6 test(s)
+1..6
 ```
 
 All tests support a standard set of options:

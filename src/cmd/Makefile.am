@@ -78,7 +78,6 @@ fluxcmd_PROGRAMS = \
 	flux-comms-stats \
 	flux-kvs \
 	flux-start \
-	flux-config \
 	flux-jstat
 
 flux_start_LDADD = \
