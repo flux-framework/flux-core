@@ -420,10 +420,14 @@ int main (int argc, char *argv[])
     flux_conf_itr_t itr = flux_conf_itr_create (ctx.cf);
     const char *key;
     while ((key = flux_conf_next (itr))) {
-        char *opt = xasprintf ("kvs:config.%s=%s",
-                               key, flux_conf_get (ctx.cf, key));
+        const char *val = flux_conf_get (ctx.cf, key);
+        char *opt = xasprintf ("kvs:config.%s=%s", key, val);
         zlist_push (modopts, opt);
         free (opt);
+        /* Set config key as broker attribute */
+        if (attr_add (ctx.attrs, key, val, 0) < 0)
+            if (attr_set (ctx.attrs, key, val, true) < 0)
+                err_exit ("config: setattr %s=%s", key, val);
     }
     flux_conf_itr_destroy (itr);
 
