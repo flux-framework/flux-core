@@ -58,7 +58,9 @@ class TestKVS(unittest.TestCase):
                      'other thing': 'more stuff'})
 
     def test_exists_dir(self):
-        self.assertTrue(flux.kvs.exists(self.f, 'config'))
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir('pytestdir')
+        self.assertTrue(flux.kvs.exists(self.f, 'pytestdir'))
 
     def test_exists_true(self):
         flux.kvs.put(self.f, 'thing', 15)

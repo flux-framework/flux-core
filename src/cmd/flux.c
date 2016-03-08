@@ -70,9 +70,6 @@ static struct optparse_option opts[] = {
     { .name = "verbose",         .key = 'v', .has_arg = 0,
       .usage = "Be verbose about environment and command search",
     },
-    { .name = "file-config",     .key = 'F', .has_arg = 0,
-      .usage = "Force use of config file, even if FLUX_URI is set",
-    },
     OPTPARSE_TABLE_END
 };
 
@@ -183,27 +180,13 @@ int main (int argc, char *argv[])
         confdir = xstrdup (opt);
     if (confdir || (confdir = intree_confdir ()))
         flux_conf_set_directory (cf, confdir);
-    flux_conf_environment_unset (cf, "FLUX_CONF_USEFILE");
 
-    /* Process config from the KVS if not a bootstrap instance, and not
-     * forced to use a config file by the command line.
-     * It is not an error if config is not foud in either place, we will
-     * try to make do with compiled-in defaults.
+
+    /* Process configuration.
+     * If not found, use compiled-in defaults.
      */
-    if (!optparse_hasopt (p, "file-config") && getenv ("FLUX_URI")
-              && !((argc - optind) > 0 && !strcmp (argv[optind], "start"))) {
-        flux_conf_load (cf);
-        if (!(h = flux_open (NULL, 0)))     /*   esp. for in-tree */
-            err_exit ("flux_open");
-        if (kvs_conf_load (h, cf) < 0 && errno != ENOENT)
-            err_exit ("could not load config from KVS");
-        optparse_set_data (p, "flux_t", h);
-    } else {
-        if (flux_conf_load (cf) == 0) {
-            flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", 0);
-        } else if (errno != ENOENT)
-            err_exit ("%s", flux_conf_get_directory (cf));
-    }
+    if (flux_conf_load (cf) < 0 && (errno != ENOENT))
+        err_exit ("%s", flux_conf_get_directory (cf));
 
     /*
      *  command line options that override environment and config:

@@ -15,7 +15,6 @@ MAN1_FILES_PRIMARY = \
 	flux-wreckrun.1 \
 	flux-wreck.1 \
 	flux-start.1 \
-	flux-config.1 \
 	flux-module.1 \
 	flux-exec.1 \
 	flux-env.1 \

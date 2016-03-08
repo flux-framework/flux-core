@@ -29,14 +29,6 @@ test_expect_success 'flux-keygen works' '
 	flux --secdir $tmpkeydir keygen --force &&
 	rm -rf $tmpkeydir
 '
-test_expect_success 'flux-config works' '
-	flux config get general.exec_path
-	if test $? != 0; then
-           # XXX: May be no KVS config, we have to fake it:
-           flux env sh -c "flux config put general.exec_path=\${FLUX_EXEC_PATH}"
-	   flux config get general.exec_path
-	fi
-'
 test_expect_success 'flux-start works' "
 	flux start --size=2 'flux comms info' | grep 'size=2'
 "
@@ -139,7 +131,7 @@ test_expect_success 'flux-help command can display manpages for subcommands' '
 	.SH NAME
 	foo \- foo bar baz
 	EOF
-	flux -Fc . help foo | grep "^FOO(1)"
+	flux -c . help foo | grep "^FOO(1)"
 '
 test_expect_success 'flux-help returns nonzero exit code from man(1)' '
         man notacommand >/dev/null 2>&1
