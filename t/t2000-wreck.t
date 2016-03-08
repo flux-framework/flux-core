@@ -243,14 +243,14 @@ test_expect_success 'wreckrun: top level environment' '
 	EOF
 	test_cmp expected_top_env2 output_top_env2
 '
-test_expect_success 'wreck plugins can use wreck:log_msg()' '
-	saved_pattern=$(flux kvs get config.wrexec.lua_pattern)
+test_expect_success DISABLED 'wreck plugins can use wreck:log_msg()' '
+	saved_pattern=$(flux getattr wrexec.lua_pattern)
 	if test $? = 0; then
 	  test_when_finished \
-	    "flux kvs put config.wrexec.lua_pattern=\"$saved_pattern\""
+	    "flux setattr wrexec.lua_pattern \"$saved_pattern\""
 	else
 	  test_when_finished \
-	     "flux kvs unlink config.wrexec.lua_pattern"
+	     "flux setattr --expunge wrexec.lua_pattern"
 	fi
 	cat <<-EOF >test.lua &&
 	function rexecd_init ()
@@ -258,7 +258,7 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	    --if not rc then error (err) end
 	end
 	EOF
-	flux kvs put "config.wrexec.lua_pattern=$(pwd)/*.lua" &&
+	flux setattr wrexec.lua_pattern "$(pwd)/*.lua" &&
 	flux wreckrun /bin/true &&
 	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
 '
