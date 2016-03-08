@@ -243,7 +243,7 @@ test_expect_success 'wreckrun: top level environment' '
 	EOF
 	test_cmp expected_top_env2 output_top_env2
 '
-test_expect_success DISABLED 'wreck plugins can use wreck:log_msg()' '
+test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	saved_pattern=$(flux getattr wrexec.lua_pattern)
 	if test $? = 0; then
 	  test_when_finished \
