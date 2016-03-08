@@ -415,15 +415,12 @@ int main (int argc, char *argv[])
         msg("Configuration failed to load: %s, falling back", confdir);
     }
 
-    /* Arrange to load config entries into kvs config.*
+    /* Arrange to load config entries into broker attrs
      */
     flux_conf_itr_t itr = flux_conf_itr_create (ctx.cf);
     const char *key;
     while ((key = flux_conf_next (itr))) {
         const char *val = flux_conf_get (ctx.cf, key);
-        char *opt = xasprintf ("kvs:config.%s=%s", key, val);
-        zlist_push (modopts, opt);
-        free (opt);
         /* Set config key as broker attribute */
         if (attr_add (ctx.attrs, key, val, 0) < 0)
             if (attr_set (ctx.attrs, key, val, true) < 0)
