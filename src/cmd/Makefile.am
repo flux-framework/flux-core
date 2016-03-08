@@ -44,7 +44,8 @@ flux_SOURCES = \
 	builtin/env.c \
 	builtin/content.c \
 	builtin/version.c \
-	builtin/hwloc.c
+	builtin/hwloc.c \
+	builtin/nodeset.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
