@@ -119,7 +119,7 @@ struct prog_ctx {
     int in_task;            /* Non-zero if currently in task ctx  */
     int taskid;             /* Current taskid executing lua_stack */
 
-    char *lua_pattern;      /* Glob for lua plugins */
+    const char *lua_pattern;/* Glob for lua plugins */
     lua_stack_t lua_stack;
     int envref;             /* Global reference to Lua env obj    */
 };
@@ -564,7 +564,7 @@ struct prog_ctx * prog_ctx_create (void)
         log_fatal (ctx, 1, "get_executable_path: %s", strerror (errno));
 
     ctx->lua_stack = lua_stack_create ();
-    ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
+    ctx->lua_pattern = WRECK_LUA_PATTERN;
     return (ctx);
 }
 
@@ -803,6 +803,7 @@ int prog_ctx_signal_parent (int fd)
 
 int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 {
+    const char *lua_pattern;
     char name [128];
     /*
      * Connect to CMB over api socket
@@ -842,7 +843,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         }
     }
 
-    kvs_get_string (ctx->flux, "config.wrexec.lua_pattern", &ctx->lua_pattern);
+    if ((lua_pattern = flux_attr_get (ctx->flux, "wrexec.lua_pattern", NULL)))
+        ctx->lua_pattern = lua_pattern;
 
     log_debug (ctx, "initializing from CMB: rank=%d", ctx->noderank);
     if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
