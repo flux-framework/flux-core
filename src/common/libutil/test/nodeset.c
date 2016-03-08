@@ -16,7 +16,7 @@ int main (int argc, char *argv[])
     uint32_t bigset = 1E6;
     char *tmp;
 
-    plan (110);
+    plan (NO_PLAN);
 
     n = nodeset_create ();
     ok (n != NULL);
@@ -140,6 +140,32 @@ int main (int argc, char *argv[])
 
     n = nodeset_create_string ("0-2");
     ok (n != NULL);
+    ok (nodeset_test_rank (n, 0));
+    ok (nodeset_test_rank (n, 1));
+    ok (nodeset_test_rank (n, 2));
+    ok (!nodeset_test_rank (n, 3));
+
+    ok (!nodeset_test_rank (n, nodeset_getattr (n, NODESET_ATTR_SIZE) - 1),
+        "nodeset_test_rank (internal size - 1) fails");
+    ok (!nodeset_test_rank (n, nodeset_getattr (n, NODESET_ATTR_SIZE)),
+        "nodeset_test_rank (internal size) fails");
+    ok (!nodeset_test_rank (n, nodeset_getattr (n, NODESET_ATTR_SIZE) + 1),
+        "nodeset_test_rank (internal size + 1) fails");
+
+    ok (!nodeset_test_range (n, 2, nodeset_getattr (n, NODESET_ATTR_SIZE) - 1),
+        "nodeset_test_range (2, internal size - 1) fails");
+    ok (!nodeset_test_range (n, 2, nodeset_getattr (n, NODESET_ATTR_SIZE)),
+        "nodeset_test_range (2, internal size) fails");
+    ok (!nodeset_test_range (n, 2, nodeset_getattr (n, NODESET_ATTR_SIZE) + 1),
+        "nodeset_test_range (2, internal size + 1) fails");
+
+    ok (!nodeset_test_range (n, nodeset_getattr (n, NODESET_ATTR_SIZE) - 1, 2),
+        "nodeset_test_range (internal size - 1, 2) fails");
+    ok (!nodeset_test_range (n, nodeset_getattr (n, NODESET_ATTR_SIZE), 2),
+        "nodeset_test_range (internal size, 2) fails");
+    ok (!nodeset_test_range (n, nodeset_getattr (n, NODESET_ATTR_SIZE) + 1, 2),
+        "nodeset_test_range (internal size + 1, 2) fails");
+
     nodeset_config_brackets (n, false);
     like (nodeset_string (n), "0-2");
     ok (nodeset_test_range (n, 0, 2), "nodeset_test_range works");
