@@ -166,7 +166,7 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 static void broker_add_services (ctx_t *ctx);
 
 static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          zhash_t *modexclude, const char *modpath);
+                          const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
@@ -194,13 +194,12 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:k:s:H:O:x:T:g:Em:IS:"
+#define OPTIONS "+vqM:X:k:s:H:O:T:g:Em:IS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
     {"module",          required_argument,  0, 'M'},
-    {"exclude",         required_argument,  0, 'x'},
     {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
@@ -221,7 +220,6 @@ static void usage (void)
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
 " -M,--module NAME             Load module NAME (may be repeated)\n"
-" -x,--exclude NAME            Exclude module NAME\n"
 " -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
@@ -242,7 +240,6 @@ int main (int argc, char *argv[])
     int c;
     ctx_t ctx;
     zlist_t *modules, *modopts, *sigwatchers;
-    zhash_t *modexclude;
     char *modpath;
     const char *confdir;
     int security_clr = 0;
@@ -257,8 +254,6 @@ int main (int argc, char *argv[])
     if (!(modules = zlist_new ()))
         oom ();
     zlist_autofree (modules);
-    if (!(modexclude = zhash_new ()))
-        oom ();
     if (!(modopts = zlist_new ()))
         oom ();
     zlist_autofree (modopts);
@@ -314,9 +309,6 @@ int main (int argc, char *argv[])
             case 'M':   /* --module NAME[nodeset] */
                 if (zlist_push (modules, xstrdup (optarg)) < 0 )
                     oom ();
-                break;
-            case 'x':   /* --exclude NAME */
-                zhash_update (modexclude, optarg, (void *)1);
                 break;
             case 'O':   /* --modopt NAME:key=val */
                 if (zlist_push (modopts, optarg) < 0)
@@ -668,7 +660,7 @@ int main (int argc, char *argv[])
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, modules, modopts, modexclude, modpath);
+    load_modules (&ctx, modules, modopts, modpath);
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -735,7 +727,6 @@ int main (int argc, char *argv[])
 
     zlist_destroy (&modules);       /* autofree set */
     zlist_destroy (&modopts);       /* autofree set */
-    zhash_destroy (&modexclude);    /* values const (no destructor) */
 
     return 0;
 }
@@ -1376,7 +1367,7 @@ static int mod_svc_cb (zmsg_t **zmsg, void *arg)
  * one or more '/' characters, it refers to a .so path.
  */
 static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          zhash_t *modexclude, const char *modpath)
+                          const char *modpath)
 {
     char *s;
     module_t *p;
@@ -1405,8 +1396,6 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                 msg_exit ("%s: not found in module search path", s);
             name = s;
         }
-        if (modexclude && zhash_lookup (modexclude, name))
-            goto next;
         if (!(p = module_add (ctx->modhash, path)))
             err_exit ("%s: module_add %s", name, path);
         if (!svc_add (ctx->services, module_get_name (p),
