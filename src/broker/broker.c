@@ -193,12 +193,11 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:k:s:H:T:g:Em:IS:"
+#define OPTIONS "+vqM:X:k:s:T:g:Em:IS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
-    {"module",          required_argument,  0, 'M'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
@@ -217,7 +216,6 @@ static void usage (void)
 "Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
-" -M,--module NAME             Load module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
@@ -299,10 +297,6 @@ int main (int argc, char *argv[])
                 break;
             case 'q':   /* --quiet */
                 ctx.quiet = true;
-                break;
-            case 'M':   /* --module NAME[nodeset] */
-                if (zlist_push (modules, xstrdup (optarg)) < 0 )
-                    oom ();
                 break;
             case 'X':   /* --module-path PATH */
                 modpath = optarg;
