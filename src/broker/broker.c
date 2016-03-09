@@ -165,8 +165,7 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (ctx_t *ctx);
 
-static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          const char *modpath);
+static void load_modules (ctx_t *ctx, zlist_t *modules, const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
@@ -194,13 +193,12 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:k:s:H:O:T:g:Em:IS:"
+#define OPTIONS "+vqM:X:k:s:H:T:g:Em:IS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
     {"module",          required_argument,  0, 'M'},
-    {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
@@ -220,7 +218,6 @@ static void usage (void)
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
 " -M,--module NAME             Load module NAME (may be repeated)\n"
-" -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
@@ -239,7 +236,7 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    zlist_t *modules, *modopts, *sigwatchers;
+    zlist_t *modules, *sigwatchers;
     char *modpath;
     const char *confdir;
     int security_clr = 0;
@@ -254,9 +251,6 @@ int main (int argc, char *argv[])
     if (!(modules = zlist_new ()))
         oom ();
     zlist_autofree (modules);
-    if (!(modopts = zlist_new ()))
-        oom ();
-    zlist_autofree (modopts);
     if (!(sigwatchers = zlist_new ()))
         oom ();
 
@@ -308,10 +302,6 @@ int main (int argc, char *argv[])
                 break;
             case 'M':   /* --module NAME[nodeset] */
                 if (zlist_push (modules, xstrdup (optarg)) < 0 )
-                    oom ();
-                break;
-            case 'O':   /* --modopt NAME:key=val */
-                if (zlist_push (modopts, optarg) < 0)
                     oom ();
                 break;
             case 'X':   /* --module-path PATH */
@@ -660,7 +650,7 @@ int main (int argc, char *argv[])
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, modules, modopts, modpath);
+    load_modules (&ctx, modules, modpath);
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -726,7 +716,6 @@ int main (int argc, char *argv[])
     runlevel_destroy (ctx.runlevel);
 
     zlist_destroy (&modules);       /* autofree set */
-    zlist_destroy (&modopts);       /* autofree set */
 
     return 0;
 }
@@ -1366,8 +1355,7 @@ static int mod_svc_cb (zmsg_t **zmsg, void *arg)
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
-static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          const char *modpath)
+static void load_modules (ctx_t *ctx, zlist_t *modules, const char *modpath)
 {
     char *s;
     module_t *p;
@@ -1410,20 +1398,6 @@ next:
         if (path != s)
             free (path);
         s = zlist_next (modules);
-    }
-
-    /* Add module options to module hash entries.
-     */
-    s = zlist_first (modopts);
-    while (s) {
-        char *arg = strchr (s, ':');
-        if (!arg)
-            msg_exit ("malformed module option: %s", s);
-        *arg++ = '\0';
-        if (!(p = zhash_lookup (mods, s)))
-            msg_exit ("module argument for unknown module: %s", s);
-        module_add_arg (p, arg);
-        s = zlist_next (modopts);
     }
 
     /* Now start all the modules we just created.
