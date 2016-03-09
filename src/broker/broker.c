@@ -165,7 +165,8 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (ctx_t *ctx);
 
-static void load_modules (ctx_t *ctx, zlist_t *modules, const char *modpath);
+static void load_modules (ctx_t *ctx, const char *default_modules,
+                          const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
@@ -234,7 +235,7 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    zlist_t *modules, *sigwatchers;
+    zlist_t *sigwatchers;
     char *modpath;
     const char *confdir;
     int security_clr = 0;
@@ -246,9 +247,6 @@ int main (int argc, char *argv[])
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
 
-    if (!(modules = zlist_new ()))
-        oom ();
-    zlist_autofree (modules);
     if (!(sigwatchers = zlist_new ()))
         oom ();
 
@@ -357,20 +355,6 @@ int main (int argc, char *argv[])
     if (!ctx.boot_method)
         msg_exit ("invalid boot method: %s", boot_method ? boot_method
                                                          : "none");
-
-    /* Add default modules to user-specified module list
-     */
-    if (default_modules) {
-        char *cpy = xstrdup (default_modules);
-        char *name, *saveptr = NULL, *a1 = cpy;
-        while ((name = strtok_r (a1, ",", &saveptr))) {
-            if (zlist_append (modules, xstrdup (name)))
-                oom ();
-            a1 = NULL;
-        }
-        free (cpy);
-    }
-
     /* Get the directory for CURVE keys.
      */
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
@@ -636,15 +620,15 @@ int main (int argc, char *argv[])
      */
     broker_add_services (&ctx);
 
-    /* Load modules
+    /* Load default modules
      */
     if (ctx.verbose)
-        msg ("loading modules");
+        msg ("loading default modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, modules, modpath);
+    load_modules (&ctx, default_modules, modpath);
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -708,8 +692,6 @@ int main (int argc, char *argv[])
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
     runlevel_destroy (ctx.runlevel);
-
-    zlist_destroy (&modules);       /* autofree set */
 
     return 0;
 }
@@ -1351,18 +1333,14 @@ static int mod_svc_cb (zmsg_t **zmsg, void *arg)
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
-static void load_modules (ctx_t *ctx, zlist_t *modules, const char *modpath)
+static void load_modules (ctx_t *ctx, const char *default_modules,
+                          const char *modpath)
 {
-    char *s;
+    char *cpy = xstrdup (default_modules);
+    char *s, *saveptr = NULL, *a1 = cpy;
     module_t *p;
-    zhash_t *mods; /* hash by module name */
 
-    /* Create modules, adding to 'mods' list
-     */
-    if (!(mods = zhash_new ()))
-        oom ();
-    s = zlist_first (modules);
-    while (s) {
+    while ((s = strtok_r (a1, ",", &saveptr))) {
         char *name = NULL;
         char *path = NULL;
         char *sp;
@@ -1385,7 +1363,6 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, const char *modpath)
         if (!svc_add (ctx->services, module_get_name (p),
                                      module_get_service (p), mod_svc_cb, p))
             msg_exit ("could not register service %s", module_get_name (p));
-        zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
         module_set_status_cb (p, module_status_cb, ctx);
 next:
@@ -1393,14 +1370,10 @@ next:
             free (name);
         if (path != s)
             free (path);
-        s = zlist_next (modules);
+        a1 = NULL;
     }
-
-    /* Now start all the modules we just created.
-     */
     module_start_all (ctx->modhash);
-
-    zhash_destroy (&mods);
+    free (cpy);
 }
 
 static void broker_block_signals (void)
