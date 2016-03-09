@@ -178,6 +178,28 @@ int filesize (const char *path)
     return sb.st_size;
 }
 
+void parse_modarg (const char *arg, char **name, char **path)
+{
+    char *modpath = NULL;
+    char *modname = NULL;
+
+    if (strchr (arg, '/')) {
+        if (!(modpath = realpath (arg, NULL)))
+            err_exit ("%s", arg);
+        if (!(modname = flux_modname (modpath)))
+            msg_exit ("%s", dlerror ());
+    } else {
+        char *searchpath = getenv ("FLUX_MODULE_PATH");
+        if (!searchpath)
+            searchpath = MODULE_PATH;
+        modname = xstrdup (arg);
+        if (!(modpath = flux_modfind (searchpath, modname)))
+            msg_exit ("%s: not found in module search path", modname);
+    }
+    *name = modname;
+    *path = modpath;
+}
+
 void mod_info (flux_t h, opt_t opt)
 {
     char *modpath = NULL;
@@ -186,33 +208,20 @@ void mod_info (flux_t h, opt_t opt)
 
     if (opt.argc != 1)
         usage ();
-    if (strchr (opt.argv[0], '/')) {
-        if (!(modpath = realpath (opt.argv[0], NULL)))
-            oom ();
-        if (!(modname = flux_modname (modpath)))
-            msg_exit ("%s", dlerror ());
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            searchpath = MODULE_PATH;
-        modname = xstrdup (opt.argv[0]);
-        if (!(modpath = flux_modfind (searchpath, modname)))
-            msg_exit ("%s: not found in module search path", modname);
-    }
+    parse_modarg (opt.argv[0], &modname, &modpath);
     digest = sha1 (modpath);
     printf ("Module name:  %s\n", modname);
     printf ("Module path:  %s\n", modpath);
     printf ("SHA1 Digest:  %s\n", digest);
     printf ("Size:         %d bytes\n", filesize (modpath));
 
-    if (modpath)
-        free (modpath);
-    if (modname)
-        free (modname);
-    if (digest)
-        free (digest);
+    free (modpath);
+    free (modname);
+    free (digest);
 }
 
+/* Derive name of module loading service from module name.
+ */
 char *getservice (const char *modname)
 {
     char *service = NULL;
@@ -227,53 +236,39 @@ char *getservice (const char *modname)
 
 void mod_insmod (flux_t h, opt_t opt)
 {
-    char *modpath = NULL;
-    char *modname = NULL;
+    char *modname;
+    char *modpath;
 
     if (opt.argc < 1)
         usage ();
-    if (strchr (opt.argv[0], '/')) {
-        if (!(modpath = realpath (opt.argv[0], NULL)))
-            err_exit ("%s", opt.argv[0]);
-        if (!(modname = flux_modname (modpath)))
-            msg_exit ("%s", dlerror ());
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            searchpath = MODULE_PATH;
-        modname = xstrdup (opt.argv[0]);
-        if (!(modpath = flux_modfind (searchpath, modname)))
-            msg_exit ("%s: not found in module search path", modname);
-    }
+    parse_modarg (opt.argv[0], &modname, &modpath);
     opt.argv++;
     opt.argc--;
-    {
-        char *service = getservice (modname);
-        char *topic = xasprintf ("%s.insmod", service);
-        char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
-        assert (json_str != NULL);
-        flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-        if (!r)
-            err_exit ("%s", topic);
-        while (!flux_rpc_completed (r)) {
-            uint32_t nodeid = FLUX_NODEID_ANY;
-            if (flux_rpc_get (r, &nodeid, NULL) < 0) {
-                if (errno == EEXIST)
-                    msg_exit ("%s[%d]: module/service name already in use",
-                            topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
-                    err_exit ("%s[%d]",
-                            topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
-            }
+
+    char *service = getservice (modname);
+    char *topic = xasprintf ("%s.insmod", service);
+    char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
+    assert (json_str != NULL);
+    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
+    if (!r)
+        err_exit ("%s", topic);
+    while (!flux_rpc_completed (r)) {
+        uint32_t nodeid = FLUX_NODEID_ANY;
+        if (flux_rpc_get (r, &nodeid, NULL) < 0) {
+            if (errno == EEXIST)
+                msg_exit ("%s[%d]: %s module/service name already in use",
+                          topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
+                          modname);
+            err_exit ("%s[%d] %s",
+                      topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid, modname);
         }
-        flux_rpc_destroy (r);
-        free (topic);
-        free (service);
-        free (json_str);
     }
-    if (modpath)
-        free (modpath);
-    if (modname)
-        free (modname);
+    flux_rpc_destroy (r);
+    free (topic);
+    free (service);
+    free (json_str);
+    free (modpath);
+    free (modname);
 }
 
 void mod_rmmod (flux_t h, opt_t opt)
@@ -283,24 +278,25 @@ void mod_rmmod (flux_t h, opt_t opt)
     if (opt.argc != 1)
         usage ();
     modname = opt.argv[0];
-    {
-        char *service = getservice (modname);
-        char *topic = xasprintf ("%s.rmmod", service);
-        char *json_str = flux_rmmod_json_encode (modname);
-        assert (json_str != NULL);
-        flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-        if (!r)
-            err_exit ("%s", topic);
-        while (!flux_rpc_completed (r)) {
-            uint32_t nodeid = FLUX_NODEID_ANY;
-            if (flux_rpc_get (r, &nodeid, NULL) < 0)
-                err ("%s[%d]", topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
-        }
-        flux_rpc_destroy (r);
-        free (topic);
-        free (service);
-        free (json_str);
+
+    char *service = getservice (modname);
+    char *topic = xasprintf ("%s.rmmod", service);
+    char *json_str = flux_rmmod_json_encode (modname);
+    assert (json_str != NULL);
+    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
+    if (!r)
+        err_exit ("%s %s", topic, modname);
+    while (!flux_rpc_completed (r)) {
+        uint32_t nodeid = FLUX_NODEID_ANY;
+        if (flux_rpc_get (r, &nodeid, NULL) < 0)
+            err ("%s[%d] %s",
+                 topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
+                 modname);
     }
+    flux_rpc_destroy (r);
+    free (topic);
+    free (service);
+    free (json_str);
 }
 
 int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
@@ -439,28 +435,25 @@ void mod_lsmod (flux_t h, opt_t opt)
         service = opt.argv[0];
     printf ("%-20s %-7s %-7s %4s  %c  %s\n",
             "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
-
-    {
-        zhash_t *mods = zhash_new ();
-        if (!mods)
-            oom ();
-        char *topic = xasprintf ("%s.lsmod", service);
-        flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
-        if (!r)
+    zhash_t *mods = zhash_new ();
+    if (!mods)
+        oom ();
+    char *topic = xasprintf ("%s.lsmod", service);
+    flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
+    if (!r)
+        err_exit ("%s", topic);
+    while (!flux_rpc_completed (r)) {
+        const char *json_str;
+        uint32_t nodeid;
+        if (flux_rpc_get (r, &nodeid, &json_str) < 0)
             err_exit ("%s", topic);
-        while (!flux_rpc_completed (r)) {
-            const char *json_str;
-            uint32_t nodeid;
-            if (flux_rpc_get (r, &nodeid, &json_str) < 0)
-                err_exit ("%s", topic);
-            if (lsmod_merge_result (nodeid, json_str, mods) < 0)
-                err_exit ("%s[%u]", topic, nodeid);
-        }
-        flux_rpc_destroy (r);
-        lsmod_map_hash (mods, lsmod_print_cb, NULL);
-        zhash_destroy (&mods);
-        free (topic);
+        if (lsmod_merge_result (nodeid, json_str, mods) < 0)
+            err_exit ("%s[%u]", topic, nodeid);
     }
+    flux_rpc_destroy (r);
+    lsmod_map_hash (mods, lsmod_print_cb, NULL);
+    zhash_destroy (&mods);
+    free (topic);
 }
 
 /*
