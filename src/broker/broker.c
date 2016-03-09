@@ -736,11 +736,13 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
+/* Currently 'expired' is always true.
+ */
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     ctx_t *ctx = arg;
-
-    exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
+    if (expired)
+        exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
 }
 
 static void update_proctitle (ctx_t *ctx)
