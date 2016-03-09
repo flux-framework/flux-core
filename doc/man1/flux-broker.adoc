@@ -72,10 +72,6 @@ The set of modules provided in the flux-core package are loaded by default.
 Modules can also be loaded and unloaded on a live comms session with
 flux-module(1).
 
-*-O, --modopt*='NAME:key=val'::
-Set an option for the comms module 'NAME'.  This option may be specified
-multiple times to load multiple modules.
-
 *-X, --module-path*='PATH'::
 Override the compiled-in module search path (colon-separated).
 The default is to search install paths.
