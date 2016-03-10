@@ -42,15 +42,16 @@
 const int max_idle = 99;
 
 typedef struct {
-    char *nodeset;
+    const char *nodeset;
     int argc;
     char **argv;
 } opt_t;
 
-#define OPTIONS "+hr:"
+#define OPTIONS "+hr:x:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
+    {"exclude",    required_argument,  0, 'x'},
     { 0, 0, 0, 0 },
 };
 
@@ -61,7 +62,7 @@ void mod_info (flux_t h, opt_t opt);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t h, opt_t opt); 
+    void (*fun)(flux_t h, opt_t opt);
 } func_t;
 
 static func_t funcs[] = {
@@ -88,7 +89,8 @@ void usage (void)
 "       flux-module load   [OPTIONS] module [arg ...]\n"
 "       flux-module remove [OPTIONS] module\n"
 "where OPTIONS are:\n"
-"       -r,--rank=[ns|all]  specify nodeset where op will be performed\n"
+"       -r,--rank=NODESET     add ranks (default \"self\") \n"
+"       -x,--exclude=NODESET  exclude ranks\n"
 );
     exit (1);
 }
@@ -99,13 +101,13 @@ int main (int argc, char *argv[])
     int ch;
     char *cmd;
     func_t *f;
-    opt_t opt = {
-        .nodeset = NULL,
-    };
-    uint32_t rank, size;
+    opt_t opt;
+    const char *rankopt = "self";
+    const char *excludeopt = NULL;
 
     log_init ("flux-module");
 
+    memset (&opt, 0, sizeof (opt));
     if (argc < 2)
         usage ();
     cmd = argv[1];
@@ -117,10 +119,11 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'r': /* --rank=[nodeset|all] */
-                if (opt.nodeset)
-                    free (opt.nodeset);
-                opt.nodeset = xstrdup (optarg);
+            case 'r': /* --rank=NODESET */
+                rankopt = optarg;
+                break;
+            case 'x': /* --exclude=NODESET */
+                excludeopt = optarg;
                 break;
             default:
                 usage ();
@@ -136,23 +139,14 @@ int main (int argc, char *argv[])
     if (strcmp (cmd, "info") != 0) {
         if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
-        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size))
-            err_exit ("flux_get_rank/size");
-        if (!opt.nodeset) {
-            opt.nodeset = xasprintf ("%d", rank);
-        } else if (!strcmp (opt.nodeset, "all") && size == 1) {
-            free (opt.nodeset);
-            opt.nodeset= xasprintf ("%d", rank);
-        } else if (!strcmp (opt.nodeset, "all")) {
-            free (opt.nodeset);
-            opt.nodeset = xasprintf ("[0-%d]", size - 1);
-        }
+        if (!(opt.nodeset = flux_get_nodeset (h, rankopt, excludeopt)))
+            err_exit ("--exclude/--rank");
+        if (strlen (opt.nodeset) == 0)
+            exit (0);
     }
 
     f->fun (h, opt);
 
-    if (opt.nodeset)
-        free (opt.nodeset);
     if (h)
         flux_close (h);
 
