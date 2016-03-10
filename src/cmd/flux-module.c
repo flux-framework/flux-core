@@ -232,6 +232,7 @@ void mod_insmod (flux_t h, opt_t opt)
 {
     char *modname;
     char *modpath;
+    int errors = 0;
 
     if (opt.argc < 1)
         usage ();
@@ -249,12 +250,14 @@ void mod_insmod (flux_t h, opt_t opt)
     while (!flux_rpc_completed (r)) {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, NULL) < 0) {
-            if (errno == EEXIST)
-                msg_exit ("%s[%d]: %s module/service name already in use",
-                          topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
-                          modname);
-            err_exit ("%s[%d] %s",
-                      topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid, modname);
+            if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
+                msg ("%s[%" PRIu32 "]: %s module/service is in use",
+                     topic, nodeid, modname);
+            else if (nodeid != FLUX_NODEID_ANY)
+                err ("%s[%" PRIu32 "]", topic, nodeid);
+            else
+                err ("%s", topic);
+            errors++;
         }
     }
     flux_rpc_destroy (r);
@@ -263,6 +266,8 @@ void mod_insmod (flux_t h, opt_t opt)
     free (json_str);
     free (modpath);
     free (modname);
+    if (errors)
+        exit (1);
 }
 
 void mod_rmmod (flux_t h, opt_t opt)
@@ -438,11 +443,14 @@ void mod_lsmod (flux_t h, opt_t opt)
         err_exit ("%s", topic);
     while (!flux_rpc_completed (r)) {
         const char *json_str;
-        uint32_t nodeid;
-        if (flux_rpc_get (r, &nodeid, &json_str) < 0)
-            err_exit ("%s", topic);
-        if (lsmod_merge_result (nodeid, json_str, mods) < 0)
-            err_exit ("%s[%u]", topic, nodeid);
+        uint32_t nodeid = FLUX_NODEID_ANY;
+        if (flux_rpc_get (r, &nodeid, &json_str) < 0
+                || lsmod_merge_result (nodeid, json_str, mods) < 0) {
+            if (nodeid != FLUX_NODEID_ANY)
+                err ("%s[%" PRIu32 "]", topic, nodeid);
+            else
+                err ("%s", topic);
+        }
     }
     flux_rpc_destroy (r);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
