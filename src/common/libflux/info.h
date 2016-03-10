@@ -11,6 +11,9 @@ int flux_get_size (flux_t h, uint32_t *size);
 
 int flux_get_arity (flux_t h, int *arity);
 
+const char *flux_get_nodeset (flux_t h, const char *nodeset,
+                              const char *exclude);
+
 #endif /* !_FLUX_CORE_INFO_H */
 
 /*
