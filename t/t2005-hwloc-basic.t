@@ -8,7 +8,7 @@ Ensure flux-hwloc reload subcommand works
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 2
+test_under_flux 2 kvs
 
 shared2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/shared/02-brokers`
 exclu2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/nonoverlapping/02-brokers`
@@ -17,6 +17,10 @@ test_debug '
     echo ${dn} &&
     echo ${shared} &&
     echo ${exclu2}
+'
+
+test_expect_success 'hwloc: load hwloc module' '
+    flux module load -r all resource-hwloc
 '
 
 #

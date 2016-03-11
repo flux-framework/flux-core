@@ -8,7 +8,7 @@ Test basic functionality of wreckrun facility.
 
 . `dirname $0`/sharness.sh
 SIZE=${FLUX_TEST_SIZE:-4}
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} wreck
 
 #  Return the previous jobid
 last_job_id() {

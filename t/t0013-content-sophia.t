@@ -11,14 +11,10 @@ fi
 
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
 MAXBLOB=`flux getattr content-blob-size-limit`
-
-test_expect_success 'unload backing store module' '
-        flux module remove --rank 0 content-sqlite
-'
 
 test_expect_success 'load content-sophia module on rank 0' '
 	flux module load --rank 0 content-sophia

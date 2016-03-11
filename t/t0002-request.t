@@ -8,7 +8,7 @@ Verify basic request/response/rpc handling.
 '
 
 . `dirname $0`/sharness.sh
-test_under_flux 2
+test_under_flux 2 minimal
 
 test_expect_success 'flux_rpc(3) example runs' '
 	${FLUX_BUILD_DIR}/doc/man3/trpc

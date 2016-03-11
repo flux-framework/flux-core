@@ -6,7 +6,7 @@ test_description='Test broker attrbitues'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 minimal
 
 test_expect_success 'flux getattr rank works' '
 	ATTR_VAL=`flux getattr rank` &&

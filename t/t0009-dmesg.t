@@ -4,7 +4,7 @@ test_description='Test broker log ring buffer'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 minimal
 
 test_expect_success 'flux getattr log-count counts log messages' '
 	OLD_VAL=`flux getattr log-count` &&

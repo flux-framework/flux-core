@@ -8,7 +8,7 @@ Verify flux command driver behavior.
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 
 test_expect_success 'baseline works' '
 	flux comms info

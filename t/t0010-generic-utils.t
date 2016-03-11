@@ -9,8 +9,12 @@ Verify basic functionality of generic flux utils
 . `dirname $0`/sharness.sh
 SIZE=4
 LASTRANK=$((SIZE-1))
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} kvs
 
+test_expect_success 'up: load live module' '
+	flux module load -r 0 live &&
+	flux module load -r all -x 0 live
+'
 #
 # Wait for all ranks to leave unknown state in live module:
 # (i.e. conf.live.status has unknown == ""), since this is required

@@ -8,7 +8,11 @@ Verify mecho in a running flux comms session.
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} kvs
+
+test_expect_success 'mecho: load mecho module' '
+	flux module load -r all mecho
+'
 
 test_expect_success 'mecho: mping 0-3 works' '
 	flux mping --count 1 \[0-3\]

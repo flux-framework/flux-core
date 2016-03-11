@@ -31,6 +31,7 @@ test_size_large() {
 #
 test_under_flux() {
     size=${1:-1}
+    personality=${2:-full}
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
         cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
@@ -49,6 +50,18 @@ test_under_flux() {
     fi
     if test -n "$SHARNESS_TEST_DIRECTORY"; then
         cd $SHARNESS_TEST_DIRECTORY
+    fi
+
+    if test "$personality" = "minimal"; then
+        export FLUX_RC1_PATH=""
+        export FLUX_RC3_PATH=""
+    elif test "$personality" != "full"; then
+        export FLUX_RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
+        export FLUX_RC3_PATH=""
+        test -x $FLUX_RC1_PATH || error "$FLUX_RC1_PATH"
+    else
+        unset FLUX_RC1_PATH
+        unset FLUX_RC3_PATH
     fi
 
     TEST_UNDER_FLUX_ACTIVE=t \

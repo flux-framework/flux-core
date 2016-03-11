@@ -77,7 +77,9 @@ EXTRA_DIST= \
 	aggregate-results.sh \
 	sharness.sh \
 	sharness.d \
-	$(T)
+	$(T) \
+	rc/rc1-kvs \
+	rc/rc1-wreck
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output

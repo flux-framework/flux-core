@@ -5,7 +5,7 @@ test_description='Test KVS zio streams'
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} kvs
 
 test_expect_success 'kz: hello world copy in, copy out' '
 	echo "hello world" >kztest.1.in &&

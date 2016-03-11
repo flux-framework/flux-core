@@ -6,7 +6,7 @@ test_description='Test event propagation'
 . `dirname $0`/sharness.sh
 SIZE=4
 LASTRANK=$(($SIZE-1))
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 
 test_expect_success 'heartbeat is received on all ranks' '
 	run_timeout 5 \

@@ -7,7 +7,7 @@ Verify module load/unload/list
 '
 
 . `dirname $0`/sharness.sh
-test_under_flux 4
+test_under_flux 4 minimal
 
 test_expect_success 'module: load test module' '
 	flux module load \

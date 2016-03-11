@@ -10,7 +10,7 @@ Test that PMI works in a FLux-launched program
 
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} wreck
 echo "# $0: flux session size will be ${SIZE}"
 
 # Usage: run_program timeout ntasks nnodes
