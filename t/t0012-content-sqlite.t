@@ -10,7 +10,7 @@ fi
 
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
 MAXBLOB=`flux getattr content-blob-size-limit`
@@ -23,9 +23,8 @@ store_junk() {
     done
 }
 
-
-test_expect_success 'verify that content-sqlite module is loaded' '
-	flux module list --rank 0 | grep -q content-sqlite
+test_expect_success 'load content-sqlite module on rank 0' '
+	flux module load --rank 0 content-sqlite
 '
 
 test_expect_success 'store 100 blobs on rank 0' '

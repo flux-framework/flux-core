@@ -8,7 +8,9 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-DMODULE_PATH=\"$(fluxmoddir)\" \
-	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\"
+	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\" \
+	-DRC1=\"$(fluxrcdir)/rc1\" \
+	-DRC3=\"$(fluxrcdir)/rc3\"
 
 fluxcmd_PROGRAMS = flux-broker
 
@@ -37,7 +39,9 @@ flux_broker_SOURCES = \
 	log.h \
 	log.c \
 	content-cache.h \
-	content-cache.c
+	content-cache.c \
+	runlevel.h \
+	runlevel.c
 
 
 flux_broker_LDADD = \

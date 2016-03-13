@@ -2,6 +2,10 @@ noinst_DATA = \
 	flux/config \
 	flux/curve
 
+dist_fluxrc_SCRIPTS = \
+        rc1 \
+        rc3
+
 flux/config: $(srcdir)/flux.conf.in
 	$(AM_V_GEN)umask 077; $(MKDIR_P) flux; \
 	sed -e 's![@]abs_top_srcdir[@]!$(abs_top_srcdir)!g' \

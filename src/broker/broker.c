@@ -68,15 +68,14 @@
 #include "sequence.h"
 #include "log.h"
 #include "content-cache.h"
+#include "runlevel.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
 #define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
 #endif
 
-const char *default_modules =
-    "connector-local,kvs,content-sqlite[0],live,mecho,job,wrexec,barrier,resource-hwloc";
-
+const char *default_modules = "connector-local";
 const char *default_boot_method = "pmi";
 
 typedef struct {
@@ -132,6 +131,7 @@ typedef struct {
     hello_t *hello;
     double hello_timeout;
     flux_t enclosing_h;
+    runlevel_t *runlevel;
 
     /* Subprocess management
      */
@@ -165,13 +165,15 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (ctx_t *ctx);
 
-static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          zhash_t *modexclude, const char *modpath);
+static void load_modules (ctx_t *ctx, const char *default_modules,
+                          const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
-static void init_shell (ctx_t *ctx);
-static int init_shell_exit_handler (struct subprocess *p, void *arg);
+static void runlevel_cb (runlevel_t *r, int level, int rc,
+                         const char *state, void *arg);
+static void runlevel_io_cb (runlevel_t *r, const char *name,
+                            const char *msg, void *arg);
 
 static int create_persistdir (ctx_t *ctx);
 static int create_scratchdir (ctx_t *ctx);
@@ -192,14 +194,11 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:k:s:H:O:x:T:g:Em:IS:"
+#define OPTIONS "+vqM:X:k:s:T:g:Em:IS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
-    {"module",          required_argument,  0, 'M'},
-    {"exclude",         required_argument,  0, 'x'},
-    {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
@@ -218,9 +217,6 @@ static void usage (void)
 "Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
-" -M,--module NAME             Load module NAME (may be repeated)\n"
-" -x,--exclude NAME            Exclude module NAME\n"
-" -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
@@ -239,8 +235,7 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    zlist_t *modules, *modopts, *sigwatchers;
-    zhash_t *modexclude;
+    zlist_t *sigwatchers;
     char *modpath;
     const char *confdir;
     int security_clr = 0;
@@ -252,14 +247,6 @@ int main (int argc, char *argv[])
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
 
-    if (!(modules = zlist_new ()))
-        oom ();
-    zlist_autofree (modules);
-    if (!(modexclude = zhash_new ()))
-        oom ();
-    if (!(modopts = zlist_new ()))
-        oom ();
-    zlist_autofree (modopts);
     if (!(sigwatchers = zlist_new ()))
         oom ();
 
@@ -279,7 +266,9 @@ int main (int argc, char *argv[])
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
-        oom();
+        oom ();
+    if (!(ctx.runlevel = runlevel_create ()))
+        oom ();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -306,17 +295,6 @@ int main (int argc, char *argv[])
                 break;
             case 'q':   /* --quiet */
                 ctx.quiet = true;
-                break;
-            case 'M':   /* --module NAME[nodeset] */
-                if (zlist_push (modules, xstrdup (optarg)) < 0 )
-                    oom ();
-                break;
-            case 'x':   /* --exclude NAME */
-                zhash_update (modexclude, optarg, (void *)1);
-                break;
-            case 'O':   /* --modopt NAME:key=val */
-                if (zlist_push (modopts, optarg) < 0)
-                    oom ();
                 break;
             case 'X':   /* --module-path PATH */
                 modpath = optarg;
@@ -377,20 +355,6 @@ int main (int argc, char *argv[])
     if (!ctx.boot_method)
         msg_exit ("invalid boot method: %s", boot_method ? boot_method
                                                          : "none");
-
-    /* Add default modules to user-specified module list
-     */
-    if (default_modules) {
-        char *cpy = xstrdup (default_modules);
-        char *name, *saveptr = NULL, *a1 = cpy;
-        while ((name = strtok_r (a1, ",", &saveptr))) {
-            if (zlist_append (modules, xstrdup (name)))
-                oom ();
-            a1 = NULL;
-        }
-        free (cpy);
-    }
-
     /* Get the directory for CURVE keys.
      */
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
@@ -555,8 +519,14 @@ int main (int argc, char *argv[])
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || log_register_attrs (ctx.log, ctx.attrs) < 0
-            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
+            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         err_exit ("configuring attributes");
+    }
+
+    if (ctx.rank == 0) {
+        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
+            err_exit ("configuring runlevel attributes");
+    }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
@@ -593,8 +563,33 @@ int main (int argc, char *argv[])
     update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
-        ctx.init_shell = subprocess_create (ctx.sm);
-        subprocess_set_callback (ctx.init_shell, init_shell_exit_handler, &ctx);
+        const char *ldpath = flux_conf_get (ctx.cf,
+                                            "general.program_library_path");
+        const char *rc1 = getenv ("FLUX_RC1_PATH");
+        const char *rc3 = getenv ("FLUX_RC3_PATH");
+        const char *local_uri;
+
+        runlevel_set_size (ctx.runlevel, ctx.size);
+        runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
+        runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
+        runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
+
+        if (attr_get (ctx.attrs, "local-uri", &local_uri, NULL) < 0)
+            err_exit ("local-uri is not set");
+        if (!rc1)
+            rc1 = flux_conf_get (ctx.cf, "general.rc1_path");
+        if (!rc3)
+            rc3 = flux_conf_get (ctx.cf, "general.rc3_path");
+
+        if (runlevel_set_rc (ctx.runlevel, 1, rc1 ? rc1 : RC1,
+                             local_uri, ldpath) < 0)
+            err_exit ("runlevel_set_rc 1");
+        if (runlevel_set_rc (ctx.runlevel, 2, ctx.init_shell_cmd,
+                             local_uri, ldpath) < 0)
+            err_exit ("runlevel_set_rc 2");
+        if (runlevel_set_rc (ctx.runlevel, 3, rc3 ? rc3 : RC3,
+                             local_uri, ldpath) < 0)
+            err_exit ("runlevel_set_rc 3");
     }
 
     /* Wire up the overlay.
@@ -625,15 +620,15 @@ int main (int argc, char *argv[])
      */
     broker_add_services (&ctx);
 
-    /* Load modules
+    /* Load default modules
      */
     if (ctx.verbose)
-        msg ("loading modules");
+        msg ("loading default modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, modules, modopts, modexclude, modpath);
+    load_modules (&ctx, default_modules, modpath);
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -696,10 +691,7 @@ int main (int argc, char *argv[])
     log_destroy (ctx.log);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
-
-    zlist_destroy (&modules);       /* autofree set */
-    zlist_destroy (&modopts);       /* autofree set */
-    zhash_destroy (&modexclude);    /* values const (no destructor) */
+    runlevel_destroy (ctx.runlevel);
 
     return 0;
 }
@@ -711,8 +703,9 @@ static void hello_update_cb (hello_t *hello, void *arg)
     if (hello_complete (hello)) {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
                   hello_get_nodeset (hello));
-        if (ctx->init_shell)
-            init_shell (ctx);
+        flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
+        if (runlevel_set_level (ctx->runlevel, 1) < 0)
+            err_exit ("runlevel_set_level 1");
     } else  {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
                   hello_get_nodeset (hello));
@@ -725,12 +718,13 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
+/* Currently 'expired' is always true.
+ */
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
-    //ctx_t *ctx = arg;
-    int rc = shutdown_get_rc (s);
+    ctx_t *ctx = arg;
     if (expired)
-        exit (rc);
+        exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
 }
 
 static void update_proctitle (ctx_t *ctx)
@@ -763,78 +757,51 @@ static void update_pidfile (ctx_t *ctx)
     free (pidfile);
 }
 
-/* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
- * Section 2.8.2 Exit status for shell commands (page 2315)
+/* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static int init_shell_exit_handler (struct subprocess *p, void *arg)
+static void runlevel_io_cb (runlevel_t *r, const char *name,
+                            const char *msg, void *arg)
 {
-    int rc = subprocess_exit_code (p);
-    ctx_t *ctx = (ctx_t *) arg;
-    assert (ctx != NULL);
+    ctx_t *ctx = arg;
+    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
+    int runlevel = runlevel_get_level (r);
 
-    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, rc,
-                  "%s", subprocess_state_string (p));
-    subprocess_destroy (p);
-    return 0;
+    flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);
 }
 
-static void path_prepend (char **s1, const char *s2)
+/* Handle completion of runlevel subprocess.
+ */
+static void runlevel_cb (runlevel_t *r, int level, int rc,
+                         const char *exit_string, void *arg)
 {
-    char *p;
+    ctx_t *ctx = arg;
+    int new_level = -1;
 
-    if (!s2)
-        ;
-    else if (!*s1)
-        *s1 = xstrdup (s2);
-    else if ((p = strstr (*s1, s2))) {
-        int s2_len = strlen (s2);
-        memmove (p, p + s2_len, strlen (p + s2_len) + 1);
-        if (*p == ':')
-            memmove (p, p + 1, strlen (p + 1) + 1);
-        path_prepend (s1, s2);
-    } else {
-        p = xasprintf ("%s:%s", s2, *s1);
-        free (*s1);
-        *s1 = p;
+    flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
+              "Run level %d %s (rc=%d)", level, exit_string, rc);
+
+    switch (level) {
+        case 1: /* init completed */
+            if (rc != 0) {
+                new_level = 3;
+                shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
+                              rc, "run level 1 %s", exit_string);
+            } else
+                new_level = 2;
+            break;
+        case 2: /* initial program completed */
+            new_level = 3;
+            shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
+                          rc, "run level 2 %s", exit_string);
+            break;
+        case 3: /* finalization completed */
+            break;
     }
-}
-
-static void init_shell (ctx_t *ctx)
-{
-    const char *shell = getenv ("SHELL");
-    char *ldpath = NULL;
-    const char *local_uri;
-
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
-        err_exit ("%s: local_uri is not set", __FUNCTION__);
-    if (!shell)
-        shell = "/bin/bash";
-
-    subprocess_argv_append (ctx->init_shell, shell);
-    if (ctx->init_shell_cmd) {
-        subprocess_argv_append (ctx->init_shell, "-c");
-        subprocess_argv_append (ctx->init_shell, ctx->init_shell_cmd);
+    if (new_level != -1) {
+        flux_log (ctx->h, LOG_INFO, "Run level %d starting", new_level);
+        if (runlevel_set_level (r, new_level) < 0)
+            err_exit ("runlevel_set_level %d", new_level);
     }
-    subprocess_set_environ (ctx->init_shell, environ);
-    subprocess_setenv (ctx->init_shell, "FLUX_URI", local_uri, 1);
-    path_prepend (&ldpath, subprocess_getenv (ctx->init_shell,
-                                              "LD_LIBRARY_PATH"));
-    path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
-    path_prepend (&ldpath, flux_conf_get (ctx->cf,
-                                            "general.program_library_path"));
-    if (ldpath) {
-        subprocess_setenv (ctx->init_shell, "LD_LIBRARY_PATH", ldpath, 1);
-        free (ldpath);
-    }
-    subprocess_unsetenv (ctx->init_shell, "PMI_FD");
-    subprocess_unsetenv (ctx->init_shell, "PMI_RANK");
-    subprocess_unsetenv (ctx->init_shell, "PMI_SIZE");
-
-
-    if (!ctx->quiet)
-        flux_log (ctx->h, LOG_INFO, "starting initial program");
-
-    subprocess_run (ctx->init_shell);
 }
 
 static int create_dummyattrs (ctx_t *ctx)
@@ -1366,19 +1333,14 @@ static int mod_svc_cb (zmsg_t **zmsg, void *arg)
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
-static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          zhash_t *modexclude, const char *modpath)
+static void load_modules (ctx_t *ctx, const char *default_modules,
+                          const char *modpath)
 {
-    char *s;
+    char *cpy = xstrdup (default_modules);
+    char *s, *saveptr = NULL, *a1 = cpy;
     module_t *p;
-    zhash_t *mods; /* hash by module name */
 
-    /* Create modules, adding to 'mods' list
-     */
-    if (!(mods = zhash_new ()))
-        oom ();
-    s = zlist_first (modules);
-    while (s) {
+    while ((s = strtok_r (a1, ",", &saveptr))) {
         char *name = NULL;
         char *path = NULL;
         char *sp;
@@ -1396,14 +1358,11 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                 msg_exit ("%s: not found in module search path", s);
             name = s;
         }
-        if (modexclude && zhash_lookup (modexclude, name))
-            goto next;
         if (!(p = module_add (ctx->modhash, path)))
             err_exit ("%s: module_add %s", name, path);
         if (!svc_add (ctx->services, module_get_name (p),
                                      module_get_service (p), mod_svc_cb, p))
             msg_exit ("could not register service %s", module_get_name (p));
-        zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
         module_set_status_cb (p, module_status_cb, ctx);
 next:
@@ -1411,28 +1370,10 @@ next:
             free (name);
         if (path != s)
             free (path);
-        s = zlist_next (modules);
+        a1 = NULL;
     }
-
-    /* Add module options to module hash entries.
-     */
-    s = zlist_first (modopts);
-    while (s) {
-        char *arg = strchr (s, ':');
-        if (!arg)
-            msg_exit ("malformed module option: %s", s);
-        *arg++ = '\0';
-        if (!(p = zhash_lookup (mods, s)))
-            msg_exit ("module argument for unknown module: %s", s);
-        module_add_arg (p, arg);
-        s = zlist_next (modopts);
-    }
-
-    /* Now start all the modules we just created.
-     */
     module_start_all (ctx->modhash);
-
-    zhash_destroy (&mods);
+    free (cpy);
 }
 
 static void broker_block_signals (void)

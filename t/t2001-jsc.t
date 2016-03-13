@@ -6,7 +6,7 @@ Test the basic functionality of job status and control API.'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 wreck
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi

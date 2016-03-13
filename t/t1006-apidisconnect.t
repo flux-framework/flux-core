@@ -6,7 +6,7 @@ test_description='Test api disconnect generation
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} kvs
 
 # Usage: check_watchers #expected #tries
 check_kvs_watchers() {

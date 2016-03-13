@@ -44,6 +44,7 @@ TESTS = \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
 	t0013-content-sophia.t \
+	t0014-runlevel.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1003-mecho.t \
@@ -77,7 +78,10 @@ EXTRA_DIST= \
 	aggregate-results.sh \
 	sharness.sh \
 	sharness.d \
-	$(T)
+	$(T) \
+	rc/rc1-kvs \
+	rc/rc1-wreck \
+	rc/rc1-testenv
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -97,6 +101,7 @@ check_SCRIPTS = \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
 	t0013-content-sophia.t \
+	t0014-runlevel.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1003-mecho.t \
