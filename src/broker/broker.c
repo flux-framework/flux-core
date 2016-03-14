@@ -376,7 +376,8 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         msg ("Loading config from %s", confdir);
     if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH) {
-        msg("Configuration failed to load: %s, falling back", confdir);
+        if (ctx.verbose)
+            msg ("Configuration failed to load from %s, falling back", confdir);
     }
 
     /* Arrange to load config entries into broker attrs
