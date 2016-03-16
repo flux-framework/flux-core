@@ -1325,6 +1325,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     int nprocs;
     const char *fence = NULL;
     bool internal = false;
+    int saved_errno;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
@@ -1444,10 +1445,12 @@ done:
         free (sender);
     return;
 error:
+    saved_errno = errno;
     Jput (in);
     Jput (dirents);
     if (sender)
-    if (flux_respond (h, msg, errno, NULL) < 0)
+        free (sender);
+    if (flux_respond (h, msg, saved_errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
