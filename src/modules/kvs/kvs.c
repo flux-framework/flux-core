@@ -1306,7 +1306,8 @@ static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
         goto done;
     rc = 0;
 done:
-    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
+    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0,
+                                   rc < 0 ? NULL : Jtostr (out)) < 0)
         flux_log_error (ctx->h, "%s", __FUNCTION__);
     Jput (out);
 }
