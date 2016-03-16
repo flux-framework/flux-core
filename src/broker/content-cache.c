@@ -164,6 +164,8 @@ static void cache_entry_destroy (void *arg)
             free (e->data);
         if (e->blobref)
             free (e->blobref);
+        assert (!e->load_requests || zlist_size (e->load_requests) == 0);
+        assert (!e->store_requests || zlist_size (e->store_requests) == 0);
         message_list_destroy (&e->load_requests);
         message_list_destroy (&e->store_requests);
         free (e);
