@@ -86,7 +86,6 @@ int flux_insmod_json_decode (const char *json_str,
     }
     rc = 0;
 done:
-    Jput (args);
     Jput (o);
     return rc;
 }
