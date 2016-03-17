@@ -67,8 +67,36 @@ static void log_sqlite_error (ctx_t *ctx, const char *fmt, ...)
     va_end (ap);
 
     const char *error = sqlite3_errmsg (ctx->db);
-    (void)flux_log (ctx->h, LOG_ERR, "%s: %s", s, error ? error : "failure");
+    int xerrcode = sqlite3_extended_errcode (ctx->db);
+    (void)flux_log (ctx->h, LOG_ERR, "%s: %s(%d)",
+                    s, error ? error : "failure", xerrcode);
     free (s);
+}
+
+static void set_errno_from_sqlite_error (ctx_t *ctx)
+{
+    switch (sqlite3_errcode (ctx->db)) {
+        case SQLITE_IOERR:      /* os io error */
+            errno = EIO;
+            break;
+        case SQLITE_NOMEM:      /* cannot allocate memory */
+            errno = ENOMEM;
+            break;
+        case SQLITE_ABORT:      /* statment is not authorized */
+        case SQLITE_PERM:       /* access mode for new db cannot be provided */
+        case SQLITE_READONLY:   /* attempt to alter data with no permission */
+            errno = EPERM;
+            break;
+        case SQLITE_TOOBIG:     /* blob too large */
+            errno = EFBIG;
+            break;
+        case SQLITE_FULL:       /* file system full */
+            errno = ENOSPC;
+            break;
+        default:
+            errno = EINVAL;
+            break;
+    }
 }
 
 static void freectx (void *arg)
@@ -217,7 +245,7 @@ void load_cb (flux_t h, flux_msg_handler_t *w,
     if (sqlite3_bind_text (ctx->load_stmt, 1, (char *)hash, SHA1_DIGEST_SIZE,
                                               SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "load: binding key");
-        errno = EIO;
+        set_errno_from_sqlite_error (ctx);
         goto done;
     }
     if (sqlite3_step (ctx->load_stmt) != SQLITE_ROW) {
@@ -266,19 +294,19 @@ void store_cb (flux_t h, flux_msg_handler_t *w,
     if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, SHA1_DIGEST_SIZE,
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding key");
-        errno = EINVAL;
+        set_errno_from_sqlite_error (ctx);
         goto done;
     }
     if (sqlite3_bind_blob (ctx->store_stmt, 2,
                            data, size, SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding data");
-        errno = EINVAL;
+        set_errno_from_sqlite_error (ctx);
         goto done;
     }
     if (sqlite3_step (ctx->store_stmt) != SQLITE_DONE
                     && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
         log_sqlite_error (ctx, "store: executing stmt");
-        errno = EINVAL;
+        set_errno_from_sqlite_error (ctx);
         goto done;
     }
     rc = 0;
