@@ -715,6 +715,7 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
     while (s) {
         if (!strcmp (topic, s)) {
             zlist_remove (p->subs, s);
+            free (s);
             break;
         }
         s = zlist_next (p->subs);
