@@ -52,6 +52,7 @@ void ipaddr_getprimary (char *buf, int len)
     if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, buf, len,
                           NULL, 0, NI_NUMERICHOST)))
         msg_exit ("getnameinfo %s: %s", hostname, gai_strerror (e));
+    freeaddrinfo (res);
 }
 
 /*
