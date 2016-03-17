@@ -31,6 +31,7 @@
 #include "reactor.h"
 #include "dispatch.h"
 #include "response.h"
+#include "flog.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/coproc.h"
@@ -44,6 +45,7 @@ struct dispatch {
     flux_watcher_t *w;
     int running_count;
     int usecount;
+    int lastnotice;        /* message handler count */
 };
 
 #define HANDLER_MAGIC 0x44433322
@@ -530,6 +532,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
 {
     struct dispatch *d = dispatch_get (h);
     flux_msg_handler_t *w = NULL;
+    int count;
 
     if (!d)
         goto nomem;
@@ -545,7 +548,12 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
     dispatch_usecount_incr (d);
     if (zlist_append (d->handlers_new, w) < 0)
         goto nomem;
-
+    count = zlist_size (d->handlers) + zlist_size (d->handlers_new);
+    if (count >= d->lastnotice + 100 || count <= d->lastnotice - 100) {
+        flux_log (d->h, LOG_DEBUG, "message handler count has reached %d",
+                  count);
+        d->lastnotice = count;
+    }
     return w;
 nomem:
     msg_handler_destroy (w);
