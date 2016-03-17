@@ -167,6 +167,7 @@ static void *module_thread (void *arg)
         flux_log_error (p->h, "flux_send");
     flux_msg_destroy (msg);
 done:
+    free (uri);
     free (rankstr);
     if (av)
         free (av);
