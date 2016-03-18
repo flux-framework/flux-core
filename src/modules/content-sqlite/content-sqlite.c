@@ -37,14 +37,21 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libminilzo/minilzo.h"
+
+const size_t lzo_buf_chunksize = 1024*1024;
+const size_t compression_threshold = 256; /* compress blobs >= this size */
 
 const char *sql_create_table = "CREATE TABLE objects("
                                "  hash CHAR(20) PRIMARY KEY,"
+                               "  size INT,"
                                "  object BLOB"
                                ");";
-const char *sql_load = "SELECT object FROM objects WHERE hash = ?1 LIMIT 1";
-const char *sql_store = "INSERT INTO objects (hash,object) values (?1, ?2)";
-const char *sql_dump = "SELECT object FROM objects";
+const char *sql_load = "SELECT object,size FROM objects"
+                       "  WHERE hash = ?1 LIMIT 1";
+const char *sql_store = "INSERT INTO objects (hash,size,object) "
+                        "  values (?1, ?2, ?3)";
+const char *sql_dump = "SELECT object,size FROM objects";
 
 typedef struct {
     char *dbdir;
@@ -57,7 +64,14 @@ typedef struct {
     bool broker_shutdown;
     const char *hashfun;
     uint32_t blob_size_limit;
+    size_t lzo_bufsize;
+    void *lzo_buf;
 } ctx_t;
+
+#define HEAP_ALLOC(var,size) \
+        lzo_align_t __LZO_MMODEL var [ ((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t) ]
+
+static HEAP_ALLOC(lzo_wrkmem, LZO1X_1_MEM_COMPRESS);
 
 static void log_sqlite_error (ctx_t *ctx, const char *fmt, ...)
 {
@@ -117,6 +131,8 @@ static void freectx (void *arg)
         }
         if (ctx->db)
             sqlite3_close (ctx->db);
+        if (ctx->lzo_buf)
+            free (ctx->lzo_buf);
         free (ctx);
     }
 }
@@ -133,6 +149,8 @@ static ctx_t *getctx (flux_t h)
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
+        ctx->lzo_buf = xzmalloc (lzo_buf_chunksize);
+        ctx->lzo_bufsize = lzo_buf_chunksize;
         ctx->h = h;
         if (!(hashfun = flux_attr_get (h, "content-hash", &flags))) {
             saved_errno = errno;
@@ -217,6 +235,21 @@ error:
     return NULL;
 }
 
+int grow_lzo_buf (ctx_t *ctx, size_t size)
+{
+    size_t newsize = ctx->lzo_bufsize;
+    void *newbuf;
+    while (newsize < size)
+        newsize += lzo_buf_chunksize;
+    if (!(newbuf = realloc (ctx->lzo_buf, newsize))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    ctx->lzo_bufsize = newsize;
+    ctx->lzo_buf = newbuf;
+    return 0;
+}
+
 void load_cb (flux_t h, flux_msg_handler_t *w,
               const flux_msg_t *msg, void *arg)
 {
@@ -226,6 +259,7 @@ void load_cb (flux_t h, flux_msg_handler_t *w,
     uint8_t hash[SHA1_DIGEST_SIZE];
     const void *data = NULL;
     int size = 0;
+    int uncompressed_size;
     int rc = -1;
 
     if (flux_request_decode_raw (msg, NULL, &blobref, &blobref_size) < 0) {
@@ -260,6 +294,30 @@ void load_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
     data = sqlite3_column_blob (ctx->load_stmt, 0);
+    if (sqlite3_column_type (ctx->load_stmt, 1) != SQLITE_INTEGER) {
+        flux_log (h, LOG_ERR, "load: selected value is not an integer");
+        errno = EINVAL;
+        goto done;
+    }
+    uncompressed_size = sqlite3_column_int (ctx->load_stmt, 1);
+    if (uncompressed_size != -1) {
+        if (ctx->lzo_bufsize < uncompressed_size
+                                && grow_lzo_buf (ctx, uncompressed_size) < 0)
+            goto done;
+        lzo_uint out_len = ctx->lzo_bufsize;
+        int r = lzo1x_decompress (data, size, ctx->lzo_buf, &out_len, NULL);
+        if (r != LZO_E_OK) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (out_len != uncompressed_size) {
+            flux_log (h, LOG_ERR, "load: blob size mismatch");
+            errno = EINVAL;
+            goto done;
+        }
+        data = ctx->lzo_buf;
+        size = uncompressed_size;
+    }
     rc = 0;
 done:
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0, data, size) < 0)
@@ -276,6 +334,7 @@ void store_cb (flux_t h, flux_msg_handler_t *w,
     SHA1_CTX sha1_ctx;
     uint8_t hash[SHA1_DIGEST_SIZE];
     char blobref[SHA1_STRING_SIZE] = "-";
+    int uncompressed_size = -1;
     int rc = -1;
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
@@ -290,14 +349,32 @@ void store_cb (flux_t h, flux_msg_handler_t *w,
     SHA1_Update (&sha1_ctx, (uint8_t *)data, size);
     SHA1_Final (&sha1_ctx, hash);
     sha1_hashtostr (hash, blobref);
-
+    if (size >= compression_threshold) {
+        int r;
+        lzo_uint out_len = size + size / 16 + 64 + 3;
+        if (ctx->lzo_bufsize < out_len && grow_lzo_buf (ctx, out_len) < 0)
+            goto done;
+        r = lzo1x_1_compress (data, size, ctx->lzo_buf, &out_len, lzo_wrkmem);
+        if (r != LZO_E_OK) {
+            errno = EINVAL;
+            goto done;
+        }
+        uncompressed_size = size;
+        size = out_len;
+        data = ctx->lzo_buf;
+    }
     if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, SHA1_DIGEST_SIZE,
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding key");
         set_errno_from_sqlite_error (ctx);
         goto done;
     }
-    if (sqlite3_bind_blob (ctx->store_stmt, 2,
+    if (sqlite3_bind_int (ctx->store_stmt, 2, uncompressed_size) != SQLITE_OK) {
+        log_sqlite_error (ctx, "store: binding size");
+        set_errno_from_sqlite_error (ctx);
+        goto done;
+    }
+    if (sqlite3_bind_blob (ctx->store_stmt, 3,
                            data, size, SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding data");
         set_errno_from_sqlite_error (ctx);
@@ -375,6 +452,7 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
         const char *blobref;
         int blobref_size;
         const void *data = NULL;
+        int uncompressed_size;
         int size = sqlite3_column_bytes (ctx->dump_stmt, 0);
         if (sqlite3_column_type (ctx->dump_stmt, 0) != SQLITE_BLOB
                                                             && size > 0) {
@@ -382,7 +460,30 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
             continue;
         }
         data = sqlite3_column_blob (ctx->dump_stmt, 0);
-
+        if (sqlite3_column_type (ctx->dump_stmt, 1) != SQLITE_INTEGER) {
+            flux_log (h, LOG_ERR, "shutdown: selected value is not an integer");
+            errno = EINVAL;
+            goto done;
+        }
+        uncompressed_size = sqlite3_column_int (ctx->dump_stmt, 1);
+        if (uncompressed_size != -1) {
+            if (ctx->lzo_bufsize < uncompressed_size
+                            && grow_lzo_buf (ctx, uncompressed_size) < 0)
+                goto done;
+            lzo_uint out_len = ctx->lzo_bufsize;
+            int r = lzo1x_decompress (data, size, ctx->lzo_buf, &out_len, NULL);
+            if (r != LZO_E_OK) {
+                errno = EINVAL;
+                goto done;
+            }
+            if (out_len != uncompressed_size) {
+                flux_log (h, LOG_ERR, "shutdown: blob size mismatch");
+                errno = EINVAL;
+                goto done;
+            }
+            data = ctx->lzo_buf;
+            size = uncompressed_size;
+        }
         if (!(rpc = flux_rpc_raw (h, "content.store", data, size,
                                                         FLUX_NODEID_ANY, 0))) {
             flux_log_error (h, "shutdown: store");
@@ -401,7 +502,7 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
         flux_rpc_destroy (rpc);
         count++;
     }
-    (void )sqlite3_reset (ctx->load_stmt);
+    (void )sqlite3_reset (ctx->dump_stmt);
     flux_log (h, LOG_DEBUG, "shutdown: %d entries returned to cache", count);
 done:
     flux_reactor_stop (flux_get_reactor (h));
@@ -417,9 +518,14 @@ static struct flux_msg_handler_spec htab[] = {
 
 int mod_main (flux_t h, int argc, char **argv)
 {
+    int lzo_rc = lzo_init ();
     ctx_t *ctx = getctx (h);
     if (!ctx)
         return -1;
+    if (lzo_rc != LZO_E_OK) {
+        flux_log (h, LOG_ERR, "lzo_init failed (rc=%d)", lzo_rc);
+        return -1;
+    }
     if (flux_event_subscribe (h, "shutdown") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         return -1;
