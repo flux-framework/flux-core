@@ -310,6 +310,7 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_start");
         return -1;
     }
+    flux_msg_handler_delvec (htab);
     return 0;
 }
 
