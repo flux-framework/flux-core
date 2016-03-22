@@ -70,8 +70,12 @@ TESTS = \
 	lua/t1002-kvs.t \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t \
-	$(top_builddir)/t/t9990-python-tests.t
+	lua/t1005-fdwatcher.t
+
+if HAVE_PYTHON
+TESTS += \
+	 $(top_builddir)/t/t9990-python-tests.t
+endif
 
 EXTRA_DIST= \
 	$(check_SCRIPTS) \
