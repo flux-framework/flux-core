@@ -16,7 +16,9 @@ check_PROGRAMS = \
 
 noinst_SCRIPTS = \
 	soak.sh \
-	soak-workload.sh
+	soak-workload.sh \
+	valgrind.sh \
+	valgrind-workload.sh
 
 if HAVE_MPI
 SUBDIRS = kap
