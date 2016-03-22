@@ -164,6 +164,8 @@ static void cache_entry_destroy (void *arg)
             free (e->data);
         if (e->blobref)
             free (e->blobref);
+        assert (!e->load_requests || zlist_size (e->load_requests) == 0);
+        assert (!e->store_requests || zlist_size (e->store_requests) == 0);
         message_list_destroy (&e->load_requests);
         message_list_destroy (&e->store_requests);
         free (e);
@@ -301,7 +303,8 @@ done:
     if (respond_requests_raw (&e->load_requests, cache->h,
                                                     rc < 0 ? saved_errno : 0,
                                                     e->data, e->len) < 0)
-        flux_log_error (cache->h, "content load");
+        flux_log_error (cache->h, "%s: error responding to load requests",
+                        __FUNCTION__);
     if (rc < 0)
         remove_entry (cache, e);
     flux_rpc_destroy (rpc);
@@ -460,7 +463,8 @@ done:
     if (respond_requests_raw (&e->store_requests, cache->h,
                                         rc < 0 ? saved_errno : 0,
                                         blobref, blobref_size) < 0)
-        flux_log_error (cache->h, "content store");
+        flux_log_error (cache->h, "%s: error responding to store requests",
+                        __FUNCTION__);
     flux_rpc_destroy (rpc);
 
     /* If cache has been flushed, respond to flush requests, if any.
@@ -555,7 +559,8 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
         }
         if (respond_requests_raw (&e->load_requests, cache->h, 0,
                                                         e->data, e->len) < 0)
-            flux_log_error (h, "content store");
+            flux_log_error (cache->h, "%s: error responding to load requests",
+                            __FUNCTION__);
         if (!e->dirty) {
             e->dirty = 1;
             cache->acct_dirty++;
@@ -766,7 +771,8 @@ static void flush_respond (content_cache_t *cache)
     }
     if (respond_requests_raw (&cache->flush_requests, cache->h,
                               errnum, NULL, 0) < 0)
-        flux_log_error (cache->h, "content flush response");
+        flux_log_error (cache->h, "%s: error responding to flush requests",
+                        __FUNCTION__);
 }
 
 static void content_flush_request (flux_t h, flux_msg_handler_t *w,

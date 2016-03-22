@@ -14,6 +14,12 @@ check_PROGRAMS = \
 	tmunge \
 	tbarrier
 
+noinst_SCRIPTS = \
+	soak.sh \
+	soak-workload.sh \
+	valgrind.sh \
+	valgrind-workload.sh
+
 if HAVE_MPI
 SUBDIRS = kap
 endif
@@ -24,4 +30,4 @@ LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
-EXTRA_DIST = valgrind.supp
+EXTRA_DIST = valgrind.supp $(noinst_SCRIPTS)

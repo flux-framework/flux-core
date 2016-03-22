@@ -167,6 +167,7 @@ static void *module_thread (void *arg)
         flux_log_error (p->h, "flux_send");
     flux_msg_destroy (msg);
 done:
+    free (uri);
     free (rankstr);
     if (av)
         free (av);
@@ -714,6 +715,7 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
     while (s) {
         if (!strcmp (topic, s)) {
             zlist_remove (p->subs, s);
+            free (s);
             break;
         }
         s = zlist_next (p->subs);

@@ -1187,16 +1187,17 @@ done:
         free (sender);
 }
 
-static int commit_complete (ctx_t *ctx, flux_rpc_t *rpc)
+static void commit_response_cb (flux_t h, flux_msg_handler_t *w,
+                                const flux_msg_t *msg, void *arg)
 {
+    ctx_t *ctx = arg;
     const char *json_str;
     JSON in = NULL;
     const char *rootdir, *sender;
     int rootseq;
     commit_t *commit;
-    int rc = -1;
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_response_decode (msg, NULL, &json_str) < 0)
         goto done;
     if (!(in = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -1220,19 +1221,8 @@ static int commit_complete (ctx_t *ctx, flux_rpc_t *rpc)
             tstat_push (&ctx->stats.commit_time,  monotime_since (commit->t0));
         zhash_delete (ctx->commits, sender);
     }
-    rc = 0;
 done:
     Jput (in);
-    return rc;
-}
-
-static void commit_completion (flux_rpc_t *rpc, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    if (commit_complete (ctx, rpc) < 0)
-        flux_log_error (ctx->h, "commit_complete");
-    flux_rpc_destroy (rpc);
 }
 
 /* Send a new commit request upstream.
@@ -1247,19 +1237,16 @@ static int send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
 
     if (!(in = kp_tcommit_enc (sender, c->dirents, fence, nprocs)))
         goto error;
-    if (!(rpc = flux_rpc (ctx->h, "kvs.commit",
-                                    Jtostr (in), FLUX_NODEID_UPSTREAM, 0)))
+    if (!(rpc = flux_rpc (ctx->h, "kvs.commit", Jtostr (in),
+                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         goto error;
-    if (flux_rpc_then (rpc, commit_completion, ctx) < 0)
-        goto error;
-
+    flux_rpc_destroy (rpc);
     Jput (c->dirents);
     c->dirents = NULL;
     Jput (in);
     return 0;
 error:
     flux_log_error (ctx->h, "%s", __FUNCTION__);
-    flux_rpc_destroy (rpc);
     Jput (in);
     return -1;
 }
@@ -1306,7 +1293,8 @@ static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
         goto done;
     rc = 0;
 done:
-    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
+    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0,
+                                   rc < 0 ? NULL : Jtostr (out)) < 0)
         flux_log_error (ctx->h, "%s", __FUNCTION__);
     Jput (out);
 }
@@ -1325,6 +1313,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     int nprocs;
     const char *fence = NULL;
     bool internal = false;
+    int saved_errno;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
@@ -1444,10 +1433,12 @@ done:
         free (sender);
     return;
 error:
+    saved_errno = errno;
     Jput (in);
     Jput (dirents);
     if (sender)
-    if (flux_respond (h, msg, errno, NULL) < 0)
+        free (sender);
+    if (flux_respond (h, msg, saved_errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
@@ -1737,6 +1728,7 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
+    { FLUX_MSGTYPE_RESPONSE, "kvs.commit",          commit_response_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
