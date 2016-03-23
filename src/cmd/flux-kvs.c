@@ -60,6 +60,8 @@ void cmd_dropcache (flux_t h, int argc, char **argv);
 void cmd_dropcache_all (flux_t h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t h, int argc, char **argv);
+void cmd_copy (flux_t h, int argc, char **argv);
+void cmd_move (flux_t h, int argc, char **argv);
 void cmd_dir (flux_t h, int argc, char **argv);
 void cmd_dirsize (flux_t h, int argc, char **argv);
 
@@ -79,6 +81,8 @@ void usage (void)
 "       flux-kvs watch-dir [-r]  key\n"
 "       flux-kvs copy-tokvs      key file\n"
 "       flux-kvs copy-fromkvs    key file\n"
+"       flux-kvs copy            srckey dstkey\n"
+"       flux-kvs move            srckey dstkey\n"
 "       flux-kvs dir [-r]        [key]\n"
 "       flux-kvs dirsize         key\n"
 "       flux-kvs version\n"
@@ -146,6 +150,10 @@ int main (int argc, char *argv[])
         cmd_copy_tokvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-fromkvs"))
         cmd_copy_fromkvs (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "copy"))
+        cmd_copy (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "move"))
+        cmd_move (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dir"))
         cmd_dir (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirsize"))
@@ -598,6 +606,26 @@ void cmd_dirsize (flux_t h, int argc, char **argv)
         err_exit ("%s", argv[0]);
     printf ("%d\n", kvsdir_get_size (dir));
     kvsdir_destroy (dir);
+}
+
+void cmd_copy (flux_t h, int argc, char **argv)
+{
+    if (argc != 2)
+        msg_exit ("copy: specify srckey dstkey");
+    if (kvs_copy (h, argv[0], argv[1]) < 0)
+        err_exit ("kvs_copy %s %s", argv[0], argv[1]);
+    if (kvs_commit (h) < 0)
+        err_exit( "kvs_commit");
+}
+
+void cmd_move (flux_t h, int argc, char **argv)
+{
+    if (argc != 2)
+        msg_exit ("move: specify srckey dstkey");
+    if (kvs_move (h, argv[0], argv[1]) < 0)
+        err_exit ("kvs_move %s %s", argv[0], argv[1]);
+    if (kvs_commit (h) < 0)
+        err_exit( "kvs_commit");
 }
 
 /*
