@@ -134,10 +134,6 @@ function filewatcher:check ()
 end
 
 function filewatcher:start ()
-    local st = posix.stat (self.filename)
-    if st then
-        self.st = setmetatable (st, stat)
-    end
     self.flux:statwatcher {
         path = self.filename,
         interval = self.interval,
@@ -148,6 +144,12 @@ function filewatcher:start ()
             log_verbose ("back to sleep\n")
         end
     }
+    --  Be sure to call initial stat(2) *after*
+    --  statwatcher is started above, to avoid any race
+    local st = posix.stat (self.filename)
+    if st then
+        self.st = setmetatable (st, stat)
+    end
     self:check ()
 end
 
