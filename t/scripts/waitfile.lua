@@ -48,7 +48,7 @@ local plugin = opts.P
 local tt = timer.new()
 
 local function printf (m, ...)
-    io.stderr:write (string.format ("waitfile: %4.03fs: "..m, tt:get0(), ...))
+    io.stderr:write (string.format ("waitfile: %s: %4.03fs: "..m, file, tt:get0(), ...))
 end
 
 local function log_verbose (m, ...)
@@ -134,10 +134,6 @@ function filewatcher:check ()
 end
 
 function filewatcher:start ()
-    local st = posix.stat (self.filename)
-    if st then
-        self.st = setmetatable (st, stat)
-    end
     self.flux:statwatcher {
         path = self.filename,
         interval = self.interval,
@@ -148,6 +144,12 @@ function filewatcher:start ()
             log_verbose ("back to sleep\n")
         end
     }
+    --  Be sure to call initial stat(2) *after*
+    --  statwatcher is started above, to avoid any race
+    local st = posix.stat (self.filename)
+    if st then
+        self.st = setmetatable (st, stat)
+    end
     self:check ()
 end
 
