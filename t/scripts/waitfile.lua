@@ -48,7 +48,7 @@ local plugin = opts.P
 local tt = timer.new()
 
 local function printf (m, ...)
-    io.stderr:write (string.format ("waitfile: %4.03fs: "..m, tt:get0(), ...))
+    io.stderr:write (string.format ("waitfile: %s: %4.03fs: "..m, file, tt:get0(), ...))
 end
 
 local function log_verbose (m, ...)
