@@ -507,11 +507,12 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
 
 /* link (key, dirent) into directory 'dir'.
  */
-static void commit_link_dirent (ctx_t *ctx, json_object *dir,
+static void commit_link_dirent (ctx_t *ctx, json_object *rootdir,
                                 const char *key, json_object *dirent)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
+    json_object *dir = rootdir;
     json_object *o, *subdir = NULL, *subdirent;
 
     /* This is the first part of a key with multiple path components.
@@ -535,6 +536,12 @@ static void commit_link_dirent (ctx_t *ctx, json_object *dir,
             subdir = copydir (subdir);/* do not corrupt store by modify orig. */
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
+        } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
+            FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
+            char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
+            commit_link_dirent (ctx, rootdir, nkey, dirent);
+            free (nkey);
+            goto done;
         } else {
             if (!dirent) /* key deletion - it doesn't exist so return */
                 goto done;
