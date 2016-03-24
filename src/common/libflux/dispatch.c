@@ -68,7 +68,7 @@ struct flux_msg_handler {
 
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static void msg_handler_destroy (flux_msg_handler_t *w);
+static void free_msg_handler (flux_msg_handler_t *w);
 
 static void dispatch_usecount_decr (struct dispatch *d)
 {
@@ -78,13 +78,13 @@ static void dispatch_usecount_decr (struct dispatch *d)
         if (d->handlers) {
             while ((w = zlist_pop (d->handlers)))
                 if (w->destroyed)
-                    msg_handler_destroy (w);
+                    free_msg_handler (w);
             zlist_destroy (&d->handlers);
         }
         if (d->handlers_new) {
             while ((w = zlist_pop (d->handlers_new)))
                 if (w->destroyed)
-                    msg_handler_destroy (w);
+                    free_msg_handler (w);
             zlist_destroy (&d->handlers_new);
         }
         free (d);
@@ -441,10 +441,10 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
      * safe to call during handlers list traversal above.
      */
     if (delete_items_zlist (d->handlers_new, item_test_destroyed,
-                            (flux_free_f)msg_handler_destroy) < 0)
+                            (flux_free_f)free_msg_handler) < 0)
         goto done;
     if (delete_items_zlist (d->handlers, item_test_destroyed,
-                            (flux_free_f)msg_handler_destroy) < 0)
+                            (flux_free_f)free_msg_handler) < 0)
         goto done;
     /* Message matched nothing.
      * Respond with ENOSYS if it was a request.
@@ -495,7 +495,7 @@ void flux_msg_handler_stop (flux_msg_handler_t *w)
     }
 }
 
-static void msg_handler_destroy (flux_msg_handler_t *w)
+static void free_msg_handler (flux_msg_handler_t *w)
 {
     if (w) {
         assert (w->magic == HANDLER_MAGIC);
@@ -556,7 +556,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
     }
     return w;
 nomem:
-    msg_handler_destroy (w);
+    free_msg_handler (w);
     errno = ENOMEM;
     return NULL;
 }
