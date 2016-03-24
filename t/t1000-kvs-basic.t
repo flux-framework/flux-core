@@ -211,6 +211,16 @@ test_expect_success 'kvs: symlink: intermediate symlink points to another symlin
 	flux kvs link $TEST.Z.Y $TEST.X.W &&
 	test_kvs_key $TEST.X.W.c 42
 '
+test_expect_success 'kvs: symlink: intermediate symlinks are followed by put' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs readlink $TEST.link >/dev/null &&
+	flux kvs put $TEST.link.X=42 &&
+	flux kvs readlink $TEST.link >/dev/null &&
+	test_kvs_key $TEST.link.X 42 &&
+	test_kvs_key $TEST.a.X 42
+'
 
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
