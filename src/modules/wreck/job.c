@@ -39,16 +39,39 @@
 static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
 {
     int rc;
-    char *key;
+    char *key = NULL;
+    char *link = NULL;
+    char *target = NULL;
 
-    if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
+    /*  Create lwj entry in lwj-active dir at first:
+     */
+    if ((asprintf (&key, "lwj-active.%lu.state", jobid) < 0)
+        || (asprintf (&link, "lwj.%lu", jobid) < 0)
+        || (asprintf (&target, "lwj-active.%lu", jobid) < 0)) {
+        flux_log_error (h, "kvs_job_set_state: asprintf");
         return (-1);
+    }
 
     flux_log (h, LOG_INFO, "Setting job %ld to %s", jobid, state);
-    rc = kvs_put_string (h, key, state);
+    if ((rc = kvs_put_string (h, key, state)) < 0) {
+        flux_log_error (h, "kvs_put_string (%s)", key);
+        goto out;
+    }
+
+    /*
+     *  Create link from lwj.<id> to lwj-active.<id>
+     */
+    if ((rc = kvs_symlink (h, link, target)) < 0) {
+        flux_log_error (h, "kvs_symlink (%s, %s)", link, key);
+        goto out;
+    }
+
     kvs_commit (h);
 
+out:
     free (key);
+    free (link);
+    free (target);
     return rc;
 }
 
