@@ -153,6 +153,33 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
     return (t->f);
 }
 
+static void log_msg (struct prog_ctx *ctx, const char *fmt, ...);
+
+static int archive_lwj (struct prog_ctx *ctx)
+{
+    char *from = NULL;
+    char *to = NULL;
+    int rc = -1;
+
+    log_msg (ctx, "archiving lwj %lu", ctx->id);
+
+    if (asprintf (&to, "lwj.%lu", ctx->id) < 0
+        || asprintf (&from, "lwj-active.%lu", ctx->id) < 0) {
+        flux_log_error (ctx->flux, "archive_lwj: asprintf");
+        goto out;
+    }
+    if ((rc = kvs_move (ctx->flux, from, to)) < 0) {
+        flux_log_error (ctx->flux, "kvs_move (%s, %s)", from, to);
+        goto out;
+    }
+    if (kvs_commit (ctx->flux) < 0)
+        flux_log_error (ctx->flux, "kvs_commit");
+out:
+    free (to);
+    free (from);
+    return (rc);
+}
+
 static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va_list ap)
 {
     int n;
@@ -1879,6 +1906,15 @@ int main (int ac, char **av)
     log_msg (ctx, "job complete. exiting...");
 
     lua_stack_call (ctx->lua_stack, "rexecd_exit");
+
+    if (ctx->nodeid == 0) {
+        /* At final job state, archive the completed lwj back to the
+         * its final resting place in lwj.<id>
+         */
+        if (archive_lwj (ctx) < 0)
+            log_err (ctx, "archive_lwj failed");
+
+    }
 
     prog_ctx_destroy (ctx);
 
