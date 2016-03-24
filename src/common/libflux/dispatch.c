@@ -74,19 +74,21 @@ static void dispatch_usecount_decr (struct dispatch *d)
 {
     flux_msg_handler_t *w;
     if (d && --d->usecount == 0) {
-        flux_watcher_destroy (d->w);
         if (d->handlers) {
-            while ((w = zlist_pop (d->handlers)))
-                if (w->destroyed)
-                    free_msg_handler (w);
+            while ((w = zlist_pop (d->handlers))) {
+                assert (w->destroyed);
+                free_msg_handler (w);
+            }
             zlist_destroy (&d->handlers);
         }
         if (d->handlers_new) {
-            while ((w = zlist_pop (d->handlers_new)))
-                if (w->destroyed)
-                    free_msg_handler (w);
+            while ((w = zlist_pop (d->handlers_new))) {
+                assert (w->destroyed);
+                free_msg_handler (w);
+            }
             zlist_destroy (&d->handlers_new);
         }
+        flux_watcher_destroy (d->w);
         free (d);
     }
 }
@@ -475,6 +477,7 @@ void flux_msg_handler_start (flux_msg_handler_t *w)
     struct dispatch *d = w->d;
 
     assert (w->magic == HANDLER_MAGIC);
+    assert (w->destroyed == 0);
     if (w->running == 0) {
         w->running = 1;
         d->running_count++;
@@ -487,6 +490,7 @@ void flux_msg_handler_stop (flux_msg_handler_t *w)
     struct dispatch *d = w->d;
 
     assert (w->magic == HANDLER_MAGIC);
+    assert (w->destroyed == 0);
     if (w->running == 1) {
         w->running = 0;
         d->running_count--;
@@ -514,7 +518,6 @@ static void free_msg_handler (flux_msg_handler_t *w)
         if (w->arg_free)
             w->arg_free (w->arg);
         w->magic = ~HANDLER_MAGIC;
-        dispatch_usecount_decr (w->d);
         free (w);
     }
 }
@@ -522,8 +525,11 @@ static void free_msg_handler (flux_msg_handler_t *w)
 void flux_msg_handler_destroy (flux_msg_handler_t *w)
 {
     assert (w->magic == HANDLER_MAGIC);
-    flux_msg_handler_stop (w);
-    w->destroyed = 1;
+    if (!w->destroyed) {
+        flux_msg_handler_stop (w);
+        dispatch_usecount_decr (w->d);
+        w->destroyed = 1;
+    }
 }
 
 flux_msg_handler_t *flux_msg_handler_create (flux_t h,
@@ -545,7 +551,6 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
     w->fn = cb;
     w->arg = arg;
     w->d = d;
-    dispatch_usecount_incr (d);
     if (zlist_append (d->handlers_new, w) < 0)
         goto nomem;
     count = zlist_size (d->handlers) + zlist_size (d->handlers_new);
@@ -554,6 +559,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
                   count);
         d->lastnotice = count;
     }
+    dispatch_usecount_incr (d);
     return w;
 nomem:
     free_msg_handler (w);
