@@ -89,7 +89,7 @@ static pid_t cleaner_pid = 0;
 static zlist_t *cleanup_list = NULL;
 static void cleanup (void)
 {
-    const struct cleaner *c;
+    struct cleaner *c;
     pthread_mutex_lock(&mutex);
     if ( ! cleanup_list || cleaner_pid != getpid())
         goto out;
@@ -98,6 +98,9 @@ static void cleanup (void)
         if (c && c->fun){
             c->fun(c);
         }
+        if (c->arg)
+            free (c->arg);
+        free (c);
         c = zlist_next(cleanup_list);
     }
     zlist_destroy(&cleanup_list);
