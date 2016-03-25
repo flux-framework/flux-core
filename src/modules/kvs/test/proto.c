@@ -126,35 +126,39 @@ void test_commit (void)
 {
     JSON o;
     const char *sender = NULL, *fence = NULL;
-    JSON dirents = NULL, dirs;
+    JSON ops = NULL;
+    JSON op1, op2;
     int nprocs = 0;
-    const char *s;
     const char *rootdir;
     int rootseq;
+    int len;
 
     ok ((o = kp_tcommit_enc (NULL, NULL, NULL, 0)) != NULL,
         "kp_tcommit_enc (external commit) works");
-    ok (kp_tcommit_dec (o, &sender, &dirents, &fence, &nprocs) == 0
-        && sender == NULL && dirents == NULL && fence == NULL && nprocs == 1,
+    ok (kp_tcommit_dec (o, &sender, &ops, &fence, &nprocs) == 0
+        && sender == NULL && ops == NULL && fence == NULL && nprocs == 1,
         "kp_tcommit_dec (external commit) works");
     Jput (o);
 
-    dirs = Jnew ();
-    Jadd_str (dirs, "foo", "bar");
-    Jadd_str (dirs, "bar", "baz");
-    ok ((o = kp_tcommit_enc ("sender", dirs, "fence", 1024)) != NULL,
+    op1 = Jnew ();
+    op2 = Jnew ();
+    ops = Jnew_ar ();
+    Jadd_ar_obj (ops, op1);
+    Jadd_ar_obj (ops, op2);
+    Jput (op1);
+    Jput (op2);
+    ok ((o = kp_tcommit_enc ("sender", ops, "fence", 1024)) != NULL,
         "kp_tcommit_enc (internal commit) works");
-    Jput (dirs);
-    ok (kp_tcommit_dec (o, &sender, &dirents, &fence, &nprocs) == 0
+    Jput (ops);
+    ok (kp_tcommit_dec (o, &sender, &ops, &fence, &nprocs) == 0
         && sender != NULL && !strcmp (sender, "sender")
         && fence != NULL  && !strcmp (fence, "fence")
         && nprocs == 1024,
         "kp_tcommit_dec (internal commit) works");
     Jput (o);
-    ok (Jget_str (dirents, "foo", &s) && !strcmp (s, "bar")
-        && Jget_str (dirents, "bar", &s) && !strcmp (s, "baz"),
-        "kp_tcommit_dec returned encoded dirents");
-    Jput (dirents);
+    ok (Jget_ar_len (ops, &len) && len == 2,
+        "kp_tcommit_dec returned encoded correct number of ops");
+    Jput (ops);
 
     ok ((o = kp_rcommit_enc (42, "abc", "def")) != NULL,
         "kp_rcommit_enc works");

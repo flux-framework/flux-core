@@ -198,7 +198,10 @@ done:
 
 void flux_msg_destroy (flux_msg_t *msg)
 {
-    zmsg_destroy (&msg);
+    int saved_errno = errno;
+    if (msg)
+        zmsg_destroy (&msg);
+    errno = saved_errno;
 }
 
 int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t *size)

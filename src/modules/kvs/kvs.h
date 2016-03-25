@@ -198,6 +198,11 @@ int kvsdir_unlink (kvsdir_t *dir, const char *key);
 int kvsdir_symlink (kvsdir_t *dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t *dir, const char *key);
 
+/* Copy/move a key to a new name.  If 'from' is a directory, copy recursively.
+ */
+int kvs_copy (flux_t h, const char *from, const char *to);
+int kvs_move (flux_t h, const char *from, const char *to);
+
 #endif /* !_FLUX_CORE_KVS_H */
 
 /*

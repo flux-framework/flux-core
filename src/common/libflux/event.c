@@ -85,11 +85,7 @@ flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
         goto error;
     return msg;
 error:
-    if (msg) {
-        int saved_errno = errno;
-        flux_msg_destroy (msg);
-        errno = saved_errno;
-    }
+    flux_msg_destroy (msg);
     return NULL;
 }
 

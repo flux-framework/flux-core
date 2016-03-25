@@ -135,11 +135,7 @@ static flux_msg_t *response_encode (const char *topic, int errnum)
         goto error;
     return msg;
 error:
-    if (msg) {
-        int saved_errno = errno;
-        flux_msg_destroy (msg);
-        errno = saved_errno;
-    }
+    flux_msg_destroy (msg);
     return NULL;
 }
 
@@ -158,11 +154,7 @@ flux_msg_t *flux_response_encode (const char *topic, int errnum,
         goto error;
     return msg;
 error:
-    if (msg) {
-        int saved_errno = errno;
-        flux_msg_destroy (msg);
-        errno = saved_errno;
-    }
+    flux_msg_destroy (msg);
     return NULL;
 }
 
@@ -181,11 +173,7 @@ flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
         goto error;
     return msg;
 error:
-    if (msg) {
-        int saved_errno = errno;
-        flux_msg_destroy (msg);
-        errno = saved_errno;
-    }
+    flux_msg_destroy (msg);
     return NULL;
 }
 
