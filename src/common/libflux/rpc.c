@@ -157,8 +157,7 @@ static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
         goto done;
     rc = 0;
 done:
-    if (msg)
-        flux_msg_destroy (msg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -176,8 +175,7 @@ static int rpc_request_send_raw (flux_rpc_t *rpc, int n, const char *topic,
         goto done;
     rc = 0;
 done:
-    if (msg)
-        flux_msg_destroy (msg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
