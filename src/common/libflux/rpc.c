@@ -89,7 +89,9 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
 
 void flux_rpc_destroy (flux_rpc_t *rpc)
 {
+    int saved_errno = errno;
     flux_rpc_usecount_decr (rpc);
+    errno = saved_errno;
 }
 
 static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
