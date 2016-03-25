@@ -222,6 +222,7 @@ test_expect_success 'kvs: symlink: intermediate symlinks are followed by put' '
 	test_kvs_key $TEST.a.X 42
 '
 
+# This will fail if individual ops are applied out of order
 test_expect_success 'kvs: symlink: kvs_copy removes symlinked destination' '
 	flux kvs unlink $TEST &&
 	flux kvs mkdir $TEST.a &&
@@ -230,6 +231,18 @@ test_expect_success 'kvs: symlink: kvs_copy removes symlinked destination' '
 	flux kvs copy $TEST.a $TEST.link &&
 	! flux kvs readlink $TEST.link >/dev/null &&
 	test_kvs_key $TEST.link.X 42
+'
+
+# This will fail if individual ops are applied out of order
+test_expect_success 'kvs: symlink: kvs_move works' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs put $TEST.a.X=42 &&
+	flux kvs move $TEST.a $TEST.link &&
+	! flux kvs readlink $TEST.link >/dev/null &&
+	test_kvs_key $TEST.link.X 42 &&
+	! flux kvs dir $TEST.a >/dev/null
 '
 
 test_expect_success 'kvs: kvsdir_get_size works' '
