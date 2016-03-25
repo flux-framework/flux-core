@@ -192,6 +192,16 @@ test_expect_success 'kvs: symlink: works' '
 	OUTPUT=$(flux kvs get $TEST.Q) &&
 	test "$OUTPUT" = "foo"
 '
+test_expect_success 'kvs: symlink: readlink fails on regular value' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	! flux kvs readlink $TEST.a.b.c
+'
+test_expect_success 'kvs: symlink: readlink fails on directory' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a.b.c &&
+	! flux kvs readlink $TEST.a.b.
+'
 test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
 	flux kvs unlink $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
@@ -243,6 +253,33 @@ test_expect_success 'kvs: symlink: kvs_move works' '
 	! flux kvs readlink $TEST.link >/dev/null &&
 	test_kvs_key $TEST.link.X 42 &&
 	! flux kvs dir $TEST.a >/dev/null
+'
+
+test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (top)' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.X=42 &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs copy $TEST.link $TEST.copy &&
+	LINKVAL=$(flux kvs readlink $TEST.copy) &&
+	test "$LINKVAL" = "$TEST.a"
+'
+
+test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (mid)' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.X=42 &&
+	flux kvs link $TEST.a.b $TEST.a.link &&
+	flux kvs copy $TEST.a $TEST.copy &&
+	LINKVAL=$(flux kvs readlink $TEST.copy.link) &&
+	test "$LINKVAL" = "$TEST.a.b"
+'
+
+test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.X=42 &&
+	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
+	flux kvs copy $TEST.a $TEST.copy &&
+	LINKVAL=$(flux kvs readlink $TEST.copy.b.link) &&
+	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
 test_expect_success 'kvs: kvsdir_get_size works' '
