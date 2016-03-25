@@ -66,7 +66,8 @@ static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
         goto out;
     }
 
-    kvs_commit (h);
+    if ((rc = kvs_commit (h)) < 0)
+        flux_log_error (h, "kvs_job_set_state: kvs_commit");
 
 out:
     free (key);
@@ -300,7 +301,10 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
             goto out;
         }
 
-        kvs_commit (h);
+        if (kvs_commit (h) < 0) {
+            flux_log_error (h, "job_request: kvs_commit");
+            goto out;
+        }
 
         /* Send a wreck.state.reserved event for listeners */
         state = "reserved";
