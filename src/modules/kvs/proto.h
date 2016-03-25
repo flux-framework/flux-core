@@ -37,9 +37,9 @@ int kp_tunwatch_dec (json_object *o, const char **key);
 
 /* kvs.commit
  */
-json_object *kp_tcommit_enc (const char *sender, json_object *dirents,
+json_object *kp_tcommit_enc (const char *sender, json_object *ops,
                              const char *fence, int nprocs);
-int kp_tcommit_dec (json_object *o, const char **sender, json_object **dirents,
+int kp_tcommit_dec (json_object *o, const char **sender, json_object **ops,
                     const char **fence, int *nprocs);
 
 json_object *kp_rcommit_enc (int rootseq, const char *rootdir,
