@@ -45,6 +45,15 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -2311,6 +2320,79 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
+static int cmb_heaptrace_start_cb (zmsg_t **zmsg, void *arg)
+{
+    const char *json_str, *filename;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "filename", &filename)) {
+        errno = EPROTO;
+        goto done;
+    }
+#if WITH_TCMALLOC
+    if (IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerStart (filename);
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif
+done:
+    Jput (in);
+    return rc;
+}
+
+static int cmb_heaptrace_dump_cb (zmsg_t **zmsg, void *arg)
+{
+    const char *json_str, *reason;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "reason", &reason)) {
+        errno = EPROTO;
+        goto done;
+    }
+#if WITH_TCMALLOC
+    if (!IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerDump (reason);
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif
+done:
+    Jput (in);
+    return rc;
+}
+
+static int cmb_heaptrace_stop_cb (zmsg_t **zmsg, void *arg)
+{
+    int rc = -1;
+    if (flux_request_decode (*zmsg, NULL, NULL) < 0)
+        goto done;
+#if WITH_TCMALLOC
+    if (!IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerStop();
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif /* WITH_TCMALLOC */
+done:
+    return rc;
+}
+
 static int requeue_for_service (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2353,6 +2435,9 @@ static struct internal_service services[] = {
     { "cmb.seq.fetch",  "[0]",  cmb_seq             },
     { "cmb.seq.set",    "[0]",  cmb_seq             },
     { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { "cmb.heaptrace.start",NULL, cmb_heaptrace_start_cb },
+    { "cmb.heaptrace.dump", NULL, cmb_heaptrace_dump_cb  },
+    { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
     { NULL, NULL, },
 };
