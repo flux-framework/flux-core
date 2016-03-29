@@ -368,6 +368,11 @@ test_expect_success 'wreck jobs are archived after failure' '
 	test_must_fail flux kvs dir lwj-active.$(flux wreck last-jobid)
 '
 
+test_expect_success 'wreck: no jobs left in lwj-active directory' '
+	flux kvs dir lwj-active > lwj-active.listing &&
+	test_must_fail test -s lwj-active.listing
+'
+
 test_debug "flux wreck ls"
 
 test_done
