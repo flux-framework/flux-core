@@ -234,6 +234,9 @@ static void log_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
         va_start (ap, format);
         vlog_error_kvs (ctx, code, format, ap);
         va_end (ap);
+
+        if (archive_lwj (ctx) < 0)
+            flux_log_error (ctx->flux, "log_fatal: archive_lwj");
     }
     if (code > 0)
         exit (code);
