@@ -29,6 +29,15 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <arraylist.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include <flux/core.h>
 
@@ -199,8 +208,16 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
         return (-1);
     }
 
-    if (pid == 0)
+    if (pid == 0) {
+#if WITH_TCMALLOC
+        /* Child: if heap profiling is running, stop it to avoid
+         * triggering a dump when child exits.
+         */
+        if (IsHeapProfilerRunning ())
+            HeapProfilerStop ();
+#endif
         exec_handler (ctx, id, fds);
+    }
 
     /*
      *  Wait for child to exit
