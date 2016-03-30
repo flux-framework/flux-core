@@ -25,27 +25,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
 #include <string.h>
-#include <time.h>
-#include <sys/resource.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <math.h>
-#include <limits.h>
-#include <assert.h>
 #include <json.h>
-#include <zmq.h>
 
 #include "log.h"
 #include "xzmalloc.h"
 #include "shortjson.h"
-#include "jsonutil.h"
 #include "base64.h"
+#include "jsonutil.h"
 
 /* base64 */
 void util_json_object_add_data (json_object *o, char *name,
@@ -59,25 +46,6 @@ void util_json_object_add_data (json_object *o, char *name,
     (void) base64_encode_block (buf, &dstlen, dat, len);
     Jadd_str (o, name, buf);
     free (buf);
-}
-
-void util_json_object_add_timeval (json_object *o, char *name,
-                                   struct timeval *tvp)
-{
-    json_object *no;
-    char tbuf[32];
-
-    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tvp->tv_sec, tvp->tv_usec);
-    if (!(no = json_object_new_string (tbuf)))
-        oom ();
-    json_object_object_add (o, name, no);
-}
-
-static json_object *util_json_object_object_get (json_object *o, char *name)
-{
-    json_object *ret = NULL;
-    json_object_object_get_ex (o, name, &ret);
-    return (ret);
 }
 
 /* base64 */
@@ -100,20 +68,6 @@ int util_json_object_get_data (json_object *o, char *name,
 
     *lenp = dlen;
     *datp = (uint8_t *) dst;
-    return 0;
-}
-
-int util_json_object_get_timeval (json_object *o, char *name,
-                                  struct timeval *tvp)
-{
-    struct timeval tv;
-    char *endptr;
-    json_object *no = util_json_object_object_get (o, name);
-    if (!no)
-        return -1;
-    tv.tv_sec = strtoul (json_object_get_string (no), &endptr, 10);
-    tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
-    *tvp = tv;
     return 0;
 }
 
