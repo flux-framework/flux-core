@@ -46,20 +46,6 @@
 #include "jsonutil.h"
 #include "base64.h"
 
-int util_json_size (json_object *o)
-{
-    const char *s = json_object_to_json_string (o);
-    return strlen (s);
-}
-
-bool util_json_match (json_object *o1, json_object *o2)
-{
-    const char *s1 = json_object_to_json_string (o1);
-    const char *s2 = json_object_to_json_string (o2);
-
-    return !strcmp (s1, s2);
-}
-
 void util_json_object_add_boolean (json_object *o, char *name, bool val)
 {
     json_object *no;

@@ -992,6 +992,14 @@ stall:
         free (sender);
 }
 
+static bool compare_json (json_object *o1, json_object *o2)
+{
+    const char *s1 = json_object_to_json_string (o1);
+    const char *s2 = json_object_to_json_string (o2);
+
+    return !strcmp (s1, s2);
+}
+
 static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
@@ -1031,7 +1039,7 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if (first || !util_json_match (val, oval)) {
+    if (first || !compare_json (val, oval) != 0) {
         if (!(out = kp_rwatch_enc (key, Jget (val))))
             goto done;
     }

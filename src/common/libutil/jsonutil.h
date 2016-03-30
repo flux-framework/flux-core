@@ -4,10 +4,6 @@
 #include <stdbool.h>
 #include <json.h>
 
-/* Calculate encoded size of JSON object.
- */
-int util_json_size (json_object *o);
-
 /* JSON helpers
  * N.B. for get_data(): caller must free returned data if non-NULL.
  */
@@ -33,8 +29,6 @@ int util_json_object_get_timeval (json_object *o, char *name,
                                   struct timeval *tvp);
 int util_json_object_get_int_array (json_object *o, char *name,
                                     int **ap, int *lp);
-
-bool util_json_match (json_object *o1, json_object *o2);
 
 #endif /* !UTIL_JSONUTIL_H */
 /*
