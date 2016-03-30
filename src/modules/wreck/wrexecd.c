@@ -95,6 +95,8 @@ struct prog_ctx {
     int globalbasis;        /* Global rank of first task on this node */
     int exited;
 
+    int errnum;
+
     /*
      *  Flags and options
      */
@@ -153,6 +155,33 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
     return (t->f);
 }
 
+static void log_msg (struct prog_ctx *ctx, const char *fmt, ...);
+
+static int archive_lwj (struct prog_ctx *ctx)
+{
+    char *from = NULL;
+    char *to = NULL;
+    int rc = -1;
+
+    log_msg (ctx, "archiving lwj %lu", ctx->id);
+
+    if (asprintf (&to, "lwj.%lu", ctx->id) < 0
+        || asprintf (&from, "lwj-active.%lu", ctx->id) < 0) {
+        flux_log_error (ctx->flux, "archive_lwj: asprintf");
+        goto out;
+    }
+    if ((rc = kvs_move (ctx->flux, from, to)) < 0) {
+        flux_log_error (ctx->flux, "kvs_move (%s, %s)", from, to);
+        goto out;
+    }
+    if (kvs_commit (ctx->flux) < 0)
+        flux_log_error (ctx->flux, "kvs_commit");
+out:
+    free (to);
+    free (from);
+    return (rc);
+}
+
 static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va_list ap)
 {
     int n;
@@ -205,6 +234,9 @@ static void log_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
         va_start (ap, format);
         vlog_error_kvs (ctx, code, format, ap);
         va_end (ap);
+
+        if (archive_lwj (ctx) < 0)
+            flux_log_error (ctx->flux, "log_fatal: archive_lwj");
     }
     if (code > 0)
         exit (code);
@@ -1579,12 +1611,10 @@ int rexecd_init (struct prog_ctx *ctx)
             else
                 log_err (ctx, "Error in initialization, terminating job");
         }
-        /* All other daemons exit here:
-         */
-        exit (errnum);
+        ctx->errnum = errnum;
     }
     free (name);
-    return (0);
+    return (errnum ? -1 : 0);
 }
 
 int exec_commands (struct prog_ctx *ctx)
@@ -1594,7 +1624,8 @@ int exec_commands (struct prog_ctx *ctx)
     int stop_children = 0;
 
     wreck_lua_init (ctx);
-    rexecd_init (ctx);
+    if (rexecd_init (ctx) < 0)
+        return (-1);
 
     prog_ctx_setenvf (ctx, "FLUX_JOB_ID",    1, "%d", ctx->id);
     prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);
@@ -1824,6 +1855,7 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
 
 int main (int ac, char **av)
 {
+    int code = 0;
     int parent_fd = -1;
     struct prog_ctx *ctx = NULL;
     optparse_t *p;
@@ -1870,19 +1902,30 @@ int main (int ac, char **av)
     if ((parent_fd = optparse_get_int (p, "parent-fd", -1)) >= 0)
         prog_ctx_signal_parent (parent_fd);
     prog_ctx_reactor_init (ctx);
-    exec_commands (ctx);
 
-    if (flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
-        log_err (ctx, "flux_reactor_run: %s", strerror (errno));
+    if (exec_commands (ctx) == 0) {
 
-    rexec_state_change (ctx, "complete");
-    log_msg (ctx, "job complete. exiting...");
+        if (flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
+            log_err (ctx, "flux_reactor_run: %s", strerror (errno));
 
-    lua_stack_call (ctx->lua_stack, "rexecd_exit");
+        rexec_state_change (ctx, "complete");
+        log_msg (ctx, "job complete. exiting...");
 
+        lua_stack_call (ctx->lua_stack, "rexecd_exit");
+    }
+
+    if (ctx->nodeid == 0) {
+        /* At final job state, archive the completed lwj back to the
+         * its final resting place in lwj.<id>
+         */
+        if (archive_lwj (ctx) < 0)
+            log_err (ctx, "archive_lwj failed");
+
+    }
+
+    code = ctx->errnum;
     prog_ctx_destroy (ctx);
-
-    return (0);
+    return (code);
 }
 
 /*

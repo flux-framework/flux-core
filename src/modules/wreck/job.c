@@ -39,16 +39,40 @@
 static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
 {
     int rc;
-    char *key;
+    char *key = NULL;
+    char *link = NULL;
+    char *target = NULL;
 
-    if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
+    /*  Create lwj entry in lwj-active dir at first:
+     */
+    if ((asprintf (&key, "lwj-active.%lu.state", jobid) < 0)
+        || (asprintf (&link, "lwj.%lu", jobid) < 0)
+        || (asprintf (&target, "lwj-active.%lu", jobid) < 0)) {
+        flux_log_error (h, "kvs_job_set_state: asprintf");
         return (-1);
+    }
 
     flux_log (h, LOG_INFO, "Setting job %ld to %s", jobid, state);
-    rc = kvs_put_string (h, key, state);
-    kvs_commit (h);
+    if ((rc = kvs_put_string (h, key, state)) < 0) {
+        flux_log_error (h, "kvs_put_string (%s)", key);
+        goto out;
+    }
 
+    /*
+     *  Create link from lwj.<id> to lwj-active.<id>
+     */
+    if ((rc = kvs_symlink (h, link, target)) < 0) {
+        flux_log_error (h, "kvs_symlink (%s, %s)", link, key);
+        goto out;
+    }
+
+    if ((rc = kvs_commit (h)) < 0)
+        flux_log_error (h, "kvs_job_set_state: kvs_commit");
+
+out:
     free (key);
+    free (link);
+    free (target);
     return rc;
 }
 
@@ -277,7 +301,10 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
             goto out;
         }
 
-        kvs_commit (h);
+        if (kvs_commit (h) < 0) {
+            flux_log_error (h, "job_request: kvs_commit");
+            goto out;
+        }
 
         /* Send a wreck.state.reserved event for listeners */
         state = "reserved";

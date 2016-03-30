@@ -363,6 +363,16 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 	test_cmp expected.submit err.submit
 '
 
+test_expect_success 'wreck jobs are archived after failure' '
+	test_must_fail flux wreckrun --input=bad.file hostname &&
+	test_must_fail flux kvs dir lwj-active.$(flux wreck last-jobid)
+'
+
+test_expect_success 'wreck: no jobs left in lwj-active directory' '
+	flux kvs dir lwj-active > lwj-active.listing &&
+	test_must_fail test -s lwj-active.listing
+'
+
 test_debug "flux wreck ls"
 
 test_done
