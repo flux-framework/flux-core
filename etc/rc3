@@ -1,16 +1,5 @@
 #!/bin/bash -e
 
-flux module remove -r all wrexec
-flux module remove -r all job
-flux module remove -r all mecho
-flux module remove -r all resource-hwloc
-flux module remove -r all live
-
-flux module remove -r all kvs
-flux module remove -r all barrier
-
-flux module remove -r 0 content-sqlite
-
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
@@ -22,3 +11,15 @@ for rcdir in $all_dirs; do
     done
 done
 shopt -u nullglob
+
+flux module remove -r all wrexec
+flux module remove -r all job
+flux module remove -r all mecho
+flux module remove -r all resource-hwloc
+flux module remove -r all live
+
+flux module remove -r all kvs
+flux module remove -r all barrier
+
+flux module remove -r 0 content-sqlite
+
