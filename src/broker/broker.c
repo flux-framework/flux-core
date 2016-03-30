@@ -62,6 +62,7 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libpmi-client/pmi-client.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
@@ -1900,12 +1901,9 @@ static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON out = NULL;
-    struct rusage usage;
     int rc = -1;
 
-    if (getrusage (RUSAGE_THREAD, &usage) < 0)
-        goto done;
-    if (!(out = rusage_to_json (&usage)))
+    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
         goto done;
     rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
     zmsg_destroy (zmsg);

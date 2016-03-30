@@ -36,9 +36,6 @@ int util_json_object_get_int_array (json_object *o, char *name,
 
 bool util_json_match (json_object *o1, json_object *o2);
 
-struct rusage;
-json_object *rusage_to_json (struct rusage *ru);
-
 #endif /* !UTIL_JSONUTIL_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

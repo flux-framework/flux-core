@@ -21,6 +21,8 @@ libutil_la_SOURCES = \
 	xzmalloc.h \
 	jsonutil.c \
 	jsonutil.h \
+	getrusage_json.c \
+	getrusage_json.h \
 	monotime.c \
 	monotime.h \
 	setenvf.c \

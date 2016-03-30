@@ -44,7 +44,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
@@ -163,12 +163,10 @@ static void rusage_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     JSON out = NULL;
-    struct rusage usage;
     int rc = -1;
 
-    if (getrusage (RUSAGE_THREAD, &usage) < 0)
+    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
         goto done;
-    out = rusage_to_json (&usage);
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0,
