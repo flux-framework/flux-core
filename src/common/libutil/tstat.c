@@ -80,18 +80,17 @@ int tstat_count (tstat_t *ts)
     return ts->n;
 }
 
-void util_json_object_add_tstat (json_object *o, const char *name,
-                                 tstat_t *ts, double scale)
+json_object *tstat_json (tstat_t *ts, double scale)
 {
-    json_object *to = Jnew ();
+    json_object *o = Jnew ();
 
-    Jadd_int (to, "count", tstat_count (ts));
-    Jadd_double (to, "min", tstat_min (ts)*scale);
-    Jadd_double (to, "mean", tstat_mean (ts)*scale);
-    Jadd_double (to, "stddev", tstat_stddev (ts)*scale);
-    Jadd_double (to, "max", tstat_max (ts)*scale);
+    Jadd_int (o, "count", tstat_count (ts));
+    Jadd_double (o, "min", tstat_min (ts)*scale);
+    Jadd_double (o, "mean", tstat_mean (ts)*scale);
+    Jadd_double (o, "stddev", tstat_stddev (ts)*scale);
+    Jadd_double (o, "max", tstat_max (ts)*scale);
 
-    json_object_object_add (o, name, to);
+    return o;
 }
 
 /*

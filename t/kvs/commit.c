@@ -39,7 +39,7 @@
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 
 typedef struct {
     pthread_t t;
@@ -180,11 +180,13 @@ int main (int argc, char *argv[])
     }
 
     if (sopt) {
-        json_object *o = util_json_object_new_object ();
-        util_json_object_add_tstat (o, "put+commit times (sec)", &ts, 1E-3);
-        util_json_object_add_double (o, "put+commmit throughput (#/sec)",
+        json_object *o = Jnew ();
+        json_object_object_add (o, "put+commit times (sec)",
+                tstat_json (&ts, 1E-3));
+        Jadd_double (o, "put+commmit throughput (#/sec)",
                           (double)(count*nthreads)/(monotime_since (t0)*1E-3));
-        printf ("%s\n", json_object_to_json_string_ext (o,JSON_C_TO_STRING_PRETTY));
+        printf ("%s\n",
+                json_object_to_json_string_ext (o, JSON_C_TO_STRING_PRETTY));
         json_object_put (o);
     }
 

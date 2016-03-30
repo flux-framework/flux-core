@@ -1628,6 +1628,12 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
     free (sender);
 }
 
+static void add_tstat (json_object *o, const char *name, tstat_t *ts,
+                       double scale)
+{
+    json_object_object_add (o, name, tstat_json (ts, scale));
+}
+
 static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
@@ -1642,19 +1648,17 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     memset (&ts, 0, sizeof (ts));
     cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty);
     Jadd_double (o, "obj size total (MiB)", (double)size/1048576);
-    util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
+    add_tstat (o, "obj size (KiB)", &ts, 1E-3);
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#pending commits", zhash_size (ctx->commits));
     Jadd_int (o, "#pending fences", zhash_size (ctx->fences));
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    util_json_object_add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
-    util_json_object_add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
-    util_json_object_add_tstat (o, "commits (sec)",
-                                &ctx->stats.commit_time, 1E-3);
-    util_json_object_add_tstat (o, "fences after sync (sec)",
-                                &ctx->stats.fence_time, 1E-3);
-    util_json_object_add_tstat (o, "commits per update",
+    add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
+    add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
+    add_tstat (o, "commits (sec)", &ctx->stats.commit_time, 1E-3);
+    add_tstat (o, "fences after sync (sec)", &ctx->stats.fence_time, 1E-3);
+    add_tstat (o, "commits per update",
                                 &ctx->stats.commit_merges, 1);
     Jadd_int (o, "#no-op stores", ctx->stats.noop_stores);
     Jadd_int (o, "#faults", ctx->stats.faults);
