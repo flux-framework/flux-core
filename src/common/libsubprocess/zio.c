@@ -34,6 +34,7 @@
 
 #include "src/common/liblsd/cbuf.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 
 #include "zio.h"
@@ -994,7 +995,7 @@ int zio_json_decode (const char *json_str, void **pp, bool *eofp)
     json_object *o = NULL;
 
     if (json_str && (o = json_tokener_parse (json_str))) {
-        if (util_json_object_get_boolean (o, "eof", eofp) == 0)
+        if (Jget_bool (o, "eof", eofp))
             rc = 0;
         else
             *eofp = false;
@@ -1011,14 +1012,14 @@ char *zio_json_encode (void *p, int len, bool eof)
     json_object *o;
     char *json_str = NULL;
 
-    if (!(o = util_json_object_new_object ())) {
+    if (!(o = json_object_new_object ())) {
         errno = ENOMEM;
         goto done;
     }
     if (len && p)
         util_json_object_add_data (o, "data", (uint8_t *) p, len);
     if (eof)
-        util_json_object_add_boolean (o, "eof", 1);
+        Jadd_bool (o, "eof", 1);
     if (!(json_str = strdup (json_object_to_json_string (o)))) {
         errno = ENOMEM;
         goto done;
@@ -1035,7 +1036,7 @@ bool zio_json_eof (const char *json_str)
     json_object *o;
 
     if ((o = json_tokener_parse (json_str)))
-        util_json_object_get_boolean (o, "eof", &eof);
+        Jget_bool (o, "eof", &eof);
     if (o)
         json_object_put (o);
     return eof;

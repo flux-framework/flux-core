@@ -349,7 +349,7 @@ send_causal_event (kap_params_t *param)
     }
 
     o = json_object_new_object (); 
-    util_json_object_add_int (o, KAP_KVSVER_NAME, v);
+    Jadd_int (o, KAP_KVSVER_NAME, v);
 
     zmsg_t * msg = flux_event_encode(KAP_CAUSAL_CONS_EV, Jtostr(o));
     if (flux_sendmsg (param->pers.handle, &msg) < 0) {
@@ -387,7 +387,7 @@ enforce_c_consistency (kap_params_t *param)
     const char *json_str;
     flux_msg_get_payload_json (msg, &json_str);
     o = json_tokener_parse (json_str);
-    if ( util_json_object_get_int (o, KAP_KVSVER_NAME, &v)) {
+    if ( !Jget_int (o, KAP_KVSVER_NAME, &v)) {
         fprintf (stderr,
             "json_object_get_int failed.\n");
         goto error;

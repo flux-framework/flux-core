@@ -138,17 +138,17 @@ static int barrier_add_client (barrier_t *b, char *sender, const flux_msg_t *msg
 
 static void send_enter_request (ctx_t *ctx, barrier_t *b)
 {
-    json_object *o = util_json_object_new_object ();
+    json_object *o = Jnew ();
     flux_rpc_t *rpc;
 
-    util_json_object_add_string (o, "name", b->name);
-    util_json_object_add_int (o, "count", b->count);
-    util_json_object_add_int (o, "nprocs", b->nprocs);
-    util_json_object_add_int (o, "hopcount", 1);
-   
+    Jadd_str (o, "name", b->name);
+    Jadd_int (o, "count", b->count);
+    Jadd_int (o, "nprocs", b->nprocs);
+    Jadd_int (o, "hopcount", 1);
+
     if (!(rpc = flux_rpc (ctx->h, "barrier.enter", Jtostr (o),
                           FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE))) {
-        flux_log_error (ctx->h, "sending barrier.enter request"); 
+        flux_log_error (ctx->h, "sending barrier.enter request");
         goto done;
     }
 done:

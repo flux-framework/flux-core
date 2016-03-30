@@ -43,54 +43,9 @@
 
 #include "log.h"
 #include "xzmalloc.h"
+#include "shortjson.h"
 #include "jsonutil.h"
 #include "base64.h"
-
-void util_json_object_add_boolean (json_object *o, char *name, bool val)
-{
-    json_object *no;
-
-    if (!(no = json_object_new_boolean (val)))
-        oom ();
-    json_object_object_add (o, name, no);
-}
-
-void util_json_object_add_double (json_object *o, char *name, double n)
-{
-    json_object *no;
-
-    if (!(no = json_object_new_double (n)))
-        oom ();
-    json_object_object_add (o, name, no);
-}
-
-void util_json_object_add_int (json_object *o, char *name, int i)
-{
-    json_object *no;
-
-    if (!(no = json_object_new_int (i)))
-        oom ();
-    json_object_object_add (o, name, no);
-}
-
-void util_json_object_add_int64 (json_object *o, char *name, int64_t i)
-{
-    json_object *no;
-
-    if (!(no = json_object_new_int64 (i)))
-        oom ();
-    json_object_object_add (o, name, no);
-}
-
-
-void util_json_object_add_string (json_object *o, char *name, const char *s)
-{
-    json_object *no;
-
-    if (!(no = json_object_new_string (s)))
-        oom ();
-    json_object_object_add (o, name, no);
-}
 
 /* base64 */
 void util_json_object_add_data (json_object *o, char *name,
@@ -102,7 +57,7 @@ void util_json_object_add_data (json_object *o, char *name,
 
     buf = xzmalloc (size);
     (void) base64_encode_block (buf, &dstlen, dat, len);
-    util_json_object_add_string (o, name, buf);
+    Jadd_str (o, name, buf);
     free (buf);
 }
 
@@ -125,51 +80,6 @@ static json_object *util_json_object_object_get (json_object *o, char *name)
     return (ret);
 }
 
-int util_json_object_get_boolean (json_object *o, char *name, bool *vp)
-{
-    json_object *no = util_json_object_object_get (o, name);
-    if (!no)
-        return -1;
-    *vp = json_object_get_boolean (no);
-    return 0;
-}
-
-int util_json_object_get_double (json_object *o, char *name, double *dp)
-{
-    json_object *no = util_json_object_object_get (o, name);
-    if (!no)
-        return -1;
-    *dp = json_object_get_double (no);
-    return 0;
-}
-
-int util_json_object_get_int (json_object *o, char *name, int *ip)
-{
-    json_object *no = util_json_object_object_get (o, name);
-    if (!no)
-        return -1;
-    *ip = json_object_get_int (no);
-    return 0;
-}
-
-int util_json_object_get_int64 (json_object *o, char *name, int64_t *ip)
-{
-    json_object *no = util_json_object_object_get (o, name);
-    if (!no)
-        return -1;
-    *ip = json_object_get_int64 (no);
-    return 0;
-}
-
-int util_json_object_get_string (json_object *o, char *name, const char **sp)
-{
-    json_object *no = util_json_object_object_get (o, name);
-    if (!no)
-        return -1;
-    *sp = json_object_get_string (no);
-    return 0;
-}
-
 /* base64 */
 int util_json_object_get_data (json_object *o, char *name,
                                uint8_t **datp, int *lenp)
@@ -178,7 +88,7 @@ int util_json_object_get_data (json_object *o, char *name,
     int dlen, len;
     void *dst;
 
-    if (util_json_object_get_string (o, name, &s) == -1)
+    if (!Jget_str (o, name, &s))
         return -1;
 
     len = strlen (s);
@@ -205,41 +115,6 @@ int util_json_object_get_timeval (json_object *o, char *name,
     tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
     *tvp = tv;
     return 0;
-}
-
-int util_json_object_get_int_array (json_object *o, char *name,
-                                    int **ap, int *lp)
-{
-    json_object *no = util_json_object_object_get (o, name);
-    json_object *vo;
-    int i, len, *arr = NULL;
-
-    if (!no)
-        goto error;
-    len = json_object_array_length (no);
-    arr = xzmalloc (sizeof (int) * len);
-    for (i = 0; i < len; i++) {
-        vo = json_object_array_get_idx (no, i);
-        if (!vo)
-            goto error;
-        arr[i] = json_object_get_int (vo);
-    }
-    *ap = arr;
-    *lp = len;
-    return 0;
-error:
-    if (arr)
-        free (arr);
-    return -1;
-}
-
-json_object *util_json_object_new_object (void)
-{
-    json_object *o;
-
-    if (!(o = json_object_new_object ()))
-        oom ();
-    return o;
 }
 
 /*

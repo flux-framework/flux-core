@@ -59,7 +59,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
@@ -1436,14 +1435,14 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
 static json_object *
 subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
 {
-    json_object *resp = util_json_object_new_object ();
+    json_object *resp = Jnew ();
 
     assert (ctx != NULL);
     assert (resp != NULL);
 
-    util_json_object_add_int (resp, "rank", ctx->rank);
-    util_json_object_add_int (resp, "pid", subprocess_pid (p));
-    util_json_object_add_string (resp, "state", subprocess_state_string (p));
+    Jadd_int (resp, "rank", ctx->rank);
+    Jadd_int (resp, "pid", subprocess_pid (p));
+    Jadd_str (resp, "state", subprocess_state_string (p));
     return (resp);
 }
 
@@ -1459,12 +1458,12 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     assert (zmsg != NULL);
 
     resp = subprocess_json_resp (ctx, p);
-    util_json_object_add_int (resp, "status", subprocess_exit_status (p));
-    util_json_object_add_int (resp, "code", subprocess_exit_code (p));
+    Jadd_int (resp, "status", subprocess_exit_status (p));
+    Jadd_int (resp, "code", subprocess_exit_code (p));
     if ((n = subprocess_signaled (p)))
-        util_json_object_add_int (resp, "signal", n);
+        Jadd_int (resp, "signal", n);
     if ((n = subprocess_exec_error (p)))
-        util_json_object_add_int (resp, "exec_errno", n);
+        Jadd_int (resp, "exec_errno", n);
 
     flux_respond (ctx->h, zmsg, 0, Jtostr (resp));
     zmsg_destroy (&zmsg);
@@ -1549,7 +1548,7 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
         free (data);
     }
 out:
-    response = util_json_object_new_object ();
+    response = Jnew ();
     Jadd_int (response, "code", errnum);
     flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
     zmsg_destroy (zmsg);
@@ -1587,7 +1586,7 @@ static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
         }
     }
 out:
-    response = util_json_object_new_object ();
+    response = Jnew ();
     Jadd_int (response, "code", errnum);
     flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
     zmsg_destroy (zmsg);
