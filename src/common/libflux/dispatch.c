@@ -424,6 +424,17 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         rc = 0; /* ignore mangled message */
         goto done;
     }
+    static int node_set = 0;
+    if (! node_set) {
+        int rank;
+        flux_get_rank(d->h, &rank);
+        TAU_PROFILE_SET_NODE(rank);
+        node_set = 1;
+    }
+    char * topic;
+    flux_msg_get_topic(msg, &topic);
+    TAU_PHASE_CREATE_DYNAMIC(tt1, topic, "", TAU_USER);
+    TAU_PHASE_START(tt1);
     /* Add any new handlers here, making handler creation
      * safe to call during handlers list traversal below.
      */
@@ -433,6 +444,7 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         match = dispatch_message_coproc (d, msg, type);
     else
         match = dispatch_message (d, msg, type);
+    TAU_PHASE_STOP(tt1);
     if (match < 0)
         goto done;
     /* Destroy handlers here, making handler destruction
