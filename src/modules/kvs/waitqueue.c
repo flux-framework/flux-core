@@ -77,6 +77,7 @@ wait_t *wait_create (flux_t h, flux_msg_handler_t *wh, const flux_msg_t *msg,
 void wait_destroy (wait_t *w, double *msec)
 {
     assert (w->magic == WAIT_MAGIC);
+    assert (w->usecount == 0);
     if (msec)
         *msec = monotime_since (w->t0);
     flux_msg_destroy (w->hand.msg);
@@ -101,7 +102,8 @@ void wait_queue_destroy (waitqueue_t *q)
 
     assert (q->magic == WAITQUEUE_MAGIC);
     while ((w = zlist_pop (q->q))) {
-        wait_destroy (w, NULL);
+        if (--w->usecount == 0)
+            wait_destroy (w, NULL);
     }
     zlist_destroy (&q->q);
     q->magic = ~WAITQUEUE_MAGIC;
@@ -174,7 +176,8 @@ int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
     }
     while ((w = zlist_pop (tmp))) {
         zlist_remove (q->q, w);
-        wait_destroy (w, NULL);
+        if (--w->usecount == 0)
+            wait_destroy (w, NULL);
     }
     rc = 0;
 done:
