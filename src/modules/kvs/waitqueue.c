@@ -130,7 +130,8 @@ void wait_runone (wait_t *w)
     assert (w->magic == WAIT_MAGIC);
 
     if (--w->usecount == 0) {
-        w->hand.cb (w->hand.h, w->hand.w, w->hand.msg, w->hand.arg);
+        if (w->hand.cb)
+            w->hand.cb (w->hand.h, w->hand.w, w->hand.msg, w->hand.arg);
         wait_destroy (w, NULL);
     }
 }
@@ -169,6 +170,7 @@ int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
                 oom ();
             if (zlist_append (tmp, w) < 0)
                 oom ();
+            w->hand.cb = NULL; // prevent wait_runone from restarting handler
         }
         w = zlist_next (q->q);
     }
