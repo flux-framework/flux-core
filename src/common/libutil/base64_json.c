@@ -32,37 +32,39 @@
 #include "xzmalloc.h"
 #include "shortjson.h"
 #include "base64.h"
-#include "jsonutil.h"
+#include "base64_json.h"
 
-/* base64 */
-void util_json_object_add_data (json_object *o, char *name,
-                                uint8_t *dat, int len)
+json_object *base64_json_encode (uint8_t *dat, int len)
 {
     char *buf;
     int dstlen;
+    json_object *o;
     int size = base64_encode_length (len);
 
     buf = xzmalloc (size);
     (void) base64_encode_block (buf, &dstlen, dat, len);
-    Jadd_str (o, name, buf);
+    if (!(o = json_object_new_string (buf)))
+        oom ();
     free (buf);
+    return o;
 }
 
-/* base64 */
-int util_json_object_get_data (json_object *o, char *name,
-                               uint8_t **datp, int *lenp)
+int base64_json_decode (json_object *o, uint8_t **datp, int *lenp)
 {
     const char *s;
     int dlen, len;
     void *dst;
 
-    if (!Jget_str (o, name, &s))
+    if (!o || json_object_get_type (o) != json_type_string) {
+        errno = EINVAL;
         return -1;
-
+    }
+    s = json_object_get_string (o);
     len = strlen (s);
     dst = xzmalloc (base64_decode_length (len));
     if (base64_decode_block (dst, &dlen, s, len) < 0) {
         free (dst);
+        errno = EINVAL;
         return -1;
     }
 

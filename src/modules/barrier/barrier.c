@@ -36,7 +36,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 
 const double barrier_reduction_timeout_sec = 0.001;

@@ -6,8 +6,8 @@
 #include <flux/core.h>
 #include "src/common/libcompat/compat.h"
 #include "src/modules/kvs/kvs_deprecated.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/base64_json.h"
 #include "kap.h"
 
 #define VAL_UNIT_SIZE    8 
@@ -189,8 +189,8 @@ fetch_kv_tuple (kap_params_t *param, int fet_i,
     }
     End = now ();
     update_metric (&Gets, Begin, End);
-    if ( util_json_object_get_data (o,
-            KAP_VAL_NAME, (uint8_t **) b, b_len) < 0 ) {
+    if ( base64_json_decode (Jobj_get (o, KAP_VAL_NAME),
+                             (uint8_t **) b, b_len) < 0 ) {
         fprintf (stderr, "get JSON failed.\n");
         goto error;
     }
@@ -272,8 +272,8 @@ put_test_obj (kap_params_t *param)
                 goto error;
             }
 
-            util_json_object_add_data (o, 
-                KAP_VAL_NAME, (uint8_t *)dat, sizeof(uint64_t)*len);
+            json_object_object_add (o, KAP_VAL_NAME,
+                base64_json_encode ((uint8_t *)dat, sizeof(uint64_t)*len));
         
             /***********************************************
              *        MEASURE PUT LATENCY                  *

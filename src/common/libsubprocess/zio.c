@@ -35,7 +35,7 @@
 #include "src/common/liblsd/cbuf.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/base64_json.h"
 
 #include "zio.h"
 
@@ -999,7 +999,8 @@ int zio_json_decode (const char *json_str, void **pp, bool *eofp)
             rc = 0;
         else
             *eofp = false;
-        if (util_json_object_get_data (o, "data", (uint8_t **) pp, &len) == 0)
+        if (base64_json_decode (Jobj_get (o, "data"),
+                                (uint8_t **) pp, &len) == 0)
             rc = len;
     }
     if (o)
@@ -1017,7 +1018,8 @@ char *zio_json_encode (void *p, int len, bool eof)
         goto done;
     }
     if (len && p)
-        util_json_object_add_data (o, "data", (uint8_t *) p, len);
+        json_object_object_add (o, "data",
+                                base64_json_encode ((uint8_t *) p, len));
     if (eof)
         Jadd_bool (o, "eof", 1);
     if (!(json_str = strdup (json_object_to_json_string (o)))) {

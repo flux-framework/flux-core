@@ -38,7 +38,8 @@
 #include "flux/core.h"
 #include "src/common/libcompat/compat.h"
 
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/base64_json.h"
 #include "src/modules/libmrpc/mrpc.h"
 #include "src/modules/libmrpc/mrpc_deprecated.h"
 #include "src/modules/libkz/kz.h"
@@ -1327,7 +1328,7 @@ static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
     if (json_str && (o = json_tokener_parse (json_str))) {
         int len;
         uint8_t *pp = NULL;
-        util_json_object_get_data (o, "data", &pp, &len);
+        base64_json_decode (Jobj_get (o, "data"), &pp, &len);
         if (pp && len > 0) {
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);

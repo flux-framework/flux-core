@@ -34,7 +34,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/base64_json.h"
 #include "src/common/libutil/readall.h"
 
 
@@ -432,7 +432,7 @@ void cmd_copy_tokvs (flux_t h, int argc, char **argv)
         (void)close (fd);
     }
     o = Jnew ();
-    util_json_object_add_data (o, "data", buf, len);
+    json_object_object_add (o, "data", base64_json_encode (buf, len));
     if (kvs_put (h, key, Jtostr (o)) < 0)
         err_exit ("%s", key);
     if (kvs_commit (h) < 0)
@@ -457,7 +457,7 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
         err_exit ("%s", key);
     if (!(o = Jfromstr (json_str)))
         msg_exit ("%s: invalid JSON", key);
-    if (util_json_object_get_data (o, "data", &buf, &len) < 0)
+    if (base64_json_decode (Jobj_get (o, "data"), &buf, &len) < 0)
         err_exit ("%s: decode error", key);
     if (!strcmp (file, "-")) {
         if (write_all (STDOUT_FILENO, buf, len) < 0)
