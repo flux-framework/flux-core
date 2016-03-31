@@ -80,6 +80,7 @@ struct kz_struct {
     int nprocs;
     char *grpname;
     int fencecount;
+    bool watching;
 };
 
 static void kz_destroy (kz_t *kz)
@@ -353,6 +354,10 @@ int kz_close (kz_t *kz)
                 goto done;
         }
     }
+    if (kz->watching) {
+        (void)kvs_unwatch (kz->h, kz->name);
+        kz->watching = false;
+    }
     rc = 0;
 done:
     if (json_str)
@@ -382,8 +387,11 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     }
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
-    if (kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
-        return -1;
+    if (!kz->watching) {
+        if (kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
+            return -1;
+        kz->watching = true;
+    }
     return 0;
 }
 
