@@ -160,6 +160,7 @@ int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
     zlist_t *tmp = NULL;
     wait_t *w;
     int rc = -1;
+    int count = 0;
 
     assert (q->magic == WAITQUEUE_MAGIC);
 
@@ -171,20 +172,18 @@ int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
             if (zlist_append (tmp, w) < 0)
                 oom ();
             w->hand.cb = NULL; // prevent wait_runone from restarting handler
+            count++;
         }
         w = zlist_next (q->q);
     }
-    if (!tmp) {
-        errno = ENOENT;
-        goto done;
+    if (tmp) {
+        while ((w = zlist_pop (tmp))) {
+            zlist_remove (q->q, w);
+            if (--w->usecount == 0)
+                wait_destroy (w, NULL);
+        }
     }
-    while ((w = zlist_pop (tmp))) {
-        zlist_remove (q->q, w);
-        if (--w->usecount == 0)
-            wait_destroy (w, NULL);
-    }
-    rc = 0;
-done:
+    rc = count;
     zlist_destroy (&tmp);
     return rc;
 }
