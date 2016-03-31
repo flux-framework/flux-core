@@ -137,40 +137,42 @@ void wait_runone (wait_t *w)
 
 void wait_runqueue (waitqueue_t *q)
 {
-    zlist_t *cpy;
+    zlist_t *cpy = NULL;
     wait_t *w;
 
     assert (q->magic == WAITQUEUE_MAGIC);
-    if (!(cpy = zlist_new ()))
-        oom ();
     while ((w = zlist_pop (q->q))) {
+        if (!cpy && !(cpy = zlist_new ()))
+            oom ();
         if (zlist_append (cpy, w) < 0)
             oom ();
     }
-    while ((w = zlist_pop (cpy)))
-        wait_runone (w);
-    zlist_destroy (&cpy);
+    if (cpy) {
+        while ((w = zlist_pop (cpy)))
+            wait_runone (w);
+        zlist_destroy (&cpy);
+    }
 }
 
 int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
 {
-    zlist_t *tmp;
+    zlist_t *tmp = NULL;
     wait_t *w;
     int rc = -1;
 
     assert (q->magic == WAITQUEUE_MAGIC);
-    if (!(tmp = zlist_new ()))
-        oom ();
 
     w = zlist_first (q->q);
     while (w) {
         if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
+            if (!tmp && !(tmp = zlist_new ()))
+                oom ();
             if (zlist_append (tmp, w) < 0)
                 oom ();
         }
         w = zlist_next (q->q);
     }
-    if (zlist_size (tmp) == 0) {
+    if (!tmp) {
         errno = ENOENT;
         goto done;
     }
