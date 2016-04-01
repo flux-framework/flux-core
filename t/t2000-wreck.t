@@ -368,6 +368,18 @@ test_expect_success 'wreck jobs are archived after failure' '
 	test_must_fail flux kvs dir lwj-active.$(flux wreck last-jobid)
 '
 
+test_expect_success 'wreck: no KVS watchers leaked after 10 jobs' '
+	flux exec -r 1-$(($SIZE-1)) -l \
+		flux comms-stats --parse "#watchers" kvs | sort -n >w.before &&
+	for i in `seq 1 10`; do
+		flux wreckrun --ntasks $SIZE /bin/true
+	done &&
+	flux exec -r 1-$(($SIZE-1)) -l \
+		flux comms-stats --parse "#watchers" kvs | sort -n >w.after &&
+	test_cmp w.before w.after
+'
+
+# Keep this test in the last position
 test_expect_success 'wreck: no jobs left in lwj-active directory' '
 	flux kvs dir lwj-active > lwj-active.listing &&
 	test_must_fail test -s lwj-active.listing
