@@ -44,6 +44,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/iterators.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -220,6 +221,26 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
         *incompletep = incomplete;
     if (dirtyp)
         *dirtyp = dirty;
+}
+
+int cache_wait_destroy_match (struct cache *cache,
+                              wait_compare_f cb, void *arg)
+{
+    const char *key;
+    struct cache_entry *hp;
+    int n, count = 0;
+    int rc = -1;
+
+    FOREACH_ZHASH (cache->zh, key, hp) {
+        if (hp->waitlist) {
+            if ((n = wait_destroy_match (hp->waitlist, cb, arg)) < 0)
+                goto done;
+            count += n;
+        }
+    }
+    rc = count;
+done:
+    return rc;
 }
 
 struct cache *cache_create (void)

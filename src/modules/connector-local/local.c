@@ -89,6 +89,7 @@ struct disconnect_notify {
     char *topic;
     uint32_t nodeid;
     int flags;
+    client_t *c;
 };
 
 static void client_destroy (client_t *c);
@@ -259,7 +260,7 @@ static int global_subscribe (ctx_t *ctx, const char *topic)
             flux_log (ctx->h, LOG_ERR, "%s: flux_event_subscribe %s: %s",
                       __FUNCTION__, topic, strerror (errno));
             goto done;
-        } 
+        }
         sub = subscription_create (topic);
         sub->unsubscribe = (unsubscribe_f) flux_event_unsubscribe;
         sub->handle = ctx->h;
@@ -362,25 +363,45 @@ static bool client_is_subscribed (client_t *c, const char *topic)
     return false;
 }
 
-static void disconnect_destroy (client_t *c, struct disconnect_notify *d)
+static int disconnect_sendmsg (struct disconnect_notify *d)
 {
-    flux_msg_t *msg;
+    int rc = -1;
+    flux_msg_t *msg = NULL;
 
+    if (!d || !d->topic || !d->c) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
     if (flux_msg_set_topic (msg, d->topic) < 0)
         goto done;
     if (flux_msg_enable_route (msg) < 0)
         goto done;
-    if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
+    if (flux_msg_push_route (msg, zuuid_str (d->c->uuid)) < 0)
         goto done;
     if (flux_msg_set_nodeid (msg, d->nodeid, d->flags) < 0)
         goto done;
-    (void)flux_send (c->ctx->h, msg, 0);
+    if (flux_send (d->c->ctx->h, msg, 0) < 0) {
+        flux_log_error (d->c->ctx->h, "%s flux_send disconnect for %s",
+                        __FUNCTION__, zuuid_str (d->c->uuid));
+    }
+    rc = 0;
 done:
     flux_msg_destroy (msg);
-    free (d->topic);
-    free (d);
+    return rc;
+}
+
+static void disconnect_destroy (void *arg)
+{
+    struct disconnect_notify *d = arg;
+
+    if (d) {
+        (void)disconnect_sendmsg (d);
+        if (d->topic)
+            free (d->topic);
+        free (d);
+    }
 }
 
 static int disconnect_update (client_t *c, const flux_msg_t *msg)
@@ -404,10 +425,12 @@ static int disconnect_update (client_t *c, const flux_msg_t *msg)
     key = xasprintf ("%s:%u:%d", svc, nodeid, flags);
     if (!zhash_lookup (c->disconnect_notify, key)) {
         d = xzmalloc (sizeof (*d));
+        d->c = c;
         d->nodeid = nodeid;
         d->flags = flags;
         d->topic = xasprintf ("%s.disconnect", svc);
         zhash_update (c->disconnect_notify, key, d);
+        zhash_freefn (c->disconnect_notify, key, disconnect_destroy);
     }
     rc = 0;
 done:
@@ -420,16 +443,7 @@ done:
 
 static void client_destroy (client_t *c)
 {
-    if (c->disconnect_notify) {
-        struct disconnect_notify *d;
-
-        d = zhash_first (c->disconnect_notify);
-        while (d) {
-            disconnect_destroy (c, d);
-            d = zhash_next (c->disconnect_notify);
-        }
-        zhash_destroy (&c->disconnect_notify);
-    }
+    zhash_destroy (&c->disconnect_notify);
     zhash_destroy (&c->subscriptions);
     if (c->uuid)
         zuuid_destroy (&c->uuid);
