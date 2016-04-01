@@ -363,9 +363,18 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 	test_cmp expected.submit err.submit
 '
 
+no_active_jobs() {
+	local i maxtries=5
+	for i in `seq 1 $maxtries`; do
+		test $(flux kvs dirsize lwj-active) -eq 0 && return 0
+		sleep 0.2
+	done &&
+	return 1
+}
+
 test_expect_success 'wreck jobs are archived after failure' '
 	test_must_fail flux wreckrun --input=bad.file hostname &&
-	test_must_fail flux kvs dir lwj-active.$(flux wreck last-jobid)
+	no_active_jobs
 '
 
 test_expect_success 'wreck: no KVS watchers leaked after 10 jobs' '
@@ -381,8 +390,7 @@ test_expect_success 'wreck: no KVS watchers leaked after 10 jobs' '
 
 # Keep this test in the last position
 test_expect_success 'wreck: no jobs left in lwj-active directory' '
-	flux kvs dir lwj-active > lwj-active.listing &&
-	test_must_fail test -s lwj-active.listing
+	no_active_jobs
 '
 
 test_debug "flux wreck ls"
