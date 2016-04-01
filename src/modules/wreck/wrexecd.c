@@ -30,6 +30,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <dirent.h>
 #include <sys/wait.h>
 #include <sys/signalfd.h>
 #include <czmq.h>
@@ -45,6 +46,7 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
+#include "src/common/libutil/fdwalk.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/libkz/kz.h"
@@ -884,13 +886,16 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     return (0);
 }
 
-void closeall (int fd)
+void close_if_gt (void *minfdp, int fd)
 {
-    int fdlimit = sysconf (_SC_OPEN_MAX);
+    int minfd = *((int *) minfdp);
+    if (fd >= minfd)
+        close (fd);
+}
 
-    while (fd < fdlimit)
-        close (fd++);
-    return;
+void close_from (int minfd)
+{
+    fdwalk (close_if_gt, (void *)&minfd);
 }
 
 static int dup_fd (int fd, int newfd)
@@ -918,7 +923,7 @@ void child_io_setup (struct task_info *t)
        || (dup_fd (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
         log_fatal (t->ctx, 1, "dup2: %s", strerror (errno));
 
-    closeall (3);
+    close_from (3);
 }
 
 void close_child_fds (struct task_info *t)
