@@ -65,6 +65,12 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh);
 void cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
                       int *incomplete, int *dirty);
 
+/* Destroy wait_t's on the waitqueue_t of any cache entry
+ * if they meet match criteria.
+ */
+int cache_wait_destroy_match (struct cache *cache,
+                              wait_compare_f cb, void *arg);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

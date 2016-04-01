@@ -1127,6 +1127,8 @@ static void unwatch_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     if (wait_destroy_match (ctx->watchlist, unwatch_cmp, &p) < 0)
         goto done;
+    if (cache_wait_destroy_match (ctx->cache, unwatch_cmp, &p) < 0)
+        goto done;
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
@@ -1630,7 +1632,8 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
+    (void)wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
+    (void)cache_wait_destroy_match (ctx->cache, disconnect_cmp, sender);
     zhash_delete (ctx->commits, sender);
     free (sender);
 }
