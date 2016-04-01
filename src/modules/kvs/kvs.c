@@ -78,7 +78,6 @@
 #include "src/common/libutil/sha1.h"
 #include "src/common/libutil/shastring.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
@@ -240,13 +239,13 @@ static bool store_by_reference (json_object *o)
 
 static json_object *dirent_create (char *type, void *arg)
 {
-    json_object *o = util_json_object_new_object ();
+    json_object *o = Jnew ();
     bool valid_type = false;
 
     if (!strcmp (type, "FILEREF") || !strcmp (type, "DIRREF")) {
         char *ref = arg;
 
-        util_json_object_add_string (o, type, ref);
+        Jadd_str (o, type, ref);
         valid_type = true;
     } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")
                                          || !strcmp (type, "LINKVAL")) {
@@ -255,7 +254,7 @@ static json_object *dirent_create (char *type, void *arg)
         if (val)
             json_object_get (val);
         else
-            val = util_json_object_new_object ();
+            val = Jnew ();
         json_object_object_add (o, type, val);
         valid_type = true;
     }
@@ -803,7 +802,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
         *next++ = '\0';
         if (!json_object_object_get_ex (dir, name, &dirent))
             goto error;
-        if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+        if (Jget_str (dirent, "LINKVAL", &link)) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
             if (!walk (ctx, root, link, &dirent, wait, false, depth))
@@ -811,7 +810,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
             if (!dirent)
                 goto error;
         }
-        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+        if (Jget_str (dirent, "DIRREF", &ref)) {
             if (!load (ctx, ref, wait, &dir))
                 goto stall;
 
@@ -819,7 +818,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
             /* N.B. in current code, directories are never stored by value */
             msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
                       __FUNCTION__, path, name, Jtostr (dirent));
-        } else if ((util_json_object_get_string (dirent, "FILEREF", NULL) == 0
+        } else if ((Jget_str (dirent, "FILEREF", NULL)
                  || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
             errno = ENOTDIR;
             goto error;
@@ -831,7 +830,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
     }
     /* now terminal path component */
     if (json_object_object_get_ex (dir, name, &dirent) &&
-        util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+        Jget_str (dirent, "LINKVAL", &link)) {
         if (!readlink) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
@@ -874,7 +873,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             //errnum = ENOENT;
             goto done; /* a NULL response is not necessarily an error */
         }
-        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+        if (Jget_str (dirent, "DIRREF", &ref)) {
             if (readlink) {
                 errnum = EINVAL;
                 goto done;
@@ -886,7 +885,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             if (!load (ctx, ref, wait, &val))
                 goto stall;
             isdir = true;
-        } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+        } else if (Jget_str (dirent, "FILEREF", &ref)) {
             if (readlink) {
                 errnum = EINVAL;
                 goto done;
@@ -992,6 +991,14 @@ stall:
         free (sender);
 }
 
+static bool compare_json (json_object *o1, json_object *o2)
+{
+    const char *s1 = json_object_to_json_string (o1);
+    const char *s2 = json_object_to_json_string (o2);
+
+    return !strcmp (s1, s2);
+}
+
 static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
@@ -1031,7 +1038,7 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if (first || !util_json_match (val, oval)) {
+    if (first || !compare_json (val, oval) != 0) {
         if (!(out = kp_rwatch_enc (key, Jget (val))))
             goto done;
     }
@@ -1628,6 +1635,12 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
     free (sender);
 }
 
+static void add_tstat (json_object *o, const char *name, tstat_t *ts,
+                       double scale)
+{
+    json_object_object_add (o, name, tstat_json (ts, scale));
+}
+
 static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
@@ -1642,19 +1655,17 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     memset (&ts, 0, sizeof (ts));
     cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty);
     Jadd_double (o, "obj size total (MiB)", (double)size/1048576);
-    util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
+    add_tstat (o, "obj size (KiB)", &ts, 1E-3);
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#pending commits", zhash_size (ctx->commits));
     Jadd_int (o, "#pending fences", zhash_size (ctx->fences));
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    util_json_object_add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
-    util_json_object_add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
-    util_json_object_add_tstat (o, "commits (sec)",
-                                &ctx->stats.commit_time, 1E-3);
-    util_json_object_add_tstat (o, "fences after sync (sec)",
-                                &ctx->stats.fence_time, 1E-3);
-    util_json_object_add_tstat (o, "commits per update",
+    add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
+    add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
+    add_tstat (o, "commits (sec)", &ctx->stats.commit_time, 1E-3);
+    add_tstat (o, "fences after sync (sec)", &ctx->stats.fence_time, 1E-3);
+    add_tstat (o, "commits per update",
                                 &ctx->stats.commit_merges, 1);
     Jadd_int (o, "#no-op stores", ctx->stats.noop_stores);
     Jadd_int (o, "#faults", ctx->stats.faults);
@@ -1733,7 +1744,7 @@ int mod_main (flux_t h, int argc, char **argv)
         return -1;
     }
     if (ctx->master) {
-        json_object *rootdir = util_json_object_new_object ();
+        json_object *rootdir = Jnew ();
         href_t href;
 
         store (ctx, rootdir, href);

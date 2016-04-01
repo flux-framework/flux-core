@@ -15,6 +15,7 @@ declare PNGFILE=${prefix}.png
 declare existing_data=""
 declare sec_max=""
 declare gb_max=""
+declare heap_option=""
 
 usage() {
     echo "Usage: soak.sh [OPTIONS]" >&2
@@ -23,6 +24,8 @@ usage() {
     echo "  -s SEC_MAX    set range of Y axes (default calculated)" >&2
     echo "  -g GB_MAX     set range of Y2 axes (default calculated)" >&2
     echo "  -d FILE       replot data from FILE - skips running the test" >&2
+    echo "  -H TRACEFILE  enable tcmalloc heap trace per job" >&2
+    echo "  -P FILENAME   record perf data to FILENAME" >&2
     echo "If replotting, NJOBS is read from FILE and -n is ignored" >&2
     exit 1
 }
@@ -32,7 +35,7 @@ die() {
     exit 1
 }
 
-while getopts "?hj:n:d:g:s:" opt; do
+while getopts "?hj:n:d:g:s:H:P:" opt; do
     case ${opt} in
         h|\?) usage ;;
         j) NJOBS=${OPTARG} ;;
@@ -40,6 +43,8 @@ while getopts "?hj:n:d:g:s:" opt; do
         d) existing_data=${OPTARG} ;;
         g) gb_max=${OPTARG} ;;
         s) sec_max=${OPTARG} ;;
+        H) heap_option="-H ${OPTARG}" ;;
+        P) perf_cmd="perf record -o ${OPTARG}" ;;
         *) die "bad option: ${opt}" ;;
     esac
 done
@@ -78,8 +83,8 @@ fi
 
 if [ -z "$existing_data" ]; then
     echo Running ${NJOBS} jobs, logging to ${LOGFILE}
-    ${top_srcdir}/src/cmd/flux start -s${NNODES} -o,-S,log-filename=${LOGFILE} \
-        ./soak-workload.sh ${NJOBS}
+    $perf_cmd ${top_srcdir}/src/cmd/flux start -s${NNODES} -o,-S,log-filename=${LOGFILE} \
+        ./soak-workload.sh -j ${NJOBS} ${heap_option}
 
     echo Extracting ${DATFILE} from ${LOGFILE}
     grep soak ${LOGFILE} | sed -e 's/[^:]*: //' >${DATFILE}

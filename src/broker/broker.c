@@ -45,14 +45,23 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libpmi-client/pmi-client.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
@@ -1426,14 +1435,14 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
 static json_object *
 subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
 {
-    json_object *resp = util_json_object_new_object ();
+    json_object *resp = Jnew ();
 
     assert (ctx != NULL);
     assert (resp != NULL);
 
-    util_json_object_add_int (resp, "rank", ctx->rank);
-    util_json_object_add_int (resp, "pid", subprocess_pid (p));
-    util_json_object_add_string (resp, "state", subprocess_state_string (p));
+    Jadd_int (resp, "rank", ctx->rank);
+    Jadd_int (resp, "pid", subprocess_pid (p));
+    Jadd_str (resp, "state", subprocess_state_string (p));
     return (resp);
 }
 
@@ -1449,12 +1458,12 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     assert (zmsg != NULL);
 
     resp = subprocess_json_resp (ctx, p);
-    util_json_object_add_int (resp, "status", subprocess_exit_status (p));
-    util_json_object_add_int (resp, "code", subprocess_exit_code (p));
+    Jadd_int (resp, "status", subprocess_exit_status (p));
+    Jadd_int (resp, "code", subprocess_exit_code (p));
     if ((n = subprocess_signaled (p)))
-        util_json_object_add_int (resp, "signal", n);
+        Jadd_int (resp, "signal", n);
     if ((n = subprocess_exec_error (p)))
-        util_json_object_add_int (resp, "exec_errno", n);
+        Jadd_int (resp, "exec_errno", n);
 
     flux_respond (ctx->h, zmsg, 0, Jtostr (resp));
     zmsg_destroy (&zmsg);
@@ -1539,7 +1548,7 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
         free (data);
     }
 out:
-    response = util_json_object_new_object ();
+    response = Jnew ();
     Jadd_int (response, "code", errnum);
     flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
     zmsg_destroy (zmsg);
@@ -1577,7 +1586,7 @@ static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
         }
     }
 out:
-    response = util_json_object_new_object ();
+    response = Jnew ();
     Jadd_int (response, "code", errnum);
     flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
     zmsg_destroy (zmsg);
@@ -1891,12 +1900,9 @@ static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON out = NULL;
-    struct rusage usage;
     int rc = -1;
 
-    if (getrusage (RUSAGE_THREAD, &usage) < 0)
-        goto done;
-    if (!(out = rusage_to_json (&usage)))
+    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
         goto done;
     rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
     zmsg_destroy (zmsg);
@@ -2311,6 +2317,79 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
+static int cmb_heaptrace_start_cb (zmsg_t **zmsg, void *arg)
+{
+    const char *json_str, *filename;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "filename", &filename)) {
+        errno = EPROTO;
+        goto done;
+    }
+#if WITH_TCMALLOC
+    if (IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerStart (filename);
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif
+done:
+    Jput (in);
+    return rc;
+}
+
+static int cmb_heaptrace_dump_cb (zmsg_t **zmsg, void *arg)
+{
+    const char *json_str, *reason;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "reason", &reason)) {
+        errno = EPROTO;
+        goto done;
+    }
+#if WITH_TCMALLOC
+    if (!IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerDump (reason);
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif
+done:
+    Jput (in);
+    return rc;
+}
+
+static int cmb_heaptrace_stop_cb (zmsg_t **zmsg, void *arg)
+{
+    int rc = -1;
+    if (flux_request_decode (*zmsg, NULL, NULL) < 0)
+        goto done;
+#if WITH_TCMALLOC
+    if (!IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerStop();
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif /* WITH_TCMALLOC */
+done:
+    return rc;
+}
+
 static int requeue_for_service (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2353,6 +2432,9 @@ static struct internal_service services[] = {
     { "cmb.seq.fetch",  "[0]",  cmb_seq             },
     { "cmb.seq.set",    "[0]",  cmb_seq             },
     { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { "cmb.heaptrace.start",NULL, cmb_heaptrace_start_cb },
+    { "cmb.heaptrace.dump", NULL, cmb_heaptrace_dump_cb  },
+    { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
     { NULL, NULL, },
 };

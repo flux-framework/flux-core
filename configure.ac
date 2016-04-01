@@ -65,6 +65,8 @@ X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
+X_AC_MALLOC
+AC_CHECK_LIB(m, floor)
 
 AC_MSG_CHECKING(--enable-python argument)
 AC_ARG_ENABLE(python,

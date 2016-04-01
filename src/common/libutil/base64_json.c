@@ -25,72 +25,52 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <math.h>
+#include <string.h>
 #include <json.h>
 
-#include "tstat.h"
-
 #include "log.h"
+#include "xzmalloc.h"
 #include "shortjson.h"
+#include "base64.h"
+#include "base64_json.h"
 
+json_object *base64_json_encode (uint8_t *dat, int len)
+{
+    char *buf;
+    int dstlen;
+    json_object *o;
+    int size = base64_encode_length (len);
 
-void tstat_push (tstat_t *ts, double x)
-{
-    if (ts->n == 0 || x < ts->min)
-        ts->min = x;
-    if (ts->n == 0 || x > ts->max)
-        ts->max = x;
-/* running variance
- * ref Knuth TAOCP vol 2, 3rd edition, page 232
- * and http://www.johndcook.com/standard_deviation.html
- */
-    if (++ts->n == 1) {
-        ts->M = ts->newM = x;
-        ts->S = 0;
-    } else {
-        ts->newM = ts->M + (x - ts->M)/ts->n;
-        ts->newS = ts->S + (x - ts->M)*(x - ts->newM);
-
-        ts->M = ts->newM;
-        ts->S = ts->newS;
-    }
-}
-double tstat_mean (tstat_t *ts)
-{
-    return (ts->n > 0) ? ts->newM : 0;
-}
-double tstat_min (tstat_t *ts)
-{
-    return ts->min;
-}
-double tstat_max (tstat_t *ts)
-{
-    return ts->max;
-}
-double tstat_variance (tstat_t *ts)
-{
-    return (ts->n > 1) ? ts->newS/(ts->n - 1) : 0;
-}
-double tstat_stddev (tstat_t *ts)
-{
-    return sqrt (tstat_variance (ts));
-}
-int tstat_count (tstat_t *ts)
-{
-    return ts->n;
-}
-
-json_object *tstat_json (tstat_t *ts, double scale)
-{
-    json_object *o = Jnew ();
-
-    Jadd_int (o, "count", tstat_count (ts));
-    Jadd_double (o, "min", tstat_min (ts)*scale);
-    Jadd_double (o, "mean", tstat_mean (ts)*scale);
-    Jadd_double (o, "stddev", tstat_stddev (ts)*scale);
-    Jadd_double (o, "max", tstat_max (ts)*scale);
-
+    buf = xzmalloc (size);
+    (void) base64_encode_block (buf, &dstlen, dat, len);
+    if (!(o = json_object_new_string (buf)))
+        oom ();
+    free (buf);
     return o;
+}
+
+int base64_json_decode (json_object *o, uint8_t **datp, int *lenp)
+{
+    const char *s;
+    int dlen, len;
+    void *dst;
+
+    if (!o || json_object_get_type (o) != json_type_string) {
+        errno = EINVAL;
+        return -1;
+    }
+    s = json_object_get_string (o);
+    len = strlen (s);
+    dst = xzmalloc (base64_decode_length (len));
+    if (base64_decode_block (dst, &dlen, s, len) < 0) {
+        free (dst);
+        errno = EINVAL;
+        return -1;
+    }
+
+    *lenp = dlen;
+    *datp = (uint8_t *) dst;
+    return 0;
 }
 
 /*

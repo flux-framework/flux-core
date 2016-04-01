@@ -55,7 +55,6 @@
 #include "src/modules/kvs/kvs_deprecated.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
@@ -330,10 +329,10 @@ flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *o)
     nodeset_t *ns = NULL;
     uint32_t rank;
 
-    if (util_json_object_get_string (o, "dest", &dest) < 0
-            || util_json_object_get_string (o, "path", &path) < 0
-            || util_json_object_get_int (o, "sender", &sender) < 0
-            || util_json_object_get_int (o, "vers", &vers) < 0
+    if (!Jget_str (o, "dest", &dest)
+            || !Jget_str (o, "path", &path)
+            || !Jget_int (o, "sender", &sender)
+            || !Jget_int (o, "vers", &vers)
             || !(ns = nodeset_create_string (dest))) {
         errno = EPROTO;
         goto done;

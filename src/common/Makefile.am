@@ -20,7 +20,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL) -lrt
+	$(LIBDL) $(LIBRT)
 libflux_internal_la_LDFLAGS = -Wl,--no-undefined
 
 lib_LTLIBRARIES = libflux-core.la
@@ -28,7 +28,6 @@ libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
 	libflux-internal.la
-#-lrt is for clock_gettime, this should be abstracted
 
 libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map \
 			  -shared -export-dynamic --disable-static \

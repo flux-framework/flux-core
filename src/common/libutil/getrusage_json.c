@@ -25,72 +25,42 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <math.h>
+#include <time.h>
+#include <sys/resource.h>
 #include <json.h>
-
-#include "tstat.h"
 
 #include "log.h"
 #include "shortjson.h"
+#include "getrusage_json.h"
 
+int getrusage_json (int who, json_object **op)
+{
+    struct rusage ru;
+    json_object *o;
 
-void tstat_push (tstat_t *ts, double x)
-{
-    if (ts->n == 0 || x < ts->min)
-        ts->min = x;
-    if (ts->n == 0 || x > ts->max)
-        ts->max = x;
-/* running variance
- * ref Knuth TAOCP vol 2, 3rd edition, page 232
- * and http://www.johndcook.com/standard_deviation.html
- */
-    if (++ts->n == 1) {
-        ts->M = ts->newM = x;
-        ts->S = 0;
-    } else {
-        ts->newM = ts->M + (x - ts->M)/ts->n;
-        ts->newS = ts->S + (x - ts->M)*(x - ts->newM);
-
-        ts->M = ts->newM;
-        ts->S = ts->newS;
-    }
-}
-double tstat_mean (tstat_t *ts)
-{
-    return (ts->n > 0) ? ts->newM : 0;
-}
-double tstat_min (tstat_t *ts)
-{
-    return ts->min;
-}
-double tstat_max (tstat_t *ts)
-{
-    return ts->max;
-}
-double tstat_variance (tstat_t *ts)
-{
-    return (ts->n > 1) ? ts->newS/(ts->n - 1) : 0;
-}
-double tstat_stddev (tstat_t *ts)
-{
-    return sqrt (tstat_variance (ts));
-}
-int tstat_count (tstat_t *ts)
-{
-    return ts->n;
-}
-
-json_object *tstat_json (tstat_t *ts, double scale)
-{
-    json_object *o = Jnew ();
-
-    Jadd_int (o, "count", tstat_count (ts));
-    Jadd_double (o, "min", tstat_min (ts)*scale);
-    Jadd_double (o, "mean", tstat_mean (ts)*scale);
-    Jadd_double (o, "stddev", tstat_stddev (ts)*scale);
-    Jadd_double (o, "max", tstat_max (ts)*scale);
-
-    return o;
+    if (getrusage (who, &ru) < 0)
+        return -1;
+    o = Jnew ();
+    Jadd_double (o, "utime",
+            (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec);
+    Jadd_double (o, "stime",
+            (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec);
+    Jadd_int64 (o, "maxrss",        ru.ru_maxrss);
+    Jadd_int64 (o, "ixrss",         ru.ru_ixrss);
+    Jadd_int64 (o, "idrss",         ru.ru_idrss);
+    Jadd_int64 (o, "isrss",         ru.ru_isrss);
+    Jadd_int64 (o, "minflt",        ru.ru_minflt);
+    Jadd_int64 (o, "majflt",        ru.ru_majflt);
+    Jadd_int64 (o, "nswap",         ru.ru_nswap);
+    Jadd_int64 (o, "inblock",       ru.ru_inblock);
+    Jadd_int64 (o, "oublock",       ru.ru_oublock);
+    Jadd_int64 (o, "msgsnd",        ru.ru_msgsnd);
+    Jadd_int64 (o, "msgrcv",        ru.ru_msgrcv);
+    Jadd_int64 (o, "nsignals",      ru.ru_nsignals);
+    Jadd_int64 (o, "nvcsw",         ru.ru_nvcsw);
+    Jadd_int64 (o, "nivcsw",        ru.ru_nivcsw);
+    *op = o;
+    return 0;
 }
 
 /*

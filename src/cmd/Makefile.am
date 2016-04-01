@@ -45,7 +45,8 @@ flux_SOURCES = \
 	builtin/content.c \
 	builtin/version.c \
 	builtin/hwloc.c \
-	builtin/nodeset.c
+	builtin/nodeset.c \
+	builtin/heaptrace.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 

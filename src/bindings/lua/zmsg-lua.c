@@ -31,7 +31,6 @@
 #include <czmq.h>
 
 #include "flux/core.h"
-#include "src/common/libutil/jsonutil.h"
 #include "lutil.h"
 #include "json-lua.h"
 #include "zmsg-lua.h"
