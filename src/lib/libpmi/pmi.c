@@ -133,7 +133,7 @@ int PMI_Init (int *spawned)
     ctx->spawned = PMI_FALSE;
     ctx->universe_size = ctx->size;
     ctx->barrier_num = 0;
-    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d", ctx->appnum);
+    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "lwj.%d.pmi", ctx->appnum);
     if (!(ctx->fctx = flux_open (NULL, 0))) {
         err ("flux_open");
         goto fail;
@@ -331,7 +331,7 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
     char *xkey = NULL;
     int rc = PMI_SUCCESS;
 
-    trace (PMI_TRACE_KVS_PUT, "%s pmi.%s.%s = %s",
+    trace (PMI_TRACE_KVS_PUT, "%s %s.%s = %s",
            __FUNCTION__, kvsname, key, value);
 
     if (ctx == NULL) {
@@ -343,7 +343,7 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    if (asprintf (&xkey, "pmi.%s.%s", kvsname, key) < 0) {
+    if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
         rc = PMI_ERR_NOMEM;
         goto done;
     }
@@ -362,7 +362,7 @@ done:
  */
 int PMI_KVS_Commit (const char kvsname[])
 {
-    trace (PMI_TRACE_KVS_PUT, "%s pmi.%s", __FUNCTION__, kvsname);
+    trace (PMI_TRACE_KVS_PUT, "%s %s", __FUNCTION__, kvsname);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -378,7 +378,7 @@ int PMI_KVS_Get (const char kvsname[], const char key[], char value[],
     int rc = PMI_SUCCESS;
     char *val = NULL;
 
-    trace (PMI_TRACE_KVS_GET, "%s pmi.%s.%s", __FUNCTION__, kvsname, key);
+    trace (PMI_TRACE_KVS_GET, "%s %s.%s", __FUNCTION__, kvsname, key);
     if (ctx == NULL) {
         rc = PMI_ERR_INIT;
         goto done;
@@ -388,7 +388,7 @@ int PMI_KVS_Get (const char kvsname[], const char key[], char value[],
         rc = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    if (asprintf (&xkey, "pmi.%s.%s", kvsname, key) < 0) {
+    if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
         rc = PMI_ERR_NOMEM;
         goto done;
     }
