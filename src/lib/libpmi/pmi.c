@@ -64,7 +64,7 @@ typedef struct {
     int appnum;
     int barrier_num;
     uint32_t cmb_rank;
-    flux_t fctx;
+    flux_t h;
     char kvsname[PMI_MAX_KVSNAMELEN];
     int trace;
 } pmi_ctx_t;
@@ -134,11 +134,11 @@ int PMI_Init (int *spawned)
     ctx->universe_size = ctx->size;
     ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "lwj.%d.pmi", ctx->appnum);
-    if (!(ctx->fctx = flux_open (NULL, 0))) {
+    if (!(ctx->h = flux_open (NULL, 0))) {
         err ("flux_open");
         goto fail;
     }
-    if (flux_get_rank (ctx->fctx, &ctx->cmb_rank) < 0) {
+    if (flux_get_rank (ctx->h, &ctx->cmb_rank) < 0) {
         err ("flux_get_rank");
         goto fail;
     }
@@ -171,8 +171,8 @@ int PMI_Finalize (void)
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (ctx->fctx)
-        flux_close (ctx->fctx);
+    if (ctx->h)
+        flux_close (ctx->h);
     if (ctx->clique)
         nodeset_destroy (ctx->clique);
     memset (ctx, 0, sizeof (pmi_ctx_t));
@@ -270,7 +270,7 @@ int PMI_Barrier (void)
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (kvs_fence (ctx->fctx, name, ctx->universe_size) < 0) {
+    if (kvs_fence (ctx->h, name, ctx->universe_size) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
@@ -347,7 +347,7 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (kvs_put_string (ctx->fctx, xkey, value) < 0) {
+    if (kvs_put_string (ctx->h, xkey, value) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
@@ -392,7 +392,7 @@ int PMI_KVS_Get (const char kvsname[], const char key[], char value[],
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (kvs_get_string (ctx->fctx, xkey, &val) < 0) {
+    if (kvs_get_string (ctx->h, xkey, &val) < 0) {
         if (errno == ENOENT)
             rc = PMI_ERR_INVALID_KEY;
         else
