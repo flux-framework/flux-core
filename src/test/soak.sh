@@ -111,6 +111,8 @@ plot \
   "${DATFILE}" using 1:(\$4/1000000) with linespoints title 'sqlite db' axes x1y2
 EOT
 
+R -q -e "x <- read.delim('${DATFILE}', header = T, sep = ' '); summary(x[ , 2])" || :
+
 echo Displaying ${PNGFILE}
 eog ${PNGFILE}
 
