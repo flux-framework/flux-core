@@ -578,6 +578,7 @@ int main (int argc, char *argv[])
         const char *rc1 = getenv ("FLUX_RC1_PATH");
         const char *rc3 = getenv ("FLUX_RC3_PATH");
         const char *local_uri;
+        const char *pmi_library_path;
 
         runlevel_set_size (ctx.runlevel, ctx.size);
         runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
@@ -590,15 +591,16 @@ int main (int argc, char *argv[])
             rc1 = flux_conf_get (ctx.cf, "general.rc1_path");
         if (!rc3)
             rc3 = flux_conf_get (ctx.cf, "general.rc3_path");
+        pmi_library_path = flux_conf_get (ctx.cf, "general.pmi_library_path");
 
         if (runlevel_set_rc (ctx.runlevel, 1, rc1 ? rc1 : RC1,
-                             local_uri, ldpath) < 0)
+                             local_uri, ldpath, pmi_library_path) < 0)
             err_exit ("runlevel_set_rc 1");
         if (runlevel_set_rc (ctx.runlevel, 2, ctx.init_shell_cmd,
-                             local_uri, ldpath) < 0)
+                             local_uri, ldpath, pmi_library_path) < 0)
             err_exit ("runlevel_set_rc 2");
         if (runlevel_set_rc (ctx.runlevel, 3, rc3 ? rc3 : RC3,
-                             local_uri, ldpath) < 0)
+                             local_uri, ldpath, pmi_library_path) < 0)
             err_exit ("runlevel_set_rc 3");
     }
 

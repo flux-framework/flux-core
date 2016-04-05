@@ -29,7 +29,8 @@ void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg);
  * used to set FLUX_URI and LD_LIBRARY_PATH in the subprocess environment.
  */
 int runlevel_set_rc (runlevel_t *r, int level, const char *command,
-                     const char *local_uri, const char *library_path);
+                     const char *local_uri, const char *library_path,
+                     const char *pmi_library_path);
 
 /* Change the runlevel.  It is assumed that the previous run level (if any)
  * has completed and this is being called from the runlevel callback.

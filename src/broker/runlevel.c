@@ -299,7 +299,8 @@ static void path_prepend (char **s1, const char *s2)
 }
 
 int runlevel_set_rc (runlevel_t *r, int level, const char *command,
-                     const char *local_uri, const char *library_path)
+                     const char *local_uri, const char *library_path,
+                     const char *pmi_library_path)
 {
     struct subprocess *p = NULL;
     char *ldpath = NULL;
@@ -311,6 +312,9 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
         errno = EINVAL;
         goto error;
     }
+
+    if (!pmi_library_path)
+        pmi_library_path = PMI_LIBRARY_PATH;
 
     path_prepend (&ldpath, getenv ("LD_LIBRARY_PATH"));
     path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
@@ -325,6 +329,8 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
             || subprocess_unsetenv (p, "PMI_FD") < 0
             || subprocess_unsetenv (p, "PMI_RANK") < 0
             || subprocess_unsetenv (p, "PMI_SIZE") < 0
+            || subprocess_setenv (p, "I_MPI_PMI_LIBRARY",
+                                  pmi_library_path, 1) < 0
             || (local_uri && subprocess_setenv (p, "FLUX_URI",
                                                 local_uri, 1) < 0)
             || (ldpath && subprocess_setenv (p, "LD_LIBRARY_PATH",

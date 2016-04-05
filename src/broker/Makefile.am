@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-DMODULE_PATH=\"$(fluxmoddir)\" \
 	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\" \
+	-DPMI_LIBRARY_PATH=\"$(fluxlibdir)/libpmi.so\" \
 	-DRC1=\"$(fluxrcdir)/rc1\" \
 	-DRC3=\"$(fluxrcdir)/rc3\"
 
