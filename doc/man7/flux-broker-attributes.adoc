@@ -79,6 +79,7 @@ parent-uri::
 The Flux URI that should be passed to flux_open(1) to establish
 a connection to the enclosing instance.
 
+
 LOGGING ATTRIBUTES
 ------------------
 
@@ -100,9 +101,14 @@ Log entries at syslog(3) level at or below this value are copied
 to stderr on the logging rank, for capture by the enclosing instance.
 
 log-filename::
-If set on rank zero, forwarded log entries are directed to this file.
-If the file name is set to "stderr", forwarded log entries are directed
-to standard error of the rank zero broker.
+(rank zero only) If set, session log entries, as filtered by log-forward-level,
+are directed to this file.  If unset, but persist-directory is set, log
+entries are directed to persist-directory/log.
+
+log-stderr-level::
+(rank zero only) Session log entries at syslog(3) level at or below this
+value, and as filtered by log-forward-level, are copied to stderr of the
+rank zero broker.
 
 
 CONTENT ATTRIBUTES
