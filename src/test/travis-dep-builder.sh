@@ -11,7 +11,7 @@ cachedir=$HOME/local/.cache
 #
 downloads="\
 https://github.com/dun/munge/archive/munge-0.5.11.tar.gz \
-https://download.libsodium.org/libsodium/releases/libsodium-1.0.6.tar.gz \
+https://github.com/jedisct1/libsodium/releases/download/1.0.10/libsodium-1.0.10.tar.gz \
 http://download.zeromq.org/zeromq-4.0.4.tar.gz \
 http://download.zeromq.org/czmq-3.0.2.tar.gz \
 https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz \
