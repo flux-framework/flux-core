@@ -2497,9 +2497,9 @@ done:
 /* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
-    int i;
     uint32_t seq;
     const char *topic, *s;
+
     if (flux_msg_get_seq (*zmsg, &seq) < 0
             || flux_msg_get_topic (*zmsg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
@@ -2510,8 +2510,12 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
         return -1;
     }
     if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
-        for (i = ctx->event_recv_seq + 1; i < seq; i++)
-            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+        int first = ctx->event_recv_seq + 1;
+        int count = seq - first;
+        if (count > 1)
+            flux_log (ctx->h, LOG_ERR, "lost events %d-%d", first, seq - 1);
+        else if (count == 1)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", first);
     }
     ctx->event_recv_seq = seq;
 
