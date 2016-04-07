@@ -431,6 +431,14 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
     JSON event = Jnew ();
     flux_msg_t *msg;
 
+    flux_log (ctx->h, LOG_CRIT, "transitioning %d from %s to %s", c->rank,
+                c->state == CS_OK ? "OK" :
+                c->state == CS_SLOW ? "SLOW" :
+                c->state == CS_FAIL ? "FAIL" : "UNKNOWN",
+                newstate == CS_OK ? "OK" :
+                newstate == CS_SLOW ? "SLOW" :
+                newstate == CS_FAIL ? "FAIL" : "UNKNOWN");
+
     Jadd_int (event, "rank", c->rank);
     Jadd_int (event, "ostate", c->state);
     c->state = newstate;
