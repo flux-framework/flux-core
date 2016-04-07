@@ -2083,7 +2083,7 @@ static int cmb_reparent_cb (zmsg_t **zmsg, void *arg)
     }
     if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
         goto done;
-    flux_log (ctx->h, LOG_INFO, "reparent %s (%s)", uri, recycled ? "restored"
+    flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
                                                                   : "new");
     rc = 0;
 done:
