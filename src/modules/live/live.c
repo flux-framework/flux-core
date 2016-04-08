@@ -304,6 +304,8 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
                                                      "tbon-parent-uri", NULL);
                     parent_set_uri (p, uri);
                 }
+                flux_log (ctx->h, LOG_DEBUG, "parent[%d] %d %s",
+                          i, p->rank, p->uri ? p->uri : "NULL");
                 if (zlist_append (ctx->parents, p) < 0)
                     oom ();
             }
