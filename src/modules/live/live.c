@@ -90,6 +90,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/optparse.h"
 
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
@@ -126,6 +127,7 @@ typedef struct {
     ns_t *ns;           /* master only */
     JSON topo;          /* master only */
     flux_t h;
+    optparse_t *opts;
 } ctx_t;
 
 static void parent_destroy (parent_t *p);
@@ -169,6 +171,8 @@ static void freectx (void *arg)
         flux_reduce_destroy (ctx->r);
         if (ctx->topo)
             Jput (ctx->topo);
+        if (ctx->opts)
+            optparse_destroy (ctx->opts);
         free (ctx);
     }
 }
@@ -197,6 +201,10 @@ static ctx_t *getctx (flux_t h)
                                      FLUX_REDUCE_TIMEDFLUSH);
         if (!ctx->r) {
             flux_log_error (h, "flux_reduce_create");
+            goto error;
+        }
+        if (!(ctx->opts = optparse_create ("live"))) {
+            flux_log_error (h, "optparse_create");
             goto error;
         }
         ctx->h = h;
@@ -1125,13 +1133,41 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t h, zhash_t *args)
+static struct optparse_option opts[] = {
+    { .name = "barrier-count", .key = 'b', .has_arg = 1, .arginfo = "N",
+      .usage = "Execute barrier count=N before identifying parents", },
+    { .name = "barrier-name", .key = 'n', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Set barrier name (default live-init)", },
+    OPTPARSE_TABLE_END,
+};
+
+int mod_main (flux_t h, int argc, char **argv)
 {
     int rc = -1;
     ctx_t *ctx = getctx (h);
+    int barrier_count;
+    const char *barrier_name;
 
     if (!ctx)
         goto done;
+    argc++; argv--; // optparse should not skip argv[0]
+    if (optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS
+            || optparse_parse_args (ctx->opts, argc, argv) != argc) {
+        flux_log (h, LOG_ERR, "error parsing options");
+        goto done;
+    }
+    barrier_count = optparse_get_int (ctx->opts, "barrier-count", 0);
+    barrier_name = optparse_get_str (ctx->opts, "barrier-name", "live-init");
+
+    if (barrier_count > 0) {
+        if (flux_barrier (h, barrier_name, barrier_count) < 0) {
+            flux_log (h, LOG_ERR, "flux_barrier %s:%d",
+                      barrier_name, barrier_count);
+            goto done;
+        }
+        flux_log (h, LOG_DEBUG, "completed barrier %s:%d",
+                  barrier_name, barrier_count);
+    }
 
     if (ctx->rank == 0) {
         if (ns_sync (ctx) < 0) {
