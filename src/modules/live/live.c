@@ -29,15 +29,17 @@
  *   cmb.failover - switch to new parent
  * The cmbd expects failover to be driven externally (e.g. by us).
  * The cmbd maintains a hash of peers and their idle time, and also sends
- * a cmb.ping upstream on the heartbeat if nothing else has been sent in the
- * previous epoch, as a keep-alive.  So if the idle time for a child is > 1,
- * something is probably wrong.
+ * a keepalive upstream on the heartbeat if nothing else has been sent in the
+ * previous epoch.  So if the idle time for a child is > 1, something is
+ * probably wrong.
  *
  * In this module, parents monitor their children on the heartbeat.  That is,
  * we call cmb.peers (locally) and check the idle time of our children.
  * If a child changes state, we publish a live.cstate event, intended to
  * reach grandchildren so they can failover to new parent without relying on
  * upstream services which would be unavailable to them for the moment.
+ * (N.B. Reaching grandchildren is problematic if events are being
+ * distributed only via the TBON)
  *
  * Monitoring does not begin until children check in the first time
  * with a live.hello.  Parents discover their children via the live.hello
@@ -1000,6 +1002,7 @@ static void hello_request_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: request decode", __FUNCTION__);
         goto done;
     }
+    flux_log (h, LOG_DEBUG, "hello from %" PRIu32, rank);
     /* Create a record for this child, unless already seen.
      * Also send rank upstream (reduced) to update conf.live.state.
      */
