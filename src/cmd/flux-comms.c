@@ -82,7 +82,8 @@ int main (int argc, char *argv[])
     if (optind == argc)
         usage ();
     cmd = argv[optind++];
-    if (rank != -1 && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
+    if (rank != FLUX_NODEID_ANY
+            && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
         usage ();
 
     if (!(h = flux_open (NULL, 0)))
@@ -122,7 +123,7 @@ int main (int argc, char *argv[])
             usage ();
         if (flux_recover (h, rank) < 0)
             err_exit ("flux_recover");
-    } else if (!strcmp (cmd, "allrecover")) {
+    } else if (!strcmp (cmd, "recover-all")) {
         if (optind != argc)
             usage ();
         if (flux_recover_all (h) < 0)
