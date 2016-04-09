@@ -220,8 +220,16 @@ function LWJ.open (f, id)
     return setmetatable ({id = id, lwj = lwj }, LWJ)
 end
 
+local function gettimeofday_as_table ()
+    local ts, us = require 'flux.posix'.gettimeofday ()
+    if not ts then return nil, us end
+    if type (ts) == "table" then return ts end
+    return { sec = ts, usec = us }
+end
+
 local function now ()
-    local t = require 'flux.posix'.gettimeofday()
+    local t, err = gettimeofday_as_table ()
+    if not t then error ("gettimeofday: "..err) end
     return t.sec + (t.usec / (1000 * 1000))
 end
 
