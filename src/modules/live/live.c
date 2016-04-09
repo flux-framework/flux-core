@@ -29,15 +29,17 @@
  *   cmb.failover - switch to new parent
  * The cmbd expects failover to be driven externally (e.g. by us).
  * The cmbd maintains a hash of peers and their idle time, and also sends
- * a cmb.ping upstream on the heartbeat if nothing else has been sent in the
- * previous epoch, as a keep-alive.  So if the idle time for a child is > 1,
- * something is probably wrong.
+ * a keepalive upstream on the heartbeat if nothing else has been sent in the
+ * previous epoch.  So if the idle time for a child is > 1, something is
+ * probably wrong.
  *
  * In this module, parents monitor their children on the heartbeat.  That is,
  * we call cmb.peers (locally) and check the idle time of our children.
  * If a child changes state, we publish a live.cstate event, intended to
  * reach grandchildren so they can failover to new parent without relying on
  * upstream services which would be unavailable to them for the moment.
+ * (N.B. Reaching grandchildren is problematic if events are being
+ * distributed only via the TBON)
  *
  * Monitoring does not begin until children check in the first time
  * with a live.hello.  Parents discover their children via the live.hello
@@ -88,6 +90,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/optparse.h"
 
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
@@ -101,7 +104,7 @@ typedef struct {
 
 typedef struct {
     uint32_t rank;
-    const char *uri;
+    char *uri;
     cstate_t state;
 } parent_t;
 
@@ -124,6 +127,7 @@ typedef struct {
     ns_t *ns;           /* master only */
     JSON topo;          /* master only */
     flux_t h;
+    optparse_t *opts;
 } ctx_t;
 
 static void parent_destroy (parent_t *p);
@@ -167,6 +171,8 @@ static void freectx (void *arg)
         flux_reduce_destroy (ctx->r);
         if (ctx->topo)
             Jput (ctx->topo);
+        if (ctx->opts)
+            optparse_destroy (ctx->opts);
         free (ctx);
     }
 }
@@ -197,6 +203,10 @@ static ctx_t *getctx (flux_t h)
             flux_log_error (h, "flux_reduce_create");
             goto error;
         }
+        if (!(ctx->opts = optparse_create ("live"))) {
+            flux_log_error (h, "optparse_create");
+            goto error;
+        }
         ctx->h = h;
         flux_aux_set (h, "flux::live", ctx, freectx);
     }
@@ -224,14 +234,25 @@ static child_t *child_create (int rank)
 
 static void parent_destroy (parent_t *p)
 {
-    free (p);
+    if (p) {
+        if (p->uri)
+            free (p->uri);
+        free (p);
+    }
+}
+
+static void parent_set_uri (parent_t *p, const char *uri)
+{
+    if (p->uri)
+        free (p->uri);
+    p->uri = uri ? xstrdup (uri) : NULL;
 }
 
 static parent_t *parent_create (int rank, const char *uri)
 {
     parent_t *p = xzmalloc (sizeof (*p));
     p->rank = rank;
-    p->uri = uri;
+    parent_set_uri (p, uri);
     return p;
 }
 
@@ -287,8 +308,12 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
         for (i = 0; i < len; i++) {
             if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el))) {
                 if (i == 0) {
-                    p->uri = flux_attr_get (ctx->h, "tbon-parent-uri", NULL);
+                    const char *uri = flux_attr_get (ctx->h,
+                                                     "tbon-parent-uri", NULL);
+                    parent_set_uri (p, uri);
                 }
+                flux_log (ctx->h, LOG_DEBUG, "parent[%d] %d %s",
+                          i, p->rank, p->uri ? p->uri : "NULL");
                 if (zlist_append (ctx->parents, p) < 0)
                     oom ();
             }
@@ -417,6 +442,14 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 {
     JSON event = Jnew ();
     flux_msg_t *msg;
+
+    flux_log (ctx->h, LOG_CRIT, "transitioning %d from %s to %s", c->rank,
+                c->state == CS_OK ? "OK" :
+                c->state == CS_SLOW ? "SLOW" :
+                c->state == CS_FAIL ? "FAIL" : "UNKNOWN",
+                newstate == CS_OK ? "OK" :
+                newstate == CS_SLOW ? "SLOW" :
+                newstate == CS_FAIL ? "FAIL" : "UNKNOWN");
 
     Jadd_int (event, "rank", c->rank);
     Jadd_int (event, "ostate", c->state);
@@ -979,6 +1012,7 @@ static void hello_request_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: request decode", __FUNCTION__);
         goto done;
     }
+    flux_log (h, LOG_DEBUG, "hello from %" PRIu32, rank);
     /* Create a record for this child, unless already seen.
      * Also send rank upstream (reduced) to update conf.live.state.
      */
@@ -1099,13 +1133,41 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t h, zhash_t *args)
+static struct optparse_option opts[] = {
+    { .name = "barrier-count", .key = 'b', .has_arg = 1, .arginfo = "N",
+      .usage = "Execute barrier count=N before identifying parents", },
+    { .name = "barrier-name", .key = 'n', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Set barrier name (default live-init)", },
+    OPTPARSE_TABLE_END,
+};
+
+int mod_main (flux_t h, int argc, char **argv)
 {
     int rc = -1;
     ctx_t *ctx = getctx (h);
+    int barrier_count;
+    const char *barrier_name;
 
     if (!ctx)
         goto done;
+    argc++; argv--; // optparse should not skip argv[0]
+    if (optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS
+            || optparse_parse_args (ctx->opts, argc, argv) != argc) {
+        flux_log (h, LOG_ERR, "error parsing options");
+        goto done;
+    }
+    barrier_count = optparse_get_int (ctx->opts, "barrier-count", 0);
+    barrier_name = optparse_get_str (ctx->opts, "barrier-name", "live-init");
+
+    if (barrier_count > 0) {
+        if (flux_barrier (h, barrier_name, barrier_count) < 0) {
+            flux_log (h, LOG_ERR, "flux_barrier %s:%d",
+                      barrier_name, barrier_count);
+            goto done;
+        }
+        flux_log (h, LOG_DEBUG, "completed barrier %s:%d",
+                  barrier_name, barrier_count);
+    }
 
     if (ctx->rank == 0) {
         if (ns_sync (ctx) < 0) {

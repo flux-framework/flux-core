@@ -424,7 +424,7 @@ int log_register_attrs (log_t *log, attr_t *attrs)
                              attr_get_log, attr_set_log, log) < 0)
             goto done;
         if (attr_add_active (attrs, "log-stderr-level", 0,
-		                 attr_get_log, attr_set_log, log) < 0)
+                             attr_get_log, attr_set_log, log) < 0)
             goto done;
     } else {
         (void)attr_delete (attrs, "log-filename", true);
@@ -436,10 +436,10 @@ int log_register_attrs (log_t *log, attr_t *attrs)
     }
 
     if (attr_add_active (attrs, "log-forward-level", 0,
-		                 attr_get_log, attr_set_log, log) < 0)
+                         attr_get_log, attr_set_log, log) < 0)
         goto done;
     if (attr_add_active (attrs, "log-critical-level", 0,
-		                 attr_get_log, attr_set_log, log) < 0)
+                         attr_get_log, attr_set_log, log) < 0)
         goto done;
     if (attr_add_active (attrs, "log-ring-size", 0,
                          attr_get_log, attr_set_log, log) < 0)
@@ -471,7 +471,7 @@ int log_forward (log_t *log, const char *facility, int level, uint32_t rank,
     Jadd_str (o, "message", message);
     if (!(rpc = flux_rpc (log->h, "cmb.log", Jtostr (o), FLUX_NODEID_UPSTREAM,
                                                          FLUX_RPC_NORESPONSE)))
-                                                                                        goto done;
+        goto done;
     rc = 0;
 done:
     Jput (o);
@@ -489,8 +489,8 @@ int log_append (log_t *log, const char *facility, int level, uint32_t rank,
     if (rank == log->rank) {
         if (log_buf_append (log, facility, level, rank, tv, message) < 0)
             rc = -1;
-	if (level <= log->critical_level) {
-	    flux_log_fprint (facility, level, rank, tv, message, stderr);
+        if (level <= log->critical_level) {
+            flux_log_fprint (facility, level, rank, tv, message, stderr);
             logged_stderr = true;
         }
     }

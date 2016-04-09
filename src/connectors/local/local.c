@@ -45,6 +45,7 @@
 typedef struct {
     int magic;
     int fd;
+    int fd_nonblock;
     struct flux_msg_iobuf outbuf;
     struct flux_msg_iobuf inbuf;
     flux_t h;
@@ -52,17 +53,17 @@ typedef struct {
 
 static const struct flux_handle_ops handle_ops;
 
-static int set_nonblock (int fd, bool nonblock)
+static int set_nonblock (ctx_t *c, int nonblock)
 {
-    int flags = fcntl (fd, F_GETFL);
-    if (flags < 0)
-        return -1;
-    if (nonblock)
-        flags |= O_NONBLOCK;
-    else
-        flags &= ~O_NONBLOCK;
-    if (fcntl (fd, F_SETFL, flags) < 0)
-        return -1;
+    int flags;
+    if (c->fd_nonblock != nonblock) {
+        if ((flags = fcntl (c->fd, F_GETFL)) < 0)
+            return -1;
+        if (fcntl (c->fd, F_SETFL, nonblock ? flags | O_NONBLOCK
+                                            : flags & ~O_NONBLOCK) < 0)
+            return -1;
+        c->fd_nonblock = nonblock;
+    }
     return 0;
 }
 
@@ -104,7 +105,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    if (set_nonblock (c->fd, (flags & FLUX_O_NONBLOCK)) < 0)
+    if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return -1;
     if (flux_msg_sendfd (c->fd, msg, &c->outbuf) < 0)
         return -1;
@@ -116,7 +117,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    if (set_nonblock (c->fd, (flags & FLUX_O_NONBLOCK)) < 0)
+    if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return NULL;
     return flux_msg_recvfd (c->fd, &c->inbuf);
 }
@@ -231,6 +232,7 @@ flux_t connector_init (const char *path, int flags)
     c->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (c->fd < 0)
         goto error;
+    c->fd_nonblock = -1;
     for (count=0;;count++) {
         if (count >= env_getint("FLUX_RETRY_COUNT", 5) || !pidcheck (pidfile))
             goto error;

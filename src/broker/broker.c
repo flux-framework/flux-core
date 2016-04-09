@@ -578,6 +578,7 @@ int main (int argc, char *argv[])
         const char *rc1 = getenv ("FLUX_RC1_PATH");
         const char *rc3 = getenv ("FLUX_RC3_PATH");
         const char *local_uri;
+        const char *pmi_library_path;
 
         runlevel_set_size (ctx.runlevel, ctx.size);
         runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
@@ -590,15 +591,16 @@ int main (int argc, char *argv[])
             rc1 = flux_conf_get (ctx.cf, "general.rc1_path");
         if (!rc3)
             rc3 = flux_conf_get (ctx.cf, "general.rc3_path");
+        pmi_library_path = flux_conf_get (ctx.cf, "general.pmi_library_path");
 
         if (runlevel_set_rc (ctx.runlevel, 1, rc1 ? rc1 : RC1,
-                             local_uri, ldpath) < 0)
+                             local_uri, ldpath, pmi_library_path) < 0)
             err_exit ("runlevel_set_rc 1");
         if (runlevel_set_rc (ctx.runlevel, 2, ctx.init_shell_cmd,
-                             local_uri, ldpath) < 0)
+                             local_uri, ldpath, pmi_library_path) < 0)
             err_exit ("runlevel_set_rc 2");
         if (runlevel_set_rc (ctx.runlevel, 3, rc3 ? rc3 : RC3,
-                             local_uri, ldpath) < 0)
+                             local_uri, ldpath, pmi_library_path) < 0)
             err_exit ("runlevel_set_rc 3");
     }
 
@@ -2081,7 +2083,7 @@ static int cmb_reparent_cb (zmsg_t **zmsg, void *arg)
     }
     if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
         goto done;
-    flux_log (ctx->h, LOG_INFO, "reparent %s (%s)", uri, recycled ? "restored"
+    flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
                                                                   : "new");
     rc = 0;
 done:
@@ -2495,9 +2497,9 @@ done:
 /* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
-    int i;
     uint32_t seq;
     const char *topic, *s;
+
     if (flux_msg_get_seq (*zmsg, &seq) < 0
             || flux_msg_get_topic (*zmsg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
@@ -2508,8 +2510,12 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
         return -1;
     }
     if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
-        for (i = ctx->event_recv_seq + 1; i < seq; i++)
-            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+        int first = ctx->event_recv_seq + 1;
+        int count = seq - first;
+        if (count > 1)
+            flux_log (ctx->h, LOG_ERR, "lost events %d-%d", first, seq - 1);
+        else if (count == 1)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", first);
     }
     ctx->event_recv_seq = seq;
 
