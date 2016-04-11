@@ -468,6 +468,8 @@ AC_DEFUN([AX_LUA_HEADERS],
 int main(int argc, char ** argv)
 {
   if(argc > 1) printf("%s", LUA_VERSION);
+  fprintf(stderr,"%s", LUA_VERSION);
+  fflush(stdout);
   exit(EXIT_SUCCESS);
 }
 ]])
@@ -481,7 +483,7 @@ int main(int argc, char ** argv)
         ])
 
       dnl Compare this to the previously found LUA_VERSION.
-      AC_MSG_CHECKING([if Lua header version matches $LUA_VERSION])
+      AC_MSG_CHECKING([if Lua header version $ax_cv_lua_header_version matches $LUA_VERSION])
       AS_IF([test "x$ax_cv_lua_header_version" = "x$LUA_VERSION"],
         [ AC_MSG_RESULT([yes])
           ax_header_version_match='yes'
