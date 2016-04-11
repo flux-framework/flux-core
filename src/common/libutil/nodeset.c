@@ -373,7 +373,7 @@ void nodeset_delete_range (nodeset_t *n, uint32_t a, uint32_t b)
 bool nodeset_test_rank (nodeset_t *n, uint32_t r)
 {
     assert (n->magic == NS_MAGIC);
-    return r <= ABS_MAX_RANK ? NS_TEST (n, r) : false;
+    return r < NS_SIZE (n) ? NS_TEST (n, r) : false;
 }
 
 bool nodeset_test_range (nodeset_t *n, uint32_t a, uint32_t b)
@@ -384,7 +384,7 @@ bool nodeset_test_range (nodeset_t *n, uint32_t a, uint32_t b)
     uint32_t lo = MIN(a,b);
     uint32_t hi = MAX(a,b);
 
-    if (hi > ABS_MAX_RANK)
+    if (hi >= NS_SIZE (n) || lo >= NS_SIZE (n))
         return false;
     for (r = lo; r <= hi; r++)
         if (!NS_TEST (n, r))

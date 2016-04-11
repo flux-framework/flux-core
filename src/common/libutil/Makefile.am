@@ -6,9 +6,9 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-Wno-strict-aliasing -Wno-error=strict-aliasing \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include
+	-Wno-strict-aliasing -Wno-error=strict-aliasing
 
 noinst_LTLIBRARIES = libutil.la
 
@@ -19,8 +19,10 @@ libutil_la_SOURCES = \
 	log.h \
 	xzmalloc.c \
 	xzmalloc.h \
-	jsonutil.c \
-	jsonutil.h \
+	base64_json.c \
+	base64_json.h \
+	getrusage_json.c \
+	getrusage_json.h \
 	monotime.c \
 	monotime.h \
 	setenvf.c \
@@ -51,10 +53,6 @@ libutil_la_SOURCES = \
 	sds.c \
 	sds.h \
 	sdsalloc.h \
-	vec.c \
-	vec.h \
-	usa.c \
-	usa.h \
 	iterators.h \
 	macros.h \
 	sha1.h \

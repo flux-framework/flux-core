@@ -112,6 +112,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
                 goto done;
             break;
         case FLUX_MSGTYPE_RESPONSE:
+        case FLUX_MSGTYPE_KEEPALIVE:
             if (flux_msg_sendzsock (ctx->sock, msg) < 0)
                 goto done;
             break;
@@ -138,10 +139,11 @@ static flux_msg_t *op_recv (void *impl, int flags)
         goto done;
     if ((flags & FLUX_O_NONBLOCK)) {
         int n;
-        if ((n = zmq_poll (&zp, 1, 0L)) < 0)
-            goto done; /* likely: EWOULDBLOCK | EAGAIN */
-        assert (n == 1);
-        assert (zp.revents == ZMQ_POLLIN);
+        if ((n = zmq_poll (&zp, 1, 0L)) <= 0) {
+            if (n == 0)
+                errno = EWOULDBLOCK;
+            goto done;
+        }
     }
     msg = zmsg_recv (ctx->sock);
 done:
@@ -237,25 +239,12 @@ done:
     return rc;
 }
 
-static void send_eof (void *sock)
-{
-    zmsg_t *zmsg;
-
-    if (!(zmsg = zmsg_new ()) || zmsg_pushmem (zmsg, NULL, 0) < 0)
-        oom ();
-    if (zmsg_send (&zmsg, sock) < 0)
-        err_exit ("error sending EOF");
-    zmsg_destroy (&zmsg);
-}
-
 static void op_fini (void *impl)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    if (ctx->sock) {
-        send_eof (ctx->sock);
+    if (ctx->sock)
         zsocket_destroy (ctx->zctx, ctx->sock);
-    }
     if (ctx->uuid)
         free (ctx->uuid);
     if (ctx->uri)

@@ -6,19 +6,22 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 check_PROGRAMS = \
 	tasyncsock \
-	tcommit \
 	tmunge \
-	tbarrier \
-	tdisconnect
+	tbarrier
 
-SUBDIRS = request module
+noinst_SCRIPTS = \
+	soak.sh \
+	soak-workload.sh \
+	valgrind.sh \
+	valgrind-workload.sh
+
 if HAVE_MPI
-SUBDIRS += kap
+SUBDIRS = kap
 endif
 
 LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
@@ -27,4 +30,4 @@ LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
-EXTRA_DIST = valgrind.supp
+EXTRA_DIST = valgrind.supp $(noinst_SCRIPTS)

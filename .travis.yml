@@ -55,9 +55,22 @@ before_install:
   # coveralls-lcov required only for coveralls upload:
   - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
 
+  # Ensure we always use internal <flux/core.h> by placing a dummy file
+  #  in the same path as ZMQ_FLAGS:
+  - mkdir -p $HOME/local/include/flux
+  - echo '#error Non-build-tree flux/core.h!' > $HOME/local/include/flux/core.h
+
 script:
+ - export LD_PRELOAD=libSegFault.so
+ - export SEGFAULT_USE_ALTSTACK=1
+ - export LIBC_FATAL_STDERR_=1
  - export CC="ccache $CC"
  - export MAKECMDS="make distcheck"
+
+ # Travis has limited resources, even though number of processors might
+ #  might appear to be large. Limit session size for testing to 5 to avoid
+ #  spurious timeouts.
+ - export FLUX_TEST_SIZE_MAX=5
 
  # Enable coverage for $CC-coverage build
  # We can't use distcheck here, it doesn't play well with coverage testing:

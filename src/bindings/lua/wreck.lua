@@ -260,8 +260,8 @@ local function fixup_nnodes (wreck)
     if not wreck.nnodes then
         wreck.nnodes = math.min (wreck.ntasks, wreck.flux.size)
     elseif wreck.nnodes > wreck.flux.size then
-        self:die ("Requested nodes (%d) exceeds available (%d)\n",
-                  wreck.nnodes, f.size)
+        wreck:die ("Requested nodes (%d) exceeds available (%d)\n",
+                  wreck.nnodes, wreck.flux.size)
     end
 end
 

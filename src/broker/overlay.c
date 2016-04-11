@@ -266,7 +266,7 @@ static int overlay_keepalive_parent (overlay_t *ov)
 
     if (!ep || !ep->zs || idle <= 1)
         return 0;
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
+    if (!(msg = flux_keepalive_encode (0, 0)))
         goto done;
     if (flux_msg_enable_route (msg) < 0)
         goto done;

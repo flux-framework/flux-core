@@ -33,8 +33,28 @@ tbon-arity::
 The branching factor of the tree based overlay network.
 
 scratch-directory::
-The temporary directory used for session sockets, content
-backing storage, etc..
+A temporary directory available for scratch storage within
+the session.  This directory _may_ be shared by multiple ranks.
+Cleanup of directory contents is the responsibility of
+the creator.
+
+scratch-directory-rank::
+A temporary directory available for scratch storage within
+the session.  This directory is unique to the local rank,
+and is usually a sub-directory of scratch-directory.
+Cleanup of directory contents is the responsibility of
+the creator.
+
+persist-directory::
+A persistent directory available for storage on rank 0 only.
+If persist-directory is not defined, persistence is unavailable
+and users should fall back to scratch-directory, with cleanup.
+
+persist-filesystem::
+If defined, and persist-directory is not defined, the rank
+0 broker chooses a unique name for persist-directory within
+persist-filesystem and creates it automatically.
+
 
 SOCKET ATTRIBUTES
 -----------------
@@ -59,21 +79,36 @@ parent-uri::
 The Flux URI that should be passed to flux_open(1) to establish
 a connection to the enclosing instance.
 
+
 LOGGING ATTRIBUTES
 ------------------
 
-log-bufcount::
+log-ring-used::
 The number of log entries currently stored in the ring buffer.
 
-log-buflimit::
+log-ring-size::
 The maximum number of log entries that can be stored in the ring buffer.
 
 log-count::
 The number of log entries ever stored in the ring buffer.
 
-log-level::
+log-forward-level::
 Log entries at syslog(3) level at or below this value are forwarded
 to rank zero for permanent capture.
+
+log-critical-level::
+Log entries at syslog(3) level at or below this value are copied
+to stderr on the logging rank, for capture by the enclosing instance.
+
+log-filename::
+(rank zero only) If set, session log entries, as filtered by log-forward-level,
+are directed to this file.  If unset, but persist-directory is set, log
+entries are directed to persist-directory/log.
+
+log-stderr-level::
+(rank zero only) Session log entries at syslog(3) level at or below this
+value, and as filtered by log-forward-level, are copied to stderr of the
+rank zero broker.
 
 
 CONTENT ATTRIBUTES

@@ -82,15 +82,15 @@ void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg)
     ctx->cb_arg = arg;
 }
 
-int flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
+void flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
 {
+    int saved_errno = errno;
     logctx_t *ctx = getctx (h);
     char *message = xvasprintf (fmt, ap);
     struct timeval tv = { 0, 0 };
     JSON o = NULL;
     uint32_t rank = FLUX_NODEID_ANY;
     flux_rpc_t *rpc = NULL;
-    int rc = -1;
 
     (void)gettimeofday (&tv, NULL);
     (void)flux_get_rank (h, &rank);
@@ -108,46 +108,39 @@ int flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
                                                         FLUX_RPC_NORESPONSE)))
             goto done;
     }
-    rc = 0;
 done:
     flux_rpc_destroy (rpc);
     Jput (o);
     free (message);
-    return rc;
+    errno = saved_errno;
 }
 
-int flux_log (flux_t h, int lev, const char *fmt, ...)
+void flux_log (flux_t h, int lev, const char *fmt, ...)
 {
     va_list ap;
-    int rc;
 
     va_start (ap, fmt);
-    rc = flux_vlog (h, lev, fmt, ap);
+    flux_vlog (h, lev, fmt, ap);
     va_end (ap);
-    return rc;
 }
 
-int flux_log_verror (flux_t h, const char *fmt, va_list ap)
+void flux_log_verror (flux_t h, const char *fmt, va_list ap)
 {
+    int saved_errno = errno;
     char *s = xvasprintf (fmt, ap);
-    int rc;
 
-    rc = flux_log (h, LOG_ERR, "%s: %s", s, zmq_strerror (errno));
+    flux_log (h, LOG_ERR, "%s: %s", s, zmq_strerror (errno));
     free (s);
-
-    return rc;
+    errno = saved_errno;
 }
 
-int flux_log_error (flux_t h, const char *fmt, ...)
+void flux_log_error (flux_t h, const char *fmt, ...)
 {
     va_list ap;
-    int rc;
 
     va_start (ap, fmt);
-    rc = flux_log_verror (h, fmt, ap);
+    flux_log_verror (h, fmt, ap);
     va_end (ap);
-
-    return rc;
 }
 
 static int dmesg_clear (flux_t h, int seq)

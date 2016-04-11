@@ -212,7 +212,9 @@ done:
 
 void flux_close (flux_t h)
 {
+    int saved_errno = errno;
     flux_handle_destroy (&h);
+    errno = saved_errno;
 }
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)

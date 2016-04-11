@@ -298,3 +298,8 @@ sophia
 sha
 blobref
 blobrefs
+lstopo
+xml
+filesystem
+filename
+PYTHONPATH

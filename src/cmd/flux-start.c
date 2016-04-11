@@ -31,6 +31,7 @@
 #include <libgen.h>
 #include <argz.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -377,7 +378,7 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     add_arg (cli->p, "%s", ctx->broker_path);
     add_arg (cli->p, "--boot-method=PMI");
     add_arg (cli->p, "--shared-ipc-namespace");
-    add_arg (cli->p, "--scratch-directory=%s", ctx->scratch_dir);
+    add_arg (cli->p, "--setattr=scratch-directory=%s", ctx->scratch_dir);
     add_args_list (cli->p, ctx->opts, "broker-opts");
     if (rank == 0 && cmd)
         add_arg (cli->p, "%s", cmd); /* must be last arg */

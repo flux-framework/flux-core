@@ -55,7 +55,6 @@
 #include "src/modules/kvs/kvs_deprecated.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
@@ -288,7 +287,7 @@ int flux_mrpc (flux_mrpc_t *f, const char *fmt, ...)
     char *topic = NULL, *s = NULL;
     va_list ap;
     JSON o = NULL;
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
     va_start (ap, fmt);
     s = xvasprintf (fmt, ap);
@@ -304,9 +303,9 @@ int flux_mrpc (flux_mrpc_t *f, const char *fmt, ...)
     Jadd_int (o, "sender", f->sender);
     Jadd_str (o, "path", f->path);
     topic = xasprintf ("mrpc.%s", s);
-    if (!(zmsg = flux_event_encode (topic, Jtostr (o))))
+    if (!(msg = flux_event_encode (topic, Jtostr (o))))
         goto done;
-    if (flux_sendmsg (f->h, &zmsg) < 0)
+    if (flux_send (f->h, msg, 0) < 0)
         goto done;
     if (kvs_fence (f->h, f->path, f->nprocs + 1) < 0)
         goto done;
@@ -317,7 +316,8 @@ done:
     if (topic)
         free (topic);
     Jput (o);
-    zmsg_destroy (&zmsg);
+    if (msg)
+        flux_msg_destroy (msg);
     return rc;
 }
 
@@ -329,10 +329,10 @@ flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *o)
     nodeset_t *ns = NULL;
     uint32_t rank;
 
-    if (util_json_object_get_string (o, "dest", &dest) < 0
-            || util_json_object_get_string (o, "path", &path) < 0
-            || util_json_object_get_int (o, "sender", &sender) < 0
-            || util_json_object_get_int (o, "vers", &vers) < 0
+    if (!Jget_str (o, "dest", &dest)
+            || !Jget_str (o, "path", &path)
+            || !Jget_int (o, "sender", &sender)
+            || !Jget_int (o, "vers", &vers)
             || !(ns = nodeset_create_string (dest))) {
         errno = EPROTO;
         goto done;

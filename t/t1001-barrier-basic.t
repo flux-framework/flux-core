@@ -10,9 +10,13 @@ before other tests that depend on barriers.
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 tbarrier="${FLUX_BUILD_DIR}/src/test/tbarrier"
 test "$verbose" = "t" || tbarrier="${tbarrier} -q"
+
+test_expect_success 'barrier: load barrier module' '
+	flux module load -r all barrier
+'
 
 test_expect_success 'barrier: returns when complete' '
 	${tbarrier} --nprocs 1 abc

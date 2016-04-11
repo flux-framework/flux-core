@@ -6,8 +6,8 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 #
 # Comms module
@@ -35,7 +35,6 @@ lib_LTLIBRARIES = libflux-kvs.la
 fluxcoreinclude_HEADERS = kvs.h
 libflux_kvs_la_SOURCES = \
 	libkvs.c \
-	conf.c \
 	proto.c \
 	kvs_deprecated.h
 libflux_kvs_la_LDFLAGS = $(fluxlib_ldflags) \
@@ -57,9 +56,9 @@ test_ldadd = \
         $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
+        $(AM_CPPFLAGS) \
         -DMODULE_PATH=\"$(top_builddir)/src/modules\" \
-        -I$(top_srcdir)/src/common/libtap \
-        $(AM_CPPFLAGS)
+        -I$(top_srcdir)/src/common/libtap
 
 check_PROGRAMS = $(TESTS)
 

@@ -34,21 +34,45 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 
 static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
 {
     int rc;
-    char *key;
+    char *key = NULL;
+    char *link = NULL;
+    char *target = NULL;
 
-    if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
+    /*  Create lwj entry in lwj-active dir at first:
+     */
+    if ((asprintf (&key, "lwj-active.%lu.state", jobid) < 0)
+        || (asprintf (&link, "lwj.%lu", jobid) < 0)
+        || (asprintf (&target, "lwj-active.%lu", jobid) < 0)) {
+        flux_log_error (h, "kvs_job_set_state: asprintf");
         return (-1);
+    }
 
     flux_log (h, LOG_INFO, "Setting job %ld to %s", jobid, state);
-    rc = kvs_put_string (h, key, state);
-    kvs_commit (h);
+    if ((rc = kvs_put_string (h, key, state)) < 0) {
+        flux_log_error (h, "kvs_put_string (%s)", key);
+        goto out;
+    }
 
+    /*
+     *  Create link from lwj.<id> to lwj-active.<id>
+     */
+    if ((rc = kvs_symlink (h, link, target)) < 0) {
+        flux_log_error (h, "kvs_symlink (%s, %s)", link, key);
+        goto out;
+    }
+
+    if ((rc = kvs_commit (h)) < 0)
+        flux_log_error (h, "kvs_job_set_state: kvs_commit");
+
+out:
     free (key);
+    free (link);
+    free (target);
     return rc;
 }
 
@@ -64,11 +88,11 @@ static int64_t next_jobid (flux_t h)
     json_object *req, *resp;
     flux_rpc_t *rpc;
 
-    req = util_json_object_new_object ();
-    util_json_object_add_string (req, "name", "lwj");
-    util_json_object_add_int64 (req, "preincrement", 1);
-    util_json_object_add_int64 (req, "postincrement", 0);
-    util_json_object_add_boolean (req, "create", true);
+    req = Jnew ();
+    Jadd_str (req, "name", "lwj");
+    Jadd_int64 (req, "preincrement", 1);
+    Jadd_int64 (req, "postincrement", 0);
+    Jadd_bool (req, "create", true);
     rpc = flux_rpc (h, "cmb.seq.fetch",
                     json_object_to_json_string (req), 0, 0);
     json_object_put (req);
@@ -79,7 +103,7 @@ static int64_t next_jobid (flux_t h)
         goto out;
     }
 
-    util_json_object_get_int64 (resp, "value", &ret);
+    Jget_int64 (resp, "value", &ret);
     json_object_put (resp);
 out:
     flux_rpc_destroy (rpc);
@@ -174,9 +198,9 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     json_object *rpc_o;
     flux_rpc_t *rpc;
 
-    rpc_o = util_json_object_new_object ();
-    util_json_object_add_string (rpc_o, "key", "lwj.next-id");
-    util_json_object_add_int64 (rpc_o, "val", id);
+    rpc_o = Jnew ();
+    Jadd_str (rpc_o, "key", "lwj.next-id");
+    Jadd_int64 (rpc_o, "val", id);
 
     rpc = flux_rpc (h, "sim_sched.lwj-watch",
                     json_object_to_json_string (rpc_o),
@@ -187,8 +211,8 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     if (rc >= 0) {
         json_object *rpc_resp = json_tokener_parse (json_str);
         if (rpc_resp) {
-	    util_json_object_get_int (rpc_resp, "rc", &rc);
-	    json_object_put (rpc_resp);
+	        Jget_int (rpc_resp, "rc", &rc);
+	        json_object_put (rpc_resp);
         }
     }
     return rc;
@@ -199,8 +223,8 @@ static bool ping_sched (flux_t h)
     bool retval = false;
     const char *s;
     flux_rpc_t *rpc;
-    json_object *o = util_json_object_new_object ();
-    util_json_object_add_int (o, "seq", 0);
+    json_object *o = Jnew ();
+    Jadd_int (o, "seq", 0);
     rpc = flux_rpc (h, "sched.ping",
                     json_object_to_json_string (o),
                     FLUX_NODEID_ANY, 0);
@@ -261,8 +285,7 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
         }
 
         //"Fix" for Race Condition
-        if (util_json_object_get_boolean (o, "race_workaround",
-                                           &should_workaround) < 0) {
+        if (!Jget_bool (o, "race_workaround", &should_workaround)) {
             should_workaround = false;
         } else if (should_workaround) {
             if (wait_for_lwj_watch_init (h, id) < 0) {
@@ -277,7 +300,10 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
             goto out;
         }
 
-        kvs_commit (h);
+        if (kvs_commit (h) < 0) {
+            flux_log_error (h, "job_request: kvs_commit");
+            goto out;
+        }
 
         /* Send a wreck.state.reserved event for listeners */
         state = "reserved";
@@ -287,9 +313,9 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
                 state = "submitted";
 
         /* Generate reply with new jobid */
-        jobinfo = util_json_object_new_object ();
-        util_json_object_add_int64 (jobinfo, "jobid", id);
-        util_json_object_add_string (jobinfo, "state", state);
+        jobinfo = Jnew ();
+        Jadd_int64 (jobinfo, "jobid", id);
+        Jadd_str (jobinfo, "state", state);
         flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
         json_object_put (jobinfo);
     }

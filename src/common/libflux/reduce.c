@@ -124,6 +124,7 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
 void flux_reduce_destroy (flux_reduce_t *r)
 {
     if (r) {
+        int saved_errno = errno;
         if (r->items) {
             void *item;
             while ((item = zlist_pop (r->items))) {
@@ -139,6 +140,7 @@ void flux_reduce_destroy (flux_reduce_t *r)
             flux_watcher_destroy (r->timer);
         }
         free (r);
+        errno = saved_errno;
     }
 }
 

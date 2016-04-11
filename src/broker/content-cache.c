@@ -164,6 +164,8 @@ static void cache_entry_destroy (void *arg)
             free (e->data);
         if (e->blobref)
             free (e->blobref);
+        assert (!e->load_requests || zlist_size (e->load_requests) == 0);
+        assert (!e->store_requests || zlist_size (e->store_requests) == 0);
         message_list_destroy (&e->load_requests);
         message_list_destroy (&e->store_requests);
         free (e);
@@ -301,7 +303,8 @@ done:
     if (respond_requests_raw (&e->load_requests, cache->h,
                                                     rc < 0 ? saved_errno : 0,
                                                     e->data, e->len) < 0)
-        flux_log_error (cache->h, "content load");
+        flux_log_error (cache->h, "%s: error responding to load requests",
+                        __FUNCTION__);
     if (rc < 0)
         remove_entry (cache, e);
     flux_rpc_destroy (rpc);
@@ -430,11 +433,15 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     int rc = -1;
 
     e->store_pending = 0;
+    assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
-    assert (cache->flush_batch_count >= 0);
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         saved_errno = errno;
-        flux_log_error (cache->h, "content store");
+        if (cache->rank == 0 && errno == ENOSYS)
+            flux_log (cache->h, LOG_DEBUG, "content store: %s",
+                      "backing store service unavailable");
+        else
+            flux_log_error (cache->h, "content store");
         goto done;
     }
     if (!blobref || blobref[blobref_size - 1] != '\0') {
@@ -455,8 +462,9 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
 done:
     if (respond_requests_raw (&e->store_requests, cache->h,
                                         rc < 0 ? saved_errno : 0,
-                                        e->blobref, strlen (blobref) + 1) < 0)
-        flux_log_error (cache->h, "content store");
+                                        blobref, blobref_size) < 0)
+        flux_log_error (cache->h, "%s: error responding to store requests",
+                        __FUNCTION__);
     flux_rpc_destroy (rpc);
 
     /* If cache has been flushed, respond to flush requests, if any.
@@ -466,9 +474,10 @@ done:
      * only do it when the number of outstanding store requests falls to
      * a low water mark, here hardwired to be half of the limit.
      */
-    if (cache->acct_dirty == 0)
+    if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
-    else if (cache->flush_batch_count <= cache->flush_batch_limit / 2)
+    else if (cache->acct_dirty - cache->flush_batch_count > 0
+            && cache->flush_batch_count <= cache->flush_batch_limit / 2)
         (void)cache_flush (cache); /* resume flushing */
 }
 
@@ -486,6 +495,8 @@ static int cache_store (content_cache_t *cache, struct cache_entry *e)
         rpc = flux_rpc_raw (cache->h, "content.store",
                             e->data, e->len, FLUX_NODEID_UPSTREAM, 0);
     } else {
+        if (cache->flush_batch_count >= cache->flush_batch_limit)
+            return 0;
         rpc = flux_rpc_raw (cache->h, "content-backing.store",
                             e->data, e->len, FLUX_NODEID_ANY, 0);
     }
@@ -548,7 +559,8 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
         }
         if (respond_requests_raw (&e->load_requests, cache->h, 0,
                                                         e->data, e->len) < 0)
-            flux_log_error (h, "content store");
+            flux_log_error (cache->h, "%s: error responding to load requests",
+                            __FUNCTION__);
         if (!e->dirty) {
             e->dirty = 1;
             cache->acct_dirty++;
@@ -564,6 +576,15 @@ static void content_store_request (flux_t h, flux_msg_handler_t *w,
                     goto done;
                 return;
             }
+        }
+    } else {
+        /* When a backing store module is unloaded, it will clear
+         * cache->backing then attempt to store all its blobs.  Any of
+         * those still in cache need to be marked dirty.
+         */
+        if (cache->rank == 0 && !cache->backing) {
+            e->dirty = 1;
+            cache->acct_dirty++;
         }
     }
     rc = 0;
@@ -595,18 +616,27 @@ static int cache_flush (content_cache_t *cache)
     struct cache_entry *e;
     const char *key;
     int saved_errno = 0;
+    int count = 0;
     int rc = 0;
 
+    if (cache->acct_dirty - cache->flush_batch_count == 0
+            || cache->flush_batch_count >= cache->flush_batch_limit)
+        return 0;
+
+    flux_log (cache->h, LOG_DEBUG, "content flush begin");
     FOREACH_ZHASH (cache->entries, key, e) {
+        if (!e->dirty || e->store_pending)
+            continue;
+        if (cache_store (cache, e) < 0) {
+            saved_errno = errno;
+            rc = -1;
+        }
+        count++;
         if (cache->flush_batch_count >= cache->flush_batch_limit)
             break;
-        if (e->dirty) {
-            if (cache_store (cache, e) < 0) {
-                saved_errno = errno;
-                rc = -1;
-            }
-        }
     }
+    flux_log (cache->h, LOG_DEBUG, "content flush +%d (dirty=%d pending=%d)",
+              count, cache->acct_dirty, cache->flush_batch_count);
     if (rc < 0)
         errno = saved_errno;
     return rc;
@@ -732,9 +762,17 @@ done:
 /* This is called when outstanding store ops have completed.  */
 static void flush_respond (content_cache_t *cache)
 {
+    int errnum = 0;
+
+    if (cache->acct_dirty){
+        errnum = EIO;
+        if (cache->rank == 0 && !cache->backing)
+            errnum = ENOSYS;
+    }
     if (respond_requests_raw (&cache->flush_requests, cache->h,
-                                cache->acct_dirty > 0 ? EIO : 0, NULL, 0) < 0)
-        flux_log_error (cache->h, "content flush");
+                              errnum, NULL, 0) < 0)
+        flux_log_error (cache->h, "%s: error responding to flush requests",
+                        __FUNCTION__);
 }
 
 static void content_flush_request (flux_t h, flux_msg_handler_t *w,
@@ -911,7 +949,7 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     /* Misc
      */
     if (attr_add_active_uint32 (attr, "content-flush-batch-limit",
-                &cache->flush_batch_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                &cache->flush_batch_limit, 0) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content-blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)

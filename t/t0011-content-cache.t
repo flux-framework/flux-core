@@ -9,9 +9,8 @@ if test "$TEST_LONG" = "t"; then
 fi
 
 # Size the session to one more than the number of cores, minimum of 4
-SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
-test ${SIZE} -lt 4 && SIZE=4
-test_under_flux ${SIZE}
+SIZE=$(test_size_large)
+test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
 MAXBLOB=`flux getattr content-blob-size-limit`

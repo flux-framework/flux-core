@@ -23,6 +23,7 @@
 \*****************************************************************************/
 
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 #include <json.h>
 

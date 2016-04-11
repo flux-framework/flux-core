@@ -36,9 +36,6 @@ Display command environment, and the path search for 'CMD'.
 *-c, --config*='DIR'::
 Set the directory to be used for configuration.  The default is $HOME/.flux.
 
-*-F, --file-config*::
-Force configuration from file instead of KVS.
-
 *-S, --secdir*='DIR'::
 Set the directory to be used long-term keys.
 The default is to use the config directory.
@@ -48,10 +45,6 @@ Set the URI used to connect to flux-broker.
 
 *-t, --trace-apisock*::
 Trace API socket traffic to 'stderr'.
-
-*-x, --exec-path*='PATH'::
-Prepend 'PATH' to sub-command executable search path.
-Multiple directories may be specified, separated by colons.
 
 
 SUB-COMMAND ENVIRONMENT
@@ -64,37 +57,39 @@ Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed
 with the following prototype:
 
-  [--exec-path PATH]:[config.general.exec_path]:install-path
+  [getenv FLUX_EXEC_PATH_PREPEND]:[config.general.exec_path]:install-path:\
+    [getenv FLUX_EXEC_PATH]
 
 setenv FLUX_MODULE_PATH::
 Set up broker comms module search path according to:
 
-  [config.general.module_path]:install-path:\
+  [getenv FLUX_MODULE_PATH_PREPEND]:[config.general.module_path]:install-path:\
     [getenv FLUX_MODULE_PATH]
 
 setenv FLUX_CONNECTOR_PATH::
 Set up search path for connector modules used by libflux to open a connection
 to the broker
 
-  [config.general.connector_path]:install-path:\
-    [getenv FLUX_CONNECTOR_PATH]
+  [getenv FLUX_CONNECTOR_PATH_PREPEND]:[config.general.connector_path]:\
+    install-path:[getenv FLUX_CONNECTOR_PATH]
 
 setenv LUA_PATH::
 Set Lua module search path:
 
-  [config.general.lua_path];[getenv LUA_PATH];install-path;;;
+  [getenv FLUX_LUA_PATH_PREPEND]:[config.general.lua_path];[getenv LUA_PATH];\
+    install-path;;;
 
 setenv LUA_CPATH::
 Set Lua binary module search path:
 
-  [config.general.lua_cpath];[getenv LUA_CPATH];install-path;;;
+  [getenv FLUX_LUA_CPATH_PREPEND];[config.general.lua_cpath];\
+    [getenv LUA_CPATH];install-path;;;
 
-setenv FLUX_BROKER_PATH::
-Set the path to the broker executable.  This environment variable is
-used by flux-start(1) and related sub-commands to launch the broker.
-The path may be set by any of the following methods, in decreasing precedence:
-- [config.general.broker_path]
-- install-path
+setenv PYTHONPATH::
+Set Python module search path:
+
+  [getenv FLUX_PYTHONPATH_PREPEND]:[config.general.python_path]:\
+    [getenv PYTHONPATH];install-path
 
 setenv FLUX_CONF_DIRECTORY::
 Set the path to the Flux config directory, which contains a config
@@ -103,9 +98,6 @@ methods, in descending precedence:
 - [--config DIR]
 - [$(top_builddir)/etc/flux, if being run from flux-core repo]
 - [$HOME/.flux/config]
-
-setenv FLUX_CONF_USEFILE::
-Set to 1 if configuration was obtained from a file.
 
 setenv FLUX_TRACE_APISOCK::
 Set to "1" if --trace-apisock was specified.  This causes the FLUX_FLAGS_TRACE

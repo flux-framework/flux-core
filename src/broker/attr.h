@@ -31,6 +31,10 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags);
 
 int attr_set (attr_t *attrs, const char *name, const char *val, bool force);
 
+/* Set an attribute's flags.
+ */
+int attr_set_flags (attr_t *attrs, const char *name, int flags);
+
 /* Add an attribute with callbacks for get/set.
  */
 int attr_add_active (attr_t *attrs, const char *name, int flags,

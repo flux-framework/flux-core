@@ -20,11 +20,6 @@ flux-module(1) manages dynamically loadable Flux modules.
 It can load/remove/list modules for the flux-broker(1), and for other
 Flux services that support dynamic module extensions.
 
-When operating in conjunction with the 'modctl' comms module,
-flux-module(1) performs module operations in parallel across a
-comms session, targeting all or a subset of session ranks
-according to OPTIONS.
-
 
 COMMANDS
 --------
@@ -53,12 +48,6 @@ OPTIONS
 -------
 *-r, --rank*=['all'|'nodeset']::
 Specify which ranks to apply the command to.
-
-*-d, --direct*::
-Bypass 'modctl' and contact 'service' directly.
-
-*-f, --fanout='N'*::
-Specify the maximum concurrency in direct mode (default 1024).
 
 
 LIST OUTPUT

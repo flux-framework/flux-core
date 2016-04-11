@@ -44,14 +44,24 @@
 #include <dlfcn.h>
 #include <argz.h>
 #include <flux/core.h>
+#include <czmq.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libpmi-client/pmi-client.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
@@ -67,15 +77,14 @@
 #include "sequence.h"
 #include "log.h"
 #include "content-cache.h"
+#include "runlevel.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
 #define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
 #endif
 
-const char *default_modules =
-    "connector-local,modctl,kvs,live,mecho,job,wrexec,barrier,resource-hwloc";
-
+const char *default_modules = "connector-local";
 const char *default_boot_method = "pmi";
 
 typedef struct {
@@ -99,7 +108,6 @@ typedef struct {
      */
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
-    char *scratch_dir;
     attr_t *attrs;
 
     /* Modules
@@ -132,6 +140,7 @@ typedef struct {
     hello_t *hello;
     double hello_timeout;
     flux_t enclosing_h;
+    runlevel_t *runlevel;
 
     /* Subprocess management
      */
@@ -154,7 +163,7 @@ static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
-static void rmmod_cb (module_t *p, void *arg);
+static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -165,14 +174,17 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (ctx_t *ctx);
 
-static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          zhash_t *modexclude, const char *modpath);
+static void load_modules (ctx_t *ctx, const char *default_modules,
+                          const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
-static void init_shell (ctx_t *ctx);
-static int init_shell_exit_handler (struct subprocess *p, void *arg);
+static void runlevel_cb (runlevel_t *r, int level, int rc,
+                         const char *state, void *arg);
+static void runlevel_io_cb (runlevel_t *r, const char *name,
+                            const char *msg, void *arg);
 
+static int create_persistdir (ctx_t *ctx);
 static int create_scratchdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
@@ -183,9 +195,6 @@ static int boot_single (ctx_t *ctx);
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
-static int attr_get_log (const char *name, const char **val, void *arg);
-static int attr_set_log (const char *name, const char *val, void *arg);
-
 static const struct flux_handle_ops broker_handle_ops;
 
 static struct boot_method boot_table[] = {
@@ -194,52 +203,39 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqM:X:L:N:k:s:H:O:x:T:g:D:Em:l:I"
+#define OPTIONS "+vqM:X:k:s:T:g:Em:IS:"
 static const struct option longopts[] = {
-    {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
-    {"module",          required_argument,  0, 'M'},
-    {"exclude",         required_argument,  0, 'x'},
-    {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
-    {"logdest",         required_argument,  0, 'L'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
-    {"scratch-directory",required_argument,  0, 'D'},
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
-    {"log-level",       required_argument,  0, 'l'},
+    {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-broker OPTIONS [module:key=val ...]\n"
+"Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
-" -N,--sid NAME                Set session id\n"
-" -M,--module NAME             Load module NAME (may be repeated)\n"
-" -x,--exclude NAME            Exclude module NAME\n"
-" -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
-" -L,--logdest FILE            Redirect log output to specified file\n"
-" -l,--log-level LEVEL         Set log level (default: 6/info)\n"
-"          [0=emerg 1=alert 2=crit 3=err 4=warning 5=notice 6=info 7=debug]\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -D,--scratch-directory DIR   Scratch directory for sockets, etc\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -m,--boot-method             Select bootstrap: pmi, single\n"
+" -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
     exit (1);
 }
@@ -248,30 +244,18 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    zlist_t *modules, *modopts, *sigwatchers;
-    zhash_t *modexclude;
+    zlist_t *sigwatchers;
     char *modpath;
     const char *confdir;
     int security_clr = 0;
     int security_set = 0;
     const char *secdir = NULL;
     char *boot_method = "pmi";
-    char *log_filename = NULL;
-    FILE *log_f = NULL;
-    int log_level = LOG_INFO;
     int e;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
 
-    if (!(modules = zlist_new ()))
-        oom ();
-    zlist_autofree (modules);
-    if (!(modexclude = zhash_new ()))
-        oom ();
-    if (!(modopts = zlist_new ()))
-        oom ();
-    zlist_autofree (modopts);
     if (!(sigwatchers = zlist_new ()))
         oom ();
 
@@ -291,7 +275,9 @@ int main (int argc, char *argv[])
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
-        oom();
+        oom ();
+    if (!(ctx.runlevel = runlevel_create ()))
+        oom ();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -303,11 +289,6 @@ int main (int argc, char *argv[])
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-            case 'N':   /* --sid NAME */
-                if (attr_add (ctx.attrs, "session-id", optarg,
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
-                    err_exit ("attr_add session-id");
-                break;
             case 's':   /* --security=MODE */
                 if (!strcmp (optarg, "none"))
                     security_clr = FLUX_SEC_TYPE_ALL;
@@ -324,26 +305,8 @@ int main (int argc, char *argv[])
             case 'q':   /* --quiet */
                 ctx.quiet = true;
                 break;
-            case 'M':   /* --module NAME[nodeset] */
-                if (zlist_push (modules, xstrdup (optarg)) < 0 )
-                    oom ();
-                break;
-            case 'x':   /* --exclude NAME */
-                zhash_update (modexclude, optarg, (void *)1);
-                break;
-            case 'O':   /* --modopt NAME:key=val */
-                if (zlist_push (modopts, optarg) < 0)
-                    oom ();
-                break;
             case 'X':   /* --module-path PATH */
                 modpath = optarg;
-                break;
-            case 'L':   /* --logdest DEST */
-                log_filename = optarg;
-                break;
-            case 'l':   /* --log-level 0-7 */
-                if ((log_level = log_strtolevel (optarg)) < 0)
-                    log_level = strtol (optarg, NULL, 10);
                 break;
             case 'k':   /* --k-ary k */
                 ctx.k_ary = strtoul (optarg, NULL, 10);
@@ -360,17 +323,6 @@ int main (int argc, char *argv[])
             case 'g':   /* --shutdown-grace SECS */
                 ctx.shutdown_grace = strtod (optarg, NULL);
                 break;
-            case 'D': { /* --scratch-directory DIR */
-                struct stat sb;
-                if (stat (optarg, &sb) < 0)
-                    err_exit ("%s", optarg);
-                if (!S_ISDIR (sb.st_mode))
-                    msg_exit ("%s: not a directory", optarg);
-                if ((sb.st_mode & S_IRWXU) != S_IRWXU)
-                    msg_exit ("%s: invalid mode: 0%o", optarg, sb.st_mode);
-                ctx.scratch_dir = xstrdup (optarg);
-                break;
-            }
             case 'E': /* --enable-epgm */
                 ctx.enable_epgm = true;
                 break;
@@ -379,6 +331,16 @@ int main (int argc, char *argv[])
                 break;
             case 'm': { /* --boot-method */
                 boot_method = optarg;
+                break;
+            }
+            case 'S': { /* --setattr ATTR=VAL */
+                char *val, *attr = xstrdup (optarg);
+                if ((val = strchr (attr, '=')))
+                    *val++ = '\0';
+                if (attr_add (ctx.attrs, attr, val, 0) < 0)
+                    if (attr_set (ctx.attrs, attr, val, true) < 0)
+                        err_exit ("setattr %s=%s", attr, val);
+                free (attr);
                 break;
             }
             default:
@@ -396,25 +358,12 @@ int main (int argc, char *argv[])
         for (m = &boot_table[0]; m->name != NULL; m++)
             if (!strcasecmp (m->name, boot_method))
                 break;
-        ctx.boot_method = m;
+        if (m->name != NULL)
+            ctx.boot_method = m;
     }
     if (!ctx.boot_method)
         msg_exit ("invalid boot method: %s", boot_method ? boot_method
                                                          : "none");
-
-    /* Add default modules to user-specified module list
-     */
-    if (default_modules) {
-        char *cpy = xstrdup (default_modules);
-        char *name, *saveptr = NULL, *a1 = cpy;
-        while ((name = strtok_r (a1, ",", &saveptr))) {
-            if (zlist_append (modules, xstrdup (name)))
-                oom ();
-            a1 = NULL;
-        }
-        free (cpy);
-    }
-
     /* Get the directory for CURVE keys.
      */
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
@@ -427,34 +376,29 @@ int main (int argc, char *argv[])
             err_exit ("flux_open enclosing instance");
     }
 
-    /* Process config from the KVS of enclosing instance (if any)
-     * and not forced to use a config file by the command line.
+    /* Process configuration.
      */
     ctx.cf = flux_conf_create ();
     if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
         msg_exit ("FLUX_CONF_DIRECTORY is not set");
     flux_conf_set_directory (ctx.cf, confdir);
-    if (getenv ("FLUX_CONF_USEFILE")) {
+    if (ctx.verbose)
+        msg ("Loading config from %s", confdir);
+    if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH) {
         if (ctx.verbose)
-            msg ("Loading config from %s", confdir);
-        if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH)
-            err_exit ("%s", confdir);
-    } else if (ctx.enclosing_h) {
-        if (ctx.verbose)
-            msg ("Loading config from KVS");
-        if (kvs_conf_load (ctx.enclosing_h, ctx.cf) < 0 && errno != ENOENT)
-            err_exit ("could not load config from enclosing instance KVS");
+            msg ("Configuration failed to load from %s, falling back", confdir);
     }
 
-    /* Arrange to load config entries into kvs config.*
+    /* Arrange to load config entries into broker attrs
      */
     flux_conf_itr_t itr = flux_conf_itr_create (ctx.cf);
     const char *key;
     while ((key = flux_conf_next (itr))) {
-        char *opt = xasprintf ("kvs:config.%s=%s",
-                               key, flux_conf_get (ctx.cf, key));
-        zlist_push (modopts, opt);
-        free (opt);
+        const char *val = flux_conf_get (ctx.cf, key);
+        /* Set config key as broker attribute */
+        if (attr_add (ctx.attrs, key, val, 0) < 0)
+            if (attr_set (ctx.attrs, key, val, true) < 0)
+                err_exit ("config: setattr %s=%s", key, val);
     }
     flux_conf_itr_destroy (itr);
 
@@ -518,32 +462,32 @@ int main (int argc, char *argv[])
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
+    if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        err_exit ("attr_set_flags session-id");
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
      * (These may have already been called by boot method)
+     * If persist-filesystem or persist-directory are set, initialize those,
+     * but only on rank 0.
      */
     if (create_scratchdir (&ctx) < 0)
         err_exit ("create_scratchdir");
     if (create_rankdir (&ctx) < 0)
         err_exit ("create_rankdir");
+    if (create_persistdir (&ctx) < 0)
+        err_exit ("create_persistdir");
 
     /* Initialize logging.
+     * First establish a redirect callback that forces all logs
+     * to ctx.h to go to our local log class rather than be sent
+     * as a "cmb.log" request message.  Next, provide the handle
+     * and rank to the log class.
      */
     flux_log_set_facility (ctx.h, "broker");
     flux_log_set_redirect (ctx.h, log_append_redirect, ctx.log);
     log_set_flux (ctx.log, ctx.h);
     log_set_rank (ctx.log, ctx.rank);
-    log_set_buflimit (ctx.log, 1024); /* adjust by attribute */
-    if (log_set_level (ctx.log, log_level) < 0)
-        err_exit ("invalid log level: %d", log_level);
-    if (ctx.rank == 0 && log_filename) {
-        if (!strcmp (log_filename, "stderr"))
-            log_f = stderr;
-        else if (!(log_f = fopen (log_filename, "a")))
-            err_exit ("%s", log_filename);
-        log_set_file (ctx.log, log_f);
-    }
 
     /* Dummy up cached attributes on the broker's handle so logging's
      * use of flux_get_rank() etc will work despite limitations.
@@ -576,14 +520,6 @@ int main (int argc, char *argv[])
             || attr_add_active (ctx.attrs, "event-relay-uri",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "log-level", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
-            || attr_add_active (ctx.attrs, "log-buflimit", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
-            || attr_add_active (ctx.attrs, "log-bufcount", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
-            || attr_add_active (ctx.attrs, "log-count", 0,
-                                attr_get_log, attr_set_log, ctx.log) < 0
             || attr_add_active_uint32 (ctx.attrs, "rank", &ctx.rank,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add_active_uint32 (ctx.attrs, "size", &ctx.size,
@@ -592,10 +528,15 @@ int main (int argc, char *argv[])
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add (ctx.attrs, "scratch-directory", ctx.scratch_dir,
-                                FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
-        err_exit ("attr_add");
+            || log_register_attrs (ctx.log, ctx.attrs) < 0
+            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
+        err_exit ("configuring attributes");
+    }
+
+    if (ctx.rank == 0) {
+        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
+            err_exit ("configuring runlevel attributes");
+    }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
@@ -632,8 +573,35 @@ int main (int argc, char *argv[])
     update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
-        ctx.init_shell = subprocess_create (ctx.sm);
-        subprocess_set_callback (ctx.init_shell, init_shell_exit_handler, &ctx);
+        const char *ldpath = flux_conf_get (ctx.cf,
+                                            "general.program_library_path");
+        const char *rc1 = getenv ("FLUX_RC1_PATH");
+        const char *rc3 = getenv ("FLUX_RC3_PATH");
+        const char *local_uri;
+        const char *pmi_library_path;
+
+        runlevel_set_size (ctx.runlevel, ctx.size);
+        runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
+        runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
+        runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
+
+        if (attr_get (ctx.attrs, "local-uri", &local_uri, NULL) < 0)
+            err_exit ("local-uri is not set");
+        if (!rc1)
+            rc1 = flux_conf_get (ctx.cf, "general.rc1_path");
+        if (!rc3)
+            rc3 = flux_conf_get (ctx.cf, "general.rc3_path");
+        pmi_library_path = flux_conf_get (ctx.cf, "general.pmi_library_path");
+
+        if (runlevel_set_rc (ctx.runlevel, 1, rc1 ? rc1 : RC1,
+                             local_uri, ldpath, pmi_library_path) < 0)
+            err_exit ("runlevel_set_rc 1");
+        if (runlevel_set_rc (ctx.runlevel, 2, ctx.init_shell_cmd,
+                             local_uri, ldpath, pmi_library_path) < 0)
+            err_exit ("runlevel_set_rc 2");
+        if (runlevel_set_rc (ctx.runlevel, 3, rc3 ? rc3 : RC3,
+                             local_uri, ldpath, pmi_library_path) < 0)
+            err_exit ("runlevel_set_rc 3");
     }
 
     /* Wire up the overlay.
@@ -649,7 +617,13 @@ int main (int argc, char *argv[])
      */
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
-    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.scratch_dir, ctx.rank);
+    {
+        const char *scratch_dir;
+        if (attr_get (ctx.attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
+            msg_exit ("scratch-directory attribute is not set");
+        }
+        snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", scratch_dir, ctx.rank);
+    }
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -658,15 +632,15 @@ int main (int argc, char *argv[])
      */
     broker_add_services (&ctx);
 
-    /* Load modules
+    /* Load default modules
      */
     if (ctx.verbose)
-        msg ("loading modules");
+        msg ("loading default modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, modules, modopts, modexclude, modpath);
+    load_modules (&ctx, default_modules, modpath);
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -729,12 +703,7 @@ int main (int argc, char *argv[])
     log_destroy (ctx.log);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
-    if (log_f)
-        fclose (log_f);
-
-    zlist_destroy (&modules);       /* autofree set */
-    zlist_destroy (&modopts);       /* autofree set */
-    zhash_destroy (&modexclude);    /* values const (no destructor) */
+    runlevel_destroy (ctx.runlevel);
 
     return 0;
 }
@@ -746,10 +715,11 @@ static void hello_update_cb (hello_t *hello, void *arg)
     if (hello_complete (hello)) {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
                   hello_get_nodeset (hello));
-        if (ctx->init_shell)
-            init_shell (ctx);
+        flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
+        if (runlevel_set_level (ctx->runlevel, 1) < 0)
+            err_exit ("runlevel_set_level 1");
     } else  {
-        flux_log (ctx->h, LOG_ERR, "nodeset: %s (incomplete)",
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
                   hello_get_nodeset (hello));
     }
     if (ctx->hello_timeout != 0
@@ -760,12 +730,13 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
+/* Currently 'expired' is always true.
+ */
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
-    //ctx_t *ctx = arg;
-    int rc = shutdown_get_rc (s);
+    ctx_t *ctx = arg;
     if (expired)
-        exit (rc);
+        exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
 }
 
 static void update_proctitle (ctx_t *ctx)
@@ -781,9 +752,13 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_pidfile (ctx_t *ctx)
 {
-    char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->scratch_dir, ctx->rank);
+    const char *scratch_dir;
+    char *pidfile;
     FILE *f;
 
+    if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0)
+        msg_exit ("scratch-directory attribute is not set");
+    pidfile = xasprintf ("%s/%d/broker.pid", scratch_dir, ctx->rank);
     if (!(f = fopen (pidfile, "w+")))
         err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
@@ -794,78 +769,51 @@ static void update_pidfile (ctx_t *ctx)
     free (pidfile);
 }
 
-/* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
- * Section 2.8.2 Exit status for shell commands (page 2315)
+/* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static int init_shell_exit_handler (struct subprocess *p, void *arg)
+static void runlevel_io_cb (runlevel_t *r, const char *name,
+                            const char *msg, void *arg)
 {
-    int rc = subprocess_exit_code (p);
-    ctx_t *ctx = (ctx_t *) arg;
-    assert (ctx != NULL);
+    ctx_t *ctx = arg;
+    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
+    int runlevel = runlevel_get_level (r);
 
-    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, rc,
-                  "%s", subprocess_state_string (p));
-    subprocess_destroy (p);
-    return 0;
+    flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);
 }
 
-static void path_prepend (char **s1, const char *s2)
+/* Handle completion of runlevel subprocess.
+ */
+static void runlevel_cb (runlevel_t *r, int level, int rc,
+                         const char *exit_string, void *arg)
 {
-    char *p;
+    ctx_t *ctx = arg;
+    int new_level = -1;
 
-    if (!s2)
-        ;
-    else if (!*s1)
-        *s1 = xstrdup (s2);
-    else if ((p = strstr (*s1, s2))) {
-        int s2_len = strlen (s2);
-        memmove (p, p + s2_len, strlen (p + s2_len) + 1);
-        if (*p == ':')
-            memmove (p, p + 1, strlen (p + 1) + 1);
-        path_prepend (s1, s2);
-    } else {
-        p = xasprintf ("%s:%s", s2, *s1);
-        free (*s1);
-        *s1 = p;
+    flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
+              "Run level %d %s (rc=%d)", level, exit_string, rc);
+
+    switch (level) {
+        case 1: /* init completed */
+            if (rc != 0) {
+                new_level = 3;
+                shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
+                              rc, "run level 1 %s", exit_string);
+            } else
+                new_level = 2;
+            break;
+        case 2: /* initial program completed */
+            new_level = 3;
+            shutdown_arm (ctx->shutdown, ctx->shutdown_grace,
+                          rc, "run level 2 %s", exit_string);
+            break;
+        case 3: /* finalization completed */
+            break;
     }
-}
-
-static void init_shell (ctx_t *ctx)
-{
-    const char *shell = getenv ("SHELL");
-    char *ldpath = NULL;
-    const char *local_uri;
-
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
-        err_exit ("%s: local_uri is not set", __FUNCTION__);
-    if (!shell)
-        shell = "/bin/bash";
-
-    subprocess_argv_append (ctx->init_shell, shell);
-    if (ctx->init_shell_cmd) {
-        subprocess_argv_append (ctx->init_shell, "-c");
-        subprocess_argv_append (ctx->init_shell, ctx->init_shell_cmd);
+    if (new_level != -1) {
+        flux_log (ctx->h, LOG_INFO, "Run level %d starting", new_level);
+        if (runlevel_set_level (r, new_level) < 0)
+            err_exit ("runlevel_set_level %d", new_level);
     }
-    subprocess_set_environ (ctx->init_shell, environ);
-    subprocess_setenv (ctx->init_shell, "FLUX_URI", local_uri, 1);
-    path_prepend (&ldpath, subprocess_getenv (ctx->init_shell,
-                                              "LD_LIBRARY_PATH"));
-    path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
-    path_prepend (&ldpath, flux_conf_get (ctx->cf,
-                                            "general.program_library_path"));
-    if (ldpath) {
-        subprocess_setenv (ctx->init_shell, "LD_LIBRARY_PATH", ldpath, 1);
-        free (ldpath);
-    }
-    subprocess_unsetenv (ctx->init_shell, "PMI_FD");
-    subprocess_unsetenv (ctx->init_shell, "PMI_RANK");
-    subprocess_unsetenv (ctx->init_shell, "PMI_SIZE");
-
-
-    if (!ctx->quiet)
-        flux_log (ctx->h, LOG_INFO, "starting initial program");
-
-    subprocess_run (ctx->init_shell);
 }
 
 static int create_dummyattrs (ctx_t *ctx)
@@ -884,62 +832,196 @@ static int create_dummyattrs (ctx_t *ctx)
     return 0;
 }
 
-/* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
- * It will be created in ctx->scratch_dir.
+/* If user set the 'scratch-directory-rank' attribute on the command line,
+ * validate the directory and its permissions, and set the immutable flag
+ * on the attribute.  If unset, create it within 'scratch-directory'.
+ * If we created the directory, arrange to remove it on exit.
+ * This function is idempotent.
  */
 static int create_rankdir (ctx_t *ctx)
 {
-    char *ranktmp = NULL;
+    const char *attr = "scratch-directory-rank";
+    const char *rank_dir, *scratch_dir, *local_uri;
+    char *dir = NULL;
     char *uri = NULL;
     int rc = -1;
 
-    if (ctx->rank == FLUX_NODEID_ANY || ctx->scratch_dir == NULL) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (attr_get (ctx->attrs, "local-uri", NULL, NULL) < 0) {
-        ranktmp = xasprintf ("%s/%d", ctx->scratch_dir, ctx->rank);
-        if (mkdir (ranktmp, 0700) < 0)
+    if (attr_get (ctx->attrs, attr, &rank_dir, NULL) == 0) {
+        struct stat sb;
+        if (stat (rank_dir, &sb) < 0)
             goto done;
-        cleanup_push_string (cleanup_directory, ranktmp);
-
-        uri = xasprintf ("local://%s", ranktmp);
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    } else {
+        if (attr_get (ctx->attrs, "scratch-directory",
+                                                &scratch_dir, NULL) < 0) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (ctx->rank == FLUX_NODEID_ANY) {
+            errno = EINVAL;
+            goto done;
+        }
+        dir = xasprintf ("%s/%d", scratch_dir, ctx->rank);
+        if (mkdir (dir, 0700) < 0)
+            goto done;
+        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        cleanup_push_string (cleanup_directory, dir);
+        rank_dir = dir;
+    }
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
+        uri = xasprintf ("local://%s", rank_dir);
         if (attr_add (ctx->attrs, "local-uri", uri,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
     rc = 0;
 done:
-    if (ranktmp)
-        free (ranktmp);
+    if (dir)
+        free (dir);
     if (uri)
         free (uri);
     return rc;
 }
 
+/* If user set the 'scratch-directory' attribute on the command line,
+ * validate the directory and its permissions, and set the immutable flag
+ * on the attribute.  If unset, create it in TMPDIR such that it will
+ * be unique in the enclosing instance, and in a hierarchy of instances.
+ * If we created the directory, arrange to remove it on exit.
+ * This function is idempotent.
+ */
 static int create_scratchdir (ctx_t *ctx)
 {
-    const char *sid;
+    const char *attr = "scratch-directory";
+    const char *sid, *scratch_dir;
+    const char *tmpdir = getenv ("TMPDIR");
+    char *dir, *tmpl = NULL;
+    int rc = -1;
 
-    if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
-        errno = EINVAL;
-        return -1;
+    if (attr_get (ctx->attrs, attr, &scratch_dir, NULL) == 0) {
+        struct stat sb;
+        if (stat (scratch_dir, &sb) < 0)
+            goto done;
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    } else {
+        if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
+            errno = EINVAL;
+            goto done;
+        }
+        tmpl = xasprintf ("%s/flux-%s-XXXXXX", tmpdir ? tmpdir : "/tmp", sid);
+        if (!(dir = mkdtemp (tmpl)))
+            goto done;
+        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        cleanup_push_string (cleanup_directory, dir);
     }
-    if (!ctx->scratch_dir) {
-        char *tmpdir = getenv ("TMPDIR");
-        char *template = xasprintf ("%s/flux-%s-XXXXXX",
-                                    tmpdir ? tmpdir : "/tmp", sid);
+    rc = 0;
+done:
+    if (tmpl)
+        free (tmpl);
+    return rc;
+}
 
-        if (!(ctx->scratch_dir = mkdtemp (template)))
-            return -1;
-        cleanup_push_string (cleanup_directory, ctx->scratch_dir);
+/* If 'persist-directory' set, validate it, make it immutable, done.
+ * If 'persist-filesystem' set, validate it, make it immutable, then:
+ * Create 'persist-directory' beneath it such that it is both unique and
+ * a different basename than 'scratch-directory' (in case persist-filesystem
+ * is set to TMPDIR).
+ */
+static int create_persistdir (ctx_t *ctx)
+{
+    struct stat sb;
+    const char *attr = "persist-directory";
+    const char *sid, *persist_dir, *persist_fs;
+    char *dir, *tmpl = NULL;
+    int rc = -1;
+
+    if (ctx->rank > 0) {
+        (void) attr_delete (ctx->attrs, "persist-filesystem", true);
+        (void) attr_delete (ctx->attrs, "persist-directory", true);
+        goto done_success;
     }
-    return 0;
+    if (attr_get (ctx->attrs, attr, &persist_dir, NULL) == 0) {
+        if (stat (persist_dir, &sb) < 0)
+            goto done;
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    } else {
+        if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (attr_get (ctx->attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
+            goto done_success;
+        }
+        if (stat (persist_fs, &sb) < 0)
+            goto done;
+        if (!S_ISDIR (sb.st_mode)) {
+            errno = ENOTDIR;
+            goto done;
+        }
+        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+            errno = EPERM;
+            goto done;
+        }
+        if (attr_set_flags (ctx->attrs, "persist-filesystem",
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        tmpl = xasprintf ("%s/fluxP-%s-XXXXXX", persist_fs, sid);
+        if (!(dir = mkdtemp (tmpl)))
+            goto done;
+        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    }
+done_success:
+    if (attr_get (ctx->attrs, "persist-filesystem", NULL, NULL) < 0) {
+        if (attr_add (ctx->attrs, "persist-filesystem", NULL,
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    }
+    if (attr_get (ctx->attrs, "persist-directory", NULL, NULL) < 0) {
+        if (attr_add (ctx->attrs, "persist-directory", NULL,
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    if (tmpl)
+        free (tmpl);
+    return rc;
 }
 
 static int boot_pmi (ctx_t *ctx)
 {
     pmi_t *pmi = NULL;
+    const char *scratch_dir;
     int spawned, size, rank, appnum;
     int relay_rank = -1, right_rank, parent_rank;
     int clique_size;
@@ -985,26 +1067,40 @@ static int boot_pmi (ctx_t *ctx)
 
     /* Get id string.
      */
-    e = pmi_get_id_length_max (pmi, &id_len);
-    if (e == PMI_SUCCESS) {
-        id = xzmalloc (id_len);
-        if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
-            msg ("pmi_get_rank: %s", pmi_strerror (e));
-            goto done;
+    if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
+        e = pmi_get_id_length_max (pmi, &id_len);
+        if (e == PMI_SUCCESS) {
+            id = xzmalloc (id_len);
+            if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
+                msg ("pmi_get_rank: %s", pmi_strerror (e));
+                goto done;
+            }
+        } else { /* No pmi_get_id() available? */
+            id = xasprintf ("%d", appnum);
         }
-    } else { /* No pmi_get_id() available? */
-        id = xasprintf ("simple-%d", appnum);
+        if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
     }
-    if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        goto done;
 
+    /* Initialize scratch-directory/rankdir
+     */
+    if (create_scratchdir (ctx) < 0) {
+        err ("pmi: could not initialize scratch-directory");
+        goto done;
+    }
+    if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
+        msg ("scratch-directory attribute is not set");
+        goto done;
+    }
+    if (create_rankdir (ctx) < 0) {
+        err ("could not initialize ankdir");
+        goto done;
+    }
 
     /* Set TBON request addr.  We will need any wildcards expanded below.
      */
     if (ctx->shared_ipc_namespace) {
-        if (create_scratchdir (ctx) < 0 || create_rankdir (ctx) < 0)
-            goto done;
-        char *reqfile = xasprintf ("%s/%d/req", ctx->scratch_dir, ctx->rank);
+        char *reqfile = xasprintf ("%s/%d/req", scratch_dir, ctx->rank);
         overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
         cleanup_push_string (cleanup_file, reqfile);
         free (reqfile);
@@ -1034,7 +1130,7 @@ static int boot_pmi (ctx_t *ctx)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/relay", ctx->scratch_dir);
+                char *relayfile = xasprintf ("%s/%d/relay", scratch_dir, rank);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
@@ -1178,7 +1274,7 @@ static int boot_pmi (ctx_t *ctx)
                                ipaddr, port);
         }
     } else if (ctx->shared_ipc_namespace) {
-        char *eventfile = xasprintf ("%s/event", ctx->scratch_dir);
+        char *eventfile = xasprintf ("%s/event", scratch_dir);
         overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
         if (ctx->rank == 0)
             cleanup_push_string (cleanup_file, eventfile);
@@ -1212,9 +1308,11 @@ static int boot_single (ctx_t *ctx)
     ctx->rank = 0;
     ctx->size = 1;
 
-    if (attr_add (ctx->attrs, "session-id", sid,
-                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
+        if (attr_add (ctx->attrs, "session-id", sid,
+                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
         goto done;
+    }
     rc = 0;
 done:
     free (sid);
@@ -1247,19 +1345,14 @@ static int mod_svc_cb (zmsg_t **zmsg, void *arg)
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
-static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
-                          zhash_t *modexclude, const char *modpath)
+static void load_modules (ctx_t *ctx, const char *default_modules,
+                          const char *modpath)
 {
-    char *s;
+    char *cpy = xstrdup (default_modules);
+    char *s, *saveptr = NULL, *a1 = cpy;
     module_t *p;
-    zhash_t *mods; /* hash by module name */
 
-    /* Create modules, adding to 'mods' list
-     */
-    if (!(mods = zhash_new ()))
-        oom ();
-    s = zlist_first (modules);
-    while (s) {
+    while ((s = strtok_r (a1, ",", &saveptr))) {
         char *name = NULL;
         char *path = NULL;
         char *sp;
@@ -1277,43 +1370,22 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                 msg_exit ("%s: not found in module search path", s);
             name = s;
         }
-        if (modexclude && zhash_lookup (modexclude, name))
-            goto next;
         if (!(p = module_add (ctx->modhash, path)))
             err_exit ("%s: module_add %s", name, path);
         if (!svc_add (ctx->services, module_get_name (p),
                                      module_get_service (p), mod_svc_cb, p))
             msg_exit ("could not register service %s", module_get_name (p));
-        zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
-        module_set_rmmod_cb (p, rmmod_cb, ctx);
+        module_set_status_cb (p, module_status_cb, ctx);
 next:
         if (name != s)
             free (name);
         if (path != s)
             free (path);
-        s = zlist_next (modules);
+        a1 = NULL;
     }
-
-    /* Add module options to module hash entries.
-     */
-    s = zlist_first (modopts);
-    while (s) {
-        char *arg = strchr (s, ':');
-        if (!arg)
-            msg_exit ("malformed module option: %s", s);
-        *arg++ = '\0';
-        if (!(p = zhash_lookup (mods, s)))
-            msg_exit ("module argument for unknown module: %s", s);
-        module_add_arg (p, arg);
-        s = zlist_next (modopts);
-    }
-
-    /* Now start all the modules we just created.
-     */
     module_start_all (ctx->modhash);
-
-    zhash_destroy (&mods);
+    free (cpy);
 }
 
 static void broker_block_signals (void)
@@ -1365,14 +1437,14 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
 static json_object *
 subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
 {
-    json_object *resp = util_json_object_new_object ();
+    json_object *resp = Jnew ();
 
     assert (ctx != NULL);
     assert (resp != NULL);
 
-    util_json_object_add_int (resp, "rank", ctx->rank);
-    util_json_object_add_int (resp, "pid", subprocess_pid (p));
-    util_json_object_add_string (resp, "state", subprocess_state_string (p));
+    Jadd_int (resp, "rank", ctx->rank);
+    Jadd_int (resp, "pid", subprocess_pid (p));
+    Jadd_str (resp, "state", subprocess_state_string (p));
     return (resp);
 }
 
@@ -1388,12 +1460,12 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     assert (zmsg != NULL);
 
     resp = subprocess_json_resp (ctx, p);
-    util_json_object_add_int (resp, "status", subprocess_exit_status (p));
-    util_json_object_add_int (resp, "code", subprocess_exit_code (p));
+    Jadd_int (resp, "status", subprocess_exit_status (p));
+    Jadd_int (resp, "code", subprocess_exit_code (p));
     if ((n = subprocess_signaled (p)))
-        util_json_object_add_int (resp, "signal", n);
+        Jadd_int (resp, "signal", n);
     if ((n = subprocess_exec_error (p)))
-        util_json_object_add_int (resp, "exec_errno", n);
+        Jadd_int (resp, "exec_errno", n);
 
     flux_respond (ctx->h, zmsg, 0, Jtostr (resp));
     zmsg_destroy (&zmsg);
@@ -1478,7 +1550,7 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
         free (data);
     }
 out:
-    response = util_json_object_new_object ();
+    response = Jnew ();
     Jadd_int (response, "code", errnum);
     flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
     zmsg_destroy (zmsg);
@@ -1516,7 +1588,7 @@ static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
         }
     }
 out:
-    response = util_json_object_new_object ();
+    response = Jnew ();
     Jadd_int (response, "code", errnum);
     flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
     zmsg_destroy (zmsg);
@@ -1630,10 +1702,10 @@ out_free:
 
 static char *subprocess_sender (struct subprocess *p)
 {
-    char *sender = NULL;
+    char *sender;
     zmsg_t *zmsg = subprocess_get_context (p, "zmsg");
-    if (zmsg)
-        flux_msg_get_route_first (zmsg, &sender);
+    if (!zmsg || flux_msg_get_route_first (zmsg, &sender) < 0)
+        return NULL;
     return (sender);
 }
 
@@ -1710,56 +1782,6 @@ static int attr_get_snoop (const char *name, const char **val, void *arg)
     snoop_t *snoop = arg;
     *val = snoop_get_uri (snoop);
     return 0;
-}
-
-static int attr_get_log (const char *name, const char **val, void *arg)
-{
-    log_t *log = arg;
-    static char s[32];
-    int n, rc = -1;
-
-    if (!strcmp (name, "log-level")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_level (log));
-        assert (n < sizeof (s));
-    } else if (!strcmp (name, "log-buflimit")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_buflimit (log));
-        assert (n < sizeof (s));
-    } else if (!strcmp (name, "log-bufcount")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_bufcount (log));
-        assert (n < sizeof (s));
-    } else if (!strcmp (name, "log-count")) {
-        n = snprintf (s, sizeof (s), "%d", log_get_count (log));
-        assert (n < sizeof (s));
-    } else {
-        errno = ENOENT;
-        goto done;
-    }
-    *val = s;
-    rc = 0;
-done:
-    return rc;
-}
-
-static int attr_set_log (const char *name, const char *val, void *arg)
-{
-    log_t *log = arg;
-    int rc = -1;
-
-    if (!strcmp (name, "log-level")) {
-        int level = strtol (val, NULL, 10);
-        if (log_set_level (log, level) < 0)
-            goto done;
-    } else if (!strcmp (name, "log-buflimit")) {
-        int limit = strtol (val, NULL, 10);
-        if (log_set_buflimit (log, limit) < 0)
-            goto done;
-    } else {
-        errno = ENOENT;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
 }
 
 static int attr_get_overlay (const char *name, const char **val, void *arg)
@@ -1880,12 +1902,9 @@ static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON out = NULL;
-    struct rusage usage;
     int rc = -1;
 
-    if (getrusage (RUSAGE_THREAD, &usage) < 0)
-        goto done;
-    if (!(out = rusage_to_json (&usage)))
+    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
         goto done;
     rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
     zmsg_destroy (zmsg);
@@ -1913,9 +1932,11 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     /* N.B. can't remove 'service' entry here as distributed
      * module shutdown may require inter-rank module communication.
      */
-    if (module_stop (p, *zmsg) < 0)
+    if (module_push_rmmod (p, *zmsg) < 0)
         goto done;
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
+    if (module_stop (p) < 0)
+        goto done;
     flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
     rc = 0;
 done:
@@ -1957,9 +1978,16 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
         arg = argz_next (argz, argz_len, arg);
     }
     module_set_poller_cb (p, module_cb, ctx);
-    module_set_rmmod_cb (p, rmmod_cb, ctx);
-    if (module_start (p) < 0)
+    module_set_status_cb (p, module_status_cb, ctx);
+    if (module_push_insmod (p, *zmsg) < 0) {
+        module_remove (ctx->modhash, p);
         goto done;
+    }
+    if (module_start (p) < 0) {
+        module_remove (ctx->modhash, p);
+        goto done;
+    }
+    zmsg_destroy (zmsg); /* zmsg will be replied to later */
     flux_log (ctx->h, LOG_INFO, "insmod %s", name);
     rc = 0;
 done:
@@ -2055,7 +2083,7 @@ static int cmb_reparent_cb (zmsg_t **zmsg, void *arg)
     }
     if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
         goto done;
-    flux_log (ctx->h, LOG_INFO, "reparent %s (%s)", uri, recycled ? "restored"
+    flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
                                                                   : "new");
     rc = 0;
 done:
@@ -2291,6 +2319,79 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
+static int cmb_heaptrace_start_cb (zmsg_t **zmsg, void *arg)
+{
+    const char *json_str, *filename;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "filename", &filename)) {
+        errno = EPROTO;
+        goto done;
+    }
+#if WITH_TCMALLOC
+    if (IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerStart (filename);
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif
+done:
+    Jput (in);
+    return rc;
+}
+
+static int cmb_heaptrace_dump_cb (zmsg_t **zmsg, void *arg)
+{
+    const char *json_str, *reason;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "reason", &reason)) {
+        errno = EPROTO;
+        goto done;
+    }
+#if WITH_TCMALLOC
+    if (!IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerDump (reason);
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif
+done:
+    Jput (in);
+    return rc;
+}
+
+static int cmb_heaptrace_stop_cb (zmsg_t **zmsg, void *arg)
+{
+    int rc = -1;
+    if (flux_request_decode (*zmsg, NULL, NULL) < 0)
+        goto done;
+#if WITH_TCMALLOC
+    if (!IsHeapProfilerRunning ()) {
+        errno = EINVAL;
+        goto done;
+    }
+    HeapProfilerStop();
+    rc = 0;
+#else
+    errno = ENOSYS;
+#endif /* WITH_TCMALLOC */
+done:
+    return rc;
+}
+
 static int requeue_for_service (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2333,6 +2434,9 @@ static struct internal_service services[] = {
     { "cmb.seq.fetch",  "[0]",  cmb_seq             },
     { "cmb.seq.set",    "[0]",  cmb_seq             },
     { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { "cmb.heaptrace.start",NULL, cmb_heaptrace_start_cb },
+    { "cmb.heaptrace.dump", NULL, cmb_heaptrace_dump_cb  },
+    { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
     { NULL, NULL, },
 };
@@ -2393,9 +2497,9 @@ done:
 /* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
-    int i;
     uint32_t seq;
     const char *topic, *s;
+
     if (flux_msg_get_seq (*zmsg, &seq) < 0
             || flux_msg_get_topic (*zmsg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
@@ -2406,8 +2510,12 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
         return -1;
     }
     if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
-        for (i = ctx->event_recv_seq + 1; i < seq; i++)
-            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+        int first = ctx->event_recv_seq + 1;
+        int count = seq - first;
+        if (count > 1)
+            flux_log (ctx->h, LOG_ERR, "lost events %d-%d", first, seq - 1);
+        else if (count == 1)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", first);
     }
     ctx->event_recv_seq = seq;
 
@@ -2490,33 +2598,39 @@ done:
 static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg = module_recvmsg (p);
+    flux_msg_t *msg = module_recvmsg (p);
     int type, rc;
+    int ka_errnum, ka_status;
 
-    if (!zmsg)
+    if (!msg)
         goto done;
-    if (zmsg_content_size (zmsg) == 0) { /* EOF - safe to pthread_join */
-        svc_remove (ctx->services, module_get_name (p));
-        module_remove (ctx->modhash, p);
-        goto done;
-    }
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            (void)broker_response_sendmsg (ctx, zmsg);
+            (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &zmsg);
-            if (zmsg)
-                flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
+            rc = broker_request_sendmsg (ctx, &msg);
+            if (msg)
+                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, &zmsg) < 0) {
+            if (broker_event_sendmsg (ctx, &msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "%s(%s): broker_event_sendmsg %s: %s",
                           __FUNCTION__, module_get_name (p),
                           flux_msg_typestr (type), strerror (errno));
             }
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
+                flux_log_error (ctx->h, "%s: flux_keepalive_decode",
+                                module_get_name (p));
+                break;
+            }
+            if (ka_status == FLUX_MODSTATE_EXITED)
+                module_set_errnum (p, ka_errnum);
+            module_set_status (p, ka_status);
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
@@ -2525,18 +2639,44 @@ static void module_cb (module_t *p, void *arg)
             break;
     }
 done:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
 }
 
-static void rmmod_cb (module_t *p, void *arg)
+static void module_status_cb (module_t *p, int prev_status, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
+    int status = module_get_status (p);
+    const char *name = module_get_name (p);
 
-    while ((zmsg = module_pop_rmmod (p))) {
-        if (flux_respond (ctx->h, zmsg, 0, NULL) < 0)
-            err ("%s: flux_respond", __FUNCTION__);
-        zmsg_destroy (&zmsg);
+    /* Transition from INIT
+     * Respond to insmod request, if any.
+     * If transitioning to EXITED, return error to insmod if mod_main() = -1
+     */
+    if (prev_status == FLUX_MODSTATE_INIT) {
+        if ((msg = module_pop_insmod (p))) {
+            int errnum = 0;
+            if (status == FLUX_MODSTATE_EXITED)
+                errnum = module_get_errnum (p);
+            if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
+                flux_log_error (ctx->h, "flux_repond to insmod %s", name);
+            flux_msg_destroy (msg);
+        }
+    }
+
+    /* Transition to EXITED
+     * Remove service routes, respond to rmmod request(s), if any,
+     * and remove the module (which calls pthread_join).
+     */
+    if (status == FLUX_MODSTATE_EXITED) {
+        flux_log (ctx->h, LOG_INFO, "module %s exited", name);
+        svc_remove (ctx->services, module_get_name (p));
+        while ((msg = module_pop_rmmod (p))) {
+            if (flux_respond (ctx->h, msg, 0, NULL) < 0)
+                flux_log_error (ctx->h, "flux_repond to rmmod %s", name);
+            flux_msg_destroy (msg);
+        }
+        module_remove (ctx->modhash, p);
     }
 }
 

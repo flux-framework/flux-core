@@ -370,16 +370,11 @@ done:
 /* kvs.commit
  */
 
-JSON kp_tcommit_enc (const char *sender, JSON dirents,
+JSON kp_tcommit_enc (const char *sender, JSON ops,
                      const char *fence, int nprocs)
 {
     JSON o = Jnew ();
-    if (dirents) {
-        json_object_iter iter;
-        json_object_object_foreachC (dirents, iter) {
-            Jadd_obj (o, iter.key, iter.val); /* takes a ref on iter.val */
-        }
-    }
+    Jadd_obj (o, "ops", ops); /* takes a ref on ops */
     if (sender)
         Jadd_str (o, ".arg_sender", sender);
     if (fence) {
@@ -389,24 +384,19 @@ JSON kp_tcommit_enc (const char *sender, JSON dirents,
     return o;
 }
 
-int kp_tcommit_dec (JSON o, const char **sender, JSON *dirents,
+int kp_tcommit_dec (JSON o, const char **sender, JSON *ops,
                     const char **fence, int *nprocs)
 {
     int rc = -1;
-    json_object_iter iter;
 
-    if (!sender || !dirents || !fence || !nprocs) {
+    if (!sender || !ops || !fence || !nprocs) {
         errno = EINVAL;
         goto done;
     }
-    *dirents = NULL;
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".arg_", 5))
-            continue;
-        if (!*dirents)
-            *dirents = Jnew ();
-        Jadd_obj (*dirents, iter.key, iter.val); /* takes a ref on iter.val */
-    }
+    *ops = NULL;
+    (void)Jget_obj (o, "ops", ops);
+    if (*ops)
+        Jget (*ops);
     *sender = NULL;
     (void)Jget_str (o, ".arg_sender", sender);
     *fence = NULL;

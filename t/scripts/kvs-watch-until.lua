@@ -54,16 +54,18 @@ local cb = fn ()
 local kw, err = f:kvswatcher {
     key = key,
     handler = function (kw, result)
-    if opts.v then 
-        printf ("%4.03fs: %s = %s\n",
-                timer:get0(),
-                key, tostring (result))
-    end
-    local ok, rv = pcall (cb, result)
-    if not ok then error (rv) end
-    if ok and rv then
-        os.exit (0)
-    end
+        if opts.v then
+            printf ("%4.03fs: %s = %s\n",
+                    timer:get0(),
+                    key, tostring (result))
+        end
+        -- Do not pass nil result to callback:
+        if result == nil then return end
+        local ok, rv = pcall (cb, result)
+        if not ok then error (rv) end
+        if ok and rv then
+            os.exit (0)
+        end
     end
 }
 

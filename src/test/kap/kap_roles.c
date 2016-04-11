@@ -4,9 +4,10 @@
 #include <stdlib.h>
 #include <json.h>
 #include <flux/core.h>
+#include "src/common/libcompat/compat.h"
 #include "src/modules/kvs/kvs_deprecated.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/base64_json.h"
 #include "kap.h"
 
 #define VAL_UNIT_SIZE    8 
@@ -188,8 +189,8 @@ fetch_kv_tuple (kap_params_t *param, int fet_i,
     }
     End = now ();
     update_metric (&Gets, Begin, End);
-    if ( util_json_object_get_data (o,
-            KAP_VAL_NAME, (uint8_t **) b, b_len) < 0 ) {
+    if ( base64_json_decode (Jobj_get (o, KAP_VAL_NAME),
+                             (uint8_t **) b, b_len) < 0 ) {
         fprintf (stderr, "get JSON failed.\n");
         goto error;
     }
@@ -271,8 +272,8 @@ put_test_obj (kap_params_t *param)
                 goto error;
             }
 
-            util_json_object_add_data (o, 
-                KAP_VAL_NAME, (uint8_t *)dat, sizeof(uint64_t)*len);
+            json_object_object_add (o, KAP_VAL_NAME,
+                base64_json_encode ((uint8_t *)dat, sizeof(uint64_t)*len));
         
             /***********************************************
              *        MEASURE PUT LATENCY                  *
@@ -348,7 +349,7 @@ send_causal_event (kap_params_t *param)
     }
 
     o = json_object_new_object (); 
-    util_json_object_add_int (o, KAP_KVSVER_NAME, v);
+    Jadd_int (o, KAP_KVSVER_NAME, v);
 
     zmsg_t * msg = flux_event_encode(KAP_CAUSAL_CONS_EV, Jtostr(o));
     if (flux_sendmsg (param->pers.handle, &msg) < 0) {
@@ -386,7 +387,7 @@ enforce_c_consistency (kap_params_t *param)
     const char *json_str;
     flux_msg_get_payload_json (msg, &json_str);
     o = json_tokener_parse (json_str);
-    if ( util_json_object_get_int (o, KAP_KVSVER_NAME, &v)) {
+    if ( !Jget_int (o, KAP_KVSVER_NAME, &v)) {
         fprintf (stderr,
             "json_object_get_int failed.\n");
         goto error;

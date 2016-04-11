@@ -198,7 +198,10 @@ done:
 
 void flux_msg_destroy (flux_msg_t *msg)
 {
-    zmsg_destroy (&msg);
+    int saved_errno = errno;
+    if (msg)
+        zmsg_destroy (&msg);
+    errno = saved_errno;
 }
 
 int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t *size)
@@ -319,7 +322,7 @@ int flux_msg_set_errnum (zmsg_t *zmsg, int e)
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_RESPONSE
+            || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_set_bigint (zframe_data (zf), zframe_size (zf), e) < 0) {
         errno = EINVAL;
         return -1;
@@ -334,7 +337,7 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
     uint32_t xe;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_RESPONSE
+            || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_get_bigint (zframe_data (zf), zframe_size (zf), &xe) < 0) {
         errno = EPROTO;
         return -1;
@@ -396,6 +399,36 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
         errno = EPROTO;
         return -1;
     }
+    return 0;
+}
+
+int flux_msg_set_status (zmsg_t *zmsg, int s)
+{
+    zframe_t *zf = zmsg_last (zmsg);
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_KEEPALIVE
+            || proto_set_bigint2 (zframe_data (zf), zframe_size (zf), s) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_status (const flux_msg_t *msg, int *s)
+{
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
+    int type;
+    uint32_t u;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_KEEPALIVE
+            || proto_get_bigint2 (zframe_data (zf), zframe_size (zf), &u) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    *s = u;
     return 0;
 }
 

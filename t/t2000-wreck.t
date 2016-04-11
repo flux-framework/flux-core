@@ -8,7 +8,7 @@ Test basic functionality of wreckrun facility.
 
 . `dirname $0`/sharness.sh
 SIZE=${FLUX_TEST_SIZE:-4}
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} wreck
 
 #  Return the previous jobid
 last_job_id() {
@@ -244,13 +244,13 @@ test_expect_success 'wreckrun: top level environment' '
 	test_cmp expected_top_env2 output_top_env2
 '
 test_expect_success 'wreck plugins can use wreck:log_msg()' '
-	saved_pattern=$(flux kvs get config.wrexec.lua_pattern)
+	saved_pattern=$(flux getattr wrexec.lua_pattern)
 	if test $? = 0; then
 	  test_when_finished \
-	    "flux kvs put config.wrexec.lua_pattern=\"$saved_pattern\""
+	    "flux setattr wrexec.lua_pattern \"$saved_pattern\""
 	else
 	  test_when_finished \
-	     "flux kvs unlink config.wrexec.lua_pattern"
+	     "flux setattr --expunge wrexec.lua_pattern"
 	fi
 	cat <<-EOF >test.lua &&
 	function rexecd_init ()
@@ -258,7 +258,7 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	    --if not rc then error (err) end
 	end
 	EOF
-	flux kvs put "config.wrexec.lua_pattern=$(pwd)/*.lua" &&
+	flux setattr wrexec.lua_pattern "$(pwd)/*.lua" &&
 	flux wreckrun /bin/true &&
 	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
 '
@@ -275,8 +275,8 @@ test_expect_success 'wreckrun: --output supported' '
 test_expect_success 'wreckrun: --error supported' '
 	flux wreckrun --output=test2.out --error=test2.err \
 	    sh -c "echo >&2 this is stderr; echo this is stdout" &&
-        $WAITFILE --timeout=1 -p "this is stderr" test2.err &&
-        $WAITFILE --timeout=1 -p "this is stdout" test2.out
+        $WAITFILE -v --timeout=1 -p "this is stderr" test2.err &&
+        $WAITFILE -v --timeout=1 -p "this is stdout" test2.out
 '
 test_expect_success 'wreckrun: kvs config output for all jobs' '
 	test_when_finished "flux kvs put lwj.output=" &&
@@ -361,6 +361,36 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 	submit: flux.rpc: Function not implemented
 	EOF
 	test_cmp expected.submit err.submit
+'
+
+no_active_jobs() {
+	local i maxtries=5
+	for i in `seq 1 $maxtries`; do
+		test $(flux kvs dirsize lwj-active) -eq 0 && return 0
+		sleep 0.2
+	done &&
+	return 1
+}
+
+test_expect_success 'wreck jobs are archived after failure' '
+	test_must_fail flux wreckrun --input=bad.file hostname &&
+	no_active_jobs
+'
+
+test_expect_success 'wreck: no KVS watchers leaked after 10 jobs' '
+	flux exec -r 1-$(($SIZE-1)) -l \
+		flux comms-stats --parse "#watchers" kvs | sort -n >w.before &&
+	for i in `seq 1 10`; do
+		flux wreckrun --ntasks $SIZE /bin/true
+	done &&
+	flux exec -r 1-$(($SIZE-1)) -l \
+		flux comms-stats --parse "#watchers" kvs | sort -n >w.after &&
+	test_cmp w.before w.after
+'
+
+# Keep this test in the last position
+test_expect_success 'wreck: no jobs left in lwj-active directory' '
+	no_active_jobs
 '
 
 test_debug "flux wreck ls"

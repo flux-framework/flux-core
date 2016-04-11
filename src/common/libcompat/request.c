@@ -30,69 +30,10 @@
 #include "src/common/libflux/info.h"
 
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
 #include "compat.h"
-
-int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
-{
-    int type;
-    int rc = -1;
-    const char *json_str;
-    JSON o = NULL;
-
-    if (in == NULL || zmsg == NULL) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (flux_msg_get_type (zmsg, &type) < 0)
-        goto done;
-    if (type != FLUX_MSGTYPE_REQUEST) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
-        goto done;
-    if (json_str == NULL || !(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    *in = o;
-    rc = 0;
-done:
-    return rc;
-}
-
-int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
-{
-    int errnum;
-    const char *json_str;
-    JSON o = NULL;
-    int rc = -1;
-
-    if (out == NULL || zmsg == NULL) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        goto done;
-    if (errnum != 0) {
-        errno = errnum;
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
-        goto done;
-    if (json_str == NULL || !(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    *out = o;
-    rc = 0;
-done:
-    return rc;
-}
 
 int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, JSON in)
@@ -135,23 +76,6 @@ int flux_json_respond (flux_t h, JSON out, zmsg_t **zmsg)
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto done;
     if (flux_msg_set_payload_json (*zmsg, out ? Jtostr (out) : NULL) < 0)
-        goto done;
-    if (flux_send (h, *zmsg, 0) < 0)
-        goto done;
-    zmsg_destroy (zmsg);
-    rc = 0;
-done:
-    return rc;
-}
-
-int flux_err_respond (flux_t h, int errnum, zmsg_t **zmsg)
-{
-    int rc = -1;
-    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
-        goto done;
-    if (flux_msg_set_errnum (*zmsg, errnum) < 0)
-        goto done;
-    if (flux_msg_set_payload_json (*zmsg, NULL) < 0)
         goto done;
     if (flux_send (h, *zmsg, 0) < 0)
         goto done;

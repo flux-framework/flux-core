@@ -131,8 +131,12 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     int rc = -1;
 
     if ((e = zhash_lookup (attrs->hash, name))) {
-        errno = EEXIST;
-        goto done;
+        if (!set) {
+            errno = EEXIST;
+            goto done;
+        }
+        if (set (name, e->val, arg) < 0)
+            goto done;
     }
     e = entry_create (name, NULL, flags);
     e->set = set;
@@ -203,6 +207,21 @@ done:
     return rc;
 }
 
+int attr_set_flags (attr_t *attrs, const char *name, int flags)
+{
+    struct entry *e;
+    int rc = -1;
+
+    if (!(e = zhash_lookup (attrs->hash, name))) {
+        errno = ENOENT;
+        goto done;
+    }
+    e->flags = flags;
+    rc = 0;
+done:
+    return rc;
+}
+
 static int get_int (const char *name, const char **val, void *arg)
 {
     int *i = arg;
@@ -220,12 +239,16 @@ static int set_int (const char *name, const char *val, void *arg)
     char *endptr;
     long n;
 
+    if (!val) {
+        errno = EINVAL;
+        return -1;
+    }
     n = strtol (val, &endptr, 0);
     if (n <= INT_MIN || n >= INT_MAX) {
         errno = ERANGE;
         return -1;
     }
-    if (val && *endptr != '\0') {
+    if (*endptr != '\0') {
         errno = EINVAL;
         return -1;
     }

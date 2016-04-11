@@ -6,8 +6,8 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 #
 # Comms module
@@ -19,6 +19,7 @@ live_la_LDFLAGS = $(fluxmod_ldflags) -module
 live_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		 $(top_builddir)/src/common/libflux-core.la \
 		 $(top_builddir)/src/modules/kvs/libflux-kvs.la \
+		 $(top_builddir)/src/modules/barrier/libflux-barrier.la \
 		 $(JSON_LIBS) $(ZMQ_LIBS)
 
 #

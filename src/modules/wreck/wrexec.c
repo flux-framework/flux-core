@@ -29,10 +29,18 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <arraylist.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include <flux/core.h>
 
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -41,7 +49,7 @@
 struct rexec_ctx {
     uint32_t nodeid;
     flux_t h;
-    char *wrexecd_path;
+    const char *wrexecd_path;
     const char *local_uri;
 };
 
@@ -60,19 +68,6 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static int wrexec_path_set (const char *key,
-    const char *val, void *arg, int err)
-{
-    struct rexec_ctx *ctx = (struct rexec_ctx *) arg;
-    if (ctx->wrexecd_path)
-        free (ctx->wrexecd_path);
-    if (err == ENOENT)
-        ctx->wrexecd_path = strdup (WREXECD_PATH);
-    else
-        ctx->wrexecd_path = strdup (val);
-    return (0);
-}
-
 static struct rexec_ctx *getctx (flux_t h)
 {
     struct rexec_ctx *ctx = (struct rexec_ctx *)flux_aux_get (h, "wrexec");
@@ -89,12 +84,6 @@ static struct rexec_ctx *getctx (flux_t h)
             goto fail;
         }
         flux_aux_set (h, "wrexec", ctx, freectx);
-        if (kvs_watch_string (h, "config.wrexec.wrexecd_path",
-             wrexec_path_set, (void *) ctx) < 0) {
-            flux_log_error (h, "getctx: kvs_watch_string");
-            goto fail;
-        }
-
     }
 
     return ctx;
@@ -186,6 +175,16 @@ static void exec_handler (struct rexec_ctx *ctx, uint64_t id, int *pfds)
     exit (255);
 }
 
+static void update_wrexecd_path (struct rexec_ctx *ctx)
+{
+    const char *p = flux_attr_get (ctx->h, "wrexec.wrexecd_path", NULL);
+    if (p != NULL)
+        ctx->wrexecd_path = p;
+    else if (ctx->wrexecd_path == NULL)
+        ctx->wrexecd_path = WREXECD_PATH;
+    return;
+}
+
 static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
 {
     int fds[2];
@@ -194,6 +193,9 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     int status;
     int rc = 0;
     pid_t pid;
+
+    /*  Refresh wrexecd_path in case it was updated since the previous run */
+    update_wrexecd_path (ctx);
 
     if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) < 0)
         return (-1);
@@ -205,8 +207,16 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
         return (-1);
     }
 
-    if (pid == 0)
+    if (pid == 0) {
+#if WITH_TCMALLOC
+        /* Child: if heap profiling is running, stop it to avoid
+         * triggering a dump when child exits.
+         */
+        if (IsHeapProfilerRunning ())
+            HeapProfilerStop ();
+#endif
         exec_handler (ctx, id, fds);
+    }
 
     /*
      *  Wait for child to exit
@@ -316,6 +326,7 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_start");
         return -1;
     }
+    flux_msg_handler_delvec (htab);
     return 0;
 }
 

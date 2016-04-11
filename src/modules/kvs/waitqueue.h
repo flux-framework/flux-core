@@ -60,7 +60,7 @@ void wait_runone (wait_t *wait);
 void wait_runqueue (waitqueue_t *q);
 
 /* Destroy all wait_t's on 'q' containing messages that 'cb' returns true on.
- * Return 0 if at least one wait_t is destroyed, or -1 on error.
+ * Return the number of wait_t's matched or -1 on error.
  */
 int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg);
 

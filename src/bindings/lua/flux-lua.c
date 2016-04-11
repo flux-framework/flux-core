@@ -36,8 +36,10 @@
 #include <lauxlib.h>
 
 #include "flux/core.h"
+#include "src/common/libcompat/compat.h"
 
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/base64_json.h"
 #include "src/modules/libmrpc/mrpc.h"
 #include "src/modules/libmrpc/mrpc_deprecated.h"
 #include "src/modules/libkz/kz.h"
@@ -1326,7 +1328,7 @@ static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
     if (json_str && (o = json_tokener_parse (json_str))) {
         int len;
         uint8_t *pp = NULL;
-        util_json_object_get_data (o, "data", &pp, &len);
+        base64_json_decode (Jobj_get (o, "data"), &pp, &len);
         if (pp && len > 0) {
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);
@@ -2021,6 +2023,8 @@ static int l_flux_reactor_start (lua_State *L)
 {
     int rc;
     const char *arg;
+    const char *reason;
+    flux_t h;
     int mode = 0;
     if ((lua_gettop (L) > 1) && (arg = lua_tostring (L, 2))) {
         if (strcmp (arg, "once") == 0)
@@ -2030,7 +2034,13 @@ static int l_flux_reactor_start (lua_State *L)
         else
             return lua_pusherror (L, "flux_reactor: Invalid argument");
     }
-    rc = flux_reactor_run (flux_get_reactor (lua_get_flux (L, 1)), mode);
+    h = lua_get_flux (L, 1);
+    rc = flux_reactor_run (flux_get_reactor (h), mode);
+    if (rc < 0 && (reason = flux_aux_get (h, "lua::reason"))) {
+        lua_pushnil (L);
+        lua_pushstring (L, reason);
+        return (2);
+    }
     return (l_pushresult (L, rc));
 }
 
@@ -2042,7 +2052,12 @@ static int l_flux_reactor_stop (lua_State *L)
 
 static int l_flux_reactor_stop_error (lua_State *L)
 {
-    flux_reactor_stop_error (flux_get_reactor (lua_get_flux (L, 1)));
+    const char *reason;
+    flux_t h = lua_get_flux (L, 1);
+    if ((lua_gettop (L) > 1) && (reason = lua_tostring (L, 2))) {
+        flux_aux_set (h, "lua::reason", strdup (reason), free);
+    }
+    flux_reactor_stop_error (flux_get_reactor (h));
     return 0;
 }
 

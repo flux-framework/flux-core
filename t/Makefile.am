@@ -6,12 +6,21 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-        $(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-        -I$(top_srcdir) -I$(top_srcdir)/src/include
+        -I$(top_srcdir) -I$(top_srcdir)/src/include \
+        $(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
+
+lua_SCRIPTS = \
+	fluxometer.lua
+
+install-data-local:
+	$(INSTALL) -m644 fluxometer/conf.lua.installed \
+		$(DESTDIR)$(luadir)/fluxometer/conf.lua
+uninstall-local:
+	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
 
 TESTS = \
 	loop/handle.t \
@@ -19,6 +28,7 @@ TESTS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t \
+	loop/log.t \
 	pmi/simple.t \
 	t0000-sharness.t \
 	t0001-basic.t \
@@ -34,9 +44,9 @@ TESTS = \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
 	t0013-content-sophia.t \
+	t0014-runlevel.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
-	t1002-modctl.t \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
@@ -62,12 +72,20 @@ TESTS = \
 	lua/t1004-statwatcher.t \
 	lua/t1005-fdwatcher.t
 
+if HAVE_PYTHON
+TESTS += \
+	 $(top_builddir)/t/t9990-python-tests.t
+endif
+
 EXTRA_DIST= \
 	$(check_SCRIPTS) \
 	aggregate-results.sh \
 	sharness.sh \
 	sharness.d \
-	$(T)
+	$(T) \
+	rc/rc1-kvs \
+	rc/rc1-wreck \
+	rc/rc1-testenv
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -87,9 +105,9 @@ check_SCRIPTS = \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
 	t0013-content-sophia.t \
+	t0014-runlevel.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
-	t1002-modctl.t \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
@@ -115,7 +133,8 @@ check_SCRIPTS = \
 	lua/t1002-kvs.t \
 	lua/t1003-iowatcher.t \
 	lua/t1004-statwatcher.t \
-	lua/t1005-fdwatcher.t
+	lua/t1005-fdwatcher.t \
+	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
 	loop/handle.t \
@@ -123,13 +142,23 @@ check_PROGRAMS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t \
+	loop/log.t \
 	pmi/kvstest \
 	pmi/simple.t \
 	pmi/pminfo \
 	kz/kzutil \
 	kvs/torture \
 	kvs/hashtest \
-	kvs/watch
+	kvs/watch \
+	kvs/watch_disconnect \
+	kvs/commit \
+	request/treq
+
+check_LTLIBRARIES = \
+	module/parent.la \
+	module/child.la \
+	request/req.la \
+	request/coproc.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -169,6 +198,10 @@ test_cppflags = \
 loop_handle_t_SOURCES = loop/handle.c
 loop_handle_t_CPPFLAGS = $(test_cppflags)
 loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_log_t_SOURCES = loop/log.c
+loop_log_t_CPPFLAGS = $(test_cppflags)
+loop_log_t_LDADD = $(test_ldadd) $(LIBDL)
 
 loop_reactor_t_SOURCES = loop/reactor.c
 loop_reactor_t_CPPFLAGS = $(test_cppflags)
@@ -221,7 +254,48 @@ kvs_watch_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
+kvs_commit_SOURCES = kvs/commit.c
+kvs_commit_CPPFLAGS = $(test_cppflags)
+kvs_commit_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
+kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
+kvs_watch_disconnect_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
 kvs_hashtest_SOURCES = kvs/hashtest.c
 kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
+
+request_treq_SOURCES = request/treq.c
+request_treq_CPPFLAGS = $(test_cppflags)
+request_treq_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+module_parent_la_SOURCES = module/parent.c
+module_parent_la_CPPFLAGS = $(test_cppflags)
+module_parent_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_parent_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+module_child_la_SOURCES = module/child.c
+module_child_la_CPPFLAGS = $(test_cppflags)
+module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_child_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+request_coproc_la_SOURCES = request/coproc.c
+request_coproc_la_CPPFLAGS = $(test_cppflags)
+request_coproc_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+request_coproc_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+request_req_la_SOURCES = request/req.c
+request_req_la_CPPFLAGS = $(test_cppflags)
+request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+request_req_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)

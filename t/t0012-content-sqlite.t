@@ -9,20 +9,26 @@ if test "$TEST_LONG" = "t"; then
 fi
 
 # Size the session to one more than the number of cores, minimum of 4
-SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
-test ${SIZE} -lt 4 && SIZE=4
-test_under_flux ${SIZE}
+SIZE=$(test_size_large)
+test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
 MAXBLOB=`flux getattr content-blob-size-limit`
 
+store_junk() {
+    local name=$1
+    local n=$2
+    for i in `seq 1 $n`; do \
+        echo "$name:$i" | flux content store >/dev/null || return 1
+    done
+}
+
 test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load --rank 0 --direct content-sqlite
+	flux module load --rank 0 content-sqlite
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
-        for i in `seq 0 99`; do echo test$i | \
-            flux content store >/dev/null; done &&
+	store_junk test 100 &&
         TOTAL=`flux comms-stats --type int --parse count content` &&
         test $TOTAL -ge 100
 '
@@ -103,7 +109,7 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 # Verify content is not lost
 
 test_expect_success 'flush rank 0 cache' '
-        flux content flush &&
+        run_timeout 10 flux content flush &&
 	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
 	test $NDIRTY -eq 0
 '
@@ -115,7 +121,7 @@ test_expect_success 'drop rank 0 cache' '
 '
 
 test_expect_success 'unload content-sqlite module' '
-	flux module remove --rank 0 --direct content-sqlite
+	flux module remove --rank 0 content-sqlite
 '
 
 test_expect_success 'check that content returned dirty' '
@@ -146,11 +152,11 @@ test_expect_success 'load 1m blob' '
 # Verify content is transferred to store
 
 test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load --rank 0 --direct content-sqlite
+	flux module load --rank 0 content-sqlite
 '
 
 test_expect_success 'flush rank 0 cache' '
-        flux content flush &&
+        run_timeout 10 flux content flush &&
 	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
 	test $NDIRTY -eq 0
 '
@@ -172,5 +178,26 @@ test_expect_success 'load 1m blob bypassing cache' '
         flux content load --bypass-cache ${HASHSTR} >1m.0.load3 &&
         test_cmp 1m.0.store 1m.0.load3
 '
+
+test_expect_success 'exercise batching of synchronous flush to backing store' '
+	flux setattr content-flush-batch-limit 5 &&
+        store_junk loadunload 200 &&
+    	flux content flush &&
+	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
+	test ${NDIRTY} -eq 0
+'
+
+test_expect_success 'exercise batching of asynchronous flush to backing store' '
+        OLD_COUNT=`flux comms-stats --type int --parse count content` &&
+	flux module remove --rank 0 content-sqlite &&
+	flux module load --rank 0 content-sqlite &&
+	flux module remove --rank 0 content-sqlite &&
+	flux module load --rank 0 content-sqlite &&
+	flux module remove --rank 0 content-sqlite &&
+	flux module load --rank 0 content-sqlite &&
+        NEW_COUNT=`flux comms-stats --type int --parse count content` &&
+	test $OLD_COUNT -le $NEW_COUNT
+'
+
 
 test_done

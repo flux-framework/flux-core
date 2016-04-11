@@ -41,13 +41,13 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "kvs_deprecated.h"
 #include "proto.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 
 struct kvsdir_struct {
@@ -82,22 +82,30 @@ typedef struct {
     zhash_t *watchers; /* kvs_watch_t hashed by stringified matchtag */
     char *cwd;
     zlist_t *dirstack;
+    flux_msg_handler_t *w;
 } kvsctx_t;
 
-static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg);
+static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg);
 
 static void freectx (void *arg)
 {
     kvsctx_t *ctx = arg;
-    zhash_destroy (&ctx->watchers);
-    zlist_destroy (&ctx->dirstack);
-    free (ctx->cwd);
-    free (ctx);
+    if (ctx) {
+        zhash_destroy (&ctx->watchers);
+        zlist_destroy (&ctx->dirstack);
+        if (ctx->w)
+            flux_msg_handler_destroy (ctx->w);
+        if (ctx->cwd)
+            free (ctx->cwd);
+        free (ctx);
+    }
 }
 
 static kvsctx_t *getctx (flux_t h)
 {
     kvsctx_t *ctx = (kvsctx_t *)flux_aux_get (h, "kvscli");
+    struct flux_match match = FLUX_MATCH_RESPONSE;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -106,6 +114,10 @@ static kvsctx_t *getctx (flux_t h)
         if (!(ctx->dirstack = zlist_new ()))
             oom ();
         if (!(ctx->cwd = xstrdup (".")))
+            oom ();
+        match.topic_glob = "kvs.watch";
+        if (!(ctx->w = flux_msg_handler_create (h, match, watch_response_cb,
+                                                                ctx)))
             oom ();
         flux_aux_set (h, "kvscli", ctx, freectx);
     }
@@ -626,8 +638,7 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
     free (k);
 
     if (lastcount == 0)
-        (void)flux_msghandler_add (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch",
-                                   watch_rep_cb, ctx);
+        flux_msg_handler_start (ctx->w);
     return wp;
 }
 
@@ -665,7 +676,7 @@ int kvs_unwatch (flux_t h, const char *key)
     }
     zlist_destroy (&hashkeys);
     if (zhash_size (ctx->watchers) == 0)
-        flux_msghandler_remove (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch");
+        flux_msg_handler_stop (ctx->w);
     rc = 0;
 done:
     Jput (in);
@@ -731,18 +742,18 @@ static int dispatch_watch (flux_t h, kvs_watcher_t *wp, json_object *val)
     return rc;
 }
 
-static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     JSON out = NULL;
     JSON val;
     uint32_t matchtag;
     kvs_watcher_t *wp;
-    int rc = 0;
 
-    if (flux_response_decode (*zmsg, NULL, &json_str) < 0)
+    if (flux_response_decode (msg, NULL, &json_str) < 0)
         goto done;
-    if (flux_msg_get_matchtag (*zmsg, &matchtag) < 0)
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0)
         goto done;
     if (!(out = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -751,11 +762,10 @@ static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (kp_rwatch_dec (out, &val) < 0)
         goto done;
     if ((wp = lookup_watcher (h, matchtag)))
-        rc = dispatch_watch (h, wp, val);
+        if (dispatch_watch (h, wp, val) < 0)
+            flux_reactor_stop_error (flux_get_reactor (h));
 done:
     Jput (out);
-    zmsg_destroy (zmsg);
-    return rc;
 }
 
 /* Not strictly an RPC since multiple replies are possible.
@@ -1599,6 +1609,61 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
     kvs_popd (dir->handle);
 
     return (rc);
+}
+
+int kvs_copy (flux_t h, const char *from, const char *to)
+{
+    char *json_str = NULL;
+    kvsdir_t *dir = NULL;
+    kvsitr_t *itr = NULL;
+    const char *name;
+    char *linkval = NULL;
+    int rc = -1;
+
+    if (kvs_get_symlink (h, from, &linkval) == 0) {
+        if (kvs_symlink (h, to, linkval) < 0)
+            goto done;
+    } else if (kvs_get_dir (h, &dir, "%s", from) < 0) {
+        if (errno != ENOTDIR)
+            goto done;
+        if (kvs_get (h, from, &json_str) < 0)
+            goto done;
+        if (kvs_put (h, to, json_str) < 0)
+            goto done;
+    } else {
+        if (!(itr = kvsitr_create (dir)))
+            goto done;
+        (void)kvs_unlink (h, to);
+        while ((name = kvsitr_next (itr)) != NULL) {
+            char *newfrom = xasprintf ("%s.%s", from, name);
+            char *newto = xasprintf ("%s.%s", to, name);
+            int nrc = kvs_copy (h, newfrom, newto);
+            free (newfrom);
+            free (newto);
+            if (nrc < 0)
+                goto done;
+        }
+    }
+    rc = 0;
+done:
+    if (json_str)
+        free (json_str);
+    if (dir)
+        kvsdir_destroy (dir);
+    if (itr)
+        kvsitr_destroy (itr);
+    if (linkval)
+        free (linkval);
+    return rc;
+}
+
+int kvs_move (flux_t h, const char *from, const char *to)
+{
+    if (kvs_copy (h, from, to) < 0)
+        return -1;
+    if (kvs_unlink (h, from) < 0)
+        return -1;
+    return 0;
 }
 
 /*

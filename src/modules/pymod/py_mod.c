@@ -34,6 +34,7 @@
 #include <string.h>
 #include <errno.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/optparse.h"

@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev libsophia libpmi-client libpmi-server \
+SUBDIRS = libtap libev libsophia libminilzo libpmi-client libpmi-server \
 	  liblsd libutil libflux libsubprocess libcompat
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
@@ -14,12 +14,13 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libsophia/libsophia.la \
+	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libpmi-client/libpmi-client.la \
 	$(builddir)/libpmi-server/libpmi-server.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL) -lrt
+	$(LIBDL) $(LIBRT)
 libflux_internal_la_LDFLAGS = -Wl,--no-undefined
 
 lib_LTLIBRARIES = libflux-core.la
@@ -27,7 +28,6 @@ libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
 	libflux-internal.la
-#-lrt is for clock_gettime, this should be abstracted
 
 libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map \
 			  -shared -export-dynamic --disable-static \

@@ -6,7 +6,7 @@ test_description='Test broker attrbitues'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 minimal
 
 test_expect_success 'flux getattr rank works' '
 	ATTR_VAL=`flux getattr rank` &&
@@ -33,8 +33,7 @@ test_expect_success 'flux lsattr works' '
 	! grep -q attrtest.foo lsattr_out
 '
 test_expect_success 'flux lsattr -v works' '
-	flux lsattr -v | sed -e "s/[\ ]\+/\	/g" >lsattr_v_out &&
-	ATTR_VAL=`grep rank lsattr_v_out | cut -f2` &&
+	ATTR_VAL=$(flux lsattr -v | awk "/^rank / { print \$2 }") &&
 	test "${ATTR_VAL}" -eq 0
 '
 

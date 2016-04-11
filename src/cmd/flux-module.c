@@ -30,32 +30,28 @@
 #include <dlfcn.h>
 #include <json.h>
 #include <flux/core.h>
+#include <czmq.h>
 #include <assert.h>
 
-#include "src/modules/modctl/modctl.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/readall.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/iterators.h"
 
 const int max_idle = 99;
 
 typedef struct {
-    int fanout;
-    bool direct;
-    char *nodeset;
+    const char *nodeset;
     int argc;
     char **argv;
 } opt_t;
 
-#define OPTIONS "+hr:df:"
+#define OPTIONS "+hr:x:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
-    {"fanout",     required_argument,  0, 'f'},
-    {"direct",     no_argument,        0, 'd'},
+    {"exclude",    required_argument,  0, 'x'},
     { 0, 0, 0, 0 },
 };
 
@@ -66,7 +62,7 @@ void mod_info (flux_t h, opt_t opt);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t h, opt_t opt); 
+    void (*fun)(flux_t h, opt_t opt);
 } func_t;
 
 static func_t funcs[] = {
@@ -93,9 +89,8 @@ void usage (void)
 "       flux-module load   [OPTIONS] module [arg ...]\n"
 "       flux-module remove [OPTIONS] module\n"
 "where OPTIONS are:\n"
-"       -r,--rank=[ns|all]  specify nodeset where op will be performed\n"
-"       -d,--direct         bypass modctl and KVS, with decreased scalability\n"
-"       -f,--fanout N       specify max concurrency in direct mode (def: 1024)\n"
+"       -r,--rank=NODESET     add ranks (default \"self\") \n"
+"       -x,--exclude=NODESET  exclude ranks\n"
 );
     exit (1);
 }
@@ -106,14 +101,13 @@ int main (int argc, char *argv[])
     int ch;
     char *cmd;
     func_t *f;
-    opt_t opt = {
-        .fanout = 1024,
-        .nodeset = NULL,
-    };
-    uint32_t rank, size;
+    opt_t opt;
+    const char *rankopt = "self";
+    const char *excludeopt = NULL;
 
     log_init ("flux-module");
 
+    memset (&opt, 0, sizeof (opt));
     if (argc < 2)
         usage ();
     cmd = argv[1];
@@ -125,16 +119,11 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'r': /* --rank=[nodeset|all] */
-                if (opt.nodeset)
-                    free (opt.nodeset);
-                opt.nodeset = xstrdup (optarg);
+            case 'r': /* --rank=NODESET */
+                rankopt = optarg;
                 break;
-            case 'd': /* --direct */
-                opt.direct = true;
-                break;
-            case 'f': /* --fanout */
-                opt.fanout = strtoul (optarg, NULL, 10);
+            case 'x': /* --exclude=NODESET */
+                excludeopt = optarg;
                 break;
             default:
                 usage ();
@@ -150,23 +139,14 @@ int main (int argc, char *argv[])
     if (strcmp (cmd, "info") != 0) {
         if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
-        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size))
-            err_exit ("flux_get_rank/size");
-        if (!opt.nodeset) {
-            opt.nodeset = xasprintf ("%d", rank);
-        } else if (!strcmp (opt.nodeset, "all") && size == 1) {
-            free (opt.nodeset);
-            opt.nodeset= xasprintf ("%d", rank);
-        } else if (!strcmp (opt.nodeset, "all")) {
-            free (opt.nodeset);
-            opt.nodeset = xasprintf ("[0-%d]", size - 1);
-        }
+        if (!(opt.nodeset = flux_get_nodeset (h, rankopt, excludeopt)))
+            err_exit ("--exclude/--rank");
+        if (strlen (opt.nodeset) == 0)
+            exit (0);
     }
 
     f->fun (h, opt);
 
-    if (opt.nodeset)
-        free (opt.nodeset);
     if (h)
         flux_close (h);
 
@@ -192,6 +172,28 @@ int filesize (const char *path)
     return sb.st_size;
 }
 
+void parse_modarg (const char *arg, char **name, char **path)
+{
+    char *modpath = NULL;
+    char *modname = NULL;
+
+    if (strchr (arg, '/')) {
+        if (!(modpath = realpath (arg, NULL)))
+            err_exit ("%s", arg);
+        if (!(modname = flux_modname (modpath)))
+            msg_exit ("%s", dlerror ());
+    } else {
+        char *searchpath = getenv ("FLUX_MODULE_PATH");
+        if (!searchpath)
+            searchpath = MODULE_PATH;
+        modname = xstrdup (arg);
+        if (!(modpath = flux_modfind (searchpath, modname)))
+            msg_exit ("%s: not found in module search path", modname);
+    }
+    *name = modname;
+    *path = modpath;
+}
+
 void mod_info (flux_t h, opt_t opt)
 {
     char *modpath = NULL;
@@ -200,33 +202,20 @@ void mod_info (flux_t h, opt_t opt)
 
     if (opt.argc != 1)
         usage ();
-    if (strchr (opt.argv[0], '/')) {
-        if (!(modpath = realpath (opt.argv[0], NULL)))
-            oom ();
-        if (!(modname = flux_modname (modpath)))
-            msg_exit ("%s", dlerror ());
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            searchpath = MODULE_PATH;
-        modname = xstrdup (opt.argv[0]);
-        if (!(modpath = flux_modfind (searchpath, modname)))
-            msg_exit ("%s: not found in module search path", modname);
-    }
+    parse_modarg (opt.argv[0], &modname, &modpath);
     digest = sha1 (modpath);
     printf ("Module name:  %s\n", modname);
     printf ("Module path:  %s\n", modpath);
     printf ("SHA1 Digest:  %s\n", digest);
     printf ("Size:         %d bytes\n", filesize (modpath));
 
-    if (modpath)
-        free (modpath);
-    if (modname)
-        free (modname);
-    if (digest)
-        free (digest);
+    free (modpath);
+    free (modname);
+    free (digest);
 }
 
+/* Derive name of module loading service from module name.
+ */
 char *getservice (const char *modname)
 {
     char *service = NULL;
@@ -241,61 +230,44 @@ char *getservice (const char *modname)
 
 void mod_insmod (flux_t h, opt_t opt)
 {
-    char *modpath = NULL;
-    char *modname = NULL;
+    char *modname;
+    char *modpath;
+    int errors = 0;
 
     if (opt.argc < 1)
         usage ();
-    if (strchr (opt.argv[0], '/')) {
-        if (!(modpath = realpath (opt.argv[0], NULL)))
-            oom ();
-        if (!(modname = flux_modname (modpath)))
-            msg_exit ("%s", dlerror ());
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            searchpath = MODULE_PATH;
-        modname = xstrdup (opt.argv[0]);
-        if (!(modpath = flux_modfind (searchpath, modname)))
-            msg_exit ("%s: not found in module search path", modname);
-    }
+    parse_modarg (opt.argv[0], &modname, &modpath);
     opt.argv++;
     opt.argc--;
-    if (opt.direct) {
-        char *service = getservice (modname);
-        char *topic = xasprintf ("%s.insmod", service);
-        char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
-        assert (json_str != NULL);
-        flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-        if (!r)
-            err_exit ("%s", topic);
-        while (!flux_rpc_completed (r)) {
-            uint32_t nodeid = FLUX_NODEID_ANY;
-            if (flux_rpc_get (r, NULL, NULL) < 0) {
-                if (errno == EEXIST)
-                    msg_exit ("%s[%d]: module/service name already in use",
-                            topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
-                    err_exit ("%s[%d]",
-                            topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
-            }
-        }
-        flux_rpc_destroy (r);
-        free (topic);
-        free (service);
-        free (json_str);
-    } else {
-        if (flux_modctl_load (h, opt.nodeset, modpath,
-                                                opt.argc, opt.argv) < 0) {
-            if (errno == EEXIST)
-                msg_exit ("%s: module/service name already in use", modname);
+
+    char *service = getservice (modname);
+    char *topic = xasprintf ("%s.insmod", service);
+    char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
+    assert (json_str != NULL);
+    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
+    if (!r)
+        err_exit ("%s", topic);
+    while (!flux_rpc_completed (r)) {
+        uint32_t nodeid = FLUX_NODEID_ANY;
+        if (flux_rpc_get (r, &nodeid, NULL) < 0) {
+            if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
+                msg ("%s[%" PRIu32 "]: %s module/service is in use",
+                     topic, nodeid, modname);
+            else if (nodeid != FLUX_NODEID_ANY)
+                err ("%s[%" PRIu32 "]", topic, nodeid);
             else
-                err_exit ("%s", modname);
+                err ("%s", topic);
+            errors++;
         }
     }
-    if (modpath)
-        free (modpath);
-    if (modname)
-        free (modname);
+    flux_rpc_destroy (r);
+    free (topic);
+    free (service);
+    free (json_str);
+    free (modpath);
+    free (modname);
+    if (errors)
+        exit (1);
 }
 
 void mod_rmmod (flux_t h, opt_t opt)
@@ -305,41 +277,60 @@ void mod_rmmod (flux_t h, opt_t opt)
     if (opt.argc != 1)
         usage ();
     modname = opt.argv[0];
-    if (opt.direct) {
-        char *service = getservice (modname);
-        char *topic = xasprintf ("%s.rmmod", service);
-        char *json_str = flux_rmmod_json_encode (modname);
-        assert (json_str != NULL);
-        flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-        if (!r)
-            err_exit ("%s", topic);
-        while (!flux_rpc_completed (r)) {
-            uint32_t nodeid = FLUX_NODEID_ANY;
-            if (flux_rpc_get (r, &nodeid, NULL) < 0)
-                err ("%s[%d]", topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid);
-        }
-        flux_rpc_destroy (r);
-        free (topic);
-        free (service);
-        free (json_str);
-    } else {
-        if (flux_modctl_unload (h, opt.nodeset, modname) < 0)
-            err_exit ("%s", modname);
+
+    char *service = getservice (modname);
+    char *topic = xasprintf ("%s.rmmod", service);
+    char *json_str = flux_rmmod_json_encode (modname);
+    assert (json_str != NULL);
+    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
+    if (!r)
+        err_exit ("%s %s", topic, modname);
+    while (!flux_rpc_completed (r)) {
+        uint32_t nodeid = FLUX_NODEID_ANY;
+        if (flux_rpc_get (r, &nodeid, NULL) < 0)
+            err ("%s[%d] %s",
+                 topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
+                 modname);
     }
+    flux_rpc_destroy (r);
+    free (topic);
+    free (service);
+    free (json_str);
 }
 
 int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
-                    const char *nodeset, void *arg)
+                    int status, const char *nodeset, void *arg)
 {
     int digest_len = strlen (digest);
     char idle_str[16];
+    char S;
     if (idle <= max_idle)
         snprintf (idle_str, sizeof (idle_str), "%d", idle);
     else
         strncpy (idle_str, "idle", sizeof (idle_str));
-    printf ("%-20.20s %6d %7s %4s %s\n", name, size,
+    switch (status) {
+        case FLUX_MODSTATE_INIT:
+            S ='I';
+            break;
+        case FLUX_MODSTATE_SLEEPING:
+            S ='S';
+            break;
+        case FLUX_MODSTATE_RUNNING:
+            S ='R';
+            break;
+        case FLUX_MODSTATE_FINALIZING:
+            S ='F';
+            break;
+        case FLUX_MODSTATE_EXITED:
+            S ='X';
+            break;
+        default:
+            S = '?';
+            break;
+    }
+    printf ("%-20.20s %7d %7s %4s  %c  %s\n", name, size,
             digest_len > 7 ? digest + digest_len - 7 : digest,
-            idle_str, nodeset ? nodeset : "");
+            idle_str, S, nodeset ? nodeset : "");
     return 0;
 }
 
@@ -348,6 +339,7 @@ typedef struct {
     int size;
     char *digest;
     int idle;
+    int status_hist[8];
     nodeset_t *nodeset;
 } mod_t;
 
@@ -360,13 +352,14 @@ void mod_destroy (mod_t *m)
 }
 
 mod_t *mod_create (const char *name, int size, const char *digest,
-                          int idle, uint32_t nodeid)
+                   int idle, int status, uint32_t nodeid)
 {
     mod_t *m = xzmalloc (sizeof (*m));
     m->name = xstrdup (name);
     m->size = size;
     m->digest = xstrdup (digest);
     m->idle = idle;
+    m->status_hist[abs (status) % 8]++;
     if (!(m->nodeset = nodeset_create_rank (nodeid)))
         oom ();
     return m;
@@ -374,34 +367,34 @@ mod_t *mod_create (const char *name, int size, const char *digest,
 
 void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
 {
-    zlist_t *keys = NULL;
     const char *key;
     mod_t *m;
-    int errnum = 0;
+    int status;
 
-    if (!(keys = zhash_keys (mods)))
-        oom ();
-    key = zlist_first (keys);
-    while (key != NULL) {
-        if ((m = zhash_lookup (mods, key))) {
-            if (cb (m->name, m->size, m->digest, m->idle,
-                                       nodeset_string (m->nodeset), arg) < 0) {
-                if (errno > errnum)
-                    errnum = errno;
-            }
-        }
-        key = zlist_next (keys);
+    FOREACH_ZHASH(mods, key, m) {
+        if (m->status_hist[FLUX_MODSTATE_INIT] > 0)
+            status = FLUX_MODSTATE_INIT;
+        else if (m->status_hist[FLUX_MODSTATE_EXITED] > 0) /* unlikely */
+            status = FLUX_MODSTATE_EXITED;
+        else if (m->status_hist[FLUX_MODSTATE_FINALIZING] > 0)
+            status = FLUX_MODSTATE_FINALIZING;
+        else if (m->status_hist[FLUX_MODSTATE_RUNNING] > 0)
+            status = FLUX_MODSTATE_RUNNING;
+        else
+            status = FLUX_MODSTATE_SLEEPING;
+        cb (m->name, m->size, m->digest, m->idle, status,
+                                        nodeset_string (m->nodeset), arg);
     }
-    zlist_destroy (&keys);
 }
 
-int lsmod_hash_cb (uint32_t nodeid, const char *json_str, zhash_t *mods)
+int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
 {
     flux_modlist_t modlist;
     mod_t *m;
     int i, len;
     const char *name, *digest;
     int size, idle;
+    int status;
     int rc = -1;
 
     if (!(modlist = flux_lsmod_json_decode (json_str)))
@@ -409,15 +402,17 @@ int lsmod_hash_cb (uint32_t nodeid, const char *json_str, zhash_t *mods)
     if ((len = flux_modlist_count (modlist)) == -1)
         goto done;
     for (i = 0; i < len; i++) {
-        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle) < 0)
+        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle,
+                                                                 &status) < 0)
             goto done;
         if ((m = zhash_lookup (mods, digest))) {
             if (idle < m->idle)
                 m->idle = idle;
+            m->status_hist[abs (status) % 8]++;
             if (!nodeset_add_rank (m->nodeset, nodeid))
                 oom ();
         } else {
-            m = mod_create (name, size, digest, idle, nodeid);
+            m = mod_create (name, size, digest, idle, status, nodeid);
             zhash_update (mods, digest, m);
             zhash_freefn (mods, digest, (zhash_free_fn *)mod_destroy);
         }
@@ -437,32 +432,30 @@ void mod_lsmod (flux_t h, opt_t opt)
         usage ();
     if (opt.argc == 1)
         service = opt.argv[0];
-    printf ("%-20s %6s %7s %4s %s\n",
-            "Module", "Size", "Digest", "Idle", "Nodeset");
-    if (opt.direct) {
-        zhash_t *mods = zhash_new ();
-        if (!mods)
-            oom ();
-        char *topic = xasprintf ("%s.lsmod", service);
-        flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
-        if (!r)
-            err_exit ("%s", topic);
-        while (!flux_rpc_completed (r)) {
-            const char *json_str;
-            uint32_t nodeid;
-            if (flux_rpc_get (r, &nodeid, &json_str) < 0)
-                err_exit ("%s", topic);
-            if (lsmod_hash_cb (nodeid, json_str, mods) < 0)
-                err_exit ("%s[%u]", topic, nodeid);
+    printf ("%-20s %-7s %-7s %4s  %c  %s\n",
+            "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
+    zhash_t *mods = zhash_new ();
+    if (!mods)
+        oom ();
+    char *topic = xasprintf ("%s.lsmod", service);
+    flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
+    if (!r)
+        err_exit ("%s", topic);
+    while (!flux_rpc_completed (r)) {
+        const char *json_str;
+        uint32_t nodeid = FLUX_NODEID_ANY;
+        if (flux_rpc_get (r, &nodeid, &json_str) < 0
+                || lsmod_merge_result (nodeid, json_str, mods) < 0) {
+            if (nodeid != FLUX_NODEID_ANY)
+                err ("%s[%" PRIu32 "]", topic, nodeid);
+            else
+                err ("%s", topic);
         }
-        flux_rpc_destroy (r);
-        lsmod_map_hash (mods, lsmod_print_cb, NULL);
-        zhash_destroy (&mods);
-        free (topic);
-    } else {
-        if (flux_modctl_list (h, service, opt.nodeset, lsmod_print_cb, NULL) < 0)
-            err_exit ("modctl_list");
     }
+    flux_rpc_destroy (r);
+    lsmod_map_hash (mods, lsmod_print_cb, NULL);
+    zhash_destroy (&mods);
+    free (topic);
 }
 
 /*

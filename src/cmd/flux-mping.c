@@ -25,6 +25,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/param.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>
@@ -33,7 +35,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/monotime.h"
 #include "src/modules/libmrpc/mrpc.h"
 #include "src/modules/libmrpc/mrpc_deprecated.h"
@@ -105,10 +107,10 @@ int main (int argc, char *argv[])
         monotime (&t0);
         if (!(f = flux_mrpc_create (h, nodelist)))
             err_exit ("flux_mrpc_create");
-        inarg = util_json_object_new_object ();
-        util_json_object_add_int (inarg, "seq", seq);
+        inarg = Jnew ();
+        Jadd_int (inarg, "seq", seq);
         if (pad)
-            util_json_object_add_string (inarg, "pad", pad);
+            Jadd_str (inarg, "pad", pad);
         flux_mrpc_put_inarg_obj (f, inarg);
         if (flux_mrpc (f, "mecho") < 0)
             err_exit ("flux_mrpc");
@@ -117,9 +119,9 @@ int main (int argc, char *argv[])
                 msg ("%d: no response", id);
                 continue;
             }
-            if (!util_json_match (inarg, outarg))
+            if (strcmp (Jtostr (inarg), Jtostr (outarg)) != 0)
                 msg ("%d: mangled response", id);
-                json_object_put (outarg);
+            json_object_put (outarg);
         }
         json_object_put (inarg);
         flux_mrpc_destroy (f);

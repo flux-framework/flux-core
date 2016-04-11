@@ -8,8 +8,11 @@ general
     python_path = @abs_top_builddir@/src/bindings/python:@abs_top_srcdir@/src/bindings/python/pycotap
     module_path = @abs_top_builddir@/src/modules
     program_library_path = @abs_top_builddir@/src/lib/libpmi/.libs:@abs_top_builddir@/src/common/.libs
+    pmi_library_path = @abs_top_builddir@/src/lib/libpmi/.libs/libpmi.so
     connector_path = @abs_top_builddir@/src/connectors
     man_path = @abs_top_builddir@/doc
+    rc1_path = @abs_top_srcdir@/etc/rc1
+    rc3_path = @abs_top_srcdir@/etc/rc3
 wrexec
     wrexecd_path = @abs_top_builddir@/src/modules/wreck/wrexecd
     lua_pattern = @abs_top_srcdir@/src/modules/wreck/lua.d/*.lua

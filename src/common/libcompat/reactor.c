@@ -61,13 +61,6 @@ struct fd_compat {
     void *arg;
 };
 
-struct zmq_compat {
-    flux_t h;
-    flux_watcher_t *w;
-    FluxZsHandler fn;
-    void *arg;
-};
-
 struct timer_compat {
     flux_t h;
     flux_watcher_t *w;
@@ -258,63 +251,6 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
     char hashkey[HASHKEY_LEN];
 
     snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
-    if ((c = zhash_lookup (ctx->watchers, hashkey))) {
-        flux_watcher_stop (c->w);
-        zhash_delete (ctx->watchers, hashkey);
-    }
-}
-
-/* 0MQ
- */
-
-static void zmq_compat_free (struct zmq_compat *c)
-{
-    if (c) {
-        flux_watcher_destroy (c->w);
-        free (c);
-    }
-}
-
-static void zmq_compat_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
-{
-    struct zmq_compat *c = arg;
-    void *zsock = flux_zmq_watcher_get_zsock (w);
-    if (c->fn (c->h, zsock, events_to_libzmq (revents), c->arg) < 0)
-        flux_reactor_stop_error (r);
-}
-
-int flux_zshandler_add (flux_t h, void *zs, short events,
-                        FluxZsHandler cb, void *arg)
-{
-    struct ctx *ctx = getctx (h);
-    struct zmq_compat *c = xzmalloc (sizeof (*c));
-    char hashkey[HASHKEY_LEN];
-
-    c->h = h;
-    c->fn = cb;
-    c->arg = arg;
-    c->w = flux_zmq_watcher_create (flux_get_reactor (h), zs,
-                                    libzmq_to_events (events),
-                                    zmq_compat_cb, c);
-    if (!c->w) {
-        free (c);
-        return -1;
-    }
-    flux_watcher_start (c->w);
-    snprintf (hashkey, sizeof (hashkey), "zmq:%p:%d", zs, events);
-    zhash_update (ctx->watchers, hashkey, c);
-    zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)zmq_compat_free);
-    return 0;
-}
-
-void flux_zshandler_remove (flux_t h, void *zs, short events)
-{
-    struct ctx *ctx = getctx (h);
-    struct zmq_compat *c;
-    char hashkey[HASHKEY_LEN];
-
-    snprintf (hashkey, sizeof (hashkey), "zmq:%p:%d", zs, events);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
         flux_watcher_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);

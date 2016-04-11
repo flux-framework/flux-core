@@ -15,9 +15,7 @@ double tstat_variance (tstat_t *ts);
 double tstat_stddev (tstat_t *ts);
 int tstat_count (tstat_t *ts);
 
-void util_json_object_add_tstat (json_object *o, const char *name,
-                                 tstat_t *ts, double scale);
-
+json_object *tstat_json (tstat_t *ts, double scale);
 
 #endif /* !_UTIL_TSTAT_H */
 /*

@@ -77,6 +77,7 @@ wait_t *wait_create (flux_t h, flux_msg_handler_t *wh, const flux_msg_t *msg,
 void wait_destroy (wait_t *w, double *msec)
 {
     assert (w->magic == WAIT_MAGIC);
+    assert (w->usecount == 0);
     if (msec)
         *msec = monotime_since (w->t0);
     flux_msg_destroy (w->hand.msg);
@@ -101,7 +102,8 @@ void wait_queue_destroy (waitqueue_t *q)
 
     assert (q->magic == WAITQUEUE_MAGIC);
     while ((w = zlist_pop (q->q))) {
-        wait_destroy (w, NULL);
+        if (--w->usecount == 0)
+            wait_destroy (w, NULL);
     }
     zlist_destroy (&q->q);
     q->magic = ~WAITQUEUE_MAGIC;
@@ -128,56 +130,60 @@ void wait_runone (wait_t *w)
     assert (w->magic == WAIT_MAGIC);
 
     if (--w->usecount == 0) {
-        w->hand.cb (w->hand.h, w->hand.w, w->hand.msg, w->hand.arg);
+        if (w->hand.cb)
+            w->hand.cb (w->hand.h, w->hand.w, w->hand.msg, w->hand.arg);
         wait_destroy (w, NULL);
     }
 }
 
 void wait_runqueue (waitqueue_t *q)
 {
-    zlist_t *cpy;
+    zlist_t *cpy = NULL;
     wait_t *w;
 
     assert (q->magic == WAITQUEUE_MAGIC);
-    if (!(cpy = zlist_new ()))
-        oom ();
     while ((w = zlist_pop (q->q))) {
+        if (!cpy && !(cpy = zlist_new ()))
+            oom ();
         if (zlist_append (cpy, w) < 0)
             oom ();
     }
-    while ((w = zlist_pop (cpy)))
-        wait_runone (w);
-    zlist_destroy (&cpy);
+    if (cpy) {
+        while ((w = zlist_pop (cpy)))
+            wait_runone (w);
+        zlist_destroy (&cpy);
+    }
 }
 
 int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
 {
-    zlist_t *tmp;
+    zlist_t *tmp = NULL;
     wait_t *w;
     int rc = -1;
+    int count = 0;
 
     assert (q->magic == WAITQUEUE_MAGIC);
-    if (!(tmp = zlist_new ()))
-        oom ();
 
     w = zlist_first (q->q);
     while (w) {
         if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
+            if (!tmp && !(tmp = zlist_new ()))
+                oom ();
             if (zlist_append (tmp, w) < 0)
                 oom ();
+            w->hand.cb = NULL; // prevent wait_runone from restarting handler
+            count++;
         }
         w = zlist_next (q->q);
     }
-    if (zlist_size (tmp) == 0) {
-        errno = ENOENT;
-        goto done;
+    if (tmp) {
+        while ((w = zlist_pop (tmp))) {
+            zlist_remove (q->q, w);
+            if (--w->usecount == 0)
+                wait_destroy (w, NULL);
+        }
     }
-    while ((w = zlist_pop (tmp))) {
-        zlist_remove (q->q, w);
-        wait_destroy (w, NULL);
-    }
-    rc = 0;
-done:
+    rc = count;
     zlist_destroy (&tmp);
     return rc;
 }

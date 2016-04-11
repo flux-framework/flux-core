@@ -9,7 +9,7 @@ Test exec functionality
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 
 test_expect_success 'basic exec functionality' '
 	flux exec /bin/true

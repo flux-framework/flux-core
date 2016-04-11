@@ -65,6 +65,8 @@ X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
+X_AC_MALLOC
+AC_CHECK_LIB(m, floor)
 
 AC_MSG_CHECKING(--enable-python argument)
 AC_ARG_ENABLE(python,
@@ -119,10 +121,13 @@ AC_PKGCONFIG
 ##
 # Project directories
 ##
+AS_VAR_SET(fluxrcdir, $sysconfdir/flux)
+AC_SUBST(fluxrcdir)
+
 AS_VAR_SET(fluxlibexecdir, $libexecdir/flux)
 AC_SUBST(fluxlibexecdir)
 
-AS_VAR_SET(fluxcmddir, $libexecdir/flux/core)
+AS_VAR_SET(fluxcmddir, $libexecdir/flux/cmd)
 AC_SUBST(fluxcmddir)
 
 AS_VAR_SET(fluxlibdir, $libdir/flux)
@@ -139,6 +144,14 @@ AC_SUBST(fluxincludedir)
 
 AS_VAR_SET(fluxcoreincludedir, $includedir/flux/core)
 AC_SUBST(fluxcoreincludedir)
+
+adl_RECURSIVE_EVAL([$bindir], fluxbindir)
+AS_VAR_SET(fluxbindir, $fluxbindir)
+AC_SUBST(fluxbindir)
+
+adl_RECURSIVE_EVAL([$luadir], fluxluadir)
+AS_VAR_SET(fluxluadir, $fluxluadir)
+AC_SUBST(fluxluadir)
 
 ##
 # Macros to avoid repetition in Makefiles.am's
@@ -161,6 +174,7 @@ AC_CONFIG_FILES( \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
   src/common/libsophia/Makefile \
+  src/common/libminilzo/Makefile \
   src/common/libpmi-client/Makefile \
   src/common/libpmi-server/Makefile \
   src/common/libflux/Makefile \
@@ -184,7 +198,6 @@ AC_CONFIG_FILES( \
   src/modules/kvs/Makefile \
   src/modules/content-sophia/Makefile \
   src/modules/content-sqlite/Makefile \
-  src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \
   src/modules/libkz/Makefile \
   src/modules/libjsc/Makefile \
@@ -196,8 +209,6 @@ AC_CONFIG_FILES( \
   src/modules/resource-hwloc/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
-  src/test/request/Makefile \
-  src/test/module/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
   etc/Makefile.inc \
@@ -207,7 +218,17 @@ AC_CONFIG_FILES( \
   doc/man7/Makefile \
   doc/test/Makefile \
   t/Makefile \
-  t/fluxometer.lua \
+  t/fluxometer/conf.lua \
+  t/fluxometer/conf.lua.installed \
 )
+
+AC_CONFIG_FILES(
+  [t/t9990-python-tests.t:t/t9990-python-tests.t.in],
+  [chmod +x t/t9990-python-tests.t]
+                )
+
+AC_CONFIG_LINKS([ \
+  t/fluxometer.lua:t/fluxometer.lua \
+])
 
 AC_OUTPUT

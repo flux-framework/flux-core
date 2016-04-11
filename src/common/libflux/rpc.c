@@ -36,7 +36,6 @@
 #include "dispatch.h"
 
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
@@ -89,7 +88,9 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
 
 void flux_rpc_destroy (flux_rpc_t *rpc)
 {
+    int saved_errno = errno;
     flux_rpc_usecount_decr (rpc);
+    errno = saved_errno;
 }
 
 static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
@@ -155,8 +156,7 @@ static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
         goto done;
     rc = 0;
 done:
-    if (msg)
-        flux_msg_destroy (msg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -174,8 +174,7 @@ static int rpc_request_send_raw (flux_rpc_t *rpc, int n, const char *topic,
         goto done;
     rc = 0;
 done:
-    if (msg)
-        flux_msg_destroy (msg);
+    flux_msg_destroy (msg);
     return rc;
 }
 

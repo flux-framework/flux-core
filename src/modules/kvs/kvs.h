@@ -198,12 +198,10 @@ int kvsdir_unlink (kvsdir_t *dir, const char *key);
 int kvsdir_symlink (kvsdir_t *dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t *dir, const char *key);
 
-/* Load flux_conf_t cache from KVS config.* namespace
+/* Copy/move a key to a new name.  If 'from' is a directory, copy recursively.
  */
-int kvs_conf_load (flux_t h, flux_conf_t cf);
-/* Save flux_conf_t cache to KVS config.* namespace
- */
-int kvs_conf_save (flux_t h, flux_conf_t cf);
+int kvs_copy (flux_t h, const char *from, const char *to);
+int kvs_move (flux_t h, const char *from, const char *to);
 
 #endif /* !_FLUX_CORE_KVS_H */
 

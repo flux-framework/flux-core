@@ -2,6 +2,7 @@
 #define BROKER_LOG_H
 
 #include <flux/core.h>
+#include "attr.h"
 
 typedef void (*log_sleeper_f)(const flux_msg_t *msg, void *arg);
 
@@ -12,16 +13,8 @@ void log_destroy (log_t *log);
 
 void log_set_flux (log_t *log, flux_t h);
 void log_set_rank (log_t *log, uint32_t rank);
-void log_set_file (log_t *log, FILE *f);
 
-int log_set_level (log_t *log, int level);
-int log_get_level (log_t *log);
-
-int log_set_buflimit (log_t *log, int limit);
-int log_get_buflimit (log_t *log);
-
-int log_get_bufcount (log_t *log);
-int log_get_count (log_t *log);
+int log_register_attrs (log_t *log, attr_t *attrs);
 
 /* Clear the buffer of entries <= seq_index
  * Set seq_index = -1 to clear all.

@@ -78,7 +78,6 @@
 #include "src/common/libutil/sha1.h"
 #include "src/common/libutil/shastring.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
@@ -113,7 +112,7 @@ const double min_commit_window = 1E-3;
 const bool event_includes_rootdir = true;
 
 typedef struct {
-    json_object *dirents;   /* hash key (e.g. a.b.c) => dirent */
+    json_object *ops;       /* array of { "key":fqkey, "dirent":dirent } */
     flux_msg_t *request;    /* request message */
     struct timespec t0;     /* commit begin timestamp */
     char *fence;            /* fence name, if applicable */
@@ -240,13 +239,13 @@ static bool store_by_reference (json_object *o)
 
 static json_object *dirent_create (char *type, void *arg)
 {
-    json_object *o = util_json_object_new_object ();
+    json_object *o = Jnew ();
     bool valid_type = false;
 
     if (!strcmp (type, "FILEREF") || !strcmp (type, "DIRREF")) {
         char *ref = arg;
 
-        util_json_object_add_string (o, type, ref);
+        Jadd_str (o, type, ref);
         valid_type = true;
     } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")
                                          || !strcmp (type, "LINKVAL")) {
@@ -255,7 +254,7 @@ static json_object *dirent_create (char *type, void *arg)
         if (val)
             json_object_get (val);
         else
-            val = util_json_object_new_object ();
+            val = Jnew ();
         json_object_object_add (o, type, val);
         valid_type = true;
     }
@@ -273,8 +272,8 @@ static commit_t *commit_create (void)
 static void commit_destroy (commit_t *c)
 {
     if (c) {
-        if (c->dirents)
-            json_object_put (c->dirents);
+        if (c->ops)
+            json_object_put (c->ops);
         if (c->fence)
             free (c->fence);
         flux_msg_destroy (c->request);
@@ -284,9 +283,12 @@ static void commit_destroy (commit_t *c)
 
 static void commit_add (commit_t *c, const char *key, json_object *dirent)
 {
-    if (!c->dirents)
-        c->dirents = util_json_object_new_object ();
-    json_object_object_add (c->dirents, key, dirent);
+    json_object *op = Jnew ();
+    Jadd_str (op, "key", key);
+    json_object_object_add (op, "dirent", dirent);
+    if (!c->ops)
+        c->ops = Jnew_ar ();
+    json_object_array_add (c->ops, op);
 }
 
 static fence_t *fence_create (int nprocs)
@@ -507,11 +509,12 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
 
 /* link (key, dirent) into directory 'dir'.
  */
-static void commit_link_dirent (ctx_t *ctx, json_object *dir,
+static void commit_link_dirent (ctx_t *ctx, json_object *rootdir,
                                 const char *key, json_object *dirent)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
+    json_object *dir = rootdir;
     json_object *o, *subdir = NULL, *subdirent;
 
     /* This is the first part of a key with multiple path components.
@@ -535,6 +538,12 @@ static void commit_link_dirent (ctx_t *ctx, json_object *dir,
             subdir = copydir (subdir);/* do not corrupt store by modify orig. */
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
+        } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
+            FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
+            char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
+            commit_link_dirent (ctx, rootdir, nkey, dirent);
+            free (nkey);
+            goto done;
         } else {
             if (!dirent) /* key deletion - it doesn't exist so return */
                 goto done;
@@ -566,13 +575,21 @@ static json_object *commit_apply_start (ctx_t *ctx)
     return copydir (rootdir); /* do not corrupt store by modifying orig. */
 }
 
-static void commit_apply_dirents (ctx_t *ctx, json_object *rootcpy, commit_t *c)
+static void commit_apply_ops (ctx_t *ctx, json_object *rootcpy, commit_t *c)
 {
-    json_object_iter iter;
+    int i, len;
+    json_object *op, *dirent;
+    const char *key;
 
-    if (c->dirents) {
-        json_object_object_foreachC (c->dirents, iter) {
-            commit_link_dirent (ctx, rootcpy, iter.key, iter.val);
+    if (c->ops) {
+        len = json_object_array_length (c->ops);
+        for (i = 0; i < len; i++) {
+            if (!(op = json_object_array_get_idx (c->ops, i))
+                    || !Jget_str (op, "key", &key))
+                continue;
+            dirent = NULL;
+            (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
+            commit_link_dirent (ctx, rootcpy, key, dirent);
         }
     }
 }
@@ -588,20 +605,6 @@ static bool commit_apply_finish (ctx_t *ctx, json_object *rootcpy)
     setroot (ctx, ref, ctx->rootseq + 1);
     monotime (&ctx->commit_time);
     return true;
-}
-
-/* Apply a single commit.
- * N.B. This is only used during initialization
- */
-static bool commit_apply_one (ctx_t *ctx, commit_t *c)
-{
-    json_object *rootcpy;
-
-    if (!c->dirents)
-        return false;
-    rootcpy = commit_apply_start (ctx);
-    commit_apply_dirents (ctx, rootcpy, c);
-    return commit_apply_finish (ctx, rootcpy);
 }
 
 /* Apply all the commits found in ctx->commits in COMMIT_MASTER state.
@@ -624,7 +627,7 @@ static int commit_apply_all (ctx_t *ctx)
         c = zhash_lookup (ctx->commits, key);
         assert (c != NULL);
         if (c->state == COMMIT_MASTER) {
-            commit_apply_dirents (ctx, rootcpy, c);
+            commit_apply_ops (ctx, rootcpy, c);
             count++;
         }
         key = zlist_next (keys);
@@ -667,7 +670,7 @@ static void commit_apply_fence (ctx_t *ctx, const char *name)
     while (key) {
         if ((c = zhash_lookup (ctx->commits, key)) && c->state == COMMIT_FENCE
                                               && !strcmp (name, c->fence)) {
-            commit_apply_dirents (ctx, rootcpy, c);
+            commit_apply_ops (ctx, rootcpy, c);
         }
         key = zlist_next (keys);
     }
@@ -799,7 +802,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
         *next++ = '\0';
         if (!json_object_object_get_ex (dir, name, &dirent))
             goto error;
-        if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+        if (Jget_str (dirent, "LINKVAL", &link)) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
             if (!walk (ctx, root, link, &dirent, wait, false, depth))
@@ -807,7 +810,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
             if (!dirent)
                 goto error;
         }
-        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+        if (Jget_str (dirent, "DIRREF", &ref)) {
             if (!load (ctx, ref, wait, &dir))
                 goto stall;
 
@@ -815,7 +818,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
             /* N.B. in current code, directories are never stored by value */
             msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
                       __FUNCTION__, path, name, Jtostr (dirent));
-        } else if ((util_json_object_get_string (dirent, "FILEREF", NULL) == 0
+        } else if ((Jget_str (dirent, "FILEREF", NULL)
                  || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
             errno = ENOTDIR;
             goto error;
@@ -827,7 +830,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
     }
     /* now terminal path component */
     if (json_object_object_get_ex (dir, name, &dirent) &&
-        util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+        Jget_str (dirent, "LINKVAL", &link)) {
         if (!readlink) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
@@ -870,7 +873,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             //errnum = ENOENT;
             goto done; /* a NULL response is not necessarily an error */
         }
-        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+        if (Jget_str (dirent, "DIRREF", &ref)) {
             if (readlink) {
                 errnum = EINVAL;
                 goto done;
@@ -882,7 +885,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             if (!load (ctx, ref, wait, &val))
                 goto stall;
             isdir = true;
-        } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+        } else if (Jget_str (dirent, "FILEREF", &ref)) {
             if (readlink) {
                 errnum = EINVAL;
                 goto done;
@@ -988,6 +991,14 @@ stall:
         free (sender);
 }
 
+static bool compare_json (json_object *o1, json_object *o2)
+{
+    const char *s1 = json_object_to_json_string (o1);
+    const char *s2 = json_object_to_json_string (o2);
+
+    return !strcmp (s1, s2);
+}
+
 static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
@@ -1027,7 +1038,7 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if (first || !util_json_match (val, oval)) {
+    if (first || !compare_json (val, oval) != 0) {
         if (!(out = kp_rwatch_enc (key, Jget (val))))
             goto done;
     }
@@ -1116,6 +1127,8 @@ static void unwatch_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     if (wait_destroy_match (ctx->watchlist, unwatch_cmp, &p) < 0)
         goto done;
+    if (cache_wait_destroy_match (ctx->cache, unwatch_cmp, &p) < 0)
+        goto done;
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
@@ -1187,16 +1200,17 @@ done:
         free (sender);
 }
 
-static int commit_complete (ctx_t *ctx, flux_rpc_t *rpc)
+static void commit_response_cb (flux_t h, flux_msg_handler_t *w,
+                                const flux_msg_t *msg, void *arg)
 {
+    ctx_t *ctx = arg;
     const char *json_str;
     JSON in = NULL;
     const char *rootdir, *sender;
     int rootseq;
     commit_t *commit;
-    int rc = -1;
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_response_decode (msg, NULL, &json_str) < 0)
         goto done;
     if (!(in = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -1220,19 +1234,8 @@ static int commit_complete (ctx_t *ctx, flux_rpc_t *rpc)
             tstat_push (&ctx->stats.commit_time,  monotime_since (commit->t0));
         zhash_delete (ctx->commits, sender);
     }
-    rc = 0;
 done:
     Jput (in);
-    return rc;
-}
-
-static void commit_completion (flux_rpc_t *rpc, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    if (commit_complete (ctx, rpc) < 0)
-        flux_log_error (ctx->h, "commit_complete");
-    flux_rpc_destroy (rpc);
 }
 
 /* Send a new commit request upstream.
@@ -1245,21 +1248,18 @@ static int send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
     flux_rpc_t *rpc = NULL;
     JSON in;
 
-    if (!(in = kp_tcommit_enc (sender, c->dirents, fence, nprocs)))
+    if (!(in = kp_tcommit_enc (sender, c->ops, fence, nprocs)))
         goto error;
-    if (!(rpc = flux_rpc (ctx->h, "kvs.commit",
-                                    Jtostr (in), FLUX_NODEID_UPSTREAM, 0)))
+    if (!(rpc = flux_rpc (ctx->h, "kvs.commit", Jtostr (in),
+                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         goto error;
-    if (flux_rpc_then (rpc, commit_completion, ctx) < 0)
-        goto error;
-
-    Jput (c->dirents);
-    c->dirents = NULL;
+    flux_rpc_destroy (rpc);
+    Jput (c->ops);
+    c->ops = NULL;
     Jput (in);
     return 0;
 error:
     flux_log_error (ctx->h, "%s", __FUNCTION__);
-    flux_rpc_destroy (rpc);
     Jput (in);
     return -1;
 }
@@ -1270,22 +1270,26 @@ error:
  */
 static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t *wait)
 {
-    const char *ref;
-    json_object_iter iter;
+    int i, len;
+    const char *ref, *key;
+    json_object *op, *dirent;
     bool dirty = false;
 
-    if (c->dirents) {
-        json_object_object_foreachC (c->dirents, iter) {
-            if (!iter.val)
+    if (c->ops) {
+        len = json_object_array_length (c->ops);
+        for (i = 0; i < len; i++) {
+            if (!(op = json_object_array_get_idx (c->ops, i))
+                    || !Jget_str (op, "key", &key)
+                    || !Jget_obj (op, "dirent", &dirent))
                 continue;
-            if ((util_json_object_get_string (iter.val, "FILEREF", &ref) == 0
-              || util_json_object_get_string (iter.val, "DIRREF", &ref) == 0)
-                                            && store_isdirty (ctx, ref, wait)) {
+            if ((Jget_str (dirent, "FILEREF", &ref)
+                    || Jget_str (dirent, "DIRREF", &ref))
+                    && store_isdirty (ctx, ref, wait)) {
                 dirty = true;
+                break;
             }
         }
     }
-
     return dirty;
 }
 
@@ -1306,7 +1310,8 @@ static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
         goto done;
     rc = 0;
 done:
-    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
+    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0,
+                                   rc < 0 ? NULL : Jtostr (out)) < 0)
         flux_log_error (ctx->h, "%s", __FUNCTION__);
     Jput (out);
 }
@@ -1317,7 +1322,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     ctx_t *ctx = arg;
     const char *json_str;
     JSON in = NULL;
-    JSON dirents = NULL;
+    JSON ops = NULL;
     commit_t *c = NULL;
     wait_t *wait;
     char *sender = NULL;
@@ -1325,6 +1330,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     int nprocs;
     const char *fence = NULL;
     bool internal = false;
+    int saved_errno;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
@@ -1334,7 +1340,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     if (flux_msg_get_route_first (msg, &sender) < 0)
         goto error;
-    if (kp_tcommit_dec (in, &arg_sender, &dirents, &fence, &nprocs) < 0)
+    if (kp_tcommit_dec (in, &arg_sender, &ops, &fence, &nprocs) < 0)
         goto error;
 
     /* Commits generated internally will contain .arg_sender.  If present,
@@ -1357,8 +1363,8 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
         c->state = COMMIT_STORE;
-        c->dirents = dirents;
-        dirents = NULL;
+        c->ops = ops;
+        ops = NULL;
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
     } else if (c->state == COMMIT_PUT) {
@@ -1439,15 +1445,17 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     }
 done:
     Jput (in);
-    Jput (dirents);
+    Jput (ops);
     if (sender)
         free (sender);
     return;
 error:
+    saved_errno = errno;
     Jput (in);
-    Jput (dirents);
+    Jput (ops);
     if (sender)
-    if (flux_respond (h, msg, errno, NULL) < 0)
+        free (sender);
+    if (flux_respond (h, msg, saved_errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
@@ -1624,9 +1632,16 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
+    (void)wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
+    (void)cache_wait_destroy_match (ctx->cache, disconnect_cmp, sender);
     zhash_delete (ctx->commits, sender);
     free (sender);
+}
+
+static void add_tstat (json_object *o, const char *name, tstat_t *ts,
+                       double scale)
+{
+    json_object_object_add (o, name, tstat_json (ts, scale));
 }
 
 static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
@@ -1643,19 +1658,17 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     memset (&ts, 0, sizeof (ts));
     cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty);
     Jadd_double (o, "obj size total (MiB)", (double)size/1048576);
-    util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
+    add_tstat (o, "obj size (KiB)", &ts, 1E-3);
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#pending commits", zhash_size (ctx->commits));
     Jadd_int (o, "#pending fences", zhash_size (ctx->fences));
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    util_json_object_add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
-    util_json_object_add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
-    util_json_object_add_tstat (o, "commits (sec)",
-                                &ctx->stats.commit_time, 1E-3);
-    util_json_object_add_tstat (o, "fences after sync (sec)",
-                                &ctx->stats.fence_time, 1E-3);
-    util_json_object_add_tstat (o, "commits per update",
+    add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
+    add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
+    add_tstat (o, "commits (sec)", &ctx->stats.commit_time, 1E-3);
+    add_tstat (o, "fences after sync (sec)", &ctx->stats.fence_time, 1E-3);
+    add_tstat (o, "commits per update",
                                 &ctx->stats.commit_merges, 1);
     Jadd_int (o, "#no-op stores", ctx->stats.noop_stores);
     Jadd_int (o, "#faults", ctx->stats.faults);
@@ -1687,40 +1700,6 @@ static void stats_clear_request_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
-/* Process arguments of the form key=val
- */
-static void setargs (ctx_t *ctx, int argc, char **argv)
-{
-    int i;
-    commit_t *c;
-
-    c = commit_create ();
-
-    for (i = 0; i < argc; i++) {
-        json_object *o = NULL;
-        href_t ref;
-        char *key = xstrdup (argv[i]);
-        char *val = strchr (key, '=');
-        if (val && *val != '\0') {
-            *val++ = '\0';
-            if (!(o = json_tokener_parse (val)))
-                o = json_object_new_string (val);
-            if (o) {
-               if (store_by_reference (o)) {
-                    store (ctx, o, ref);
-                    commit_add (c, key, dirent_create ("FILEREF", ref));
-                } else {
-                    commit_add (c, key, dirent_create ("FILEVAL", o));
-                }
-            }
-        }
-        free (key);
-    }
-
-    commit_apply_one (ctx, c);
-    commit_destroy (c);
-}
-
 static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",        stats_get_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",      stats_clear_request_cb },
@@ -1737,6 +1716,7 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
+    { FLUX_MSGTYPE_RESPONSE, "kvs.commit",          commit_response_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1767,13 +1747,11 @@ int mod_main (flux_t h, int argc, char **argv)
         return -1;
     }
     if (ctx->master) {
-        json_object *rootdir = util_json_object_new_object ();
+        json_object *rootdir = Jnew ();
         href_t href;
 
         store (ctx, rootdir, href);
         setroot (ctx, href, 0);
-        setargs (ctx, argc, argv);
-        FASSERT (h, argc == 0 || ctx->rootseq > 0);
     } else {
         href_t href;
         int rootseq;

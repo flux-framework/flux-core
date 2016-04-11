@@ -29,29 +29,6 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
 int flux_json_respond (flux_t h, json_object *out, zmsg_t **zmsg)
                        __attribute__ ((deprecated));
 
-/* Convert 'zmsg' request into a response and send it.  'zmsg' is destroyed
- * on success.  Set errnum in response to 'errnum' (may be zero).
- * The original payload in the request, if any, is destroyed.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_err_respond (flux_t h, int errnum, zmsg_t **zmsg)
-                      __attribute__ ((deprecated));
-
-/* Decode request message, setting 'in' to JSON payload.
- * If payload is missing, fail with errno == EPROTO.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
-                              __attribute__ ((deprecated));
-
-/* Decode response message, setting 'out' to JSON payload.
- * If payload is missing, fail with errno == EPROTO.
- * If errnum is nonzero in response, fail with errno == errnum.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
-                               __attribute__ ((deprecated));
-
 #endif /* !_FLUX_JSONC_REQUEST_H */
 
 /*

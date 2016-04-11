@@ -6,8 +6,6 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	$(LUA_INCLUDE) \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/modules/libmrpc \
@@ -16,6 +14,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/modules/broker \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/broker \
+	$(LUA_INCLUDE) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-DWREXECD_BINDIR=\"$(libexecdir)/flux\" \
 	-DWRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\"
 

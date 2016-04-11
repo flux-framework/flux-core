@@ -15,9 +15,8 @@ if test "$TEST_LONG" = "t"; then
 fi
 
 # Size the session to one more than the number of cores, minimum of 4
-SIZE=$(($(nproc)+1))
-test ${SIZE} -lt 4 && SIZE=4
-test_under_flux ${SIZE}
+SIZE=$(test_size_large)
+test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
 TEST=$TEST_NAME
@@ -193,6 +192,16 @@ test_expect_success 'kvs: symlink: works' '
 	OUTPUT=$(flux kvs get $TEST.Q) &&
 	test "$OUTPUT" = "foo"
 '
+test_expect_success 'kvs: symlink: readlink fails on regular value' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	! flux kvs readlink $TEST.a.b.c
+'
+test_expect_success 'kvs: symlink: readlink fails on directory' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a.b.c &&
+	! flux kvs readlink $TEST.a.b.
+'
 test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
 	flux kvs unlink $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
@@ -211,6 +220,66 @@ test_expect_success 'kvs: symlink: intermediate symlink points to another symlin
 	flux kvs link $TEST.a.b $TEST.Z.Y &&
 	flux kvs link $TEST.Z.Y $TEST.X.W &&
 	test_kvs_key $TEST.X.W.c 42
+'
+test_expect_success 'kvs: symlink: intermediate symlinks are followed by put' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs readlink $TEST.link >/dev/null &&
+	flux kvs put $TEST.link.X=42 &&
+	flux kvs readlink $TEST.link >/dev/null &&
+	test_kvs_key $TEST.link.X 42 &&
+	test_kvs_key $TEST.a.X 42
+'
+
+# This will fail if individual ops are applied out of order
+test_expect_success 'kvs: symlink: kvs_copy removes symlinked destination' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs put $TEST.a.X=42 &&
+	flux kvs copy $TEST.a $TEST.link &&
+	! flux kvs readlink $TEST.link >/dev/null &&
+	test_kvs_key $TEST.link.X 42
+'
+
+# This will fail if individual ops are applied out of order
+test_expect_success 'kvs: symlink: kvs_move works' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs put $TEST.a.X=42 &&
+	flux kvs move $TEST.a $TEST.link &&
+	! flux kvs readlink $TEST.link >/dev/null &&
+	test_kvs_key $TEST.link.X 42 &&
+	! flux kvs dir $TEST.a >/dev/null
+'
+
+test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (top)' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.X=42 &&
+	flux kvs link $TEST.a $TEST.link &&
+	flux kvs copy $TEST.link $TEST.copy &&
+	LINKVAL=$(flux kvs readlink $TEST.copy) &&
+	test "$LINKVAL" = "$TEST.a"
+'
+
+test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (mid)' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.X=42 &&
+	flux kvs link $TEST.a.b $TEST.a.link &&
+	flux kvs copy $TEST.a $TEST.copy &&
+	LINKVAL=$(flux kvs readlink $TEST.copy.link) &&
+	test "$LINKVAL" = "$TEST.a.b"
+'
+
+test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.X=42 &&
+	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
+	flux kvs copy $TEST.a $TEST.copy &&
+	LINKVAL=$(flux kvs readlink $TEST.copy.b.link) &&
+	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
 test_expect_success 'kvs: kvsdir_get_size works' '
@@ -257,7 +326,7 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/src/test/tcommit ${THREADS} 100 \
+	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
@@ -265,7 +334,7 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 	THREADS=8 &&
-	flux exec ${FLUX_BUILD_DIR}/src/test/tcommit \
+	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
 		--fence $((${SIZE}*${THREADS})) ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '

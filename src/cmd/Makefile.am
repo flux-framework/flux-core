@@ -6,8 +6,8 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
         -DCONNECTOR_PATH=\"$(fluxconnectordir)\" \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
@@ -44,7 +44,9 @@ flux_SOURCES = \
 	builtin/env.c \
 	builtin/content.c \
 	builtin/version.c \
-	builtin/hwloc.c
+	builtin/hwloc.c \
+	builtin/nodeset.c \
+	builtin/heaptrace.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
@@ -58,7 +60,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-wreck \
 	flux-exec \
 	flux-topo \
-	flux-lstopo \
 	flux-ps
 
 if HAVE_PYTHON
@@ -79,18 +80,12 @@ fluxcmd_PROGRAMS = \
 	flux-comms-stats \
 	flux-kvs \
 	flux-start \
-	flux-config \
 	flux-jstat
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \
-	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
-	$(fluxcmd_ldadd) \
-	$(LIBUTIL)
-flux_module_LDADD = \
-	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
 	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)

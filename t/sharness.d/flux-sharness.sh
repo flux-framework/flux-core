@@ -4,39 +4,24 @@
 #
 
 #
-#  Unset variables important to Flux
-#
-unset FLUX_CONFIG
-unset FLUX_MODULE_PATH
-unset FLUX_CMBD_PATH
-
-#
-#  FLUX_BUILD_DIR and FLUX_SOURCE_DIR are set to build and source paths
-#  (based on current directory)
-#
-if test -z "$FLUX_BUILD_DIR"; then
-    if test -z "${builddir}"; then
-        FLUX_BUILD_DIR="$(cd .. && pwd)"
-    else
-        FLUX_BUILD_DIR="$(cd ${builddir}/.. && pwd))"
-    fi
-    export FLUX_BUILD_DIR
-fi
-if test -z "$FLUX_SOURCE_DIR"; then
-    if test -z "${srcdir}"; then
-        FLUX_SOURCE_DIR="$(cd .. && pwd)"
-    else
-        FLUX_SOURCE_DIR="$(cd ${srcdir}/.. && pwd)"
-    fi
-    export FLUX_SOURCE_DIR
-fi
-
-
-#
 #  Extra functions for Flux testsuite
 #
 run_timeout() {
     perl -e 'alarm shift @ARGV; exec @ARGV' "$@"
+}
+
+#
+#  Echo on stdout a reasonable size for a large test session,
+#   controllable test-wide via env vars FLUX_TEST_SIZE_MIN and
+#   FLUX_TEST_SIZE_MAX.
+#
+test_size_large() {
+    min=${FLUX_TEST_SIZE_MIN:-4}
+    max=${FLUX_TEST_SIZE_MAX:-17}
+    size=$(($(nproc)+1))
+    test ${size} -lt ${min} && size=$min
+    test ${size} -gt ${max} && size=$max
+    echo ${size}
 }
 
 #
@@ -46,12 +31,13 @@ run_timeout() {
 #
 test_under_flux() {
     size=${1:-1}
+    personality=${2:-full}
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
         cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         return
     fi
-    quiet="-o -q,-L${log_file},-ldebug"
+    quiet="-o -q,-Slog-filename=${log_file},-Slog-forward-level=7"
     if test "$verbose" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --verbose"
         quiet=""
@@ -64,6 +50,18 @@ test_under_flux() {
     fi
     if test -n "$SHARNESS_TEST_DIRECTORY"; then
         cd $SHARNESS_TEST_DIRECTORY
+    fi
+
+    if test "$personality" = "minimal"; then
+        export FLUX_RC1_PATH=""
+        export FLUX_RC3_PATH=""
+    elif test "$personality" != "full"; then
+        export FLUX_RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
+        export FLUX_RC3_PATH=""
+        test -x $FLUX_RC1_PATH || error "$FLUX_RC1_PATH"
+    else
+        unset FLUX_RC1_PATH
+        unset FLUX_RC3_PATH
     fi
 
     TEST_UNDER_FLUX_ACTIVE=t \
@@ -90,28 +88,6 @@ test_on_rank() {
     ranks=$1; shift;
     flux exec --rank=${ranks} "$@"
 }
-
-
-#
-#  Export some extra variables to test scripts specific to Flux
-#   testsuite
-#
-#  Add path to flux(1) command to PATH
-#
-if test -n "$FLUX_TEST_INSTALLED_PATH"; then
-    PATH=$FLUX_TEST_INSTALLED_PATH:$PATH
-    fluxbin=$FLUX_TEST_INSTALLED_PATH/flux
-else # normal case, use ${top_builddir}/src/cmd/flux
-    PATH=$FLUX_BUILD_DIR/src/cmd:$PATH
-    fluxbin=$FLUX_BUILD_DIR/src/cmd/flux
-fi
-export PATH
-
-if ! test -x ${fluxbin}; then
-    echo >&2 "Failed to find a flux binary in ${fluxbin}."
-    echo >&2 "Do you need to run make?"
-    return 1
-fi
 
 #  Export a shorter name for this test
 TEST_NAME=$SHARNESS_TEST_NAME
