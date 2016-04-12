@@ -726,10 +726,8 @@ static void commit_timeout_handler (flux_reactor_t *r, flux_watcher_t *w,
     ctx->commit_timer_armed = false;
 
     count = commit_apply_all (ctx);
-    if (count > 1) {
-        flux_log (ctx->h, LOG_DEBUG, "%s: coalesced %d commits",
-                  __FUNCTION__, count);
-    }
+    if (count > 1)
+        flux_log (ctx->h, LOG_DEBUG, "coalesced %d commits", count);
 }
 
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
