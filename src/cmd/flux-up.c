@@ -177,7 +177,6 @@ static ns_t *ns_guess (flux_t h)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
     uint32_t size, rank;
-    uint32_t r;
 
     if (flux_get_rank (h, &rank) < 0)
         err_exit ("flux_get_rank");
@@ -189,12 +188,7 @@ static ns_t *ns_guess (flux_t h)
     ns->unknown = nodeset_create ();
     if (!ns->ok || !ns->slow || !ns->fail || !ns->unknown)
         oom ();
-
-    nodeset_add_rank (ns->ok, rank);
-    for (r = 0; r < size; r++) {
-        if (r != rank)
-            nodeset_add_rank (ns->unknown, r);
-    }
+    nodeset_add_range (ns->ok, rank, size - 1);
     return ns;
 }
 
