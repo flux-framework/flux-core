@@ -32,6 +32,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/iterators.h"
 
 #include "heartbeat.h"
 #include "overlay.h"
@@ -180,23 +181,15 @@ void overlay_set_flux (overlay_t *ov, flux_t h)
 json_object *overlay_lspeer_encode (overlay_t *ov)
 {
     JSON out = Jnew ();
-    zlist_t *uuids;
-    char *uuid;
+    const char *uuid;
     child_t *child;
 
-    if (!(uuids = zhash_keys (ov->children)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        if ((child = zhash_lookup (ov->children, uuid))) {
-            JSON o = Jnew ();
-            Jadd_int (o, "idle", ov->epoch - child->lastseen);
-            Jadd_obj (out, uuid, o);
-            Jput (o);
-        }
-        uuid = zlist_next (uuids);
+    FOREACH_ZHASH (ov->children, uuid, child) {
+        JSON o = Jnew ();
+        Jadd_int (o, "idle", ov->epoch - child->lastseen);
+        Jadd_obj (out, uuid, o); /* takes ref on 'o' */
+        Jput (o);
     }
-    zlist_destroy (&uuids);
     return out;
 }
 
@@ -358,18 +351,14 @@ done:
 int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg)
 {
     flux_msg_t *cpy = NULL;
-    zlist_t *uuids = NULL;
-    char *uuid;
+    const char *uuid;
+    child_t *child;
     int rc = -1;
 
     if (!ov->child || !ov->child->zs || !ov->children)
         return 0;
-    if (!(uuids = zhash_keys (ov->children)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        child_t *child = zhash_lookup (ov->children, uuid);
-        if (child && !child->mute) {
+    FOREACH_ZHASH (ov->children, uuid, child) {
+        if (!child->mute) {
             if (!(cpy = flux_msg_copy (msg, true)))
                 oom ();
             if (flux_msg_enable_route (cpy) < 0)
@@ -381,11 +370,9 @@ int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg)
             flux_msg_destroy (cpy);
             cpy = NULL;
         }
-        uuid = zlist_next (uuids);
     }
     rc = 0;
 done:
-    zlist_destroy (&uuids);
     flux_msg_destroy (cpy);
     return rc;
 }
