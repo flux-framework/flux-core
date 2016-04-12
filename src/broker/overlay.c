@@ -452,11 +452,10 @@ flux_msg_t *overlay_recvmsg_event (overlay_t *ov)
         goto done;
     if (ov->event_munge) {
         if (flux_sec_unmunge_zmsg (ov->sec, &msg) < 0) {
-            //flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
-            //          flux_sec_errstr (ctx->sec));
             flux_msg_destroy (msg);
-            msg = NULL;
             errno = EPROTO;
+            flux_log_error (ov->h, "dropping malformed event");
+            msg = NULL;
             goto done;
         }
     }
