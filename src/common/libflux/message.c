@@ -857,12 +857,17 @@ bool flux_msg_has_payload (const flux_msg_t *msg)
 
 int flux_msg_set_payload_json (zmsg_t *zmsg, const char *s)
 {
-    int rc;
+    int rc = -1;
     if (s) {
         int len = strlen (s);
+        if (len == 0 || *s != '{') { /* ensure payload is json object */
+            errno = EINVAL;
+            goto done;
+        }
         rc = flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len + 1);
     } else
         rc = flux_msg_set_payload (zmsg, 0, NULL, 0);
+done:
     return rc;
 }
 
@@ -882,7 +887,8 @@ int flux_msg_get_payload_json (const flux_msg_t *msg, const char **s)
         *s = NULL;
     } else {
         if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)
-                              || buf[size - 1] != '\0') {
+                              || buf[size - 1] != '\0'
+                              || buf[0] != '{') {
             errno = EPROTO;
             goto done;
         }
