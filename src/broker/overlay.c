@@ -60,6 +60,7 @@ struct overlay_struct {
     struct endpoint *right;     /* DEALER - requests to rank overlay */
     overlay_cb_f parent_cb;
     void *parent_arg;
+    int right_lastsent;
     int parent_lastsent;
 
     struct endpoint *child;     /* ROUTER - requests from children */
@@ -141,6 +142,7 @@ overlay_t *overlay_create (void)
         oom ();
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
+    ov->right_lastsent = -1;
     if (!(ov->children = zhash_new ()))
         oom ();
     return ov;
@@ -192,6 +194,21 @@ json_object *overlay_lspeer_encode (overlay_t *ov)
     }
     return out;
 }
+
+void overlay_log_idle_children (overlay_t *ov)
+{
+    const char *uuid;
+    child_t *child;
+    int idle;
+
+    FOREACH_ZHASH (ov->children, uuid, child) {
+        idle = ov->epoch - child->lastseen;
+        if (idle >= 3)
+            flux_log (ov->h, LOG_CRIT, "child %s idle for %d heartbeats",
+                      uuid, idle);
+    }
+}
+
 
 void overlay_mute_child (overlay_t *ov, const char *uuid)
 {
@@ -269,6 +286,25 @@ done:
     return rc;
 }
 
+static int overlay_keepalive_right (overlay_t *ov)
+{
+    struct endpoint *ep = ov->right;
+    int idle = ov->epoch - ov->right_lastsent;
+    flux_msg_t *msg = NULL;
+    int rc = -1;
+
+    if (!ep || !ep->zs || idle <= 1)
+        return 0;
+    if (!(msg = flux_keepalive_encode (0, 0)))
+        goto done;
+    if (flux_msg_enable_route (msg) < 0)
+        goto done;
+    rc = flux_msg_sendzsock (ep->zs, msg);
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
 static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
@@ -277,6 +313,8 @@ static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
     if (flux_heartbeat_decode (msg, &ov->epoch) < 0)
         return;
     overlay_keepalive_parent (ov);
+    overlay_keepalive_right (ov);
+    overlay_log_idle_children (ov);
 }
 
 void overlay_set_right (overlay_t *ov, const char *fmt, ...)
@@ -302,6 +340,8 @@ int overlay_sendmsg_right (overlay_t *ov, const flux_msg_t *msg)
         goto done;
     }
     rc = flux_msg_sendzsock (ov->right->zs, msg);
+    if (rc == 0)
+        ov->right_lastsent = ov->epoch;
 done:
     return rc;
 }
