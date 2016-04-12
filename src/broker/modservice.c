@@ -88,8 +88,6 @@ static ctx_t *getctx (flux_t h, module_t *p)
 
 
 /* Route string will not include the endpoints.
- * FIXME: t/lua/t0002-rpc.t tries to ping with an array object.
- * This should be caught at a lower level - see issue #181
  */
 static void ping_cb (flux_t h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
@@ -103,8 +101,7 @@ static void ping_cb (flux_t h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto done;
-    if (!(o = Jfromstr (json_str))
-                    || !json_object_is_type (o, json_type_object)) {
+    if (!(o = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
