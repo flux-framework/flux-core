@@ -32,7 +32,7 @@ is (msg.pad, "xxxxxx", "recv: got expected ping pad")
 local packet = { 1, 2, 3 }  -- Force encoding to be 'array'
 local msg, err = f:rpc ("cmb.ping", packet)
 is (msg, nil, "rpc: invalid packet: nil response indicates error")
-is (err, "Protocol error", "rpc: invalid packet: err is 'Protocol error'")
+is (err, "Invalid argument", "rpc: invalid packet: err is 'Invalid argument'")
 
 --
 -- 'ping' to specfic rank
