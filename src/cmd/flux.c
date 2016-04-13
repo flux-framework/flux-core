@@ -232,9 +232,10 @@ int main (int argc, char *argv[])
 
     if (vopt)
         print_environment (cf);
-    if (optparse_get_subcommand (p, argv [optind]))
-        optparse_run_subcommand (p, argc, argv);
-    else {
+    if (optparse_get_subcommand (p, argv [optind])) {
+        if (optparse_run_subcommand (p, argc, argv) < 0)
+            exit (1);
+    } else {
         searchpath = flux_conf_environment_get(cf, "FLUX_EXEC_PATH");
         if (vopt)
             printf ("sub-command search path: %s\n", searchpath);
