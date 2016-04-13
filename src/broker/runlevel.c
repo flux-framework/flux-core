@@ -71,8 +71,6 @@ void runlevel_destroy (runlevel_t *r)
             if (r->rc[i])
                 subprocess_destroy (r->rc[i]);
         }
-        if (r->nodeset)
-            free (r->nodeset);
         free (r);
     }
 }
