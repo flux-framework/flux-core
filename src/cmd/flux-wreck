@@ -220,9 +220,27 @@ function LWJ.open (f, id)
     return setmetatable ({id = id, lwj = lwj }, LWJ)
 end
 
+local function gettimeofday_as_table ()
+    local ts, us = require 'flux.posix'.gettimeofday ()
+    if not ts then return nil, us end
+    if type (ts) == "table" then return ts end
+    return { sec = ts, usec = us }
+end
+
 local function now ()
-    local t = require 'flux.posix'.gettimeofday()
+    local t, err = gettimeofday_as_table ()
+    if not t then error ("gettimeofday: "..err) end
     return t.sec + (t.usec / (1000 * 1000))
+end
+
+function LWJ:timediff (tstart, tend, talt)
+    local t0 = self.lwj[tstart.."-time"]
+    if not t0 then return 0 end
+    local t1 = self.lwj[tend.."-time"]
+    if not t1 then t1 = self.lwj[talt.."-time"] end
+    if not t1 then t1 = now () end
+    local s = t1 - t0
+    return s > 0 and s or 0
 end
 
 LWJ.__index = function (self, key)
@@ -239,13 +257,13 @@ LWJ.__index = function (self, key)
     elseif key == "nnodes" then
         return self.lwj.nnodes
     elseif key == "runtime" then
-        local st = self.lwj["starting-time"]
-        if not st then return 0 end
-        local ct = self.lwj["complete-time"]
-        local ft = self.lwj["failed-time"]
-        if not ct and not ft then ct = now () end
-        local s = (ct and ct or ft) - st
-        return s > 0 and s or 0
+        return self:timediff ("starting", "complete", "failed")
+    elseif key == "t0" then
+        return self:timediff ("create", "starting", "failed")
+    elseif key == "t1" then
+        return self:timediff ("starting", "running", "failed")
+    elseif key == "t2" then
+        return self:timediff ("running", "complete", "failed")
     elseif key == "start" then
         return os.date ("%FT%T", self.lwj["starting-time"])
     elseif key == "end" then
@@ -255,7 +273,7 @@ LWJ.__index = function (self, key)
     elseif key == "command" then
         return self.lwj.cmdline[1]
     end
-    return nil
+    return LWJ [key]
 end
 
 local function seconds_to_string (s)
@@ -289,6 +307,30 @@ Command {
                     seconds_to_string (j.runtime),
                     tostring (j.ranks),
                     j.command:match ("([^/]+)$"))
+        end
+    end
+ end
+}
+
+Command {
+ name = "timing",
+ usage = "",
+ description = "List timings of jobs in kvs",
+ handler = function (self, arg) 
+    local lwj, err = f:kvsdir ("lwj")
+    if not lwj then
+        die ("Failed to get lwj info: %s\n", err)
+    end
+    local fmt = "%6s %12s %12s %12s %12s\n"
+    printf (fmt, "ID", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
+    for id in lwj:keys() do
+        if tonumber (id) then
+            local j, err = LWJ.open (f, id)
+            if not j then die ("job%d: %s", id, err) end
+            printf (fmt, id, seconds_to_string (j.t0),
+                    seconds_to_string (j.t1),
+                    seconds_to_string (j.t2),
+                    seconds_to_string (j.runtime))
         end
     end
  end

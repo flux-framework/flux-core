@@ -4,7 +4,51 @@
 --   directed in lwj.<id>.input.config
 --
 local posix = require 'flux.posix'
-local cpuset = require 'flux.affinity'.cpuset
+
+-- temporary "set" class until we have nodeset lua bindings
+local taskset = {}
+function taskset:__index (key)
+    if tonumber (key) then
+        return self.t [tostring(key)]
+    end
+    return rawget (taskset,key)
+end
+function taskset.new (arg)
+    local hostlist = require 'flux.hostlist'
+    local t = {}
+    local hl = arg and hostlist.new ("["..arg.."]") or hostlist.new ()
+    for i in hl:next () do
+        t[tostring(i)] = true
+    end
+    return setmetatable ({ t = t }, taskset)
+end
+function taskset:len ()
+    local count = 0
+    for i,v in pairs (self.t) do
+        count = count + 1
+    end
+    return count
+end
+
+function taskset:set (i)
+    local k = tostring (i)
+    local prev = self.t[k]
+    self.t[k] = true
+    return prev or false
+end
+
+function taskset:clear (i)
+    local k = tostring (i)
+    local prev = self.t[k]
+    self.t[k] = nil
+    return prev or false
+end
+
+function taskset:iterator ()
+    return pairs (self.t)
+end
+
+----
 
 local function kvs_input_config (wreck)
     local o = wreck.kvsdir ["input.config"]
@@ -30,7 +74,7 @@ function inputconf.create (wreck)
         c.conf = { { src = "stdin", dst = "*" } }
     end
 
-    c.tasksleft, err = cpuset.new ('0-'..c.maxid)
+    c.tasksleft, err = taskset.new ('0-'..c.maxid)
 
     -- Add stdin entry to inputs
     c.inputs[1] = { filename = "stdin",
@@ -40,7 +84,7 @@ end
 
 function inputconf:set (taskid)
     if self.tasksleft[taskid] then
-        self.tasksleft [taskid] = 0
+        self.tasksleft:clear(taskid)
         return false
     end
     return true
@@ -96,7 +140,7 @@ function inputconf:dst_to_list (dst)
     if dst == "" or dst == "*" or dst == "all" then
         return self.tasksleft
     end
-    return cpuset.new (dst)
+    return taskset.new (dst)
 end
 
 function inputconf:task_stdin (taskid)
@@ -107,9 +151,9 @@ end
 function inputconf:link (ids, path)
     local f = self.wreck.flux
     local taskids = self:dst_to_list (ids)
-    if #taskids == 0 then return true end
+    if taskids:len() == 0 then return true end
     for i in taskids:iterator () do
-	if not self:set (i) then
+        if not self:set (i) then
             local input, err = self:task_input (path, i)
             if not input then return nil, err end
             f:kvs_symlink (self:task_stdin (i), input.kzpath)

@@ -38,6 +38,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/fdwalk.h"
 #include "zio.h"
 #include "subprocess.h"
 
@@ -554,27 +555,27 @@ int subprocess_socketpair (struct subprocess *p, int *child_fd)
     return fds[0];
 }
 
+void do_prepare_open_fd (void *arg, int fd)
+{
+    struct subprocess *p = arg;
+    if (fd < 3 || fd == p->childfd)
+        return;
+    if (fda_isset (p->child_fda, fd)) {
+        int flags = fcntl (fd, F_GETFD, 0);
+        // XXX No way to return error to caller
+        if (flags >= 0)
+            (void) fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC);
+        return;
+    }
+    close (fd);
+}
+
 /* Close all fd's except the ones we are using.
  * Clear the close-on-exec flag for socketpair fd's we are passing to child.
  */
 static int preparefd_child (struct subprocess *p)
 {
-    int fd, fdlimit = sysconf (_SC_OPEN_MAX);
-
-    for (fd = 3; fd < fdlimit; fd++) {
-        if (fd == p->childfd)
-            continue;
-        if (fda_isset (p->child_fda, fd)) {
-            int flags = fcntl (fd, F_GETFD, 0);
-            if (flags < 0)
-                return -1;
-            if (fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC) < 0)
-                return -1;
-            continue;
-        }
-        close (fd);
-    }
-    return 0;
+    return fdwalk (do_prepare_open_fd, (void *) p);
 }
 
 static int dup2_fd (int fd, int newfd)
