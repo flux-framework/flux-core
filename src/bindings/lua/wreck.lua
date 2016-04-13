@@ -111,8 +111,8 @@ function wreck:usage()
                              is a list of [src:]dst pairs separated by semi-
                              colon, where src is an optional src file
                              (default: stdin) and dst is a list of taskids
-                             or "*" or "all". E.g. (-s0 sends stdin to task 0,
-                             -s /dev/null:* closes all stdin, etc.)
+                             or "*" or "all". E.g. (-i0 sends stdin to task 0,
+                             -i /dev/null:* closes all stdin, etc.)
   -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
 ]])
