@@ -36,12 +36,8 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
     uint8_t *data;
     int size;
     flux_t h;
-    flux_conf_t cf;
     flux_rpc_t *rpc;
     const char *topic;
-
-    if (!(cf = optparse_get_data (p, "conf")))
-        msg_exit ("optparse_get ('conf') failed");
 
     n = optparse_optind (p);
     if (n != ac - 1) {
@@ -72,12 +68,8 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     uint8_t *data;
     int size;
     flux_t h;
-    flux_conf_t cf;
     flux_rpc_t *rpc;
     const char *topic;
-
-    if (!(cf = optparse_get_data (p, "conf")))
-        msg_exit ("optparse_get ('conf') failed");
 
     if (optparse_optind (p)  != ac) {
         optparse_print_usage (p);
@@ -131,12 +123,8 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
 static int internal_content_flush (optparse_t *p, int ac, char *av[])
 {
     flux_t h;
-    flux_conf_t cf;
     flux_rpc_t *rpc = NULL;
     const char *topic = "content.flush";
-
-    if (!(cf = optparse_get_data (p, "conf")))
-        msg_exit ("optparse_get ('conf') failed");
 
     if (optparse_optind (p)  != ac) {
         optparse_print_usage (p);
@@ -156,12 +144,8 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
 static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
 {
     flux_t h;
-    flux_conf_t cf;
     flux_rpc_t *rpc = NULL;
     const char *topic = "content.dropcache";
-
-    if (!(cf = optparse_get_data (p, "conf")))
-        msg_exit ("optparse_get ('conf') failed");
 
     if (optparse_optind (p) != ac) {
         optparse_print_usage (p);

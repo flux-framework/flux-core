@@ -204,8 +204,8 @@ static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va
 
     if (fatal) {
         // best effort
-        kvsdir_put_int (ctx->kvs, "fatalerror", fatal);
-        kvs_commit (ctx->flux);
+        if (kvsdir_put_int (ctx->kvs, "fatalerror", fatal) == 0)
+            (void)kvs_commit (ctx->flux);
     }
 }
 

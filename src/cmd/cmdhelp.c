@@ -78,16 +78,16 @@ static json_object *command_list_file_read (const char *path)
 {
     FILE *fp = NULL;
     json_object *o = NULL;
-    enum json_tokener_error e;
+    enum json_tokener_error e = json_tokener_success;
     json_tokener *tok = json_tokener_new ();
 
     if (tok == NULL) {
-        err ("json_tokener_new: Out of memory\n");
+        msg ("json_tokener_new: Out of memory");
         return (NULL);
     }
 
     if (!(fp = fopen (path, "r"))) {
-        err ("fopen: %s\n", strerror (errno));
+        err ("%s", path);
         return (NULL);
     }
 
@@ -104,13 +104,13 @@ static json_object *command_list_file_read (const char *path)
     fclose (fp);
     json_tokener_free (tok);
 
-    if (e != json_tokener_success) {
-        err ("%s: %s\n", path, json_tokener_error_desc (e));
+    if (!o || e != json_tokener_success) {
+        msg ("%s: %s", path, o ? json_tokener_error_desc (e) : "premature EOF");
         return (NULL);
     }
 
     if (json_object_get_type (o) != json_type_array) {
-        err ("%s: not a JSON array\n", path);
+        msg ("%s: not a JSON array", path);
         json_object_put (o);
         return (NULL);
     }
@@ -129,7 +129,7 @@ static int command_list_read (zhash_t *h, const char *path)
     o = command_list_file_read (path);
 
     if (!(l = json_object_get_array (o))) {
-        err ("%s: failed to get array list from JSON\n", path);
+        msg ("%s: failed to get array list from JSON", path);
         goto out;
     }
 
@@ -143,7 +143,7 @@ static int command_list_read (zhash_t *h, const char *path)
         if (!Jget_str (entry, "category", &category)
             || !Jget_str (entry, "command", &command)
             || !Jget_str (entry, "description", &description)) {
-            err ("%s: Missing element in JSON entry %d\n", path, i);
+            msg ("%s: Missing element in JSON entry %d", path, i);
             goto out;
         }
         if (!(zl = zhash_lookup (h, category))) {
