@@ -143,7 +143,6 @@ int main (int argc, char *argv[])
     char *confdir = NULL;
     const char *secdir = NULL;
     flux_conf_t cf;
-    flux_t h = NULL;
     optparse_t *p;
     const char *searchpath;
     const char *argv0 = argv[0];
@@ -236,16 +235,12 @@ int main (int argc, char *argv[])
     if (optparse_get_subcommand (p, argv [optind]))
         optparse_run_subcommand (p, argc, argv);
     else {
-        flux_close (h); /* Ensure handle doesn't stay open across exec(2) */
-        h = NULL;
         searchpath = flux_conf_environment_get(cf, "FLUX_EXEC_PATH");
         if (vopt)
             printf ("sub-command search path: %s\n", searchpath);
         exec_subcommand (searchpath, vopt, argv + optind);
     }
 
-    if (h)
-        flux_close (h);
     free (confdir);
     flux_conf_destroy (cf);
     optparse_destroy (p);
