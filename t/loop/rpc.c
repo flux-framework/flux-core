@@ -99,7 +99,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
     flux_rpc_destroy (r);
 
     /* cause remote EPROTO (unexpected payload) - will be picked up in _get() */
-    ok ((r = flux_rpc (h, "rpctest.hello", "foo", FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((r = flux_rpc (h, "rpctest.hello", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when none is expected works, at first");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
@@ -122,13 +122,13 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
     flux_rpc_destroy (r);
 
     /* working with-payload RPC */
-    ok ((r = flux_rpc (h, "rpctest.echo", "foo", FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     json_str = NULL;
     ok (flux_rpc_get (r, NULL, &json_str) == 0
-        && json_str && !strcmp (json_str, "foo"),
+        && json_str && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload");
     flux_rpc_destroy (r);
 
@@ -158,7 +158,7 @@ static void then_cb (flux_rpc_t *r, void *arg)
         "flux_rpc_check says get won't block in then callback");
     json_str = NULL;
     ok (flux_rpc_get (r, NULL, &json_str) == 0
-        && json_str && !strcmp (json_str, "xxx"),
+        && json_str && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload in then callback");
     flux_reactor_stop (flux_get_reactor (h));
 }
@@ -225,7 +225,7 @@ int main (int argc, char *argv[])
      * will be invoked. Continuation stops the reactor.
     */
     flux_rpc_t *r;
-    ok ((r = flux_rpc (h, "rpctest.echo", "xxx", FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
@@ -250,7 +250,7 @@ int main (int argc, char *argv[])
      * This will hang if rpc implementation doesn't return a cached message
      * back to the handle in _then().  Else, continuation will stop reactor.
      */
-    ok ((thenbug_r = flux_rpc (h, "rpctest.echo", "xxx",
+    ok ((thenbug_r = flux_rpc (h, "rpctest.echo", "{}",
         FLUX_NODEID_ANY, 0)) != NULL,
         "thenbug: sent echo request");
     do {

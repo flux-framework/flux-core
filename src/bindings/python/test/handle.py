@@ -29,7 +29,7 @@ class TestHandle(unittest.TestCase):
 
     def test_rpc_ping(self):
         """Sending a ping"""
-        r = self.f.rpc_send('live.ping', {'seq': 1, 'pad': 'stuff'})
+        r = self.f.rpc_send('cmb.ping', {'seq': 1, 'pad': 'stuff'})
         self.assertEqual(r['seq'], 1)
         self.assertEqual(r['pad'], 'stuff')
 

@@ -1028,7 +1028,8 @@ static void hello_request_cb (flux_t h, flux_msg_handler_t *w,
      */
     if (zlist_push (ctx->parents, parent_create (ctx->rank, NULL)) < 0)
         oom ();
-    out = parents_tojson (ctx);
+    out = Jnew ();
+    json_object_object_add (out, "parents", parents_tojson (ctx));
     parent_destroy (zlist_pop (ctx->parents));
     rc = 0;
 done:
@@ -1039,11 +1040,14 @@ done:
     Jput (out);
 }
 
+/* Request: {"rank":N}
+ * Response: {"parents":[...]}
+ */
 static int hello (ctx_t *ctx)
 {
     const char *json_str;
     JSON in = Jnew ();
-    JSON out = NULL;
+    JSON a, out = NULL;
     flux_rpc_t *rpc;
     int rc = -1;
 
@@ -1057,13 +1061,13 @@ static int hello (ctx_t *ctx)
         flux_log_error (ctx->h, "live.hello");
         goto done;
     }
-    if (!(out = Jfromstr (json_str))) {
+    if (!(out = Jfromstr (json_str)) || !Jget_obj (out, "parents", &a)) {
         errno = EPROTO;
         flux_log_error (ctx->h, "live.hello");
         goto done;
     }
     if (zlist_size (ctx->parents) == 0) /* don't redo on failover */
-        parents_fromjson (ctx, out);
+        parents_fromjson (ctx, a);
     rc = 0;
 done:
     flux_rpc_destroy (rpc);

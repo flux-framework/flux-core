@@ -38,7 +38,7 @@
 #include "src/common/libutil/xzmalloc.h"
 
 struct flux_modlist_struct {
-    JSON a;
+    json_object *o;
 };
 
 /* Get service name from module name string.
@@ -135,14 +135,15 @@ char *flux_rmmod_json_encode (const char *name)
 int flux_modlist_get (flux_modlist_t mods, int n, const char **name, int *size,
                       const char **digest, int *idle, int *status)
 {
-    JSON o;
+    JSON o, a;
     int rc = -1;
 
-    if (!Jget_ar_obj (mods->a, n, &o) || !Jget_str (o, "name", name)
-                                      || !Jget_int (o, "size", size)
-                                      || !Jget_str (o, "digest", digest)
-                                      || !Jget_int (o, "idle", idle)
-                                      || !Jget_int (o, "status", status)) {
+    if (!Jget_obj (mods->o, "mods", &a) || !Jget_ar_obj (a, n, &o)
+                                        || !Jget_str (o, "name", name)
+                                        || !Jget_int (o, "size", size)
+                                        || !Jget_str (o, "digest", digest)
+                                        || !Jget_int (o, "idle", idle)
+                                        || !Jget_int (o, "status", status)) {
         errno = EPROTO;
         goto done;
     }
@@ -153,9 +154,10 @@ done:
 
 int flux_modlist_count (flux_modlist_t mods)
 {
+    JSON a;
     int len;
 
-    if (!Jget_ar_len (mods->a, &len)) {
+    if (!Jget_obj (mods->o, "mods", &a) || !Jget_ar_len (a, &len)) {
         errno = EPROTO;
         return -1;
     }
@@ -165,21 +167,29 @@ int flux_modlist_count (flux_modlist_t mods)
 int flux_modlist_append (flux_modlist_t mods, const char *name, int size,
                             const char *digest, int idle, int status)
 {
-    JSON o = Jnew ();
+    JSON a, o = Jnew ();
+    int rc = -1;
+
+    if (!Jget_obj (mods->o, "mods", &a)) {
+        errno = EINVAL;
+        goto done;
+    }
     Jadd_str (o, "name", name);
     Jadd_int (o, "size", size);
     Jadd_str (o, "digest", digest);
     Jadd_int (o, "idle", idle);
     Jadd_int (o, "status", status);
-    Jadd_ar_obj (mods->a, o); /* takes a ref on o */
+    Jadd_ar_obj (a, o); /* takes a ref on o */
+    rc = 0;
+done:
     Jput (o);
-    return 0;
+    return rc;
 }
 
 void flux_modlist_destroy (flux_modlist_t mods)
 {
     if (mods) {
-        Jput (mods->a);
+        Jput (mods->o);
         free (mods);
     }
 }
@@ -187,19 +197,20 @@ void flux_modlist_destroy (flux_modlist_t mods)
 flux_modlist_t flux_modlist_create (void)
 {
     flux_modlist_t mods = xzmalloc (sizeof (*mods));
-    mods->a = Jnew_ar ();
+    mods->o = Jnew ();
+    json_object_object_add (mods->o, "mods", Jnew_ar ());
     return mods;
 }
 
 char *flux_lsmod_json_encode (flux_modlist_t mods)
 {
-    return xstrdup (Jtostr (mods->a));
+    return xstrdup (Jtostr (mods->o));
 }
 
 flux_modlist_t flux_lsmod_json_decode (const char *json_str)
 {
     flux_modlist_t mods = xzmalloc (sizeof (*mods));
-    if (!(mods->a = Jfromstr (json_str))) {
+    if (!(mods->o = Jfromstr (json_str))) {
         free (mods);
         errno = EPROTO;
         return NULL;
