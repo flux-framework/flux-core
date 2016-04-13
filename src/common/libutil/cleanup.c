@@ -51,12 +51,12 @@ struct cleaner {
 static void unlinkat_recursive (int fd)
 {
     DIR *dir;
-    struct dirent *d;
+    struct dirent *d, entry;
     struct stat sb;
     int cfd;
 
     if ((dir = fdopendir (fd))) {
-        while ((d = readdir (dir))) {
+        while (readdir_r (dir, &entry, &d) == 0 && d != NULL) {
             if (!strcmp (d->d_name, ".") || !strcmp (d->d_name, ".."))
                 continue;
             if (fstatat (fd, d->d_name, &sb, AT_SYMLINK_NOFOLLOW) < 0)
