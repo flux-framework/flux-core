@@ -35,8 +35,6 @@
 
 #include "message.h"
 
-#include "src/common/libutil/log.h"
-
 /* Begin manual codec
  */
 #define PROTO_MAGIC         0x8e
