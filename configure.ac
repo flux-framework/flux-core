@@ -193,6 +193,7 @@ AC_CONFIG_FILES( \
   src/connectors/local/Makefile \
   src/connectors/shmem/Makefile \
   src/connectors/loop/Makefile \
+  src/connectors/ssh/Makefile \
   src/modules/Makefile \
   src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
