@@ -101,13 +101,13 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
     const char *json_str;
 
     errno = 0;
-    ok (!(r = flux_rpc_multi (h, NULL, "foo", "all", 0)) && errno == EINVAL,
+    ok (!(r = flux_rpc_multi (h, NULL, "{}", "all", 0)) && errno == EINVAL,
         "flux_rpc_multi [0] with NULL topic fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_rpc_multi (h, "bar", "foo", NULL, 0)) && errno == EINVAL,
+    ok (!(r = flux_rpc_multi (h, "bar", "{}", NULL, 0)) && errno == EINVAL,
         "flux_rpc_multi [0] with NULL nodeset fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_rpc_multi (h, "bar", "foo", "xyz", 0)) && errno == EINVAL,
+    ok (!(r = flux_rpc_multi (h, "bar", "{}", "xyz", 0)) && errno == EINVAL,
         "flux_rpc_multi [0] with bad nodeset fails with EINVAL");
 
     /* working no-payload RPC */
@@ -125,7 +125,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
     flux_rpc_destroy (r);
 
     /* cause remote EPROTO (unexpected payload) - picked up in _get() */
-    ok ((r = flux_rpc_multi (h, "rpctest.hello", "foo", "all", 0)) != NULL,
+    ok ((r = flux_rpc_multi (h, "rpctest.hello", "{}", "all", 0)) != NULL,
         "flux_rpc_multi [0] with unexpected payload works, at first");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
@@ -188,7 +188,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
     flux_rpc_destroy (r);
 
     /* same with echo payload */
-    ok ((r = flux_rpc_multi (h, "rpctest.echo", "foo", "[0-63]", 0)) != NULL,
+    ok ((r = flux_rpc_multi (h, "rpctest.echo", "{}", "[0-63]", 0)) != NULL,
         "flux_rpc_multi [0-%d] ok",
         64 - 1);
     ok (flux_rpc_check (r) == false,
@@ -196,7 +196,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
     errors = 0;
     for (i = 0; i < 64; i++) {
         if (flux_rpc_get (r, NULL, &json_str) < 0
-                || !json_str || strcmp (json_str, "foo") != 0)
+                || !json_str || strcmp (json_str, "{}") != 0)
             errors++;
     }
     ok (errors == 0,

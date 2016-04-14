@@ -6,9 +6,6 @@
             VAR;                   \
             (VAR) = zlist_next(LIST))
 
-#define FOREACH_ZHASH_KEYS(HASH, KEY) \
-    FOREACH_ZLIST(zhash_keys(HASH), KEY)
-
 #define FOREACH_ZHASH(HASH, KEY, VALUE) \
     for((VALUE) = zhash_first(HASH),    \
         (KEY) = zhash_cursor(HASH);     \

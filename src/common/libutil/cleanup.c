@@ -22,6 +22,10 @@
  *  See also:  http://www.gnu.org/licenses/
  \*****************************************************************************/
 
+#if HAVE_CONFIG_H
+#  include <config.h>
+#endif /* HAVE_CONFIG_H */
+
 #include "cleanup.h"
 #include "xzmalloc.h"
 
@@ -29,6 +33,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <dirent.h>
 #include <libgen.h>
 #include <unistd.h>
@@ -43,27 +48,37 @@ struct cleaner {
     void * arg;
 };
 
-static void unlink_recursive (const char *dirpath)
+static void unlinkat_recursive (int fd)
 {
     DIR *dir;
-    struct dirent *dirent;
-    char path[PATH_MAX + 1];
+    struct dirent *d, entry;
     struct stat sb;
+    int cfd;
 
-    if ((dir = opendir (dirpath))) {
-        while ((dirent = readdir (dir))) {
-            if (!strcmp (dirent->d_name, ".") || !strcmp (dirent->d_name, ".."))
+    if ((dir = fdopendir (fd))) {
+        while (readdir_r (dir, &entry, &d) == 0 && d != NULL) {
+            if (!strcmp (d->d_name, ".") || !strcmp (d->d_name, ".."))
                 continue;
-            snprintf (path, sizeof (path), "%s/%s", dirpath, dirent->d_name);
-            if (lstat (path, &sb) < 0)
+            if (fstatat (fd, d->d_name, &sb, AT_SYMLINK_NOFOLLOW) < 0)
                 continue;
-            if (S_ISDIR (sb.st_mode))
-                unlink_recursive (path);
-            else
-                unlink (path);
+            if (S_ISDIR (sb.st_mode)) {
+                if ((cfd = openat (fd, d->d_name, O_PATH | O_DIRECTORY)) < 0)
+                    continue;
+                unlinkat_recursive (cfd);
+                (void)unlinkat (fd, d->d_name, AT_REMOVEDIR);
+            } else
+                (void)unlinkat (fd, d->d_name, 0);
         }
         closedir (dir);
-        rmdir (dirpath);
+    }
+}
+
+static void unlink_recursive (const char *dirpath)
+{
+    DIR *dir = opendir (dirpath);
+    if (dir) {
+        unlinkat_recursive (dirfd (dir));
+        (void)rmdir (dirpath);
     }
 }
 

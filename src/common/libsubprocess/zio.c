@@ -1038,7 +1038,7 @@ bool zio_json_eof (const char *json_str)
     json_object *o;
 
     if ((o = json_tokener_parse (json_str)))
-        Jget_bool (o, "eof", &eof);
+        (void)Jget_bool (o, "eof", &eof);
     if (o)
         json_object_put (o);
     return eof;

@@ -148,8 +148,6 @@ static nodeset_t *ns_special (flux_t h, const char *arg)
     }
     return ns;
 error:
-    if (ns)
-        nodeset_destroy (ns);
     errno = saved_errno;
     return NULL;
 }

@@ -2005,21 +2005,17 @@ static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     flux_modlist_t mods = NULL;
     char *json_str = NULL;
-    JSON out = NULL;
     int rc = -1;
 
     if (!(mods = module_get_modlist (ctx->modhash)))
         goto done;
     if (!(json_str = flux_lsmod_json_encode (mods)))
         goto done;
-    out = Jfromstr (json_str);
-    assert (out != NULL);
-    if (flux_respond (ctx->h, *zmsg, 0, Jtostr (out)) < 0)
+    if (flux_respond (ctx->h, *zmsg, 0, json_str) < 0)
         goto done;
     rc = 0;
 done:
     zmsg_destroy (zmsg);
-    Jput (out);
     if (json_str)
         free (json_str);
     if (mods)

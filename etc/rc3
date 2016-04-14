@@ -16,7 +16,7 @@ flux module remove -r all wrexec
 flux module remove -r all job
 flux module remove -r all mecho
 flux module remove -r all resource-hwloc
-flux module remove -r all live
+#flux module remove -r all live
 
 flux module remove -r all kvs
 flux module remove -r all barrier
