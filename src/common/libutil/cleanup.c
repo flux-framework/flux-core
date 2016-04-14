@@ -41,6 +41,10 @@
 
 #include <czmq.h>
 
+#ifndef O_PATH
+#define O_PATH 0 /* O_PATH is too new for CentOS 6 - see issue #646 */
+#endif
+
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct cleaner {
