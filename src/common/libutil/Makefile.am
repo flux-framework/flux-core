@@ -60,7 +60,9 @@ libutil_la_SOURCES = \
 	shastring.h \
 	shastring.c \
 	fdwalk.h \
-	fdwalk.c
+	fdwalk.c \
+	popen2.h \
+	popen2.c
 
 EXTRA_DIST = veb_mach.c
 
