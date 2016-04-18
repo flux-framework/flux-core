@@ -266,7 +266,8 @@ static int global_subscribe (ctx_t *ctx, const char *topic)
         sub->handle = ctx->h;
         zhash_update (ctx->subscriptions, topic, sub);
         zhash_freefn (ctx->subscriptions, topic, subscription_destroy);
-        //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
+        /* N.B. t/t1008-proxy.t looks for this log message */
+        flux_log (ctx->h, LOG_DEBUG, "subscribe %s", topic);
     }
     sub->usecount++;
     rc = 0;
@@ -283,7 +284,8 @@ static int global_unsubscribe (ctx_t *ctx, const char *topic)
         goto done;
     if (--sub->usecount == 0) {
         zhash_delete (ctx->subscriptions, topic);
-        //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
+        /* N.B. t/t1008-proxy.t looks for this log message */
+        flux_log (ctx->h, LOG_DEBUG, "unsubscribe %s", topic);
     }
     rc = 0;
 done:
