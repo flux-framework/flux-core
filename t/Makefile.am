@@ -51,6 +51,7 @@ TESTS = \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
+	t1008-proxy.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
@@ -112,6 +113,7 @@ check_SCRIPTS = \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
+	t1008-proxy.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
@@ -181,7 +183,8 @@ dist_check_SCRIPTS = \
 	scripts/kvs-watch-until.lua \
 	scripts/cpus-allowed.lua \
 	scripts/waitfile.lua \
-	scripts/t0004-event-helper.sh
+	scripts/t0004-event-helper.sh \
+	scripts/tssh
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
