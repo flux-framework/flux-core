@@ -36,6 +36,8 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
     const char *name = NULL, *val = NULL;
     flux_t h;
 
+    log_init ("flux-setattr");
+
     n = optparse_optind (p);
     if (optparse_hasopt (p, "expunge") && n == ac - 1) {
         name = av[n];
@@ -65,6 +67,9 @@ static int cmd_lsattr (optparse_t *p, int ac, char *av[])
 {
     const char *name, *val;
     flux_t h;
+
+    log_init ("flux-lsatrr");
+
     if (optparse_optind (p) != ac)
         optparse_fatal_usage (p, 1, NULL);
     h = builtin_get_flux_handle (p);
@@ -87,6 +92,8 @@ static int cmd_getattr (optparse_t *p, int ac, char *av[])
     flux_t h = NULL;
     const char *val;
     int n, flags;
+
+    log_init ("flux-getattr");
 
     n = optparse_optind (p);
     if (n != ac - 1)
