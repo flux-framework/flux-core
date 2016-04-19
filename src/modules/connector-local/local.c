@@ -81,7 +81,6 @@ typedef struct {
     zhash_t *disconnect_notify;
     zhash_t *subscriptions;
     zuuid_t *uuid;
-    int cfd_id;
     struct ucred ucred;
 } client_t;
 
@@ -604,8 +603,6 @@ static void response_cb (flux_t h, flux_msg_handler_t *w,
                   __FUNCTION__, topic ? topic : "NULL");
         goto done;
     }
-    if (flux_msg_clear_route (cpy) < 0)
-        goto done;
     c = zlist_first (ctx->clients);
     while (c) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
