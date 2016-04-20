@@ -305,3 +305,5 @@ filename
 PYTHONPATH
 localhost
 EEXIST
+rsh
+RCMD
