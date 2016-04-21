@@ -57,7 +57,7 @@ class MessageWatcher(Watcher):
         self.fh = flux_handle
         self.cb = callback
         self.args = args
-        wargs = ffi.new_handle(self)
+        self.wargs = ffi.new_handle(self)
         c_topic_glob = ffi.new('char[]', topic_glob)
         match = ffi.new('struct flux_match *', {
             'typemask': type_mask,
@@ -67,7 +67,7 @@ class MessageWatcher(Watcher):
         })
         self.handle = raw.flux_msg_handler_create(self.fh.handle, match[0],
                                                   message_handler_wrapper,
-                                                  wargs)
+                                                  self.wargs)
 
     def start(self):
         raw.flux_msg_handler_start(self.handle)
@@ -95,10 +95,10 @@ class TimerWatcher(Watcher):
         self.cb = callback
         self.args = args
         self.handle = None
-        wargs = ffi.new_handle(self)
+        self.wargs = ffi.new_handle(self)
         self.handle = raw.flux_timer_watcher_create(
             raw.flux_get_reactor(flux_handle),
-            float(after), float(repeat), timeout_handler_wrapper, wargs)
+            float(after), float(repeat), timeout_handler_wrapper, self.wargs)
 
 @ffi.callback('flux_watcher_f')
 def fd_handler_wrapper(handle_trash, fd_watcher_s, revents,
@@ -116,8 +116,8 @@ class FDWatcher(Watcher):
         self.cb = callback
         self.args = args
         self.handle = None
-        wargs = ffi.new_handle(self)
+        self.wargs = ffi.new_handle(self)
         self.handle = raw.flux_fd_watcher_create(
             raw.flux_get_reactor(flux_handle),
-            self.fd_int, self.events, fd_handler_wrapper, wargs)
+            self.fd_int, self.events, fd_handler_wrapper, self.wargs)
 
