@@ -51,6 +51,9 @@
 #include "module.h"
 #include "modservice.h"
 
+#include "src/common/libutil/profiling.h"
+
+
 #define MODULE_MAGIC    0xfeefbe01
 struct module_struct {
     int magic;
@@ -113,6 +116,10 @@ static void *module_thread (void *arg)
     flux_msg_t *msg;
 
     assert (p->zctx);
+
+    PROFILING_INIT((int[]){1}, (char*[1][1]){{ "broker_module" }});
+    PROFILING_SET_RANK(p->rank);
+    PROFILING_REGION_START(p->name);
 
     /* Connect to broker socket, enable logging, register built-in services
      */

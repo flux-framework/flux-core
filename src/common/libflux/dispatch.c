@@ -38,9 +38,8 @@
 #include "src/common/libutil/coproc.h"
 #include "src/common/libutil/iterators.h"
 
+#include "src/common/libutil/profiling.h"
 #include <pthread.h>
-#define PROFILING_ON
-#include <TAU.h>
 
 struct dispatch {
     flux_t h;
@@ -414,8 +413,6 @@ done:
     return rc;
 }
 
-pthread_mutex_t tau_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
                        int revents, void *arg)
 {
@@ -435,39 +432,21 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         rc = 0; /* ignore mangled message */
         goto done;
     }
-    static int node_set = 0;
+    /* static int node_set = 0; */
 
-    if (! node_set) {
-        int argc = 1;
-        char **argv = (char*[]){ "broker" };
-        TAU_INIT(&argc, &argv);
-        uint32_t rank;
-        flux_get_rank(d->h, &rank);
-        TAU_PROFILE_SET_NODE(rank);
-        node_set = 1;
-        if (node_set || argc || argv)
-        fprintf(stderr, "SET UP TAU on rank %u, %u\n", rank, getpid());
-        TAU_START("program");
-    }
     const char * topic;
     flux_msg_get_topic(msg, &topic);
-    /* pthread_mutex_lock(&tau_mutex); */
-    /* pthread_mutex_unlock(&tau_mutex); */
     /* Add any new handlers here, making handler creation
      * safe to call during handlers list traversal below.
      */
     if (transfer_items_zlist (d->handlers_new, d->handlers) < 0)
         goto done;
-    if (strstr(topic, "wrexec.run"))
-        TAU_DYNAMIC_PHASE_START(topic);
-    TAU_START(topic);
+    PROFILING_REGION_START(topic);
     if ((flux_flags_get (d->h) & FLUX_O_COPROC))
         match = dispatch_message_coproc (d, msg, type);
     else
         match = dispatch_message (d, msg, type);
-    TAU_STOP(topic);
-    if (strstr(topic, "wrexec.run"))
-        TAU_DYNAMIC_PHASE_STOP(topic);
+    PROFILING_REGION_STOP(topic);
     if (match < 0)
         goto done;
     /* Destroy handlers here, making handler destruction
