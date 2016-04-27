@@ -303,3 +303,5 @@ xml
 filesystem
 filename
 PYTHONPATH
+localhost
+EEXIST
