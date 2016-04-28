@@ -47,6 +47,7 @@ struct pmi_server {
 };
 
 struct context {
+    double killer_timeout;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
     struct subprocess_manager *sm;
@@ -71,7 +72,8 @@ struct client {
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
-int start_pmi (struct context *ctx, const char *cmd);
+int start_session (struct context *ctx, const char *cmd);
+int exec_broker (struct context *ctx, const char *cmd);
 void remove_corelimit (void);
 char *create_scratch_dir (struct context *ctx);
 struct client *client_create (struct context *ctx, int rank, const char *cmd);
@@ -103,7 +105,6 @@ int main (int argc, char *argv[])
     char *command = NULL;
     size_t len = 0;
     struct context *ctx = xzmalloc (sizeof (*ctx));
-    double killer_timeout;
     const char *searchpath;
 
     log_init ("flux-start");
@@ -115,6 +116,10 @@ int main (int argc, char *argv[])
         msg_exit ("optparse_set usage");
     if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
+    ctx->killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
+                                                    default_killer_timeout), NULL);
+    if (ctx->killer_timeout < 0.)
+        msg_exit ("--killer-timeout argument must be >= 0");
     if (optind < argc) {
         if ((e = argz_create (argv + optind, &command, &len)) != 0)
             errn_exit (e, "argz_creawte");
@@ -128,31 +133,14 @@ int main (int argc, char *argv[])
         msg_exit ("Could not locate broker in %s", searchpath);
 
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
-    if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
-        err_exit ("flux_reactor_create");
-    killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
-                                               default_killer_timeout), NULL);
-    if (killer_timeout < 0.)
-        msg_exit ("--killer-timeout argument must be >= 0");
-    if (!(ctx->timer = flux_timer_watcher_create (ctx->reactor,
-                                                  killer_timeout, 0.,
-                                                  killer, ctx)))
-        err_exit ("flux_timer_watcher_create");
-    if (!(ctx->sm = subprocess_manager_create ()))
-        err_exit ("subprocess_manager_create");
-    if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
-        err_exit ("subprocess_manager_set reactor");
-    ctx->session_id = xasprintf ("%d", getpid ());
-    ctx->scratch_dir = create_scratch_dir (ctx);
 
-    status = start_pmi (ctx, command);
+    if (ctx->size == 1) {
+        status = exec_broker (ctx, command);
+    } else {
+        status = start_session (ctx, command);
+    }
 
     optparse_destroy (ctx->opts);
-    flux_watcher_destroy (ctx->timer);
-    flux_reactor_destroy (ctx->reactor);
-    subprocess_manager_destroy (ctx->sm);
-    free (ctx->session_id);
-    free (ctx->scratch_dir);
     free (ctx->broker_path);
     free (ctx);
 
@@ -361,6 +349,59 @@ int pmi_barrier (void *arg)
     return 0;
 }
 
+int execvp_argz (const char *cmd, char *argz, size_t argz_len)
+{
+    char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
+    if (!av) {
+        errno = ENOMEM;
+        return -1;
+    }
+    argz_extract (argz, argz_len, av);
+    execvp (cmd, av);
+    free (av);
+    return -1;
+}
+
+int exec_broker (struct context *ctx, const char *cmd)
+{
+    char *argz = NULL;
+    size_t argz_len = 0;
+    const char *arg;
+
+    if (argz_add (&argz, &argz_len, ctx->broker_path) != 0)
+        goto nomem;
+
+    optparse_getopt_iterator_reset (ctx->opts, "broker-opts");
+    while ((arg = optparse_getopt_next (ctx->opts, "broker-opts"))) {
+        if (argz_add (&argz, &argz_len, arg) != 0)
+            goto nomem;
+    }
+    if (cmd) {
+        if (argz_add (&argz, &argz_len, cmd) != 0)
+            goto nomem;
+    }
+    if (optparse_hasopt (ctx->opts, "verbose")) {
+        char *cpy = malloc (argz_len);
+        if (!cpy)
+            goto nomem;
+        memcpy (cpy, argz, argz_len);
+        argz_stringify (cpy, argz_len, ' ');
+        msg ("%s", cpy);
+        free (cpy);
+    }
+    if (!optparse_hasopt (ctx->opts, "noexec")) {
+        if (execvp_argz (ctx->broker_path, argz, argz_len) < 0)
+            goto error;
+    }
+    free (argz);
+    return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    free (argz);
+    return -1;
+}
+
 struct client *client_create (struct context *ctx, int rank, const char *cmd)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
@@ -457,10 +498,23 @@ int client_run (struct client *cli)
     return subprocess_run (cli->p);
 }
 
-int start_pmi (struct context *ctx, const char *cmd)
+int start_session (struct context *ctx, const char *cmd)
 {
     struct client *cli;
     int rank;
+
+    if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
+        err_exit ("flux_reactor_create");
+    if (!(ctx->timer = flux_timer_watcher_create (ctx->reactor,
+                                                  ctx->killer_timeout, 0.,
+                                                  killer, ctx)))
+        err_exit ("flux_timer_watcher_create");
+    if (!(ctx->sm = subprocess_manager_create ()))
+        err_exit ("subprocess_manager_create");
+    if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
+        err_exit ("subprocess_manager_set reactor");
+    ctx->session_id = xasprintf ("%d", getpid ());
+    ctx->scratch_dir = create_scratch_dir (ctx);
 
     pmi_server_initialize (ctx);
 
@@ -481,6 +535,13 @@ int start_pmi (struct context *ctx, const char *cmd)
         err_exit ("flux_reactor_run");
 
     pmi_server_finalize (ctx);
+
+    free (ctx->session_id);
+    free (ctx->scratch_dir);
+
+    subprocess_manager_destroy (ctx->sm);
+    flux_watcher_destroy (ctx->timer);
+    flux_reactor_destroy (ctx->reactor);
 
     return (ctx->exit_rc);
 }
