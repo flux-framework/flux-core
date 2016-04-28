@@ -112,12 +112,10 @@ static json_object * lua_table_to_json (lua_State *L, int i);
 
 static int lua_is_integer (lua_State *L, int index)
 {
-    double l;
-    if ((lua_type (L, index) == LUA_TNUMBER) &&
-        (l = lua_tonumber (L, index)) &&
-        ((int) l == l) &&
-        (l >= 1)) {
-        return (1);
+    if (lua_type (L, index) == LUA_TNUMBER) {
+        double ip, l = lua_tonumber (L, index);
+        if (modf (l, &ip) == 0.0)
+            return (1);
     }
     return (0);
 }
