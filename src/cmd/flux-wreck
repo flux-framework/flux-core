@@ -29,96 +29,29 @@ local f, err = require 'flux' .new()
 local wreck = require 'wreck'
 local hostlist = require 'flux.hostlist'
 local posix = require 'posix'
-
-local prog = string.match (arg[0], "([^/]+)$")
-local shortprog = prog:match ("flux%-(.+)$")
-
-local function eprintf (...)
-    io.stderr:write (string.format (...))
-end
+local prog = require 'flux.Subcommander'.create {
+    usage = "COMMAND [OPTIONS]",
+    handler = function (self, arg)
+        self:log ("COMMAND required\n")
+        self:help (1)
+    end
+}
 
 local function printf (...)
     io.stdout:write (string.format (...))
 end
 
-local function die (fmt, ...)
-    eprintf (shortprog..": "..fmt, ...)
-    os.exit (1)
-end
-
-
---- Index of all commands registered in this script
-local Commands = {}
-
---- Command class from which all "commands" inherit
-local Command = {}
-Command.__index = Command
-
---- Allow new commad methods to be registered by "calling" Command.
--- a table is passed to Command with fields:
--- @param t.name Name of the script method
--- @param t.description Brief description of this method
--- @param t.usage brief usage to be displayed in help
--- @param t.handle function implementing handler with args (self, arg...)
--- @param t.options extra options (besides --help) for this cmd
-setmetatable (Command,
-    { __call = function (_,t)
-        assert (t and t.name)
-        Commands[t.name] = t
-        return setmetatable (t, Command)
-     end
-    }
-)
-function Command:opt_table ()
-    local long_opts = { help = 'h' }
-    local short_opts = "h"
-    if not self.options then
-        return short_opts, long_opts
-    end
-    for _, t in pairs (self.options) do
-        short_opts = short_opts .. t.char .. (t.arg and ":" or "")
-        long_opts [t.name] = t.char
-    end
-    return short_opts, long_opts
-end
-
-function Command:help (code)
-    local _, opt_table = self:opt_table ()
-    eprintf ("Usage: %s %s %s\n", prog, self.name, self.usage)
-    eprintf ("  -%s, --%-20s %s\n", 'h', 'help', "Display this message.")
-    if self.options then
-        for _,t in pairs (self.options) do
-            local optstr = t.name .. (t.arg and "="..t.arg or "")
-            eprintf ("  -%s, --%-20s %s\n", t.char, optstr, t.usage)
-        end
-    end
-    if code then os.exit (code) end
-end
-
-function Command:run (args)
-    local getopts = require 'flux.alt_getopt' .get_opts
-    local opts, optind = getopts (args, self:opt_table())
-    if not opts then self:help (1) end
-    if opts.h then self:help (0) end
-    local a = {}
-    for i = optind, #args do
-        table.insert (a, args[i])
-    end
-    self.opt = opts
-    self.handler (self, a)
-end
-
 local function check_jobid_arg (self, id)
     if not id then
-        eprintf ("Error: Job id required\n")
+        io.stderr:write ("Error: Job id required\n")
         self:help (1)
     elseif not tonumber (id) then
-        die ("Invalid Job id '%s'\n", id)
+        self:die ("Invalid Job id '%s'\n", id)
     end
     return id
 end
 
-Command {
+prog:SubCommand {
  name = "attach",
  description = "Attach to running or completed job output",
  usage = "[OPTIONS] JOBID",
@@ -138,7 +71,9 @@ Command {
             f:reactor_stop()
         end
     }
-    if not taskio then die ("Failed to connect to job %d: %s\n", id, err) end
+    if not taskio then
+        self:die ("Failed to connect to job %d: %s\n", id, err)
+    end
     local kz, err = f:kz_open ("lwj."..id..".input.files.stdin", "w")
     if kz then
         f:iowatcher {
@@ -151,7 +86,7 @@ Command {
     end
     if not taskio:complete() then f:reactor () end
     if self.opt.s then
-        Commands.status:run ({id})
+        self.parent:run {"status", id}
     end
     os.exit (0)
  end
@@ -161,12 +96,12 @@ local function opt_sig (s)
     if not s then return posix.SIGTERM end
     if tonumber (s) then return tonumber (s) end
     if not tonumber (posix[s]) then
-        die ("Invalid signal '%s'\n", s)
+        prog:die ("Invalid signal '%s'\n", s)
     end
     return tonumber (posix [s])
 end
 
-Command {
+prog:SubCommand {
  name = "kill",
  description = "Kill a running job",
  usage = "[OPTIONS] JOBID",
@@ -177,28 +112,28 @@ Command {
  handler = function (self, arg)
     local id = check_jobid_arg (self, arg[1])
     local lwj, err = f:kvsdir ("lwj.%d", id)
-    if not lwj then die ("Job %d: %s\n", id, err) end
+    if not lwj then self:die ("Job %d: %s\n", id, err) end
     if lwj.state ~= "running" then
         io.stderr:write ("Job "..id..": "..lwj.state.."\n")
         os.exit (1)
     end
     local sig = opt_sig (self.opt.s)
     local rc, err = f:sendevent ({signal = sig}, "wreck.%d.kill", id)
-    if not rc then die ("signal: %s\n", err) end
+    if not rc then self:die ("signal: %s\n", err) end
  end
 }
 
-Command {
+prog:SubCommand {
  name = "status",
  description = "Return status of jobs",
  usage = "JOBID",
  handler = function (self, arg)
     local jobid = check_jobid_arg (self, arg[1])
     local lwj, err = f:kvsdir ("lwj.%d", jobid)
-    if not lwj then die ("Job %d: %s\n", jobid, err) end
+    if not lwj then self:die ("Job %d: %s\n", jobid, err) end
     print ("Job "..jobid.." status: "..lwj.state)
     local code, msglist = wreck.status { flux = f, jobid = jobid }
-    if not code then die (msglist) end
+    if not code then self:die (msglist) end
     for msg, hl in pairs (msglist) do
         local s = string.format ("task%s: %s", tostring (hl:sort()), msg)
         print (s)
@@ -288,21 +223,21 @@ local function seconds_to_string (s)
     return f ("%.03fs", s)
 end
 
-Command {
+prog:SubCommand {
  name = "ls",
  usage = "",
  description = "List jobs in kvs",
  handler = function (self, arg)
     local lwj, err = f:kvsdir ("lwj")
     if not lwj then
-        die ("Failed to get lwj info: %s\n", err)
+        self:die ("Failed to get lwj info: %s\n", err)
     end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
     printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
     for id in lwj:keys() do
         if tonumber (id) then
             local j, err = LWJ.open (f, id)
-            if not j then die ("job%d: %s", id, err) end
+            if not j then self:die ("job%d: %s", id, err) end
             printf (fmt, id, j.ntasks, j.state, j.start,
                     seconds_to_string (j.runtime),
                     tostring (j.ranks),
@@ -312,21 +247,21 @@ Command {
  end
 }
 
-Command {
+prog:SubCommand {
  name = "timing",
  usage = "",
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
     local lwj, err = f:kvsdir ("lwj")
     if not lwj then
-        die ("Failed to get lwj info: %s\n", err)
+        self:die ("Failed to get lwj info: %s\n", err)
     end
     local fmt = "%6s %12s %12s %12s %12s\n"
     printf (fmt, "ID", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
     for id in lwj:keys() do
         if tonumber (id) then
             local j, err = LWJ.open (f, id)
-            if not j then die ("job%d: %s", id, err) end
+            if not j then self:die ("job%d: %s", id, err) end
             printf (fmt, id, seconds_to_string (j.t0),
                     seconds_to_string (j.t1),
                     seconds_to_string (j.t2),
@@ -336,7 +271,7 @@ Command {
  end
 }
 
-Command {
+prog:SubCommand {
  name = "last-jobid",
  description = "Display the last jobid in lwj id sequence",
  usage = "",
@@ -349,54 +284,17 @@ Command {
     }
     local resp, err = f:rpc ("cmb.seq.fetch", req)
     if not resp then
-        die ("No last jobid found: %s", err)
+        slef:die ("No last jobid found: %s", err)
     end
     print (resp.value)
  end
 }
 
 
-local function main_usage ()
-    eprintf ("Usage: %s COMMAND [OPTIONS]...\n", prog)
-    eprintf ("Supported commands: \n")
-    for name,info in pairs (Commands) do
-        eprintf (" %-12s %s\n", name, info.description)
-    end
-end
-
-Command {
- name = "help",
- description = "Display this help or help for a command",
- usage = "[COMMAND]",
- handler = function (self, arg)
-    if #arg == 0 then
-        main_usage ()
-        os.exit (0)
-    end
-    Commands[arg[1]]:help (0)
- end
-}
-
---
---  Main program: Run cmd in arg[1]:
---
-local cmd = table.remove (arg, 1)
-if not cmd then
-    main_usage ()
-    os.exit (1)
-end
-if cmd == "-h" or cmd == "--help" then
-    cmd = "help"
-end
-
 -- Check for valid connection to flux:
 if not f then die ("Connecting to flux failed: %s\n", err) end
 
-local command = Commands[cmd]
-if not command then
-     die ("Error: Unknown command: %s\n", cmd)
-end
-
-command:run (arg)
+-- Process cmdline, run any subcommand, or exit with failure:
+prog:run (arg)
 
 --  vi: ts=4 sw=4 expandtab
