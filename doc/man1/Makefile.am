@@ -23,7 +23,8 @@ MAN1_FILES_PRIMARY = \
 	flux-getattr.1 \
 	flux-dmesg.1 \
 	flux-content.1 \
-	flux-hwloc.1
+	flux-hwloc.1 \
+	flux-proxy.1
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section

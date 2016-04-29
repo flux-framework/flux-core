@@ -422,7 +422,8 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
         err_exit ("flux_handle_create");
-    flux_set_reactor (ctx.h, ctx.reactor);
+    if (flux_set_reactor (ctx.h, ctx.reactor) < 0)
+        err_exit ("flux_set_reactor");
 
     subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor);
 

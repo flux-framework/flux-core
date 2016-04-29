@@ -504,7 +504,8 @@ flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags)
     int saved_errno;
 
     flags |= h->flags;
-    if (!(flags & FLUX_O_NONBLOCK) && flux_sleep_on (h, match) < 0) {
+    if (!(flags & FLUX_O_NONBLOCK) && (flags & FLUX_O_COPROC)
+                                   && flux_sleep_on (h, match) < 0) {
         if (errno != EINVAL)
             goto fatal;
         errno = 0;

@@ -101,9 +101,14 @@ flux_reactor_t *flux_reactor_create (int flags)
     return r;
 }
 
-void flux_set_reactor (flux_t h, flux_reactor_t *r)
+int flux_set_reactor (flux_t h, flux_reactor_t *r)
 {
+    if (flux_aux_get (h, "flux::reactor")) {
+        errno = EEXIST;
+        return -1;
+    }
     flux_aux_set (h, "flux::reactor", r, NULL);
+    return 0;
 }
 
 flux_reactor_t *flux_get_reactor (flux_t h)
