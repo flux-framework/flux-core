@@ -74,7 +74,6 @@ struct client {
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 int start_session (struct context *ctx, const char *cmd);
 int exec_broker (struct context *ctx, const char *cmd);
-void remove_corelimit (void);
 char *create_scratch_dir (struct context *ctx);
 struct client *client_create (struct context *ctx, int rank, const char *cmd);
 void client_destroy (struct client *cli);
@@ -125,7 +124,6 @@ int main (int argc, char *argv[])
             errn_exit (e, "argz_creawte");
         argz_stringify (command, len, ' ');
     }
-    remove_corelimit ();
 
     if (!(searchpath = getenv ("FLUX_EXEC_PATH")))
         msg_exit ("FLUX_EXEC_PATH is not set");
@@ -150,15 +148,6 @@ int main (int argc, char *argv[])
     log_fini ();
 
     return status;
-}
-
-void remove_corelimit (void)
-{
-    struct rlimit rl;
-    rl.rlim_cur = RLIM_INFINITY;
-    rl.rlim_max = RLIM_INFINITY;
-    if (setrlimit (RLIMIT_CORE, &rl) < 0)
-        err ("setrlimit: could not remove core file size limit");
 }
 
 char *find_broker (const char *searchpath)
