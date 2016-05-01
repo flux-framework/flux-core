@@ -1,0 +1,465 @@
+#!/usr/bin/env lua
+--[[--------------------------------------------------------------------------
+ *  Copyright (c) 2016 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+ ---------------------------------------------------------------------------]]
+--
+-- flux-cron: Flux's cron request cmdline utility
+--
+local f, err = require 'flux' .new()
+local posix = require 'posix'
+
+local program = require 'flux.Subcommander'.create {
+    name = "flux-cron",
+    description = "Schedule and manage cron-like jobs in a flux session",
+    usage = "[OPTIONS] COMMAND [OPTIONS...]",
+    handler = function (self, args)
+        if not args[1] then
+            self:log ("required COMMAND missing\n")
+            self:help (1)
+        else
+            self:die ("Unknown COMMAND `%s'", args[1])
+        end
+    end
+}
+
+local function printf (fmt, ...)
+    io.stdout:write (string.format (fmt, ...))
+end
+
+local function parse_time (s)
+    if not s then return nil end
+
+    local m = { s = 1, m = 60, h = 3600, d = 56400 }
+    local n, suffix = s:match ("^([0-9.]+)([HhMmDdSs]?)$")
+    if not tonumber (n) then
+        return nil, "Invalid duration '"..s.."'"
+    end
+    if suffix and m [suffix]  then
+        n = (n * m [suffix])
+    end
+    return (n)
+end
+
+local function now ()
+    local s, ns = posix.clock_gettime ()
+    local now = (s + (ns /1000000000))
+    return now
+end
+
+local function reladate (t)
+    local fmt = string.format
+    local now = now ()
+
+    if (t > now) then
+        return "in the future"
+    end
+
+    local diff = now - t
+
+    if (diff < 2) then
+        return fmt ("a second ago")
+    end
+
+    if (diff < 90) then
+        return fmt ("%d seconds ago", diff)
+    end
+
+    -- Convert to minutes:
+    diff = diff / 60
+    if (diff < 2) then
+        return fmt ("a minute ago")
+    end
+    if (diff < 90) then
+        return fmt ("%d minutes ago", diff)
+    end
+
+    -- Convert to hours:
+    diff = diff / 60;
+    if (diff < 36) then
+        return fmt ("%.1f hours ago", diff)
+    end
+
+    -- Convert to days:
+    diff = diff / 24;
+    if (diff < 14) then
+        return fmt ("%.1f days ago", diff)
+    end
+
+    -- weeks for past 10 weeks or so, reduce precision in output:
+    local d = math.floor (diff)
+    if (d < 70) then
+        return fmt ("%d weeks ago", (d + 3) / 7)
+    end
+    if (d < 365) then
+        return fmt ("%d months ago", (d + 15) / 30)
+    end
+
+    return fmt ("%.1f years ago", diff / 365)
+end
+
+--
+-- Extend "Command" objects adding self:request() method for common
+--  "cron.create" RPC generation:
+--
+local Command = getmetatable (program)
+function Command:request (type, typeargs, arg)
+    local command = table.concat (arg, " ")
+    local req = {
+        type = type,
+        args = typeargs,
+        command = command,
+        name = self.opt.N or arg[1],
+        ["repeat"] = self.opt.c
+    }
+    -- Process comma-separated list of options to add undocumented
+    --  members to JSON request, e.g. `-o rank=1,task-history-count=5`
+    if self.opt.o then
+        for opt in self.opt.o:gmatch ("[^,]+") do
+            local k,v = opt:match("(.+)=(.+)")
+            req[k] = v
+        end
+    end
+    return f:rpc ("cron.create", req)
+end
+
+
+program:SubCommand {
+ name = "interval",
+ description = "run COMMAND once every INTERVAL",
+ usage = "INTERVAL COMMAND",
+ options = {
+    { name = "count", char = "c", arg = "N",
+      usage = "Repeat COMMAND at most N times"
+    },
+    { name = "name", char = "N", arg = "S",
+      usage = "Name cron job string S instead of default"
+    },
+    { name = "after", char = "a", arg = "INTERVAL",
+      usage = "Set INTERVAL for initial timer"
+    },
+    { name = "options", char = "o", arg = "OPTS",
+      usage = "Comma separated list of key=value options to set in request"
+    },
+ },
+ handler = function (self, arg)
+    if #arg <  2 then self:die ("INTERVAL and COMMAND required") end
+
+    local interval, err = parse_time (table.remove (arg, 1))
+    if not interval then self:die (err) end
+    local args = { interval = interval }
+    args.after = parse_time (self.opt.a)
+
+    local resp, err = self:request ("interval", args, arg)
+    if not resp then self:die (err) end
+    self:log ("cron-%d created\n", resp.id)
+ end
+}
+
+program:SubCommand {
+ name = "event",
+ description = "run COMMAND on every event matching TOPIC",
+ usage = "TOPIC COMMAND",
+ options = {
+    { name = "nth", char = "n", arg = "N",
+      usage = "Run command every Nth matching event",
+    },
+    { name = "after", char = "a", arg = "N",
+      usage = "Run command the first time only after N events",
+    },
+    { name = "min-interval", char = "i", arg = "T",
+      usage = "Set minimum interval at which two cron jobs will execute",
+    },
+    { name = "count", char = "c", arg = "N",
+      usage = "Repeat COMMAND at most N times"
+    },
+    { name = "options", char = "o", arg = "OPTS",
+      usage = "Comma separated list of key=value options to set in request"
+    },
+    { name = "name", char = "N", arg = "S",
+      usage = "Name cron job string S instead of default"
+    }
+ },
+ handler = function (self, arg)
+    if #arg < 2 then self:die ("TOPIC and COMMAND args are required") end
+    local topic = table.remove (arg, 1)
+    local args = { topic = topic, nth = self.opt.n, after = self.opt.a }
+    args.min_interval = parse_time (self.opt.i)
+
+    local resp, err = self:request ("event", args, arg)
+    if not resp then self:die (err) end
+    self:log ("cron-%d created\n", resp.id)
+ end
+}
+
+--
+--  Convert date in Unix seconds (floating point) to a standard
+--   datetime string
+--
+local function date_string (t)
+    local sec = math.floor (t)
+    local msec = t - sec
+    local tm = posix.localtime (sec)
+    return string.format ("%d-%02d-%02dT%02d:%02d:%02d.%03d",
+            tm.year, tm.month, tm.monthday,
+            tm.hour, tm.min, tm.sec, math.floor (msec * 1000))
+end
+
+local function seconds_to_string (s)
+    local f = string.format
+    if s > (60*60*24) then
+        return f ("%.03fd", s / (60*60*24))
+    elseif s > (60*60) then
+        return f ("%.03fh", s / (60*60))
+    elseif s > 60 then
+        return f ("%.03fm", s / 60)
+    elseif s > 1 then
+        return f ("%.03fs", s)
+    end
+    return f ("%.2fms", s * 1000)
+end
+
+program:SubCommand {
+ name = "dump",
+ description = "Dump values from a cron entry",
+ usage = "[IDs]",
+ options = {
+    { name = "key", char = "k", arg = "KEY",
+      usage = "Print only KEY from the entry",
+    },
+ },
+ handler = function (self, arg)
+    local id = tonumber (arg[1])
+    if not id then self:die ("ID argument required") end
+    local req = {}
+    local resp, err = f:rpc ("cron.list", req)
+    if not resp then self:die (err) end
+
+    local function p (k, v)
+        if not self.opt.k then
+            if type (v) == "string" then v = '"'..v..'"' end
+            printf ("%s = %s\n", k, tostring (v))
+        elseif self.opt.k == k then
+            printf ("%s\n", tostring (v))
+        end
+    end
+
+    local function dump_tasks (l)
+        for i, t in pairs (l) do
+            for k,v in pairs (t) do
+                p ("task."..i.."."..k, v)
+            end
+        end
+    end
+
+    local function dump_t (name, td)
+        for k,v in pairs (td) do
+            p (name.."."..k, v)
+        end
+    end
+
+    local function dump_entry (e)
+        for k,v in pairs (e) do
+            if k == "tasks" then
+                dump_tasks (v)
+            elseif type (v) == "table" then
+                dump_t (k, v)
+            else
+                p (k, v)
+            end
+        end
+    end
+
+    for _, e in pairs (resp.entries) do
+        if tonumber (e.id) == id then
+            dump_entry (e)
+            return
+       end
+    end
+    self:die ("cron-%d: No such cron entry found", id)
+  end
+}
+
+
+program:SubCommand {
+ name = "list",
+ description = "List registered and stopped flux-cron jobs",
+ usage = "[IDs]",
+ options = {},
+ handler = function (self, arg)
+
+    local req = {}
+    local resp, err = f:rpc ("cron.list", req)
+    if not resp then self:die (err) end
+
+    local fmt = "%6s %-15s %-8s %9s %18s  %-18s\n"
+    printf (fmt, "ID", "CMD/NAME", "STATE", "#RUNS", "LASTRUN", "STATUS")
+
+
+    for _, e in pairs (resp.entries) do
+        local lastrun, runtime, status = "None", 0, "None"
+        local t = e.tasks[1]
+        local t2 = e.tasks[2] or {}
+        if t then
+            local t0 = t["start-time"] or t2["start-time"]
+            local t1 = t["end-time"] or now ()
+            if t0 then
+                lastrun = reladate (t0)
+                runtime = seconds_to_string (t1 - t0)
+            end
+            if t.state == "Failed" then
+                if t.code == 127 then
+                    status = "Exec-Error"
+                else
+                    status = string.format ("%s:rc=%d", t.state, t.code)
+                end
+            elseif t.state == "Exited" then
+                status = "Success"
+            else
+                status = t.state
+            end
+        end
+
+        local state = "Active"
+        local count = e.stats.count
+        if e["repeat"] > 0 then
+            count = e.count .. "/" .. e["repeat"]
+        end
+        if e.stopped then state = "Stopped" end
+        printf (fmt, e.id, e.name, state, count, lastrun, status)
+    end
+ end
+}
+
+program:SubCommand {
+ name = "delete",
+ description = "Delete flux cron entries",
+ usage = "IDs",
+ options = {
+   { name = "kill", char = "k",
+     usage = "Also kill any currently running task associated with"..
+             " this entry"
+   }
+ },
+ handler = function (self, arg)
+    if not arg[1] then
+        self:help()
+        os.exit (1)
+    end
+
+    for _,id in ipairs (arg) do
+        local resp, err = f:rpc ("cron.delete", { id = id, kill = self.opt.k })
+        if not resp then self:die (err) end
+
+        local t = resp.tasks [1]
+        local extra = ""
+        if t then
+            local t0 = t["start-time"]
+            local t1 = t["end-time"]
+            if t1 then
+                local runtime = seconds_to_string (t1 - t0)
+                extra = " last ran "..reladate (t1).." for "..runtime
+            else
+                extra = " still running. Started "..reladate (t0)
+            end
+        end
+        printf ("Removed cron-%d: %s%s\n", arg[1], resp.name, extra)
+    end
+ end
+}
+
+program:SubCommand {
+ name = "stop",
+ description = "Stop a flux cron job from executing",
+ usage = "IDs",
+  handler = function (self, arg)
+    if not arg[1] then
+        self:help()
+        os.exit (1)
+    end
+
+    for _,id in ipairs (arg) do
+        local resp, err = f:rpc ("cron.stop", { id = id })
+        if not resp then self:die (err) end
+        printf ("Stopped cron-%d\n", arg[1])
+    end
+ end
+}
+
+program:SubCommand {
+ name = "start",
+ description = "Start a stopped flux cron job",
+ usage = "IDs",
+  handler = function (self, arg)
+    if not arg[1] then
+        self:help()
+        os.exit (1)
+    end
+
+    for _,id in ipairs (arg) do
+        local resp, err = f:rpc ("cron.start", { id = id })
+        if not resp then self:die (err) end
+        printf ("Started cron-%d\n", arg[1])
+    end
+ end
+}
+
+program:SubCommand {
+ name = "sync",
+ description = "Query and modify sync-on-event behavior for flux-cron",
+ options = {
+   { name = "disable", char = "d",
+     usage = "Disable cron sync-event"
+   },
+   { name = "epsilon", char = "e", arg = "TIME",
+     usage = "Set amount of time after a sync-event that jobs are"..
+             " still allowed to be run."
+   }
+ },
+ usage = "IDs",
+  handler = function (self, arg)
+    local req = {}
+
+    if self.opt.d then
+        req.disable = true
+    elseif arg[1] then
+        req.topic = arg[1]
+    end
+    if self.opt.e then
+        req.sync_epsilon = parse_time (self.opt.e)
+    end
+
+    local resp, err = f:rpc ("cron.sync", req)
+    if not resp then self:die (err) end
+    if (resp.sync_disabled) then
+        self:log ("sync disabled.\n")
+    else
+        self:log ("sync to event \"%s\" epsilon=%.3fs.\n",
+                  resp.sync_event, resp.sync_epsilon)
+    end
+ end
+}
+
+
+program:run (arg)
+
+--  vi: ts=4 sw=4 expandtab
