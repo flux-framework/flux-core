@@ -16,31 +16,55 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-flux-start(1) launches a Flux instance by starting
-Flux message brokers local, as children of flux-start(1).
-The brokers use UNIX domain sockets to communicate.
+flux-start(1) launches a new Flux instance.  If a size other than
+one is specified on the command line, it is assumed that an
+instance of that size is to be started on the local host
+with flux-start as the parent.
+
+If size is one (the default), flux-start execs a single flux-broker(1)
+directly.  If a PMI environment is available, flux-broker will
+use it to fetch job information and bootstrap a session of geometry
+determined from PMI.  If PMI is unavailable, flux-broker will run
+as a standalone, single-rank job.
+
+A failure of the initial program (such as non-zero exit code)
+causes flux-start to exit with a non-zero exit code.
 
 Note: in order to launch a Flux instance, you must have generated
-long-term CURVE keys using *flux-keygen*.
+long-term CURVE keys using flux-keygen(1).
 
 OPTIONS
 -------
 *-s, --size*='N'::
-Set the size of the comms session (number of message brokers).
+Set the size of the instance (number of message broker ranks).
 The default is 1.
 
 *-o, --broker-opts*='option_string'::
 Add options to the message broker daemon, separated by commas.
-For example, to set the branching factor of the tree-based-overlay
-network to 8 and enable verbose mode:
-
-  flux start -o"-v,--k-ary=8"
 
 *-v, --verbose*::
 Display commands before executing them.
 
 *-X, --noexec*::
 Don't execute anything.  This option is most useful with -v.
+
+EXAMPLES
+--------
+
+Launch an 8-way Flux instance with an interactive shell
+as the initial program and all logs output to stderr:
+
+  flux start -s8 -o,log-stderr-level=7
+
+Launch an 8-way Flux instance within a slurm job, with an interactive
+shell as the initial program:
+
+  srun -pty -N8 flux start
+
+Launch an 8-way Flux instance under Flux, with /bin/true as
+the initial program:
+
+  flux wreckrun -N8 flux start /bin/true
 
 
 AUTHOR
@@ -56,3 +80,8 @@ Github: <http://github.com/flux-framework>
 COPYRIGHT
 ---------
 include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-broker(1) flux-keygen(1)
