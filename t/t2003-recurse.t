@@ -11,7 +11,7 @@ test_under_flux 4 wreck
 test_expect_success 'recurse: Flux launches Flux ' '
 	printenv FLUX_URI >old_uri &&
 	test -s old_uri &&
-	flux wreckrun -n1 -N1 flux broker \
+	flux wreckrun -n1 -N1 flux start \
 		printenv FLUX_URI >new_uri &&
 	test -s new_uri &&
 	! test_cmp old_uri new_uri
@@ -32,7 +32,7 @@ test_expect_success 'recurse: parent-uri is unset in bootstrap instance' '
 test_expect_success 'recurse: local-uri != local-uri in enclosing instance' '
 	flux getattr local-uri >enc_uri &&
 	test -s enc_uri &&
-	flux wreckrun -n1 -N1 flux broker \
+	flux wreckrun -n1 -N1 flux start \
 		flux getattr local-uri >attr_uri &&
 	test -s attr_uri &&
 	! test_cmp enc_uri attr_uri
@@ -41,15 +41,15 @@ test_expect_success 'recurse: local-uri != local-uri in enclosing instance' '
 test_expect_success 'recurse: parent-uri == local-uri in enclosing instance' '
 	flux getattr local-uri >enc_uri &&
 	test -s enc_uri &&
-	flux wreckrun -n1 -N1 flux broker \
+	flux wreckrun -n1 -N1 flux start \
 		flux getattr parent-uri >attr_uri &&
 	test -s attr_uri &&
 	test_cmp enc_uri attr_uri
 '
 
 test_expect_success 'recurse: Flux launches Flux launches Flux' '
-	flux wreckrun -n1 -N1 flux broker \
-		flux wreckrun -n1 -N1 flux broker \
+	flux wreckrun -n1 -N1 flux start \
+		flux wreckrun -n1 -N1 flux start \
 			echo hello >hello_out &&
 	echo hello >hello_expected &&
 	test_cmp hello_expected hello_out
