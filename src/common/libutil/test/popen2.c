@@ -52,14 +52,6 @@ int main(int argc, char** argv)
     ok (p == NULL && errno == ENOENT,
         "popen2 /noexist failed with ENOENT");
 
-    /* open/write/close (stdin ignored by child) */
-    ok ((p = popen2 ("/bin/true", av)) != NULL,
-        "popen2 /bin/true OK");
-    ok (write_all (fd, outbuf, sizeof (outbuf)) == sizeof (outbuf),
-        "write to fd worked");
-    ok (pclose2 (p) == 0,
-        "pclose2 OK");
-
     /* open/close (child exit error) */
     ok ((p = popen2 ("/bin/false", av)) != NULL,
         "popen2 /bin/false OK");
