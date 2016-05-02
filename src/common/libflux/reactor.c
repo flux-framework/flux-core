@@ -46,12 +46,6 @@ struct flux_reactor {
     int usecount;
 };
 
-struct watcher_ops {
-    void (*start)(void *impl, flux_watcher_t *w);
-    void (*stop)(void *impl, flux_watcher_t *w);
-    void (*destroy)(void *impl, flux_watcher_t *w);
-};
-
 struct flux_watcher {
     flux_reactor_t *r;
     flux_watcher_f fn;
@@ -180,10 +174,10 @@ static int libev_to_events (int events)
  ** Watchers
  **/
 
-static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
-                                            void *impl, struct watcher_ops ops,
-                                            int signature,
-                                            flux_watcher_f fun, void *arg)
+flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
+                                     void *impl, struct watcher_ops ops,
+                                     int signature,
+                                     flux_watcher_f fun, void *arg)
 {
     struct flux_watcher *w = xzmalloc (sizeof (*w));
     w->r = r;
@@ -194,6 +188,27 @@ static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
     w->arg = arg;
     reactor_usecount_incr (r);
     return w;
+}
+
+int flux_watcher_get_signature (flux_watcher_t *w)
+{
+    return w->signature;
+}
+
+void *flux_watcher_get_impl (flux_watcher_t *w)
+{
+    return w->impl;
+}
+
+flux_reactor_t *flux_watcher_get_reactor (flux_watcher_t *w)
+{
+    return w->r;
+}
+
+void flux_watcher_call (flux_watcher_t *w, int revents)
+{
+    if (w->fn)
+        w->fn (w->r, w, revents, w->arg);
 }
 
 void flux_watcher_start (flux_watcher_t *w)

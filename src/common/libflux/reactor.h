@@ -121,6 +121,26 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
 void flux_stat_watcher_get_rstat (flux_watcher_t *w,
                                   struct stat *stat, struct stat *prev);
 
+/* construction kit for custom watchers
+ */
+
+struct watcher_ops {
+    void (*start)(void *impl, flux_watcher_t *w);
+    void (*stop)(void *impl, flux_watcher_t *w);
+    void (*destroy)(void *impl, flux_watcher_t *w);
+};
+
+flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
+                                     void *impl, struct watcher_ops ops,
+                                     int signature,
+                                     flux_watcher_f fun, void *arg);
+
+int flux_watcher_get_signature (flux_watcher_t *w);
+void *flux_watcher_get_impl (flux_watcher_t *w);
+flux_reactor_t *flux_watcher_get_reactor (flux_watcher_t *w);
+void flux_watcher_call (flux_watcher_t *w, int revents);
+
+
 #endif /* !_FLUX_CORE_REACTOR_H */
 
 /*

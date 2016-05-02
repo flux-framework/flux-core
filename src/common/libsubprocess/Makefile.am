@@ -15,14 +15,17 @@ libsubprocess_la_SOURCES = \
 	zio.c \
 	zio.h \
 	subprocess.c \
-	subprocess.h
+	subprocess.h \
+	inbuf.c \
+	inbuf.h
 
 
 TESTS = \
 	test_subprocess.t \
 	test_loop.t \
 	test_socketpair.t \
-	test_zio.t
+	test_zio.t \
+	test_inbuf.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -55,3 +58,7 @@ test_loop_t_LDADD = $(test_ldadd)
 test_zio_t_SOURCES = test/zio.c
 test_zio_t_CPPFLAGS = $(test_cppflags)
 test_zio_t_LDADD = $(test_ldadd)
+
+test_inbuf_t_SOURCES = test/inbuf.c
+test_inbuf_t_CPPFLAGS = $(test_cppflags)
+test_inbuf_t_LDADD = $(test_ldadd)
