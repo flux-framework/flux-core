@@ -85,7 +85,6 @@
 #endif
 
 const char *default_modules = "connector-local";
-const char *default_boot_method = "pmi";
 
 typedef struct {
     /* 0MQ
@@ -133,7 +132,6 @@ typedef struct {
     content_cache_t *cache;
     /* Bootstrap
      */
-    struct boot_method *boot_method;
     bool enable_epgm;
     bool shared_ipc_namespace;
     int k_ary;
@@ -191,6 +189,7 @@ static int create_dummyattrs (ctx_t *ctx);
 
 static int boot_pmi (ctx_t *ctx);
 static int boot_single (ctx_t *ctx);
+static struct boot_method *lookup_boot_method (const char *name);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -250,7 +249,7 @@ int main (int argc, char *argv[])
     int security_clr = 0;
     int security_set = 0;
     const char *secdir = NULL;
-    char *boot_method = "pmi";
+    struct boot_method *boot_method = NULL;
     int e;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -330,7 +329,8 @@ int main (int argc, char *argv[])
                 ctx.shared_ipc_namespace = true;
                 break;
             case 'm': { /* --boot-method */
-                boot_method = optarg;
+                if (!(boot_method = lookup_boot_method (optarg)))
+                    msg_exit ("unknown boot method: %s", optarg);
                 break;
             }
             case 'S': { /* --setattr ATTR=VAL */
@@ -350,20 +350,10 @@ int main (int argc, char *argv[])
     if (optind < argc) {
         size_t len = 0;
         if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &len)) != 0)
-            errn_exit (e, "argz_creawte");
+            errn_exit (e, "argz_create");
         argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
-    if (boot_method) {
-        struct boot_method *m;
-        for (m = &boot_table[0]; m->name != NULL; m++)
-            if (!strcasecmp (m->name, boot_method))
-                break;
-        if (m->name != NULL)
-            ctx.boot_method = m;
-    }
-    if (!ctx.boot_method)
-        msg_exit ("invalid boot method: %s", boot_method ? boot_method
-                                                         : "none");
+
     /* Get the directory for CURVE keys.
      */
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
@@ -456,13 +446,39 @@ int main (int argc, char *argv[])
     /* Execute the selected boot method.
      * At minimum, this must ensure that rank, size, and sid are set.
      */
-    if (ctx.verbose)
-        msg ("boot: %s", ctx.boot_method->name);
-    if (ctx.boot_method->fun (&ctx) < 0)
-        msg_exit ("bootstrap failed");
+    if (boot_method) {
+        int rc = boot_method->fun (&ctx);
+        if (ctx.verbose)
+            msg ("boot: %s: %s", boot_method->name,
+                 rc == 0 ? "ok" : "fail");
+        if (rc < 0)
+            msg_exit ("bootstrap failed");
+    } else {
+        if (ctx.verbose)
+            msg ("boot: no boot method specified");
+        int i, rc = -1;
+        for (i = 0; boot_table[i].name != NULL; i++) {
+            rc = boot_table[i].fun (&ctx);
+            if (ctx.verbose)
+                msg ("boot: %s: %s", boot_table[i].name,
+                     rc == 0 ? "ok" : "fail");
+            if (rc == 0)
+                break;
+        }
+        if (rc < 0)
+            msg_exit ("bootstrap failed");
+    }
+
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
+
+    if (ctx.verbose) {
+        const char *sid = "unknown";
+        (void)attr_get (ctx.attrs, "session-id", &sid, NULL);
+        msg ("boot: rank=%d size=%d session-id=%s", ctx.rank, ctx.size, sid);
+    }
+
     if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
         err_exit ("attr_set_flags session-id");
 
@@ -707,6 +723,15 @@ int main (int argc, char *argv[])
     runlevel_destroy (ctx.runlevel);
 
     return 0;
+}
+
+static struct boot_method *lookup_boot_method (const char *name)
+{
+    int i;
+    for (i = 0; boot_table[i].name != NULL; i++)
+        if (!strcasecmp (boot_table[i].name, name))
+            break;
+    return boot_table[i].name ? &boot_table[i] : NULL;
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)
@@ -1036,17 +1061,16 @@ static int boot_pmi (ctx_t *ctx)
     char *val = NULL;
     int e, rc = -1;
 
-    if (ctx->enable_epgm || !ctx->shared_ipc_namespace)
-        ipaddr_getprimary (ipaddr, sizeof (ipaddr));
-
-    if (!(pmi = pmi_create_guess ())) {
-        err ("pmi_create");
+    if (!(pmi = pmi_create_guess ()))
         goto done;
-    }
     if ((e = pmi_init (pmi, &spawned)) != PMI_SUCCESS) {
         msg ("pmi_init: %s", pmi_strerror (e));
         goto done;
     }
+
+    if (ctx->enable_epgm || !ctx->shared_ipc_namespace)
+        ipaddr_getprimary (ipaddr, sizeof (ipaddr));
+
 
     /* Get rank, size, appnum
      */

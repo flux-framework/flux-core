@@ -307,3 +307,4 @@ localhost
 EEXIST
 rsh
 RCMD
+pty

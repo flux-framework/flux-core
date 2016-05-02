@@ -114,9 +114,11 @@ static const char *pmi_strerror (int errnum)
 {
     int i = 0;
     static char buf[16];
-    while (pmi_errstr[i].s != NULL)
+    while (pmi_errstr[i].s != NULL) {
         if (errnum == pmi_errstr[i].err)
             return pmi_errstr[i].s;
+        i++;
+    }
     snprintf (buf, sizeof (buf), "%d", errnum);
     return buf;
 }
@@ -569,11 +571,14 @@ int PMI_Get_id (char id_str[], int length)
         goto done;
     }
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (id_str == NULL || length < strlen (ctx->kvsname) + 1) {
+    if (id_str == NULL || length <= 1) {
         ret = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    snprintf (id_str, length + 1, "%s", ctx->kvsname);
+    if (snprintf (id_str, length + 1, "%d", ctx->appnum) == length + 1) {
+        ret = PMI_ERR_INVALID_ARG;
+        goto done;
+    }
     ret = PMI_SUCCESS;
 done:
     return_trace (PMI_TRACE_PARAM, ret);
