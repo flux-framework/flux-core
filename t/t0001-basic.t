@@ -29,7 +29,10 @@ test_expect_success 'flux-keygen works' '
 	flux --secdir $tmpkeydir keygen --force &&
 	rm -rf $tmpkeydir
 '
-test_expect_success 'flux-start works' "
+test_expect_success 'flux-start in exec mode works' "
+	flux start --size=1 'flux comms info' | grep 'size=1'
+"
+test_expect_success 'flux-start in subprocess/pmi mode works' "
 	flux start --size=2 'flux comms info' | grep 'size=2'
 "
 test_expect_success 'flux-start passes through errors from command' "
@@ -38,6 +41,13 @@ test_expect_success 'flux-start passes through errors from command' "
 test_expect_success 'flux-start passes exit code due to signal' "
 	test_expect_code 130 flux start --size=1 'kill -INT \$\$'
 "
+test_expect_success 'flux-start in exec mode works as initial program' "
+	flux start --size=2 flux start --size=1 flux comms info | grep size=1
+"
+test_expect_success 'flux-start in subprocess/pmi mode works as initial program' "
+	flux start --size=2 flux start --size=1 flux comms info | grep size=1
+"
+
 test_expect_success 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
 	mkdir -p test-under-flux && (
