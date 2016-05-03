@@ -114,9 +114,10 @@ static const char *pmi_strerror (int errnum)
 {
     int i = 0;
     static char buf[16];
-    while (pmi_errstr[i].s != NULL)
+    for (i=0; pmi_errstr[i].s != NULL; i++)
         if (errnum == pmi_errstr[i].err)
             return pmi_errstr[i].s;
+
     snprintf (buf, sizeof (buf), "%d", errnum);
     return buf;
 }
