@@ -40,12 +40,6 @@
 #include "src/common/libpmi-server/simple.h"
 #include "src/common/libsubprocess/subprocess.h"
 
-struct pmi_server {
-    zhash_t *kvs;
-    int barrier;
-    struct pmi_simple_server *srv;
-};
-
 struct context {
     double killer_timeout;
     flux_reactor_t *reactor;
@@ -58,22 +52,25 @@ struct context {
     int size;
     int count;
     int exit_rc;
-    struct pmi_server pmi;
+    struct simple_server *ss;
 };
 
 struct client {
     int rank;
-    int fd;
     struct subprocess *p;
-    flux_watcher_t *w;
     struct context *ctx;
-    char *buf;
-    int buflen;
+    struct simple_client *sc;
 };
+
+struct simple_client *simple_client_create (struct simple_server *ss,
+                                            struct subprocess *p, int rank);
+void simple_client_destroy (struct simple_client *sc);
+struct simple_server *simple_server_create (flux_reactor_t *r,
+                                            int appnum, int size);
+void simple_server_destroy (struct simple_server *ss);
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 int start_session (struct context *ctx, const char *cmd);
-int exec_broker (struct context *ctx, const char *cmd);
 char *create_scratch_dir (struct context *ctx);
 struct client *client_create (struct context *ctx, int rank, const char *cmd);
 void client_destroy (struct client *cli);
@@ -116,12 +113,13 @@ int main (int argc, char *argv[])
     if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
     ctx->killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
-                                                    default_killer_timeout), NULL);
+                                                    default_killer_timeout),
+                                  NULL);
     if (ctx->killer_timeout < 0.)
         msg_exit ("--killer-timeout argument must be >= 0");
     if (optind < argc) {
         if ((e = argz_create (argv + optind, &command, &len)) != 0)
-            errn_exit (e, "argz_creawte");
+            errn_exit (e, "argz_create");
         argz_stringify (command, len, ' ');
     }
 
@@ -132,11 +130,7 @@ int main (int argc, char *argv[])
 
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
 
-    if (ctx->size == 1) {
-        status = exec_broker (ctx, command);
-    } else {
-        status = start_session (ctx, command);
-    }
+    status = start_session (ctx, command);
 
     optparse_destroy (ctx->opts);
     free (ctx->broker_path);
@@ -179,7 +173,7 @@ void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     }
 }
 
-static int child_report (struct subprocess *p)
+int child_report (struct subprocess *p)
 {
     struct client *cli = subprocess_get_context (p, "cli");
     pid_t pid = subprocess_pid (p);
@@ -204,7 +198,7 @@ static int child_report (struct subprocess *p)
     return 0;
 }
 
-static int child_exit (struct subprocess *p)
+int child_exit (struct subprocess *p)
 {
     struct client *cli = subprocess_get_context (p, "cli");
     struct context *ctx = cli->ctx;
@@ -254,89 +248,6 @@ char *create_scratch_dir (struct context *ctx)
     return scratchdir;
 }
 
-static int dgetline (int fd, char *buf, int len)
-{
-    int i = 0;
-    while (i < len - 1) {
-        if (read (fd, &buf[i], 1) <= 0)
-            return -1;
-        if (buf[i] == '\n')
-            break;
-        i++;
-    }
-    if (buf[i] != '\n') {
-        errno = EPROTO;
-        return -1;
-    }
-    buf[i] = '\0';
-    return 0;
-}
-
-static int dputline (int fd, const char *buf)
-{
-    int len = strlen (buf);
-    int n, count = 0;
-    while (count < len) {
-        if ((n = write (fd, buf + count, len - count)) < 0)
-            return n;
-        count += n;
-    }
-    return count;
-}
-
-void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
-                    int revents, void *arg)
-{
-    struct client *rcli, *cli = arg;
-    struct context *ctx = cli->ctx;
-    int rc;
-    char *resp;
-    if (dgetline (cli->fd, cli->buf, cli->buflen) < 0)
-        err_exit ("%s", __FUNCTION__);
-    rc = pmi_simple_server_request (ctx->pmi.srv, cli->buf, cli);
-    if (rc < 0)
-        err_exit ("%s", __FUNCTION__);
-    while (pmi_simple_server_response (ctx->pmi.srv, &resp, &rcli) == 0) {
-        if (dputline (rcli->fd, resp) < 0)
-            err_exit ("%s", __FUNCTION__);
-        free (resp);
-    }
-    if (rc == 1) {
-        close (cli->fd);
-        cli->fd = -1;
-        flux_watcher_stop (w);
-    }
-}
-
-int pmi_kvs_put (void *arg, const char *kvsname,
-                 const char *key, const char *val)
-{
-    struct context *ctx = arg;
-    zhash_update (ctx->pmi.kvs, key, xstrdup (val));
-    zhash_freefn (ctx->pmi.kvs, key, (zhash_free_fn *)free);
-    return 0;
-}
-
-int pmi_kvs_get (void *arg, const char *kvsname,
-                 const char *key, char *val, int len)
-{
-    struct context *ctx = arg;
-    char *v = zhash_lookup (ctx->pmi.kvs, key);
-    if (!v || strlen (v) >= len)
-        return -1;
-    strcpy (val, v);
-    return 0;
-}
-
-int pmi_barrier (void *arg)
-{
-    struct context *ctx = arg;
-    if (++ctx->pmi.barrier == ctx->size) {
-        ctx->pmi.barrier = 0;
-        return 1;
-    }
-    return 0;
-}
 
 int execvp_argz (const char *cmd, char *argz, size_t argz_len)
 {
@@ -351,7 +262,7 @@ int execvp_argz (const char *cmd, char *argz, size_t argz_len)
     return -1;
 }
 
-int exec_broker (struct context *ctx, const char *cmd)
+int start_session_exec (struct context *ctx, const char *cmd)
 {
     char *argz = NULL;
     size_t argz_len = 0;
@@ -391,18 +302,15 @@ error:
     return -1;
 }
 
+
 struct client *client_create (struct context *ctx, int rank, const char *cmd)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
-    int client_fd;
 
     cli->rank = rank;
-    cli->fd = -1;
     cli->ctx = ctx;
     if (!(cli->p = subprocess_create (ctx->sm)))
         goto fail;
-    cli->buflen = pmi_simple_server_get_maxrequest (ctx->pmi.srv);
-    cli->buf = xzmalloc (cli->buflen);
     subprocess_set_context (cli->p, "cli", cli);
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
@@ -415,18 +323,8 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
         add_arg (cli->p, "%s", cmd); /* must be last arg */
 
     subprocess_set_environ (cli->p, environ);
-
-    if ((cli->fd = subprocess_socketpair (cli->p, &client_fd)) < 0)
-        goto fail;
     subprocess_set_context (cli->p, "client", cli);
-    cli->w = flux_fd_watcher_create (ctx->reactor, cli->fd, FLUX_POLLIN,
-                                     pmi_simple_cb, cli);
-    if (!cli->w)
-        goto fail;
-    flux_watcher_start (cli->w);
-    subprocess_setenvf (cli->p, "PMI_FD", 1, "%d", client_fd);
-    subprocess_setenvf (cli->p, "PMI_RANK", 1, "%d", rank);
-    subprocess_setenvf (cli->p, "PMI_SIZE", 1, "%d", ctx->size);
+
     return cli;
 fail:
     client_destroy (cli);
@@ -436,13 +334,9 @@ fail:
 void client_destroy (struct client *cli)
 {
     if (cli) {
-        flux_watcher_destroy (cli->w);
-        if (cli->fd != -1)
-            close (cli->fd);
+        simple_client_destroy (cli->sc);
         if (cli->p)
             subprocess_destroy (cli->p);
-        if (cli->buf)
-            free (cli->buf);
         free (cli);
     }
 }
@@ -462,35 +356,10 @@ void client_dumpargs (struct client *cli)
     free (az);
 }
 
-void pmi_server_initialize (struct context *ctx)
-{
-    struct pmi_simple_ops ops = {
-        .kvs_put = pmi_kvs_put,
-        .kvs_get = pmi_kvs_get,
-        .barrier = pmi_barrier,
-    };
-    int appnum = strtol (ctx->session_id, NULL, 10);
-    if (!(ctx->pmi.kvs = zhash_new()))
-        oom ();
-    ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size, "-", ctx);
-    if (!ctx->pmi.srv)
-        err_exit ("pmi_simple_server_create");
-}
-
-void pmi_server_finalize (struct context *ctx)
-{
-    zhash_destroy (&ctx->pmi.kvs);
-    pmi_simple_server_destroy (ctx->pmi.srv);
-}
-
-int client_run (struct client *cli)
-{
-    return subprocess_run (cli->p);
-}
-
-int start_session (struct context *ctx, const char *cmd)
+int start_session_pmi (struct context *ctx, const char *cmd)
 {
     struct client *cli;
+    int appnum = getpid ();
     int rank;
 
     if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
@@ -503,10 +372,10 @@ int start_session (struct context *ctx, const char *cmd)
         err_exit ("subprocess_manager_create");
     if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
         err_exit ("subprocess_manager_set reactor");
-    ctx->session_id = xasprintf ("%d", getpid ());
+    ctx->session_id = xasprintf ("%d", appnum);
     ctx->scratch_dir = create_scratch_dir (ctx);
 
-    pmi_server_initialize (ctx);
+    ctx->ss = simple_server_create (ctx->reactor, appnum, ctx->size);
 
     for (rank = 0; rank < ctx->size; rank++) {
         if (!(cli = client_create (ctx, rank, cmd)))
@@ -517,14 +386,15 @@ int start_session (struct context *ctx, const char *cmd)
             client_destroy (cli);
             continue;
         }
-        if (client_run (cli) < 0)
+        cli->sc = simple_client_create (ctx->ss, cli->p, rank);
+        if (subprocess_run (cli->p) < 0)
             err_exit ("subprocess_run");
         ctx->count++;
     }
     if (flux_reactor_run (ctx->reactor, 0) < 0)
         err_exit ("flux_reactor_run");
 
-    pmi_server_finalize (ctx);
+    simple_server_destroy (ctx->ss);
 
     free (ctx->session_id);
     free (ctx->scratch_dir);
@@ -534,6 +404,205 @@ int start_session (struct context *ctx, const char *cmd)
     flux_reactor_destroy (ctx->reactor);
 
     return (ctx->exit_rc);
+}
+
+int start_session (struct context *ctx, const char *cmd)
+{
+    int rc;
+    if (ctx->size == 1)
+        rc = start_session_exec (ctx, cmd);
+    else
+        rc = start_session_pmi (ctx, cmd);
+    return rc;
+}
+
+/**
+ ** Simple PMI server implementation using libpmi-server,
+ ** which implements the MPICH wire protocol for PMI 1.1.
+ **/
+
+struct simple_server {
+    zhash_t *kvs;
+    int barrier;
+    struct pmi_simple_server *ctx;
+    int size;
+    flux_reactor_t *r;
+    int usecount;
+};
+
+struct simple_client {
+    int fd;
+    flux_watcher_t *w;
+    char *buf;
+    int buflen;
+    struct simple_server *ss;
+};
+
+int simple_dgetline (int fd, char *buf, int len)
+{
+    int i = 0;
+    while (i < len - 1) {
+        if (read (fd, &buf[i], 1) <= 0)
+            return -1;
+        if (buf[i] == '\n')
+            break;
+        i++;
+    }
+    if (buf[i] != '\n') {
+        errno = EPROTO;
+        return -1;
+    }
+    buf[i] = '\0';
+    return 0;
+}
+
+int simple_dputline (int fd, const char *buf)
+{
+    int len = strlen (buf);
+    int n, count = 0;
+    while (count < len) {
+        if ((n = write (fd, buf + count, len - count)) < 0)
+            return n;
+        count += n;
+    }
+    return count;
+}
+
+int simple_kvs_put_cb (void *arg, const char *kvsname,
+                       const char *key, const char *val)
+{
+    struct simple_server *ss = arg;
+    zhash_update (ss->kvs, key, xstrdup (val));
+    zhash_freefn (ss->kvs, key, (zhash_free_fn *)free);
+    return 0;
+}
+
+int simple_kvs_get_cb (void *arg, const char *kvsname,
+                       const char *key, char *val, int len)
+{
+    struct simple_server *ss = arg;
+    char *v = zhash_lookup (ss->kvs, key);
+    if (!v || strlen (v) >= len)
+        return -1;
+    strcpy (val, v);
+    return 0;
+}
+
+int simple_barrier_cb (void *arg)
+{
+    struct simple_server *ss = arg;
+    if (++ss->barrier == ss->size) {
+        ss->barrier = 0;
+        return 1;
+    }
+    return 0;
+}
+
+struct pmi_simple_ops simple_ops = {
+    .kvs_put = simple_kvs_put_cb,
+    .kvs_get = simple_kvs_get_cb,
+    .barrier = simple_barrier_cb,
+};
+
+struct simple_server *simple_server_create (flux_reactor_t *r,
+                                            int appnum, int size)
+{
+    struct simple_server *ss = xzmalloc (sizeof (*ss));
+
+    if (!(ss->kvs = zhash_new()))
+        oom ();
+    if (!(ss->ctx = pmi_simple_server_create (&simple_ops,
+                                              appnum, size, "-", ss)))
+        err_exit ("pmi_simple_server_create");
+    ss->r = r;
+    ss->size = size;
+    ss->usecount = 1;
+    return ss;
+}
+
+struct simple_server *simple_server_ref (struct simple_server *ss)
+{
+    ss->usecount++;
+    return ss;
+}
+
+void simple_server_unref (struct simple_server *ss)
+{
+    if (ss && --ss->usecount == 0) {
+        zhash_destroy (&ss->kvs);
+        pmi_simple_server_destroy (ss->ctx);
+        free (ss);
+    }
+}
+
+void simple_server_destroy (struct simple_server *ss)
+{
+    simple_server_unref (ss);
+}
+
+/* per-client context */
+
+void simple_request_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
+{
+    struct simple_client *rsc, *sc = arg;
+    struct simple_server *ss = sc->ss;
+    int rc;
+    char *resp;
+
+    if (simple_dgetline (sc->fd, sc->buf, sc->buflen) < 0)
+        err_exit ("%s", __FUNCTION__);
+    rc = pmi_simple_server_request (ss->ctx, sc->buf, sc);
+    if (rc < 0)
+        err_exit ("%s", __FUNCTION__);
+    while (pmi_simple_server_response (ss->ctx, &resp, &rsc) == 0) {
+        if (simple_dputline (rsc->fd, resp) < 0)
+            err_exit ("%s", __FUNCTION__);
+        free (resp);
+    }
+    if (rc == 1) {
+        close (sc->fd);
+        sc->fd = -1;
+        flux_watcher_stop (sc->w);
+    }
+}
+
+
+struct simple_client *simple_client_create (struct simple_server *ss,
+                                            struct subprocess *p, int rank)
+{
+    struct simple_client *sc = xzmalloc (sizeof (*sc));
+    int client_fd;
+
+    sc->buflen = pmi_simple_server_get_maxrequest (ss->ctx);
+    sc->buf = xzmalloc (sc->buflen);
+
+    if ((sc->fd = subprocess_socketpair (p, &client_fd)) < 0)
+        err_exit ("subprocess_socketpair");
+    if (!(sc->w = flux_fd_watcher_create (ss->r, sc->fd, FLUX_POLLIN,
+                                          simple_request_cb, sc)))
+        err_exit ("flux_fd_watcher_create");
+    flux_watcher_start (sc->w);
+    sc->ss = simple_server_ref (ss);
+
+    subprocess_setenvf (p, "PMI_FD", 1, "%d", client_fd);
+    subprocess_setenvf (p, "PMI_RANK", 1, "%d", rank);
+    subprocess_setenvf (p, "PMI_SIZE", 1, "%d", ss->size);
+
+    return sc;
+}
+
+void simple_client_destroy (struct simple_client *sc)
+{
+    if (sc) {
+        flux_watcher_destroy (sc->w);
+        if (sc->fd != -1)
+            close (sc->fd);
+        if (sc->buf)
+            free (sc->buf);
+        simple_server_unref (sc->ss);
+        free (sc);
+    }
 }
 
 /*
