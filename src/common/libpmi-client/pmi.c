@@ -102,6 +102,8 @@ pmi_t *pmi_create_guess (void)
         return pmi_create_simple (strtol (fd_str, NULL, 10),
                                   strtol (rank_str, NULL, 10),
                                   strtol (size_str, NULL, 10));
+    else if (getenv ("PMIX_SERVER_URI"))
+        return pmi_create_dlopen ("libpmix.so");
     else
         return pmi_create_dlopen (NULL);
 }
