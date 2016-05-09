@@ -65,7 +65,8 @@ dist_wreckscripts_SCRIPTS = \
 	lua.d/02-affinity.lua \
 	lua.d/timeout.lua \
         lua.d/output.lua \
-        lua.d/input.lua
+        lua.d/input.lua \
+	lua.d/mvapich.lua
    
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
 #
