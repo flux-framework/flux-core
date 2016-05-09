@@ -135,9 +135,6 @@ local function get_filtered_env ()
         if k:match ("SLURM_") then env[k] = nil end
         if k:match ("FLUX_URI") then env[k] = nil end
     end
-    -- XXX: MVAPICH2 at least requires MPIRUN_RSH_LAUNCH to be set
-    --  in the environment or PMI doesn't work (for unknown reason)
-    env.MPIRUN_RSH_LAUNCH = 1
     return (env)
 end
 
