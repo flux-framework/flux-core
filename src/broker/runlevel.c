@@ -221,9 +221,9 @@ int runlevel_get_level (runlevel_t *r)
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
  * Section 2.8.2 Exit status for shell commands (page 2315)
  */
-static int subprocess_cb (struct subprocess *p, void *arg)
+static int subprocess_cb (struct subprocess *p)
 {
-    runlevel_t *r = arg;
+    runlevel_t *r = subprocess_get_context (p, "runlevel");
     int rc = subprocess_exit_code (p);
     const char *exit_string = subprocess_exit_string (p);
 
@@ -289,7 +289,8 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
     }
 
     if (!(p = subprocess_create (r->sm))
-            || subprocess_set_callback (p, subprocess_cb, r) < 0
+            || subprocess_set_context (p, "runlevel", r) < 0
+            || subprocess_add_hook (p, SUBPROCESS_COMPLETE, subprocess_cb) < 0
             || subprocess_argv_append (p, shell) < 0
             || (command && subprocess_argv_append (p, "-c") < 0)
             || (command && subprocess_argv_append (p, command) < 0)

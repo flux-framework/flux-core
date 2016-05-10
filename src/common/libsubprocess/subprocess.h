@@ -34,7 +34,25 @@ typedef enum sm_item {
     SM_REACTOR,
 } sm_item_t;
 
-typedef int (*subprocess_cb_f) (struct subprocess *p, void *arg);
+
+/* Supported hook entry points:
+ */
+typedef enum {
+    SUBPROCESS_PRE_EXEC,   /* In child, just before exec(2)                  */
+    SUBPROCESS_POST_FORK,  /* In parent, after fork(2), before child exec(2) */
+    SUBPROCESS_RUNNING,    /* In parent, after child exec(2)                 */
+    SUBPROCESS_STATUS,     /* Any change in status from waitpid(2)           */
+    SUBPROCESS_EXIT,       /* Subprocess has exited and been reaped          */
+    SUBPROCESS_COMPLETE,   /* Subprocess has exited and all I/O complete     */
+    SUBPROCESS_HOOK_COUNT
+} subprocess_hook_t;
+
+/* Prototype for generic subprocess callbacks:
+ */
+typedef int (*subprocess_cb_f) (struct subprocess *p);
+
+/* I/O specific callback. Output passed in JSON arg
+ */
 typedef int (*subprocess_io_cb_f) (struct subprocess *p, const char *json_str);
 
 /*
@@ -89,15 +107,11 @@ struct subprocess * subprocess_manager_next (struct subprocess_manager *sm);
 struct subprocess * subprocess_create (struct subprocess_manager *sm);
 
 /*
- *  Set a callback function for subprocess exit
+ *  Append function [fn] to the list of callbacks for hook type [hook_type].
  */
-int subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg);
-
-/*
- *  Set a callback function for subprocess status change
- */
-int subprocess_set_status_callback (struct subprocess *p,
-                                    subprocess_cb_f fn, void *arg);
+int subprocess_add_hook (struct subprocess *p,
+			 subprocess_hook_t type,
+			 subprocess_cb_f fn);
 
 /*
  *  Set an IO callback

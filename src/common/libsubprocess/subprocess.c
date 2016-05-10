@@ -70,28 +70,28 @@ struct subprocess {
 
     int child_fda[FDA_LENGTH]; /* child end of subprocess_socketpair(s) */
 
+    int refcount;
     int status;
     int exec_error;
 
     unsigned short started:1;
-    unsigned short execed:1;
     unsigned short running:1;
     unsigned short exited:1;
     unsigned short completed:1;
+
 
     zio_t *zio_in;
     zio_t *zio_out;
     zio_t *zio_err;
     flux_watcher_t *child_watcher;
 
-    subprocess_cb_f exit_cb;
-    void *exit_cb_arg;
-
-    subprocess_cb_f status_cb;
-    void *status_cb_arg;
-
     subprocess_io_cb_f io_cb;
+
+    zlist_t *hooks [SUBPROCESS_HOOK_COUNT];
 };
+
+static void subprocess_free (struct subprocess *p);
+
 
 static void fda_zero (int fda[])
 {
@@ -140,6 +140,32 @@ static int sigmask_unblock_all (void)
     return sigprocmask (SIG_SETMASK, &mask, NULL);
 }
 
+static void subprocess_ref (struct subprocess *p)
+{
+    ++p->refcount;
+}
+
+static void subprocess_unref (struct subprocess *p)
+{
+    if (--p->refcount == 0)
+        subprocess_free (p);
+}
+
+static int subprocess_run_hooks (struct subprocess *p, zlist_t *hooks)
+{
+    subprocess_cb_f fn = zlist_first (hooks);
+    int rc = 0;
+    subprocess_ref (p);
+    while (fn) {
+        if ((rc = fn (p)) < 0)
+            goto done;
+        fn = zlist_next (hooks);
+    }
+done:
+    subprocess_unref (p);
+    return (rc);
+}
+
 /*
  *  Default handler for stdout/err: send output directly into
  *   stderr of caller...
@@ -177,8 +203,7 @@ static int check_completion (struct subprocess *p)
      */
     if (subprocess_io_complete (p) && subprocess_exited (p)) {
         p->completed = 1;
-        if (p->exit_cb)
-            return p->exit_cb (p, p->exit_cb_arg);
+        return subprocess_run_hooks (p, p->hooks [SUBPROCESS_COMPLETE]);
     }
     return (0);
 }
@@ -210,14 +235,34 @@ static int output_handler (zio_t *z, const char *json_str, int len, void *arg)
     return (0);
 }
 
+static int hooks_table_init (struct subprocess *p)
+{
+    int i;
+    for (i = 0; i < SUBPROCESS_HOOK_COUNT; i++) {
+        if (!(p->hooks [i] = zlist_new ()))
+            return (-1);
+    }
+    return (0);
+}
+
+static void hooks_table_free (struct subprocess *p)
+{
+    int i;
+    for (i = 0; i < SUBPROCESS_HOOK_COUNT; i++) {
+        if (p->hooks [i])
+            zlist_destroy (&p->hooks [i]);
+    }
+}
+
 struct subprocess * subprocess_create (struct subprocess_manager *sm)
 {
     int fds[2];
     struct subprocess *p = xzmalloc (sizeof (*p));
 
+    memset (p, 0, sizeof (*p));
     p->sm = sm;
-
-    if (!(p->zhash = zhash_new ())) {
+    if (!(p->zhash = zhash_new ())
+     || hooks_table_init (p) < 0) {
         subprocess_destroy (p);
         errno = ENOMEM;
         return (NULL);
@@ -226,6 +271,7 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     fda_zero (p->child_fda);
 
     p->pid = (pid_t) -1;
+    p->refcount = 1;
 
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0) {
         msg ("socketpair: %m");
@@ -261,8 +307,12 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     return (p);
 }
 
-
 void subprocess_destroy (struct subprocess *p)
+{
+    subprocess_unref (p);
+}
+
+static void subprocess_free (struct subprocess *p)
 {
     assert (p != NULL);
 
@@ -270,6 +320,7 @@ void subprocess_destroy (struct subprocess *p)
         zlist_remove (p->sm->processes, (void *) p);
     if (p->zhash)
         zhash_destroy (&p->zhash);
+    hooks_table_free (p);
 
     fda_closeall (p->child_fda);
 
@@ -327,26 +378,16 @@ int subprocess_io_complete (struct subprocess *p)
 }
 
 int
-subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg)
-{
-    p->exit_cb = fn;
-    p->exit_cb_arg = arg;
-    return (0);
-}
-
-int
-subprocess_set_status_callback (struct subprocess *p,
-                                subprocess_cb_f fn, void *arg)
-{
-    p->status_cb = fn;
-    p->status_cb_arg = arg;
-    return (0);
-}
-
-int
 subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn)
 {
     p->io_cb = fn;
+    return (0);
+}
+
+int subprocess_add_hook (struct subprocess *p,
+                         subprocess_hook_t t, subprocess_cb_f fn)
+{
+    zlist_append (p->hooks [t], fn);
     return (0);
 }
 
@@ -696,6 +737,11 @@ static void subprocess_child (struct subprocess *p)
         exit (1);
     }
 
+    if (subprocess_run_hooks (p, p->hooks [SUBPROCESS_PRE_EXEC]) < 0) {
+        err ("Failed to run subprocess hooks: %s\n", strerror (errno));
+        exit (1);
+    }
+
     environ = subprocess_env_expand (p);
     argv = subprocess_argv_expand (p);
     execvp (argv[0], argv);
@@ -734,8 +780,10 @@ int subprocess_exec (struct subprocess *p)
         subprocess_reap (p);
         rc = -1;
     }
-    else
+    else {
         p->running = 1;
+        subprocess_run_hooks (p, p->hooks [SUBPROCESS_RUNNING]);
+    }
 
     /* No longer need parentfd socket */
     close (p->parentfd);
@@ -745,19 +793,25 @@ int subprocess_exec (struct subprocess *p)
     return (rc);
 }
 
+static void subprocess_process_wait_status (struct subprocess *p, int status)
+{
+    if (status < 0)
+        return;
+    p->status = status;
+    if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
+        p->exited = 1;
+        subprocess_run_hooks (p, p->hooks [SUBPROCESS_EXIT]);
+    }
+    subprocess_run_hooks (p, p->hooks [SUBPROCESS_STATUS]);
+    check_completion (p);
+}
+
+
 static void child_watcher (flux_reactor_t *r, flux_watcher_t *w,
                            int revents, void *arg)
 {
     struct subprocess *p = arg;
-
-    p->status = flux_child_watcher_get_rstatus (w);
-    if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
-        flux_watcher_stop (w);
-        p->exited = 1;
-    }
-    if (p->status_cb)
-        p->status_cb (p, p->status_cb_arg);
-    check_completion (p);
+    subprocess_process_wait_status (p, flux_child_watcher_get_rstatus (w));
 }
 
 int subprocess_fork (struct subprocess *p)
@@ -789,7 +843,8 @@ int subprocess_fork (struct subprocess *p)
 
     sp_barrier_wait (p->parentfd);
     p->started = 1;
-    return (0);
+
+    return (subprocess_run_hooks (p, p->hooks [SUBPROCESS_POST_FORK]));
 }
 
 int subprocess_run (struct subprocess *p)
@@ -960,16 +1015,13 @@ subprocess_manager_run (struct subprocess_manager *sm, int ac, char **av,
 int subprocess_reap (struct subprocess *p)
 {
     pid_t rc;
+    int status;
     if (p->exited)
         return (0);
-    rc = waitpid (p->pid, &p->status, 0);
+    rc = waitpid (p->pid, &status, 0);
     if (rc <= 0)
         return (-1);
-    if (WIFEXITED (p->status) || WIFSIGNALED (p->status))
-        p->exited = 1;
-    if (p->status_cb)
-        p->status_cb (p, p->status_cb_arg);
-    check_completion (p);
+    subprocess_process_wait_status (p, status);
     return (0);
 }
 
@@ -984,9 +1036,7 @@ subprocess_manager_wait (struct subprocess_manager *sm)
     if ((pid < 0) || !(p = subprocess_manager_find_pid (sm, pid))) {
         return (NULL);
     }
-    p->status = status;
-    if (WIFEXITED (p->status) || WIFSIGNALED (p->status))
-        p->exited = 1;
+    subprocess_process_wait_status (p, status);
     return (p);
 }
 
@@ -994,11 +1044,8 @@ int
 subprocess_manager_reap_all (struct subprocess_manager *sm)
 {
     struct subprocess *p;
-    while ((p = subprocess_manager_wait (sm))) {
-            if (p->status_cb)
-                p->status_cb (p, p->status_cb_arg);
-            check_completion (p);
-    }
+    while ((p = subprocess_manager_wait (sm)))
+        check_completion (p);
     return (0);
 }
 

@@ -1479,11 +1479,10 @@ subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
     return (resp);
 }
 
-static int child_exit_handler (struct subprocess *p, void *arg)
+static int child_exit_handler (struct subprocess *p)
 {
     int n;
-
-    ctx_t *ctx = (ctx_t *) arg;
+    ctx_t *ctx = (ctx_t *) subprocess_get_context (p, "ctx");
     zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p, "zmsg");
     json_object *resp;
 
@@ -1665,8 +1664,8 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     }
 
     p = subprocess_create (ctx->sm);
-    subprocess_set_callback (p, child_exit_handler, ctx);
     subprocess_set_context (p, "ctx", ctx);
+    subprocess_add_hook (p, SUBPROCESS_COMPLETE, child_exit_handler);
 
     for (i = 0; i < argc; i++) {
         json_object *ox = json_object_array_get_idx (o, i);
