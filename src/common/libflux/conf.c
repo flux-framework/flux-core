@@ -40,7 +40,7 @@
 
 #include "conf.h"
 
-static void initialize_environment (flux_conf_t cf);
+static void initialize_environment (flux_conf_t *cf);
 
 struct flux_conf_struct
 {
@@ -51,12 +51,12 @@ struct flux_conf_struct
 
 struct flux_conf_itr_struct
 {
-    flux_conf_t cf;
+    flux_conf_t *cf;
     zlist_t *zl;
     const char *item;
 };
 
-void flux_conf_destroy (flux_conf_t cf)
+void flux_conf_destroy (flux_conf_t *cf)
 {
     if (cf->confdir)
         free (cf->confdir);
@@ -67,9 +67,9 @@ void flux_conf_destroy (flux_conf_t cf)
     free (cf);
 }
 
-flux_conf_t flux_conf_create (void)
+flux_conf_t *flux_conf_create (void)
 {
-    flux_conf_t cf = xzmalloc (sizeof(*cf));
+    flux_conf_t *cf = xzmalloc (sizeof(*cf));
     struct passwd *pw = getpwuid (getuid ());
     char *confdir;
 
@@ -91,7 +91,7 @@ flux_conf_t flux_conf_create (void)
     return cf;
 }
 
-static void initialize_environment (flux_conf_t cf)
+static void initialize_environment (flux_conf_t *cf)
 {
     // Defaults from the environment
     flux_conf_environment_from_env (
@@ -114,19 +114,19 @@ static void initialize_environment (flux_conf_t cf)
     flux_conf_environment_push (cf, "PYTHONPATH", PYTHON_PATH);
 }
 
-const char *flux_conf_get_directory (flux_conf_t cf)
+const char *flux_conf_get_directory (flux_conf_t *cf)
 {
     return cf->confdir;
 }
 
-void flux_conf_set_directory (flux_conf_t cf, const char *path)
+void flux_conf_set_directory (flux_conf_t *cf, const char *path)
 {
     free (cf->confdir);
     flux_conf_environment_set (cf, "FLUX_CONF_DIRECTORY", path, ':');
     cf->confdir = xstrdup (path);
 }
 
-void flux_conf_clear (flux_conf_t cf)
+void flux_conf_clear (flux_conf_t *cf)
 {
     zconfig_destroy (&cf->z);
     if (!(cf->z = zconfig_new ("root", NULL)))
@@ -137,7 +137,7 @@ void flux_conf_clear (flux_conf_t cf)
     initialize_environment (cf);
 }
 
-int flux_conf_load (flux_conf_t cf)
+int flux_conf_load (flux_conf_t *cf)
 {
     char *path = xasprintf ("%s/config", cf->confdir);
     int rc = -1;
@@ -156,7 +156,7 @@ done:
     return rc;
 }
 
-int flux_conf_save (flux_conf_t cf)
+int flux_conf_save (flux_conf_t *cf)
 {
     struct stat sb;
 
@@ -183,7 +183,7 @@ int flux_conf_save (flux_conf_t cf)
     return 0;
 }
 
-const char *flux_conf_get (flux_conf_t cf, const char *key)
+const char *flux_conf_get (flux_conf_t *cf, const char *key)
 {
     char *val = NULL;
     char *nkey = NULL;
@@ -206,7 +206,7 @@ done:
     return val;
 }
 
-int flux_conf_put (flux_conf_t cf, const char *key, const char *fmt, ...)
+int flux_conf_put (flux_conf_t *cf, const char *key, const char *fmt, ...)
 {
     char *val = NULL;
     char *nkey = NULL;
@@ -242,7 +242,7 @@ done:
     return rc;
 }
 
-void flux_conf_itr_destroy (flux_conf_itr_t itr)
+void flux_conf_itr_destroy (flux_conf_itr_t *itr)
 {
     char *item;
     while ((item = zlist_pop (itr->zl)))
@@ -270,9 +270,9 @@ static void zconfig_to_zlist (zconfig_t *z, const char *prefix, zlist_t *zl)
     }
 }
 
-flux_conf_itr_t flux_conf_itr_create (flux_conf_t cf)
+flux_conf_itr_t *flux_conf_itr_create (flux_conf_t *cf)
 {
-    flux_conf_itr_t itr = xzmalloc (sizeof(*itr));
+    flux_conf_itr_t *itr = xzmalloc (sizeof(*itr));
     itr->cf = cf;
     if (!(itr->zl = zlist_new ()))
         oom ();
@@ -281,7 +281,7 @@ flux_conf_itr_t flux_conf_itr_create (flux_conf_t cf)
     return itr;
 }
 
-const char *flux_conf_next (flux_conf_itr_t itr)
+const char *flux_conf_next (flux_conf_itr_t *itr)
 {
     const char *item = itr->item;
     if (item)
@@ -335,13 +335,13 @@ static const char *stringify_env_item (struct env_item *item)
     return item->str_cache;
 }
 
-const char *flux_conf_environment_get (flux_conf_t cf, const char *key)
+const char *flux_conf_environment_get (flux_conf_t *cf, const char *key)
 {
     struct env_item *item = zhash_lookup (cf->environment, key);
     return stringify_env_item(item);
 }
 
-static void flux_conf_environment_set_inner (flux_conf_t cf,
+static void flux_conf_environment_set_inner (flux_conf_t *cf,
                                              const char *key,
                                              const char *value,
                                              char separator)
@@ -356,7 +356,7 @@ static void flux_conf_environment_set_inner (flux_conf_t cf,
     flux_conf_environment_push_back(cf, key, value);
 }
 
-void flux_conf_environment_set (flux_conf_t cf,
+void flux_conf_environment_set (flux_conf_t *cf,
                                 const char *key,
                                 const char *value,
                                 char separator)
@@ -364,12 +364,12 @@ void flux_conf_environment_set (flux_conf_t cf,
     flux_conf_environment_set_inner (cf, key, value, separator);
 }
 
-void flux_conf_environment_unset (flux_conf_t cf, const char *key)
+void flux_conf_environment_unset (flux_conf_t *cf, const char *key)
 {
     flux_conf_environment_set_inner (cf, key, NULL, 0);
 }
 
-static void flux_conf_environment_push_inner (flux_conf_t cf,
+static void flux_conf_environment_push_inner (flux_conf_t *cf,
                                               const char *key,
                                               const char *value,
                                               bool before,
@@ -409,35 +409,35 @@ static void flux_conf_environment_push_inner (flux_conf_t cf,
     }
 }
 
-void flux_conf_environment_push (flux_conf_t cf,
+void flux_conf_environment_push (flux_conf_t *cf,
                                          const char *key,
                                          const char *value)
 {
     flux_conf_environment_push_inner (cf, key, value, true, true);
 }
 
-void flux_conf_environment_push_back (flux_conf_t cf,
+void flux_conf_environment_push_back (flux_conf_t *cf,
                                         const char *key,
                                         const char *value)
 {
     flux_conf_environment_push_inner (cf, key, value, false, true);
 }
 
-void flux_conf_environment_no_dedup_push (flux_conf_t cf,
+void flux_conf_environment_no_dedup_push (flux_conf_t *cf,
                                        const char *key,
                                        const char *value)
 {
     flux_conf_environment_push_inner (cf, key, value, true, false);
 }
 
-void flux_conf_environment_no_dedup_push_back (flux_conf_t cf,
+void flux_conf_environment_no_dedup_push_back (flux_conf_t *cf,
                                       const char *key,
                                       const char *value)
 {
     flux_conf_environment_push_inner (cf, key, value, false, false);
 }
 
-void flux_conf_environment_from_env (flux_conf_t cf,
+void flux_conf_environment_from_env (flux_conf_t *cf,
                                      const char *key,
                                      const char *default_base,
                                      char separator)
@@ -448,7 +448,7 @@ void flux_conf_environment_from_env (flux_conf_t cf,
     flux_conf_environment_set (cf, key, env, separator);
 }
 
-void flux_conf_environment_set_separator (flux_conf_t cf,
+void flux_conf_environment_set_separator (flux_conf_t *cf,
                                           const char *key,
                                           char separator)
 {
@@ -457,22 +457,22 @@ void flux_conf_environment_set_separator (flux_conf_t cf,
         item->sep = separator;
 }
 
-const char *flux_conf_environment_first (flux_conf_t cf)
+const char *flux_conf_environment_first (flux_conf_t *cf)
 {
     return stringify_env_item (zhash_first (cf->environment));
 }
 
-const char *flux_conf_environment_next (flux_conf_t cf)
+const char *flux_conf_environment_next (flux_conf_t *cf)
 {
     return stringify_env_item (zhash_next (cf->environment));
 }
 
-const char *flux_conf_environment_cursor (flux_conf_t cf)
+const char *flux_conf_environment_cursor (flux_conf_t *cf)
 {
     return zhash_cursor (cf->environment);
 }
 
-void flux_conf_environment_apply (flux_conf_t cf)
+void flux_conf_environment_apply (flux_conf_t *cf)
 {
     const char *key;
     struct env_item *item;

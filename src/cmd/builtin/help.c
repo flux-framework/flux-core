@@ -28,7 +28,7 @@
 
 static int cmd_help (optparse_t *p, int ac, char *av[])
 {
-    flux_conf_t cf;
+    flux_conf_t *cf;
     int n = optparse_optind (p);
     char *cmd;
 

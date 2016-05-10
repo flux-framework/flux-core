@@ -5,7 +5,7 @@
 
 void test_getput (void)
 {
-    flux_conf_t cf;
+    flux_conf_t *cf;
 
     ok (((cf = flux_conf_create ()) != NULL), "created conf");
 
@@ -74,8 +74,8 @@ void test_getput (void)
 
 void test_iterator (void)
 {
-    flux_conf_t cf;
-    flux_conf_itr_t itr;
+    flux_conf_t *cf;
+    flux_conf_itr_t *itr;
 
     ok (((cf = flux_conf_create ()) != NULL), "created conf");
     ok ((flux_conf_put (cf, "a", "x") == 0), "added first item");

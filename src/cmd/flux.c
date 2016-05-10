@@ -47,8 +47,8 @@
 
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
 char *intree_confdir (void);
-void setup_path (flux_conf_t cf, const char *argv0);
-static void print_environment (flux_conf_t cf);
+void setup_path (flux_conf_t *cf, const char *argv0);
+static void print_environment (flux_conf_t *cf);
 static void register_builtin_subcommands (optparse_t *p);
 
 static struct optparse_option opts[] = {
@@ -142,7 +142,7 @@ int main (int argc, char *argv[])
     bool vopt = false;
     char *confdir = NULL;
     const char *secdir = NULL;
-    flux_conf_t cf;
+    flux_conf_t *cf;
     optparse_t *p;
     const char *searchpath;
     const char *argv0 = argv[0];
@@ -303,7 +303,7 @@ char *intree_confdir (void)
  *  flux executable is the same as the first. This is important
  *  for example with "flux start".
  */
-void setup_path (flux_conf_t cf, const char *argv0)
+void setup_path (flux_conf_t *cf, const char *argv0)
 {
     char *selfdir;
     assert (argv0);
@@ -349,7 +349,7 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
     }
 }
 
-static void print_environment (flux_conf_t cf)
+static void print_environment (flux_conf_t *cf)
 {
     const char *key, *value;
     for (value = (char*)flux_conf_environment_first(cf), key = (char*)flux_conf_environment_cursor(cf);

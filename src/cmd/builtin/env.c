@@ -25,7 +25,7 @@
 
 #include "builtin.h"
 
-static void print_environment (flux_conf_t cf)
+static void print_environment (flux_conf_t *cf)
 {
     const char *key, *value;
     for (value = (char*)flux_conf_environment_first (cf),
@@ -44,7 +44,7 @@ static int cmd_env (optparse_t *p, int ac, char *av[])
         execvp (av[n], av+n); /* no return if sucessful */
         err_exit ("execvp (%s)", av[n]);
     } else {
-        flux_conf_t cf = optparse_get_data (p, "conf");
+        flux_conf_t *cf = optparse_get_data (p, "conf");
         if (cf == NULL)
             msg_exit ("flux-env: failed to get flux config!");
         print_environment (cf);

@@ -118,7 +118,7 @@ typedef struct {
     bool quiet;
     pid_t pid;
     char *proctitle;
-    flux_conf_t cf;
+    flux_conf_t *cf;
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
@@ -381,7 +381,7 @@ int main (int argc, char *argv[])
 
     /* Arrange to load config entries into broker attrs
      */
-    flux_conf_itr_t itr = flux_conf_itr_create (ctx.cf);
+    flux_conf_itr_t *itr = flux_conf_itr_create (ctx.cf);
     const char *key;
     while ((key = flux_conf_next (itr))) {
         const char *val = flux_conf_get (ctx.cf, key);

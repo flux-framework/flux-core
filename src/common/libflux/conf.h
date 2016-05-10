@@ -10,38 +10,38 @@
  * hierarchy, using "." as the path separator (not "/" like zconfig).
  */
 
-typedef struct flux_conf_struct *flux_conf_t;
-typedef struct flux_conf_itr_struct *flux_conf_itr_t;
+typedef struct flux_conf_struct flux_conf_t;
+typedef struct flux_conf_itr_struct flux_conf_itr_t;
 
 /* Create/destroy config context.
  */
-flux_conf_t flux_conf_create (void);
-void flux_conf_destroy (flux_conf_t cf);
+flux_conf_t *flux_conf_create (void);
+void flux_conf_destroy (flux_conf_t *cf);
 
 /* Get/set config directory.  If unset, a default in the user's
  * home directory is used.  The config _file_ is hardwired to
  * $configdir/config.
  */
-const char *flux_conf_get_directory (flux_conf_t cf);
-void flux_conf_set_directory (flux_conf_t cf, const char *path);
+const char *flux_conf_get_directory (flux_conf_t *cf);
+void flux_conf_set_directory (flux_conf_t *cf, const char *path);
 
 /* Load/save/clear the cached config.
  */
-int flux_conf_load (flux_conf_t cf);
-int flux_conf_save (flux_conf_t cf);
-void flux_conf_clear (flux_conf_t cf);
+int flux_conf_load (flux_conf_t *cf);
+int flux_conf_save (flux_conf_t *cf);
+void flux_conf_clear (flux_conf_t *cf);
 
 /* Get/put config values using the cached config.
  */
-const char *flux_conf_get (flux_conf_t cf, const char *key);
-int flux_conf_put (flux_conf_t cf, const char *key, const char *fmt, ...);
+const char *flux_conf_get (flux_conf_t *cf, const char *key);
+int flux_conf_put (flux_conf_t *cf, const char *key, const char *fmt, ...);
 
 /* Iterate over keys in the cached config.  Fully qualified key paths are
  * returned, suitable for passing to flux_conf_get ().
  */
-flux_conf_itr_t flux_conf_itr_create (flux_conf_t cf);
-void flux_conf_itr_destroy (flux_conf_itr_t itr);
-const char *flux_conf_next (flux_conf_itr_t itr);
+flux_conf_itr_t *flux_conf_itr_create (flux_conf_t *cf);
+void flux_conf_itr_destroy (flux_conf_itr_t *itr);
+const char *flux_conf_next (flux_conf_itr_t *itr);
 
 /**
  * @brief Set the iteration cursor for the environment to the first element
@@ -50,7 +50,7 @@ const char *flux_conf_next (flux_conf_itr_t itr);
  *
  * @return the key of the first element or null if the environment is empty
  */
-const char *flux_conf_environment_first (flux_conf_t cf);
+const char *flux_conf_environment_first (flux_conf_t *cf);
 /**
  * @brief Get the next key in the environment
  *
@@ -59,7 +59,7 @@ const char *flux_conf_environment_first (flux_conf_t cf);
  * @return the key of the next element or null if iteration is complete or the
  * environment is empty
  */
-const char *flux_conf_environment_next (flux_conf_t cf);
+const char *flux_conf_environment_next (flux_conf_t *cf);
 /**
  * @brief Get the value of the current cursor element, matching the key from
  * either *_first or *_next
@@ -68,7 +68,7 @@ const char *flux_conf_environment_next (flux_conf_t cf);
  *
  * @return The value of the current environment element
  */
-const char *flux_conf_environment_cursor (flux_conf_t cf);
+const char *flux_conf_environment_cursor (flux_conf_t *cf);
 
 /**
  * @brief Apply the changes encoded in this flux_conf_t to the environment of
@@ -80,7 +80,7 @@ const char *flux_conf_environment_cursor (flux_conf_t cf);
  *
  * @param cf  The configuration whose environment should be applied
  */
-void flux_conf_environment_apply (flux_conf_t cf);
+void flux_conf_environment_apply (flux_conf_t *cf);
 /**
  * @brief Split, deduplicate, and push a new value onto the front of the
  * environment variable whose key is "key."
@@ -90,7 +90,7 @@ void flux_conf_environment_apply (flux_conf_t cf);
  * @param value The value to use, this will be split based on the separator
  * defined for the key if one is set, otherwise it is prepended whole
  */
-void flux_conf_environment_push (flux_conf_t cf,
+void flux_conf_environment_push (flux_conf_t *cf,
                                  const char *key,
                                  const char *value);
 /**
@@ -102,7 +102,7 @@ void flux_conf_environment_push (flux_conf_t cf,
  * @param value The value to use, this will be split based on the separator
  * defined for the key if one is set, otherwise it is appended whole
  */
-void flux_conf_environment_push_back (flux_conf_t cf,
+void flux_conf_environment_push_back (flux_conf_t *cf,
                                       const char *key,
                                       const char *value);
 /**
@@ -117,7 +117,7 @@ void flux_conf_environment_push_back (flux_conf_t cf,
  * @param key The key to target
  * @param value The value to prepend
  */
-void flux_conf_environment_no_dedup_push (flux_conf_t cf,
+void flux_conf_environment_no_dedup_push (flux_conf_t *cf,
                                  const char *key,
                                  const char *value);
 /**
@@ -129,7 +129,7 @@ void flux_conf_environment_no_dedup_push (flux_conf_t cf,
  * @param key The key to target
  * @param value The value to append
  */
-void flux_conf_environment_no_dedup_push_back (flux_conf_t cf,
+void flux_conf_environment_no_dedup_push_back (flux_conf_t *cf,
                                       const char *key,
                                       const char *value);
 /**
@@ -142,7 +142,7 @@ void flux_conf_environment_no_dedup_push_back (flux_conf_t cf,
  * @param separator the separator used to divide elements in the value, ":"
  * for unix paths for example, or ";" for LUA_PATH
  */
-void flux_conf_environment_set (flux_conf_t cf,
+void flux_conf_environment_set (flux_conf_t *cf,
                                 const char *key,
                                 const char *value,
                                 char separator);
@@ -153,7 +153,7 @@ void flux_conf_environment_set (flux_conf_t cf,
  * @param cf the config to act on
  * @param key the key which should be unset on application
  */
-void flux_conf_environment_unset (flux_conf_t cf, const char *key);
+void flux_conf_environment_unset (flux_conf_t *cf, const char *key);
 /**
  * @brief Initialize the environment variable "key" with the value from the
  * enclosing environment if it is set, otherwise set it to "default_base."
@@ -164,7 +164,7 @@ void flux_conf_environment_unset (flux_conf_t cf, const char *key);
  * unset
  * @param separator the separator between tokens in the value
  */
-void flux_conf_environment_from_env (flux_conf_t cf,
+void flux_conf_environment_from_env (flux_conf_t *cf,
                                      const char *key,
                                      const char *default_base,
                                      char separator);
@@ -176,7 +176,7 @@ void flux_conf_environment_from_env (flux_conf_t cf,
  * @param separator the separator to use to join components of this object and
  * split and dedup inputs
  */
-void flux_conf_environment_set_separator (flux_conf_t cf,
+void flux_conf_environment_set_separator (flux_conf_t *cf,
                                           const char *key,
                                           char separator);
 
@@ -191,7 +191,7 @@ void flux_conf_environment_set_separator (flux_conf_t cf,
  *
  * @return A reference to the value of the key, or null if that key is not set
  */
-const char *flux_conf_environment_get (flux_conf_t cf, const char *key);
+const char *flux_conf_environment_get (flux_conf_t *cf, const char *key);
 
 #endif /* !_FLUX_CORE_FCONFIG_H */
 
