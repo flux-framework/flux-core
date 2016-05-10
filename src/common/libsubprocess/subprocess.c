@@ -84,13 +84,13 @@ struct subprocess {
     zio_t *zio_err;
     flux_watcher_t *child_watcher;
 
-    subprocess_cb_f *exit_cb;
+    subprocess_cb_f exit_cb;
     void *exit_cb_arg;
 
-    subprocess_cb_f *status_cb;
+    subprocess_cb_f status_cb;
     void *status_cb_arg;
 
-    subprocess_io_cb_f *io_cb;
+    subprocess_io_cb_f io_cb;
 };
 
 static void fda_zero (int fda[])
@@ -178,7 +178,7 @@ static int check_completion (struct subprocess *p)
     if (subprocess_io_complete (p) && subprocess_exited (p)) {
         p->completed = 1;
         if (p->exit_cb)
-            return (*p->exit_cb) (p, p->exit_cb_arg);
+            return p->exit_cb (p, p->exit_cb_arg);
     }
     return (0);
 }
@@ -196,7 +196,7 @@ static int output_handler (zio_t *z, const char *json_str, int len, void *arg)
         Jadd_int (o, "pid", subprocess_pid (p));
         Jadd_str (o, "type", "io");
         Jadd_str (o, "name", zio_name (z));
-        (*p->io_cb) (p, json_object_to_json_string (o));
+        p->io_cb (p, json_object_to_json_string (o));
         json_object_put (o);
     }
     else

@@ -34,8 +34,8 @@ typedef enum sm_item {
     SM_REACTOR,
 } sm_item_t;
 
-typedef int (subprocess_cb_f) (struct subprocess *p, void *arg);
-typedef int (subprocess_io_cb_f) (struct subprocess *p, const char *json_str);
+typedef int (*subprocess_cb_f) (struct subprocess *p, void *arg);
+typedef int (*subprocess_io_cb_f) (struct subprocess *p, const char *json_str);
 
 /*
  *  Create a subprocess manager to manage creation, destruction, and
