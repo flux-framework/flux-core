@@ -26,7 +26,7 @@ test_expect_success 'we can find a flux binary' '
 '
 test_expect_success 'flux-keygen works' '
 	umask 077 && tmpkeydir=`mktemp -d` &&
-	flux --secdir $tmpkeydir keygen --force &&
+	flux keygen --secdir $tmpkeydir --force &&
 	rm -rf $tmpkeydir
 '
 test_expect_success 'flux-start in exec mode works' "
@@ -131,17 +131,13 @@ test_expect_success 'flux-help command list can be extended' '
 '
 test_expect_success 'flux-help command can display manpages for subcommands' '
 	PWD=$(pwd) &&
-	cat <<-EOF >config &&
-	general
-	    man_path = ${PWD}/man
-	EOF
 	mkdir -p man/man1 &&
 	cat <<-EOF > man/man1/flux-foo.1 &&
 	.TH FOO "1" "January 1962" "Foo utils" "User Commands"
 	.SH NAME
 	foo \- foo bar baz
 	EOF
-	flux -c . help foo | grep "^FOO(1)"
+	MANPATH=${PWD}/man flux help foo | grep "^FOO(1)"
 '
 test_expect_success 'flux-help returns nonzero exit code from man(1)' '
         man notacommand >/dev/null 2>&1

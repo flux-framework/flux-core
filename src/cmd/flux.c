@@ -36,67 +36,43 @@
 #include <glob.h>
 #include <assert.h>
 #include <flux/core.h>
+#include <pwd.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/optparse.h"
+#include "src/common/libutil/environment.h"
 
 #include "cmdhelp.h"
 #include "builtin.h"
 
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
-char *intree_confdir (void);
-void setup_path (flux_conf_t *cf, const char *argv0);
-static void print_environment (flux_conf_t *cf);
+bool flux_is_installed (void);
+void setup_path (struct environment *env, const char *argv0);
+void setup_keydir (struct environment *env, int flags);
+static void print_environment (struct environment *env);
 static void register_builtin_subcommands (optparse_t *p);
 
 static struct optparse_option opts[] = {
-    { .name = "trace-handle",    .key = 't', .has_arg = 0,
-      .usage = "Set FLUX_HANDLE_TRACE=1 before executing COMMAND"
-    },
-    { .name = "config",          .key = 'c', .has_arg = 1,
-      .arginfo = "DIR",
-      .usage = "Set path to config directory"
-    },
-    { .name = "secdir",          .key = 'S', .has_arg = 1,
-      .arginfo = "DIR",
-      .usage = "Set the directory where CURVE keys will be stored"
-    },
-    { .name = "uri",             .key = 'u', .has_arg = 1,
-      .arginfo = "URI",
-      .usage = "Override default URI to flux broker"
-    },
     { .name = "verbose",         .key = 'v', .has_arg = 0,
       .usage = "Be verbose about environment and command search",
     },
     OPTPARSE_TABLE_END
 };
 
-static char * get_help_pattern ()
-{
-    char *intree = intree_confdir ();
-    char *pattern;
-    if ((pattern = getenv ("FLUX_CMDHELP_PATTERN")))
-        return strdup (pattern);
-    if (intree == NULL)
-        pattern = xasprintf ("%s/flux/help.d/*.json", X_DATADIR);
-    else {
-        pattern = xasprintf ("%s/help.d/*.json", intree);
-        free (intree);
-    }
-    return (pattern);
-}
-
 void usage (optparse_t *p)
 {
-    char *help_pattern = get_help_pattern ();
+    const char *help_pattern = getenv ("FLUX_CMDHELP_PATTERN");
+    if (!help_pattern) {
+        int *flags = optparse_get_data (p, "conf_flags");
+        help_pattern = flux_conf_get ("cmdhelp_pattern", *flags);
+    }
+    assert (help_pattern != NULL);
+
     optparse_print_usage (p);
     fprintf (stderr, "\n");
-    if (help_pattern) {
-        emit_command_help (help_pattern, stderr);
-        free (help_pattern);
-    }
+    emit_command_help (help_pattern, stderr);
 }
 
 static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
@@ -138,112 +114,111 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
 
 int main (int argc, char *argv[])
 {
-    const char *opt;
     bool vopt = false;
-    char *confdir = NULL;
-    const char *secdir = NULL;
-    flux_conf_t *cf;
+    struct environment *env;
     optparse_t *p;
     const char *searchpath;
     const char *argv0 = argv[0];
+    int flags = 0;
 
     log_init ("flux");
 
-    cf = flux_conf_create ();
-
     p = setup_optparse_parse_args (argc, argv);
 
-    optparse_set_data (p, "conf", cf);
+    if (!flux_is_installed ())
+        flags |= CONF_FLAG_INTREE;
+    optparse_set_data (p, "conf_flags", &flags);
 
     if (optparse_hasopt (p, "help")) {
-        usage (p);
+        usage (p); // N.B. accesses "conf_flags"
         exit (0);
     }
-    vopt = optparse_hasopt (p, "verbose");
-    if (optparse_hasopt (p, "trace-handle")) {
-        if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
-            err_exit ("setenv");
-        flux_conf_environment_set (cf, "FLUX_HANDLE_TRACE", "1", 0);
-    }
-    if (optparse_getopt (p, "uri", &opt)) {
-        if (setenv ("FLUX_URI", opt, 1) < 0)
-            err_exit ("setenv");
-        flux_conf_environment_set(cf, "FLUX_URI", opt, 0);
-    }
-
     optind = optparse_optind (p);
-
-    /* Set the config directory and pass it to sub-commands.
-    */
-    if (optparse_getopt (p, "config", &opt))
-        confdir = xstrdup (opt);
-    if (confdir || (confdir = intree_confdir ()))
-        flux_conf_set_directory (cf, confdir);
-
-
-    /* Process configuration.
-     * If not found, use compiled-in defaults.
-     */
-    if (flux_conf_load (cf) < 0 && (errno != ENOENT))
-        err_exit ("%s", flux_conf_get_directory (cf));
-
-    /*
-     *  command line options that override environment and config:
-     */
-    if (!optparse_getopt (p, "secdir", &secdir))
-        secdir = flux_conf_get_directory (cf);
-    flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY", secdir, 0);
-
-    /* Add PATH to flux_conf_environment and prepend path to
-     *  this executable if necessary.
-     */
-    setup_path (cf, argv0);
-
-    /* Add config items to environment variables */
-    /* NOTE: I would prefer that this be in config, but kvs_load loads
-     * everything out of band, preventing that */
-    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", flux_conf_get(cf, "general.connector_path"));
-    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",      flux_conf_get(cf, "general.exec_path"));
-    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",    flux_conf_get(cf, "general.module_path"));
-    flux_conf_environment_push (cf, "LUA_CPATH",           flux_conf_get(cf, "general.lua_cpath"));
-    flux_conf_environment_push (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"));
-    flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
-
-    /* Prepend if FLUX_*_PATH_PREPEND is set */
-    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH",
-                                getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
-    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",
-                                getenv ("FLUX_EXEC_PATH_PREPEND"));
-    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",
-                                getenv ("FLUX_MODULE_PATH_PREPEND"));
-    flux_conf_environment_push (cf, "LUA_CPATH",
-                                getenv ("FLUX_LUA_CPATH_PREPEND"));
-    flux_conf_environment_push (cf, "LUA_PATH",
-                                getenv ("FLUX_LUA_PATH_PREPEND"));
-    flux_conf_environment_push (cf, "PYTHONPATH",
-                                getenv ("FLUX_PYTHONPATH_PREPEND"));
-
     if (argc - optind == 0) {
         usage (p);
         exit (1);
     }
+    vopt = optparse_hasopt (p, "verbose");
 
-    flux_conf_environment_apply(cf);
+    /* prepare the environment 'env' that will be passed to subcommands.
+     */
+    env = environment_create ();
+
+    /* Add PATH to env and prepend path to this executable if necessary.
+     */
+    setup_path (env, argv0);
+
+    /* Prepend config values to env values.
+     * Note special handling of lua ;; (default path).
+     */
+    environment_from_env (env, "LUA_CPATH", "", ';');
+    environment_no_dedup_push_back (env, "LUA_CPATH", ";;");
+    environment_push (env, "LUA_CPATH", flux_conf_get ("lua_cpath_add", flags));
+    environment_push (env, "LUA_CPATH", getenv ("FLUX_LUA_CPATH_PREPEND"));
+
+    environment_from_env (env, "LUA_PATH", "", ';');
+    environment_no_dedup_push_back (env, "LUA_PATH", ";;");
+    environment_push (env, "LUA_PATH", flux_conf_get ("lua_path_add", flags));
+    environment_push (env, "LUA_PATH", getenv ("FLUX_LUA_PATH_PREPEND"));
+
+    environment_from_env (env, "PYTHONPATH", "", ':');
+    environment_push (env, "PYTHONPATH", flux_conf_get ("python_path", flags));
+    environment_push (env, "PYTHONPATH", getenv ("FLUX_PYTHONPATH_PREPEND"));
+
+    environment_from_env (env, "MANPATH", "", ':');
+    environment_push (env, "MANPATH", flux_conf_get ("man_path", flags));
+
+    environment_from_env (env, "FLUX_EXEC_PATH", "", ':');
+    environment_push (env, "FLUX_EXEC_PATH",
+                      flux_conf_get ("exec_path", flags));
+    environment_push (env, "FLUX_EXEC_PATH", getenv ("FLUX_EXEC_PATH_PREPEND"));
+
+    environment_from_env (env, "FLUX_CONNECTOR_PATH", "", ':');
+    environment_push (env, "FLUX_CONNECTOR_PATH",
+                      flux_conf_get ("connector_path", flags));
+    environment_push (env, "FLUX_CONNECTOR_PATH",
+                      getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
+
+    environment_from_env (env, "FLUX_MODULE_PATH", "", ':');
+    environment_push (env, "FLUX_MODULE_PATH",
+                      flux_conf_get ("module_path", flags));
+    environment_push (env, "FLUX_MODULE_PATH",
+                      getenv ("FLUX_MODULE_PATH_PREPEND"));
+
+    /* Set FLUX_SEC_DIRECTORY, possibly to $HOME/.flux.
+     */
+    setup_keydir (env, flags);
+
+    if (getenv ("FLUX_URI"))
+        environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
+
+    environment_from_env (env, "FLUX_RC1_PATH",
+                          flux_conf_get ("rc1_path", flags), 0);
+    environment_from_env (env, "FLUX_RC3_PATH",
+                          flux_conf_get ("rc3_path", flags), 0);
+    environment_from_env (env, "FLUX_PMI_LIBRARY_PATH",
+                          flux_conf_get ("pmi_library_path", flags), 0);
+    environment_from_env (env, "FLUX_WRECK_LUA_PATTERN",
+                          flux_conf_get ("wreck_lua_pattern", flags), 0);
+    environment_from_env (env, "FLUX_WREXECD_PATH",
+                          flux_conf_get ("wrexecd_path", flags), 0);
+
+    environment_apply(env);
+    optparse_set_data (p, "env", env);
 
     if (vopt)
-        print_environment (cf);
+        print_environment (env);
     if (optparse_get_subcommand (p, argv [optind])) {
         if (optparse_run_subcommand (p, argc, argv) < 0)
             exit (1);
     } else {
-        searchpath = flux_conf_environment_get(cf, "FLUX_EXEC_PATH");
+        searchpath = environment_get (env, "FLUX_EXEC_PATH");
         if (vopt)
             printf ("sub-command search path: %s\n", searchpath);
         exec_subcommand (searchpath, vopt, argv + optind);
     }
 
-    free (confdir);
-    flux_conf_destroy (cf);
+    environment_destroy (env);
     optparse_destroy (p);
     log_fini ();
 
@@ -284,16 +259,15 @@ char *dir_self (void)
     return xstrdup (flux_exe_dir);
 }
 
-char *intree_confdir (void)
+bool flux_is_installed (void)
 {
-    char *confdir = NULL;
     char *selfdir = dir_self ();
+    bool ret = false;
 
-    if (strcmp (selfdir, X_BINDIR) != 0){
-        confdir = xasprintf ("%s/../../etc/flux", selfdir);
-    }
+    if (!strcmp (selfdir, X_BINDIR))
+        ret = true;
     free (selfdir);
-    return confdir;
+    return ret;
 }
 
 /*
@@ -303,7 +277,7 @@ char *intree_confdir (void)
  *  flux executable is the same as the first. This is important
  *  for example with "flux start".
  */
-void setup_path (flux_conf_t *cf, const char *argv0)
+void setup_path (struct environment *env, const char *argv0)
 {
     char *selfdir;
     assert (argv0);
@@ -311,12 +285,31 @@ void setup_path (flux_conf_t *cf, const char *argv0)
     /*  If argv[0] was explicitly "flux" then assume PATH is already set */
     if (strcmp (argv0, "flux") == 0)
         return;
-    flux_conf_environment_from_env (cf, "PATH", "/bin:/usr/bin", ':');
+    environment_from_env (env, "PATH", "/bin:/usr/bin", ':');
     selfdir = dir_self ();
-    flux_conf_environment_push (cf, "PATH", selfdir);
+    environment_push (env, "PATH", selfdir);
     free (selfdir);
 }
 
+void setup_keydir (struct environment *env, int flags)
+{
+    const char *dir = getenv ("FLUX_SEC_DIRECTORY");
+    char *new_dir = NULL;
+
+    if (!dir)
+        dir = flux_conf_get ("keydir", flags);
+    if (!dir) {
+        struct passwd *pw = getpwuid (getuid ());
+        if (!pw)
+            msg_exit ("Who are you!?!");
+        dir = new_dir = xasprintf ("%s/.flux", pw->pw_dir);
+    }
+    if (!dir)
+        msg_exit ("Could not determine keydir");
+    environment_set (env, "FLUX_SEC_DIRECTORY", dir, 0);
+    if (new_dir)
+        free (new_dir);
+}
 
 void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
         const char *prefix)
@@ -349,14 +342,11 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
     }
 }
 
-static void print_environment (flux_conf_t *cf)
+static void print_environment (struct environment *env)
 {
-    const char *key, *value;
-    for (value = (char*)flux_conf_environment_first(cf), key = (char*)flux_conf_environment_cursor(cf);
-            value != NULL;
-            value = flux_conf_environment_next(cf), key = flux_conf_environment_cursor(cf)) {
-        printf("%s=%s\n", key, value);
-    }
+    const char *val;
+    for (val = environment_first (env); val; val = environment_next (env))
+        printf("%s=%s\n", environment_cursor (env), val);
     fflush(stdout);
 }
 
