@@ -51,7 +51,15 @@ static int ctx_hwloc_init (flux_t h, ctx_t *ctx)
     int ret = -1;
     char *key, *path = NULL;
     hwloc_bitmap_t restrictset = NULL;
+    uint32_t hwloc_version;
 
+    hwloc_version = hwloc_get_api_version ();
+    if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16)) {
+        flux_log (h, LOG_ERR, "%s: compiled for hwloc API 0x%x but running on "
+                        "library API 0x%x", __FUNCTION__, HWLOC_API_VERSION,
+                        hwloc_version);
+        goto done;
+    }
     if (ctx->topology) {
         hwloc_topology_destroy (ctx->topology);
         ctx->topology = NULL;
