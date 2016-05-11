@@ -61,6 +61,8 @@ libutil_la_SOURCES = \
 	shastring.c \
 	fdwalk.h \
 	fdwalk.c \
+	profiling.h \
+	profiling.c
 	popen2.h \
 	popen2.c
 

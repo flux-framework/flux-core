@@ -55,6 +55,8 @@
 #endif
 #endif /* WITH_TCMALLOC */
 
+#include "src/common/libutil/profiling.h"
+
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
@@ -251,6 +253,7 @@ int main (int argc, char *argv[])
     const char *secdir = NULL;
     struct boot_method *boot_method = NULL;
     int e;
+
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -481,6 +484,12 @@ int main (int argc, char *argv[])
 
     if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
         err_exit ("attr_set_flags session-id");
+
+    // Setup profiling
+    PROFILING_INIT(&argc, &argv);
+    PROFILING_SET_RANK(ctx.rank);
+    // This is necessary to prevent over-frequent writing in TAU
+    PROFILING_REGION_START("main");
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
