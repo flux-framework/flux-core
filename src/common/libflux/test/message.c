@@ -394,10 +394,16 @@ void check_encode (void)
         "flux_msg_create works");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0,
         "flux_msg_set_topic works");
-    ok (flux_msg_encode (msg, &buf, &size) == 0 && buf != NULL && size > 0,
+    size = flux_msg_encode_size (msg);
+    ok (size > 0,
+        "flux_msg_encode_size works");
+    buf = malloc (size);
+    assert (buf != NULL);
+    ok (flux_msg_encode (msg, buf, size) == 0,
         "flux_msg_encode works");
     ok ((msg2 = flux_msg_decode (buf, size)) != NULL,
         "flux_msg_decode works");
+    free (buf);
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "decoded expected message type");
     ok (flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar"),

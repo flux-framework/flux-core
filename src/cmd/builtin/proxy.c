@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2015 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -23,31 +23,30 @@
 \*****************************************************************************/
 
 #if HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
+#include "builtin.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <getopt.h>
 #include <libgen.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/param.h>
 #include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <ctype.h>
 #include <fcntl.h>
+#include <argz.h>
+#include <glob.h>
 #include <czmq.h>
-#include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/log.h"
-
+#include "src/common/libsubprocess/subprocess.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -59,6 +58,10 @@ typedef struct {
     flux_reactor_t *reactor;
     uid_t session_owner;
     zhash_t *subscriptions;
+    struct subprocess_manager *sm;
+    struct subprocess *p;
+    bool oneshot;
+    int exit_code;
 } ctx_t;
 
 typedef void (*unsubscribe_f)(void *handle, const char *topic);
@@ -71,7 +74,8 @@ typedef struct {
 } subscription_t;
 
 typedef struct {
-    int fd;
+    int rfd;
+    int wfd;
     flux_watcher_t *inw;
     flux_watcher_t *outw;
     struct flux_msg_iobuf inbuf;
@@ -81,7 +85,6 @@ typedef struct {
     zhash_t *disconnect_notify;
     zhash_t *subscriptions;
     zuuid_t *uuid;
-    struct ucred ucred;
 } client_t;
 
 struct disconnect_notify {
@@ -97,30 +100,37 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 
-static void freectx (void *arg)
+static void ctx_destroy (ctx_t *ctx)
 {
-    ctx_t *ctx = arg;
-    zlist_destroy (&ctx->clients);
-    zhash_destroy (&ctx->subscriptions);
-    free (ctx);
+    if (ctx) {
+        zlist_destroy (&ctx->clients);
+        zhash_destroy (&ctx->subscriptions);
+        if (ctx->sm)
+            subprocess_manager_destroy (ctx->sm);
+        if (ctx->reactor)
+            flux_reactor_destroy (ctx->reactor);
+        free (ctx);
+    }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *ctx_create (flux_t h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::local_connector");
-
-    if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
-        ctx->h = h;
-        if (!(ctx->reactor = flux_get_reactor (h)))
-            err_exit ("flux_get_reactor");
-        if (!(ctx->clients = zlist_new ()))
-            oom ();
-        if (!(ctx->subscriptions = zhash_new ()))
-            oom ();
-        ctx->session_owner = geteuid ();
-        flux_aux_set (h, "flux::local_connector", ctx, freectx);
-    }
+    ctx_t *ctx = xzmalloc (sizeof (*ctx));
+    ctx->h = h;
+    if (!(ctx->reactor = flux_reactor_create (SIGCHLD)))
+        err_exit ("flux_reactor_create");
+    if (flux_set_reactor (h, ctx->reactor) < 0)
+        err_exit ("flux_set_reactor");
+    if (!(ctx->clients = zlist_new ()))
+        oom ();
+    if (!(ctx->subscriptions = zhash_new ()))
+        oom ();
+    ctx->session_owner = geteuid ();
+    if (!(ctx->sm = subprocess_manager_create ()))
+        err_exit ("subprocess_manager_create");
+    if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
+        err_exit ("subprocess_manager_set reactor");
+    subprocess_manager_set (ctx->sm, SM_WAIT_FLAGS, WNOHANG);
 
     return ctx;
 }
@@ -139,14 +149,14 @@ static int set_nonblock (int fd, bool nonblock)
     return 0;
 }
 
-static client_t * client_create (ctx_t *ctx, int fd)
+static client_t * client_create (ctx_t *ctx, int rfd, int wfd)
 {
     client_t *c;
-    socklen_t crlen = sizeof (c->ucred);
     flux_t h = ctx->h;
 
     c = xzmalloc (sizeof (*c));
-    c->fd = fd;
+    c->rfd = rfd;
+    c->wfd = wfd;
     if (!(c->uuid = zuuid_new ()))
         oom ();
     c->ctx = ctx;
@@ -156,22 +166,10 @@ static client_t * client_create (ctx_t *ctx, int fd)
         oom ();
     if (!(c->outqueue = zlist_new ()))
         oom ();
-    if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &c->ucred, &crlen) < 0) {
-        flux_log (h, LOG_ERR, "getsockopt SO_PEERCRED: %s", strerror (errno));
-        goto error;
-    }
-    assert (crlen == sizeof (c->ucred));
-    /* Deny connections by uid other than session owner for now.
-     */
-    if (c->ucred.uid != ctx->session_owner) {
-        flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied",
-                  c->ucred.uid, (int)c->ucred.pid);
-        goto error;
-    }
-    c->inw = flux_fd_watcher_create (ctx->reactor,
-                                     fd, FLUX_POLLIN, client_read_cb, c);
-    c->outw = flux_fd_watcher_create (ctx->reactor,
-                                      fd, FLUX_POLLOUT, client_write_cb, c);
+    c->inw = flux_fd_watcher_create (ctx->reactor, c->rfd,
+                                     FLUX_POLLIN, client_read_cb, c);
+    c->outw = flux_fd_watcher_create (ctx->reactor, c->wfd,
+                                      FLUX_POLLOUT, client_write_cb, c);
     if (!c->inw || !c->outw) {
         flux_log (h, LOG_ERR, "flux_fd_watcher_create: %s", strerror (errno));
         goto error;
@@ -179,7 +177,11 @@ static client_t * client_create (ctx_t *ctx, int fd)
     flux_watcher_start (c->inw);
     flux_msg_iobuf_init (&c->inbuf);
     flux_msg_iobuf_init (&c->outbuf);
-    if (set_nonblock (c->fd, true) < 0) {
+    if (set_nonblock (c->rfd, true) < 0) {
+        flux_log (h, LOG_ERR, "set_nonblock: %s", strerror (errno));
+        goto error;
+    }
+    if (c->wfd != c->rfd && set_nonblock (c->wfd, true) < 0) {
         flux_log (h, LOG_ERR, "set_nonblock: %s", strerror (errno));
         goto error;
     }
@@ -195,7 +197,7 @@ static int client_send_try (client_t *c)
     flux_msg_t *msg = zlist_head (c->outqueue);
 
     if (msg) {
-        if (flux_msg_sendfd (c->fd, msg, &c->outbuf) < 0) {
+        if (flux_msg_sendfd (c->wfd, msg, &c->outbuf) < 0) {
             if (errno != EWOULDBLOCK && errno != EAGAIN)
                 return -1;
             //flux_log (c->ctx->h, LOG_DEBUG, "send: client not ready");
@@ -265,7 +267,7 @@ static int global_subscribe (ctx_t *ctx, const char *topic)
         sub->handle = ctx->h;
         zhash_update (ctx->subscriptions, topic, sub);
         zhash_freefn (ctx->subscriptions, topic, subscription_destroy);
-        /* N.B. t/t1008-proxy.t looks for this log message */
+        /* N.B. t1008-proxy.t looks for this log message */ 
         flux_log (ctx->h, LOG_DEBUG, "subscribe %s", topic);
     }
     sub->usecount++;
@@ -283,7 +285,7 @@ static int global_unsubscribe (ctx_t *ctx, const char *topic)
         goto done;
     if (--sub->usecount == 0) {
         zhash_delete (ctx->subscriptions, topic);
-        /* N.B. t/t1008-proxy.t looks for this log message */
+        /* N.B. t1008-proxy.t looks for this log message */ 
         flux_log (ctx->h, LOG_DEBUG, "unsubscribe %s", topic);
     }
     rc = 0;
@@ -462,8 +464,10 @@ static void client_destroy (client_t *c)
     flux_watcher_destroy (c->inw);
     flux_msg_iobuf_clean (&c->inbuf);
 
-    if (c->fd != -1)
-        close (c->fd);
+    if (c->rfd != -1)
+        close (c->rfd);
+    if (c->wfd != -1 && c->wfd != c->rfd)
+        close (c->wfd);
 
     free (c);
 }
@@ -472,6 +476,7 @@ static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     client_t *c = arg;
+    ctx_t *ctx = c->ctx;
 
     if (revents & FLUX_POLLERR)
         goto disconnect;
@@ -486,6 +491,8 @@ static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
 disconnect:
     zlist_remove (c->ctx->clients, c);
     client_destroy (c);
+    if (ctx->oneshot)
+        flux_reactor_stop (r);
 }
 
 static bool internal_request (client_t *c, const flux_msg_t *msg)
@@ -523,7 +530,8 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     client_t *c = arg;
-    flux_t h = c->ctx->h;
+    ctx_t *ctx = c->ctx;
+    flux_t h = ctx->h;
     flux_msg_t *msg = NULL;
     int type;
 
@@ -535,7 +543,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
      * EWOULDBLOCK, EAGAIN stores state in c->inbuf for continuation
      */
     //flux_log (h, LOG_DEBUG, "recv: client ready");
-    if (!(msg = flux_msg_recvfd (c->fd, &c->inbuf))) {
+    if (!(msg = flux_msg_recvfd (c->rfd, &c->inbuf))) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
             //flux_log (h, LOG_DEBUG, "recv: client not ready");
             return;
@@ -576,8 +584,10 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
     return;
 disconnect:
     flux_msg_destroy (msg);
-    zlist_remove (c->ctx->clients, c);
+    zlist_remove (ctx->clients, c);
     client_destroy (c);
+    if (ctx->oneshot)
+        flux_reactor_stop (r);
 }
 
 /* Received response message from broker.
@@ -664,6 +674,27 @@ static void event_cb (flux_t h, flux_msg_handler_t *w,
     //flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic, count);
 }
 
+static int check_cred (ctx_t *ctx, int fd)
+{
+    struct ucred ucred;
+    socklen_t crlen = sizeof (ucred);
+    int rc = -1;
+
+    if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &ucred, &crlen) < 0) {
+        flux_log_error (ctx->h, "getsockopt SO_PEERCRED");
+        goto done;
+    }
+    assert (crlen == sizeof (ucred));
+    if (ucred.uid != ctx->session_owner) {
+        flux_log (ctx->h, LOG_ERR, "connect by uid=%d pid=%d denied",
+                  ucred.uid, (int)ucred.pid);
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 /* Accept a connection from new client.
  */
 static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -681,7 +712,11 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
             flux_log (h, LOG_ERR, "accept: %s", strerror (errno));
             goto done;
         }
-        if (!(c = client_create (ctx, cfd))) {
+        if (check_cred (ctx, cfd) < 0) {
+            close (cfd);
+            goto done;
+        }
+        if (!(c = client_create (ctx, cfd, cfd))) {
             close (cfd);
             goto done;
         }
@@ -729,43 +764,229 @@ error_close:
     return -1;
 }
 
+static char *findlocal (const char *globstr)
+{
+    glob_t globbuf;
+    char *uri = NULL;
+
+    if (glob (globstr, GLOB_ONLYDIR, NULL, &globbuf) != 0)
+        goto done;
+    if (globbuf.gl_pathc < 1) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (asprintf (&uri, "local://%s", globbuf.gl_pathv[0]) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
+done:
+    return uri;
+}
+
+/* Given a JOB identifier that is not a URI, try to turn it into a URI.
+ * Returns uri on success (caller must free), or NULL on failure errno set.
+ */
+static char *findjob (const char *job)
+{
+    char *tmpdir = getenv ("TMPDIR");
+    char *uri = NULL;
+    char globstr[PATH_MAX + 1];
+
+    if (!tmpdir)
+        tmpdir = "/tmp";
+    /* Try to interpret 'job' as the path from local://
+     * as we might get from ssh://host/path/to/sockdir
+     */
+    if (access (job, F_OK) == 0) {
+        if (asprintf (&uri, "local://%s", job) < 0) {
+            errno = ENOMEM;
+            goto done;
+        }
+        goto done;
+    }
+    /* Try to interpret 'job' as the flux session-id.
+     */
+    snprintf (globstr, sizeof (globstr), "%s/flux-%s-*/0", tmpdir, job);
+    if ((uri = findlocal (globstr)))
+        goto done;
+    /* Try to interpret 'job' as "/session-id",
+     * as we might get from ssh://host/jobid
+     */
+    if (strlen (job) > 1 && job[0] == '/' && isdigit (job[1])) {
+        snprintf (globstr, sizeof (globstr), "%s/flux-%s-*/0", tmpdir, job + 1);
+        if ((uri = findlocal (globstr)))
+            goto done;
+    }
+    /* Not found, return NULL */
+    errno = ENOENT;
+done:
+    return uri;
+}
+
+static int child_cb (struct subprocess *p, void *arg)
+{
+    ctx_t *ctx = arg;
+
+    ctx->exit_code = subprocess_exit_code (p);
+    flux_reactor_stop (ctx->reactor);
+    subprocess_destroy (p);
+    return 0;
+}
+
+static int child_create (ctx_t *ctx, int ac, char **av, const char *workpath)
+{
+    const char *shell = getenv ("SHELL");
+    char *argz = NULL;
+    size_t argz_len = 0;
+    struct subprocess *p = NULL;
+    int i;
+
+    if (!shell)
+        shell = "/bin/sh";
+
+    for (i = 0; i < ac; i++) {
+        if (argz_add (&argz, &argz_len, av[i]) != 0) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    if (argz)
+        argz_stringify (argz, argz_len, ' ');
+
+    if (!(p = subprocess_create (ctx->sm))
+            || subprocess_set_callback (p, child_cb, ctx) < 0
+            || subprocess_argv_append (p, shell) < 0
+            || (argz && subprocess_argv_append (p, "-c") < 0)
+            || (argz && subprocess_argv_append (p, argz) < 0)
+            || subprocess_set_environ (p, environ) < 0
+            || subprocess_setenvf (p, "FLUX_URI", 1,
+                                   "local://%s", workpath) < 0
+            || subprocess_run (p) < 0)
+        goto error;
+
+    if (argz)
+        free (argz);
+    ctx->p = p;
+    return 0;
+error:
+    if (p)
+        subprocess_destroy (p);
+    if (argz)
+        free (argz);
+    return -1;
+}
+
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,     NULL,          event_cb },
     { FLUX_MSGTYPE_RESPONSE,  NULL,          response_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, int argc, char **argv)
+static struct optparse_option proxy_opts[] = {
+    { .name = "stdio", .key = 's', .has_arg = 0,
+      .usage = "Present proxy interface on stdio", },
+    { .name = "setenv", .key = 'e', .has_arg = 1,
+      .usage = "Set NAME=VALUE in flux-proxy environment", },
+    OPTPARSE_TABLE_END
+};
+
+static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
-    ctx_t *ctx = getctx (h);
+    flux_t h = NULL;
+    int n;
+    ctx_t *ctx;
+    const char *tmpdir = getenv ("TMPDIR");
+    char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];
-    const char *local_uri = NULL;
-    char *tmpdir;
-    int rc = -1;
+    char pidfile[PATH_MAX + 1];
+    const char *job;
+    const char *optarg;
+    int optind;
 
-    if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
-        flux_log (h, LOG_ERR, "flux_attr_get local-uri: %s", strerror (errno));
-        goto done;
-    }
-    if (!(tmpdir = strstr (local_uri, "local://"))) {
-        flux_log (h, LOG_ERR, "malformed local-uri");
-        goto done;
-    }
-    tmpdir += strlen ("local://");
-    snprintf (sockpath, sizeof (sockpath), "%s/local", tmpdir);
+    log_init ("flux-proxy");
 
-    /* Create listen socket and watcher to handle new connections
-     */
-    if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
-        goto done;
-    if (!(ctx->listen_w = flux_fd_watcher_create (ctx->reactor, ctx->listen_fd,
-                                           FLUX_POLLIN | FLUX_POLLERR,
-                                           listener_cb, ctx))) {
-        flux_log (h, LOG_ERR, "flux_fd_watcher_create: %s", strerror (errno));
-        goto done;
+    optind = optparse_optind (p);
+    if (optind == ac)
+        optparse_fatal_usage (p, 1, "JOB argument is required\n");
+    job = av[optind++];
+
+    if (optparse_hasopt (p, "stdio") && optind != ac)
+        optparse_fatal_usage (p, 1, "there can be no COMMAND with --stdio\n");
+
+    while ((optarg = optparse_getopt_next (p, "setenv"))) {
+        char *name = xstrdup (optarg);
+        char *val = strchr (name, '=');
+        if (val)
+            *val++ = '\0';
+        if (!val)
+            optparse_fatal_usage (p, 1, "--setenv optarg format is NAME=VAL");
+        setenv (name, val, 1);
+        free (name);
     }
-    flux_watcher_start (ctx->listen_w);
+
+    if (strstr (job, "://")) {
+        if (!(h = flux_open (job, 0)))
+            err_exit ("%s", job);
+    } else {
+        char *uri = findjob (job);
+        if (!uri)
+            err_exit ("%s", job);
+        if (!(h = flux_open (uri, 0)))
+            err_exit ("%s", uri);
+         free (uri);
+    }
+
+    flux_log_set_facility (h, "proxy");
+    ctx = ctx_create (h);
+
+    ctx->listen_fd = -1;
+
+    if (optparse_hasopt (p, "stdio")) {
+        client_t *c;
+        if (!(c = client_create (ctx, STDIN_FILENO, STDOUT_FILENO)))
+            err_exit ("error creating stdio client");
+        if (zlist_append (ctx->clients, c) < 0)
+            oom ();
+        ctx->oneshot = true;
+    } else {
+        /* Create socket directory.
+         */
+        n = snprintf (workpath, sizeof (workpath), "%s/flux-proxy-XXXXXX",
+                                 tmpdir ? tmpdir : "/tmp");
+        assert (n < sizeof (workpath));
+        if (!mkdtemp (workpath))
+            err_exit ("error creating proxy socket directory");
+        cleanup_push_string(cleanup_directory, workpath);
+
+        /* Write proxy pid to broker.pid file.
+         * Local connector expects this.
+         */
+        n = snprintf (pidfile, sizeof (pidfile), "%s/broker.pid", workpath);
+        assert (n < sizeof (pidfile));
+        FILE *f = fopen (pidfile, "w");
+        if (!f || fprintf (f, "%d", getpid ()) < 0 || fclose (f) == EOF)
+            err_exit ("%s", pidfile);
+        cleanup_push_string(cleanup_file, pidfile);
+
+        /* Listen on socket
+         */
+        n = snprintf (sockpath, sizeof (sockpath), "%s/local", workpath);
+        assert (n < sizeof (sockpath));
+        if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
+            goto done;
+        if (!(ctx->listen_w = flux_fd_watcher_create (ctx->reactor,
+                                               ctx->listen_fd,
+                                               FLUX_POLLIN | FLUX_POLLERR,
+                                               listener_cb, ctx))) {
+            goto done;
+        }
+        flux_watcher_start (ctx->listen_w);
+
+        /* Create child
+         */
+        if (child_create (ctx, ac - optind, av + optind, workpath) < 0)
+            err_exit ("child_create");
+   }
 
     /* Create/start event/response message watchers
      */
@@ -780,7 +1001,6 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
         goto done;
     }
-    rc = 0;
 done:
     flux_msg_handler_delvec (htab);
     flux_watcher_destroy (ctx->listen_w);
@@ -793,11 +1013,28 @@ done:
         while ((c = zlist_pop (ctx->clients)))
             client_destroy (c);
     }
-    return rc;
+    if (ctx->exit_code)
+        exit (ctx->exit_code);
+
+    ctx_destroy (ctx);
+    flux_close (h);
+    return (0);
 }
 
-MOD_NAME ("connector-local");
+int subcommand_proxy_register (optparse_t *p)
+{
+    optparse_err_t e;
+
+    e = optparse_reg_subcommand (p, "proxy", cmd_proxy,
+        "[OPTIONS] JOB [COMMAND...]",
+        "Route messages to/from Flux instance",
+        proxy_opts);
+    if (e != OPTPARSE_SUCCESS)
+        return (-1);
+
+    return (0);
+}
 
 /*
- * vi:tabstop=4 shiftwidth=4 expandtab
+ * vi: ts=4 sw=4 expandtab
  */

@@ -303,3 +303,8 @@ xml
 filesystem
 filename
 PYTHONPATH
+localhost
+EEXIST
+rsh
+RCMD
+pty

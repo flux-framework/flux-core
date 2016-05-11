@@ -57,11 +57,10 @@ struct flux_match {
 }
 
 struct flux_msg_iobuf {
-    uint32_t nsize;
-    size_t nsize_done;
-    void *buf;
+    uint8_t *buf;
     size_t size;
     size_t done;
+    uint8_t buf_fixed[4096];
 };
 
 /* Create a new Flux message.
@@ -75,11 +74,11 @@ void flux_msg_destroy (flux_msg_t *msg);
  */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
 
-/* Encode a flux_msg_t to buffer.
+/* Encode a flux_msg_t to buffer (pre-sized by calling flux_msg_encode_size()).
  * Returns 0 on success, -1 on failure with errno set.
- * Caller must free buf.
  */
-int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t *size);
+size_t flux_msg_encode_size (const flux_msg_t *msg);
+int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size);
 
 /* Decode a flux_msg_t from buffer.
  * Returns message on success, NULL on failure with errno set.

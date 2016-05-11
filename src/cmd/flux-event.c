@@ -88,7 +88,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     char *topic = argv[1];  /* "pub" should be argv0 */
     flux_msg_t *msg = NULL;
     char *json_str = NULL;
-    int e;
+    int e, n;
 
     if (!topic) {
         optparse_print_usage (p);
@@ -98,11 +98,16 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     if (!(h = optparse_get_data (p, "handle")))
         err_exit ("failed to get handle");
 
-    if (argc > 2) {
+    n = optparse_optind (p);
+    if (n < argc - 1) {
         size_t len = 0;
-        if ((e = argz_create (argv + 2, &json_str, &len)) != 0)
+        json_object *o;
+        if ((e = argz_create (argv + n + 1, &json_str, &len)) != 0)
             errn_exit (e, "argz_create");
         argz_stringify (json_str, len, ' ');
+        if (*json_str != '{' || !(o = json_tokener_parse (json_str)))
+            msg_exit ("JSON argument must be a valid JSON object");
+        json_object_put (o);
     }
     if (!(msg = flux_event_encode (topic, json_str))
               || flux_send (h, msg, 0) < 0)
@@ -174,8 +179,9 @@ static int event_sub (optparse_t *p, int argc, char **argv)
      */
     setlinebuf (stdout);
 
-    if (argc > 0)
-        subscribe_all (h, argc, argv);
+    n = optparse_optind (p);
+    if (n < argc)
+        subscribe_all (h, argc - n, argv + n);
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
@@ -203,8 +209,8 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */
-    if (argc > 0)
-        unsubscribe_all (h, argc, argv);
+    if (argc > 1)
+        unsubscribe_all (h, argc - 1, argv + 1);
     else if (flux_event_unsubscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
     return (0);
