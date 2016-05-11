@@ -7,7 +7,11 @@
 /* Memory allocation functions that call oom() on allocation error.
  */
 void *xzmalloc (size_t size);
-void *xrealloc (void *ptr, size_t size);
+void *flux_xrealloc (void *ptr, size_t size);
+static inline void *xrealloc (void *ptr, size_t size) 
+{
+    return flux_xrealloc(ptr, size);
+}
 char *xstrdup (const char *s);
 char *xvasprintf(const char *fmt, va_list ap);
 char *xasprintf (const char *fmt, ...)

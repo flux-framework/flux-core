@@ -304,7 +304,7 @@ static void request_cb (flux_t h,
     }
 }
 
-struct flux_msg_handler_spec htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "*",        request_cb, NULL },
     { FLUX_MSGTYPE_EVENT,     "wrexec.*", event_cb,   NULL },
     FLUX_MSGHANDLER_TABLE_END

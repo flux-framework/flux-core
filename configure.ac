@@ -68,6 +68,23 @@ X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 
+AC_ARG_WITH([caliper],
+            [AS_HELP_STRING([--with-caliper],
+                            [enable caliper profiling])],
+                            [],
+                            [with_caliper=no])
+
+LIBCALIPER=
+AS_IF([test "x$with_caliper" != xno],
+      [AC_CHECK_LIB([caliper], [cali_begin_byname],
+                    [AC_SUBST([LIBCALIPER], ["-lcaliper"])
+                     AC_DEFINE([CALIPER_PROFILING], [1],
+                              [Define if you have libcaliper])
+                    ],
+                    [AC_MSG_FAILURE(
+                     [--with-caliper was given, but test for caliper failed])])])
+                         
+
 AC_MSG_CHECKING(--enable-python argument)
 AC_ARG_ENABLE(python,
 	[  --enable-python[=OPTS]   Include Python bindings. [default=yes] [OPTS=no/yes]], ,
