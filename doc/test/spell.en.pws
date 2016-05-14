@@ -308,3 +308,9 @@ EEXIST
 rsh
 RCMD
 pty
+Cron
+CRON
+cron
+lifecycle
+rexec
+subcommand
