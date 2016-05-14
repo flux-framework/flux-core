@@ -33,79 +33,50 @@ Display help on options, and a list of the core Flux sub-commands.
 *-v, --verbose*::
 Display command environment, and the path search for 'CMD'.
 
-*-c, --config*='DIR'::
-Set the directory to be used for configuration.  The default is $HOME/.flux.
-
-*-S, --secdir*='DIR'::
-Set the directory to be used long-term keys.
-The default is to use the config directory.
-
-*-u, --uri*='URI'::
-Set the URI used to connect to flux-broker.
-
-*-t, --trace-apisock*::
-Trace API socket traffic to 'stderr'.
-
 
 SUB-COMMAND ENVIRONMENT
 -----------------------
-flux(1) uses compiled-in install paths, configuration derived from a file
-or the KVS (if available), the environment, and its command line arguments
+flux(1) uses compiled-in install paths and its environment
 to construct the environment for sub-commands.
 
 Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed
 with the following prototype:
 
-  [getenv FLUX_EXEC_PATH_PREPEND]:[config.general.exec_path]:install-path:\
+  [getenv FLUX_EXEC_PATH_PREPEND]:install-path:\
     [getenv FLUX_EXEC_PATH]
 
 setenv FLUX_MODULE_PATH::
 Set up broker comms module search path according to:
 
-  [getenv FLUX_MODULE_PATH_PREPEND]:[config.general.module_path]:install-path:\
+  [getenv FLUX_MODULE_PATH_PREPEND]:install-path:\
     [getenv FLUX_MODULE_PATH]
 
 setenv FLUX_CONNECTOR_PATH::
 Set up search path for connector modules used by libflux to open a connection
 to the broker
 
-  [getenv FLUX_CONNECTOR_PATH_PREPEND]:[config.general.connector_path]:\
-    install-path:[getenv FLUX_CONNECTOR_PATH]
+  [getenv FLUX_CONNECTOR_PATH_PREPEND]:install-path:\
+    [getenv FLUX_CONNECTOR_PATH]
+
+setenv FLUX_SEC_DIRECTORY::
+Set directory for Flux CURVE keys.  This is not a search path.
+If unset, flux(1) sets it to $HOME/flux.
 
 setenv LUA_PATH::
 Set Lua module search path:
 
-  [getenv FLUX_LUA_PATH_PREPEND]:[config.general.lua_path];[getenv LUA_PATH];\
-    install-path;;;
+  [getenv FLUX_LUA_PATH_PREPEND];[getenv LUA_PATH];install-path;;;
 
 setenv LUA_CPATH::
 Set Lua binary module search path:
 
-  [getenv FLUX_LUA_CPATH_PREPEND];[config.general.lua_cpath];\
-    [getenv LUA_CPATH];install-path;;;
+  [getenv FLUX_LUA_CPATH_PREPEND];[getenv LUA_CPATH];install-path;;;
 
 setenv PYTHONPATH::
 Set Python module search path:
 
-  [getenv FLUX_PYTHONPATH_PREPEND]:[config.general.python_path]:\
-    [getenv PYTHONPATH];install-path
-
-setenv FLUX_CONF_DIRECTORY::
-Set the path to the Flux config directory, which contains a config
-file and long term keys.  The path may be set by any of the following
-methods, in descending precedence:
-- [--config DIR]
-- [$(top_builddir)/etc/flux, if being run from flux-core repo]
-- [$HOME/.flux/config]
-
-setenv FLUX_TRACE_APISOCK::
-Set to "1" if --trace-apisock was specified.  This causes the FLUX_FLAGS_TRACE
-flag to be set when an API socket is established by a sub-command.
-
-setenv FLUX_URI::
-Set if "--uri" was specified.  If flux_open(3)'s uri argument is NULL,
-it substitutes the value of FLUX_URI, if set.  Otherwise, it fails.
+  [getenv FLUX_PYTHONPATH_PREPEND]:[getenv PYTHONPATH];install-path
 
 
 AUTHOR
