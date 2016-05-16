@@ -15,9 +15,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/broker \
 	$(LUA_INCLUDE) \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-DWREXECD_BINDIR=\"$(libexecdir)/flux\" \
-	-DWRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\"
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 wreckscriptsdir = $(sysconfdir)/wreck/lua.d
 
@@ -43,7 +41,7 @@ job_la_LIBADD = $(fluxmod_libadd)
 wrexec_la_SOURCES = wrexec.c
 wrexec_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 wrexec_la_LIBADD = $(fluxmod_libadd)
-wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
+wrexec_la_CPPFLAGS = $(AM_CPPFLAGS)
 
 wrexecd_SOURCES = \
 	wrexecd.c \
