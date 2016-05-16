@@ -118,7 +118,6 @@ typedef struct {
     bool quiet;
     pid_t pid;
     char *proctitle;
-    flux_conf_t *cf;
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
@@ -172,8 +171,7 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (ctx_t *ctx);
 
-static void load_modules (ctx_t *ctx, const char *default_modules,
-                          const char *modpath);
+static void load_modules (ctx_t *ctx, const char *default_modules);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
@@ -193,6 +191,8 @@ static struct boot_method *lookup_boot_method (const char *name);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
+
+static void init_attrs_from_environment (attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -244,11 +244,8 @@ int main (int argc, char *argv[])
     int c;
     ctx_t ctx;
     zlist_t *sigwatchers;
-    char *modpath;
-    const char *confdir;
     int security_clr = 0;
     int security_set = 0;
-    const char *secdir = NULL;
     struct boot_method *boot_method = NULL;
     int e;
 
@@ -279,8 +276,10 @@ int main (int argc, char *argv[])
         oom ();
 
     ctx.pid = getpid();
-    if (!(modpath = getenv ("FLUX_MODULE_PATH")))
-        modpath = MODULE_PATH;
+
+    /* Initialize config attrs from environment set up by flux(1)
+     */
+    init_attrs_from_environment (ctx.attrs);
 
     if (!(ctx.sm = subprocess_manager_create ()))
         oom ();
@@ -305,7 +304,8 @@ int main (int argc, char *argv[])
                 ctx.quiet = true;
                 break;
             case 'X':   /* --module-path PATH */
-                modpath = optarg;
+                if (attr_set (ctx.attrs, "conf.module_path", optarg, true) < 0)
+                    err_exit ("setting conf.module_path attribute");
                 break;
             case 'k':   /* --k-ary k */
                 ctx.k_ary = strtoul (optarg, NULL, 10);
@@ -354,10 +354,6 @@ int main (int argc, char *argv[])
         argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
 
-    /* Get the directory for CURVE keys.
-     */
-    if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
-        msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
     /* Connect to enclosing instance, if any.
      */
@@ -365,32 +361,6 @@ int main (int argc, char *argv[])
         if (!(ctx.enclosing_h = flux_open (NULL, 0)))
             err_exit ("flux_open enclosing instance");
     }
-
-    /* Process configuration.
-     */
-    ctx.cf = flux_conf_create ();
-    if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
-        msg_exit ("FLUX_CONF_DIRECTORY is not set");
-    flux_conf_set_directory (ctx.cf, confdir);
-    if (ctx.verbose)
-        msg ("Loading config from %s", confdir);
-    if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH) {
-        if (ctx.verbose)
-            msg ("Configuration failed to load from %s, falling back", confdir);
-    }
-
-    /* Arrange to load config entries into broker attrs
-     */
-    flux_conf_itr_t *itr = flux_conf_itr_create (ctx.cf);
-    const char *key;
-    while ((key = flux_conf_next (itr))) {
-        const char *val = flux_conf_get (ctx.cf, key);
-        /* Set config key as broker attribute */
-        if (attr_add (ctx.attrs, key, val, 0) < 0)
-            if (attr_set (ctx.attrs, key, val, true) < 0)
-                err_exit ("config: setattr %s=%s", key, val);
-    }
-    flux_conf_itr_destroy (itr);
 
     broker_block_signals ();
 
@@ -425,7 +395,10 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
-    flux_sec_set_directory (ctx.sec, secdir);
+    const char *keydir;
+    if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
+        err_exit ("getattr security.keydir");
+    flux_sec_set_directory (ctx.sec, keydir);
     if (security_clr && flux_sec_disable (ctx.sec, security_clr) < 0)
         err_exit ("flux_sec_disable");
     if (security_set && flux_sec_enable (ctx.sec, security_set) < 0)
@@ -543,8 +516,6 @@ int main (int argc, char *argv[])
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add_active_int (ctx.attrs, "tbon-arity", &ctx.k_ary,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
-                                FLUX_ATTRFLAG_IMMUTABLE) < 0
             || log_register_attrs (ctx.log, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         err_exit ("configuring attributes");
@@ -590,34 +561,28 @@ int main (int argc, char *argv[])
     update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
-        const char *ldpath = flux_conf_get (ctx.cf,
-                                            "general.program_library_path");
-        const char *rc1 = getenv ("FLUX_RC1_PATH");
-        const char *rc3 = getenv ("FLUX_RC3_PATH");
-        const char *local_uri;
-        const char *pmi_library_path;
+        const char *rc1, *rc3, *pmi, *uri;
+        const char *rc2 = ctx.init_shell_cmd;
+
+        if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0)
+            err_exit ("local-uri is not set");
+        if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0)
+            err_exit ("conf.rc1_path is not set");
+        if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0)
+            err_exit ("conf.rc3_path is not set");
+        if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0)
+            err_exit ("conf.pmi_library_path is not set");
 
         runlevel_set_size (ctx.runlevel, ctx.size);
         runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
 
-        if (attr_get (ctx.attrs, "local-uri", &local_uri, NULL) < 0)
-            err_exit ("local-uri is not set");
-        if (!rc1)
-            rc1 = flux_conf_get (ctx.cf, "general.rc1_path");
-        if (!rc3)
-            rc3 = flux_conf_get (ctx.cf, "general.rc3_path");
-        pmi_library_path = flux_conf_get (ctx.cf, "general.pmi_library_path");
-
-        if (runlevel_set_rc (ctx.runlevel, 1, rc1 ? rc1 : RC1,
-                             local_uri, ldpath, pmi_library_path) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 1, rc1, uri) < 0)
             err_exit ("runlevel_set_rc 1");
-        if (runlevel_set_rc (ctx.runlevel, 2, ctx.init_shell_cmd,
-                             local_uri, ldpath, pmi_library_path) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 2, rc2, uri) < 0)
             err_exit ("runlevel_set_rc 2");
-        if (runlevel_set_rc (ctx.runlevel, 3, rc3 ? rc3 : RC3,
-                             local_uri, ldpath, pmi_library_path) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 3, rc3, uri) < 0)
             err_exit ("runlevel_set_rc 3");
     }
 
@@ -657,7 +622,7 @@ int main (int argc, char *argv[])
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, default_modules, modpath);
+    load_modules (&ctx, default_modules);
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -723,6 +688,44 @@ int main (int argc, char *argv[])
     runlevel_destroy (ctx.runlevel);
 
     return 0;
+}
+
+struct attrmap {
+    const char *env;
+    const char *attr;
+    uint8_t required:1;
+};
+
+static struct attrmap attrmap[] = {
+    { "FLUX_EXEC_PATH",         "conf.exec_path",           1 },
+    { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1 },
+    { "FLUX_MODULE_PATH",       "conf.module_path",         1 },
+    { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1 },
+    { "FLUX_RC1_PATH",          "broker.rc1_path",          1 },
+    { "FLUX_RC3_PATH",          "broker.rc3_path",          1 },
+    { "FLUX_WRECK_LUA_PATTERN", "wrexec.lua_pattern",       1 },
+    { "FLUX_WREXECD_PATH",      "wrexec.wrexecd_path",      1 },
+    { "FLUX_SEC_DIRECTORY",     "security.keydir",          1 },
+
+    { "FLUX_URI",               "parent-uri",               0 },
+    { NULL, NULL },
+};
+
+static void init_attrs_from_environment (attr_t *attrs)
+{
+    struct attrmap *m;
+    const char *val;
+    int flags = 0;  // XXX possibly these should be immutable?
+                    //   however they weren't before and wreck test depends
+                    //   on changing wrexec.lua_pattern
+
+    for (m = &attrmap[0]; m->env != NULL; m++) {
+        val = getenv (m->env);
+        if (!val && m->required)
+            msg_exit ("required environment variable %s is not set", m->env);
+        if (attr_add (attrs, m->attr, val, flags) < 0)
+            err_exit ("attr_add %s", m->attr);
+    }
 }
 
 static struct boot_method *lookup_boot_method (const char *name)
@@ -1370,12 +1373,15 @@ static int mod_svc_cb (zmsg_t **zmsg, void *arg)
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
-static void load_modules (ctx_t *ctx, const char *default_modules,
-                          const char *modpath)
+static void load_modules (ctx_t *ctx, const char *default_modules)
 {
     char *cpy = xstrdup (default_modules);
     char *s, *saveptr = NULL, *a1 = cpy;
+    const char *modpath;
     module_t *p;
+
+    if (attr_get (ctx->attrs, "conf.module_path", &modpath, NULL) < 0)
+        err_exit ("conf.module_path is not set");
 
     while ((s = strtok_r (a1, ",", &saveptr))) {
         char *name = NULL;

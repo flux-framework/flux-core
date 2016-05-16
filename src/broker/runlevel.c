@@ -275,33 +275,10 @@ done:
     return 0;
 }
 
-static void path_prepend (char **s1, const char *s2)
-{
-    char *p;
-
-    if (!s2)
-        ;
-    else if (!*s1)
-        *s1 = xstrdup (s2);
-    else if ((p = strstr (*s1, s2))) {
-        int s2_len = strlen (s2);
-        memmove (p, p + s2_len, strlen (p + s2_len) + 1);
-        if (*p == ':')
-            memmove (p, p + 1, strlen (p + 1) + 1);
-        path_prepend (s1, s2);
-    } else {
-        p = xasprintf ("%s:%s", s2, *s1);
-        free (*s1);
-        *s1 = p;
-    }
-}
-
 int runlevel_set_rc (runlevel_t *r, int level, const char *command,
-                     const char *local_uri, const char *library_path,
-                     const char *pmi_library_path)
+                     const char *local_uri)
 {
     struct subprocess *p = NULL;
-    char *ldpath = NULL;
     const char *shell = getenv ("SHELL");
     if (!shell)
         shell = "/bin/bash";
@@ -310,13 +287,6 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
         errno = EINVAL;
         goto error;
     }
-
-    if (!pmi_library_path)
-        pmi_library_path = PMI_LIBRARY_PATH;
-
-    path_prepend (&ldpath, getenv ("LD_LIBRARY_PATH"));
-    path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
-    path_prepend (&ldpath, library_path);
 
     if (!(p = subprocess_create (r->sm))
             || subprocess_set_callback (p, subprocess_cb, r) < 0
@@ -327,12 +297,8 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
             || subprocess_unsetenv (p, "PMI_FD") < 0
             || subprocess_unsetenv (p, "PMI_RANK") < 0
             || subprocess_unsetenv (p, "PMI_SIZE") < 0
-            || subprocess_setenv (p, "I_MPI_PMI_LIBRARY",
-                                  pmi_library_path, 1) < 0
             || (local_uri && subprocess_setenv (p, "FLUX_URI",
-                                                local_uri, 1) < 0)
-            || (ldpath && subprocess_setenv (p, "LD_LIBRARY_PATH",
-                                             ldpath, 1) < 0))
+                                                local_uri, 1) < 0))
         goto error;
     if (level == 1 || level == 3) {
         if (subprocess_setenv (p, "FLUX_NODESET_MASK", r->nodeset, 1) < 0)
@@ -342,13 +308,9 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
         if (subprocess_set_context (p, "runlevel_t", r) < 0)
             goto error;
     }
-    if (ldpath)
-        free (ldpath);
     r->rc[level] = p;
     return 0;
 error:
-    if (ldpath)
-        free (ldpath);
     if (p)
         subprocess_destroy (p);
     return -1;
