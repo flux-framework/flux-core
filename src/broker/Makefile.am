@@ -6,12 +6,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-	-DMODULE_PATH=\"$(fluxmoddir)\" \
-	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\" \
-	-DPMI_LIBRARY_PATH=\"$(fluxlibdir)/libpmi.so\" \
-	-DRC1=\"$(fluxrcdir)/rc1\" \
-	-DRC3=\"$(fluxrcdir)/rc3\"
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 fluxcmd_PROGRAMS = flux-broker
 
@@ -72,9 +67,8 @@ test_ldadd = \
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
-        $(AM_CPPFLAGS) \
-        -DCONNECTOR_PATH=\"$(top_builddir)/src/connectors\" \
-        -UMODULE_PATH -DMODULE_PATH=\"$(top_builddir)/src/modules\"
+        $(AM_CPPFLAGS)
+
 
 check_PROGRAMS = $(TESTS)
 

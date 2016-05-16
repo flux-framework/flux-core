@@ -175,14 +175,12 @@ static void exec_handler (struct rexec_ctx *ctx, uint64_t id, int *pfds)
     exit (255);
 }
 
-static void update_wrexecd_path (struct rexec_ctx *ctx)
+static int update_wrexecd_path (struct rexec_ctx *ctx)
 {
-    const char *p = flux_attr_get (ctx->h, "wrexec.wrexecd_path", NULL);
-    if (p != NULL)
-        ctx->wrexecd_path = p;
-    else if (ctx->wrexecd_path == NULL)
-        ctx->wrexecd_path = WREXECD_PATH;
-    return;
+    ctx->wrexecd_path = flux_attr_get (ctx->h, "wrexec.wrexecd_path", NULL);
+    if (!ctx->wrexecd_path)
+        return -1;
+    return 0;
 }
 
 static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
@@ -195,7 +193,8 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     pid_t pid;
 
     /*  Refresh wrexecd_path in case it was updated since the previous run */
-    update_wrexecd_path (ctx);
+    if (update_wrexecd_path (ctx) < 0)
+        return (-1);
 
     if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) < 0)
         return (-1);

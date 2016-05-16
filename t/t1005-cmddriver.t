@@ -15,39 +15,29 @@ test_expect_success 'baseline works' '
 '
 
 test_expect_success 'flux prepends to FLUX_MODULE_PATH' '
-	FLUX_MODULE_PATH=/xyz flux /usr/bin/printenv \
-		| grep "FLUX_MODULE_PATH=.*:/xyz"
+	(FLUX_MODULE_PATH=/xyz \
+		flux /usr/bin/printenv | grep "FLUX_MODULE_PATH=.*:/xyz")
 '
 
 test_expect_success 'flux prepends to FLUX_CONNECTOR_PATH' '
-        FLUX_CONNECTOR_PATH=/xyz flux /usr/bin/printenv \
-		| grep "FLUX_CONNECTOR_PATH=.*:/xyz"
+        (FLUX_CONNECTOR_PATH=/xyz \
+		flux /usr/bin/printenv | grep "FLUX_CONNECTOR_PATH=.*:/xyz")
 '
 
-test_expect_success 'flux --uri sets FLUX_URI' '
-	flux --uri xyz://foo /usr/bin/printenv \
-		| egrep "^FLUX_URI=xyz://foo$"
+test_expect_success 'flux fails for unknown connector scheme' '
+	(FLUX_URI=noexist:// \
+		test_must_fail flux comms info)
 '
 
-test_expect_success 'flux --trace-handle sets FLUX_HANDLE_TRACE=1' '
-	flux --trace-handle /usr/bin/printenv \
-		| egrep "^FLUX_HANDLE_TRACE=1$"
+test_expect_success 'flux fails for unknown connector path' '
+	(FLUX_URI=local://noexist \
+		test_must_fail flux comms info)
 '
 
-# ENOENT
-test_expect_success 'flux --uri fails for unknown connector' '
-	test_must_fail flux --uri 'noexist://' comms info
-'
-
-# ENOENT
-test_expect_success 'flux --uri fails for unknown path' '
-	test_must_fail flux --uri 'local://noexist' comms info
-'
-
-# EINVAL
-test_expect_success 'cmddriver: --uri fails for non-connector dso' '
-	test_must_fail flux --connector-path ${FLUX_BUILD_DIR}/src/modules \
-			       --uri kvs:// comms info
+test_expect_success 'flux fails fails for non-connector dso' '
+	(FLUX_CONNECTOR_PATH=${FLUX_BUILD_DIR}/src/modules \
+	FLUX_URI=kvs:// \
+		test_must_fail flux comms info)
 '
 
 # Test flux 'env' builtin
@@ -59,11 +49,12 @@ test_expect_success 'flux env runs argument' "
 		| grep /connectors
 "
 test_expect_success 'flux env passes cmddriver options' '
-	flux --uri foo://xyz env | grep "^export FLUX_URI=\"foo://xyz"
+	(FLUX_URI=foo://xyz \
+		flux env | grep "^export FLUX_URI=\"foo://xyz")
 '
 test_expect_success 'flux env passes cmddriver option to argument' "
-	flux --uri foo://xyx env sh -c 'echo \$FLUX_URI' \
-		| grep ^foo://xyx$
+	(FLUX_URI=foo://xyx \
+		flux env sh -c 'echo \$FLUX_URI' | grep '^foo://xyx$')
 "
 # push /foo twice onto PYTHONPATH -- ensure it is leftmost position:
 #test_expect_success 'cmddriver pushes dup path elements onto front of PATH' "
@@ -87,8 +78,8 @@ test_expect_success 'flux env passes cmddriver option to argument' "
 #		awk -F '/meh' 'NF-1 != 1 {print; exit 1}'
 #"
 test_expect_success 'cmddriver removes multiple contiguous separators in input' "
-	LUA_PATH='/meh;;;' flux env sh -c 'echo \$LUA_PATH' |
-		grep -v ';;;;'
+	(LUA_PATH='/meh;;;' \
+		flux env sh -c 'echo \$LUA_PATH' | grep -v ';;;;')
 "
 readlink --version >/dev/null && test_set_prereq READLINK
 test_expect_success READLINK 'cmddriver adds its own path to PATH if called with relative path' "
@@ -96,16 +87,9 @@ test_expect_success READLINK 'cmddriver adds its own path to PATH if called with
 	fluxdir=\$(dirname \$fluxcmd) &&
 	PATH='/bin:/usr/bin' \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
 "
-test_expect_success 'flux --secdir overrides config' '
-	umask 077 && tmpkeydir=`mktemp -d` &&
-	flux env flux --secdir="$tmpkeydir" keygen &&
-	ls $tmpkeydir >&2 &&
-	test -f $tmpkeydir/curve/client_secret &&
-	rm -rf $tmpkeydir
-'
 
 test_expect_success 'FLUX_*_PREPEND environment variables work' '
-	FLUX_CONNECTOR_PATH_PREPEND=/foo \
+	( FLUX_CONNECTOR_PATH_PREPEND=/foo \
 	  flux /usr/bin/printenv | grep "FLUX_CONNECTOR_PATH=/foo" &&
 	FLUX_EXEC_PATH_PREPEND=/foo \
 	  flux /usr/bin/printenv | grep "FLUX_EXEC_PATH=/foo" &&
@@ -116,9 +100,9 @@ test_expect_success 'FLUX_*_PREPEND environment variables work' '
 	FLUX_LUA_CPATH_PREPEND=/foo \
 	  flux /usr/bin/printenv | grep "LUA_CPATH=/foo" &&
 	FLUX_PYTHONPATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "PYTHONPATH=/foo"
+	  flux /usr/bin/printenv | grep "PYTHONPATH=/foo")
 '
 test_expect_success 'flux-env output can be passed to eval' '
-    eval $(flux env)
+    (eval $(flux env))
 '
 test_done

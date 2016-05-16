@@ -135,12 +135,14 @@ static connector_init_f *find_connector (const char *scheme, void **dsop)
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
 
+    if (!searchpath) {
+        errno = ENOENT;
+        goto done;
+    }
     if (snprintf (name, sizeof (name), "%s.so", scheme) >= sizeof (name)) {
         errno = ENAMETOOLONG;
         goto done;
     }
-    if (!searchpath)
-        searchpath = CONNECTOR_PATH;
     if (!(path = find_file (name, searchpath)))
         goto done;
     if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {

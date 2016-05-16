@@ -597,7 +597,7 @@ struct prog_ctx * prog_ctx_create (void)
         log_fatal (ctx, 1, "get_executable_path: %s", strerror (errno));
 
     ctx->lua_stack = lua_stack_create ();
-    ctx->lua_pattern = WRECK_LUA_PATTERN;
+    ctx->lua_pattern = NULL;
     return (ctx);
 }
 

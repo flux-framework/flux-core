@@ -193,8 +193,6 @@ test_ldadd = \
         $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
-        -DMODULE_PATH=\"$(top_builddir)/src/modules\" \
-        -DCONNECTOR_PATH=\"$(top_builddir)/src/connectors\" \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
 

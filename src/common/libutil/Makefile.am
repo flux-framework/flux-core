@@ -62,7 +62,9 @@ libutil_la_SOURCES = \
 	fdwalk.h \
 	fdwalk.c \
 	popen2.h \
-	popen2.c
+	popen2.c \
+	environment.h \
+	environment.c
 
 EXTRA_DIST = veb_mach.c
 

@@ -31,18 +31,19 @@
 #include "src/common/libutil/log.h"
 
 
-#define OPTIONS "hfp"
+#define OPTIONS "hfpd:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"force",      no_argument,        0, 'f'},
     {"plain",      no_argument,        0, 'p'},
+    {"secdir",     required_argument,  0, 'd'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-keygen [--force] [--plain]\n"
+"Usage: flux-keygen [--secdir DIR] [--force] [--plain]\n"
 );
     exit (1);
 }
@@ -53,7 +54,7 @@ int main (int argc, char *argv[])
     flux_sec_t sec;
     bool force = false;
     bool plain = false;
-    char *secdir;
+    const char *secdir = getenv ("FLUX_SEC_DIRECTORY");
 
     log_init ("flux-keygen");
 
@@ -68,6 +69,9 @@ int main (int argc, char *argv[])
             case 'p': /* --plain */
                 plain = true;
                 break;
+            case 'd': /* --secdir */
+                secdir = optarg;
+                break;
             default:
                 usage ();
                 break;
@@ -75,11 +79,11 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
-    if (!(sec = flux_sec_create ()))
+
+     if (!(sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
-    if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
-        msg_exit ("FLUX_SEC_DIRECTORY is not set");
-    flux_sec_set_directory (sec, secdir);
+    if (secdir)
+        flux_sec_set_directory (sec, secdir);
     if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)
         msg_exit ("PLAIN security is not available");
     if (flux_sec_keygen (sec, force, true) < 0)

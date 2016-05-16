@@ -11,7 +11,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
+    (void)setenv ("FLUX_CONNECTOR_PATH",
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "opened loop connector");
     if (!h)

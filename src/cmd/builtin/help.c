@@ -28,21 +28,16 @@
 
 static int cmd_help (optparse_t *p, int ac, char *av[])
 {
-    flux_conf_t cf;
     int n = optparse_optind (p);
     char *cmd;
 
-    if (!(cf = optparse_get_data (p, "conf")))
-        msg_exit ("flux-help: error getting flux_conf_t");
-
     if (n < ac) {
-        const char *cf_path = flux_conf_get (cf, "general.man_path");
         const char *topic = av [n];
         int rc;
-        if (cf_path)
-            setenvf ("MANPATH", 1, "%s:%s", cf_path, MANDIR);
-        else
-            setenv ("MANPATH", MANDIR, 1);
+
+        /* N.B. Flux doc dir already prepended to MANPATH if needed.
+         */
+
         cmd = xasprintf ("man flux-%s %s", topic, topic);
         if ((rc = system (cmd)) < 0)
             err_exit ("man");

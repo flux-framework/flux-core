@@ -185,7 +185,7 @@ void parse_modarg (const char *arg, char **name, char **path)
     } else {
         char *searchpath = getenv ("FLUX_MODULE_PATH");
         if (!searchpath)
-            searchpath = MODULE_PATH;
+            msg_exit ("FLUX_MODULE_PATH is not set");
         modname = xstrdup (arg);
         if (!(modpath = flux_modfind (searchpath, modname)))
             msg_exit ("%s: not found in module search path", modname);

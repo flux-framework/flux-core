@@ -57,7 +57,6 @@ test_ldadd = \
 
 test_cppflags = \
         $(AM_CPPFLAGS) \
-        -DMODULE_PATH=\"$(top_builddir)/src/modules\" \
         -I$(top_srcdir)/src/common/libtap
 
 check_PROGRAMS = $(TESTS)

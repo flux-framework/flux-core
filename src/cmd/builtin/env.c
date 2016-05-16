@@ -24,17 +24,14 @@
 #include <unistd.h>
 
 #include "builtin.h"
+#include "src/common/libutil/environment.h"
 
-static void print_environment (flux_conf_t cf)
+static void print_environment (struct environment *env)
 {
-    const char *key, *value;
-    for (value = (char*)flux_conf_environment_first (cf),
-         key = (char*)flux_conf_environment_cursor(cf);
-         value != NULL;
-         value = flux_conf_environment_next(cf), key = flux_conf_environment_cursor(cf)) {
-        printf ("export %s=\"%s\"\n", key, value);
-    }
-    fflush (stdout);
+    const char *val;
+    for (val = environment_first (env); val; val = environment_next (env))
+        printf("export %s=\"%s\"\n", environment_cursor (env), val);
+    fflush(stdout);
 }
 
 static int cmd_env (optparse_t *p, int ac, char *av[])
@@ -44,10 +41,10 @@ static int cmd_env (optparse_t *p, int ac, char *av[])
         execvp (av[n], av+n); /* no return if sucessful */
         err_exit ("execvp (%s)", av[n]);
     } else {
-        flux_conf_t cf = optparse_get_data (p, "conf");
-        if (cf == NULL)
-            msg_exit ("flux-env: failed to get flux config!");
-        print_environment (cf);
+        struct environment *env = optparse_get_data (p, "env");
+        if (env == NULL)
+            msg_exit ("flux-env: failed to get flux envirnoment!");
+        print_environment (env);
     }
     return (0);
 }
