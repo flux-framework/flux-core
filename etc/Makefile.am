@@ -1,18 +1,11 @@
 noinst_DATA = \
-	flux/config \
 	flux/curve
 
 dist_fluxrc_SCRIPTS = \
         rc1 \
         rc3
 
-flux/config: $(srcdir)/flux.conf.in
-	$(AM_V_GEN)umask 077; $(MKDIR_P) flux; \
-	sed -e 's![@]abs_top_srcdir[@]!$(abs_top_srcdir)!g' \
-	    -e 's![@]abs_top_builddir[@]!$(abs_top_builddir)!g' \
-	    $(srcdir)/flux.conf.in > $@
-
-flux/curve: flux/config
+flux/curve:
 	$(AM_V_GEN)$(top_builddir)/src/cmd/flux keygen --force
 
 fluxhelpdir = $(datadir)/flux/help.d
@@ -29,6 +22,5 @@ pkgconfig_DATA = flux-core.pc
 endif
 
 EXTRA_DIST = \
-	flux.conf.in \
 	Makefile.inc.in \
 	gen-cmdhelp.pl

@@ -3,12 +3,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
-
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/handle.h"
-#include "src/common/libflux/reactor.h"
-#include "src/common/libflux/dispatch.h"
-#include "src/common/libflux/request.h"
+#include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
@@ -138,7 +133,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
+    (void)setenv ("FLUX_CONNECTOR_PATH",
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "opened loop connector");
     if (!h)

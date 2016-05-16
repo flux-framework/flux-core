@@ -7,14 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
-        -DMODULE_PATH=\"$(fluxmoddir)\" \
-        -DCONNECTOR_PATH=\"$(fluxconnectordir)\" \
-	-DEXEC_PATH=\"$(fluxcmddir)\" \
-	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \
-	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
-	-DPYTHON_PATH=\"$(pyexecdir)\" \
-	-DMANDIR=\"$(mandir)\"
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \

@@ -1,6 +1,6 @@
 #include <argz.h>
+#include <flux/core.h>
 
-#include "src/common/libflux/module.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
@@ -8,8 +8,9 @@
 void test_helpers (void)
 {
     char *name, *path;
+    const char *modpath = flux_conf_get ("module_path", CONF_FLAG_INTREE);
 
-    path = xasprintf ("%s/kvs/.libs/kvs.so", MODULE_PATH);
+    path = xasprintf ("%s/kvs/.libs/kvs.so", modpath);
     ok (access (path, F_OK) == 0,
         "built kvs module is located");
     name = flux_modname (path);
@@ -28,10 +29,10 @@ void test_helpers (void)
         "flux_modfind fails with nonexistent directory");
     ok (!flux_modfind (".", "foo"),
         "flux_modfind fails in current directory");
-    ok (!flux_modfind (MODULE_PATH, "foo"),
+    ok (!flux_modfind (modpath, "foo"),
         "flux_modfind fails to find unknown module in moduledir");
 
-    path = xasprintf ("%s/kvs/.libs", MODULE_PATH);
+    path = xasprintf ("%s/kvs/.libs", modpath);
     name = flux_modfind (path, "kvs");
     ok ((name != NULL),
         "flux_modfind finds kvs in flat directory");
@@ -39,13 +40,13 @@ void test_helpers (void)
         free (name);
     free (path);
 
-    name = flux_modfind (MODULE_PATH, "kvs");
+    name = flux_modfind (modpath, "kvs");
     ok ((name != NULL),
         "flux_modfind also finds kvs in moduledir");
     if (name)
         free (name);
 
-    path = xasprintf ("foo:bar:xyz:%s:zzz", MODULE_PATH);
+    path = xasprintf ("foo:bar:xyz:%s:zzz", modpath);
     name = flux_modfind (path, "kvs");
     ok ((name != NULL),
         "flux_modfind also finds kvs in search path");

@@ -1,14 +1,7 @@
 #include <czmq.h>
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/handle.h"
-#include "src/common/libflux/rpc.h"
-#include "src/common/libflux/request.h"
-#include "src/common/libflux/response.h"
-#include "src/common/libflux/reactor.h"
-#include "src/common/libflux/dispatch.h"
+#include <flux/core.h>
 
 #include "src/common/libutil/shortjson.h"
-
 #include "src/common/libtap/tap.h"
 
 /* request nodeid and flags returned in response */
@@ -194,7 +187,8 @@ int main (int argc, char *argv[])
 
     plan (37);
 
-    (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
+    (void)setenv ("FLUX_CONNECTOR_PATH",
+                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
         "opened loop connector");
     if (!h)
