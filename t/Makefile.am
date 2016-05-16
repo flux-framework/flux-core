@@ -63,6 +63,7 @@ TESTS = \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
+	lua/t0004-getattr.t \
 	lua/t0007-alarm.t \
 	lua/t0008-mrpc.t \
 	lua/t0009-sequences.t \
@@ -127,6 +128,7 @@ check_SCRIPTS = \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
+	lua/t0004-getattr.t \
 	lua/t0007-alarm.t \
 	lua/t0008-mrpc.t \
 	lua/t0009-sequences.t \
