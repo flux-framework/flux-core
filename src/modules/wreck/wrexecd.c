@@ -1179,8 +1179,6 @@ int exec_command (struct prog_ctx *ctx, int i)
         lua_stack_call (ctx->lua_stack, "rexecd_task_init");
 
         prog_ctx_setenv  (ctx, "FLUX_URI", getenv ("FLUX_URI"));
-        prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", t->globalid);
-        prog_ctx_setenvf (ctx, "PMI_RANK", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "FLUX_TASK_RANK", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "FLUX_TASK_LOCAL_ID", 1, "%d", i);
 
@@ -1635,8 +1633,6 @@ int exec_commands (struct prog_ctx *ctx)
     prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);
     prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->nodeid);
     prog_ctx_setenvf (ctx, "FLUX_JOB_SIZE",  1, "%d", ctx->total_ntasks);
-    prog_ctx_setenvf (ctx, "MPIRUN_NPROCS", 1, "%d", ctx->total_ntasks);
-    prog_ctx_setenvf (ctx, "PMI_SIZE", 1, "%d", ctx->total_ntasks);
     gtid_list_create (ctx, buf, sizeof (buf));
     prog_ctx_setenvf (ctx, "FLUX_LOCAL_RANKS",  1, "%s", buf);
 

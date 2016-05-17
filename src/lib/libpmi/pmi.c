@@ -205,7 +205,7 @@ int PMI_Init (int *spawned)
     memset (ctx, 0, sizeof (pmi_ctx_t));
     ctx->magic = PMI_CTX_MAGIC;
 
-    ctx->trace = env_getint ("PMI_TRACE", 0);
+    ctx->trace = env_getint ("FLUX_PMI_TRACE", 0);
 
     ctx->size = env_getint ("FLUX_JOB_SIZE", 1);
     ctx->rank = env_getint ("FLUX_TASK_RANK", 0);

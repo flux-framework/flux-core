@@ -554,6 +554,40 @@ static int l_flux_rpc (lua_State *L)
     return (1);
 }
 
+static void push_attr_flags (lua_State *L, int flags)
+{
+    int t;
+    lua_newtable (L);
+    if (flags == 0)
+        return;
+    t = lua_gettop (L);
+    if (flags & FLUX_ATTRFLAG_IMMUTABLE) {
+        lua_pushboolean (L, true);
+        lua_setfield (L, t, "FLUX_ATTRFLAG_IMMUTABLE");
+    }
+    if (flags & FLUX_ATTRFLAG_READONLY) {
+        lua_pushboolean (L, true);
+        lua_setfield (L, t, "FLUX_ATTRFLAG_READONLY");
+    }
+    if (flags & FLUX_ATTRFLAG_ACTIVE) {
+        lua_pushboolean (L, true);
+        lua_setfield (L, t, "FLUX_ATTRFLAG_ACTIVE");
+    }
+}
+
+static int l_flux_getattr (lua_State *L)
+{
+    flux_t f = lua_get_flux (L, 1);
+    int flags;
+    const char *name = luaL_checkstring (L, 2);
+    const char *val = flux_attr_get (f, name, &flags);
+    if (val == NULL)
+        return lua_pusherror (L, strerror (errno));
+    lua_pushstring (L, val);
+    push_attr_flags (L, flags);
+    return (2);
+}
+
 static int l_flux_subscribe (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
@@ -2176,6 +2210,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "recv_event",      l_flux_recv_event },
     { "subscribe",       l_flux_subscribe   },
     { "unsubscribe",     l_flux_unsubscribe },
+    { "getattr",         l_flux_getattr     },
     { "kz_open",         l_flux_kz_open     },
     { "msghandler",      l_msghandler_add    },
     { "kvswatcher",      l_kvswatcher_add    },
