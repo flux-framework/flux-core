@@ -68,6 +68,14 @@ void heartbeat_set_flux (heartbeat_t *hb, flux_t h)
     hb->h = h;
 }
 
+int heartbeat_set_attrs (heartbeat_t *hb, attr_t *attrs)
+{
+    if (attr_add_active_int (attrs, "heartbeat-epoch",
+                             &hb->epoch, FLUX_ATTRFLAG_READONLY) < 0)
+        return -1;
+    return 0;
+}
+
 int heartbeat_set_rate (heartbeat_t *hb, double rate)
 {
     if (rate < min_heartrate || rate > max_heartrate)
