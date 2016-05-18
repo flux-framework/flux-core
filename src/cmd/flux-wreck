@@ -290,11 +290,103 @@ prog:SubCommand {
  end
 }
 
+prog:SubCommand {
+ name = "purge",
+ usage = "[OPTIONS]",
+ options = {
+  { name = "verbose",  char = "v",
+    usage = "Increase verbosity." },
+  { name = "target-size", char = 't', arg = "N",
+    usage = "Specify a target number of lwj entries to keep"
+  },
+  { name = "remove",  char = "R",
+    usage = "Remove all eligible lwj entries." },
+  { name = "max",  char = "m", arg = "N",
+    usage = "Maximum number of entries to target." },
+ },
+ description = "Purge old jobs entries from kvs",
+ handler = function (self, arg)
+    local tt = require 'flux.timer'. new()
+    local verbose = self.opt.v
+    local lwj, err = f:kvsdir ("lwj")
+    if not lwj then
+        self:die ("kvsdir (%s): %s\n", d, err)
+    end
+
+    ---
+    -- Gather LWJ ids from kvs directory into a Lua array
+    --
+    local ids = {}
+    for x in lwj:keys () do
+        if tonumber (x) then table.insert (ids, x) end
+    end
+    if verbose then self:log ("%4.03fs: got lwj list\n", tt:get0()) end
+
+    local total = #ids
+    local target = tonumber (self.opt.t)
+    local max = tonumber (self.opt.m) or math.huge
+
+    -- Without --target-size option, just list current number of lwj entries
+    if not target then
+        self:log ("%d total job entries\n", total)
+    elseif total <= target then
+        -- If current total is less than target, then log and exit
+        self:log ("%d total jobs at or below target size of %d\n",
+                  total, target)
+    else
+        -- Otherwise, we need to purge some entries:
+        --
+        local n = math.min (total - target, max)
+
+        -- Remove the first n ids using lwj-completed directory
+        local r = {}
+        (function() -- anonymous function used for early return
+            local completed = f:kvsdir ("lwj-complete")
+            for hb in completed:keys () do
+                local d = completed [hb]
+                for id in d:keys() do
+                    table.insert (r, id)
+                    if self.opt.R then
+                        f:kvs_unlink ("lwj."..id)
+                        f:kvs_unlink ("lwj-complete."..hb.."."..id)
+                    end
+                    n = n - 1
+                    if n == 0 then return end
+                end
+                if self.opt.R then
+                    f:kvs_unlink ("lwj-complete."..hb)
+                end
+            end
+        end)()
+
+        -- gather ids to remove in hostlist for condensed output:
+        --
+        local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
+        local idstring = tostring (hl):match ("%[(.+)%]")
+
+        if self.opt.R then
+            lwj:commit()
+            if verbose then
+                self:log ("%4.03fs: unlinked %d entries\n", tt:get0(), #hl)
+            end
+        elseif verbose then
+            self:log ("%4.03fs: finished walking %d entries in lwj-complete\n",
+                      tt:get0(), #hl)
+        end
+
+        self:log ("%s %d lwj entries: %s\n",
+                  self.opt.R and "removed" or "would remove", #hl, idstring)
+        if verbose then
+            self:log ("%4.03fs: all done.\n", tt:get0());
+        end
+    end
+ end
+}
+
 
 -- Check for valid connection to flux:
-if not f then die ("Connecting to flux failed: %s\n", err) end
+if not f then prog:die ("Connecting to flux failed: %s\n", err) end
 
 -- Process cmdline, run any subcommand, or exit with failure:
 prog:run (arg)
-
 --  vi: ts=4 sw=4 expandtab
