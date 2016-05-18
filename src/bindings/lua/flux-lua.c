@@ -288,6 +288,21 @@ static int l_flux_kvs_symlink (lua_State *L)
     return (1);
 }
 
+static int l_flux_kvs_unlink (lua_State *L)
+{
+    flux_t f;
+    const char *key;
+    if (!(f = lua_get_flux (L, 1)))
+        return lua_pusherror (L, "flux handle expected");
+    if (!(key = lua_tostring (L, 2)))
+        return lua_pusherror (L, "key expected in arg #2");
+
+    if (kvs_unlink (f, key) < 0)
+        return lua_pusherror (L, strerror (errno));
+    lua_pushboolean (L, true);
+    return (1);
+}
+
 static int l_flux_kvs_type (lua_State *L)
 {
     flux_t f;
@@ -2200,6 +2215,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "kvs_commit",      l_flux_kvs_commit  },
     { "kvs_put",         l_flux_kvs_put     },
     { "kvs_get",         l_flux_kvs_get     },
+    { "kvs_unlink",      l_flux_kvs_unlink  },
 //    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },

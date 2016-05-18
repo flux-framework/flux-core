@@ -212,6 +212,17 @@ static int l_kvsdir_commit (lua_State *L)
     return (1);
 }
 
+static int l_kvsdir_unlink (lua_State *L)
+{
+    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    const char *key = luaL_checkstring (L, 2);
+    if (kvsdir_unlink (d, key) < 0)
+            return lua_pusherror (L, "unlink: %s", strerror (errno));
+    lua_pushboolean (L, true);
+    return (1);
+}
+
+
 static int l_kvsdir_watch (lua_State *L)
 {
     int rc;
@@ -320,6 +331,7 @@ static const struct luaL_Reg kvsdir_methods [] = {
     { "__newindex",      l_kvsdir_newindex },
     { "__tostring",      l_kvsdir_tostring },
     { "commit",          l_kvsdir_commit   },
+    { "unlink",          l_kvsdir_unlink   },
     { "keys",            l_kvsdir_next     },
     { "watch",           l_kvsdir_watch    },
     { "watch_dir",       l_kvsdir_watch_dir},
