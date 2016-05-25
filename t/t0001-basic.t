@@ -139,6 +139,16 @@ test_expect_success 'flux-help command can display manpages for subcommands' '
 	EOF
 	MANPATH=${PWD}/man flux help foo | grep "^FOO(1)"
 '
+test_expect_success 'flux-help command can display manpages for api calls' '
+	PWD=$(pwd) &&
+	mkdir -p man/man3 &&
+	cat <<-EOF > man/man3/flux_foo.3 &&
+	.TH FOO "3" "January 1962" "Foo api call" "Flux Programming Interface"
+	.SH NAME
+	flux_foo \- Call the flux_foo interface
+	EOF
+	MANPATH=${PWD}/man flux help flux_foo | grep "^FOO(3)"
+'
 test_expect_success 'flux-help returns nonzero exit code from man(1)' '
         man notacommand >/dev/null 2>&1
         code=$?
