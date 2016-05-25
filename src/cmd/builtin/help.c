@@ -38,7 +38,16 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
         /* N.B. Flux doc dir already prepended to MANPATH if needed.
          */
 
-        cmd = xasprintf ("man flux-%s %s", topic, topic);
+        /*  If user tried 'flux help flux*' then assume we
+         *   don't need to prepend another flux.
+         *  O/w, assume user is asking for help on a flux command
+         *   so prepend flux-
+         */
+        if (strncmp (topic, "flux", 4) == 0)
+            cmd = xasprintf ("man %s", topic);
+        else
+            cmd = xasprintf ("man flux-%s", topic);
+
         if ((rc = system (cmd)) < 0)
             err_exit ("man");
         else if (WIFEXITED (rc) && ((rc = WEXITSTATUS (rc)) != 0))
