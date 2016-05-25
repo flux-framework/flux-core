@@ -823,9 +823,9 @@ done:
     return uri;
 }
 
-static int child_cb (struct subprocess *p, void *arg)
+static int child_cb (struct subprocess *p)
 {
-    ctx_t *ctx = arg;
+    ctx_t *ctx = subprocess_get_context (p, "ctx");
 
     ctx->exit_code = subprocess_exit_code (p);
     flux_reactor_stop (ctx->reactor);
@@ -854,7 +854,8 @@ static int child_create (ctx_t *ctx, int ac, char **av, const char *workpath)
         argz_stringify (argz, argz_len, ' ');
 
     if (!(p = subprocess_create (ctx->sm))
-            || subprocess_set_callback (p, child_cb, ctx) < 0
+            || subprocess_set_context (p, "ctx", ctx) < 0
+            || subprocess_add_hook (p, SUBPROCESS_COMPLETE, child_cb) < 0
             || subprocess_argv_append (p, shell) < 0
             || (argz && subprocess_argv_append (p, "-c") < 0)
             || (argz && subprocess_argv_append (p, argz) < 0)

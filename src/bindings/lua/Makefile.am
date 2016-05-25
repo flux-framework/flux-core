@@ -18,6 +18,7 @@ nobase_dist_lua_SCRIPTS = \
 	flux/posix.lua \
 	flux/base64.lua \
 	flux/lustache.lua \
+	flux/Subcommander.lua \
 	wreck/io.lua
 
 #  Required because install(1) doesn't seem to preserve

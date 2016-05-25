@@ -48,6 +48,13 @@ kvsdir_test (dir, key, "0",   "string 0 not converted to numeric")
 kvsdir_test (dir, key, "0x1", "string 0x1 not converted to numeric")
 kvsdir_test (dir, key, "00",  "string 00 not converted to numeric")
 
+local r, err = dir:unlink (key)
+is (r, true, "kvsdir: unlink succeeds")
+is (err, nil, "kvsdir: unlink: no error")
+dir:commit()
+local r = dir [key]
+is (r, nil, "unlink: after unlink key doesn't exist")
+
 -- low-level kvs_put testing
 local tests = {
  { val = "foo", msg = "kvs_put: string" },
@@ -113,6 +120,14 @@ is (type(x), "string", "error is a string")
 dir.testkey = "foo"
 kvsdir_test (dir, 'testkey', "foo", "unlink: set known value for key")
 dir.testkey = nil
+kvsdir_test (dir, 'testkey', nil, "unlink: key is now nil")
+
+dir.testkey = "foo"
+kvsdir_test (dir, 'testkey', "foo", "unlink: set known value for key")
+local r, err = f:kvs_unlink ("testkey")
+is (r, true, "kvs_unlink: success")
+is (err, nil, "kvs_unlink: no error")
+f:kvs_commit()
 kvsdir_test (dir, 'testkey', nil, "unlink: key is now nil")
 
 

@@ -45,11 +45,53 @@ exit with the highest exit code of all tasks.
 Send SIGTERM to running job 'jobid'. If '--signal' is used, send signal 'N'
 where 'N' may  be a signal number or name such as 'SIGKILL'.
 
+*timing*::
+List timing information for lwj entries in Flux KVS. This command lists
+four specific intervals in the wreck job lifecycle:
+ 'STARTING'::: Time from LWJ entry creation until the job reaches the
+              "starting" state. The "starting" state is when the first
+              rexec daemon receives the request to launch tasks.
+ 'RUNNING'::: Time from "starting" to "running". The running state is
+             reached when all rexec daemons have forked and executed
+             all tasks.
+ 'COMPLETE'::: Time from "running" to "complete". This is the nominal time
+              that tasks of the job actually ran.
+ 'TOTAL'::: This is the total time from job creation to the "completed" state.
+
+
 *last-jobid*::
 Return the current value of the 'lwj' sequence number, that is the last
 jobid allocated to a submitted wreck job. Other jobs may be started
 between the time the id is obtained and when it is displayed in this
 command, so 'last-jobid' should not be relied upon during real workloads.
+
+*purge* [OPTIONS...]::
+Purge old job entries from Flux KVS. Without any options, the 'purge'
+subcommand will print the current number of entries in the 'lwj.'
+kvs directory. Otherwise, 'flux wreck purge' walks the list of all
+completed jobs in the Flux KVS and selects the oldest (in terms of
+completion time) as candidates for removal. The number of jobs selected
+is dependent on the options below:
+
+--verbose:::
+-v:::
+	Increase verbosity.
+
+--target-size='COUNT':::
+-t 'COUNT':::
+	Set the target number of job entries to keep to 'COUNT'. The number
+	of IDs to remove will be calculated based on target size, number of
+	current job entries, and any maximum set on command line.
+
+--remove:::
+-R:::
+	Perform an unlink of all selected job entries in KVS. This option is
+	only valid if supplied with '--target-size'.
+
+--max=N:::
+-m N:::
+	Set the maximum number of entries to remove on any one run.
+
 
 AUTHOR
 ------

@@ -54,7 +54,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-wreck \
 	flux-exec \
 	flux-topo \
-	flux-ps
+	flux-ps \
+	flux-cron
 
 if HAVE_PYTHON
 dist_fluxcmd_SCRIPTS+= \

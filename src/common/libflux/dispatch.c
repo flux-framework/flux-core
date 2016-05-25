@@ -487,11 +487,12 @@ void flux_msg_handler_start (flux_msg_handler_t *w)
 
 void flux_msg_handler_stop (flux_msg_handler_t *w)
 {
-    struct dispatch *d = w->d;
-
+    if (!w)
+        return;
     assert (w->magic == HANDLER_MAGIC);
     assert (w->destroyed == 0);
     if (w->running == 1) {
+        struct dispatch *d = w->d;
         w->running = 0;
         d->running_count--;
         if (d->running_count == 0)
@@ -524,6 +525,8 @@ static void free_msg_handler (flux_msg_handler_t *w)
 
 void flux_msg_handler_destroy (flux_msg_handler_t *w)
 {
+    if (!w)
+        return;
     assert (w->magic == HANDLER_MAGIC);
     if (!w->destroyed) {
         flux_msg_handler_stop (w);

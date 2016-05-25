@@ -35,7 +35,7 @@
 
 extern char **environ;
 
-static int exit_handler (struct subprocess *p, void *arg)
+static int exit_handler (struct subprocess *p)
 {
     ok (subprocess_exited (p), "exit_handler: subprocess exited");
     ok (subprocess_exit_code (p) == 0, "exit_handler: subprocess exited normally");
@@ -81,7 +81,7 @@ int main (int ac, char **av)
 
     if (!(p = subprocess_create (sm)))
         BAIL_OUT ("Failed to create a subprocess object");
-    ok (subprocess_set_callback (p, exit_handler, NULL) >= 0,
+    ok (subprocess_add_hook (p, SUBPROCESS_COMPLETE, exit_handler) >= 0,
         "set subprocess exit handler");
 
     child_fd = -1;

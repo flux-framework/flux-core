@@ -179,9 +179,9 @@ void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     }
 }
 
-static int child_report (struct subprocess *p, void *arg)
+static int child_report (struct subprocess *p)
 {
-    struct client *cli = arg;
+    struct client *cli = subprocess_get_context (p, "cli");
     pid_t pid = subprocess_pid (p);
     int sig;
 
@@ -204,9 +204,9 @@ static int child_report (struct subprocess *p, void *arg)
     return 0;
 }
 
-static int child_exit (struct subprocess *p, void *arg)
+static int child_exit (struct subprocess *p)
 {
-    struct client *cli = arg;
+    struct client *cli = subprocess_get_context (p, "cli");
     struct context *ctx = cli->ctx;
     int rc = subprocess_exit_code (p);
 
@@ -403,8 +403,9 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
         goto fail;
     cli->buflen = pmi_simple_server_get_maxrequest (ctx->pmi.srv);
     cli->buf = xzmalloc (cli->buflen);
-    subprocess_set_callback (cli->p, child_exit, cli);
-    subprocess_set_status_callback (cli->p, child_report, cli);
+    subprocess_set_context (cli->p, "cli", cli);
+    subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
+    subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
     add_arg (cli->p, "%s", ctx->broker_path);
     add_arg (cli->p, "--boot-method=PMI");
     add_arg (cli->p, "--shared-ipc-namespace");

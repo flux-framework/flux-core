@@ -84,7 +84,7 @@ test_shutdown_t_SOURCES = test/shutdown.c shutdown.c
 test_shutdown_t_CPPFLAGS = $(test_cppflags)
 test_shutdown_t_LDADD = $(test_ldadd)
 
-test_heartbeat_t_SOURCES = test/heartbeat.c heartbeat.c
+test_heartbeat_t_SOURCES = test/heartbeat.c heartbeat.c attr.c
 test_heartbeat_t_CPPFLAGS = $(test_cppflags)
 test_heartbeat_t_LDADD = $(test_ldadd)
 

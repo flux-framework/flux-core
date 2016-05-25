@@ -12,6 +12,7 @@ for rcdir in $all_dirs; do
 done
 shopt -u nullglob
 
+flux module remove -r 0 cron
 flux module remove -r all wrexec
 flux module remove -r all job
 flux module remove -r all mecho

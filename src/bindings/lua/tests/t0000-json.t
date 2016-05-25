@@ -88,7 +88,6 @@ is (j.runtest (1), 1,         "number 1 returns unharmed")
 is (j.runtest (0), 0,         "number 0 returns unharmed")
 is (j.runtest (1.0), 1.0,     "float value returns unharmed")
 
-todo ( "Need to investigate", 1)
 is (j.runtest (1.01), 1.01,   "float value returns unharmed (more precision)")
 
 is (j.runtest (1024000000), 1024000000,

@@ -45,6 +45,7 @@ TESTS = \
 	t0012-content-sqlite.t \
 	t0013-content-sophia.t \
 	t0014-runlevel.t \
+	t0015-cron.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1003-mecho.t \
@@ -108,6 +109,7 @@ check_SCRIPTS = \
 	t0012-content-sqlite.t \
 	t0013-content-sophia.t \
 	t0014-runlevel.t \
+	t0015-cron.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1003-mecho.t \

@@ -627,6 +627,8 @@ int main (int argc, char *argv[])
     /* install heartbeat (including timer on rank 0)
      */
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
+    if (heartbeat_set_attrs (ctx.heartbeat, ctx.attrs) < 0)
+        err_exit ("initializing heartbeat attributes");
     if (heartbeat_start (ctx.heartbeat) < 0)
         err_exit ("heartbeat_start");
     if (ctx.rank == 0 && ctx.verbose)
@@ -1479,11 +1481,10 @@ subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
     return (resp);
 }
 
-static int child_exit_handler (struct subprocess *p, void *arg)
+static int child_exit_handler (struct subprocess *p)
 {
     int n;
-
-    ctx_t *ctx = (ctx_t *) arg;
+    ctx_t *ctx = (ctx_t *) subprocess_get_context (p, "ctx");
     zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p, "zmsg");
     json_object *resp;
 
@@ -1612,7 +1613,8 @@ static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
         while (p) {
             if (pid == subprocess_pid (p)) {
                 errnum = 0;
-                if (subprocess_kill (p, signum) < 0)
+                /* Send signal to entire process group */
+                if (kill (-pid, signum) < 0)
                     errnum = errno;
             }
             p = subprocess_manager_next (ctx->sm);
@@ -1627,6 +1629,13 @@ out:
         json_object_put (response);
     if (request)
         json_object_put (request);
+    return (0);
+}
+
+static int do_setpgrp (struct subprocess *p)
+{
+    if (setpgrp () < 0)
+        fprintf (stderr, "setpgrp: %s", strerror (errno));
     return (0);
 }
 
@@ -1665,8 +1674,9 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     }
 
     p = subprocess_create (ctx->sm);
-    subprocess_set_callback (p, child_exit_handler, ctx);
     subprocess_set_context (p, "ctx", ctx);
+    subprocess_add_hook (p, SUBPROCESS_COMPLETE, child_exit_handler);
+    subprocess_add_hook (p, SUBPROCESS_PRE_EXEC, do_setpgrp);
 
     for (i = 0; i < argc; i++) {
         json_object *ox = json_object_array_get_idx (o, i);
@@ -1746,8 +1756,15 @@ static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
     while (p) {
         char *sender;
         if ((sender = subprocess_sender (p))) {
-            if (strcmp (id, sender) == 0)
-                subprocess_kill (p, SIGKILL);
+            pid_t pid;
+            if ((strcmp (id, sender) == 0)
+               && ((pid = subprocess_pid (p)) > (pid_t) 0)) {
+                /* Kill process group for subprocess p */
+                flux_log (ctx->h, LOG_INFO,
+                          "Terminating PGRP %ld", (unsigned long) pid);
+                if (kill (-pid, SIGKILL) < 0)
+                    flux_log_error (ctx->h, "killpg");
+            }
             free (sender);
         }
         p = subprocess_manager_next (ctx->sm);

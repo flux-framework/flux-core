@@ -88,6 +88,8 @@ struct prog_ctx {
 
     uint32_t noderank;
 
+    int epoch;              /* current heartbeat epoch */
+
     int64_t id;             /* id of this execution */
     int total_ntasks;       /* Total number of tasks in job */
     int nnodes;
@@ -162,11 +164,13 @@ static int archive_lwj (struct prog_ctx *ctx)
 {
     char *from = NULL;
     char *to = NULL;
+    char *link = NULL;
     int rc = -1;
 
     log_msg (ctx, "archiving lwj %lu", ctx->id);
 
     if (asprintf (&to, "lwj.%lu", ctx->id) < 0
+        || asprintf (&link, "lwj-complete.%d.%lu", ctx->epoch, ctx->id) < 0
         || asprintf (&from, "lwj-active.%lu", ctx->id) < 0) {
         flux_log_error (ctx->flux, "archive_lwj: asprintf");
         goto out;
@@ -175,11 +179,18 @@ static int archive_lwj (struct prog_ctx *ctx)
         flux_log_error (ctx->flux, "kvs_move (%s, %s)", from, to);
         goto out;
     }
+    /* Also create a link in lwj-complete.<epoch>.<id> to be used
+     *  to traverse completed jobs ordered by completion time
+     */
+    if (kvs_symlink (ctx->flux, link, to) < 0)
+        flux_log_error (ctx->flux, "kvs_symlink (%s -> %s)", link, to);
+
     if (kvs_commit (ctx->flux) < 0)
         flux_log_error (ctx->flux, "kvs_commit");
 out:
     free (to);
     free (from);
+    free (link);
     return (rc);
 }
 
@@ -834,6 +845,19 @@ int prog_ctx_signal_parent (int fd)
     return (rc);
 }
 
+static int flux_heartbeat_epoch (flux_t h)
+{
+    long int epoch;
+    char *p;
+    const char *val = flux_attr_get (h, "heartbeat-epoch", NULL);
+    if (!val)
+        return 0;
+    epoch = strtol (val, &p, 10);
+    if (*p != '\0' || epoch == LONG_MIN || epoch == LONG_MAX)
+        return 0;
+    return epoch;
+}
+
 int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 {
     const char *lua_pattern;
@@ -882,6 +906,13 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     log_debug (ctx, "initializing from CMB: rank=%d", ctx->noderank);
     if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
         log_fatal (ctx, 1, "Failed to load lwj info");
+
+    /*
+     *  Get current heartbeat-epoch. It will be updated by hb event
+     *   listener locally, but we need initial value in case this job
+     *   exits within one heartbeat.
+     */
+    ctx->epoch = flux_heartbeat_epoch (ctx->flux);
 
     return (0);
 }
@@ -1751,6 +1782,11 @@ void ev_cb (flux_t f, flux_msg_handler_t *mw,
         log_err (ctx, "flux_msg_get_topic: %s", strerror (errno));
         return;
     }
+    if (strcmp (topic, "hb") == 0) {
+        /* ignore mangled hb messages */
+        flux_heartbeat_decode (msg, &ctx->epoch);
+        return;
+    }
     if (flux_msg_get_payload_json (msg, &json_str) < 0) {
         log_err (ctx, "flux_msg_get_payload_json");
         return;
@@ -1759,6 +1795,7 @@ void ev_cb (flux_t f, flux_msg_handler_t *mw,
         log_err (ctx, "json_tokener_parse");
         return;
     }
+
 
     base = strlen (ctx->topic);
     if (strcmp (topic+base, "kill") == 0) {
@@ -1795,6 +1832,10 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
     if (flux_event_subscribe (ctx->flux, ctx->topic) < 0)
         return log_err (ctx, "flux_event_subscribe (%s): %s",
                         ctx->topic, strerror (errno));
+
+    if (flux_event_subscribe (ctx->flux, "hb") < 0)
+        return log_err (ctx, "flux_event_subscribe (hb): %s",
+                        strerror (errno));
 
     for (i = 0; i < ctx->nprocs; i++)
         task_info_io_setup (ctx->task [i]);

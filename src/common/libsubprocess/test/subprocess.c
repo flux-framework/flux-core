@@ -66,7 +66,7 @@ int main (int ac, char **av)
 
     diag ("subprocess accessors tests");
     if (!(p = subprocess_create (sm)))
-        BAIL_OUT ("Failed to create subprocess handle");
+        BAIL_OUT ("Failed to create subprocess handle: %s", strerror (errno));
     ok (p != NULL, "create subprocess handle");
 
     rc = subprocess_set_args (p, 1, args);

@@ -36,12 +36,14 @@
 
 extern char **environ;
 
-static int exit_handler (struct subprocess *p, void *arg)
+static int exit_handler (struct subprocess *p)
 {
     ok (p != NULL, "exit_handler: valid subprocess");
-    ok (arg != NULL, "exit_handler: arg is expected");
+    ok (subprocess_get_context (p, "reactor") != NULL,
+        "exit_handler: context is set for subprocess");
     ok (subprocess_exited (p), "exit_handler: subprocess exited");
     ok (subprocess_exit_code (p) == 0, "exit_handler: subprocess exited normally");
+    diag ("code = %d\n", subprocess_exit_code (p));
     subprocess_destroy (p);
     return (0);
 }
@@ -77,7 +79,8 @@ int main (int ac, char **av)
 
     if (!(p = subprocess_create (sm)))
         BAIL_OUT ("Failed to create a subprocess object");
-    ok (subprocess_set_callback (p, exit_handler, r) >= 0,
+    ok (subprocess_set_context (p, "reactor", r) >= 0, "set subprocess context");
+    ok (subprocess_add_hook (p, SUBPROCESS_COMPLETE, exit_handler) >= 0,
         "set subprocess exit handler");
     ok (subprocess_set_io_callback (p, io_cb) >= 0,
         "set subprocess io callback");
