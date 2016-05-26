@@ -22,6 +22,7 @@ cron_la_SOURCES = \
 	types.c \
 	interval.c \
 	event.c \
+	datetime.c \
 	cron.c
 
 cron_la_LDFLAGS = $(fluxmod_ldflags) -module

@@ -30,6 +30,7 @@
  */
 extern struct cron_entry_ops cron_interval_operations;
 extern struct cron_entry_ops cron_event_operations;
+extern struct cron_entry_ops cron_datetime_operations;
 
 static struct cron_typeinfo {
     const char *name;
@@ -37,6 +38,7 @@ static struct cron_typeinfo {
 } cron_types[] = {
     { "interval", &cron_interval_operations },
     { "event",    &cron_event_operations    },
+    { "datetime", &cron_datetime_operations },
     { NULL, NULL }
 };
 
