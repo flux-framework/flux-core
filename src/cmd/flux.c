@@ -61,14 +61,23 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static const char *default_cmdhelp_pattern (optparse_t *p)
+{
+    int *flags = optparse_get_data (p, "conf_flags");
+    return flux_conf_get ("cmdhelp_pattern", *flags);
+}
+
 void usage (optparse_t *p)
 {
-    const char *help_pattern = getenv ("FLUX_CMDHELP_PATTERN");
-    if (!help_pattern) {
-        int *flags = optparse_get_data (p, "conf_flags");
-        help_pattern = flux_conf_get ("cmdhelp_pattern", *flags);
-    }
-    assert (help_pattern != NULL);
+    char *help_pattern;
+    const char *val = getenv ("FLUX_CMDHELP_PATTERN");
+    const char *def = default_cmdhelp_pattern (p);
+
+    if (asprintf (&help_pattern, "%s%s%s",
+                  def ? def : "",
+                  val ? ":" : "",
+                  val ? val : "") < 0)
+        err_exit ("faled to get command help list!");
 
     optparse_print_usage (p);
     fprintf (stderr, "\n");

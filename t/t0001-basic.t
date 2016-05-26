@@ -112,7 +112,8 @@ test_expect_success 'flux-help command list can be extended' '
 	cat <<-EOF  > help.d/test.json &&
 	[{ "category": "test", "command": "test", "description": "a test" }]
 	EOF
-	cat <<-EOF  > help.expected &&
+	flux help 2>&1 | sed "0,/^$/d" >help.expected &&
+	cat <<-EOF  >>help.expected &&
 	Common commands from flux-test:
 	   test               a test
 	EOF
@@ -121,7 +122,7 @@ test_expect_success 'flux-help command list can be extended' '
 	cat <<-EOF  > help.d/test2.json &&
 	[{ "category": "test2", "command": "test2", "description": "a test two" }]
 	EOF
-	cat <<-EOF  >> help.expected &&
+	cat <<-EOF  >>help.expected &&
 
 	Common commands from flux-test2:
 	   test2              a test two
