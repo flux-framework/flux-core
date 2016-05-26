@@ -238,7 +238,7 @@ out:
     return (zh);
 }
 
-void emit_command_help (const char *pattern, FILE *fp)
+static void emit_command_help_from_pattern (const char *pattern, FILE *fp)
 {
     zhash_t *zh = NULL;
     zlist_t *keys = NULL;
@@ -260,6 +260,17 @@ void emit_command_help (const char *pattern, FILE *fp)
     zlist_destroy (&keys);
     zhash_destroy (&zh);
     return;
+}
+
+void emit_command_help (const char *plist, FILE *fp)
+{
+    int i, count;
+    sds *p;
+    if (!(p = sdssplitlen (plist, strlen (plist), ":", 1, &count)))
+        return;
+    for (i = 0; i < count; i++)
+        emit_command_help_from_pattern (p[i], fp);
+    sdsfreesplitres (p, count);
 }
 
 /*
