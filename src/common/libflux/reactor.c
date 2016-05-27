@@ -597,6 +597,21 @@ void flux_periodic_watcher_reset (flux_watcher_t *w,
     ev_periodic_again (loop, &fp->evp);
 }
 
+double flux_watcher_next_wakeup (flux_watcher_t *w)
+{
+    if (w->signature == PERIODIC_SIG) {
+        struct f_periodic *fp = w->impl;
+        return ((double) ev_periodic_at (&fp->evp));
+    }
+    else if (w->signature == TIMER_SIG) {
+        ev_timer *tw = w->impl;
+        struct ev_loop *loop = w->r->loop;
+        return ((double) (ev_now (loop) +  ev_timer_remaining (loop, tw)));
+    }
+    errno = EINVAL;
+    return  (-1.);
+}
+
 /* Prepare
  */
 #define PREPARE_SIG 1002
