@@ -257,27 +257,26 @@ static void hooks_table_free (struct subprocess *p)
 struct subprocess * subprocess_create (struct subprocess_manager *sm)
 {
     int fds[2];
+    int saved_errno;
     struct subprocess *p = xzmalloc (sizeof (*p));
 
     memset (p, 0, sizeof (*p));
+    p->childfd = -1;
+    p->parentfd = -1;
+    fda_zero (p->child_fda);
+
     p->sm = sm;
     if (!(p->zhash = zhash_new ())
      || hooks_table_init (p) < 0) {
-        subprocess_destroy (p);
         errno = ENOMEM;
-        return (NULL);
+        goto error;
     }
-
-    fda_zero (p->child_fda);
 
     p->pid = (pid_t) -1;
     p->refcount = 1;
 
-    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0) {
-        msg ("socketpair: %m");
-        free (p);
-        return (NULL);
-    }
+    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0)
+        goto error;
     p->childfd = fds[0];
     p->parentfd = fds[1];
 
@@ -286,17 +285,19 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     p->exited = 0;
     p->completed = 0;
 
-    p->zio_in = zio_pipe_writer_create ("stdin", (void *) p);
-    p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p);
-    p->zio_err = zio_pipe_reader_create ("stderr", NULL, (void *) p);
+    if (!(p->zio_in = zio_pipe_writer_create ("stdin", (void *) p)))
+        goto error;
+    if (!(p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p)))
+        goto error;
+    if (!(p->zio_err = zio_pipe_reader_create ("stderr", NULL, (void *) p)))
+        goto error;
 
     zio_set_send_cb (p->zio_out, output_handler);
     zio_set_send_cb (p->zio_err, output_handler);
 
     if (zlist_append (sm->processes, (void *)p) < 0) {
-        subprocess_destroy (p);
         errno = ENOMEM;
-        return (NULL);
+        goto error;
     }
 
     if (sm->reactor) {
@@ -305,6 +306,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
         zio_reactor_attach (p->zio_out, sm->reactor);
     }
     return (p);
+error:
+    saved_errno = errno;
+    subprocess_destroy (p);
+    errno = saved_errno;
+    return (NULL);
 }
 
 void subprocess_destroy (struct subprocess *p)
@@ -318,32 +324,29 @@ static void subprocess_free (struct subprocess *p)
 
     if (p->sm)
         zlist_remove (p->sm->processes, (void *) p);
-    if (p->zhash)
-        zhash_destroy (&p->zhash);
+    zhash_destroy (&p->zhash);
     hooks_table_free (p);
 
     fda_closeall (p->child_fda);
 
-    p->sm = NULL;
-    free (p->argz);
-    p->argz = NULL;
-    p->argz_len = 0;
-    free (p->envz);
-    p->envz = NULL;
-    p->envz_len = 0;
-
-    free (p->cwd);
+    if (p->argz)
+        free (p->argz);
+    if (p->envz)
+        free (p->envz);
+    if (p->cwd)
+        free (p->cwd);
 
     zio_destroy (p->zio_in);
     zio_destroy (p->zio_out);
     zio_destroy (p->zio_err);
 
-    if (p->parentfd > 0)
+    if (p->parentfd != -1)
         close (p->parentfd);
-    if (p->childfd > 0)
+    if (p->childfd != -1)
         close (p->childfd);
     flux_watcher_destroy (p->child_watcher);
 
+    memset (p, 0, sizeof (*p));
     free (p);
 }
 
