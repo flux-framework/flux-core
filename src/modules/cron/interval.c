@@ -95,6 +95,8 @@ static JSON cron_interval_to_json (void *arg)
     JSON o = Jnew ();
     Jadd_double (o, "interval", iv->seconds);
     Jadd_double (o, "after",    iv->after);
+    Jadd_double (o, "next_wakeup",
+                 flux_watcher_next_wakeup (iv->w));
     return (o);
 }
 
