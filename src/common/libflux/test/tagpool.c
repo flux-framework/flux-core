@@ -4,73 +4,102 @@
 
 int main (int argc, char *argv[])
 {
-    tagpool_t t;
+    struct tagpool *t;
     uint32_t tags[256];
     uint32_t avail;
+    uint32_t norm_size, grp_size;
+    int i, j, k, count, duplicates;
 
-    plan (9);
-
-    /* Test the singleton pool.
-     */
+    plan (NO_PLAN);
 
     t = tagpool_create ();
     ok (t != NULL,
         "tagpool_create works");
-    uint32_t bsize = tagpool_getattr (t, TAGPOOL_ATTR_BLOCKSIZE);
-    uint32_t blocks = tagpool_getattr (t, TAGPOOL_ATTR_BLOCKS);
-    uint32_t vebsize = tagpool_getattr (t, TAGPOOL_ATTR_SSIZE);
 
-    avail = tagpool_avail (t);
-    ok (avail == ~(uint32_t)0 - bsize + vebsize + 1,
-        "tagpool_avail returns correct size for empty pool");
+    /* Test regular
+     */
 
-    int i;
+    norm_size = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_SIZE);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
+    ok (avail == norm_size,
+        "regular: all tags available (%d/%d)", avail, norm_size);
+
     for (i = 0; i < 256; i++) {
-        tags[i] = tagpool_alloc (t, 1);
+        tags[i] = tagpool_alloc (t, 0);
         if (tags[i] == FLUX_MATCHTAG_NONE)
             break;
     }
-    ok (tagpool_avail (t) == avail - 256,
-        "tagpool_alloc works 256 times");
+    ok (i == 256,
+        "regular: tagpool_alloc worked %d/256 times", i);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
+    ok (avail == norm_size - 256,
+        "regular: pool depleted by 256 (%d)", norm_size - avail);
 
-    int duplicates = 0;
-    int j, k;
+    duplicates = 0;
     for (j = 0; j < i; j++) {
         for (k = j + 1; k < i; k++)
             if (tags[j] == tags[k])
                 duplicates++;
     }
     ok (duplicates == 0,
-        "allocated tags are unique");
+        "regular: allocated tags contain no duplicates (%d)", duplicates);
 
     while (--i >= 0)
-        tagpool_free (t, tags[i], 1);
-    ok (tagpool_avail (t) == avail,
-        "tagpool_free works");
-
-    int count = 0;
-    while (tagpool_alloc (t, 1) != FLUX_MATCHTAG_NONE)
-        count++;
-    ok (count == vebsize,
-        "tagpool_alloc returns FLUX_MATCHTAG_NONE when singleton pool exhausted");
-    tagpool_destroy (t);
-
-    /* Test the block pool
-     */
-
-    t = tagpool_create ();
-    ok (t != NULL,
-        "tagpool_create works");
-
-    ok (tagpool_alloc (t, bsize + 1) == FLUX_MATCHTAG_NONE,
-        "tagpool_alloc returns FLUX_MATCHTAG_NONE when block is too big");
+        tagpool_free (t, tags[i]);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
+    ok (avail == norm_size,
+        "regular: tagpool_free restored all to pool");
 
     count = 0;
-    while (tagpool_alloc (t, 42) != FLUX_MATCHTAG_NONE)
+    while (tagpool_alloc (t, 0) != FLUX_MATCHTAG_NONE)
         count++;
-    ok (count == blocks,
-        "tagpool_alloc returns FLUX_MATCHTAG_NONE when block pool exhausted");
+    ok (count == norm_size,
+        "regular: tagpool_alloc returns FLUX_MATCHTAG_NONE eventually (%d)", count);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
+    ok (avail == 0,
+        "regular: pool is exhausted");
 
+    /* Test groups
+     */
+
+    grp_size = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_SIZE);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL);
+    ok (avail == grp_size,
+        "group: all tags available (%d/%d)", avail, grp_size);
+
+    for (i = 0; i < 256; i++) {
+        tags[i] = tagpool_alloc (t, TAGPOOL_FLAG_GROUP);
+        if (tags[i] == FLUX_MATCHTAG_NONE)
+            break;
+    }
+    ok (i == 256,
+        "group: tagpool_alloc worked 256 times (%d)", i);
+    ok (tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL) == grp_size - 256,
+        "group: pool depleted by 256 (%d)", grp_size - avail);
+
+    duplicates = 0;
+    for (j = 0; j < i; j++) {
+        for (k = j + 1; k < i; k++)
+            if (tags[j] == tags[k])
+                duplicates++;
+    }
+    ok (duplicates == 0,
+        "group: allocated tags contain no duplicates (%d)", duplicates);
+
+    while (--i >= 0)
+        tagpool_free (t, tags[i]);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL);
+    ok (avail == grp_size,
+        "group: tagpool_free restored all to pool");
+
+    count = 0;
+    while (tagpool_alloc (t, TAGPOOL_FLAG_GROUP) != FLUX_MATCHTAG_NONE)
+        count++;
+    ok (count == grp_size,
+        "group: tagpool_alloc returns FLUX_MATCHTAG_NONE eventually (%d)", count);
+    avail = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL);
+    ok (avail == 0,
+        "group: pool is exhausted");
     tagpool_destroy (t);
 
     done_testing ();
