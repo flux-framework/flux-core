@@ -84,7 +84,8 @@ TESTS = test_nodeset.t \
 	test_sha1.t \
 	test_popen2.t \
 	test_kary.t \
-	test_approxidate.t
+	test_approxidate.t \
+	test_cronodate.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -147,3 +148,7 @@ test_popen2_t_LDADD = $(test_ldadd)
 test_kary_t_SOURCES = test/kary.c
 test_kary_t_CPPFLAGS = $(test_cppflags)
 test_kary_t_LDADD = $(test_ldadd)
+
+test_cronodate_t_SOURCES = test/cronodate.c
+test_cronodate_t_CPPFLAGS = $(test_cppflags)
+test_cronodate_t_LDADD = $(test_ldadd)
