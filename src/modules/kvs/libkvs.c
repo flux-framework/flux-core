@@ -613,7 +613,7 @@ static void destroy_watcher (void *arg)
 {
     kvs_watcher_t *wp = arg;
     free (wp->key);
-    flux_matchtag_free (wp->h, wp->matchtag, 1);
+    flux_matchtag_free (wp->h, wp->matchtag);
     free (wp);
 }
 
@@ -776,7 +776,7 @@ done:
 static int watch_rpc (flux_t h, const char *key, JSON *val,
                       bool once, bool directory, uint32_t *matchtag)
 {
-    struct flux_match match = { .typemask = FLUX_MSGTYPE_RESPONSE, .bsize = 0,
+    struct flux_match match = { .typemask = FLUX_MSGTYPE_RESPONSE,
                                 .topic_glob = NULL };
     JSON in = NULL;
     JSON out = NULL;
@@ -789,7 +789,7 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
     /* Send the request.
      */
     assert (once || matchtag != NULL);
-    match.matchtag = flux_matchtag_alloc (h, 1);
+    match.matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
     if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
@@ -822,7 +822,7 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
 done:
     if (match.matchtag != FLUX_MATCHTAG_NONE) {
         if (!matchtag || ret == -1)
-            flux_matchtag_free (h, match.matchtag, 1);
+            flux_matchtag_free (h, match.matchtag);
     }
     Jput (in);
     Jput (out);
