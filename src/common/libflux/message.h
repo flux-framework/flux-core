@@ -26,33 +26,28 @@ enum {
 
 struct flux_match {
     int typemask;           /* bitmask of matching message types (or 0) */
-    uint32_t matchtag;      /* matchtag block begin (or FLUX_MATCHTAG_NONE) */
-    int bsize;              /* size of matchtag block (or 0) */
+    uint32_t matchtag;      /* matchtag (or FLUX_MATCHTAG_NONE) */
     char *topic_glob;       /* glob matching topic string (or NULL) */
 };
 
 #define FLUX_MATCH_ANY (struct flux_match){ \
     .typemask = FLUX_MSGTYPE_ANY, \
     .matchtag = FLUX_MATCHTAG_NONE, \
-    .bsize = 0, \
     .topic_glob = NULL, \
 }
 #define FLUX_MATCH_EVENT (struct flux_match){ \
     .typemask = FLUX_MSGTYPE_EVENT, \
     .matchtag = FLUX_MATCHTAG_NONE, \
-    .bsize = 0, \
     .topic_glob = NULL, \
 }
 #define FLUX_MATCH_REQUEST (struct flux_match){ \
     .typemask = FLUX_MSGTYPE_REQUEST, \
     .matchtag = FLUX_MATCHTAG_NONE, \
-    .bsize = 0, \
     .topic_glob = NULL, \
 }
 #define FLUX_MATCH_RESPONSE (struct flux_match){ \
     .typemask = FLUX_MSGTYPE_RESPONSE, \
     .matchtag = FLUX_MATCHTAG_NONE, \
-    .bsize = 0, \
     .topic_glob = NULL, \
 }
 
@@ -178,6 +173,8 @@ int flux_msg_get_status (const flux_msg_t *msg, int *status);
 /* Get/set/compare match tag (request/response only)
  */
 #define FLUX_MATCHTAG_NONE (0)
+#define FLUX_MATCHTAG_GROUP_SHIFT (20)
+#define FLUX_MATCHTAG_GROUP_MASK (0xfff00000)
 int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t matchtag);
 int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag);
 bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag);
