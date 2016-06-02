@@ -83,14 +83,12 @@ class Flux(Wrapper):
              type_mask=flux.FLUX_MSGTYPE_ANY,
              match_tag=flux.FLUX_MATCHTAG_NONE,
              topic_glob=None,
-             bsize=0,
              flags=0):
         """ Receive a message, returns a flux.Message containing the result or None """
         match = ffi.new('struct flux_match *', {
             'typemask': type_mask,
             'matchtag': match_tag,
             'topic_glob': topic_glob if topic_glob is not None else ffi.NULL,
-            'bsize': bsize,
         })
         handle = self.flux_recv(match[0], flags)
         if handle is not None:
@@ -132,8 +130,7 @@ class Flux(Wrapper):
                            type_mask=lib.FLUX_MSGTYPE_ANY,
                            topic_glob='*',
                            args=None,
-                           match_tag=flux.FLUX_MATCHTAG_NONE,
-                           bsize=0):
+                           match_tag=flux.FLUX_MATCHTAG_NONE):
         return MessageWatcher(self, type_mask, callback, topic_glob, match_tag,
                               bsize, args)
 

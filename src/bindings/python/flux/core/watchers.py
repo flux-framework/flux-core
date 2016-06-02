@@ -51,7 +51,6 @@ class MessageWatcher(Watcher):
     def __init__(self, flux_handle, type_mask, callback,
                  topic_glob='*',
                  match_tag=flux.FLUX_MATCHTAG_NONE,
-                 bsize=0,
                  args=None):
         self.handle = None
         self.fh = flux_handle
@@ -62,7 +61,6 @@ class MessageWatcher(Watcher):
         match = ffi.new('struct flux_match *', {
             'typemask': type_mask,
             'matchtag': match_tag,
-            'bsize': bsize,
             'topic_glob': c_topic_glob,
         })
         self.handle = raw.flux_msg_handler_create(self.fh.handle, match[0],
