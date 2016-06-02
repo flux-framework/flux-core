@@ -355,7 +355,9 @@ int cron_task_run (cron_task_t *t,
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    t->match.matchtag = flux_matchtag_alloc (h, 1);
+    t->match.matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
+    if (t->match.matchtag == FLUX_MATCHTAG_NONE)
+        return -1;
     t->match.topic_glob = "cmb.exec";
     t->mh = flux_msg_handler_create (h, t->match, exec_handler, t);
     if (!t->mh)
