@@ -66,7 +66,9 @@ libutil_la_SOURCES = \
 	environment.h \
 	environment.c \
 	kary.h \
-	kary.c
+	kary.c \
+	approxidate.h \
+	approxidate.c
 
 EXTRA_DIST = veb_mach.c
 
