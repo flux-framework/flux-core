@@ -211,6 +211,56 @@ program:SubCommand {
  end
 }
 
+program:SubCommand {
+ name = "tab",
+ description = "Schedule cron jobs using crontab(5) format",
+ usage = "FILE",
+ options = {
+    { name = "options", char = "o", arg = "OPTS",
+      usage = "Comma separated list of key=value options to set in request"
+    },
+ },
+ handler = function (self, arg)
+    local fp = io.stdin
+    local file = table.remove (arg, 1)
+
+    if #arg == 1 and arg[1] ~= "-" then
+        local fp, err = io.open (arg[1], "r")
+        if not fp then self:die (err) end
+    end
+
+    local function parse_crontab_line (line)
+        local s = line:match ("^(.+)#.*$") or line -- remove comments
+        local min, hr, dom, mon, dow, command =
+         s:match ("%s*(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(.+)")
+        if not min or not hr or not dom or
+           not mon or not dow or not command then
+            return nil
+        end
+        return {
+            second = 0,
+            minute = min,
+            hour = hr,
+            mday = dom,
+            month = mon,
+            weekday = dow,
+        }, command
+    end
+
+    for line in fp:lines () do
+        local args, command = parse_crontab_line (line)
+        if not args then
+            self:die ("Failed to process crontab line: %s", line)
+        end
+        local resp, err = self:request ("datetime", args, { command })
+        if not resp then self:die (err) end
+
+        self:log ("cron-%d created\n", resp.id)
+    end
+ end
+}
+
+
 --
 --  Convert date in Unix seconds (floating point) to a standard
 --   datetime string
