@@ -128,7 +128,7 @@ function Command:request (type, typeargs, arg)
         type = type,
         args = typeargs,
         command = command,
-        name = self.opt.N or arg[1],
+        name = self.opt.N or command:match("%S+"),
         ["repeat"] = self.opt.c
     }
     -- Process comma-separated list of options to add undocumented
