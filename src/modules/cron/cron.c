@@ -676,10 +676,7 @@ static void cron_create_handler (flux_t h, flux_msg_handler_t *w,
     zlist_append (ctx->entries, e);
 
     rc = 0;
-    out = Jnew ();
-    Jadd_int64 (out, "id", e->id);
-    Jadd_str (out, "name", e->name);
-
+    out = cron_entry_to_json (e);
 done:
     if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
                               rc < 0 ? NULL : Jtostr (out)) < 0)
