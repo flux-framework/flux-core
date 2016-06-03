@@ -254,8 +254,10 @@ program:SubCommand {
         end
         local resp, err = self:request ("datetime", args, { command })
         if not resp then self:die (err) end
-
-        self:log ("cron-%d created\n", resp.id)
+        local next_wakeup = resp.typedata.next_wakeup
+        local n = next_wakeup - now ()
+        self:log ("cron-%d created: scheduled in %.3fs at %s\n",
+                  resp.id, n, os.date ("%c", next_wakeup))
     end
  end
 }
