@@ -145,4 +145,14 @@ test_expect_success 'rank 0 cache is all valid' '
 	test $VALID -eq $TOTAL
 '
 
+# Write 8192 blobs, allowing 1024 requests to be outstanding
+test_expect_success 'store 8K blobs from rank 0 using async RPC' '
+	flux content spam 8192 1024
+'
+
+# Write 1024 blobs per rank
+test_expect_success 'store 1K blobs from all ranks using async RPC' '
+	flux exec flux content spam 1024 256
+'
+
 test_done
