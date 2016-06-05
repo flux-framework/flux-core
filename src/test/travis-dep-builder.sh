@@ -12,8 +12,8 @@ cachedir=$HOME/local/.cache
 downloads="\
 https://github.com/dun/munge/archive/munge-0.5.11.tar.gz \
 https://github.com/jedisct1/libsodium/releases/download/1.0.10/libsodium-1.0.10.tar.gz \
-http://download.zeromq.org/zeromq-4.0.4.tar.gz \
-http://download.zeromq.org/czmq-3.0.2.tar.gz \
+https://github.com/zeromq/zeromq4-1/releases/download/v4.1.4/zeromq-4.1.4.tar.gz \
+https://github.com/zeromq/czmq/archive/v3.0.2.tar.gz \
 https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz \
 http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
 http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz \
@@ -145,6 +145,7 @@ for pkg in $downloads; do
       cd ${name} &&
       curl -L -O --insecure ${pkg} || die "Failed to download ${pkg}"
       tar --strip-components=1 -xf *.tar.gz || die "Failed to un-tar ${name}"
+      test -x configure || ./autogen.sh
       test -x configure && CC=gcc ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
                   ${extra_configure_opts[$name]} || : &&
