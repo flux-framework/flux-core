@@ -24,6 +24,17 @@ declare -A extra_configure_opts=(\
 ["mpich-3.1.4"]="--disable-fortran --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
 )
 
+checkouts="\
+https://github.com/wolfcw/libfaketime.git"
+
+declare -A checkout_sha1=(\
+["libfaketime"]="b68f2820c4091075fbc205965ec6976f6d241aaa"
+)
+
+declare -A extra_make_opts=(\
+["libfaketime"]="LIBDIRNAME=/lib"
+)
+
 #
 #  Python pip packages
 #
@@ -133,6 +144,27 @@ done
 # hack for 'make install' targets that force installation to
 #  /lib/systemd if $prefix/lib/systemd/system doesn't exist
 mkdir -p ${prefix}/lib/systemd/system
+
+for url in $checkouts; do
+    name=$(basename ${url} .git)
+    if check_cache "$name"; then
+       say "Using cached version of ${name}"
+       continue
+    fi
+    git clone ${url} ${name} || die "Failed to clone ${url}"
+    (
+      cd ${name} || die "cd failed"
+      if test -n "${checkout_sha1[$name]}"; then
+        git checkout ${checkout_sha1[$name]}
+      fi
+      test -x configure && CC=gcc ./configure --prefix=${prefix} \
+                  --sysconfdir=${prefix}/etc \
+                  ${extra_configure_opts[$name]} || : &&
+      make PREFIX=${prefix} ${extra_make_opts[$name]} &&
+      make PREFIX=${prefix} ${extra_make_opts[$name]} install
+    ) || die "Failed to build and install $name"
+    add_cache "$name"
+done
 
 for pkg in $downloads; do
     name=$(basename ${pkg} .tar.gz)
