@@ -3,20 +3,22 @@
 
 #include <stdint.h>
 
-typedef struct tagpool_struct *tagpool_t;
+enum {
+    TAGPOOL_FLAG_GROUP = 1,
+};
 
-tagpool_t tagpool_create (void);
-void tagpool_destroy (tagpool_t t);
-uint32_t tagpool_alloc (tagpool_t t, int len);
-void tagpool_free (tagpool_t t, uint32_t matchtag, int len);
-uint32_t tagpool_avail (tagpool_t t);
+struct tagpool *tagpool_create (void);
+void tagpool_destroy (struct tagpool *t);
+uint32_t tagpool_alloc (struct tagpool *t, int flags);
+void tagpool_free (struct tagpool *t, uint32_t matchtag);
 
 enum {
-    TAGPOOL_ATTR_BLOCKS,
-    TAGPOOL_ATTR_BLOCKSIZE,
-    TAGPOOL_ATTR_SSIZE,
+    TAGPOOL_ATTR_REGULAR_SIZE,
+    TAGPOOL_ATTR_REGULAR_AVAIL,
+    TAGPOOL_ATTR_GROUP_SIZE,
+    TAGPOOL_ATTR_GROUP_AVAIL,
 };
-uint32_t tagpool_getattr (tagpool_t, int attr);
+uint32_t tagpool_getattr (struct tagpool *t, int attr);
 
 
 #endif /* _FLUX_CORE_TAGPOOL_H */

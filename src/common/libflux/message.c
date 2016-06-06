@@ -500,10 +500,16 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
 
 bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
 {
-    uint32_t t;
-    if (flux_msg_get_matchtag (msg, &t) < 0)
+    uint32_t tag, matchgroup;
+
+    if (flux_msg_get_route_count (msg) > 0)
+        return false; /* don't match in foreign matchtag domain */
+    if (flux_msg_get_matchtag (msg, &tag) < 0)
         return false;
-    if (t != matchtag)
+    matchgroup = matchtag>>FLUX_MATCHTAG_GROUP_SHIFT;
+    if (matchgroup > 0 && (tag>>FLUX_MATCHTAG_GROUP_SHIFT) != matchgroup)
+        return false;
+    if (matchgroup == 0 && tag != matchtag)
         return false;
     return true;
 }
@@ -525,15 +531,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
             return false;
     }
     if (match.matchtag != FLUX_MATCHTAG_NONE) {
-        uint32_t matchtag;
-        uint32_t lo = match.matchtag;
-        uint32_t hi = match.bsize > 1 ? match.matchtag + match.bsize - 1
-                                      : match.matchtag;
-        if (flux_msg_get_route_count (msg) > 0)
-            return false; /* don't match in foreign matchtag domain */
-        if (flux_msg_get_matchtag (msg, &matchtag) < 0)
-            return false;
-        if (matchtag < lo || matchtag > hi)
+        if (!flux_msg_cmp_matchtag (msg, match.matchtag))
             return false;
     }
     if (match.topic_glob && strlen (match.topic_glob) > 0

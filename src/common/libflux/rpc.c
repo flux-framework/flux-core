@@ -45,11 +45,11 @@ struct flux_rpc_struct {
     flux_then_f then_cb;
     void *then_arg;
     flux_msg_handler_t *w;
-    uint32_t *nodemap;          /* nodeid indexed by matchtag */
+    uint32_t nodeid;
     flux_msg_t *rx_msg;
     flux_msg_t *rx_msg_consumed;
     int rx_count;
-    bool oneway;
+    int rx_expected;
     void *aux;
     flux_free_f aux_destroy;
     const char *type;
@@ -74,12 +74,10 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
              * protocol, we simply leak them.  See issue #212.
              */
             if (flux_rpc_completed (rpc))
-                flux_matchtag_free (rpc->h, rpc->m.matchtag, rpc->m.bsize);
+                flux_matchtag_free (rpc->h, rpc->m.matchtag);
         }
         flux_msg_destroy (rpc->rx_msg);
         flux_msg_destroy (rpc->rx_msg_consumed);
-        if (rpc->nodemap)
-            free (rpc->nodemap);
         if (rpc->aux && rpc->aux_destroy)
             rpc->aux_destroy (rpc->aux);
         free (rpc);
@@ -93,42 +91,54 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
     errno = saved_errno;
 }
 
-static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
+static flux_rpc_t *rpc_create (flux_t h, int rx_expected)
 {
     flux_rpc_t *rpc = xzmalloc (sizeof (*rpc));
-    if ((flags & FLUX_RPC_NORESPONSE)) {
-        rpc->oneway = true;
+    int flags = 0;
+
+    if (rx_expected == 0) {
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
     } else {
-        rpc->nodemap = xzmalloc (sizeof (rpc->nodemap[0]) * count);
-        rpc->m.matchtag = flux_matchtag_alloc (h, count);
+        if (rx_expected != 1)
+            flags |= FLUX_MATCHTAG_GROUP;
+        rpc->m.matchtag = flux_matchtag_alloc (h, flags);
         if (rpc->m.matchtag == FLUX_MATCHTAG_NONE) {
             flux_rpc_destroy (rpc);
             return NULL;
         }
     }
-    rpc->m.bsize = count;
+    rpc->rx_expected = rx_expected;
     rpc->m.typemask = FLUX_MSGTYPE_RESPONSE;
     rpc->h = h;
     rpc->usecount = 1;
+    rpc->nodeid = FLUX_NODEID_ANY;
     return rpc;
 }
 
-static uint32_t lookup_nodeid (flux_rpc_t *rpc, uint32_t matchtag)
-{
-    int ix = matchtag - rpc->m.matchtag;
-    if (ix < 0 || ix >= rpc->m.bsize)
-        return FLUX_NODEID_ANY;
-    return rpc->nodemap[ix];
-}
-
-static int rpc_request_prepare (flux_rpc_t *rpc, int n, flux_msg_t *msg,
+static int rpc_request_prepare (flux_rpc_t *rpc, flux_msg_t *msg,
                                 uint32_t nodeid)
 {
     int flags = 0;
     int rc = -1;
+    uint32_t matchtag = rpc->m.matchtag & ~FLUX_MATCHTAG_GROUP_MASK;
+    uint32_t matchgrp = rpc->m.matchtag & FLUX_MATCHTAG_GROUP_MASK;
 
-    if (flux_msg_set_matchtag (msg, rpc->m.matchtag + n) < 0)
+    /* We need a way to get the nodeid out of a response for flux_rpc_get().
+     * For group rpc, use the lower matchtag bits to stash the nodeid
+     * in the request, and it will come back in the response.
+     * For singleton rpc, stash destination nodeid in rpc->nodeid.
+     * TODO-scalability: If nodeids exceed 1<<20, we may need to use a seq#
+     * in lower matchtag bits and stash a mapping array inthe rpc object.
+     */
+    if (matchgrp > 0) {
+        if ((nodeid & FLUX_MATCHTAG_GROUP_MASK) != 0) {
+            errno = ERANGE;
+            goto done;
+        }
+        matchtag = matchgrp | nodeid;
+    } else
+        rpc->nodeid = nodeid;
+    if (flux_msg_set_matchtag (msg, matchtag) < 0)
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
@@ -142,7 +152,7 @@ done:
     return rc;
 }
 
-static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
+static int rpc_request_send (flux_rpc_t *rpc, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
     flux_msg_t *msg;
@@ -150,7 +160,7 @@ static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
 
     if (!(msg = flux_request_encode (topic, json_str)))
         goto done;
-    if (rpc_request_prepare (rpc, n, msg, nodeid) < 0)
+    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
         goto done;
     if (flux_send (rpc->h, msg, 0) < 0)
         goto done;
@@ -160,7 +170,7 @@ done:
     return rc;
 }
 
-static int rpc_request_send_raw (flux_rpc_t *rpc, int n, const char *topic,
+static int rpc_request_send_raw (flux_rpc_t *rpc, const char *topic,
                                  const void *data, int len, uint32_t nodeid)
 {
     flux_msg_t *msg;
@@ -168,7 +178,7 @@ static int rpc_request_send_raw (flux_rpc_t *rpc, int n, const char *topic,
 
     if (!(msg = flux_request_encode_raw (topic, data, len)))
         goto done;
-    if (rpc_request_prepare (rpc, n, msg, nodeid) < 0)
+    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
         goto done;
     if (flux_send (rpc->h, msg, 0) < 0)
         goto done;
@@ -180,7 +190,7 @@ done:
 
 bool flux_rpc_check (flux_rpc_t *rpc)
 {
-    if (rpc->oneway)
+    if (rpc->rx_count >= rpc->rx_expected)
         return false;
     if (rpc->rx_msg || (rpc->rx_msg = flux_recv (rpc->h, rpc->m,
                                                  FLUX_O_NONBLOCK)))
@@ -189,11 +199,24 @@ bool flux_rpc_check (flux_rpc_t *rpc)
     return false;
 }
 
+static int get_rx_nodeid (flux_rpc_t *rpc, const flux_msg_t *msg,
+                          uint32_t *nodeid)
+{
+    uint32_t tag;
+    if (flux_msg_get_matchtag (msg, &tag) < 0)
+        return -1;
+    if ((tag & FLUX_MATCHTAG_GROUP_MASK) > 0)
+        *nodeid = tag & ~FLUX_MATCHTAG_GROUP_MASK;
+    else
+        *nodeid = rpc->nodeid;
+    return 0;
+}
+
 static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
 {
     int rc = -1;
 
-    if (rpc->oneway) {
+    if (rpc->rx_count >= rpc->rx_expected) {
         errno = EINVAL;
         goto done;
     }
@@ -203,12 +226,8 @@ static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
     rpc->rx_msg_consumed = rpc->rx_msg;
     rpc->rx_msg = NULL;
     rpc->rx_count++;
-    if (nodeid) {
-        uint32_t matchtag;
-        if (flux_msg_get_matchtag (rpc->rx_msg_consumed, &matchtag) < 0)
-            goto done;
-        *nodeid = lookup_nodeid (rpc, matchtag);
-    }
+    if (nodeid && get_rx_nodeid (rpc, rpc->rx_msg_consumed, nodeid) < 0)
+        goto done;
     rc = 0;
 done:
     return rc;
@@ -276,7 +295,7 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
 {
     int rc = -1;
 
-    if (rpc->oneway) {
+    if (rpc->rx_count >= rpc->rx_expected) {
         errno = EINVAL;
         goto done;
     }
@@ -304,8 +323,9 @@ done:
 
 bool flux_rpc_completed (flux_rpc_t *rpc)
 {
-    if (rpc->oneway || rpc->rx_count == rpc->m.bsize
-                    || flux_fatality (rpc->h))
+    if (flux_fatality (rpc->h))
+        return true;
+    if (rpc->rx_count >= rpc->rx_expected)
         return true;
     return false;
 }
@@ -314,13 +334,14 @@ flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
                       uint32_t nodeid, int flags)
 {
     flux_rpc_t *rpc;
+    int rx_expected = 1;
 
-    if (!(rpc = rpc_create (h, flags, 1)))
+    if ((flags & FLUX_RPC_NORESPONSE))
+        rx_expected = 0;
+    if (!(rpc = rpc_create (h, rx_expected)))
         goto error;
-    if (rpc_request_send (rpc, 0, topic, json_str, nodeid) < 0)
+    if (rpc_request_send (rpc, topic, json_str, nodeid) < 0)
         goto error;
-    if (!rpc->oneway)
-        rpc->nodemap[0] = nodeid;
     return rpc;
 error:
     flux_rpc_destroy (rpc);
@@ -332,13 +353,14 @@ flux_rpc_t *flux_rpc_raw (flux_t h, const char *topic,
                           uint32_t nodeid, int flags)
 {
     flux_rpc_t *rpc;
+    int rx_expected = 1;
 
-    if (!(rpc = rpc_create (h, flags, 1)))
+    if ((flags & FLUX_RPC_NORESPONSE))
+        rx_expected = 0;
+    if (!(rpc = rpc_create (h, rx_expected)))
         goto error;
-    if (rpc_request_send_raw (rpc, 0, topic, data, len, nodeid) < 0)
+    if (rpc_request_send_raw (rpc, topic, data, len, nodeid) < 0)
         goto error;
-    if (!rpc->oneway)
-        rpc->nodemap[0] = nodeid;
     return rpc;
 error:
     flux_rpc_destroy (rpc);
@@ -353,6 +375,7 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
     flux_rpc_t *rpc = NULL;
     int i;
     uint32_t count;
+    int rx_expected;
 
     if (!topic || !nodeset) {
         errno = EINVAL;
@@ -370,17 +393,18 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
         errno = EINVAL;
         goto error;
     }
-    if (!(rpc = rpc_create (h, flags, count)))
+    rx_expected = count;
+    if ((flags & FLUX_RPC_NORESPONSE))
+        rx_expected = 0;
+    if (!(rpc = rpc_create (h, rx_expected)))
         goto error;
     if (!(itr = nodeset_iterator_create (ns)))
         goto error;
     for (i = 0; i < count; i++) {
         uint32_t nodeid = nodeset_next (itr);
         assert (nodeid != NODESET_EOF);
-        if (rpc_request_send (rpc, i, topic, json_str, nodeid) < 0)
+        if (rpc_request_send (rpc, topic, json_str, nodeid) < 0)
             goto error;
-        if (!rpc->oneway)
-            rpc->nodemap[i] = nodeid;
     }
     nodeset_iterator_destroy (itr);
     return rpc;

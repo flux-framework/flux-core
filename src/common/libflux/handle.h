@@ -45,6 +45,12 @@ enum {
     FLUX_POLLERR = 4,
 };
 
+/* Flags for flux_matchtag_alloc()
+ */
+enum {
+    FLUX_MATCHTAG_GROUP = 1,
+};
+
 /* Options for flux_setopt().
  * (Connectors may define custom option names)
  */
@@ -102,12 +108,12 @@ void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
 int flux_flags_get (flux_t h);
 
-/* Alloc/free a matchtag block for matched requests.
+/* Alloc/free matchtag for matched request/response.
  * This is mainly used internally by the rpc code.
  */
-uint32_t flux_matchtag_alloc (flux_t h, int size);
-void flux_matchtag_free (flux_t h, uint32_t t, int size);
-uint32_t flux_matchtag_avail (flux_t h);
+uint32_t flux_matchtag_alloc (flux_t h, int flags);
+void flux_matchtag_free (flux_t h, uint32_t matchtag);
+uint32_t flux_matchtag_avail (flux_t h, int flags);
 
 /* Send a message
  * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)

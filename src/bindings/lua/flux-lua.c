@@ -469,7 +469,9 @@ static int l_flux_send (lua_State *L)
     if (nargs >= 3)
         nodeid = lua_tointeger (L, 4);
 
-    matchtag = flux_matchtag_alloc (f, 1);
+    matchtag = flux_matchtag_alloc (f, 0);
+    if (matchtag == FLUX_MATCHTAG_NONE)
+        return lua_pusherror (L, strerror (errno));
 
     rc = flux_json_request (f, nodeid, matchtag, tag, o);
     json_object_put (o);
@@ -490,7 +492,6 @@ static int l_flux_recv (lua_State *L)
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
         .topic_glob = NULL,
     };
 
@@ -667,7 +668,6 @@ static int l_flux_recv_event (lua_State *L)
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_EVENT,
         .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
         .topic_glob = NULL,
     };
     zmsg_t *zmsg = NULL;
@@ -1050,7 +1050,6 @@ static int l_flux_recvmsg (lua_State *L)
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
         .topic_glob = NULL,
     };
 

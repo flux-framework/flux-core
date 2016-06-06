@@ -393,14 +393,14 @@ void test_unwatchloop (int argc, char **argv)
     key = argv[0];
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
-    uint32_t avail = flux_matchtag_avail (h);
+    uint32_t avail = flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
     for (i = 0; i < 1000; i++) {
         if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
             err_exit ("kvs_watch_int[%d] %s", i, key);
         if (kvs_unwatch (h, key) < 0)
             err_exit ("kvs_unwatch[%d] %s", i, key);
     }
-    uint32_t leaked = avail - flux_matchtag_avail (h);
+    uint32_t leaked = avail - flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
     if (leaked > 0)
         msg_exit ("leaked %u matchtags", leaked);
 

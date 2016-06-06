@@ -152,7 +152,6 @@ static int msghandler_add (flux_t h, int typemask, const char *pattern,
         .typemask = typemask,
         .topic_glob = (char *)pattern,
         .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 1,
     };
     char hashkey[HASHKEY_LEN];
     struct msg_compat *c = xzmalloc (sizeof (*c));

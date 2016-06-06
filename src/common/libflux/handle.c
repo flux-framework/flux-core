@@ -54,7 +54,7 @@ struct flux_handle_struct {
     int             pollfd;
 
     zhash_t         *aux;
-    tagpool_t       tagpool;
+    struct tagpool  *tagpool;
     flux_msgcounters_t msgcounters;
     flux_fatal_f    fatal;
     void            *fatal_arg;
@@ -347,23 +347,27 @@ void flux_clr_msgcounters (flux_t h)
     memset (&h->msgcounters, 0, sizeof (h->msgcounters));
 }
 
-uint32_t flux_matchtag_alloc (flux_t h, int len)
+uint32_t flux_matchtag_alloc (flux_t h, int flags)
 {
-    uint32_t matchtag = tagpool_alloc (h->tagpool, len);
-    if (matchtag == FLUX_MATCHTAG_NONE)
+    uint32_t tag;
+    int tpflags = 0;
+
+    if ((flags & FLUX_MATCHTAG_GROUP))
+        tpflags |= TAGPOOL_FLAG_GROUP;
+    tag = tagpool_alloc (h->tagpool, tpflags);
+    if (tag == FLUX_MATCHTAG_NONE)
         errno = EBUSY; /* appropriate error? */
-    return matchtag;
+    return tag;
 }
 
-/* Free a block of matchtags, first deleting any queued matching responses.
+/* Free matchtag, first deleting any queued matching responses.
  */
-void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
+void flux_matchtag_free (flux_t h, uint32_t matchtag)
 {
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .topic_glob = NULL,
         .matchtag = matchtag,
-        .bsize = len,
     };
     flux_msg_t *msg = msglist_first (h->queue);
     while (msg) {
@@ -373,12 +377,15 @@ void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
         }
         msg = msglist_next (h->queue);
     }
-    tagpool_free (h->tagpool, matchtag, len);
+    tagpool_free (h->tagpool, matchtag);
 }
 
-uint32_t flux_matchtag_avail (flux_t h)
+uint32_t flux_matchtag_avail (flux_t h, int flags)
 {
-    return tagpool_avail (h->tagpool);
+    if ((flags & FLUX_MATCHTAG_GROUP))
+        return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_GROUP_AVAIL);
+    else
+        return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_REGULAR_AVAIL);
 }
 
 static void update_tx_stats (flux_t h, const flux_msg_t *msg)

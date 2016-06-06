@@ -162,8 +162,71 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int spam_max_inflight;
+static int spam_cur_inflight;
+
+static void store_completion (flux_rpc_t *rpc, void *arg)
+{
+    flux_reactor_t *r = arg;
+    const char *blobref;
+    int blobref_size;
+
+    if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0)
+        err_exit ("store");
+    if (!blobref || blobref[blobref_size - 1] != '\0')
+        msg_exit ("store: protocol error");
+    //printf ("%s\n", blobref);
+    flux_rpc_destroy (rpc);
+    if (--spam_cur_inflight < spam_max_inflight/2)
+        flux_reactor_stop (r);
+}
+
+static int internal_content_spam (optparse_t *p, int ac, char *av[])
+{
+    int i, count;
+    flux_rpc_t *rpc;
+    flux_t h;
+    flux_reactor_t *r;
+    char data[256];
+    int size = 256;
+
+    if (ac != 2 && ac != 3) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    count = strtoul (av[1], NULL, 10);
+    if (ac == 3)
+        spam_max_inflight = strtoul (av[2], NULL, 10);
+    else
+        spam_max_inflight = 1;
+
+    if (!(h = builtin_get_flux_handle (p)))
+        err_exit ("flux_open");
+    if (!(r = flux_get_reactor (h)))
+        err_exit ("flux_get_reactor");
+
+    spam_cur_inflight = 0;
+    i = 0;
+    while (i < count || spam_cur_inflight > 0) {
+        while (i < count && spam_cur_inflight < spam_max_inflight) {
+            snprintf (data, size, "spam-o-matic pid=%d seq=%d", getpid(), i);
+            if (!(rpc = flux_rpc_raw (h, "content.store", data, size, 0, 0)))
+                err_exit ("content.store(%d)", i);
+            if (flux_rpc_then (rpc, store_completion, r) < 0)
+                err_exit ("flux_rpc_then(%d)", i);
+            spam_cur_inflight++;
+            i++;
+        }
+        if (flux_reactor_run (r, 0) < 0)
+            err ("flux_reactor_run");
+    }
+    return (0);
+}
+
 int cmd_content (optparse_t *p, int ac, char *av[])
 {
+    log_init ("flux-content");
+
     if (optparse_run_subcommand (p, ac, av) != OPTPARSE_SUCCESS)
         exit (1);
     return (0);
@@ -196,17 +259,23 @@ static struct optparse_subcommand content_subcmds[] = {
       internal_content_store,
       store_opts,
     },
-     { "dropcache",
-       NULL,
-       "Drop non-essential entries from local content cache",
-       internal_content_dropcache,
-       NULL,
+    { "dropcache",
+      NULL,
+      "Drop non-essential entries from local content cache",
+      internal_content_dropcache,
+      NULL,
     },
-     { "flush",
-       NULL,
-       "Flush dirty entries from local content cache",
-       internal_content_flush,
-       NULL,
+    { "flush",
+      NULL,
+      "Flush dirty entries from local content cache",
+      internal_content_flush,
+      NULL,
+    },
+    { "spam",
+      "N [M]",
+      "Store N random entries, keeping M requests in flight (default 1)",
+      internal_content_spam,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };

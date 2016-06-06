@@ -124,7 +124,6 @@ static void wait_for_event (flux_t h, int64_t id, char *topic)
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_EVENT,
         .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
     };
     match.topic_glob = topic;
     flux_msg_t *msg = flux_recv (h, match, 0);
