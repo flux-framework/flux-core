@@ -225,6 +225,29 @@ void flux_watcher_destroy (flux_watcher_t *w)
     }
 }
 
+static void safe_stop_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
+{
+    flux_watcher_stop ((flux_watcher_t *)pw->data);
+    ev_prepare_stop (loop, pw);
+    free (pw);
+}
+
+/* Stop a watcher in the next ev_prepare callback. To be used from periodics
+ *  reschedule callback or other ev callbacks in which it is documented
+ *  unsafe to modify the ev_loop or any watcher.
+ */
+static void watcher_stop_safe (flux_watcher_t *w)
+{
+    if (w) {
+        ev_prepare *pw = xzmalloc (sizeof (*pw));
+        ev_prepare_init (pw, safe_stop_cb);
+        pw->data = w;
+        ev_prepare_start (w->r->loop, pw);
+    }
+}
+
+
+
 /* flux_t handle
  */
 
@@ -515,14 +538,23 @@ static void periodic_cb (struct ev_loop *loop, ev_periodic *pw, int revents)
         fp->w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+
 static ev_tstamp periodic_reschedule_cb (ev_periodic *pw, ev_tstamp now)
 {
     ev_tstamp rc;
     struct f_periodic *fp = pw->data;
     assert (fp->reschedule_cb != NULL);
     rc = (ev_tstamp) fp->reschedule_cb (fp->w, (double) now, fp->w->arg);
-    if (rc < now)
+    if (rc < now) {
+        /*  User reschedule cb returned time in the past. The watcher will
+         *   be stopped, but not here (changing loop is not allowed in a
+         *   libev reschedule cb. flux_watcher_stop_safe() will stop it in
+         *   a prepare callback.
+         *  Return time far in the future to ensure we aren't called again.
+         */
+        watcher_stop_safe (fp->w);
         return (now + 1e99);
+    }
     return rc;
 }
 
