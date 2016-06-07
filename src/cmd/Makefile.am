@@ -79,6 +79,7 @@ fluxcmd_PROGRAMS = \
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
+	$(LIBPMIX) \
 	$(LIBUTIL)
 flux_mping_LDADD = \
 	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
