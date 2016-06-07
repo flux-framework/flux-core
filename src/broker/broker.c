@@ -62,6 +62,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
+#include "src/common/libutil/kary.h"
 #include "src/common/libpmi-client/pmi-client.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
@@ -1054,7 +1055,7 @@ static int boot_pmi (ctx_t *ctx)
     pmi_t *pmi = NULL;
     const char *scratch_dir;
     int spawned, size, rank, appnum;
-    int relay_rank = -1, right_rank, parent_rank;
+    int relay_rank = -1, parent_rank;
     int clique_size;
     int *clique_ranks = NULL;
     char ipaddr[HOST_NAME_MAX + 1];
@@ -1259,19 +1260,6 @@ static int boot_pmi (ctx_t *ctx)
         }
         overlay_push_parent (ctx->overlay, "%s", val);
     }
-
-    /* Read the uri of our neigbor, after computing its rank.
-     */
-    right_rank = rank == 0 ? size - 1 : rank - 1;
-    if (snprintf (key, key_len, "cmbd.%d.uri", right_rank) >= key_len) {
-        msg ("pmi key string overflow");
-        goto done;
-    }
-    if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len)) != PMI_SUCCESS) {
-        msg ("pmi_kvs_get: %s", pmi_strerror (e));
-        goto done;
-    }
-    overlay_set_right (ctx->overlay, "%s", val);
 
     /* Event distribution (four configurations):
      * 1) epgm enabled, one broker per node
@@ -2528,6 +2516,22 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
             if (zmsg)
                 flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
             break;
+        case FLUX_MSGTYPE_RESPONSE:
+            /* TRICKY:  Fix up ROUTER socket used in reverse direction.
+             * Request/response is designed for requests to travel
+             * ROUTER->DEALER (up) and responses DEALER-ROUTER (down).
+             * When used conventionally, the route stack is accumulated
+             * automatically as a request is routed up, and unwound
+             * automatically as a response is routed down.  When responses
+             * are routed up, ROUTER socket behavior must be subverted on
+             * the receiving end by popping two frames off of the stack and
+             * discarding.
+             */
+            (void)flux_msg_pop_route (zmsg, NULL);
+            (void)flux_msg_pop_route (zmsg, NULL);
+            if (broker_response_sendmsg (ctx, zmsg) < 0)
+                goto done;
+            break;
         case FLUX_MSGTYPE_EVENT:
             rc = broker_event_sendmsg (ctx, &zmsg);
             break;
@@ -2605,7 +2609,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = zmsg_recv (sock);
-    int type;
+    int type, rc;
 
     if (!zmsg)
         goto done;
@@ -2626,6 +2630,13 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             }
             if (handle_event (ctx, &zmsg) < 0)
+                goto done;
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+            rc = broker_request_sendmsg (ctx, &zmsg);
+            if (zmsg)
+                flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
+            if (rc < 0)
                 goto done;
             break;
         default:
@@ -2759,9 +2770,43 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                   "signal %d (%s) %d", signum, strsignal (signum));
 }
 
+/* TRICKY:  Fix up ROUTER socket used in reverse direction.
+ * Request/response is designed for requests to travel
+ * ROUTER->DEALER (up) and responses DEALER-ROUTER (down).
+ * When used conventionally, the route stack is accumulated
+ * automatically as a reqest is routed up, and unwound
+ * automatically as a response is routed down.  When requests
+ * are routed down, ROUTER socket behavior must be subverted on the
+ * sending end by pushing the identity of the sender onto the stack,
+ * followed by the identity of the peer we want to route the message to.
+ */
+static int subvert_sendmsg_child (ctx_t *ctx, const flux_msg_t *msg,
+                                  uint32_t nodeid)
+{
+    flux_msg_t *cpy = flux_msg_copy (msg, true);
+    int saved_errno;
+    char uuid[16];
+    int rc = -1;
+
+    snprintf (uuid, sizeof (uuid), "%u", ctx->rank);
+    if (flux_msg_push_route (cpy, uuid) < 0)
+        goto done;
+    snprintf (uuid, sizeof (uuid), "%u", nodeid);
+    if (flux_msg_push_route (cpy, uuid) < 0)
+        goto done;
+    if (overlay_sendmsg_child (ctx->overlay, cpy) < 0)
+        goto done;
+    rc = 0;
+done:
+    saved_errno = errno;
+    flux_msg_destroy (cpy);
+    errno = saved_errno;
+    return rc;
+}
+
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    uint32_t nodeid;
+    uint32_t nodeid, gw;
     int flags;
     int rc = -1;
 
@@ -2787,14 +2832,17 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
         }
     } else if (nodeid == ctx->rank) {
         rc = svc_sendmsg (ctx->services, zmsg);
-    } else if (nodeid == 0) {
+    } else if ((gw = kary_child_route (ctx->k_ary, ctx->size,
+                                       ctx->rank, nodeid)) != KARY_NONE) {
+        rc = subvert_sendmsg_child (ctx, *zmsg, gw);
+        if (rc == 0)
+            zmsg_destroy (zmsg);
+    } else if (ctx->rank > 0) {
         rc = overlay_sendmsg_parent (ctx->overlay, *zmsg);
         if (rc == 0)
             zmsg_destroy (zmsg);
     } else {
-        rc = overlay_sendmsg_right (ctx->overlay, *zmsg);
-        if (rc == 0)
-            zmsg_destroy (zmsg);
+        errno = EHOSTUNREACH;
     }
 done:
     /* N.B. don't destroy zmsg on error as we use it to send errnum reply.
@@ -2804,15 +2852,41 @@ done:
 
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 {
-    int rc;
+    int rc = -1;
+    char *uuid = NULL;
+    uint32_t parent;
+    char puuid[16];
 
-    if (flux_msg_get_route_count (msg) == 0)
+    if (flux_msg_get_route_last (msg, &uuid) < 0)
+        goto done;
+
+    /* If no next hop, this is for broker-resident service.
+     */
+    if (uuid == NULL) {
         rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
-    else {
-        rc = module_response_sendmsg (ctx->modhash, msg);
-        if (rc < 0 && errno == ENOSYS)
-            rc = overlay_sendmsg_child (ctx->overlay, msg);
+        goto done;
     }
+
+    parent = kary_parentof (ctx->k_ary, ctx->rank);
+    snprintf (puuid, sizeof (puuid), "%u", parent);
+
+    /* See if it should go to the parent (backwards!)
+     * (receiving end will compensate for reverse ROUTER behavior)
+     */
+    if (parent != KARY_NONE && !strcmp (puuid, uuid)) {
+        rc = overlay_sendmsg_parent (ctx->overlay, msg);
+        goto done;
+    }
+
+    /* Try to deliver to a module.
+     * If modhash didn't match next hop, route to child.
+     */
+    rc = module_response_sendmsg (ctx->modhash, msg);
+    if (rc < 0 && errno == ENOSYS)
+        rc = overlay_sendmsg_child (ctx->overlay, msg);
+done:
+    if (uuid)
+        free (uuid);
     return rc;
 }
 
