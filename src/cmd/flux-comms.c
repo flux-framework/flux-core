@@ -131,9 +131,12 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "info")) {
         int arity;
         uint32_t rank, size;
-        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0
-                                         || flux_get_arity (h, &arity) < 0)
-            err_exit ("flux_get_rank/size/arity");
+        const char *s;
+        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0)
+            err_exit ("flux_get_rank/size");
+        if (!(s = flux_attr_get (h, "tbon.arity", NULL)))
+            err_exit ("flux_attr_get tbon.arity");
+        arity = strtoul (s, NULL, 10);
         printf ("rank=%d\n", rank);
         printf ("size=%d\n", size);
         printf ("arity=%d\n", arity);
