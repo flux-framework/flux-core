@@ -31,6 +31,7 @@
 #include "reduce.h"
 #include "reactor.h"
 #include "info.h"
+#include "attr.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
@@ -73,12 +74,34 @@ static void timer_cb (flux_reactor_t *reactor, flux_watcher_t *w,
     flush_current (r);
 }
 
+/* Scale the timeout based on our height in the tree,
+ * small at the leaves and 100% at the root.
+ * (calculations based on maxlevel + 1 so timeout is nonzero at
+ * the leaves - there may be multiple items to reduce there).
+ */
+static int scale_timeout (flux_reduce_t *r, double timeout)
+{
+    uint32_t maxlevel, level;
+    const char *s;
+
+    if (!(s = flux_attr_get (r->h, "tbon.level", NULL)))
+        return -1;
+    level = strtoul (s, NULL, 10);
+    if (!(s = flux_attr_get (r->h, "tbon.maxlevel", NULL)))
+        return -1;
+    maxlevel = strtoul (s, NULL, 10);
+    maxlevel++; /* see note above */
+    if (level > 0)
+        r->timeout = (maxlevel - level) * (timeout / level);
+    else
+        r->timeout = timeout;
+    return 0;
+}
+
+
 flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
                                    double timeout, void *arg, int flags)
 {
-    int arity = 2;
-    uint32_t size = 1;
-
     if (!h || ((flags & FLUX_REDUCE_HWMFLUSH) && !ops.itemweight)
            || ((flags & FLUX_REDUCE_TIMEDFLUSH) && timeout <= 0)) {
         errno = EINVAL;
@@ -92,8 +115,7 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
     }
     r->ops = ops;
     r->rank = 0;
-    if (flux_get_rank (h, &r->rank) < 0 || flux_get_size (h, &size) < 0
-                                        || flux_get_arity (h, &arity) < 0) {
+    if (flux_get_rank (h, &r->rank) < 0) {
         flux_reduce_destroy (r);
         return NULL;
     }
@@ -103,15 +125,10 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
     if (!(r->items = zlist_new ()))
         oom ();
     if ((flags & FLUX_REDUCE_TIMEDFLUSH)) {
-        double my_level = floor (log (r->rank + 1) / log (arity));
-        double max_level = floor (log (size) / log (arity)) + 1.;
-        /* Scale the timeout based on our height in the tree,
-         * small at the leaves and 100% at the root.
-         * (calculations based on max_level + 1 so timeout is nonzero at
-         * the leaves - there may be multiple items to reduce there).
-         */
-        r->timeout = (max_level - my_level) * (timeout / max_level);
-
+        if (scale_timeout (r, timeout) < 0) {
+            flux_reduce_destroy (r);
+            return NULL;
+        }
         if (!(r->timer = flux_timer_watcher_create (r->reactor, r->timeout, 0,
                                                     timer_cb, r))) {
             flux_reduce_destroy (r);
