@@ -19,20 +19,14 @@ void overlay_set_flux (overlay_t *ov, flux_t h);
  * When we reparent (e.g. for failover), a new current parent is selected
  * and moved to the top.  Old parent sockets are not closed; they may
  * still trigger the parent callback, but only the primary is used for sends.
- *
- * The 'right' socket is an alternate topology (ring) used for rank-
- * addressed requests other than to self or rank 0.  It connects to
- * rank - 1, wrapped.
  */
 void overlay_push_parent (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_parent (overlay_t *ov);
-void overlay_set_right (overlay_t *ov, const char *fmt, ...);
 void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
 int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg);
-int overlay_sendmsg_right (overlay_t *ov, const flux_msg_t *msg);
 
 /* The child is where other ranks connect to send requests.
- * This is the ROUTER side of parent/right sockets described above.
+ * This is the ROUTER side of parent sockets described above.
  */
 void overlay_set_child (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_child (overlay_t *ov);
