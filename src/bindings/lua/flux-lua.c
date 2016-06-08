@@ -425,9 +425,12 @@ static int l_flux_size (lua_State *L)
 static int l_flux_arity (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
+    const char *s;
     int arity;
-    if (flux_get_arity (f, &arity) < 0)
-        return lua_pusherror (L, "flux_get_arity error");
+
+    if (!(s = flux_attr_get (f, "tbon.arity", NULL)))
+        return lua_pusherror (L, "flux_attr_get tbon.arity error");
+    arity = strtoul (s, NULL, 10);
     return (l_pushresult (L, arity));
 }
 
