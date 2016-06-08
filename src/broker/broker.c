@@ -87,6 +87,13 @@
 
 const char *default_modules = "connector-local";
 
+struct tbon_param {
+    int k;
+    int level;
+    int maxlevel;
+    int descendants;
+};
+
 typedef struct {
     /* 0MQ
      */
@@ -130,11 +137,11 @@ typedef struct {
     log_t *log;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
+    struct tbon_param tbon;
     /* Bootstrap
      */
     bool enable_epgm;
     bool shared_ipc_namespace;
-    int k_ary;
     hello_t *hello;
     double hello_timeout;
     flux_t enclosing_h;
@@ -264,7 +271,7 @@ int main (int argc, char *argv[])
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
-    ctx.k_ary = 2; /* binary TBON is default */
+    ctx.tbon.k = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
     ctx.shutdown = shutdown_create ();
     ctx.attrs = attr_create ();
@@ -309,8 +316,8 @@ int main (int argc, char *argv[])
                     err_exit ("setting conf.module_path attribute");
                 break;
             case 'k':   /* --k-ary k */
-                ctx.k_ary = strtoul (optarg, NULL, 10);
-                if (ctx.k_ary < 0)
+                ctx.tbon.k = strtoul (optarg, NULL, 10);
+                if (ctx.tbon.k < 1)
                     usage ();
                 break;
             case 'H':   /* --heartrate SECS */
@@ -447,6 +454,10 @@ int main (int argc, char *argv[])
     assert (ctx.size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
 
+    ctx.tbon.level = kary_levelof (ctx.tbon.k, ctx.rank);
+    ctx.tbon.maxlevel = kary_levelof (ctx.tbon.k, ctx.size - 1);
+    ctx.tbon.descendants = kary_sum_descendants (ctx.tbon.k, ctx.size, ctx.rank);
+
     if (ctx.verbose) {
         const char *sid = "unknown";
         (void)attr_get (ctx.attrs, "session-id", &sid, NULL);
@@ -515,7 +526,15 @@ int main (int argc, char *argv[])
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add_active_uint32 (ctx.attrs, "size", &ctx.size,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add_active_int (ctx.attrs, "tbon-arity", &ctx.k_ary,
+            || attr_add_active_int (ctx.attrs, "tbon.arity", &ctx.tbon.k,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add_active_int (ctx.attrs, "tbon.level", &ctx.tbon.level,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add_active_int (ctx.attrs, "tbon.maxlevel",
+                                &ctx.tbon.maxlevel,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add_active_int (ctx.attrs, "tbon.descendants",
+                                &ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || log_register_attrs (ctx.log, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
@@ -1248,7 +1267,7 @@ static int boot_pmi (ctx_t *ctx)
     /* Read the uri of our parent, after computing its rank
      */
     if (ctx->rank > 0) {
-        parent_rank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
+        parent_rank = kary_parentof (ctx->tbon.k, ctx->rank);
         if (snprintf (key, key_len, "cmbd.%d.uri", parent_rank) >= key_len) {
             msg ("pmi key string overflow");
             goto done;
@@ -2832,7 +2851,7 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
         }
     } else if (nodeid == ctx->rank) {
         rc = svc_sendmsg (ctx->services, zmsg);
-    } else if ((gw = kary_child_route (ctx->k_ary, ctx->size,
+    } else if ((gw = kary_child_route (ctx->tbon.k, ctx->size,
                                        ctx->rank, nodeid)) != KARY_NONE) {
         rc = subvert_sendmsg_child (ctx, *zmsg, gw);
         if (rc == 0)
@@ -2867,7 +2886,7 @@ static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
         goto done;
     }
 
-    parent = kary_parentof (ctx->k_ary, ctx->rank);
+    parent = kary_parentof (ctx->tbon.k, ctx->rank);
     snprintf (puuid, sizeof (puuid), "%u", parent);
 
     /* See if it should go to the parent (backwards!)
