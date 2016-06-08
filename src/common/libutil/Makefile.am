@@ -64,7 +64,9 @@ libutil_la_SOURCES = \
 	popen2.h \
 	popen2.c \
 	environment.h \
-	environment.c
+	environment.c \
+	kary.h \
+	kary.c
 
 EXTRA_DIST = veb_mach.c
 
