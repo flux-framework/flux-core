@@ -24,20 +24,20 @@ give insight into how various addresses are routed.
 
 'target' may be the name of a comms module service, e.g. "kvs" or "live".
 flux-ping(1) will send a request to "kvs.ping" or "live.ping".
-As a shorthand, 'target' can include a rank prefix delimited by an
+As a shorthand, 'target' can include a rank or nodeset prefix delimited by an
 exclamation point.  "flux ping 4!kvs" is equivalent to
 "flux ping --rank 4 kvs" (see --rank option below).
 Don't forget to quote the exclamation point if it is interpreted by your shell.
 
-As a shorthand, 'target' may also simply be a rank by itself indicating 
-that the broker on that rank, rather than a comms module, is to be pinged.
-"flux ping 4" is equivalent to "flux ping --rank 4 cmb".
-
+As a shorthand, 'target' may also simply be a rank or nodeset by itself
+indicating that the broker on that rank or ranks, rather than a comms
+module, is to be pinged.  "flux ping 0-15" is equivalent to
+"flux ping --rank 0-15 cmb".
 
 OPTIONS
 -------
-*-r, --rank*'=N'::
-Find target on a specific broker rank.
+*-r, --rank*'=NODESET'::
+Find target on a specific broker rank(s).
 Default: send to FLUX_NODEID_ANY.
 
 *-p, --pad*'=N'::
@@ -75,22 +75,16 @@ round-trip latency is a bit over half a millisecond.  The route hops are:
   0:     rank of the local broker
   382A6: UUID of the KVS module.
 
-One can direct a ping request to a specific node, e.g.
+One can direct a ping request to a nodeset, e.g.
 
-  $ flux ping 6
-  6!cmb.ping pad=0 seq=0 time=1.463 ms (73C6E!1A4D9!0r!7r!6)
-  6!cmb.ping pad=0 seq=1 time=1.652 ms (73C6E!1A4D9!0r!7r!6)
+  $ flux ping 0-7
+  0-7!cmb.ping pad=0 seq=0 time=(0.413:1.180:2.097) ms stddev 0.503
+  0-7!cmb.ping pad=0 seq=1 time=(0.397:1.334:2.150) ms stddev 0.499
   ...
 
-This tells you that the message broker on rank 6 is responsive.
-The route hops are:
-
-  73C6E: UUID of the ping command
-  1A4D9: UUID of the API module
-  0r:    rank of the local broker (r indicates "right ring" socket)
-  7r:    rank of the next broker (r indicates "right ring" socket)
-  6:     rank of the target broker
-
+This tells you that the message brokers on ranks 0-7 are responsive.
+The time shows the statistical breakdown of RTT values for the set of
+responses in (min:mean:max) format.
 
 AUTHOR
 ------
