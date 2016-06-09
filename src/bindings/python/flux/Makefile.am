@@ -33,7 +33,7 @@ _core_build.py: $(MAKE_BINDING)
 				  --add_long_sub 'FLUX_SEC_TYPE_ALL.*\n.*\),|||FLUX_SEC_TYPE_ALL = 7,'\
 				  flux.h
 
-fluxpy_LTLIBRARIES = _core.la _barrier.la _mrpc.la _kvs.la _jsc.la _kz.la
+fluxpy_LTLIBRARIES = _core.la _barrier.la _kvs.la _jsc.la _kz.la
 
 _core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
@@ -64,18 +64,6 @@ _barrier_la_LIBADD = $(top_builddir)/src/modules/barrier/libflux-barrier.la $(co
 _barrier_la_DEPENDENCIES = _barrier_build.py
 
 
-_mrpc_build.py: $(top_srcdir)/src/modules/libmrpc/mrpc.h $(MAKE_BINDING) _core_build.py
-	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/libmrpc \
-	  			  --package flux \
-	                          --modname _mrpc \
-				  --include_ffi _core_build \
-				  mrpc.h
-
-_mrpc_la_SOURCES = _mrpc.c
-_mrpc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libmrpc
-_mrpc_la_LIBADD = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la $(common_libs)
-_mrpc_la_DEPENDENCIES = _mrpc_build.py
-
 _kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs_deprecated.h $(MAKE_BINDING) _core_build.py
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/kvs \
 	  			  --package flux \
@@ -103,7 +91,6 @@ _kz_la_DEPENDENCIES = _kz_build.py
 
 fluxpy_PYTHON=\
 	      __init__.py\
-	      mrpc.py\
 	      kvs.py\
 	      wrapper.py\
 	      json_c.py\

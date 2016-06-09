@@ -20,7 +20,6 @@ pymod_la_SOURCES = py_mod.c
 pymod_la_LDFLAGS = $(fluxmod_ldflags) -module $(PYTHON_LDFLAGS)
 pymod_la_LIBADD = $(top_builddir)/src/common/libflux-core.la \
 		  $(top_builddir)/src/common/libflux-internal.la \
-		  $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 		  $(JSON_LIBS) $(ZMQ_LIBS)
 
 fluxpymod_PYTHON = echo.py __init__.py

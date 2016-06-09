@@ -48,7 +48,6 @@ TESTS = \
 	t0015-cron.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
-	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
@@ -66,7 +65,6 @@ TESTS = \
 	lua/t0003-events.t \
 	lua/t0004-getattr.t \
 	lua/t0007-alarm.t \
-	lua/t0008-mrpc.t \
 	lua/t0009-sequences.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
@@ -112,7 +110,6 @@ check_SCRIPTS = \
 	t0015-cron.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
-	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
@@ -132,7 +129,6 @@ check_SCRIPTS = \
 	lua/t0003-events.t \
 	lua/t0004-getattr.t \
 	lua/t0007-alarm.t \
-	lua/t0008-mrpc.t \
 	lua/t0009-sequences.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \

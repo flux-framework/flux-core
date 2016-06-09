@@ -64,7 +64,6 @@ endif
 
 fluxcmd_PROGRAMS = \
 	flux-ping \
-	flux-mping \
 	flux-up \
 	flux-keygen \
 	flux-logger \
@@ -78,10 +77,6 @@ fluxcmd_PROGRAMS = \
 	flux-jstat
 
 flux_start_LDADD = \
-	$(fluxcmd_ldadd) \
-	$(LIBUTIL)
-flux_mping_LDADD = \
-	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_jstat_LDADD = \
