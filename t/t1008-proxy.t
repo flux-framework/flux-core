@@ -45,10 +45,10 @@ test_expect_success 'flux-proxy manages event redistribution' '
 	flux proxy $TEST_JOBID \
 	  "flux event sub -c1 hb& flux event sub -c1 hb& wait;wait" &&
 	FLUX_URI=$TEST_URI flux dmesg | sed -e "s/[^ ]* //" >event.out &&
-	test $(grep "connector-local.debug\[0\]: subscribe hb" event.out|wc -l) -eq 1 &&
-	test $(grep "proxy.debug\[0\]: subscribe hb" event.out|wc -l) -eq 1 &&
-	test $(grep "connector-local.debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1 &&
-	test $(grep "proxy.debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1
+	test $(egrep "connector-local.*debug\[0\]: subscribe hb" event.out|wc -l) -eq 1 &&
+	test $(egrep "proxy.*debug\[0\]: subscribe hb" event.out|wc -l) -eq 1 &&
+	test $(egrep "connector-local.*debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1 &&
+	test $(egrep "proxy.*debug\[0\]: unsubscribe hb" event.out|wc -l) -eq 1
 '
 
 test_expect_success 'flux-proxy --setenv option works' '

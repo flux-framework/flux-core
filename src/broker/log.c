@@ -30,6 +30,8 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/wallclock.h"
+#include "src/common/libutil/stdlog.h"
 
 #include "log.h"
 
@@ -55,13 +57,9 @@ struct log_struct {
 };
 
 struct log_entry {
-    char *facility;
-    int level;
-    uint32_t rank;
-    struct timeval tv;
-    char *message;
+    char *buf;
+    int len;
     int seq;
-    JSON obj;
 };
 
 struct sleeper {
@@ -91,25 +89,18 @@ static struct sleeper *sleeper_create (log_sleeper_f fun, flux_msg_t *msg,
 static void log_entry_destroy (struct log_entry *e)
 {
     if (e) {
-        if (e->facility)
-            free (e->facility);
-        if (e->message)
-            free (e->message);
-        Jput (e->obj);
+        if (e->buf)
+            free (e->buf);
         free (e);
     }
 }
 
-static struct log_entry *log_entry_create (const char *facility, int level,
-                                           uint32_t rank, struct timeval tv,
-                                           const char *message)
+static struct log_entry *log_entry_create (const char *buf, int len)
 {
     struct log_entry *e = xzmalloc (sizeof (*e));
-    e->facility = xstrdup (facility);
-    e->level = level;
-    e->rank = rank;
-    e->tv = tv;
-    e->message = xstrdup (message);
+    e->buf = xzmalloc (len);
+    memcpy (e->buf, buf, len);
+    e->len = len;
     return e;
 }
 
@@ -137,7 +128,8 @@ void log_buf_clear (log_t *log, int seq_index)
     }
 }
 
-const char *log_buf_get (log_t *log, int seq_index, int *seq)
+int log_buf_get (log_t *log, int seq_index, int *seq,
+                 const char **buf, int *len)
 {
     struct log_entry *e = zlist_first (log->buf);
 
@@ -145,20 +137,15 @@ const char *log_buf_get (log_t *log, int seq_index, int *seq)
         e = zlist_next (log->buf);
     if (!e) {
         errno = ENOENT;
-        goto done;
+        return -1;
     }
-    if (!e->obj) {
-        e->obj = Jnew ();
-        Jadd_str (e->obj, "facility", e->facility);
-        Jadd_int (e->obj, "level", e->level);
-        Jadd_int (e->obj, "rank", e->rank);
-        Jadd_int (e->obj, "timestamp_usec", e->tv.tv_usec);
-        Jadd_int (e->obj, "timestamp_sec", e->tv.tv_sec);
-        Jadd_str (e->obj, "message", e->message);
-    }
-    *seq = e->seq;
-done:
-    return e ? Jtostr (e->obj) : NULL;
+    if (seq)
+        *seq = e->seq;
+    if (buf)
+        *buf = e->buf;
+    if (len)
+        *len = e->len;
+    return 0;
 }
 
 int log_buf_sleepon (log_t *log, log_sleeper_f fun, flux_msg_t *msg, void *arg)
@@ -189,9 +176,7 @@ void log_buf_disconnect (log_t *log, const char *uuid)
     }
 }
 
-static int log_buf_append (log_t *log, const char *facility, int level,
-                           uint32_t rank, struct timeval tv,
-                           const char *message)
+static int log_buf_append (log_t *log, const char *buf, int len)
 {
     assert (log->magic == LOG_MAGIC);
     struct log_entry *e;
@@ -199,7 +184,7 @@ static int log_buf_append (log_t *log, const char *facility, int level,
 
     if (log->ring_size > 0) {
         log_buf_trim (log, log->ring_size - 1);
-        e = log_entry_create (facility, level, rank, tv, message);
+        e = log_entry_create (buf, len);
         e->seq = log->seq++;
         if (zlist_append (log->buf, e) < 0) {
             log_entry_destroy (e);
@@ -455,93 +440,58 @@ done:
     return rc;
 }
 
-int log_forward (log_t *log, const char *facility, int level, uint32_t rank,
-                 struct timeval tv, const char *message)
+int log_forward (log_t *log, const char *buf, int len)
 {
     assert (log->magic == LOG_MAGIC);
-    JSON o = Jnew ();
-    flux_rpc_t *rpc = NULL;
-    int rc = -1;
 
-    Jadd_str (o, "facility", facility);
-    Jadd_int (o, "level", level);
-    Jadd_int (o, "rank", rank);
-    Jadd_int (o, "timestamp_usec", tv.tv_usec);
-    Jadd_int (o, "timestamp_sec", tv.tv_sec);
-    Jadd_str (o, "message", message);
-    if (!(rpc = flux_rpc (log->h, "cmb.log", Jtostr (o), FLUX_NODEID_UPSTREAM,
-                                                         FLUX_RPC_NORESPONSE)))
-        goto done;
-    rc = 0;
-done:
-    Jput (o);
+    flux_rpc_t *rpc;
+    if (!(rpc = flux_rpc_raw (log->h, "cmb.log", buf, len,
+                              FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
+        return -1;
     flux_rpc_destroy (rpc);
-    return rc;
+    return 0;
 }
 
-int log_append (log_t *log, const char *facility, int level, uint32_t rank,
-                struct timeval tv, const char *message)
+int log_append (log_t *log, const char *buf, int len)
 {
     assert (log->magic == LOG_MAGIC);
     bool logged_stderr = false;
     int rc = 0;
+    uint32_t rank = FLUX_NODEID_ANY;
+    int severity = LOG_INFO;
+    struct stdlog_header hdr;
+
+    stdlog_init (&hdr);
+    if (stdlog_decode (buf, len, &hdr, NULL, NULL, NULL, NULL) == 0) {
+        rank = strtoul (hdr.hostname, NULL, 10);
+        severity = STDLOG_SEVERITY (hdr.pri);
+    }
 
     if (rank == log->rank) {
-        if (log_buf_append (log, facility, level, rank, tv, message) < 0)
+        if (log_buf_append (log, buf, len) < 0)
             rc = -1;
-        if (level <= log->critical_level) {
-            flux_log_fprint (facility, level, rank, tv, message, stderr);
+        if (severity <= log->critical_level) {
+            flux_log_fprint (buf, len, stderr);
             logged_stderr = true;
         }
     }
-    if (level <= log->forward_level) {
+    if (severity <= log->forward_level) {
         if (log->rank == 0) {
-            flux_log_fprint (facility, level, rank, tv, message, log->f);
+            flux_log_fprint (buf, len, log->f);
         } else {
-            if (log_forward (log, facility, level, rank, tv, message) < 0)
+            if (log_forward (log, buf, len) < 0)
                 rc = -1;
         }
     }
-    if (!logged_stderr && level <= log->stderr_level && log->rank == 0)
-        flux_log_fprint (facility, level, rank, tv, message, stderr);
+    if (!logged_stderr && severity <= log->stderr_level && log->rank == 0)
+        flux_log_fprint (buf, len, stderr);
     return rc;
 }
 
-int log_append_json (log_t *log, const char *json_str)
-{
-    assert (log->magic == LOG_MAGIC);
-    JSON in = NULL;
-    const char *facility, *message;
-    int level, rank, tv_usec, tv_sec;
-    struct timeval tv;
-    int rc = -1;
-
-    if (!(in = Jfromstr (json_str))
-            || !Jget_str (in, "facility", &facility)
-            || !Jget_int (in, "level", &level)
-            || !Jget_int (in, "rank", &rank)
-            || !Jget_int (in, "timestamp_usec", &tv_usec)
-            || !Jget_int (in, "timestamp_sec", &tv_sec)
-            || !Jget_str (in, "message", &message)) {
-        errno = EPROTO;
-        goto done;
-    }
-    tv.tv_sec = tv_sec;
-    tv.tv_usec = tv_usec;
-    if (log_append (log, facility, level, rank, tv, message) < 0)
-        goto done;
-    rc = 0;
-done:
-    Jput (in);
-    return rc;
-}
-
-void log_append_redirect (const char *facility, int level, uint32_t rank,
-                          struct timeval tv, const char *message, void *arg)
+void log_append_redirect (const char *buf, int len, void *arg)
 {
     log_t *log = arg;
-    assert (log->magic == LOG_MAGIC);
-    (void)log_append (log, facility, level, rank, tv, message);
+    (void)log_append (log, buf, len);
 }
 
 /*

@@ -260,7 +260,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open  (NULL, 0)))
         err_exit ("flux_open");
 
-    flux_log_set_facility (h, "jstat");
+    flux_log_set_appname (h, "jstat");
     cmd = argv[optind++];
 
     if (!strcmp ("notify", cmd))

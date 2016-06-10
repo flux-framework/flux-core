@@ -32,20 +32,20 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/stdlog.h"
 
 
-#define OPTIONS "hp:"
+#define OPTIONS "hs:n:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
-    {"priority",   required_argument,  0, 'p'},
+    {"severity",   required_argument,  0, 's'},
+    {"appname",    required_argument,  0, 'n'},
     { 0, 0, 0, 0 },
 };
 
-int parse_logstr (char *s, int *lp, char **fp);
-
 void usage (void)
 {
-    fprintf (stderr, "Usage: flux-logger [--priority facility.level] message ...\n"
+    fprintf (stderr, "Usage: flux-logger [--severity LEVEL] [--appname NAME] message ...\n"
 );
     exit (1);
 }
@@ -56,9 +56,8 @@ int main (int argc, char *argv[])
     int ch;
     char *message = NULL;
     size_t len = 0;
-    char *priority = "user.notice";
-    int level;
-    char *facility;
+    int severity = LOG_NOTICE;
+    char *appname = "logger";
     int e;
 
     log_init ("flux-logger");
@@ -68,8 +67,12 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'p': /* --priority facility.level */
-                priority = optarg;
+            case 's': /* --severity LEVEL */
+                if ((severity = stdlog_string_to_severity (optarg)) < 0)
+                    log_msg_exit ("invalid severity: Use emerg|alert|crit|err|warning|notice|info|debug");
+                break;
+            case 'n': /* --appname NAME */
+                appname = optarg;
                 break;
             default:
                 usage ();
@@ -86,35 +89,15 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
 
-    if (parse_logstr (priority, &level, &facility) < 0)
-        msg_exit ("bad priority argument");
-    flux_log_set_facility (h, facility);
-    flux_log (h, level, "%s", message);
+    flux_log_set_appname (h, appname);
+    flux_log (h, severity, "%s", message);
 
     flux_close (h);
 
     free (message);
-    free (facility);
     log_fini ();
     return 0;
 }
-
-int parse_logstr (char *s, int *lp, char **fp)
-{
-    char *p, *fac = xstrdup (s);
-    int lev = LOG_INFO;
-
-    if ((p = strchr (fac, '.'))) {
-        *p++ = '\0';
-        lev = log_strtolevel (p);
-        if (lev < 0)
-            return -1;
-    }
-    *lp = lev;
-    *fp = fac;
-    return 0;
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

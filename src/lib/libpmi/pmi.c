@@ -228,7 +228,7 @@ int PMI_Init (int *spawned)
         fprintf (stderr, "flux_get_rank: %s", strerror (errno));
         goto done_destroy;
     }
-    flux_log_set_facility (ctx->h, "libpmi");
+    flux_log_set_appname (ctx->h, "libpmi");
     *spawned = ctx->spawned;
     ret = PMI_SUCCESS;
 done:

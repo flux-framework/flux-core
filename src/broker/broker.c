@@ -486,7 +486,7 @@ int main (int argc, char *argv[])
      * as a "cmb.log" request message.  Next, provide the handle
      * and rank to the log class.
      */
-    flux_log_set_facility (ctx.h, "broker");
+    flux_log_set_appname (ctx.h, "broker");
     flux_log_set_redirect (ctx.h, log_append_redirect, ctx.log);
     log_set_flux (ctx.log, ctx.h);
     log_set_rank (ctx.log, ctx.rank);
@@ -2163,13 +2163,14 @@ done:
 static int cmb_log_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    const char *json_str;
+    const char *buf;
+    int len;
 
-    if (flux_request_decode (*zmsg, NULL, &json_str) < 0) {
-        msg ("%s: decode error", __FUNCTION__);
+    if (flux_request_decode_raw (*zmsg, NULL, &buf, &len) < 0) {
+        log_msg ("%s: decode error", __FUNCTION__);
         goto done;
     }
-    if (log_append_json (ctx->log, json_str) < 0)
+    if (log_append (ctx->log, buf, len) < 0)
         goto done;
 done:
     zmsg_destroy (zmsg); /* no reply */
@@ -2203,6 +2204,8 @@ static void cmb_dmesg (const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
+    const char *buf;
+    int len;
     int seq;
     JSON in = NULL;
     JSON out = NULL;
@@ -2216,7 +2219,7 @@ static void cmb_dmesg (const flux_msg_t *msg, void *arg)
         errno = EPROTO;
         goto done;
     }
-    if (!(json_str = log_buf_get (ctx->log, seq, &seq))) {
+    if (log_buf_get (ctx->log, seq, &seq, &buf, &len) < 0) {
         if (follow && errno == ENOENT) {
             flux_msg_t *cpy = flux_msg_copy (msg, true);
             if (!cpy)
@@ -2229,11 +2232,9 @@ static void cmb_dmesg (const flux_msg_t *msg, void *arg)
         }
         goto done;
     }
-    if (!(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
+    out = Jnew ();
     Jadd_int (out, "seq", seq);
+    Jadd_str_len (out, "buf", buf, len);
     rc = 0;
 done:
     flux_respond (ctx->h, msg, rc < 0 ? errno : 0,

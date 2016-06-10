@@ -21,11 +21,12 @@ int log_register_attrs (log_t *log, attr_t *attrs);
  */
 void log_buf_clear (log_t *log, int seq_index);
 
-/* Get next entry in json log format with seq > seq_index
+/* Get next entry with seq > seq_index
  * Set seq_index = -1 to get the first entry.
  * 'seq' is assigned the sequence number of the returned entry.
  */
-const char *log_buf_get (log_t *log, int seq_index, int *seq);
+int log_buf_get (log_t *log, int seq_index, int *seq,
+                 const char **buf, int *len);
 
 /* Call 'fun' when anther item is added to the ring buffer.
  * This is how we implement a "nonblocking" dmesg request.
@@ -36,16 +37,15 @@ int log_buf_sleepon (log_t *log, log_sleeper_f fun, flux_msg_t *msg, void *arg);
  */
 void log_buf_disconnect (log_t *log, const char *uuid);
 
-/* Receive a log entry in json log format.
+/* Receive a log entry.
  */
-int log_append_json (log_t *log, const char *json_str);
+int log_append (log_t *log, const char *buf, int len);
 
-/* Receive a fully decoded log entry.
+/* Receive a log entry.
  * This is a flux_log_f that can be passed to flux_log_redirect()
  * and is used to capture log entries from the broker itself.
  */
-void log_append_redirect (const char *facility, int level, uint32_t rank,
-                          struct timeval tv, const char *s, void *arg);
+void log_append_redirect (const char *buf, int len, void *arg);
 
 #endif /* BROKER_LOG_H */
 

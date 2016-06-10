@@ -127,7 +127,7 @@ static void *module_thread (void *arg)
         err ("%s: error faking rank attribute", p->name);
         goto done;
     }
-    flux_log_set_facility (p->h, p->name);
+    flux_log_set_appname (p->h, p->name);
     modservice_register (p->h, p);
 
     /* Block all signals

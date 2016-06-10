@@ -937,7 +937,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
          free (uri);
     }
 
-    flux_log_set_facility (h, "proxy");
+    flux_log_set_appname (h, "proxy");
     ctx = ctx_create (h);
 
     ctx->listen_fd = -1;

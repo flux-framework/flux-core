@@ -153,7 +153,7 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
         char name [128];
         t->f = flux_open (NULL, 0);
         snprintf (name, sizeof (name) - 1, "lwj.%ld.%d", ctx->id, t->globalid);
-        flux_log_set_facility (t->f, name);
+        flux_log_set_appname (t->f, name);
     }
     return (t->f);
 }
@@ -869,7 +869,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         log_fatal (ctx, 1, "flux_open");
 
     snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
-    flux_log_set_facility (ctx->flux, name);
+    flux_log_set_appname (ctx->flux, name);
 
     if (kvs_get_dir (ctx->flux, &ctx->kvs,
                      "lwj.%lu", ctx->id) < 0) {
