@@ -394,7 +394,7 @@ program:SubCommand {
         local state = "Active"
         local count = e.stats.count
         if e["repeat"] > 0 then
-            count = e.count .. "/" .. e["repeat"]
+            count = e.stats.count .. "/" .. e["repeat"]
         end
         if e.stopped then state = "Stopped" end
         printf (fmt, e.id, e.name, state, count, lastrun, status)
