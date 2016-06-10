@@ -8,7 +8,6 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_srcdir)/src/modules/libmrpc \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/modules/broker \
@@ -29,8 +28,7 @@ fluxmod_LTLIBRARIES = \
 fluxlibexec_PROGRAMS = \
 	wrexecd
 
-fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
-		 $(top_builddir)/src/common/libflux-core.la \
+fluxmod_libadd = $(top_builddir)/src/common/libflux-core.la \
 		 $(top_builddir)/src/common/libflux-internal.la \
 		 $(top_builddir)/src/modules/kvs/libflux-kvs.la
 
@@ -50,7 +48,6 @@ wrexecd_SOURCES = \
 
 wrexecd_libs = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
-	$(top_builddir)/src/modules/libmrpc/libflux-mrpc.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \

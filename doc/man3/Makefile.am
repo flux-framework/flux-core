@@ -59,7 +59,6 @@ MAN3_FILES_SECONDARY = \
 	flux_reduce_opt_set.3 \
 	flux_reduce_opt_get.3 \
 	flux_get_size.3 \
-	flux_get_arity.3 \
 	flux_attr_set.3 \
 	flux_attr_first.3 \
 	flux_attr_next.3 \
@@ -128,7 +127,6 @@ flux_reduce_push.3: flux_reduce_create.3
 flux_reduce_opt_set.3: flux_reduce_create.3
 flux_reduce_opt_get.3: flux_reduce_create.3
 flux_get_size.3: flux_get_rank.3
-flux_get_arity.3: flux_get_rank.3
 flux_attr_set.3: flux_attr_get.3
 flux_attr_first.3: flux_attr_get.3
 flux_attr_next.3: flux_attr_get.3

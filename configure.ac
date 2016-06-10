@@ -199,14 +199,11 @@ AC_CONFIG_FILES( \
   src/modules/kvs/Makefile \
   src/modules/content-sophia/Makefile \
   src/modules/content-sqlite/Makefile \
-  src/modules/libmrpc/Makefile \
   src/modules/libkz/Makefile \
   src/modules/libjsc/Makefile \
   src/modules/live/Makefile \
-  src/modules/mecho/Makefile \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
-  src/modules/pymod/Makefile \
   src/modules/resource-hwloc/Makefile \
   src/modules/cron/Makefile \
   src/test/Makefile \

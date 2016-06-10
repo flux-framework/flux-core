@@ -264,6 +264,8 @@ void test_timed (flux_t h)
     ok ((r = flux_reduce_create (h, reduce_ops, 0.1, NULL,
                                  FLUX_REDUCE_TIMEDFLUSH)) != NULL,
         "timed: flux_reduce_create works");
+    if (!r)
+        BAIL_OUT();
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_TIMEOUT, &timeout,
                              sizeof (timeout)) == 0 && timeout == 0.1,
         "timed: timeout scaled by 1.0 on rank 0");
@@ -350,6 +352,10 @@ int main (int argc, char *argv[])
         "opened loop connector");
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
+
+    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_fake (h, "tbon.level", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_fake (h, "tbon.maxlevel", "0", FLUX_ATTRFLAG_IMMUTABLE);
 
     test_nopolicy (h); // 6
     test_hwm (h); // 37

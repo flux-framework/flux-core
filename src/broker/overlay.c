@@ -53,14 +53,11 @@ struct overlay_struct {
 
     uint32_t rank;
     char rankstr[16];
-    char rankstr_right[16];
 
     zlist_t *parents;           /* DEALER - requests to parent */
                                 /*  (reparent pushes new parent on head) */
-    struct endpoint *right;     /* DEALER - requests to rank overlay */
     overlay_cb_f parent_cb;
     void *parent_arg;
-    int right_lastsent;
     int parent_lastsent;
 
     struct endpoint *child;     /* ROUTER - requests from children */
@@ -127,7 +124,6 @@ void overlay_destroy (overlay_t *ov)
         if (ov->h)
             (void)flux_event_unsubscribe (ov->h, "hb");
         endpoint_destroy (ov->child);
-        endpoint_destroy (ov->right);
         endpoint_destroy (ov->event);
         endpoint_destroy (ov->relay);
         zhash_destroy (&ov->children);
@@ -142,7 +138,6 @@ overlay_t *overlay_create (void)
         oom ();
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
-    ov->right_lastsent = -1;
     if (!(ov->children = zhash_new ()))
         oom ();
     return ov;
@@ -162,7 +157,6 @@ void overlay_set_rank (overlay_t *ov, uint32_t rank)
 {
     ov->rank = rank;
     snprintf (ov->rankstr, sizeof (ov->rankstr), "%u", rank);
-    snprintf (ov->rankstr_right, sizeof (ov->rankstr), "%ur", rank);
 }
 
 void overlay_set_flux (overlay_t *ov, flux_t h)
@@ -286,25 +280,6 @@ done:
     return rc;
 }
 
-static int overlay_keepalive_right (overlay_t *ov)
-{
-    struct endpoint *ep = ov->right;
-    int idle = ov->epoch - ov->right_lastsent;
-    flux_msg_t *msg = NULL;
-    int rc = -1;
-
-    if (!ep || !ep->zs || idle <= 1)
-        return 0;
-    if (!(msg = flux_keepalive_encode (0, 0)))
-        goto done;
-    if (flux_msg_enable_route (msg) < 0)
-        goto done;
-    rc = flux_msg_sendzsock (ep->zs, msg);
-done:
-    flux_msg_destroy (msg);
-    return rc;
-}
-
 static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
@@ -313,37 +288,7 @@ static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
     if (flux_heartbeat_decode (msg, &ov->epoch) < 0)
         return;
     overlay_keepalive_parent (ov);
-    overlay_keepalive_right (ov);
     overlay_log_idle_children (ov);
-}
-
-void overlay_set_right (overlay_t *ov, const char *fmt, ...)
-{
-    if (ov->right)
-        endpoint_destroy (ov->right);
-    va_list ap;
-    va_start (ap, fmt);
-    ov->right = endpoint_vcreate (fmt, ap);
-    va_end (ap);
-}
-
-/* If local uuid already appears in the route stack, the message has
- * already gone round the ring, so return EHOSTUNREACH.
- */
-int overlay_sendmsg_right (overlay_t *ov, const flux_msg_t *msg)
-{
-    int rc = -1;
-
-    if (!ov->right || !ov->right->zs
-                   || flux_msg_has_route (msg, ov->rankstr_right)) {
-        errno = EHOSTUNREACH;
-        goto done;
-    }
-    rc = flux_msg_sendzsock (ov->right->zs, msg);
-    if (rc == 0)
-        ov->right_lastsent = ov->epoch;
-done:
-    return rc;
 }
 
 void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
@@ -631,23 +576,6 @@ error:
     return -1;
 }
 
-static int connect_right (overlay_t *ov, struct endpoint *ep)
-{
-    if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_DEALER)))
-        err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ov->sec, ep->zs) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
-    zsocket_set_hwm (ep->zs, 0);
-    zsocket_set_identity (ep->zs, ov->rankstr_right);
-    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
-    if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
-                                           ep->zs, FLUX_POLLIN, parent_cb, ov)))
-        err_exit ("flux_zmq_watcher_create");
-    flux_watcher_start (ep->w);
-    return 0;
-}
-
 int overlay_connect (overlay_t *ov)
 {
     int rc = -1;
@@ -660,9 +588,6 @@ int overlay_connect (overlay_t *ov)
     }
     if (ov->event && !ov->event->zs && ov->rank > 0)
         connect_event_sub (ov, ov->event);
-
-    if (ov->right && !ov->right->zs)
-        connect_right (ov, ov->right);
 
     if ((ep = zlist_first (ov->parents))) {
         if (connect_parent (ov, ep) < 0)

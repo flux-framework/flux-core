@@ -314,3 +314,5 @@ cron
 lifecycle
 rexec
 subcommand
+stddev
+RTT
