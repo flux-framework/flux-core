@@ -263,6 +263,48 @@ program:SubCommand {
 }
 
 
+program:SubCommand {
+ name = "at",
+ description = "Schedule a cron job at a given date and time",
+ usage = "TIME COMMAND",
+ options = {
+    { name = "options", char = "o", arg = "OPTS",
+      usage = "Comma separated list of key=value options to set in request"
+    },
+ },
+ handler = function (self, arg)
+    if #arg < 2 then self:die ("TIME and COMMAND args are required") end
+    local function get_datetime (s)
+        local f, err = io.popen ("date +%s --date=\""..s.."\"")
+        local time = f:read ("*n")
+        f:close ()
+        if not time then return nil, "Failed to parse datetime" end
+        return os.date ("*t", time)
+    end
+
+    local t, err = get_datetime (table.remove (arg, 1))
+    if not t then
+        self:die ("Failed to parse datetime arg")
+    end
+    local args = {
+        second = t.sec,
+        minute = t.min,
+        hour =   t.hour,
+        mday =   t.day,
+        month =  t.month - 1, -- zero origin for months
+        year =   t.year - 1900
+    }
+    -- force only a single repeat
+    self.opt.c = 1
+
+    local resp, err = self:request ("datetime", args, arg)
+    if not resp then self:die (err) end
+    local next_wakeup = resp.typedata.next_wakeup
+    local n = next_wakeup - now ()
+    self:log ("cron-%d created: scheduled in %.3fs at %s\n",
+              resp.id, n, os.date ("%c", next_wakeup))
+ end
+}
 --
 --  Convert date in Unix seconds (floating point) to a standard
 --   datetime string
