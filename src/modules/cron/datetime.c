@@ -105,8 +105,12 @@ static double reschedule_cb (flux_watcher_t *w, double now, void *arg)
      *  and stop the cron entry in an ev_prepare callback. See ev(7).
      */
     if (next < now) {
-        flux_log_error (dt->h,
-            "cron-%ju: Unable to get next wakeup. Stopping.", e->id);
+        /*  Only issue an error if this entry has more than one repeat:
+         */
+        if (e->repeat == 0 || e->repeat < e->stats.count + 1) {
+            flux_log_error (dt->h,
+                    "cron-%ju: Unable to get next wakeup. Stopping.", e->id);
+        }
         cron_entry_stop_safe (e);
         return now + 1.e19;
     }
