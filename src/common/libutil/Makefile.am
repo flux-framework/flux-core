@@ -70,7 +70,9 @@ libutil_la_SOURCES = \
 	approxidate.h \
 	approxidate.c \
 	cronodate.h \
-	cronodate.c
+	cronodate.c \
+	wallclock.h \
+	wallclock.c
 
 EXTRA_DIST = veb_mach.c
 
@@ -85,14 +87,15 @@ TESTS = test_nodeset.t \
 	test_popen2.t \
 	test_kary.t \
 	test_approxidate.t \
-	test_cronodate.t
+	test_cronodate.t \
+	test_wallclock.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
+	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
@@ -152,3 +155,7 @@ test_kary_t_LDADD = $(test_ldadd)
 test_cronodate_t_SOURCES = test/cronodate.c
 test_cronodate_t_CPPFLAGS = $(test_cppflags)
 test_cronodate_t_LDADD = $(test_ldadd)
+
+test_wallclock_t_SOURCES = test/wallclock.c
+test_wallclock_t_CPPFLAGS = $(test_cppflags)
+test_wallclock_t_LDADD = $(test_ldadd)
