@@ -126,4 +126,30 @@ test_expect_success 'flux-cron tab works for month' '
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
 '
+test_expect_success 'flux-cron at works' '
+    $set_faketime Jun 5 15:45 2016 &&
+    id=$(flux_cron at "Jun 6 15:45:00 2016" flux event pub t.cron.complete) &&
+    test_when_finished "flux cron delete ${id}" &&
+    next=$(date +%s --date="Jun 6 15:45 2016") &&
+    cron_entry_check ${id} type datetime &&
+    cron_entry_check ${id} stopped false &&
+    cron_entry_check ${id} typedata.next_wakeup ${next} &&
+    ${event_trace} t.cron t.cron.complete \
+        $set_faketime Jun 6 15:45 2016 &&
+    cron_entry_check ${id} stats.count 1 &&
+    cron_entry_check ${id} stopped true
+'
+test_expect_success 'relative flux-cron at works' '
+    $set_faketime Jun 5 15:45:00 2016 &&
+    next=$(date +%s --date="+1 hour") &&
+    id=$(flux_cron at "+1 hour" flux event pub t.cron.complete) &&
+    test_when_finished "flux cron delete ${id}" &&
+    cron_entry_check ${id} type datetime &&
+    cron_entry_check ${id} stopped false &&
+    cron_entry_check ${id} typedata.next_wakeup ${next} &&
+    ${event_trace} t.cron t.cron.complete \
+        $set_faketime +1 hour &&
+    cron_entry_check ${id} stats.count 1 &&
+    cron_entry_check ${id} stopped true
+'
 test_done
