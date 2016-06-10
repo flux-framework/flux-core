@@ -121,7 +121,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optind < argc) {
         if ((e = argz_create (argv + optind, &command, &len)) != 0)
-            errn_exit (e, "argz_creawte");
+            log_errn_exit (e, "argz_creawte");
         argz_stringify (command, len, ' ');
     }
 
@@ -456,7 +456,7 @@ void client_dumpargs (struct client *cli)
 
     for (i = 0; i < argc; i++)
         if ((e = argz_add (&az, &az_len, subprocess_get_arg (cli->p, i))) != 0)
-            errn_exit (e, "argz_add");
+            log_errn_exit (e, "argz_add");
     argz_stringify (az, az_len, ' ');
     log_msg ("%d: %s", cli->rank, az);
     free (az);

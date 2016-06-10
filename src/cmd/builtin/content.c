@@ -84,7 +84,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         const char *hashfun;
 
         if (size > blob_size_limit)
-            errn_exit (EFBIG, "content-store");
+            log_errn_exit (EFBIG, "content-store");
         if (!(hashfun = flux_attr_get (h, "content-hash", &flags)))
             err_exit ("flux_attr_get content-hash");
         if (!strcmp (hashfun, "sha1")) {

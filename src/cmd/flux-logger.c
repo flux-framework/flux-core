@@ -83,7 +83,7 @@ int main (int argc, char *argv[])
         usage ();
 
     if ((e = argz_create (argv + optind, &message, &len)) != 0)
-        errn_exit (e, "argz_create");
+        log_errn_exit (e, "argz_create");
     argz_stringify (message, len, ' ');
 
     if (!(h = flux_open (NULL, 0)))

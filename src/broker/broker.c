@@ -358,7 +358,7 @@ int main (int argc, char *argv[])
     if (optind < argc) {
         size_t len = 0;
         if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &len)) != 0)
-            errn_exit (e, "argz_create");
+            log_errn_exit (e, "argz_create");
         argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
 

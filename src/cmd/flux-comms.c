@@ -107,7 +107,7 @@ int main (int argc, char *argv[])
         size_t len = 0;
         if (optind < argc) {
             if ((e = argz_create (argv + optind, &msg, &len)) != 0)
-                errn_exit (e, "argz_create");
+                log_errn_exit (e, "argz_create");
             argz_stringify (msg, len, ' ');
         }
         flux_panic (h, rank, msg);

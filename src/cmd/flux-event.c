@@ -103,7 +103,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
         size_t len = 0;
         json_object *o;
         if ((e = argz_create (argv + n + 1, &json_str, &len)) != 0)
-            errn_exit (e, "argz_create");
+            log_errn_exit (e, "argz_create");
         argz_stringify (json_str, len, ' ');
         if (*json_str != '{' || !(o = json_tokener_parse (json_str)))
             log_msg_exit ("JSON argument must be a valid JSON object");

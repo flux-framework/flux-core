@@ -268,9 +268,9 @@ int main (int argc, char *argv[])
     /* Spawn thread which will be our client.
      */
     if ((rc = pthread_attr_init (&attr)))
-        errn (rc, "S: pthread_attr_init");
+        log_errn (rc, "S: pthread_attr_init");
     if ((rc = pthread_create (&tid, &attr, thread, NULL)))
-        errn (rc, "S: pthread_create");
+        log_errn (rc, "S: pthread_create");
 
     /* Handle 'iter' client messages with timeout
      */
@@ -287,7 +287,7 @@ int main (int argc, char *argv[])
     /* Wait for thread to terminate, then clean up.
      */
     if ((rc = pthread_join (tid, NULL)))
-        errn (rc, "S: pthread_join");
+        log_errn (rc, "S: pthread_join");
     zctx_destroy (&zctx); /* destroys sockets too */
 
     if (strstr (uri, "ipc://"))

@@ -321,7 +321,7 @@ static void xping (flux_t h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
             || flux_rpc_get (rpc, NULL, &json_str) < 0)
         err_exit ("req.xping");
     if (!(out = Jfromstr (json_str)) || !Jget_str (out, "route", &route))
-        errn_exit (EPROTO, "req.xping");
+        log_errn_exit (EPROTO, "req.xping");
     printf ("hops=%d\n", count_hops (route));
     Jput (out);
     Jput (in);
@@ -420,7 +420,7 @@ void test_coproc (flux_t h, uint32_t nodeid)
         err_exit ("req.count");
 
     if ((rc = pthread_create (&t, NULL, thd, &nodeid)))
-        errn_exit (rc, "pthread_create");
+        log_errn_exit (rc, "pthread_create");
 
     do {
         //usleep (100*1000); /* 100ms */
@@ -445,7 +445,7 @@ void test_coproc (flux_t h, uint32_t nodeid)
         log_msg_exit ("request was not flushed");
 
     if ((rc = pthread_join (t, NULL)))
-        errn_exit (rc, "pthread_join");
+        log_errn_exit (rc, "pthread_join");
     log_msg ("thread finished");
 }
 

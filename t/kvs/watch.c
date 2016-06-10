@@ -69,12 +69,12 @@ static void signal_ready (void)
     int rc;
 
     if ((rc = pthread_mutex_lock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_lock");
+        log_errn_exit (rc, "pthread_mutex_lock");
     start_count++;
     if ((rc = pthread_mutex_unlock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_unlock");
+        log_errn_exit (rc, "pthread_mutex_unlock");
     if ((rc = pthread_cond_signal (&start_cond)))
-        errn_exit (rc, "pthread_cond_signal");
+        log_errn_exit (rc, "pthread_cond_signal");
 }
 
 static void wait_ready (void)
@@ -82,13 +82,13 @@ static void wait_ready (void)
     int rc;
 
     if ((rc = pthread_mutex_lock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_lock");
+        log_errn_exit (rc, "pthread_mutex_lock");
     while (start_count < nthreads) {
         if ((rc = pthread_cond_wait (&start_cond, &start_lock)))
-            errn_exit (rc, "pthread_cond_wait");
+            log_errn_exit (rc, "pthread_cond_wait");
     }
     if ((rc = pthread_mutex_unlock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_unlock");
+        log_errn_exit (rc, "pthread_mutex_unlock");
 }
 
 /* expect val: {-1,0,1,...,(changes - 1)}
@@ -98,7 +98,7 @@ static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
 {
     thd_t *t = arg;
     if (errnum != 0) {
-        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
     if (val == t->last_val) {
@@ -121,7 +121,7 @@ static int mt_watchnil_cb (const char *k, int val, void *arg, int errnum)
 {
     thd_t *t = arg;
     if (errnum != ENOENT) {
-        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
     t->nil_count++;
@@ -135,7 +135,7 @@ static int mt_watchstable_cb (const char *k, int val, void *arg, int errnum)
     thd_t *t = arg;
 
     if (errnum != 0) {
-        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
     t->stable_count++;
@@ -223,9 +223,9 @@ void test_mt (int argc, char **argv)
         thd[i].n = i;
         thd[i].last_val = -42;
         if ((rc = pthread_attr_init (&thd[i].attr)))
-            errn (rc, "pthread_attr_init");
+            log_errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].tid, &thd[i].attr, thread, &thd[i])))
-            errn (rc, "pthread_create");
+            log_errn (rc, "pthread_create");
     }
     wait_ready ();
 
@@ -244,7 +244,7 @@ void test_mt (int argc, char **argv)
      */
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
-            errn (rc, "pthread_join");
+            log_errn (rc, "pthread_join");
         if (thd[i].nil_count != 1) {
             log_msg ("%d: nil callback called %d times (expected one)",
                  i, thd[i].nil_count);

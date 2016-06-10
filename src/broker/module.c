@@ -135,7 +135,7 @@ static void *module_thread (void *arg)
     if (sigfillset (&signal_set) < 0)
         err_exit ("%s: sigfillset", p->name);
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
-        errn_exit (errnum, "pthread_sigmask");
+        log_errn_exit (errnum, "pthread_sigmask");
 
     /* Run the module's main().
      */
@@ -291,7 +291,7 @@ static void module_destroy (module_t *p)
     if (p->t) {
         errnum = pthread_join (p->t, NULL);
         if (errnum)
-            errn_exit (errnum, "pthread_join");
+            log_errn_exit (errnum, "pthread_join");
     }
 
     assert (p->h == NULL);
@@ -384,7 +384,7 @@ void module_set_args (module_t *p, int argc, char * const argv[])
         p->argz_len = 0;
     }
     if (argv && (e = argz_create (argv, &p->argz, &p->argz_len)) != 0)
-        errn_exit (e, "argz_create");
+        log_errn_exit (e, "argz_create");
 }
 
 void module_add_arg (module_t *p, const char *arg)
@@ -393,7 +393,7 @@ void module_add_arg (module_t *p, const char *arg)
 
     assert (p->magic == MODULE_MAGIC);
     if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
-        errn_exit (e, "argz_add");
+        log_errn_exit (e, "argz_add");
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)

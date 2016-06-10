@@ -112,7 +112,7 @@ err (const char *fmt, ...)
 /* Log message and errnum string, then exit.
  */
 void
-errn_exit (int errnum, const char *fmt, ...)
+log_errn_exit (int errnum, const char *fmt, ...)
 {
     va_list ap;
 
@@ -125,7 +125,7 @@ errn_exit (int errnum, const char *fmt, ...)
 /* Log message and errnum string.
  */
 void
-errn (int errnum, const char *fmt, ...)
+log_errn (int errnum, const char *fmt, ...)
 {
     va_list ap;
 

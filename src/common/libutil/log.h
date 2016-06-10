@@ -14,17 +14,18 @@ void err_exit (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2), noreturn));
 void err (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2)));
-void errn_exit (int errnum, const char *fmt, ...)
+void log_errn_exit (int errnum, const char *fmt, ...)
         __attribute__ ((format (printf, 2, 3), noreturn));
-void errn (int errnum, const char *fmt, ...)
+void log_errn (int errnum, const char *fmt, ...)
         __attribute__ ((format (printf, 2, 3)));
 void log_msg_exit (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2), noreturn));
 void log_msg (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2)));
 
+
 #define oom() do { \
-  errn_exit (ENOMEM, "%s::%s(), line %d", __FILE__, __FUNCTION__, __LINE__); \
+    log_errn_exit (ENOMEM, "%s::%s(), line %d", __FILE__, __FUNCTION__, __LINE__); \
 } while (0)
 
 #endif /* !_UTIL_LOG_H */

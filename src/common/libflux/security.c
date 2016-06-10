@@ -164,14 +164,14 @@ static void lock_sec (flux_sec_t c)
 {
     int e = pthread_mutex_lock (&c->lock);
     if (e)
-        errn_exit (e, "pthread_mutex_lock");
+        log_errn_exit (e, "pthread_mutex_lock");
 }
 
 static void unlock_sec (flux_sec_t c)
 {
     int e = pthread_mutex_unlock (&c->lock);
     if (e)
-        errn_exit (e, "pthread_mutex_unlock");
+        log_errn_exit (e, "pthread_mutex_unlock");
 }
 
 const char *flux_sec_errstr (flux_sec_t c)
@@ -239,7 +239,7 @@ flux_sec_t flux_sec_create (void)
     int e;
 
     if ((e = pthread_mutex_init (&c->lock, NULL)))
-        errn_exit (e, "pthread_mutex_init");
+        log_errn_exit (e, "pthread_mutex_init");
     c->uid = getuid ();
     c->gid = getgid ();
     c->typemask = FLUX_SEC_TYPE_MUNGE | FLUX_SEC_TYPE_CURVE;

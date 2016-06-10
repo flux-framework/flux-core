@@ -128,9 +128,9 @@ int main (int argc, char *argv[])
         err_exit ("S: zsocket_connect");
 
     if ((rc = pthread_attr_init (&attr)))
-        errn (rc, "S: pthread_attr_init");
+        log_errn (rc, "S: pthread_attr_init");
     if ((rc = pthread_create (&tid, &attr, thread, NULL)))
-        errn (rc, "S: pthread_create");
+        log_errn (rc, "S: pthread_create");
 
     /* Handle one client message.
      */
@@ -146,7 +146,7 @@ int main (int argc, char *argv[])
     /* Wait for thread to terminate, then clean up.
      */
     if ((rc = pthread_join (tid, NULL)))
-        errn (rc, "S: pthread_join");
+        log_errn (rc, "S: pthread_join");
     zctx_destroy (&zctx); /* destroys sockets too */
 
     flux_sec_destroy (sec);

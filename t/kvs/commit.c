@@ -161,14 +161,14 @@ int main (int argc, char *argv[])
         if (!(thd[i].perf = zlist_new ()))
             oom ();
         if ((rc = pthread_attr_init (&thd[i].attr)))
-            errn (rc, "pthread_attr_init");
+            log_errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].t, &thd[i].attr, thread, &thd[i])))
-            errn (rc, "pthread_create");
+            log_errn (rc, "pthread_create");
     }
 
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].t, NULL)))
-            errn (rc, "pthread_join");
+            log_errn (rc, "pthread_join");
         if (sopt) {
             double *e;
             while ((e = zlist_pop (thd[i].perf))) {
