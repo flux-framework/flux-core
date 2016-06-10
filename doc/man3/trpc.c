@@ -10,7 +10,7 @@ void get_rank (flux_rpc_t *rpc)
     if (flux_rpc_get (rpc, NULL, &json_str) < 0)
         err_exit ("flux_rpc_get");
     if (!(o = Jfromstr (json_str)) || !Jget_str (o, "value", &rank))
-        msg_exit ("response protocol error");
+        log_msg_exit ("response protocol error");
     printf ("rank is %s\n", rank);
     Jput (o);
 }

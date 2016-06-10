@@ -218,7 +218,7 @@ int main (int argc, char *argv[])
     if (optind != argc - 1)
         usage ();
     if (ctx.batch && ctx.count == -1)
-        msg_exit ("--batch should only be used with --count");
+        log_msg_exit ("--batch should only be used with --count");
     target = argv[optind++];
 
     /* Create null terminated pad string for reuse in each message.

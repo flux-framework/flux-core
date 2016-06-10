@@ -173,12 +173,12 @@ void cmd_type (flux_t h, int argc, char **argv)
     int i;
 
     if (argc == 0)
-        msg_exit ("get-type: specify one or more keys");
+        log_msg_exit ("get-type: specify one or more keys");
     for (i = 0; i < argc; i++) {
         if (kvs_get (h, argv[i], &json_str) < 0)
             err_exit ("%s", argv[i]);
         if (!(o = Jfromstr (json_str)))
-            msg_exit ("%s: malformed JSON", argv[i]);
+            log_msg_exit ("%s: malformed JSON", argv[i]);
         const char *type = "unknown";
         switch (json_object_get_type (o)) {
             case json_type_null:
@@ -216,12 +216,12 @@ void cmd_get (flux_t h, int argc, char **argv)
     int i;
 
     if (argc == 0)
-        msg_exit ("get: specify one or more keys");
+        log_msg_exit ("get: specify one or more keys");
     for (i = 0; i < argc; i++) {
         if (kvs_get (h, argv[i], &json_str) < 0)
             err_exit ("%s", argv[i]);
         if (!(o = Jfromstr (json_str)))
-            msg_exit ("%s: malformed JSON", argv[i]);
+            log_msg_exit ("%s: malformed JSON", argv[i]);
         switch (json_object_get_type (o)) {
             case json_type_null:
                 printf ("nil\n");
@@ -254,12 +254,12 @@ void cmd_put (flux_t h, int argc, char **argv)
     int i;
 
     if (argc == 0)
-        msg_exit ("put: specify one or more key=value pairs");
+        log_msg_exit ("put: specify one or more key=value pairs");
     for (i = 0; i < argc; i++) {
         char *key = xstrdup (argv[i]);
         char *val = strchr (key, '=');
         if (!val)
-            msg_exit ("put: you must specify a value as key=value");
+            log_msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
         if (kvs_put (h, key, val) < 0) {
             if (errno != EINVAL || kvs_put_string (h, key, val) < 0)
@@ -276,7 +276,7 @@ void cmd_unlink (flux_t h, int argc, char **argv)
     int i;
 
     if (argc == 0)
-        msg_exit ("unlink: specify one or more keys");
+        log_msg_exit ("unlink: specify one or more keys");
     for (i = 0; i < argc; i++) {
         /* FIXME: unlink nonexistent silently fails */
         /* FIXME: unlink directory silently succedes */
@@ -290,7 +290,7 @@ void cmd_unlink (flux_t h, int argc, char **argv)
 void cmd_link (flux_t h, int argc, char **argv)
 {
     if (argc != 2)
-        msg_exit ("link: specify target and link_name");
+        log_msg_exit ("link: specify target and link_name");
     if (kvs_symlink (h, argv[1], argv[0]) < 0)
         err_exit ("%s", argv[1]);
     if (kvs_commit (h) < 0)
@@ -303,7 +303,7 @@ void cmd_readlink (flux_t h, int argc, char **argv)
     char *target;
 
     if (argc == 0)
-        msg_exit ("readlink: specify one or more keys"); 
+        log_msg_exit ("readlink: specify one or more keys"); 
     for (i = 0; i < argc; i++) {
         if (kvs_get_symlink (h, argv[i], &target) < 0)
             err_exit ("%s", argv[i]);
@@ -318,7 +318,7 @@ void cmd_mkdir (flux_t h, int argc, char **argv)
     int i;
 
     if (argc == 0)
-        msg_exit ("mkdir: specify one or more directories");
+        log_msg_exit ("mkdir: specify one or more directories");
     for (i = 0; i < argc; i++) {
         if (kvs_mkdir (h, argv[i]) < 0)
             err_exit ("%s", argv[i]);
@@ -347,7 +347,7 @@ void cmd_exists (flux_t h, int argc, char **argv)
 {
     int i;
     if (argc == 0)
-        msg_exit ("exist: specify one or more keys");
+        log_msg_exit ("exist: specify one or more keys");
     for (i = 0; i < argc; i++) {
         if (!key_exists (h, argv[i]))
             exit (1);
@@ -358,7 +358,7 @@ void cmd_version (flux_t h, int argc, char **argv)
 {
     int vers;
     if (argc != 0)
-        msg_exit ("version: takes no arguments");
+        log_msg_exit ("version: takes no arguments");
     if (kvs_get_version (h, &vers) < 0)
         err_exit ("kvs_get_version");
     printf ("%d\n", vers);
@@ -368,7 +368,7 @@ void cmd_wait (flux_t h, int argc, char **argv)
 {
     int vers;
     if (argc != 1)
-        msg_exit ("wait: specify a version");
+        log_msg_exit ("wait: specify a version");
     vers = strtoul (argv[0], NULL, 10);
     if (kvs_wait_version (h, vers) < 0)
         err_exit ("kvs_get_version");
@@ -381,7 +381,7 @@ void cmd_watch (flux_t h, int argc, char **argv)
     char *key;
 
     if (argc != 1)
-        msg_exit ("watch: specify one key");
+        log_msg_exit ("watch: specify one key");
     key = argv[0];
     if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
         err_exit ("%s", key);
@@ -395,7 +395,7 @@ void cmd_watch (flux_t h, int argc, char **argv)
 void cmd_dropcache (flux_t h, int argc, char **argv)
 {
     if (argc != 0)
-        msg_exit ("dropcache: takes no arguments");
+        log_msg_exit ("dropcache: takes no arguments");
     if (kvs_dropcache (h) < 0)
         err_exit ("kvs_dropcache");
 }
@@ -403,7 +403,7 @@ void cmd_dropcache (flux_t h, int argc, char **argv)
 void cmd_dropcache_all (flux_t h, int argc, char **argv)
 {
     if (argc != 0)
-        msg_exit ("dropcache-all: takes no arguments");
+        log_msg_exit ("dropcache-all: takes no arguments");
     flux_msg_t *msg = flux_event_encode ("kvs.dropcache", NULL);
     if (!msg || flux_send (h, msg, 0) < 0)
         err_exit ("flux_send");
@@ -418,7 +418,7 @@ void cmd_copy_tokvs (flux_t h, int argc, char **argv)
     JSON o;
 
     if (argc != 2)
-        msg_exit ("copy-tokvs: specify key and filename");
+        log_msg_exit ("copy-tokvs: specify key and filename");
     key = argv[0];
     file = argv[1];
     if (!strcmp (file, "-")) {
@@ -450,13 +450,13 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
     char *json_str;
 
     if (argc != 2)
-        msg_exit ("copy-fromkvs: specify key and filename");
+        log_msg_exit ("copy-fromkvs: specify key and filename");
     key = argv[0];
     file = argv[1];
     if (kvs_get (h, key, &json_str) < 0)
         err_exit ("%s", key);
     if (!(o = Jfromstr (json_str)))
-        msg_exit ("%s: invalid JSON", key);
+        log_msg_exit ("%s: invalid JSON", key);
     if (base64_json_decode (Jobj_get (o, "data"), &buf, &len) < 0)
         err_exit ("%s: decode error", key);
     if (!strcmp (file, "-")) {
@@ -560,7 +560,7 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
         argv++;
     }
     if (argc != 1)
-        msg_exit ("watchdir: specify one directory");
+        log_msg_exit ("watchdir: specify one directory");
     key = argv[0];
 
     rc = kvs_get_dir (h, &dir, "%s", key);
@@ -594,14 +594,14 @@ void cmd_dir (flux_t h, int argc, char **argv)
     else if (argc == 1)
         dump_kvs_dir (h, ropt, argv[0]);
     else
-        msg_exit ("dir: specify zero or one directory");
+        log_msg_exit ("dir: specify zero or one directory");
 }
 
 void cmd_dirsize (flux_t h, int argc, char **argv)
 {
     kvsdir_t *dir = NULL;
     if (argc != 1)
-        msg_exit ("dirsize: specify one directory");
+        log_msg_exit ("dirsize: specify one directory");
     if (kvs_get_dir (h, &dir, "%s", argv[0]) < 0)
         err_exit ("%s", argv[0]);
     printf ("%d\n", kvsdir_get_size (dir));
@@ -611,7 +611,7 @@ void cmd_dirsize (flux_t h, int argc, char **argv)
 void cmd_copy (flux_t h, int argc, char **argv)
 {
     if (argc != 2)
-        msg_exit ("copy: specify srckey dstkey");
+        log_msg_exit ("copy: specify srckey dstkey");
     if (kvs_copy (h, argv[0], argv[1]) < 0)
         err_exit ("kvs_copy %s %s", argv[0], argv[1]);
     if (kvs_commit (h) < 0)
@@ -621,7 +621,7 @@ void cmd_copy (flux_t h, int argc, char **argv)
 void cmd_move (flux_t h, int argc, char **argv)
 {
     if (argc != 2)
-        msg_exit ("move: specify srckey dstkey");
+        log_msg_exit ("move: specify srckey dstkey");
     if (kvs_move (h, argv[0], argv[1]) < 0)
         err_exit ("kvs_move %s %s", argv[0], argv[1]);
     if (kvs_commit (h) < 0)

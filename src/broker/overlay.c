@@ -479,7 +479,7 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
     if (flux_sec_ssockinit (ov->sec, ep->zs) < 0)
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
+        log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
     zsocket_set_hwm (ep->zs, 0);
     if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
@@ -499,7 +499,7 @@ static int bind_event_pub (overlay_t *ov, struct endpoint *ep)
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
     if (flux_sec_ssockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
+        log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
     zsocket_set_sndhwm (ep->zs, 0);
     if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s: %s", __FUNCTION__, ep->uri);
@@ -524,7 +524,7 @@ static int connect_event_sub (overlay_t *ov, struct endpoint *ep)
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
     if (flux_sec_csockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
+        log_msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
     zsocket_set_rcvhwm (ep->zs, 0);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
@@ -553,7 +553,7 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
         goto error;
     if (flux_sec_csockinit (ov->sec, ep->zs) < 0) {
         savederr = errno;
-        msg ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
+        log_msg ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
         errno = savederr;
         goto error;
     }

@@ -491,7 +491,7 @@ module_t *module_add (modhash_t *mh, const char *path)
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
-        msg ("%s", dlerror ());
+        log_msg ("%s", dlerror ());
         errno = ENOENT;
         return NULL;
     }

@@ -303,7 +303,7 @@ int main (int argc, char *argv[])
                 else if (!strcmp (optarg, "curve"))
                     security_set |= FLUX_SEC_TYPE_CURVE;
                 else
-                    msg_exit ("--security argument must be none|plain|curve");
+                    log_msg_exit ("--security argument must be none|plain|curve");
                 break;
             case 'v':   /* --verbose */
                 ctx.verbose = true;
@@ -338,7 +338,7 @@ int main (int argc, char *argv[])
                 break;
             case 'm': { /* --boot-method */
                 if (!(boot_method = lookup_boot_method (optarg)))
-                    msg_exit ("unknown boot method: %s", optarg);
+                    log_msg_exit ("unknown boot method: %s", optarg);
                 break;
             }
             case 'S': { /* --setattr ATTR=VAL */
@@ -412,9 +412,9 @@ int main (int argc, char *argv[])
     if (security_set && flux_sec_enable (ctx.sec, security_set) < 0)
         err_exit ("flux_sec_enable");
     if (flux_sec_zauth_init (ctx.sec, ctx.zctx, "flux") < 0)
-        msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
+        log_msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
     if (flux_sec_munge_init (ctx.sec) < 0)
-        msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
+        log_msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
 
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
@@ -430,24 +430,24 @@ int main (int argc, char *argv[])
     if (boot_method) {
         int rc = boot_method->fun (&ctx);
         if (ctx.verbose)
-            msg ("boot: %s: %s", boot_method->name,
+            log_msg ("boot: %s: %s", boot_method->name,
                  rc == 0 ? "ok" : "fail");
         if (rc < 0)
-            msg_exit ("bootstrap failed");
+            log_msg_exit ("bootstrap failed");
     } else {
         if (ctx.verbose)
-            msg ("boot: no boot method specified");
+            log_msg ("boot: no boot method specified");
         int i, rc = -1;
         for (i = 0; boot_table[i].name != NULL; i++) {
             rc = boot_table[i].fun (&ctx);
             if (ctx.verbose)
-                msg ("boot: %s: %s", boot_table[i].name,
+                log_msg ("boot: %s: %s", boot_table[i].name,
                      rc == 0 ? "ok" : "fail");
             if (rc == 0)
                 break;
         }
         if (rc < 0)
-            msg_exit ("bootstrap failed");
+            log_msg_exit ("bootstrap failed");
     }
 
     assert (ctx.rank != FLUX_NODEID_ANY);
@@ -461,7 +461,7 @@ int main (int argc, char *argv[])
     if (ctx.verbose) {
         const char *sid = "unknown";
         (void)attr_get (ctx.attrs, "session-id", &sid, NULL);
-        msg ("boot: rank=%d size=%d session-id=%s", ctx.rank, ctx.size, sid);
+        log_msg ("boot: rank=%d size=%d session-id=%s", ctx.rank, ctx.size, sid);
     }
 
     if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
@@ -571,10 +571,10 @@ int main (int argc, char *argv[])
         const char *child = overlay_get_child (ctx.overlay);
         const char *event = overlay_get_event (ctx.overlay);
         const char *relay = overlay_get_relay (ctx.overlay);
-        msg ("parent: %s", parent ? parent : "none");
-        msg ("child: %s", child ? child : "none");
-        msg ("event: %s", event ? event : "none");
-        msg ("relay: %s", relay ? relay : "none");
+        log_msg ("parent: %s", parent ? parent : "none");
+        log_msg ("child: %s", child ? child : "none");
+        log_msg ("event: %s", event ? event : "none");
+        log_msg ("relay: %s", relay ? relay : "none");
     }
 
     update_proctitle (&ctx);
@@ -609,7 +609,7 @@ int main (int argc, char *argv[])
     /* Wire up the overlay.
      */
     if (ctx.verbose)
-        msg ("initializing overlay sockets");
+        log_msg ("initializing overlay sockets");
     if (overlay_bind (ctx.overlay) < 0) /* idempotent */
         err_exit ("overlay_bind");
     if (overlay_connect (ctx.overlay) < 0)
@@ -622,7 +622,7 @@ int main (int argc, char *argv[])
     {
         const char *scratch_dir;
         if (attr_get (ctx.attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
-            msg_exit ("scratch-directory attribute is not set");
+            log_msg_exit ("scratch-directory attribute is not set");
         }
         snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", scratch_dir, ctx.rank);
     }
@@ -637,7 +637,7 @@ int main (int argc, char *argv[])
     /* Load default modules
      */
     if (ctx.verbose)
-        msg ("loading default modules");
+        log_msg ("loading default modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
@@ -652,7 +652,7 @@ int main (int argc, char *argv[])
     if (heartbeat_start (ctx.heartbeat) < 0)
         err_exit ("heartbeat_start");
     if (ctx.rank == 0 && ctx.verbose)
-        msg ("installing session heartbeat: T=%0.1fs",
+        log_msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
 
     /* Send hello message to parent.
@@ -668,11 +668,11 @@ int main (int argc, char *argv[])
     /* Event loop
      */
     if (ctx.verbose)
-        msg ("entering event loop");
+        log_msg ("entering event loop");
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         err ("flux_reactor_run");
     if (ctx.verbose)
-        msg ("exited event loop");
+        log_msg ("exited event loop");
 
     /* remove heartbeat timer, if any
      */
@@ -682,14 +682,14 @@ int main (int argc, char *argv[])
      * FIXME: this will hang in pthread_join unless modules have been stopped.
      */
     if (ctx.verbose)
-        msg ("unloading modules");
+        log_msg ("unloading modules");
     modhash_destroy (ctx.modhash);
 
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
 
     if (ctx.verbose)
-        msg ("cleaning up");
+        log_msg ("cleaning up");
     if (ctx.enclosing_h)
         flux_close (ctx.enclosing_h);
     if (ctx.sec)
@@ -744,7 +744,7 @@ static void init_attrs_from_environment (attr_t *attrs)
     for (m = &attrmap[0]; m->env != NULL; m++) {
         val = getenv (m->env);
         if (!val && m->required)
-            msg_exit ("required environment variable %s is not set", m->env);
+            log_msg_exit ("required environment variable %s is not set", m->env);
         if (attr_add (attrs, m->attr, val, flags) < 0)
             err_exit ("attr_add %s", m->attr);
     }
@@ -808,7 +808,7 @@ static void update_pidfile (ctx_t *ctx)
     FILE *f;
 
     if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0)
-        msg_exit ("scratch-directory attribute is not set");
+        log_msg_exit ("scratch-directory attribute is not set");
     pidfile = xasprintf ("%s/%d/broker.pid", scratch_dir, ctx->rank);
     if (!(f = fopen (pidfile, "w+")))
         err_exit ("%s", pidfile);
@@ -1089,7 +1089,7 @@ static int boot_pmi (ctx_t *ctx)
     if (!(pmi = pmi_create_guess ()))
         goto done;
     if ((e = pmi_init (pmi, &spawned)) != PMI_SUCCESS) {
-        msg ("pmi_init: %s", pmi_strerror (e));
+        log_msg ("pmi_init: %s", pmi_strerror (e));
         goto done;
     }
 
@@ -1100,15 +1100,15 @@ static int boot_pmi (ctx_t *ctx)
     /* Get rank, size, appnum
      */
     if ((e = pmi_get_size (pmi, &size)) != PMI_SUCCESS) {
-        msg ("pmi_get_size: %s", pmi_strerror (e));
+        log_msg ("pmi_get_size: %s", pmi_strerror (e));
         goto done;
     }
     if ((e = pmi_get_rank (pmi, &rank)) != PMI_SUCCESS) {
-        msg ("pmi_get_rank: %s", pmi_strerror (e));
+        log_msg ("pmi_get_rank: %s", pmi_strerror (e));
         goto done;
     }
     if ((e = pmi_get_appnum (pmi, &appnum)) != PMI_SUCCESS) {
-        msg ("pmi_get_appnum: %s", pmi_strerror (e));
+        log_msg ("pmi_get_appnum: %s", pmi_strerror (e));
         goto done;
     }
     ctx->rank = rank;
@@ -1122,7 +1122,7 @@ static int boot_pmi (ctx_t *ctx)
         if (e == PMI_SUCCESS) {
             id = xzmalloc (id_len);
             if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
-                msg ("pmi_get_rank: %s", pmi_strerror (e));
+                log_msg ("pmi_get_rank: %s", pmi_strerror (e));
                 goto done;
             }
         } else { /* No pmi_get_id() available? */
@@ -1139,7 +1139,7 @@ static int boot_pmi (ctx_t *ctx)
         goto done;
     }
     if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
-        msg ("scratch-directory attribute is not set");
+        log_msg ("scratch-directory attribute is not set");
         goto done;
     }
     if (create_rankdir (ctx) < 0) {
@@ -1165,13 +1165,13 @@ static int boot_pmi (ctx_t *ctx)
      */
     if (ctx->enable_epgm) {
         if ((e = pmi_get_clique_size (pmi, &clique_size)) != PMI_SUCCESS) {
-            msg ("pmi_get_clique_size: %s", pmi_strerror (e));
+            log_msg ("pmi_get_clique_size: %s", pmi_strerror (e));
             goto done;
         }
         clique_ranks = xzmalloc (sizeof (int) * clique_size);
         if ((e = pmi_get_clique_ranks (pmi, clique_ranks, clique_size))
                                                           != PMI_SUCCESS) {
-            msg ("pmi_get_clique_ranks: %s", pmi_strerror (e));
+            log_msg ("pmi_get_clique_ranks: %s", pmi_strerror (e));
             goto done;
         }
         if (clique_size > 1) {
@@ -1192,21 +1192,21 @@ static int boot_pmi (ctx_t *ctx)
      * and buffers for keys and values.
      */
     if ((e = pmi_kvs_get_name_length_max (pmi, &kvsname_len)) != PMI_SUCCESS) {
-        msg ("pmi_kvs_get_name_length_max: %s", pmi_strerror (e));
+        log_msg ("pmi_kvs_get_name_length_max: %s", pmi_strerror (e));
         goto done;
     }
     kvsname = xzmalloc (kvsname_len);
     if ((e = pmi_kvs_get_my_name (pmi, kvsname, kvsname_len)) != PMI_SUCCESS) {
-        msg ("pmi_kvs_get_my_name: %s", pmi_strerror (e));
+        log_msg ("pmi_kvs_get_my_name: %s", pmi_strerror (e));
         goto done;
     }
     if ((e = pmi_kvs_get_key_length_max (pmi, &key_len)) != PMI_SUCCESS) {
-        msg ("pmi_kvs_get_key_length_max: %s", pmi_strerror (e));
+        log_msg ("pmi_kvs_get_key_length_max: %s", pmi_strerror (e));
         goto done;
     }
     key = xzmalloc (key_len);
     if ((e = pmi_kvs_get_value_length_max (pmi, &val_len)) != PMI_SUCCESS) {
-        msg ("pmi_kvs_get_value_length_max: %s", pmi_strerror (e));
+        log_msg ("pmi_kvs_get_value_length_max: %s", pmi_strerror (e));
         goto done;
     }
     val = xzmalloc (val_len);
@@ -1223,15 +1223,15 @@ static int boot_pmi (ctx_t *ctx)
      */
     if ((child_uri = overlay_get_child (ctx->overlay))) {
         if (snprintf (key, key_len, "cmbd.%d.uri", rank) >= key_len) {
-            msg ("pmi key string overflow");
+            log_msg ("pmi key string overflow");
             goto done;
         }
         if (snprintf (val, val_len, "%s", child_uri) >= val_len) {
-            msg ("pmi val string overflow");
+            log_msg ("pmi val string overflow");
             goto done;
         }
         if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
-            msg ("pmi_kvs_put: %s", pmi_strerror (e));
+            log_msg ("pmi_kvs_put: %s", pmi_strerror (e));
             goto done;
         }
     }
@@ -1240,15 +1240,15 @@ static int boot_pmi (ctx_t *ctx)
      */
     if (ctx->enable_epgm && (relay_uri = overlay_get_relay (ctx->overlay))) {
         if (snprintf (key, key_len, "cmbd.%d.relay", rank) >= key_len) {
-            msg ("pmi key string overflow");
+            log_msg ("pmi key string overflow");
             goto done;
         }
         if (snprintf (val, val_len, "%s", relay_uri) >= val_len) {
-            msg ("pmi val string overflow");
+            log_msg ("pmi val string overflow");
             goto done;
         }
         if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
-            msg ("pmi_kvs_put: %s", pmi_strerror (e));
+            log_msg ("pmi_kvs_put: %s", pmi_strerror (e));
             goto done;
         }
     }
@@ -1256,11 +1256,11 @@ static int boot_pmi (ctx_t *ctx)
     /* Puts are complete, now we synchronize and begin our gets.
      */
     if ((e = pmi_kvs_commit (pmi, kvsname)) != PMI_SUCCESS) {
-        msg ("pmi_kvs_commit: %s", pmi_strerror (e));
+        log_msg ("pmi_kvs_commit: %s", pmi_strerror (e));
         goto done;
     }
     if ((e = pmi_barrier (pmi)) != PMI_SUCCESS) {
-        msg ("pmi_barrier: %s", pmi_strerror (e));
+        log_msg ("pmi_barrier: %s", pmi_strerror (e));
         goto done;
     }
 
@@ -1269,12 +1269,12 @@ static int boot_pmi (ctx_t *ctx)
     if (ctx->rank > 0) {
         parent_rank = kary_parentof (ctx->tbon.k, ctx->rank);
         if (snprintf (key, key_len, "cmbd.%d.uri", parent_rank) >= key_len) {
-            msg ("pmi key string overflow");
+            log_msg ("pmi key string overflow");
             goto done;
         }
         if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
                                                             != PMI_SUCCESS) {
-            msg ("pmi_kvs_get: %s", pmi_strerror (e));
+            log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
             goto done;
         }
         overlay_push_parent (ctx->overlay, "%s", val);
@@ -1296,12 +1296,12 @@ static int boot_pmi (ctx_t *ctx)
         if (relay_rank >= 0 && rank != relay_rank) {
             if (snprintf (key, key_len, "cmbd.%d.relay", relay_rank)
                                                                 >= key_len) {
-                msg ("pmi key string overflow");
+                log_msg ("pmi key string overflow");
                 goto done;
             }
             if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
                                                             != PMI_SUCCESS) {
-                msg ("pmi_kvs_get: %s", pmi_strerror (e));
+                log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
                 goto done;
             }
             overlay_set_event (ctx->overlay, "%s", val);
@@ -1363,7 +1363,7 @@ static bool nodeset_member (const char *s, uint32_t rank)
 
     if (s) {
         if (!(ns = nodeset_create_string (s)))
-            msg_exit ("malformed nodeset: %s", s);
+            log_msg_exit ("malformed nodeset: %s", s);
         member = nodeset_test_rank (ns, rank);
     }
     if (ns)
@@ -1403,18 +1403,18 @@ static void load_modules (ctx_t *ctx, const char *default_modules)
         }
         if (strchr (s, '/')) {
             if (!(name = flux_modname (s)))
-                msg_exit ("%s", dlerror ());
+                log_msg_exit ("%s", dlerror ());
             path = s;
         } else {
             if (!(path = flux_modfind (modpath, s)))
-                msg_exit ("%s: not found in module search path", s);
+                log_msg_exit ("%s: not found in module search path", s);
             name = s;
         }
         if (!(p = module_add (ctx->modhash, path)))
             err_exit ("%s: module_add %s", name, path);
         if (!svc_add (ctx->services, module_get_name (p),
                                      module_get_service (p), mod_svc_cb, p))
-            msg_exit ("could not register service %s", module_get_name (p));
+            log_msg_exit ("could not register service %s", module_get_name (p));
         module_set_poller_cb (p, module_cb, ctx);
         module_set_status_cb (p, module_status_cb, ctx);
 next:
@@ -2153,8 +2153,7 @@ static int cmb_panic_cb (zmsg_t **zmsg, void *arg)
         goto done;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "msg", &s))
         s = "no reason";
-    msg ("PANIC: %s", s ? s : "no reason");
-    exit (1);
+    log_msg_exit ("PANIC: %s", s ? s : "no reason");
 done:
     Jput (in);
     return rc;

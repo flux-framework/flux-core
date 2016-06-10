@@ -102,7 +102,7 @@ int main (int argc, char *argv[])
             case 'c': /* --count N */
                 maxcount = atoi (optarg);
                 if (maxcount < 0 || maxcount > INT_MAX)
-                    msg_exit ("--count: invalid arg: '%s'", optarg);
+                    log_msg_exit ("--count: invalid arg: '%s'", optarg);
                 break;
             case 'l': /* --long */
                 lopt = true;
@@ -126,7 +126,7 @@ int main (int argc, char *argv[])
             oom ();
     }
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
-        msg_exit ("FLUX_SEC_DIRECTORY is not set");
+        log_msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
@@ -156,15 +156,15 @@ int main (int argc, char *argv[])
     if (nopt) {
         if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
             err_exit ("flux_sec_disable");
-        msg ("Security is disabled");
+        log_msg ("Security is disabled");
     }
     if (flux_sec_zauth_init (sec, zctx, session) < 0)
-        msg_exit ("flux_sec_zinit: %s", flux_sec_errstr (sec));
+        log_msg_exit ("flux_sec_zinit: %s", flux_sec_errstr (sec));
 
     /* Connect to the snoop socket
      */
     if (vopt)
-        msg ("connecting to %s...", uri);
+        log_msg ("connecting to %s...", uri);
 
     if (!(s = connect_snoop (zctx, sec, uri)))
         err_exit ("%s", uri);
@@ -187,7 +187,7 @@ int main (int argc, char *argv[])
     if ((zloop_start (zloop) < 0) && (count != maxcount))
         err_exit ("zloop_start");
     if (vopt)
-        msg ("disconnecting");
+        log_msg ("disconnecting");
 
     zmonitor_destroy (&zmon);
 
@@ -207,7 +207,7 @@ static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri)
     if (!(s = zsocket_new (zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
     if (flux_sec_csockinit (sec, s) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (sec));
+        log_msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (sec));
     if (zsocket_connect (s, "%s", uri) < 0)
         err_exit ("%s", uri);
 
@@ -272,7 +272,7 @@ static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
             free (s);
         }
         if (event == ZMQ_EVENT_DISCONNECTED)
-            msg_exit ("lost connection");
+            log_msg_exit ("lost connection");
         zmsg_destroy (&zmsg);
     }
     return 0;

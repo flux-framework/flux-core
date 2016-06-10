@@ -101,7 +101,7 @@ int main (int argc, char *argv[])
             tname = xasprintf ("%s.%d", name, i);
         if (flux_barrier (h, tname, nprocs) < 0) {
             if (errno == EINVAL && tname == NULL)
-                msg_exit ("%s", "provide barrier name if not running as LWJ");
+                log_msg_exit ("%s", "provide barrier name if not running as LWJ");
             else
                 err_exit ("flux_barrier");
         }

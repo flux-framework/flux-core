@@ -47,7 +47,7 @@ int count_watchers (flux_t h)
         if (flux_rpc_get (r, NULL, &json_str) < 0)
             err_exit ("kvs.stats.get");
         if (!(out = Jfromstr (json_str)) || !Jget_int (out, "#watchers", &n))
-            msg_exit ("error decoding stats payload");
+            log_msg_exit ("error decoding stats payload");
         count += n;
         Jput (out);
     }
@@ -68,14 +68,14 @@ int main (int argc, char **argv)
     w0 = count_watchers (h);
     send_watch_requests (h, "nonexist");
     w1 = count_watchers (h) - w0;
-    msg ("test watchers: %d", w1);
+    log_msg ("test watchers: %d", w1);
     flux_close (h);
-    msg ("disconnected");
+    log_msg ("disconnected");
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
     w2 = count_watchers (h) - w0;
-    msg ("test watchers: %d", w2);
+    log_msg ("test watchers: %d", w2);
     if (w2 != 0)
         err_exit ("Test failure, watchers were not removed on disconnect");
 

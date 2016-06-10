@@ -235,7 +235,7 @@ char *flux_modname(const char *path)
     // library dependency doesn't resolve, it really helps to know that's
     // the error.  Otherwise it prints as "invalid argument" from the
     // broker.
-    msg ("%s", dlerror ());
+    log_msg ("%s", dlerror ());
     errno = ENOENT;
     return NULL;
 }

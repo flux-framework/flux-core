@@ -43,7 +43,7 @@ static int cmd_env (optparse_t *p, int ac, char *av[])
     } else {
         struct environment *env = optparse_get_data (p, "env");
         if (env == NULL)
-            msg_exit ("flux-env: failed to get flux envirnoment!");
+            log_msg_exit ("flux-env: failed to get flux envirnoment!");
         print_environment (env);
     }
     return (0);

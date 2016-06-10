@@ -120,11 +120,11 @@ int main (int argc, char *argv[])
     if (optind != argc - 1)
         usage ();
     if (scale != 1.0 && type != json_type_int && type != json_type_double)
-        msg_exit ("Use --scale only with --type int or --type double");
+        log_msg_exit ("Use --scale only with --type int or --type double");
     target = argv[optind++];
 
     if (Copt && nodeid != FLUX_NODEID_ANY)
-        msg_exit ("Use --clear not --clear-all to clear a single node.");
+        log_msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");

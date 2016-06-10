@@ -160,7 +160,7 @@ void test_echo (flux_t h, uint32_t nodeid)
         err_exit ("%s", __FUNCTION__);
     if (!(out = Jfromstr (json_str)) || !Jget_str (out, "mumble", &s)
                                      || strcmp (s, "burble") != 0)
-        msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
+        log_msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
     Jput (in);
     Jput (out);
     flux_rpc_destroy (rpc);
@@ -173,9 +173,9 @@ void test_err (flux_t h, uint32_t nodeid)
     if (!(rpc = flux_rpc (h, "req.err", NULL, nodeid, 0)))
         err_exit ("error sending request");
     if (flux_rpc_get (rpc, NULL, NULL) == 0)
-        msg_exit ("%s: succeeded when should've failed", __FUNCTION__);
+        log_msg_exit ("%s: succeeded when should've failed", __FUNCTION__);
     if (errno != 42)
-        msg_exit ("%s: got errno %d instead of 42", __FUNCTION__, errno);
+        log_msg_exit ("%s: got errno %d instead of 42", __FUNCTION__, errno);
     flux_rpc_destroy (rpc);
 }
 
@@ -190,7 +190,7 @@ void test_src (flux_t h, uint32_t nodeid)
              || flux_rpc_get (rpc, NULL, &json_str) < 0)
         err_exit ("%s", __FUNCTION__);
     if (!(out = Jfromstr (json_str)) || !Jget_int (out, "wormz", &i) || i != 42)
-        msg_exit ("%s: didn't get expected payload", __FUNCTION__);
+        log_msg_exit ("%s: didn't get expected payload", __FUNCTION__);
     Jput (out);
     flux_rpc_destroy (rpc);
 }
@@ -227,11 +227,11 @@ void test_nsrc (flux_t h, uint32_t nodeid)
         if (!msg)
             err_exit ("%s", __FUNCTION__);
         if (flux_response_decode (msg, NULL, &json_str) < 0)
-            msg_exit ("%s: decode %d", __FUNCTION__, i);
+            log_msg_exit ("%s: decode %d", __FUNCTION__, i);
         if (!(out = Jfromstr (json_str)) || !Jget_int (out, "seq", &seq))
-            msg_exit ("%s: decode %d payload", __FUNCTION__, i);
+            log_msg_exit ("%s: decode %d payload", __FUNCTION__, i);
         if (seq != i)
-            msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
+            log_msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
         Jput (out);
         flux_msg_destroy (msg);
     }
@@ -269,9 +269,9 @@ void test_putmsg (flux_t h, uint32_t nodeid)
         if (!msg)
             err_exit ("%s", __FUNCTION__);
         if (flux_response_decode (msg, NULL, &json_str) < 0)
-            msg_exit ("%s: decode", __FUNCTION__);
+            log_msg_exit ("%s: decode", __FUNCTION__);
         if (!(out = Jfromstr (json_str)) || !Jget_int (out, "seq", &seq))
-            msg_exit ("%s: decode - payload", __FUNCTION__);
+            log_msg_exit ("%s: decode - payload", __FUNCTION__);
         Jput (out);
         if (seq >= defer_start && seq < defer_start + defer_count && !popped) {
             if (zlist_append (defer, msg) < 0)
@@ -287,7 +287,7 @@ void test_putmsg (flux_t h, uint32_t nodeid)
             continue;
         }
         if (seq != myseq)
-            msg_exit ("%s: expected %d got %d", __FUNCTION__, myseq, seq);
+            log_msg_exit ("%s: expected %d got %d", __FUNCTION__, myseq, seq);
         myseq++;
         flux_msg_destroy (msg);
     } while (myseq < count);
@@ -427,13 +427,13 @@ void test_coproc (flux_t h, uint32_t nodeid)
         if ((count = req_count (h, nodeid)) < 0)
             err_exit ("req.count");
     } while (count - count0 < 1);
-    msg ("%d requests are stuck", count - count0);
+    log_msg ("%d requests are stuck", count - count0);
 
     if (!(rpc = flux_rpc (h, "coproc.hi", NULL, nodeid, 0))
              || flux_rpc_get (rpc, NULL, NULL) < 0)
         err_exit ("coproc.hi");
     flux_rpc_destroy (rpc);
-    msg ("hi request was answered");
+    log_msg ("hi request was answered");
 
     if (!(rpc = flux_rpc (h, "req.flush", NULL, nodeid, 0))
              || flux_rpc_get (rpc, NULL, NULL) < 0)
@@ -442,11 +442,11 @@ void test_coproc (flux_t h, uint32_t nodeid)
     if ((count = req_count (h, nodeid)) < 0)
         err_exit ("req.count");
     if (count != 0)
-        msg_exit ("request was not flushed");
+        log_msg_exit ("request was not flushed");
 
     if ((rc = pthread_join (t, NULL)))
         errn_exit (rc, "pthread_join");
-    msg ("thread finished");
+    log_msg ("thread finished");
 }
 
 /*

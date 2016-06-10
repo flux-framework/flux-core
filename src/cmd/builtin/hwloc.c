@@ -59,7 +59,7 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
         err_exit ("flux_rpc");
 
     if (!(t->o = Jfromstr (json_str)) || !Jget_str (t->o, "topology", &t->topo))
-        msg_exit ("failed to parse json topology");
+        log_msg_exit ("failed to parse json topology");
 
     return (t);
 }
@@ -90,11 +90,11 @@ static void lstopo_argz_init (char *cmd, char **argzp, size_t *argz_lenp,
                      "--of", "console", NULL };
     if (  (e = argz_create (argv, argzp, argz_lenp)) != 0
        || (e = argz_create (extra_args, &extra, &extra_len)) != 0)
-        msg_exit ("argz_create: %s", strerror (e));
+        log_msg_exit ("argz_create: %s", strerror (e));
 
     /*  Append any extra args in av[] */
     if ((e = argz_append (argzp, argz_lenp, extra, extra_len)) != 0)
-        msg_exit ("argz_append: %s", strerror (e));
+        log_msg_exit ("argz_append: %s", strerror (e));
 
     free (extra);
 }
@@ -185,9 +185,9 @@ static int cmd_lstopo (optparse_t *p, int ac, char *av[])
     status = exec_lstopo (p, ac, av, hwloc_topo_topology (t));
     if (status) {
         if (WIFEXITED (status) && WEXITSTATUS (status) != ENOENT)
-            msg_exit ("lstopo: Exited with %d", WEXITSTATUS (status));
+            log_msg_exit ("lstopo: Exited with %d", WEXITSTATUS (status));
         if (WIFSIGNALED (status) && WTERMSIG (status) != SIGPIPE)
-            msg_exit ("lstopo: %s%s", strsignal (WTERMSIG (status)),
+            log_msg_exit ("lstopo: %s%s", strsignal (WTERMSIG (status)),
                       WCOREDUMP (status) ? " (core dumped)" : "");
     }
 

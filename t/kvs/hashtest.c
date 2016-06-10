@@ -439,7 +439,7 @@ struct hash_impl *create_sophia (void)
     path = mkdtemp (template);
     assert (path != NULL);
     cleanup_push_string (cleanup_directory_recursive, path);
-    msg ("sophia.path: %s", path);
+    log_msg ("sophia.path: %s", path);
     impl->h = sp_env ();
     assert (impl->h != NULL);
     rc = sp_setstring (impl->h, "sophia.path", path, 0);
@@ -596,7 +596,7 @@ struct hash_impl *create_sqlite (void)
     path = mkdtemp (template);
     assert (path != NULL);
     cleanup_push_string (cleanup_directory_recursive, path);
-    msg ("sqlite path: %s", path);
+    log_msg ("sqlite path: %s", path);
 
     snprintf (dbpath, sizeof (dbpath), "%s/db", path);
     rc = sqlite3_open (dbpath, &db);
@@ -679,25 +679,25 @@ int main (int argc, char *argv[])
         impl = create_sqlite ();
     if (!impl)
         usage ();
-    msg ("create hash: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
+    log_msg ("create hash: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
                                        rusage_maxrss_since (&res));
 
     rusage (&res);
     monotime (&t0);
     items = create_items ();
-    msg ("create items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
+    log_msg ("create items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
                                         rusage_maxrss_since (&res));
 
     rusage (&res);
     monotime (&t0);
     impl->insert (impl, items);
-    msg ("insert items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
+    log_msg ("insert items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
                                         rusage_maxrss_since (&res));
 
     rusage (&res);
     monotime (&t0);
     impl->lookup (impl, items);
-    msg ("lookup items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
+    log_msg ("lookup items: %.2fs (%+ldK)", monotime_since (t0) * 1E-3,
                                         rusage_maxrss_since (&res));
 
     impl->destroy (impl);

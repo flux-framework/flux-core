@@ -814,14 +814,14 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
 
         } else if (json_object_object_get_ex (dirent, "DIRVAL", &dir)) {
             /* N.B. in current code, directories are never stored by value */
-            msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
+            log_msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
                       __FUNCTION__, path, name, Jtostr (dirent));
         } else if ((Jget_str (dirent, "FILEREF", NULL)
                  || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
             errno = ENOTDIR;
             goto error;
         } else {
-            msg_exit ("%s: unknown dirent type: path=%s name=%s: dirent=%s ",
+            log_msg_exit ("%s: unknown dirent type: path=%s name=%s: dirent=%s ",
                       __FUNCTION__, path, name, Jtostr (dirent));
         }
         name = next;
@@ -920,7 +920,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             FASSERT (ctx->h, dir == false); /* dir && readlink should never happen */
             val = vp;
         } else
-            msg_exit ("%s: corrupt internal storage", __FUNCTION__);
+            log_msg_exit ("%s: corrupt internal storage", __FUNCTION__);
     }
     /* val now contains the requested object */
     if (isdir)

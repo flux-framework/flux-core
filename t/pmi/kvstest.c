@@ -57,30 +57,30 @@ int main(int argc, char *argv[])
         err_exit ("pmi_create");
     e = pmi_init (pmi, &spawned);
     if (e != PMI_SUCCESS)
-        msg_exit ("pmi_init: %s", pmi_strerror (e));
+        log_msg_exit ("pmi_init: %s", pmi_strerror (e));
     e = pmi_initialized (pmi, &initialized);
     if (e != PMI_SUCCESS)
-        msg_exit ("pmi_initialized: %s", pmi_strerror (e));
+        log_msg_exit ("pmi_initialized: %s", pmi_strerror (e));
     if (initialized == 0)
-        msg_exit ("pmi_initialized says nope!");
+        log_msg_exit ("pmi_initialized says nope!");
     e = pmi_get_rank (pmi, &rank);
     if (e != PMI_SUCCESS)
-        msg_exit ("pmi_get_rank: %s", pmi_strerror (e));
+        log_msg_exit ("pmi_get_rank: %s", pmi_strerror (e));
     e = pmi_get_size (pmi, &size);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_get_size: %s",
+        log_msg_exit ("%d: pmi_get_size: %s",
                 rank, pmi_strerror (e));
     e = pmi_kvs_get_name_length_max (pmi, &kvsname_len);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_kvs_get_name_length_max: %s",
+        log_msg_exit ("%d: pmi_kvs_get_name_length_max: %s",
                 rank, pmi_strerror (e));
     e = pmi_kvs_get_key_length_max (pmi, &key_len);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_kvs_get_key_length_max: %s",
+        log_msg_exit ("%d: pmi_kvs_get_key_length_max: %s",
                 rank, pmi_strerror (e));
     e = pmi_kvs_get_value_length_max (pmi, &val_len);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_kvs_get_value_length_max: %s",
+        log_msg_exit ("%d: pmi_kvs_get_value_length_max: %s",
                 rank, pmi_strerror (e));
 
     kvsname = xzmalloc (kvsname_len);
@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 
     e = pmi_kvs_get_my_name (pmi, kvsname, kvsname_len);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_kvs_get_my_name: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: pmi_kvs_get_my_name: %s", rank, pmi_strerror (e));
 
     /* Put phase
      * (keycount * PUT) + COMMIT + BARRIER
@@ -101,14 +101,14 @@ int main(int argc, char *argv[])
         snprintf (val, val_len, "sandwich.%d.%d", rank, i);
         e = pmi_kvs_put (pmi, kvsname, key, val);
         if (e != PMI_SUCCESS)
-            msg_exit ("%d: pmi_kvs_put: %s", rank, pmi_strerror (e));
+            log_msg_exit ("%d: pmi_kvs_put: %s", rank, pmi_strerror (e));
     }
     e = pmi_kvs_commit (pmi, kvsname);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_kvs_commit: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: pmi_kvs_commit: %s", rank, pmi_strerror (e));
     e = pmi_barrier (pmi);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_barrier: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: pmi_barrier: %s", rank, pmi_strerror (e));
     if (rank == 0)
         printf ("%d: put phase: %.3f sec\n", rank, monotime_since (t));
 
@@ -123,10 +123,10 @@ int main(int argc, char *argv[])
                 snprintf (key, key_len, "kvstest-%d-%d", j, i);
                 e = pmi_kvs_get (pmi, kvsname, key, val, val_len);
                 if (e != PMI_SUCCESS)
-                    msg_exit ("%d: pmi_kvs_get: %s", rank, pmi_strerror (e));
+                    log_msg_exit ("%d: pmi_kvs_get: %s", rank, pmi_strerror (e));
                 snprintf (val2, val_len, "sandwich.%d.%d", j, i);
                 if (strcmp (val, val2) != 0)
-                    msg_exit ("%d: pmi_kvs_get: exp %s got %s\n",
+                    log_msg_exit ("%d: pmi_kvs_get: exp %s got %s\n",
                              rank, val2, val);
             }
         } else {
@@ -134,22 +134,22 @@ int main(int argc, char *argv[])
                       rank > 0 ? rank - 1 : size - 1, i);
             e = pmi_kvs_get (pmi, kvsname, key, val, val_len);
             if (e != PMI_SUCCESS)
-                msg_exit ("%d: pmi_kvs_get: %s", rank, pmi_strerror (e));
+                log_msg_exit ("%d: pmi_kvs_get: %s", rank, pmi_strerror (e));
             snprintf (val2, val_len, "sandwich.%d.%d",
                       rank > 0 ? rank - 1 : size - 1, i);
             if (strcmp (val, val2) != 0)
-                msg_exit ("%d: pmi_kvs_get: exp %s got %s\n", rank, val2, val);
+                log_msg_exit ("%d: pmi_kvs_get: exp %s got %s\n", rank, val2, val);
         }
     }
     e = pmi_barrier (pmi);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_barrier: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: pmi_barrier: %s", rank, pmi_strerror (e));
     if (rank == 0)
         printf ("%d: get phase: %.3f sec\n", rank, monotime_since (t));
 
     e = pmi_finalize (pmi);
     if (e != PMI_SUCCESS)
-        msg_exit ("%d: pmi_finalize: %s", rank, pmi_strerror (e));
+        log_msg_exit ("%d: pmi_finalize: %s", rank, pmi_strerror (e));
 
     free (val);
     free (val2);

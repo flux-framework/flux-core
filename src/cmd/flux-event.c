@@ -106,7 +106,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
             errn_exit (e, "argz_create");
         argz_stringify (json_str, len, ' ');
         if (*json_str != '{' || !(o = json_tokener_parse (json_str)))
-            msg_exit ("JSON argument must be a valid JSON object");
+            log_msg_exit ("JSON argument must be a valid JSON object");
         json_object_put (o);
     }
     if (!(msg = flux_event_encode (topic, json_str))

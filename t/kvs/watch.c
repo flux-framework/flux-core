@@ -102,7 +102,7 @@ static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
         return -1;
     }
     if (val == t->last_val) {
-        msg ("%d: %s: called with same value as last time: %d", t->n,
+        log_msg ("%d: %s: called with same value as last time: %d", t->n,
             __FUNCTION__, val);
         return -1;
     }
@@ -246,17 +246,17 @@ void test_mt (int argc, char **argv)
         if ((rc = pthread_join (thd[i].tid, NULL)))
             errn (rc, "pthread_join");
         if (thd[i].nil_count != 1) {
-            msg ("%d: nil callback called %d times (expected one)",
+            log_msg ("%d: nil callback called %d times (expected one)",
                  i, thd[i].nil_count);
             errors++;
         }
         if (thd[i].stable_count != 1) {
-            msg ("%d: stable callback called %d times (expected one)",
+            log_msg ("%d: stable callback called %d times (expected one)",
                  i, thd[i].stable_count);
             errors++;
         }
         if (thd[i].change_count > changes + 1) {
-            msg ("%d: changing callback called %d times (expected <= %d)",
+            log_msg ("%d: changing callback called %d times (expected <= %d)",
                  i, thd[i].change_count, changes + 1);
             errors++;
         }
@@ -272,7 +272,7 @@ void test_mt (int argc, char **argv)
 
 static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
 {
-    msg ("%s: value = %d errnum = %d", __FUNCTION__, val, errnum);
+    log_msg ("%s: value = %d errnum = %d", __FUNCTION__, val, errnum);
 
     flux_t h = arg;
     if (kvs_put_int (h, key, val + 1) < 0)
@@ -302,9 +302,9 @@ void test_selfmod (int argc, char **argv)
     if (kvs_watch_int (h, key, selfmod_watch_cb, h) < 0)
         err_exit ("kvs_watch_int");
 
-    msg ("reactor: start");
+    log_msg ("reactor: start");
     flux_reactor_run (flux_get_reactor (h), 0);
-    msg ("reactor: end");
+    log_msg ("reactor: end");
 
     flux_close (h);
 }
@@ -326,7 +326,7 @@ static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct timer_ctx *ctx = arg;
     static int count = 0;
-    msg ("%s", __FUNCTION__);
+    log_msg ("%s", __FUNCTION__);
     if (kvs_put_int (ctx->h, ctx->key, count++) < 0)
         err_exit ("%s: kvs_put_int", __FUNCTION__);
     if (kvs_commit (ctx->h) < 0)
@@ -367,7 +367,7 @@ void test_unwatch (int argc, char **argv)
     if (flux_reactor_run (r, 0) < 0)
         err_exit ("flux_reactor_run");
     if (count != 10)
-        msg_exit ("watch called %d times (should be 10)", count);
+        log_msg_exit ("watch called %d times (should be 10)", count);
     flux_watcher_destroy (timer);
     flux_close (ctx.h);
 }
@@ -402,7 +402,7 @@ void test_unwatchloop (int argc, char **argv)
     }
     uint32_t leaked = avail - flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
     if (leaked > 0)
-        msg_exit ("leaked %u matchtags", leaked);
+        log_msg_exit ("leaked %u matchtags", leaked);
 
     flux_close (h);
 }

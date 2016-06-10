@@ -141,7 +141,7 @@ int main (int argc, char *argv[])
         err_exit ("S: flux_sec_unmunge_zmsg: %s", flux_sec_errstr (sec));
     //zmsg_dump (zmsg);
     if ((n = zmsg_size (zmsg) != nframes))
-        msg_exit ("S: expected %d frames, got %d", nframes, n);
+        log_msg_exit ("S: expected %d frames, got %d", nframes, n);
 
     /* Wait for thread to terminate, then clean up.
      */

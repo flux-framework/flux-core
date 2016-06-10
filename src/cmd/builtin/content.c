@@ -98,7 +98,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
             sha1_hashtostr (hash, hashstr);
             printf ("%s\n", hashstr);
         } else
-            msg_exit ("content-store: unsupported hash function: %s", hashfun);
+            log_msg_exit ("content-store: unsupported hash function: %s", hashfun);
     } else {
         const char *blobref;
         int blobref_size;
@@ -111,7 +111,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0)
             err_exit ("%s", topic);
         if (!blobref || blobref[blobref_size - 1] != '\0')
-            msg_exit ("%s: protocol error", topic);
+            log_msg_exit ("%s: protocol error", topic);
         printf ("%s\n", blobref);
         flux_rpc_destroy (rpc);
     }
@@ -174,7 +174,7 @@ static void store_completion (flux_rpc_t *rpc, void *arg)
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0)
         err_exit ("store");
     if (!blobref || blobref[blobref_size - 1] != '\0')
-        msg_exit ("store: protocol error");
+        log_msg_exit ("store: protocol error");
     //printf ("%s\n", blobref);
     flux_rpc_destroy (rpc);
     if (--spam_cur_inflight < spam_max_inflight/2)

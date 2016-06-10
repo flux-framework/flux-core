@@ -278,7 +278,7 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
     flux_reactor_t *r = flux_get_reactor (h);
     flux_watcher_t *w = NULL;
 
-    msg ("process attached to %s", key);
+    log_msg ("process attached to %s", key);
 
     ctx->h = h;
     ctx->blocksize = blocksize;

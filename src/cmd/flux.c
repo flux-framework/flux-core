@@ -96,21 +96,21 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
     optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] COMMAND ARGS");
     e = optparse_add_option_table (p, opts);
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option_table() failed");
+        log_msg_exit ("optparse_add_option_table() failed");
 
     // Remove automatic `--help' in favor of our own usage() from above
     e = optparse_remove_option (p, "help");
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_remove_option (\"help\")");
+        log_msg_exit ("optparse_remove_option (\"help\")");
     e = optparse_add_option (p, &helpopt);
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option (\"help\")");
+        log_msg_exit ("optparse_add_option (\"help\")");
 
     // Don't print internal subcommands in --help (we print subcommands using
     //  emit_command_help() above.
     e = optparse_set (p, OPTPARSE_PRINT_SUBCMDS, 0);
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_set (OPTPARSE_PRINT_SUBCMDS");
+        log_msg_exit ("optparse_set (OPTPARSE_PRINT_SUBCMDS");
 
     register_builtin_subcommands (p);
 
@@ -310,11 +310,11 @@ void setup_keydir (struct environment *env, int flags)
     if (!dir) {
         struct passwd *pw = getpwuid (getuid ());
         if (!pw)
-            msg_exit ("Who are you!?!");
+            log_msg_exit ("Who are you!?!");
         dir = new_dir = xasprintf ("%s/.flux", pw->pw_dir);
     }
     if (!dir)
-        msg_exit ("Could not determine keydir");
+        log_msg_exit ("Could not determine keydir");
     environment_set (env, "FLUX_SEC_DIRECTORY", dir, 0);
     if (new_dir)
         free (new_dir);
@@ -328,7 +328,7 @@ void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
             dir ? "/" : "",
             prefix ? prefix : "", argv[0]);
     if (vopt)
-        msg ("trying to exec %s", path);
+        log_msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
     free (path);
 }
@@ -347,7 +347,7 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
+        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
     }
 }
 
@@ -375,7 +375,7 @@ static void register_builtin_subcommands (optparse_t *p)
     struct builtin_cmd *cmd = &builtin_cmds[0];
     while (cmd->reg_fn) {
         if (cmd->reg_fn (p) < 0)
-            msg_exit ("register builtin %s failed\n", cmd->name);
+            log_msg_exit ("register builtin %s failed\n", cmd->name);
         cmd++;
     }
 }

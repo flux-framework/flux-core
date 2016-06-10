@@ -134,7 +134,7 @@ int main (int argc, char *argv[])
     opt.argv = argv + optind;
 
     if (!(f = func_lookup (cmd)))
-        msg_exit ("unknown function '%s'", cmd);
+        log_msg_exit ("unknown function '%s'", cmd);
 
     if (strcmp (cmd, "info") != 0) {
         if (!(h = flux_open (NULL, 0)))
@@ -181,14 +181,14 @@ void parse_modarg (const char *arg, char **name, char **path)
         if (!(modpath = realpath (arg, NULL)))
             err_exit ("%s", arg);
         if (!(modname = flux_modname (modpath)))
-            msg_exit ("%s", dlerror ());
+            log_msg_exit ("%s", dlerror ());
     } else {
         char *searchpath = getenv ("FLUX_MODULE_PATH");
         if (!searchpath)
-            msg_exit ("FLUX_MODULE_PATH is not set");
+            log_msg_exit ("FLUX_MODULE_PATH is not set");
         modname = xstrdup (arg);
         if (!(modpath = flux_modfind (searchpath, modname)))
-            msg_exit ("%s: not found in module search path", modname);
+            log_msg_exit ("%s: not found in module search path", modname);
     }
     *name = modname;
     *path = modpath;
@@ -251,7 +251,7 @@ void mod_insmod (flux_t h, opt_t opt)
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, NULL) < 0) {
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
-                msg ("%s[%" PRIu32 "]: %s module/service is in use",
+                log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
                      topic, nodeid, modname);
             else if (nodeid != FLUX_NODEID_ANY)
                 err ("%s[%" PRIu32 "]", topic, nodeid);

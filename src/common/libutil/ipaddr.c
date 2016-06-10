@@ -48,10 +48,10 @@ void ipaddr_getprimary (char *buf, int len)
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL)
-        msg_exit ("getaddrinfo %s: %s", hostname, gai_strerror (e));
+        log_msg_exit ("getaddrinfo %s: %s", hostname, gai_strerror (e));
     if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, buf, len,
                           NULL, 0, NI_NUMERICHOST)))
-        msg_exit ("getnameinfo %s: %s", hostname, gai_strerror (e));
+        log_msg_exit ("getnameinfo %s: %s", hostname, gai_strerror (e));
     freeaddrinfo (res);
 }
 

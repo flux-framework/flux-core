@@ -85,9 +85,9 @@ int main (int argc, char *argv[])
     if (secdir)
         flux_sec_set_directory (sec, secdir);
     if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)
-        msg_exit ("PLAIN security is not available");
+        log_msg_exit ("PLAIN security is not available");
     if (flux_sec_keygen (sec, force, true) < 0)
-        msg_exit ("%s", flux_sec_errstr (sec));
+        log_msg_exit ("%s", flux_sec_errstr (sec));
     flux_sec_destroy (sec);
 
     log_fini ();

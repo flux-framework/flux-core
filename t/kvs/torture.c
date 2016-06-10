@@ -134,20 +134,20 @@ int main (int argc, char *argv[])
         if (kvs_put (h, key, json_object_to_json_string (vo)) < 0)
             err_exit ("kvs_put %s", key);
         if (verbose)
-            msg ("%s = %s", key, val);
+            log_msg ("%s = %s", key, val);
         if (vo)
             json_object_put (vo);
         free (key);
     }
     if (!quiet)
-        msg ("kvs_put:    time=%0.3f s (%d keys of size %d)",
+        log_msg ("kvs_put:    time=%0.3f s (%d keys of size %d)",
              monotime_since (t0)/1000, count, size);
 
     monotime (&t0);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
     if (!quiet)
-        msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);
+        log_msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);
 
     monotime (&t0);
     for (i = 0; i < count; i++) {
@@ -157,20 +157,20 @@ int main (int argc, char *argv[])
         if (kvs_get (h, key, &json_str) < 0)
             err_exit ("kvs_get '%s'", key);
         if (!(vo = json_tokener_parse (json_str)))
-            msg_exit ("json_tokener_parse");
+            log_msg_exit ("json_tokener_parse");
         free (json_str);
         s = json_object_get_string (vo);
         if (verbose)
-            msg ("%s = %s", key, s);
+            log_msg ("%s = %s", key, s);
         if (strcmp (s, val) != 0)
-            msg_exit ("kvs_get: key '%s' wrong value '%s'",
+            log_msg_exit ("kvs_get: key '%s' wrong value '%s'",
                       key, json_object_get_string (vo));
         if (vo)
             json_object_put (vo);
         free (key);
     }
     if (!quiet)
-        msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
+        log_msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
              monotime_since (t0)/1000, count, size);
 
     if (prefix)

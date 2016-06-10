@@ -161,7 +161,7 @@ void *thread (void *arg)
         buf = xzmalloc (bufsize);
     for (i = 0; i < iter; i++) {
         if (vopt)
-            msg ("sending %d of %d", i + 1, iter);
+            log_msg ("sending %d of %d", i + 1, iter);
         if (raw)
             send_raw (buf, bufsize);
         else
@@ -281,7 +281,7 @@ int main (int argc, char *argv[])
         zmsg_destroy (&zmsg);
         alarm (0);
         if (vopt)
-            msg ("received message %d of %d", i + 1, iter);
+            log_msg ("received message %d of %d", i + 1, iter);
     }
 
     /* Wait for thread to terminate, then clean up.

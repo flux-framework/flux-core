@@ -110,15 +110,15 @@ int main (int argc, char *argv[])
 
     ctx->opts = optparse_create ("flux-start");
     if (optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option_table");
+        log_msg_exit ("optparse_add_option_table");
     if (optparse_set (ctx->opts, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_set usage");
+        log_msg_exit ("optparse_set usage");
     if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
     ctx->killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
                                                     default_killer_timeout), NULL);
     if (ctx->killer_timeout < 0.)
-        msg_exit ("--killer-timeout argument must be >= 0");
+        log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optind < argc) {
         if ((e = argz_create (argv + optind, &command, &len)) != 0)
             errn_exit (e, "argz_creawte");
@@ -126,9 +126,9 @@ int main (int argc, char *argv[])
     }
 
     if (!(searchpath = getenv ("FLUX_EXEC_PATH")))
-        msg_exit ("FLUX_EXEC_PATH is not set");
+        log_msg_exit ("FLUX_EXEC_PATH is not set");
     if (!(ctx->broker_path = find_broker (searchpath)))
-        msg_exit ("Could not locate broker in %s", searchpath);
+        log_msg_exit ("Could not locate broker in %s", searchpath);
 
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
 
@@ -186,20 +186,20 @@ static int child_report (struct subprocess *p)
     int sig;
 
     if ((sig = subprocess_stopped (p)))
-        msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
+        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
     else if ((subprocess_continued (p)))
-        msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
+        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
     else if ((sig = subprocess_signaled (p)))
-        msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
+        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
     else if (subprocess_exited (p)) {
         int rc = subprocess_exit_code (p);
         if (rc >= 128)
-            msg ("%d (pid %d) exited with rc=%d (%s)", cli->rank, pid, rc,
+            log_msg ("%d (pid %d) exited with rc=%d (%s)", cli->rank, pid, rc,
                                                        strsignal (rc - 128));
         else if (rc > 0)
-            msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, rc);
+            log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, rc);
     } else
-        msg ("%d (pid %d) status=%d", cli->rank, pid,
+        log_msg ("%d (pid %d) status=%d", cli->rank, pid,
                                       subprocess_exit_status (p));
     return 0;
 }
@@ -375,7 +375,7 @@ int exec_broker (struct context *ctx, const char *cmd)
             goto nomem;
         memcpy (cpy, argz, argz_len);
         argz_stringify (cpy, argz_len, ' ');
-        msg ("%s", cpy);
+        log_msg ("%s", cpy);
         free (cpy);
     }
     if (!optparse_hasopt (ctx->opts, "noexec")) {
@@ -458,7 +458,7 @@ void client_dumpargs (struct client *cli)
         if ((e = argz_add (&az, &az_len, subprocess_get_arg (cli->p, i))) != 0)
             errn_exit (e, "argz_add");
     argz_stringify (az, az_len, ' ');
-    msg ("%d: %s", cli->rank, az);
+    log_msg ("%d: %s", cli->rank, az);
     free (az);
 }
 
