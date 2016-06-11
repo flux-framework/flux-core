@@ -99,6 +99,25 @@ Create a cron entry to execute 'command' after every event matching 'topic'.
  -o 'LIST':::
  Set comma separated EXTRA OPTIONS for this cron entry.
 
+*tab* [OPTIONS] ['file'] ::
+Process one or more lines containing crontab expressions from 'file'
+(stdin by default) Each valid crontab line will result in a new cron
+entry registered with the flux-cron service. The cron expression format
+supported by `flux cron tab` has 5 fields: 'minutes' (0-59), 'hours'
+(0-23), 'day of month' (1-31), 'month' (0-11), and 'day of week' (0-6).
+Everything after the day of week is considered a command to be run.
+
+ --options='LIST':::
+ -o 'LIST':::
+ Set comma separated EXTRA OPTIONS for all cron entries.
+
+*at* [OPTIONS] 'string' 'command'
+Run 'command' at specific date and time described by 'string'
+
+ --options='LIST':::
+ -o 'LIST':::
+ Set comma separated EXTRA OPTIONS for all cron entries.
+
 *list*::
 Display a list of current entries registered with the cron module and
 their current state, last run time, etc.
