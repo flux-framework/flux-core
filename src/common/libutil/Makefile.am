@@ -72,7 +72,9 @@ libutil_la_SOURCES = \
 	cronodate.h \
 	cronodate.c \
 	wallclock.h \
-	wallclock.c
+	wallclock.c \
+	stdlog.h \
+	stdlog.c
 
 EXTRA_DIST = veb_mach.c
 
@@ -88,7 +90,8 @@ TESTS = test_nodeset.t \
 	test_kary.t \
 	test_approxidate.t \
 	test_cronodate.t \
-	test_wallclock.t
+	test_wallclock.t \
+	test_stdlog.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -159,3 +162,7 @@ test_cronodate_t_LDADD = $(test_ldadd)
 test_wallclock_t_SOURCES = test/wallclock.c
 test_wallclock_t_CPPFLAGS = $(test_cppflags)
 test_wallclock_t_LDADD = $(test_ldadd)
+
+test_stdlog_t_SOURCES = test/stdlog.c
+test_stdlog_t_CPPFLAGS = $(test_cppflags)
+test_stdlog_t_LDADD = $(test_ldadd)
