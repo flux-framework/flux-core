@@ -90,6 +90,15 @@ Jadd_str (JSON o, const char *name, const char *s)
     json_object_object_add (o, (char *)name, n);
 }
 
+static __inline__ void
+Jadd_str_len (JSON o, const char *name, const char *s, int len)
+{
+    JSON n = json_object_new_string_len (s, len);
+    if (!n)
+        oom ();
+    json_object_object_add (o, (char *)name, n);
+}
+
 /* Add object to JSON (caller retains ownership of original).
  */
 static __inline__ void
