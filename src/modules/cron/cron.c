@@ -395,10 +395,12 @@ static int cron_entry_defer (cron_entry_t *e)
     /* O/w, defer this task: push entry onto deferred list, and start
      *  sync event message handler if needed
      */
+    if (zlist_push (ctx->deferred, e) < 0)
+        return (-1);
     e->stats.deferred++;
     flux_log (ctx->h, LOG_DEBUG, "deferring cron-%ju to next %s event",
              e->id, ctx->sync_event);
-    zlist_push (ctx->deferred, e);
+
     if (zlist_size (ctx->deferred) == 1)
         flux_msg_handler_start (ctx->mh);
 
