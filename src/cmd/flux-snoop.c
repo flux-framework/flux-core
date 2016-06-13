@@ -30,6 +30,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 
 
 #define OPTIONS "hanN:vlc:"

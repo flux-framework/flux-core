@@ -1,5 +1,6 @@
 #include <flux/core.h>
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/log.h"
 
 void get_rank (flux_rpc_t *rpc, void *arg)
 {

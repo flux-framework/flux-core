@@ -1,7 +1,7 @@
 #include <czmq.h>
 #include <poll.h>
 
-#include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"
 #include "src/common/libutil/ev_zlist.h"

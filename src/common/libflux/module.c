@@ -36,6 +36,8 @@
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 
 struct flux_modlist_struct {
     json_object *o;

@@ -130,6 +130,7 @@
 #include "flog.h"
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 
 

@@ -45,6 +45,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 
 #if CZMQ_VERSION_MAJOR < 2
 #define zmsg_pushstrf zmsg_pushstr

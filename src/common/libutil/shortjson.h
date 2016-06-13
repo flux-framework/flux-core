@@ -3,7 +3,7 @@
 
 #include <json.h>
 #include <stdbool.h>
-#include "log.h" /* oom */
+#include "oom.h"
 
 typedef json_object *JSON;
 

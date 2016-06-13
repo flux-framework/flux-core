@@ -24,10 +24,6 @@ void log_msg (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2)));
 
 
-#define oom() do { \
-    log_errn_exit (ENOMEM, "%s::%s(), line %d", __FILE__, __FUNCTION__, __LINE__); \
-} while (0)
-
 #endif /* !_UTIL_LOG_H */
 
 /*

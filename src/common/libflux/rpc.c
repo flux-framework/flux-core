@@ -26,6 +26,8 @@
 #include "config.h"
 #endif
 #include <assert.h>
+#include <errno.h>
+#include <stdlib.h>
 
 #include "request.h"
 #include "response.h"
@@ -35,8 +37,6 @@
 #include "reactor.h"
 #include "dispatch.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
 struct flux_rpc_struct {
@@ -93,9 +93,14 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
 
 static flux_rpc_t *rpc_create (flux_t h, int rx_expected)
 {
-    flux_rpc_t *rpc = xzmalloc (sizeof (*rpc));
+    flux_rpc_t *rpc;
     int flags = 0;
 
+    if (!(rpc = malloc (sizeof (*rpc)))) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    memset (rpc, 0, sizeof (*rpc));
     if (rx_expected == 0) {
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
     } else {

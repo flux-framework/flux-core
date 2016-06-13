@@ -29,8 +29,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "log.h"
 #include "xzmalloc.h"
+#include "oom.h"
 
 void *xzmalloc (size_t size)
 {
