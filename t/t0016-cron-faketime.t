@@ -4,9 +4,9 @@ test_description='Test flux cron service'
 
 . $(dirname $0)/sharness.sh
 
-#  Check for libfaketimeMT:
-LD_PRELOAD=libfaketimeMT.so.1 ldd /bin/date 2>/dev/null | grep -q libfaketime
-if test $? -ne 0 ; then
+#  Check for libfaketimeMT using known epoch with /bin/date:
+t=$(LD_PRELOAD=libfaketimeMT.so.1 FAKETIME="1973-11-29 21:33:09 UTC" date +%s)
+if test "$t" != "123456789" ; then
     skip_all='libfaketime not found. Skipping all tests'
     test_done
 fi
