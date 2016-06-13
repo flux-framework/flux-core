@@ -39,7 +39,7 @@ static int cmd_env (optparse_t *p, int ac, char *av[])
     int n = optparse_optind (p);
     if (av && av[n]) {
         execvp (av[n], av+n); /* no return if sucessful */
-        err_exit ("execvp (%s)", av[n]);
+        log_err_exit ("execvp (%s)", av[n]);
     } else {
         struct environment *env = optparse_get_data (p, "env");
         if (env == NULL)

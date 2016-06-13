@@ -87,31 +87,6 @@ _vlog (const char *fmt, va_list ap)
 /* Log message and errno string, then exit.
  */
 void
-err_exit (const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start (ap, fmt);
-    _verr (errno, fmt, ap);
-    va_end (ap);
-    exit (1);
-}
-
-/* Log message and errno string.
- */
-void
-err (const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start (ap, fmt);
-    _verr (errno, fmt, ap);
-    va_end (ap);
-}
-
-/* Log message and errno string, then exit.
- */
-void
 log_err_exit (const char *fmt, ...)
 {
     va_list ap;

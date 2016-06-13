@@ -129,15 +129,15 @@ int main (int argc, char *argv[])
         log_msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     if (!(uri = flux_attr_get (h, "snoop-uri", NULL)))
-        err_exit ("snoop-uri");
+        log_err_exit ("snoop-uri");
 
     /* N.B. flux_get_zctx () is not implemented for the API socket since
      * it has no internal zctx (despite supporting the flux reactor).
      */
     if (!(zctx = zctx_new ()))
-        err_exit ("zctx_new");
+        log_err_exit ("zctx_new");
     zctx_set_linger (zctx, 5);
 
     /* N.B. We use the zloop reactor and handle disconnects via zmonitor.
@@ -151,11 +151,11 @@ int main (int argc, char *argv[])
     /* Initialize security ctx.
      */
     if (!(sec = flux_sec_create ()))
-        err_exit ("flux_sec_create");
+        log_err_exit ("flux_sec_create");
     flux_sec_set_directory (sec, secdir);
     if (nopt) {
         if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
-            err_exit ("flux_sec_disable");
+            log_err_exit ("flux_sec_disable");
         log_msg ("Security is disabled");
     }
     if (flux_sec_zauth_init (sec, zctx, session) < 0)
@@ -167,25 +167,25 @@ int main (int argc, char *argv[])
         log_msg ("connecting to %s...", uri);
 
     if (!(s = connect_snoop (zctx, sec, uri)))
-        err_exit ("%s", uri);
+        log_err_exit ("%s", uri);
     zp.socket = s;
     zp.events = ZMQ_POLLIN;
     if (zloop_poller (zloop, &zp, snoop_cb, NULL) < 0)
-        err_exit ("zloop_poller");
+        log_err_exit ("zloop_poller");
     zsocket_set_subscribe (s, "");
 
     zmonitor_t *zmon;
     if (!(zmon = zmonitor_new (zctx, s, ZMQ_EVENT_DISCONNECTED)))
-        err_exit ("zmonitor_new");
+        log_err_exit ("zmonitor_new");
     if (vopt)
         zmonitor_set_verbose (zmon, true);
     zp.socket = zmonitor_socket (zmon);
     zp.events = ZMQ_POLLIN;
     if (zloop_poller (zloop, &zp, zmon_cb, NULL) < 0)
-        err_exit ("zloop_poller");
+        log_err_exit ("zloop_poller");
 
     if ((zloop_start (zloop) < 0) && (count != maxcount))
-        err_exit ("zloop_start");
+        log_err_exit ("zloop_start");
     if (vopt)
         log_msg ("disconnecting");
 
@@ -205,11 +205,11 @@ static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri)
     void *s;
 
     if (!(s = zsocket_new (zctx, ZMQ_SUB)))
-        err_exit ("zsocket_new");
+        log_err_exit ("zsocket_new");
     if (flux_sec_csockinit (sec, s) < 0)
         log_msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (sec));
     if (zsocket_connect (s, "%s", uri) < 0)
-        err_exit ("%s", uri);
+        log_err_exit ("%s", uri);
 
     return s;
 }

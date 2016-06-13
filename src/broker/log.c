@@ -420,11 +420,11 @@ int log_register_attrs (log_t *log, attr_t *attrs)
         if (attr_get (attrs, "log-filename", NULL, NULL) < 0
           && attr_get (attrs, "persist-directory", &val, NULL) == 0 && val) {
             if (snprintf (s, sizeof (s), "%s/log", val) >= sizeof (s)) {
-                err ("log-filename truncated");
+                log_err ("log-filename truncated");
                 goto done;
             }
             if (attr_add (attrs, "log-filename", s, 0) < 0) {
-                err ("could not initialize log-filename");
+                log_err ("could not initialize log-filename");
                 goto done;
             }
         }

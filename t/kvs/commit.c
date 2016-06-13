@@ -85,11 +85,11 @@ void *thread (void *arg)
     uint32_t rank;
 
     if (!(t->h = flux_open (NULL, 0))) {
-        err ("%d: flux_open", t->n);
+        log_err ("%d: flux_open", t->n);
         goto done;
     }
     if (flux_get_rank (t->h, &rank) < 0) {
-        err ("%d: flux_get_rank", t->n);
+        log_err ("%d: flux_get_rank", t->n);
         goto done;
     }
     for (i = 0; i < count; i++) {
@@ -99,13 +99,13 @@ void *thread (void *arg)
         if (sopt)
             monotime (&t0);
         if (kvs_put_int (t->h, key, 42) < 0)
-            err_exit ("%s", key);
+            log_err_exit ("%s", key);
         if (fopt) {
             if (kvs_fence (t->h, fence, fence_nprocs) < 0)
-                err_exit ("kvs_fence");
+                log_err_exit ("kvs_fence");
         } else {
             if (kvs_commit (t->h) < 0)
-                err_exit ("kvs_commit");
+                log_err_exit ("kvs_commit");
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
             oom ();

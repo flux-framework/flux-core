@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
     else
         pmi = pmi_create_guess ();
     if (!pmi)
-        err_exit ("pmi_create");
+        log_err_exit ("pmi_create");
     e = pmi_init (pmi, &spawned);
     if (e != PMI_SUCCESS)
         log_msg_exit ("pmi_init: %s", pmi_strerror (e));

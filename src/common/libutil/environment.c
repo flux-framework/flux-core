@@ -251,11 +251,11 @@ void environment_apply (struct environment *e)
     {
         if (item->unset) {
             if (unsetenv (key))
-                err_exit ("unsetenv: %s", key);
+                log_err_exit ("unsetenv: %s", key);
         } else {
             const char *value = stringify_env_item (item);
             if (setenv (key, value, 1) < 0)
-                err_exit ("setenv: %s=%s", key, value);
+                log_err_exit ("setenv: %s=%s", key, value);
         }
     }
 }

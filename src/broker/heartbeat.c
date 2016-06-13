@@ -135,11 +135,11 @@ static void timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_msg_t *msg = NULL;
 
     if (!(msg = flux_heartbeat_encode (hb->send_epoch++))) {
-        err ("heartbeat_encode");
+        log_err ("heartbeat_encode");
         goto done;
     }
     if (flux_send (hb->h, msg, 0) < 0) {
-        err ("flux_send");
+        log_err ("flux_send");
         goto done;
     }
 done:

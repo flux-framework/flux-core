@@ -118,18 +118,18 @@ static ctx_t *ctx_create (flux_t h)
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     ctx->h = h;
     if (!(ctx->reactor = flux_reactor_create (SIGCHLD)))
-        err_exit ("flux_reactor_create");
+        log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (h, ctx->reactor) < 0)
-        err_exit ("flux_set_reactor");
+        log_err_exit ("flux_set_reactor");
     if (!(ctx->clients = zlist_new ()))
         oom ();
     if (!(ctx->subscriptions = zhash_new ()))
         oom ();
     ctx->session_owner = geteuid ();
     if (!(ctx->sm = subprocess_manager_create ()))
-        err_exit ("subprocess_manager_create");
+        log_err_exit ("subprocess_manager_create");
     if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
-        err_exit ("subprocess_manager_set reactor");
+        log_err_exit ("subprocess_manager_set reactor");
     subprocess_manager_set (ctx->sm, SM_WAIT_FLAGS, WNOHANG);
 
     return ctx;
@@ -565,12 +565,12 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                 if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
                     oom (); /* FIXME */
                 if (flux_send (h, msg, 0) < 0)
-                    err ("%s: flux_send", __FUNCTION__);
+                    log_err ("%s: flux_send", __FUNCTION__);
             }
             break;
         case FLUX_MSGTYPE_EVENT:
             if (flux_send (h, msg, 0) < 0)
-                err ("%s: flux_send", __FUNCTION__);
+                log_err ("%s: flux_send", __FUNCTION__);
             break;
         default:
             flux_log (h, LOG_ERR, "drop unexpected %s",
@@ -921,13 +921,13 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     if (strstr (job, "://")) {
         if (!(h = flux_open (job, 0)))
-            err_exit ("%s", job);
+            log_err_exit ("%s", job);
     } else {
         char *uri = findjob (job);
         if (!uri)
-            err_exit ("%s", job);
+            log_err_exit ("%s", job);
         if (!(h = flux_open (uri, 0)))
-            err_exit ("%s", uri);
+            log_err_exit ("%s", uri);
          free (uri);
     }
 
@@ -939,7 +939,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     if (optparse_hasopt (p, "stdio")) {
         client_t *c;
         if (!(c = client_create (ctx, STDIN_FILENO, STDOUT_FILENO)))
-            err_exit ("error creating stdio client");
+            log_err_exit ("error creating stdio client");
         if (zlist_append (ctx->clients, c) < 0)
             oom ();
         ctx->oneshot = true;
@@ -950,7 +950,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
                                  tmpdir ? tmpdir : "/tmp");
         assert (n < sizeof (workpath));
         if (!mkdtemp (workpath))
-            err_exit ("error creating proxy socket directory");
+            log_err_exit ("error creating proxy socket directory");
         cleanup_push_string(cleanup_directory, workpath);
 
         /* Write proxy pid to broker.pid file.
@@ -960,7 +960,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         assert (n < sizeof (pidfile));
         FILE *f = fopen (pidfile, "w");
         if (!f || fprintf (f, "%d", getpid ()) < 0 || fclose (f) == EOF)
-            err_exit ("%s", pidfile);
+            log_err_exit ("%s", pidfile);
         cleanup_push_string(cleanup_file, pidfile);
 
         /* Listen on socket
@@ -980,7 +980,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         /* Create child
          */
         if (child_create (ctx, ac - optind, av + optind, workpath) < 0)
-            err_exit ("child_create");
+            log_err_exit ("child_create");
    }
 
     /* Create/start event/response message watchers

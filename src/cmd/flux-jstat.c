@@ -258,7 +258,7 @@ int main (int argc, char *argv[])
         usage (1);
 
     if (!(h = flux_open  (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     flux_log_set_appname (h, "jstat");
     cmd = argv[optind++];

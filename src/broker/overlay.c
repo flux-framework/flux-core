@@ -168,10 +168,10 @@ void overlay_set_flux (overlay_t *ov, flux_t h)
     match.topic_glob = "hb";
     if (!(ov->heartbeat = flux_msg_handler_create (ov->h, match,
                                                    heartbeat_handler, ov)))
-        err_exit ("flux_msg_handler_create");
+        log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (ov->heartbeat);
     if (flux_event_subscribe (ov->h, "hb") < 0)
-        err_exit ("flux_event_subscribe");
+        log_err_exit ("flux_event_subscribe");
 }
 
 json_object *overlay_lspeer_encode (overlay_t *ov)
@@ -477,19 +477,19 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
 static int bind_child (overlay_t *ov, struct endpoint *ep)
 {
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_ROUTER)))
-        err_exit ("zsocket_new");
+        log_err_exit ("zsocket_new");
     if (flux_sec_ssockinit (ov->sec, ep->zs) < 0)
         log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
     zsocket_set_hwm (ep->zs, 0);
     if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
+        log_err_exit ("%s", ep->uri);
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
         free (ep->uri);
         ep->uri = zsocket_last_endpoint (ep->zs);
     }
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
                                            ep->zs, FLUX_POLLIN, child_cb, ov)))
-        err_exit ("flux_zmq_watcher_create");
+        log_err_exit ("flux_zmq_watcher_create");
     flux_watcher_start (ep->w);
     return 0;
 }
@@ -497,12 +497,12 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
 static int bind_event_pub (overlay_t *ov, struct endpoint *ep)
 {
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_PUB)))
-        err_exit ("zsocket_new");
+        log_err_exit ("zsocket_new");
     if (flux_sec_ssockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
         log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
     zsocket_set_sndhwm (ep->zs, 0);
     if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s: %s", __FUNCTION__, ep->uri);
+        log_err_exit ("%s: %s", __FUNCTION__, ep->uri);
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
         free (ep->uri);
         ep->uri = zsocket_last_endpoint (ep->zs);
@@ -522,16 +522,16 @@ static void event_cb (flux_reactor_t *r, flux_watcher_t *w,
 static int connect_event_sub (overlay_t *ov, struct endpoint *ep)
 {
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_SUB)))
-        err_exit ("zsocket_new");
+        log_err_exit ("zsocket_new");
     if (flux_sec_csockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
         log_msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
     zsocket_set_rcvhwm (ep->zs, 0);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
+        log_err_exit ("%s", ep->uri);
     zsocket_set_subscribe (ep->zs, "");
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
                                            ep->zs, FLUX_POLLIN, event_cb, ov)))
-        err_exit ("flux_zmq_watcher_create");
+        log_err_exit ("flux_zmq_watcher_create");
     flux_watcher_start (ep->w);
     return 0;
 }
@@ -591,7 +591,7 @@ int overlay_connect (overlay_t *ov)
 
     if ((ep = zlist_first (ov->parents))) {
         if (connect_parent (ov, ep) < 0)
-            err_exit ("%s", ep->uri);
+            log_err_exit ("%s", ep->uri);
     }
     rc = 0;
 done:

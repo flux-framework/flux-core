@@ -669,7 +669,7 @@ static int sp_barrier_read_error (int fd)
     int e;
     ssize_t n = read (fd, &e, sizeof (int));
     if (n < 0) {
-        err ("sp_read_error: read: %m");
+        log_err ("sp_read_error: read: %m");
         return (-1);
     }
     else if (n == sizeof (int)) {
@@ -683,7 +683,7 @@ static int sp_barrier_signal (int fd)
 {
     char c = 0;
     if (write (fd, &c, sizeof (c)) != 1) {
-        err ("sp_barrier_signal: write: %m");
+        log_err ("sp_barrier_signal: write: %m");
         return (-1);
     }
     return (0);
@@ -694,7 +694,7 @@ static int sp_barrier_wait (int fd)
     char c;
     int n;
     if ((n = read (fd, &c, sizeof (c))) != 1) {
-        err ("sp_barrier_wait: read:fd=%d: (got %d): %m", fd, n);
+        log_err ("sp_barrier_wait: read:fd=%d: (got %d): %m", fd, n);
         return (-1);
     }
     return (0);
@@ -703,7 +703,7 @@ static int sp_barrier_wait (int fd)
 static void sp_barrier_write_error (int fd, int e)
 {
     if (write (fd, &e, sizeof (int)) != sizeof (int)) {
-        err ("sp_barrier_error: write: %m");
+        log_err ("sp_barrier_error: write: %m");
     }
 }
 
@@ -720,7 +720,7 @@ static void subprocess_child (struct subprocess *p)
         child_io_setup (p);
 
     if (p->cwd && chdir (p->cwd) < 0) {
-        err ("Couldn't change dir to %s: going to /tmp instead", p->cwd);
+        log_err ("Couldn't change dir to %s: going to /tmp instead", p->cwd);
         if (chdir ("/tmp") < 0)
             exit (1);
     }
@@ -736,12 +736,12 @@ static void subprocess_child (struct subprocess *p)
     sp_barrier_wait (p->childfd);
 
     if (preparefd_child (p) < 0) {
-        err ("Failed to prepare child fds");
+        log_err ("Failed to prepare child fds");
         exit (1);
     }
 
     if (subprocess_run_hooks (p, p->hooks [SUBPROCESS_PRE_EXEC]) < 0) {
-        err ("Failed to run subprocess hooks: %s\n", strerror (errno));
+        log_err ("Failed to run subprocess hooks: %s\n", strerror (errno));
         exit (1);
     }
 

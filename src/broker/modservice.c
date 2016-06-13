@@ -210,12 +210,12 @@ static void register_event (ctx_t *ctx, const char *name,
 
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
     if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
-        err_exit ("flux_msg_handler_create");
+        log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (w);
     if (zlist_append (ctx->handlers, w) < 0)
         oom ();
     if (flux_event_subscribe (ctx->h, match.topic_glob) < 0)
-        err_exit ("%s: flux_event_subscribe %s",
+        log_err_exit ("%s: flux_event_subscribe %s",
                   __FUNCTION__, match.topic_glob);
     free (match.topic_glob);
 }
@@ -228,7 +228,7 @@ static void register_request (ctx_t *ctx, const char *name,
 
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
     if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
-        err_exit ("flux_msg_handler_create");
+        log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (w);
     if (zlist_append (ctx->handlers, w) < 0)
         oom ();
@@ -249,9 +249,9 @@ void modservice_register (flux_t h, module_t *p)
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
 
     if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx)))
-        err_exit ("flux_prepare_watcher_create");
+        log_err_exit ("flux_prepare_watcher_create");
     if (!(ctx->w_check = flux_check_watcher_create (r, check_cb, ctx)))
-        err_exit ("flux_check_watcher_create");
+        log_err_exit ("flux_check_watcher_create");
     flux_watcher_start (ctx->w_prepare);
     flux_watcher_start (ctx->w_check);
 }

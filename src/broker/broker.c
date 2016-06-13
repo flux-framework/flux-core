@@ -313,7 +313,7 @@ int main (int argc, char *argv[])
                 break;
             case 'X':   /* --module-path PATH */
                 if (attr_set (ctx.attrs, "conf.module_path", optarg, true) < 0)
-                    err_exit ("setting conf.module_path attribute");
+                    log_err_exit ("setting conf.module_path attribute");
                 break;
             case 'k':   /* --k-ary k */
                 ctx.tbon.k = strtoul (optarg, NULL, 10);
@@ -322,7 +322,7 @@ int main (int argc, char *argv[])
                 break;
             case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
-                    err_exit ("heartrate `%s'", optarg);
+                    log_err_exit ("heartrate `%s'", optarg);
                 break;
             case 'T':   /* --timeout SECS */
                 ctx.hello_timeout = strtod (optarg, NULL);
@@ -347,7 +347,7 @@ int main (int argc, char *argv[])
                     *val++ = '\0';
                 if (attr_add (ctx.attrs, attr, val, 0) < 0)
                     if (attr_set (ctx.attrs, attr, val, true) < 0)
-                        err_exit ("setattr %s=%s", attr, val);
+                        log_err_exit ("setattr %s=%s", attr, val);
                 free (attr);
                 break;
             }
@@ -367,7 +367,7 @@ int main (int argc, char *argv[])
      */
     if (getenv ("FLUX_URI")) {
         if (!(ctx.enclosing_h = flux_open (NULL, 0)))
-            err_exit ("flux_open enclosing instance");
+            log_err_exit ("flux_open enclosing instance");
     }
 
     broker_block_signals ();
@@ -377,21 +377,21 @@ int main (int argc, char *argv[])
     zsys_handler_set (NULL);
     ctx.zctx = zctx_new ();
     if (!ctx.zctx)
-        err_exit ("zctx_new");
+        log_err_exit ("zctx_new");
     zctx_set_linger (ctx.zctx, 5);
 
     /* Set up the flux reactor.
      */
     if (!(ctx.reactor = flux_reactor_create (SIGCHLD)))
-        err_exit ("flux_reactor_create");
+        log_err_exit ("flux_reactor_create");
 
     /* Set up flux handle.
      * The handle is used for simple purposes such as logging.
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
-        err_exit ("flux_handle_create");
+        log_err_exit ("flux_handle_create");
     if (flux_set_reactor (ctx.h, ctx.reactor) < 0)
-        err_exit ("flux_set_reactor");
+        log_err_exit ("flux_set_reactor");
 
     subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor);
 
@@ -402,15 +402,15 @@ int main (int argc, char *argv[])
     /* Initialize security context.
      */
     if (!(ctx.sec = flux_sec_create ()))
-        err_exit ("flux_sec_create");
+        log_err_exit ("flux_sec_create");
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
-        err_exit ("getattr security.keydir");
+        log_err_exit ("getattr security.keydir");
     flux_sec_set_directory (ctx.sec, keydir);
     if (security_clr && flux_sec_disable (ctx.sec, security_clr) < 0)
-        err_exit ("flux_sec_disable");
+        log_err_exit ("flux_sec_disable");
     if (security_set && flux_sec_enable (ctx.sec, security_set) < 0)
-        err_exit ("flux_sec_enable");
+        log_err_exit ("flux_sec_enable");
     if (flux_sec_zauth_init (ctx.sec, ctx.zctx, "flux") < 0)
         log_msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
     if (flux_sec_munge_init (ctx.sec) < 0)
@@ -465,7 +465,7 @@ int main (int argc, char *argv[])
     }
 
     if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        err_exit ("attr_set_flags session-id");
+        log_err_exit ("attr_set_flags session-id");
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
@@ -474,11 +474,11 @@ int main (int argc, char *argv[])
      * but only on rank 0.
      */
     if (create_scratchdir (&ctx) < 0)
-        err_exit ("create_scratchdir");
+        log_err_exit ("create_scratchdir");
     if (create_rankdir (&ctx) < 0)
-        err_exit ("create_rankdir");
+        log_err_exit ("create_rankdir");
     if (create_persistdir (&ctx) < 0)
-        err_exit ("create_persistdir");
+        log_err_exit ("create_persistdir");
 
     /* Initialize logging.
      * First establish a redirect callback that forces all logs
@@ -495,14 +495,14 @@ int main (int argc, char *argv[])
      * use of flux_get_rank() etc will work despite limitations.
      */
     if (create_dummyattrs (&ctx) < 0)
-        err_exit ("creating dummy attributes");
+        log_err_exit ("creating dummy attributes");
 
     overlay_set_rank (ctx.overlay, ctx.rank);
 
     /* Registers message handlers and obtains rank.
      */
     if (content_cache_set_flux (ctx.cache, ctx.h) < 0)
-        err_exit ("content_cache_set_flux");
+        log_err_exit ("content_cache_set_flux");
 
     content_cache_set_enclosing_flux (ctx.cache, ctx.enclosing_h);
 
@@ -538,12 +538,12 @@ int main (int argc, char *argv[])
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || log_register_attrs (ctx.log, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
-        err_exit ("configuring attributes");
+        log_err_exit ("configuring attributes");
     }
 
     if (ctx.rank == 0) {
         if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
-            err_exit ("configuring runlevel attributes");
+            log_err_exit ("configuring runlevel attributes");
     }
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
@@ -585,13 +585,13 @@ int main (int argc, char *argv[])
         const char *rc2 = ctx.init_shell_cmd;
 
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0)
-            err_exit ("local-uri is not set");
+            log_err_exit ("local-uri is not set");
         if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0)
-            err_exit ("conf.rc1_path is not set");
+            log_err_exit ("conf.rc1_path is not set");
         if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0)
-            err_exit ("conf.rc3_path is not set");
+            log_err_exit ("conf.rc3_path is not set");
         if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0)
-            err_exit ("conf.pmi_library_path is not set");
+            log_err_exit ("conf.pmi_library_path is not set");
 
         runlevel_set_size (ctx.runlevel, ctx.size);
         runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
@@ -599,11 +599,11 @@ int main (int argc, char *argv[])
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
 
         if (runlevel_set_rc (ctx.runlevel, 1, rc1, uri) < 0)
-            err_exit ("runlevel_set_rc 1");
+            log_err_exit ("runlevel_set_rc 1");
         if (runlevel_set_rc (ctx.runlevel, 2, rc2, uri) < 0)
-            err_exit ("runlevel_set_rc 2");
+            log_err_exit ("runlevel_set_rc 2");
         if (runlevel_set_rc (ctx.runlevel, 3, rc3, uri) < 0)
-            err_exit ("runlevel_set_rc 3");
+            log_err_exit ("runlevel_set_rc 3");
     }
 
     /* Wire up the overlay.
@@ -611,9 +611,9 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         log_msg ("initializing overlay sockets");
     if (overlay_bind (ctx.overlay) < 0) /* idempotent */
-        err_exit ("overlay_bind");
+        log_err_exit ("overlay_bind");
     if (overlay_connect (ctx.overlay) < 0)
-        err_exit ("overlay_connect");
+        log_err_exit ("overlay_connect");
 
     /* Set up snoop socket
      */
@@ -648,9 +648,9 @@ int main (int argc, char *argv[])
      */
     heartbeat_set_flux (ctx.heartbeat, ctx.h);
     if (heartbeat_set_attrs (ctx.heartbeat, ctx.attrs) < 0)
-        err_exit ("initializing heartbeat attributes");
+        log_err_exit ("initializing heartbeat attributes");
     if (heartbeat_start (ctx.heartbeat) < 0)
-        err_exit ("heartbeat_start");
+        log_err_exit ("heartbeat_start");
     if (ctx.rank == 0 && ctx.verbose)
         log_msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
@@ -663,14 +663,14 @@ int main (int argc, char *argv[])
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
     hello_set_timeout (ctx.hello, 1.0);
     if (hello_start (ctx.hello) < 0)
-        err_exit ("hello_start");
+        log_err_exit ("hello_start");
 
     /* Event loop
      */
     if (ctx.verbose)
         log_msg ("entering event loop");
     if (flux_reactor_run (ctx.reactor, 0) < 0)
-        err ("flux_reactor_run");
+        log_err ("flux_reactor_run");
     if (ctx.verbose)
         log_msg ("exited event loop");
 
@@ -746,7 +746,7 @@ static void init_attrs_from_environment (attr_t *attrs)
         if (!val && m->required)
             log_msg_exit ("required environment variable %s is not set", m->env);
         if (attr_add (attrs, m->attr, val, flags) < 0)
-            err_exit ("attr_add %s", m->attr);
+            log_err_exit ("attr_add %s", m->attr);
     }
 }
 
@@ -768,7 +768,7 @@ static void hello_update_cb (hello_t *hello, void *arg)
                   hello_get_nodeset (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
-            err_exit ("runlevel_set_level 1");
+            log_err_exit ("runlevel_set_level 1");
     } else  {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
                   hello_get_nodeset (hello));
@@ -811,11 +811,11 @@ static void update_pidfile (ctx_t *ctx)
         log_msg_exit ("scratch-directory attribute is not set");
     pidfile = xasprintf ("%s/%d/broker.pid", scratch_dir, ctx->rank);
     if (!(f = fopen (pidfile, "w+")))
-        err_exit ("%s", pidfile);
+        log_err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
-        err_exit ("%s", pidfile);
+        log_err_exit ("%s", pidfile);
     if (fclose(f) < 0)
-        err_exit ("%s", pidfile);
+        log_err_exit ("%s", pidfile);
     cleanup_push_string (cleanup_file, pidfile);
     free (pidfile);
 }
@@ -863,7 +863,7 @@ static void runlevel_cb (runlevel_t *r, int level, int rc,
     if (new_level != -1) {
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", new_level);
         if (runlevel_set_level (r, new_level) < 0)
-            err_exit ("runlevel_set_level %d", new_level);
+            log_err_exit ("runlevel_set_level %d", new_level);
     }
 }
 
@@ -1135,7 +1135,7 @@ static int boot_pmi (ctx_t *ctx)
     /* Initialize scratch-directory/rankdir
      */
     if (create_scratchdir (ctx) < 0) {
-        err ("pmi: could not initialize scratch-directory");
+        log_err ("pmi: could not initialize scratch-directory");
         goto done;
     }
     if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
@@ -1143,7 +1143,7 @@ static int boot_pmi (ctx_t *ctx)
         goto done;
     }
     if (create_rankdir (ctx) < 0) {
-        err ("could not initialize ankdir");
+        log_err ("could not initialize ankdir");
         goto done;
     }
 
@@ -1215,7 +1215,7 @@ static int boot_pmi (ctx_t *ctx)
      * the real addresses.
      */
     if (overlay_bind (ctx->overlay) < 0) {
-        err ("overlay_bind failed");   /* function is idempotent */
+        log_err ("overlay_bind failed");   /* function is idempotent */
         goto done;
     }
 
@@ -1390,7 +1390,7 @@ static void load_modules (ctx_t *ctx, const char *default_modules)
     module_t *p;
 
     if (attr_get (ctx->attrs, "conf.module_path", &modpath, NULL) < 0)
-        err_exit ("conf.module_path is not set");
+        log_err_exit ("conf.module_path is not set");
 
     while ((s = strtok_r (a1, ",", &saveptr))) {
         char *name = NULL;
@@ -1411,7 +1411,7 @@ static void load_modules (ctx_t *ctx, const char *default_modules)
             name = s;
         }
         if (!(p = module_add (ctx->modhash, path)))
-            err_exit ("%s: module_add %s", name, path);
+            log_err_exit ("%s: module_add %s", name, path);
         if (!svc_add (ctx->services, module_get_name (p),
                                      module_get_service (p), mod_svc_cb, p))
             log_msg_exit ("could not register service %s", module_get_name (p));
@@ -1434,7 +1434,7 @@ static void broker_block_signals (void)
     sigemptyset(&sigmask);
     sigfillset(&sigmask);
     if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
-        err_exit ("sigprocmask");
+        log_err_exit ("sigprocmask");
 }
 
 static void broker_handle_signals (ctx_t *ctx, zlist_t *sigwatchers)
@@ -1445,7 +1445,7 @@ static void broker_handle_signals (ctx_t *ctx, zlist_t *sigwatchers)
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
         w = flux_signal_watcher_create (ctx->reactor, sigs[i], signal_cb, ctx);
         if (!w)
-            err_exit ("flux_signal_watcher_create");
+            log_err_exit ("flux_signal_watcher_create");
         if (zlist_push (sigwatchers, w) < 0)
             oom ();
         flux_watcher_start (w);
@@ -1662,7 +1662,7 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     const char *local_uri;
 
     if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
-        err_exit ("%s: local_uri is not set", __FUNCTION__);
+        log_err_exit ("%s: local_uri is not set", __FUNCTION__);
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto out_free;
@@ -2499,7 +2499,7 @@ static void broker_add_services (ctx_t *ctx)
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
         if (!svc_add (ctx->services, svc->topic, NULL, svc->fun, ctx))
-            err_exit ("error adding handler for %s", svc->topic);
+            log_err_exit ("error adding handler for %s", svc->topic);
     }
 }
 

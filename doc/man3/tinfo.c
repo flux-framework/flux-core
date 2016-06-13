@@ -9,11 +9,11 @@ int main (int argc, char **argv)
     uint32_t rank, n;
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     if (flux_get_rank (h, &rank) < 0)
-        err_exit ("flux_get_rank");
+        log_err_exit ("flux_get_rank");
     if (flux_get_size (h, &n) < 0)
-        err_exit ("flux_get_size");
+        log_err_exit ("flux_get_size");
     flux_close (h);
     return (0);
 }

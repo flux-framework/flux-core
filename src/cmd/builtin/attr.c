@@ -51,7 +51,7 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
     if (flux_attr_set (h, name, val) < 0)
-        err_exit ("%s", av[1]);
+        log_err_exit ("%s", av[1]);
     flux_close (h);
     return (0);
 }
@@ -101,7 +101,7 @@ static int cmd_getattr (optparse_t *p, int ac, char *av[])
 
     h = builtin_get_flux_handle (p);
     if (!(val = flux_attr_get (h, av[n], &flags)))
-        err_exit ("%s", av[n]);
+        log_err_exit ("%s", av[n]);
     printf ("%s\n", val);
     flux_close (h);
     return (0);

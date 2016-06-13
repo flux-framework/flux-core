@@ -113,7 +113,7 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         if (!(ctx->reactor = flux_get_reactor (h)))
-            err_exit ("flux_get_reactor");
+            log_err_exit ("flux_get_reactor");
         if (!(ctx->clients = zlist_new ()))
             oom ();
         if (!(ctx->subscriptions = zhash_new ()))
@@ -557,12 +557,12 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                 if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
                     oom (); /* FIXME */
                 if (flux_send (h, msg, 0) < 0)
-                    err ("%s: flux_send", __FUNCTION__);
+                    log_err ("%s: flux_send", __FUNCTION__);
             }
             break;
         case FLUX_MSGTYPE_EVENT:
             if (flux_send (h, msg, 0) < 0)
-                err ("%s: flux_send", __FUNCTION__);
+                log_err ("%s: flux_send", __FUNCTION__);
             break;
         default:
             flux_log (h, LOG_ERR, "drop unexpected %s",

@@ -127,21 +127,21 @@ int main (int argc, char *argv[])
         log_msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     if (copt) {
         flux_rpc_t *rpc;
         char *topic = xasprintf ("%s.stats.clear", target);
         if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
                                 || flux_rpc_get (rpc, NULL, NULL) < 0)
-            err_exit ("%s", topic);
+            log_err_exit ("%s", topic);
         free (topic);
         flux_rpc_destroy (rpc);
     } else if (Copt) {
         char *topic = xasprintf ("%s.stats.clear", target);
         flux_msg_t *msg = flux_event_encode (target, NULL);
         if (!msg || flux_send (h, msg, 0) < 0)
-            err_exit ("sending event");
+            log_err_exit ("sending event");
         flux_msg_destroy (msg);
         free (topic);
     } else if (Ropt) {
@@ -150,7 +150,7 @@ int main (int argc, char *argv[])
         char *topic = xasprintf ("%s.rusage", target);
         if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
                                 || flux_rpc_get (rpc, NULL, &json_str) < 0)
-            err_exit ("%s", topic);
+            log_err_exit ("%s", topic);
         parse_json (objname, json_str, scale, type);
         free (topic);
         flux_rpc_destroy (rpc);
@@ -160,7 +160,7 @@ int main (int argc, char *argv[])
         char *topic = xasprintf ("%s.stats.get", target);
         if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
                                 || flux_rpc_get (rpc, NULL, &json_str) < 0)
-            err_exit ("%s", topic);
+            log_err_exit ("%s", topic);
         parse_json (objname, json_str, scale, type);
         free (topic);
         flux_rpc_destroy (rpc);
@@ -175,14 +175,14 @@ static void parse_json (const char *n, const char *json_str, double scale,
 {
     json_object *o = json_tokener_parse (json_str);
     if (!o)
-        err_exit ("error parsing JSON response");
+        log_err_exit ("error parsing JSON response");
     if (n) {
         char *cpy = xstrdup (n);
         char *name, *saveptr = NULL, *a1 = cpy;
 
         while ((name = strtok_r (a1, ".", &saveptr))) {
             if (!json_object_object_get_ex (o, name, &o) || o == NULL)
-                err_exit ("`%s' not found in response", n);
+                log_err_exit ("`%s' not found in response", n);
             a1 = NULL;
         }
         free (cpy);
@@ -193,7 +193,7 @@ static void parse_json (const char *n, const char *json_str, double scale,
             errno = 0;
             d = json_object_get_double (o);
             if (errno != 0)
-                err_exit ("couldn't convert value to double");
+                log_err_exit ("couldn't convert value to double");
             printf ("%lf\n", d * scale);
             break;
         }
@@ -202,7 +202,7 @@ static void parse_json (const char *n, const char *json_str, double scale,
             errno = 0;
             d = json_object_get_double (o);
             if (errno != 0)
-                err_exit ("couldn't convert value to double (en route to int)");
+                log_err_exit ("couldn't convert value to double (en route to int)");
             printf ("%d\n", (int)(d * scale));
             break;
         }

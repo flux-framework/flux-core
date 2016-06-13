@@ -8,7 +8,7 @@ void get_rank (flux_rpc_t *rpc)
     const char *rank;
 
     if (flux_rpc_get (rpc, NULL, &json_str) < 0)
-        err_exit ("flux_rpc_get");
+        log_err_exit ("flux_rpc_get");
     if (!(o = Jfromstr (json_str)) || !Jget_str (o, "value", &rank))
         log_msg_exit ("response protocol error");
     printf ("rank is %s\n", rank);
@@ -22,10 +22,10 @@ int main (int argc, char **argv)
     JSON o = Jnew();
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     Jadd_str (o, "name", "rank");
     if (!(rpc = flux_rpc (h, "cmb.attrget", Jtostr (o), FLUX_NODEID_ANY, 0)))
-        err_exit ("flux_rpc");
+        log_err_exit ("flux_rpc");
     get_rank (rpc);
     flux_rpc_destroy (rpc);
     flux_close (h);

@@ -84,7 +84,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     tstat_t *tstat = flux_rpc_aux_get (rpc);
 
     if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
-        err ("flux_rpc_get");
+        log_err ("flux_rpc_get");
         goto done;
     }
     if (!(out = Jfromstr (json_str))
@@ -94,7 +94,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
             || !Jget_str (out, "pad", &pad)
             || !Jget_str (out, "route", &route)
             || strcmp (ctx->pad, pad) != 0) {
-        err ("error decoding ping response");
+        log_err ("error decoding ping response");
         goto done;
     }
     t0.tv_sec = sec;
@@ -143,10 +143,10 @@ void send_ping (struct ping_ctx *ctx)
     else
         rpc = flux_rpc (ctx->h, ctx->topic, Jtostr (in), ctx->nodeid, 0);
     if (!rpc)
-        err_exit ("flux_rpc");
+        log_err_exit ("flux_rpc");
     flux_rpc_aux_set (rpc, tstat, free);
     if (flux_rpc_then (rpc, ping_continuation, ctx) < 0)
-        err_exit ("flux_rpc_then");
+        log_err_exit ("flux_rpc_then");
 
     Jput (in);
 
@@ -263,9 +263,9 @@ int main (int argc, char *argv[])
     ctx.topic = xasprintf ("%s.ping", target);
 
     if (!(ctx.h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     if (!(ctx.reactor = flux_get_reactor (ctx.h)))
-        err_exit ("flux_get_reactor");
+        log_err_exit ("flux_get_reactor");
 
     /* In batch mode, requests are sent before reactor is started
      * to process responses.  o/w requests are set in a timer watcher.
@@ -279,11 +279,11 @@ int main (int argc, char *argv[])
         tw = flux_timer_watcher_create (ctx.reactor, ctx.period, ctx.period,
                                         timer_cb, &ctx);
         if (!tw)
-            err_exit ("error creating watchers");
+            log_err_exit ("error creating watchers");
         flux_watcher_start (tw);
     }
     if (flux_reactor_run (ctx.reactor, 0) < 0)
-        err_exit ("flux_reactor_run");
+        log_err_exit ("flux_reactor_run");
 
     /* Clean up.
      */

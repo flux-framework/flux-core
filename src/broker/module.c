@@ -117,14 +117,14 @@ static void *module_thread (void *arg)
     /* Connect to broker socket, enable logging, register built-in services
      */
     if (!(p->h = flux_open (uri, 0)))
-        err_exit ("flux_open %s", uri);
+        log_err_exit ("flux_open %s", uri);
     if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT,
                       p->zctx, sizeof (p->zctx)) < 0)
-        err_exit ("flux_opt_set ZEROMQ_CONTEXT");
+        log_err_exit ("flux_opt_set ZEROMQ_CONTEXT");
 
     rankstr = xasprintf ("%u", p->rank);
     if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        err ("%s: error faking rank attribute", p->name);
+        log_err ("%s: error faking rank attribute", p->name);
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
@@ -133,7 +133,7 @@ static void *module_thread (void *arg)
     /* Block all signals
      */
     if (sigfillset (&signal_set) < 0)
-        err_exit ("%s: sigfillset", p->name);
+        log_err_exit ("%s: sigfillset", p->name);
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
         log_errn_exit (errnum, "pthread_sigmask");
 
@@ -529,14 +529,14 @@ module_t *module_add (modhash_t *mh, const char *path)
     /* Broker end of PAIR socket is opened here.
      */
     if (!(p->sock = zsocket_new (p->zctx, ZMQ_PAIR)))
-        err_exit ("zsocket_new");
+        log_err_exit ("zsocket_new");
     zsocket_set_hwm (p->sock, 0);
     if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
-        err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
+        log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
     if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
                                                  p->sock, FLUX_POLLIN,
                                                  module_cb, p)))
-        err_exit ("flux_zmq_watcher_create");
+        log_err_exit ("flux_zmq_watcher_create");
 
     /* Update the modhash.
      */

@@ -77,7 +77,7 @@ void usage (optparse_t *p)
                   def ? def : "",
                   val ? ":" : "",
                   val ? val : "") < 0)
-        err_exit ("faled to get command help list!");
+        log_err_exit ("faled to get command help list!");
 
     optparse_print_usage (p);
     fprintf (stderr, "\n");
@@ -92,7 +92,7 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
     };
     optparse_t *p = optparse_create ("flux");
     if (p == NULL)
-        err_exit ("optparse_create");
+        log_err_exit ("optparse_create");
     optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] COMMAND ARGS");
     e = optparse_add_option_table (p, opts);
     if (e != OPTPARSE_SUCCESS)
@@ -261,7 +261,7 @@ char *dir_self (void)
     if (!exe_path_valid) {
         memset (flux_exe_path, 0, MAXPATHLEN);
         if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
-            err_exit ("readlink (/proc/self/exe)");
+            log_err_exit ("readlink (/proc/self/exe)");
         flux_exe_dir = strip_trailing_dot_libs (dirname (flux_exe_path));
         exe_path_valid = true;
     }
@@ -337,7 +337,7 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
 {
     if (strchr (argv[0], '/')) {
         exec_subcommand_dir (vopt, NULL, argv, NULL);
-        err_exit ("%s", argv[0]);
+        log_err_exit ("%s", argv[0]);
     } else {
         char *cpy = xstrdup (searchpath);
         char *dir, *saveptr = NULL, *a1 = cpy;
@@ -365,7 +365,7 @@ flux_t builtin_get_flux_handle (optparse_t *p)
     if ((h = optparse_get_data (p, "flux_t")))
         flux_incref (h);
     else if ((h = flux_open (NULL, 0)) == NULL)
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     return h;
 }
 

@@ -52,11 +52,11 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
     struct hwloc_topo *t = xzmalloc (sizeof (*t));
 
     if (!(t->h = builtin_get_flux_handle (p)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     t->rpc = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0);
     if (!t->rpc || (flux_rpc_get (t->rpc, NULL, &json_str) < 0))
-        err_exit ("flux_rpc");
+        log_err_exit ("flux_rpc");
 
     if (!(t->o = Jfromstr (json_str)) || !Jget_str (t->o, "topology", &t->topo))
         log_msg_exit ("failed to parse json topology");
@@ -111,16 +111,16 @@ FILE * argz_popen (char *argz, size_t argz_len, pid_t *pidptr)
     int pfds[2];
     pid_t pid;
     if (pipe (pfds) < 0)
-        err_exit ("pipe");
+        log_err_exit ("pipe");
     switch ((pid = fork ())) {
     case -1:
-        err_exit ("fork");
+        log_err_exit ("fork");
     case  0:
         close (pfds[1]);
         dup2 (pfds[0], STDIN_FILENO);
         argz_execp (argz, argz_len);
         if (errno != ENOENT)
-            err ("exec");
+            log_err ("exec");
         exit (errno); /* So we can detect ENOENT.. Sorry */
     default:
         break;
@@ -155,11 +155,11 @@ static int exec_lstopo (optparse_t *p, int ac, char *av[], const char *topo)
     while (true) {
         const char *next = *(cp+1);
         if (!(fp = argz_popen (argz, argz_len, &pid)))
-            err_exit ("popen (lstopo)");
+            log_err_exit ("popen (lstopo)");
         fputs (topo, fp);
         fclose (fp);
         if (waitpid (pid, &status, 0) < 0)
-            err_exit ("waitpid");
+            log_err_exit ("waitpid");
 
         /* Break out of loop if exec() was succcessful, failed with
          *  an error other than "File not found", or we ran out programs
@@ -213,25 +213,25 @@ static void config_hwloc_paths (flux_t h, const char *dirpath)
     int n;
 
     if (flux_get_size (h, &size) < 0)
-        err_exit ("flux_get_size");
+        log_err_exit ("flux_get_size");
     for (rank = 0; rank < size; rank++) {
         n = snprintf (key, sizeof (key), "%s.%"PRIu32, key_prefix, rank);
         assert (n < sizeof (key));
         if (dirpath == NULL) {
             /* Remove any per rank xml and reload default xml */
             if (kvs_unlink (h, key) < 0)
-                err_exit ("kvs_unlink");
+                log_err_exit ("kvs_unlink");
             continue;
         }
         n = snprintf (path, sizeof (path), "%s/%"PRIu32".xml", dirpath, rank);
         assert (n < sizeof (path));
         if (access (path, R_OK) < 0)
-            err_exit ("%s", path);
+            log_err_exit ("%s", path);
         if (kvs_put_string (h, key, path) < 0)
-            err_exit ("kvs_put_string");
+            log_err_exit ("kvs_put_string");
     }
     if (kvs_commit (h) < 0)
-        err_exit ("kvs_commit");
+        log_err_exit ("kvs_commit");
 }
 
 static void request_hwloc_reload (flux_t h, const char *nodeset)
@@ -240,15 +240,15 @@ static void request_hwloc_reload (flux_t h, const char *nodeset)
 
     if (!(rpc = flux_rpc_multi (h, "resource-hwloc.reload", NULL,
                                                         nodeset, 0)))
-        err_exit ("flux_rpc_multi");
+        log_err_exit ("flux_rpc_multi");
     while (!flux_rpc_completed (rpc)) {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (rpc, &nodeid, &json_str) < 0) {
             if (nodeid == FLUX_NODEID_ANY)
-                err ("flux_rpc_get");
+                log_err ("flux_rpc_get");
             else
-                err ("rpc(%"PRIu32")", nodeid);
+                log_err ("rpc(%"PRIu32")", nodeid);
         }
     }
     flux_rpc_destroy (rpc);
@@ -263,9 +263,9 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     flux_t h;
 
     if (!(h = builtin_get_flux_handle (p)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     if (av[n] && !(dirpath = realpath (av[n], NULL)))
-        err_exit ("%s", av[n]);
+        log_err_exit ("%s", av[n]);
 
     config_hwloc_paths (h, dirpath);
     request_hwloc_reload (h, nodeset);

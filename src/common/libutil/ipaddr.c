@@ -43,7 +43,7 @@ void ipaddr_getprimary (char *buf, int len)
     int e;
 
     if (gethostname (hostname, sizeof (hostname)) < 0)
-        err_exit ("gethostname");
+        log_err_exit ("gethostname");
     memset (&hints, 0, sizeof (hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;

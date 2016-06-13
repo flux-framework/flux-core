@@ -109,7 +109,7 @@ static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
     json_object *o;
 
     if (flux_msg_decode (zmsg, &tag, &o) < 0) {
-        err ("bad msg from rexec sesion %lu", c->id);
+        log_err ("bad msg from rexec sesion %lu", c->id);
         return (-1);
     }
 
@@ -152,10 +152,10 @@ static void exec_handler (struct rexec_ctx *ctx, uint64_t id, int *pfds)
     args = wrexecd_args_create (ctx, id);
 
     if ((sid = setsid ()) < 0)
-        err ("setsid");
+        log_err ("setsid");
 
     if ((pid = fork()) < 0)
-        err_exit ("fork");
+        log_err_exit ("fork");
     else if (pid > 0)
         exit (0); /* parent of grandchild == child */
 
@@ -167,10 +167,10 @@ static void exec_handler (struct rexec_ctx *ctx, uint64_t id, int *pfds)
     closeall (4);
     flux_log (ctx->h, LOG_DEBUG, "running %s %s %s", args[0], args[1], args[2]);
     if (setenv ("FLUX_URI", ctx->local_uri, 1) < 0)
-        err_exit ("setenv");
+        log_err_exit ("setenv");
     if (execvp (args[0], args) < 0) {
         close (3);
-        err_exit ("execvp");
+        log_err_exit ("execvp");
     }
     exit (255);
 }

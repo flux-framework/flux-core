@@ -10,12 +10,6 @@
 void log_init (char *cmd_name);
 void log_fini (void);
 
-/* deprecated */
-void err_exit (const char *fmt, ...)
-        __attribute__ ((format (printf, 1, 2), noreturn));
-void err (const char *fmt, ...)
-        __attribute__ ((format (printf, 1, 2)));
-
 void log_err_exit (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2), noreturn));
 void log_err (const char *fmt, ...)

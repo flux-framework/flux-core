@@ -81,7 +81,7 @@ int main (int argc, char *argv[])
         usage ();
 
      if (!(sec = flux_sec_create ()))
-        err_exit ("flux_sec_create");
+        log_err_exit ("flux_sec_create");
     if (secdir)
         flux_sec_set_directory (sec, secdir);
     if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)

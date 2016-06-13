@@ -138,9 +138,9 @@ int main (int argc, char *argv[])
 
     if (strcmp (cmd, "info") != 0) {
         if (!(h = flux_open (NULL, 0)))
-            err_exit ("flux_open");
+            log_err_exit ("flux_open");
         if (!(opt.nodeset = flux_get_nodeset (h, rankopt, excludeopt)))
-            err_exit ("--exclude/--rank");
+            log_err_exit ("--exclude/--rank");
         if (strlen (opt.nodeset) == 0)
             exit (0);
     }
@@ -179,7 +179,7 @@ void parse_modarg (const char *arg, char **name, char **path)
 
     if (strchr (arg, '/')) {
         if (!(modpath = realpath (arg, NULL)))
-            err_exit ("%s", arg);
+            log_err_exit ("%s", arg);
         if (!(modname = flux_modname (modpath)))
             log_msg_exit ("%s", dlerror ());
     } else {
@@ -246,7 +246,7 @@ void mod_insmod (flux_t h, opt_t opt)
     assert (json_str != NULL);
     flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
     if (!r)
-        err_exit ("%s", topic);
+        log_err_exit ("%s", topic);
     while (!flux_rpc_completed (r)) {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, NULL) < 0) {
@@ -254,9 +254,9 @@ void mod_insmod (flux_t h, opt_t opt)
                 log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
                      topic, nodeid, modname);
             else if (nodeid != FLUX_NODEID_ANY)
-                err ("%s[%" PRIu32 "]", topic, nodeid);
+                log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
-                err ("%s", topic);
+                log_err ("%s", topic);
             errors++;
         }
     }
@@ -284,11 +284,11 @@ void mod_rmmod (flux_t h, opt_t opt)
     assert (json_str != NULL);
     flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
     if (!r)
-        err_exit ("%s %s", topic, modname);
+        log_err_exit ("%s %s", topic, modname);
     while (!flux_rpc_completed (r)) {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, NULL) < 0)
-            err ("%s[%d] %s",
+            log_err ("%s[%d] %s",
                  topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
                  modname);
     }
@@ -440,16 +440,16 @@ void mod_lsmod (flux_t h, opt_t opt)
     char *topic = xasprintf ("%s.lsmod", service);
     flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
     if (!r)
-        err_exit ("%s", topic);
+        log_err_exit ("%s", topic);
     while (!flux_rpc_completed (r)) {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, &json_str) < 0
                 || lsmod_merge_result (nodeid, json_str, mods) < 0) {
             if (nodeid != FLUX_NODEID_ANY)
-                err ("%s[%" PRIu32 "]", topic, nodeid);
+                log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
-                err ("%s", topic);
+                log_err ("%s", topic);
         }
     }
     flux_rpc_destroy (r);

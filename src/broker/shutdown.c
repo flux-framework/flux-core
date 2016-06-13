@@ -120,13 +120,13 @@ void shutdown_set_handle (shutdown_t *s, flux_t h)
     match.topic_glob = "shutdown";
     if (!(s->shutdown = flux_msg_handler_create (s->h, match,
                                                  shutdown_handler, s)))
-        err_exit ("flux_msg_handler_create");
+        log_err_exit ("flux_msg_handler_create");
     flux_msg_handler_start (s->shutdown);
     if (flux_event_subscribe (s->h, "shutdown") < 0)
-        err_exit ("flux_event_subscribe");
+        log_err_exit ("flux_event_subscribe");
 
     if (flux_get_rank (s->h, &s->myrank) < 0)
-        err_exit ("flux_get_rank");
+        log_err_exit ("flux_get_rank");
 }
 
 void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg)

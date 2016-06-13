@@ -87,7 +87,7 @@ static json_object *command_list_file_read (const char *path)
     }
 
     if (!(fp = fopen (path, "r"))) {
-        err ("%s", path);
+        log_err ("%s", path);
         return (NULL);
     }
 
@@ -230,7 +230,7 @@ zhash_t *get_command_list_hash (const char *pattern)
     for (i = 0; i < gl.gl_pathc; i++) {
         const char *file = gl.gl_pathv[i];
         if (command_list_read (zh, file) < 0)
-            err_exit ("%s: failed to read content\n", file);
+            log_err_exit ("%s: failed to read content\n", file);
     }
     globfree (&gl);
 
