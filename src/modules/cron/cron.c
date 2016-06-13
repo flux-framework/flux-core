@@ -351,7 +351,10 @@ static int64_t next_cronid (flux_t h)
     Jadd_int64 (req, "postincrement", 0);
     Jadd_bool (req, "create", true);
 
-    rpc = flux_rpc (h, "cmb.seq.fetch", Jtostr (req), 0, 0);
+    if (!(rpc = flux_rpc (h, "cmb.seq.fetch", Jtostr (req), 0, 0))) {
+        flux_log_error (h, "flux_rpc");
+        return ret;
+    }
     Jput (req);
 
     if ((flux_rpc_get (rpc, NULL, &json_str) < 0)
@@ -392,10 +395,12 @@ static int cron_entry_defer (cron_entry_t *e)
     /* O/w, defer this task: push entry onto deferred list, and start
      *  sync event message handler if needed
      */
+    if (zlist_push (ctx->deferred, e) < 0)
+        return (-1);
     e->stats.deferred++;
     flux_log (ctx->h, LOG_DEBUG, "deferring cron-%ju to next %s event",
              e->id, ctx->sync_event);
-    zlist_push (ctx->deferred, e);
+
     if (zlist_size (ctx->deferred) == 1)
         flux_msg_handler_start (ctx->mh);
 
@@ -673,7 +678,10 @@ static void cron_create_handler (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
 
-    zlist_append (ctx->entries, e);
+    if (zlist_append (ctx->entries, e) < 0) {
+        saved_errno = errno;
+        goto done;
+    }
 
     rc = 0;
     out = cron_entry_to_json (e);
@@ -694,7 +702,7 @@ static void cron_sync_handler (flux_t h, flux_msg_handler_t *w,
     const char *topic;
     bool disable;
     double epsilon;
-    int saved_errno;
+    int saved_errno = 0;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0

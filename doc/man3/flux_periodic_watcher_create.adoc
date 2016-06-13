@@ -1,5 +1,5 @@
 flux_periodic_watcher_create(3)
-============================
+===============================
 :doctype: manpage
 
 
