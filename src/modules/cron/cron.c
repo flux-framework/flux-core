@@ -694,7 +694,7 @@ static void cron_sync_handler (flux_t h, flux_msg_handler_t *w,
     const char *topic;
     bool disable;
     double epsilon;
-    int saved_errno;
+    int saved_errno = 0;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0
