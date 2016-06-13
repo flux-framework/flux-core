@@ -110,6 +110,10 @@ log-stderr-level::
 value, and as filtered by log-forward-level, are copied to stderr of the
 rank zero broker.
 
+log-level::
+Log entries at syslog(3) level at or below this value are stored
+in the ring buffer.
+
 
 CONTENT ATTRIBUTES
 ------------------
