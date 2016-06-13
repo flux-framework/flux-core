@@ -676,7 +676,10 @@ static void cron_create_handler (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
 
-    zlist_append (ctx->entries, e);
+    if (zlist_append (ctx->entries, e) < 0) {
+        saved_errno = errno;
+        goto done;
+    }
 
     rc = 0;
     out = cron_entry_to_json (e);
