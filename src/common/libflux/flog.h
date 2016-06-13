@@ -59,6 +59,11 @@ int flux_dmesg (flux_t h, int flags, flux_log_f fun, void *arg);
  */
 void flux_log_fprint (const char *buf, int len, void *arg);
 
+/* Convert errno to string.
+ * Flux errno space includes POSIX errno + zeromq errors.
+ */
+const char *flux_strerror (int errnum);
+
 #endif /* !_FLUX_CORE_FLOG_H */
 
 /*

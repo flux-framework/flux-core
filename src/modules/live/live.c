@@ -338,8 +338,7 @@ static int reparent (ctx_t *ctx, int oldrank, parent_t *p)
         oom ();
     goodbye (ctx, oldrank);
     if ((rc = flux_reparent (ctx->h, -1, p->uri)) < 0)
-        flux_log (ctx->h, LOG_ERR, "%s %s: %s",
-                  __FUNCTION__, p->uri, strerror (errno));
+        flux_log_error (ctx->h, "%s %s", __FUNCTION__, p->uri);
     hello (ctx);
 done:
     return rc;
@@ -431,8 +430,7 @@ static void cstate_cb (flux_t h, flux_msg_handler_t *w,
     if (ctx->rank == 0) {
         ns_chg_one (ctx, rank, ostate, nstate);
         if (ns_sync (ctx) < 0)
-            flux_log (h, LOG_ERR, "%s: ns_sync: %s",
-                      __FUNCTION__, strerror (errno));
+            flux_log_error (h, "%s: ns_sync", __FUNCTION__);
     }
 done:
     Jput (event);
@@ -484,7 +482,7 @@ static void hb_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
     if (!(peers_str = flux_lspeer (h, -1)) || !(peers = Jfromstr (peers_str))) {
-        flux_log (h, LOG_ERR, "flux_lspeer: %s", strerror (errno));
+        flux_log_error (h, "flux_lspeer");
         goto done;
     }
     if (!(keys = zhash_keys (ctx->children)))
@@ -534,14 +532,14 @@ static void manage_subscriptions (ctx_t *ctx)
 {
     if (ctx->hb_subscribed && zhash_size (ctx->children) == 0) {
         if (flux_event_unsubscribe (ctx->h, "hb") < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: flux_event_unsubscribe hb: %s",
-                      __FUNCTION__, strerror (errno));
+            flux_log_error (ctx->h, "%s: flux_event_unsubscribe hb",
+                            __FUNCTION__);
         else
             ctx->hb_subscribed = false;
     } else if (!ctx->hb_subscribed && zhash_size (ctx->children) > 0) {
         if (flux_event_subscribe (ctx->h, "hb") < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: flux_event_subscribe hb: %s",
-                      __FUNCTION__, strerror (errno));
+            flux_log_error (ctx->h, "%s: flux_event_subscribe hb",
+                            __FUNCTION__);
         else
             ctx->hb_subscribed = true;
     }
@@ -928,11 +926,9 @@ static void hello_sink (flux_reduce_t *r, int batchnum, void *arg)
         ns_chg_hello (ctx, o);
         hello_merge (ctx->topo, o);
         if (ns_sync (ctx) < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: ns_sync: %s",
-                      __FUNCTION__, strerror (errno));
+            flux_log_error (ctx->h, "%s: ns_sync", __FUNCTION__);
         if (topo_sync (ctx) < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: topo_sync: %s",
-                      __FUNCTION__, strerror (errno));
+            flux_log_error (ctx->h, "%s: topo_sync", __FUNCTION__);
         Jput (o);
     }
 }
@@ -1121,7 +1117,7 @@ static void recover_event_cb (flux_t h, flux_msg_handler_t *w,
         if (errno == EINVAL)
             flux_log (h, LOG_ERR, "recovery: parent is still in FAIL state");
         else
-            flux_log (h, LOG_ERR, "recover: %s", strerror (errno));
+            flux_log_error (h, "recover");
     }
 }
 

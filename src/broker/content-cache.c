@@ -718,7 +718,7 @@ done:
     saved_errno = errno;
     if (rc < 0)
         flux_log (h, LOG_DEBUG, "content dropcache: %s",
-                  strerror (saved_errno));
+                  flux_strerror (saved_errno));
     else
         flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
                   orig_size - (int)zhash_size (cache->entries), orig_size);
@@ -804,7 +804,7 @@ done:
     saved_errno = errno;
     if (rc < 0)
         flux_log (h, LOG_DEBUG, "content flush: %s",
-                  strerror (saved_errno));
+                  flux_strerror (saved_errno));
     else
         flux_log (h, LOG_DEBUG, "content flush");
     errno = saved_errno;

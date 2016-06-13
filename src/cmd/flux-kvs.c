@@ -566,7 +566,7 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
     rc = kvs_get_dir (h, &dir, "%s", key);
     while (rc == 0 || (rc < 0 && errno == ENOENT)) {
         if (rc < 0) {
-            printf ("%s: %s\n", key, strerror (errno));
+            printf ("%s: %s\n", key, flux_strerror (errno));
             if (dir)
                 kvsdir_destroy (dir);
             dir = NULL;

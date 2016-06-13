@@ -2313,7 +2313,7 @@ static int cmb_sub_cb (zmsg_t **zmsg, void *arg)
     rc = module_subscribe (ctx->modhash, uuid, topic);
 done:
     if (rc < 0)
-        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
+        FLUX_LOG_ERROR (ctx->h);
     if (uuid)
         free (uuid);
     Jput (in);
@@ -2346,7 +2346,7 @@ static int cmb_unsub_cb (zmsg_t **zmsg, void *arg)
     rc = module_unsubscribe (ctx->modhash, uuid, topic);
 done:
     if (rc < 0)
-        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
+        FLUX_LOG_ERROR (ctx->h);
     if (uuid)
         free (uuid);
     Jput (in);
@@ -2362,8 +2362,7 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
     int rc = sequence_request_handler (ctx->seq, (flux_msg_t *) *zmsg, &out);
 
     if (flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
-        flux_log (ctx->h, LOG_ERR, "cmb.seq: flux_respond: %s\n",
-                  strerror (errno));
+        flux_log_error (ctx->h, "cmb.seq: flux_respond");
     if (out)
         Jput (out);
     zmsg_destroy (zmsg);
@@ -2615,8 +2614,7 @@ static void send_mute_request (ctx_t *ctx, void *sock)
     if (flux_msg_enable_route (zmsg))
         goto done;
     if (zmsg_send (&zmsg, sock) < 0)
-        flux_log (ctx->h, LOG_ERR, "failed to send mute request: %s",
-                  strerror (errno));
+        flux_log_error (ctx->h, "failed to send mute request");
     /* No response will be sent */
 done:
     zmsg_destroy (&zmsg);
@@ -2691,9 +2689,9 @@ static void module_cb (module_t *p, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, &msg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "%s(%s): broker_event_sendmsg %s: %s",
-                          __FUNCTION__, module_get_name (p),
-                          flux_msg_typestr (type), strerror (errno));
+                flux_log_error (ctx->h, "%s(%s): broker_event_sendmsg %s",
+                                __FUNCTION__, module_get_name (p),
+                                flux_msg_typestr (type));
             }
             break;
         case FLUX_MSGTYPE_KEEPALIVE:

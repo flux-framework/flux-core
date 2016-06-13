@@ -127,6 +127,7 @@
 #include <czmq.h>
 
 #include "security.h"
+#include "flog.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -585,7 +586,7 @@ static zcert_t *getcurve (flux_sec_t c, const char *role)
     if (asprintf (&path, "%s/%s", c->curve_dir, role) < 0)
         oom ();
     if (!(cert = zcert_load (path)))
-        seterrstr (c, "zcert_load %s: %s", path, strerror (errno));
+        seterrstr (c, "zcert_load %s: %s", path, flux_strerror (errno));
     free (path);
     return cert;
 }
@@ -638,7 +639,7 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
     rc = zhash_save (passwds, c->passwd_file);
     umask (old_mask);
     if (rc < 0) {
-        seterrstr (c, "zhash_save %s: %s", c->passwd_file, strerror (errno));
+        seterrstr (c, "zhash_save %s: %s", c->passwd_file, flux_strerror (errno));
         goto done;
     }
     /* FIXME: check created file mode */
@@ -722,7 +723,7 @@ int flux_sec_unmunge_zmsg (flux_sec_t c, zmsg_t **zmsg)
     }
     zmsg_destroy (zmsg);
     if (!(*zmsg = zmsg_decode ((byte *)buf, len))) {
-        seterrstr (c, "zmsg_decode: %s", strerror (errno));
+        seterrstr (c, "zmsg_decode: %s", flux_strerror (errno));
         if (errno == 0)
             errno = EINVAL;
         goto done_unlock;

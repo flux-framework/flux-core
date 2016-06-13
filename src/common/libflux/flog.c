@@ -92,6 +92,11 @@ void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg)
     ctx->cb_arg = arg;
 }
 
+const char *flux_strerror (int errnum)
+{
+    return zmq_strerror (errnum);
+}
+
 void flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
@@ -149,7 +154,7 @@ void flux_log_verror (flux_t h, const char *fmt, va_list ap)
     int saved_errno = errno;
     char *s = xvasprintf (fmt, ap);
 
-    flux_log (h, LOG_ERR, "%s: %s", s, zmq_strerror (errno));
+    flux_log (h, LOG_ERR, "%s: %s", s, flux_strerror (errno));
     free (s);
     errno = saved_errno;
 }
@@ -246,7 +251,6 @@ int flux_dmesg (flux_t h, int flags, flux_log_f fun, void *arg)
 done:
     return rc;
 }
-
 
 void flux_log_fprint (const char *buf, int len, void *arg)
 {

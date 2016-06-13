@@ -216,7 +216,7 @@ static void enter_request_cb (flux_t h, flux_msg_handler_t *w,
                         "abort %s due to double entry by client %s",
                         name, sender);
             if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
-                flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
+                flux_log_error (ctx->h, "exit_event_send");
             goto done;
         }
     }
@@ -227,7 +227,7 @@ static void enter_request_cb (flux_t h, flux_msg_handler_t *w,
     b->count += count;
     if (b->count == b->nprocs) {
         if (exit_event_send (ctx->h, b->name, 0) < 0)
-            flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
+            flux_log_error (ctx->h, "exit_event_send");
     } else if (ctx->rank > 0 && !ctx->timer_armed) {
         flux_timer_watcher_reset (ctx->timer, barrier_reduction_timeout_sec, 0.);
         flux_watcher_start (ctx->timer);
@@ -252,7 +252,7 @@ static int disconnect (const char *key, void *item, void *arg)
 
     if (zhash_lookup (b->clients, sender)) {
         if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
-            flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
+            flux_log_error (ctx->h, "exit_event_send");
     }
     return 0;
 }

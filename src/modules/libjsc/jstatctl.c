@@ -233,7 +233,7 @@ static int extract_raw_nnodes (flux_t h, int64_t j, int64_t *nnodes)
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".nnodes", j);
     if (kvs_get_int64 (h, key, nnodes) < 0) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
@@ -247,7 +247,7 @@ static int extract_raw_ntasks (flux_t h, int64_t j, int64_t *ntasks)
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".ntasks", j);
     if (kvs_get_int64 (h, key, ntasks) < 0) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
@@ -261,7 +261,7 @@ static int extract_raw_walltime (flux_t h, int64_t j, int64_t *walltime)
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".walltime", j);
     if (kvs_get_int64 (h, key, walltime) < 0) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
@@ -274,7 +274,7 @@ static int extract_raw_rdl (flux_t h, int64_t j, char **rdlstr)
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".rdl", j);
     if (kvs_get_string (h, key, rdlstr) < 0) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
@@ -289,7 +289,7 @@ static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
     char *key = xasprintf ("lwj.%"PRId64".state", j);
     char *state = NULL;
     if (kvs_get_string (h, key, &state) < 0) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else {
@@ -309,7 +309,7 @@ static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
     char *key = xasprintf ("lwj.%"PRId64".%"PRId64".procdesc", j, i);
     if (kvs_get (h, key, &json_str) < 0
             || !(*o = Jfromstr (json_str))) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         rc = -1;
         if (json_str)
             free (json_str);
@@ -401,7 +401,7 @@ static int extract_raw_rdl_alloc (flux_t h, int64_t j, JSON jcb)
         key = xasprintf ("lwj.%"PRId64".rank.%"PRId32".cores", j, i);
         if (kvs_get_int64 (h, key, &cores) < 0) {
             if (errno != EINVAL)
-                flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+                flux_log_error (h, "extract %s", key);
             processing = false;
         } else {
             JSON elem = Jnew ();
@@ -505,16 +505,17 @@ static int send_state_event (flux_t h, job_state_t st, int64_t j)
 
     if ((asprintf (&json, "{\"lwj\":%"PRId64"}", j) < 0)
         || (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0)) {
-        flux_log (h, LOG_ERR, "create state change event: %s\n",
-                     jsc_job_num2state (st));
+        errno = ENOMEM;
+        flux_log_error (h, "create state change event: %s",
+                        jsc_job_num2state (st));
         goto done;
     }
     if ((msg = flux_event_encode (topic, json)) == NULL) {
-        flux_log (h, LOG_ERR, "flux_event_encode: %s\n", strerror (errno));
+        flux_log_error (h, "flux_event_encode");
         goto done;
     }
     if (flux_send (h, msg, 0) < 0)
-        flux_log (h, LOG_ERR, "flux_send event: %s\n", strerror (errno));
+        flux_log_error (h, "flux_send event");
     flux_msg_destroy (msg);
     rc = 0;
 done:
@@ -534,9 +535,9 @@ static int update_state (flux_t h, int64_t j, JSON o)
 
     key = xasprintf ("lwj.%"PRId64".state", j);
     if (kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0)
-        flux_log (h, LOG_ERR, "update %s: %s", key, strerror (errno));
+        flux_log_error (h, "update %s", key);
     else if (kvs_commit (h) < 0)
-        flux_log (h, LOG_ERR, "commit %s: %s", key, strerror (errno));
+        flux_log_error (h, "commit %s", key);
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
               jsc_job_num2state ((job_state_t)st));
@@ -545,7 +546,7 @@ static int update_state (flux_t h, int64_t j, JSON o)
     free (key);
 
     if (send_state_event (h, st, j) < 0)
-        flux_log (h, LOG_ERR, "send state event");
+        flux_log_error (h, "send state event");
 
     return rc;
 }
@@ -570,13 +571,13 @@ static int update_rdesc (flux_t h, int64_t j, JSON o)
     key2 = xasprintf ("lwj.%"PRId64".ntasks", j);
     key3 = xasprintf ("lwj.%"PRId64".walltime", j);
     if (kvs_put_int64 (h, key1, nnodes) < 0)
-        flux_log (h, LOG_ERR, "update %s: %s", key1, strerror (errno));
+        flux_log_error (h, "update %s", key1);
     else if (kvs_put_int64 (h, key2, ntasks) < 0)
-        flux_log (h, LOG_ERR, "update %s: %s", key2, strerror (errno));
+        flux_log_error (h, "update %s", key2);
     else if (kvs_put_int64 (h, key3, walltime) < 0)
-        flux_log (h, LOG_ERR, "update %s: %s", key3, strerror (errno));
+        flux_log_error (h, "update %s", key3);
     else if (kvs_commit (h) < 0)
-        flux_log (h, LOG_ERR, "commit failed");
+        flux_log_error (h, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
         rc = 0;
@@ -592,9 +593,9 @@ static int update_rdl (flux_t h, int64_t j, const char *rs)
     int rc = -1;
     char *key = xasprintf ("lwj.%"PRId64".rdl", j);
     if (kvs_put_string (h, key, rs) < 0)
-        flux_log (h, LOG_ERR, "update %s: %s", key, strerror (errno));
+        flux_log_error (h, "update %s", key);
     else if (kvs_commit (h) < 0)
-        flux_log (h, LOG_ERR, "commit failed");
+        flux_log_error (h, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
         rc = 0;
@@ -658,7 +659,7 @@ static int update_rdl_alloc (flux_t h, int64_t j, JSON o)
 
     FOREACH_ZHASH (rtab, key, ncores) {
         if ( (rc = kvs_put_int64 (h, key, *ncores)) < 0) {
-            flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
+            flux_log_error (h, "put %s", key);
             goto done;
         }
     }
@@ -691,7 +692,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     key = xasprintf ("lwj.%"PRId64".%"PRId32".procdesc", j, r);
     if (kvs_get (h, key, &json_str) < 0
             || !(d = Jfromstr (json_str))) {
-        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        flux_log_error (h, "extract %s", key);
         goto done;
     }
 
@@ -704,7 +705,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     }
     Jadd_int64 (d, "nodeid", (int64_t)hrank);
     if (kvs_put (h, key, Jtostr (d)) < 0) {
-        flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
+        flux_log_error (h, "put %s", key);
         goto done;
     }
     rc = 0;
@@ -892,20 +893,17 @@ int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
     if (!func)
         goto done;
     if (flux_event_subscribe (h, "wreck.state.") < 0) {
-        flux_log (h, LOG_ERR, "subscribing to job event: %s",
-                     strerror (errno));
+        flux_log_error (h, "subscribing to job event");
         rc = -1;
         goto done;
     }
     if (flux_event_subscribe (h, "jsc.state.") < 0) {
-        flux_log (h, LOG_ERR, "subscribing to job event: %s",
-                     strerror (errno));
+        flux_log_error (h, "subscribing to job event");
         rc = -1;
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, (void *)ctx) < 0) {
-        flux_log (h, LOG_ERR, "registering resource event handler: %s",
-                  strerror (errno));
+        flux_log_error (h, "registering resource event handler");
         rc = -1;
         goto done;
     }

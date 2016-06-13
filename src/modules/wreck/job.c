@@ -99,7 +99,7 @@ static int64_t next_jobid (flux_t h)
 
     if ((flux_rpc_get (rpc, NULL, &json_str) < 0)
         || !(resp = json_tokener_parse (json_str))) {
-        flux_log (h, LOG_ERR, "rpc_get: %s\n", strerror (errno));
+        flux_log_error (h, "rpc_get");
         goto out;
     }
 
@@ -137,17 +137,16 @@ static void send_create_event (flux_t h, int64_t id, char *topic)
     char *json = NULL;
 
     if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
-        flux_log (h, LOG_ERR, "failed to create state change event: %s",
-                  strerror (errno));
+        errno = ENOMEM;
+        flux_log_error (h, "failed to create state change event");
         goto out;
     }
     if ((msg = flux_event_encode (topic, json)) == NULL) {
-        flux_log (h, LOG_ERR, "failed to create state change event: %s",
-                  strerror (errno));
+        flux_log_error (h, "failed to create state change event");
         goto out;
     }
     if (flux_send (h, msg, 0) < 0)
-        flux_log (h, LOG_ERR, "reserved event failed: %s", strerror (errno));
+        flux_log_error (h, "reserved event failed");
     flux_msg_destroy (msg);
 
     /* Workaround -- wait for our own event to be published with a
@@ -245,7 +244,7 @@ static bool sched_loaded (flux_t h)
 static int do_submit_job (flux_t h, unsigned long id)
 {
     if (kvs_job_set_state (h, id, "submitted") < 0) {
-        flux_log (h, LOG_ERR, "kvs_job_set_state: %s\n", strerror (errno));
+        flux_log_error (h, "kvs_job_set_state");
         return (-1);
     }
     send_create_event (h, id, "wreck.state.submitted");
@@ -278,8 +277,7 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
 
         if ((id = next_jobid (h)) < 0) {
             if (flux_respond (h, msg, errno, NULL) < 0)
-                flux_log (h, LOG_ERR, "job_request: flux_respond: %s",
-                          strerror (errno));
+                flux_log_error (h, "job_request: flux_respond");
             goto out;
         }
 
@@ -323,7 +321,7 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
          *  for now
          */
         if (flux_respond (h, msg, ENOSYS, NULL) < 0)
-            flux_log (h, LOG_ERR, "flux_respond: %s", strerror (errno));
+            flux_log_error (h, "flux_respond");
     }
 
 out:
@@ -341,7 +339,7 @@ struct flux_msg_handler_spec mtab[] = {
 int mod_main (flux_t h, int argc, char **argv)
 {
     if (flux_msg_handler_addvec (h, mtab, NULL) < 0) {
-        flux_log (h, LOG_ERR, "flux_msg_handler_addvec: %s", strerror (errno));
+        flux_log_error (h, "flux_msg_handler_addvec");
         return (-1);
     }
     /* Subscribe to our own `wreck.state.reserved` events so we
@@ -352,11 +350,11 @@ int mod_main (flux_t h, int argc, char **argv)
      */
     if ((flux_event_subscribe (h, "wreck.state.reserved") < 0)
        || (flux_event_subscribe (h, "wreck.state.submitted") < 0)) {
-        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
+        flux_log_error (h, "flux_event_subscribe");
         return -1;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
+        flux_log_error (h, "flux_reactor_run");
         return -1;
     }
     flux_msg_handler_delvec (mtab);
