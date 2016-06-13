@@ -251,6 +251,32 @@ static int cron_entry_stop (cron_entry_t *e)
     return (0);
 }
 
+/*
+ * Callback used to stop a cron entry safely.
+ */
+static void entry_stop_cb (flux_reactor_t *r, flux_watcher_t *w,
+                           int revents, void *arg)
+{
+    cron_entry_stop (arg);
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+}
+
+/* Stop cron entry `e` "safely" by waiting until the next
+ *  "prepare" callback. Temporary watcher created here wil lbe
+ *  destroyed within prepare_cb.
+ */
+int cron_entry_stop_safe (cron_entry_t *e)
+{
+    flux_reactor_t *r = flux_get_reactor (e->ctx->h);
+    flux_watcher_t *w = flux_prepare_watcher_create (r,
+                            entry_stop_cb, e);
+    if (!w)
+        return (-1);
+    flux_watcher_start (w);
+    return (0);
+}
+
 static int cron_entry_start (cron_entry_t *e)
 {
     if (!e->data || !e->stopped) {
@@ -650,10 +676,7 @@ static void cron_create_handler (flux_t h, flux_msg_handler_t *w,
     zlist_append (ctx->entries, e);
 
     rc = 0;
-    out = Jnew ();
-    Jadd_int64 (out, "id", e->id);
-    Jadd_str (out, "name", e->name);
-
+    out = cron_entry_to_json (e);
 done:
     if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
                               rc < 0 ? NULL : Jtostr (out)) < 0)

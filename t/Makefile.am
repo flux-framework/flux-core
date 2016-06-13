@@ -46,6 +46,7 @@ TESTS = \
 	t0013-content-sophia.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
+	t0016-cron-faketime.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1005-cmddriver.t \
@@ -108,6 +109,7 @@ check_SCRIPTS = \
 	t0013-content-sophia.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
+	t0016-cron-faketime.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1005-cmddriver.t \

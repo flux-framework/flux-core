@@ -25,6 +25,7 @@ MAN3_FILES_PRIMARY = \
 	flux_zmq_watcher_create.3 \
 	flux_handle_watcher_create.3 \
 	flux_timer_watcher_create.3 \
+	flux_periodic_watcher_create.3 \
 	flux_idle_watcher_create.3 \
 	flux_msg_handler_create.3 \
 	flux_msg_cmp.3 \
@@ -70,9 +71,11 @@ MAN3_FILES_SECONDARY = \
 	flux_fd_watcher_get_fd.3 \
 	flux_watcher_stop.3 \
 	flux_watcher_destroy.3 \
+	flux_watcher_next_wakeup.3 \
 	flux_zmq_watcher_get_zsock.3 \
 	flux_handle_watcher_get_flux.3 \
 	flux_timer_watcher_reset.3 \
+	flux_periodic_watcher_reset.3 \
 	flux_prepare_watcher_create.3 \
 	flux_check_watcher_create.3 \
 	flux_msg_handler_destroy.3 \
@@ -138,9 +141,11 @@ flux_reactor_error.3: flux_reactor_create.3
 flux_fd_watcher_get_fd.3: flux_fd_watcher_create.3
 flux_watcher_stop.3: flux_watcher_start.3
 flux_watcher_destroy.3: flux_watcher_start.3
+flux_watcher_next_wakeup.3: flux_watcher_start.3
 flux_zmq_watcher_get_zsock.3: flux_zmq_watcher_create.3
 flux_handle_watcher_get_flux.3: flux_handle_watcher_create.3
 flux_timer_watcher_reset.3: flux_timer_watcher_create.3
+flux_periodic_watcher_reset.3: flux_periodic_watcher_create.3
 flux_prepare_watcher_create.3: flux_idle_watcher_create.3
 flux_check_watcher_create.3: flux_idle_watcher_create.3
 flux_msg_handler_destroy.3: flux_msg_handler_create.3

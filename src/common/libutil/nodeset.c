@@ -316,6 +316,12 @@ uint32_t nodeset_next (nodeset_iterator_t *itr)
     return (itr->r == NS_SIZE (itr->n) ? NODESET_EOF : itr->r);
 }
 
+uint32_t nodeset_next_rank (nodeset_t *n, uint32_t r)
+{
+    uint32_t next = NS_NEXT (n, r);
+    return (next == NS_SIZE (n) ? NODESET_EOF : next);
+}
+
 void nodeset_iterator_rewind (nodeset_iterator_t *itr)
 {
     itr->started = false;

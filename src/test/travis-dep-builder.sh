@@ -12,8 +12,8 @@ cachedir=$HOME/local/.cache
 downloads="\
 https://github.com/dun/munge/archive/munge-0.5.11.tar.gz \
 https://github.com/jedisct1/libsodium/releases/download/1.0.10/libsodium-1.0.10.tar.gz \
-http://download.zeromq.org/zeromq-4.0.4.tar.gz \
-http://download.zeromq.org/czmq-3.0.2.tar.gz \
+https://github.com/zeromq/zeromq4-1/releases/download/v4.1.4/zeromq-4.1.4.tar.gz \
+https://github.com/zeromq/czmq/archive/v3.0.2.tar.gz \
 https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz \
 http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
 http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz \
@@ -22,6 +22,17 @@ http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz"
 declare -A extra_configure_opts=(\
 ["zeromq-4.0.4"]="--with-libsodium --with-libsodium-include-dir=\$prefix/include" \
 ["mpich-3.1.4"]="--disable-fortran --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
+)
+
+checkouts="\
+https://github.com/wolfcw/libfaketime.git"
+
+declare -A checkout_sha1=(\
+["libfaketime"]="b68f2820c4091075fbc205965ec6976f6d241aaa"
+)
+
+declare -A extra_make_opts=(\
+["libfaketime"]="LIBDIRNAME=/lib"
 )
 
 #
@@ -134,6 +145,27 @@ done
 #  /lib/systemd if $prefix/lib/systemd/system doesn't exist
 mkdir -p ${prefix}/lib/systemd/system
 
+for url in $checkouts; do
+    name=$(basename ${url} .git)
+    if check_cache "$name"; then
+       say "Using cached version of ${name}"
+       continue
+    fi
+    git clone ${url} ${name} || die "Failed to clone ${url}"
+    (
+      cd ${name} || die "cd failed"
+      if test -n "${checkout_sha1[$name]}"; then
+        git checkout ${checkout_sha1[$name]}
+      fi
+      test -x configure && CC=gcc ./configure --prefix=${prefix} \
+                  --sysconfdir=${prefix}/etc \
+                  ${extra_configure_opts[$name]} || : &&
+      make PREFIX=${prefix} ${extra_make_opts[$name]} &&
+      make PREFIX=${prefix} ${extra_make_opts[$name]} install
+    ) || die "Failed to build and install $name"
+    add_cache "$name"
+done
+
 for pkg in $downloads; do
     name=$(basename ${pkg} .tar.gz)
     if check_cache "$name"; then
@@ -145,6 +177,7 @@ for pkg in $downloads; do
       cd ${name} &&
       curl -L -O --insecure ${pkg} || die "Failed to download ${pkg}"
       tar --strip-components=1 -xf *.tar.gz || die "Failed to un-tar ${name}"
+      test -x configure || ./autogen.sh
       test -x configure && CC=gcc ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
                   ${extra_configure_opts[$name]} || : &&

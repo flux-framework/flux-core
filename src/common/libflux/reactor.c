@@ -225,6 +225,29 @@ void flux_watcher_destroy (flux_watcher_t *w)
     }
 }
 
+static void safe_stop_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
+{
+    flux_watcher_stop ((flux_watcher_t *)pw->data);
+    ev_prepare_stop (loop, pw);
+    free (pw);
+}
+
+/* Stop a watcher in the next ev_prepare callback. To be used from periodics
+ *  reschedule callback or other ev callbacks in which it is documented
+ *  unsafe to modify the ev_loop or any watcher.
+ */
+static void watcher_stop_safe (flux_watcher_t *w)
+{
+    if (w) {
+        ev_prepare *pw = xzmalloc (sizeof (*pw));
+        ev_prepare_init (pw, safe_stop_cb);
+        pw->data = w;
+        ev_prepare_start (w->r->loop, pw);
+    }
+}
+
+
+
 /* flux_t handle
  */
 
@@ -457,6 +480,136 @@ void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat)
     assert (w->signature == TIMER_SIG);
     ev_timer *tw = w->impl;
     ev_timer_set (tw, after, repeat);
+}
+
+/* Periodic
+ */
+#define PERIODIC_SIG 1007
+
+struct f_periodic {
+    struct flux_watcher *w;
+    ev_periodic          evp;
+    flux_reschedule_f    reschedule_cb;
+};
+
+static struct f_periodic * f_periodic_alloc ()
+{
+    struct f_periodic *fp = xzmalloc (sizeof (*fp));
+    fp->w = NULL;
+    fp->reschedule_cb = NULL;
+
+    // Pointer from ev_periodic->data back to ourself:
+    //  required for libev callbacks.
+    fp->evp.data = fp;
+    return (fp);
+}
+
+static void f_periodic_free (struct f_periodic *fp)
+{
+    free (fp);
+}
+
+static void periodic_start (void *impl, flux_watcher_t *w)
+{
+    struct f_periodic *fp = w->impl;
+    assert (w->signature == PERIODIC_SIG);
+    ev_periodic_start (w->r->loop, &fp->evp);
+}
+
+static void periodic_stop (void *impl, flux_watcher_t *w)
+{
+    struct f_periodic *fp = w->impl;
+    assert (w->signature == PERIODIC_SIG);
+    ev_periodic_stop (w->r->loop, &fp->evp);
+}
+
+static void periodic_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == PERIODIC_SIG);
+    if (impl)
+        f_periodic_free (impl);
+}
+
+static void periodic_cb (struct ev_loop *loop, ev_periodic *pw, int revents)
+{
+    struct f_periodic *fp = pw->data;
+    struct flux_watcher *w = fp->w;
+    if (w->fn)
+        fp->w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
+}
+
+
+static ev_tstamp periodic_reschedule_cb (ev_periodic *pw, ev_tstamp now)
+{
+    ev_tstamp rc;
+    struct f_periodic *fp = pw->data;
+    assert (fp->reschedule_cb != NULL);
+    rc = (ev_tstamp) fp->reschedule_cb (fp->w, (double) now, fp->w->arg);
+    if (rc < now) {
+        /*  User reschedule cb returned time in the past. The watcher will
+         *   be stopped, but not here (changing loop is not allowed in a
+         *   libev reschedule cb. flux_watcher_stop_safe() will stop it in
+         *   a prepare callback.
+         *  Return time far in the future to ensure we aren't called again.
+         */
+        watcher_stop_safe (fp->w);
+        return (now + 1e99);
+    }
+    return rc;
+}
+
+flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
+                                              double offset, double interval,
+                                              flux_reschedule_f reschedule_cb,
+                                              flux_watcher_f cb, void *arg)
+{
+    if (offset < 0 || interval < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    struct watcher_ops ops = {
+        .start = periodic_start,
+        .stop = periodic_stop,
+        .destroy = periodic_destroy,
+    };
+    flux_watcher_t *w;
+    struct f_periodic *fp = f_periodic_alloc ();
+    fp->reschedule_cb = reschedule_cb;
+
+    ev_periodic_init (&fp->evp, periodic_cb, offset, interval,
+                      reschedule_cb ? periodic_reschedule_cb : NULL);
+    w = flux_watcher_create (r, fp, ops, PERIODIC_SIG, cb, arg);
+    fp->w = w;
+
+    return w;
+}
+
+void flux_periodic_watcher_reset (flux_watcher_t *w,
+                                  double next, double interval,
+                                  flux_reschedule_f reschedule_cb)
+{
+    struct f_periodic *fp = w->impl;
+    struct ev_loop *loop = w->r->loop;
+    assert (w->signature == PERIODIC_SIG);
+    fp->reschedule_cb = reschedule_cb;
+    ev_periodic_set (&fp->evp, next, interval,
+                     reschedule_cb ? periodic_reschedule_cb : NULL);
+    ev_periodic_again (loop, &fp->evp);
+}
+
+double flux_watcher_next_wakeup (flux_watcher_t *w)
+{
+    if (w->signature == PERIODIC_SIG) {
+        struct f_periodic *fp = w->impl;
+        return ((double) ev_periodic_at (&fp->evp));
+    }
+    else if (w->signature == TIMER_SIG) {
+        ev_timer *tw = w->impl;
+        struct ev_loop *loop = w->r->loop;
+        return ((double) (ev_now (loop) +  ev_timer_remaining (loop, tw)));
+    }
+    errno = EINVAL;
+    return  (-1.);
 }
 
 /* Prepare

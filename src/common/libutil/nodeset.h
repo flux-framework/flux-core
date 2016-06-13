@@ -89,6 +89,10 @@ uint32_t nodeset_count (nodeset_t *n);
 uint32_t nodeset_min (nodeset_t *n);
 uint32_t nodeset_max (nodeset_t *n);
 
+/* Return next rank above r in the list, or NODESET_EOF if list is empty
+ */
+uint32_t nodeset_next_rank (nodeset_t *n, uint32_t r);
+
 /* Iteration.  Terminate when NODESET_EOF is returned.
  */
 nodeset_iterator_t *nodeset_iterator_create (nodeset_t *n);

@@ -100,6 +100,10 @@ void *cron_entry_type_data (cron_entry_t *e);
  */
 int cron_entry_schedule_task (cron_entry_t *e);
 
+/* Stop the current entry in the next prepare watcher.
+ */
+int cron_entry_stop_safe (cron_entry_t *e);
+
 /* Retrieve current timestamp in seconds
  */
 double get_timestamp (void);

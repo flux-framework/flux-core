@@ -66,7 +66,11 @@ libutil_la_SOURCES = \
 	environment.h \
 	environment.c \
 	kary.h \
-	kary.c
+	kary.c \
+	approxidate.h \
+	approxidate.c \
+	cronodate.h \
+	cronodate.c
 
 EXTRA_DIST = veb_mach.c
 
@@ -79,7 +83,9 @@ TESTS = test_nodeset.t \
 	test_msglist.t \
 	test_sha1.t \
 	test_popen2.t \
-	test_kary.t
+	test_kary.t \
+	test_approxidate.t \
+	test_cronodate.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -97,6 +103,10 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
+
+test_approxidate_t_SOURCES = test/approxidate.c
+test_approxidate_t_CPPFLAGS = $(test_cppflags)
+test_approxidate_t_LDADD = $(test_ldadd)
 
 test_nodeset_t_SOURCES = test/nodeset.c
 test_nodeset_t_CPPFLAGS = $(test_cppflags)
@@ -138,3 +148,7 @@ test_popen2_t_LDADD = $(test_ldadd)
 test_kary_t_SOURCES = test/kary.c
 test_kary_t_CPPFLAGS = $(test_cppflags)
 test_kary_t_LDADD = $(test_ldadd)
+
+test_cronodate_t_SOURCES = test/cronodate.c
+test_cronodate_t_CPPFLAGS = $(test_cppflags)
+test_cronodate_t_LDADD = $(test_ldadd)

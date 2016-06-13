@@ -128,7 +128,7 @@ function Command:request (type, typeargs, arg)
         type = type,
         args = typeargs,
         command = command,
-        name = self.opt.N or arg[1],
+        name = self.opt.N or command:match("%S+"),
         ["repeat"] = self.opt.c
     }
     -- Process comma-separated list of options to add undocumented
@@ -211,6 +211,100 @@ program:SubCommand {
  end
 }
 
+program:SubCommand {
+ name = "tab",
+ description = "Schedule cron jobs using crontab(5) format",
+ usage = "FILE",
+ options = {
+    { name = "options", char = "o", arg = "OPTS",
+      usage = "Comma separated list of key=value options to set in request"
+    },
+ },
+ handler = function (self, arg)
+    local fp = io.stdin
+    local file = table.remove (arg, 1)
+
+    if #arg == 1 and arg[1] ~= "-" then
+        local fp, err = io.open (arg[1], "r")
+        if not fp then self:die (err) end
+    end
+
+    local function parse_crontab_line (line)
+        local s = line:match ("^(.+)#.*$") or line -- remove comments
+        local min, hr, dom, mon, dow, command =
+         s:match ("%s*(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(.+)")
+        if not min or not hr or not dom or
+           not mon or not dow or not command then
+            return nil
+        end
+        return {
+            second = 0,
+            minute = min,
+            hour = hr,
+            mday = dom,
+            month = mon,
+            weekday = dow,
+        }, command
+    end
+
+    for line in fp:lines () do
+        local args, command = parse_crontab_line (line)
+        if not args then
+            self:die ("Failed to process crontab line: %s", line)
+        end
+        local resp, err = self:request ("datetime", args, { command })
+        if not resp then self:die (err) end
+        local next_wakeup = resp.typedata.next_wakeup
+        local n = next_wakeup - now ()
+        self:log ("cron-%d created: scheduled in %.3fs at %s\n",
+                  resp.id, n, os.date ("%c", next_wakeup))
+    end
+ end
+}
+
+
+program:SubCommand {
+ name = "at",
+ description = "Schedule a cron job at a given date and time",
+ usage = "TIME COMMAND",
+ options = {
+    { name = "options", char = "o", arg = "OPTS",
+      usage = "Comma separated list of key=value options to set in request"
+    },
+ },
+ handler = function (self, arg)
+    if #arg < 2 then self:die ("TIME and COMMAND args are required") end
+    local function get_datetime (s)
+        local f, err = io.popen ("date +%s --date=\""..s.."\"")
+        local time = f:read ("*n")
+        f:close ()
+        if not time then return nil, "Failed to parse datetime" end
+        return os.date ("*t", time)
+    end
+
+    local t, err = get_datetime (table.remove (arg, 1))
+    if not t then
+        self:die ("Failed to parse datetime arg")
+    end
+    local args = {
+        second = t.sec,
+        minute = t.min,
+        hour =   t.hour,
+        mday =   t.day,
+        month =  t.month - 1, -- zero origin for months
+        year =   t.year - 1900
+    }
+    -- force only a single repeat
+    self.opt.c = 1
+
+    local resp, err = self:request ("datetime", args, arg)
+    if not resp then self:die (err) end
+    local next_wakeup = resp.typedata.next_wakeup
+    local n = next_wakeup - now ()
+    self:log ("cron-%d created: scheduled in %.3fs at %s\n",
+              resp.id, n, os.date ("%c", next_wakeup))
+ end
+}
 --
 --  Convert date in Unix seconds (floating point) to a standard
 --   datetime string
@@ -342,7 +436,7 @@ program:SubCommand {
         local state = "Active"
         local count = e.stats.count
         if e["repeat"] > 0 then
-            count = e.count .. "/" .. e["repeat"]
+            count = e.stats.count .. "/" .. e["repeat"]
         end
         if e.stopped then state = "Stopped" end
         printf (fmt, e.id, e.name, state, count, lastrun, status)

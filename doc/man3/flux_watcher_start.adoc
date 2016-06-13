@@ -5,7 +5,7 @@ flux_watcher_start(3)
 
 NAME
 ----
-flux_watcher_start, flux_watcher_stop, flux_watcher_destroy -  start/stop/destroy reactor watcher
+flux_watcher_start, flux_watcher_stop, flux_watcher_destroy, flux_watcher_next_wakeup -  start/stop/destroy/query reactor watcher
 
 
 SYNOPSIS
@@ -16,6 +16,8 @@ void flux_watcher_start (flux_watcher_t *w);
 void flux_watcher_stop (flux_watcher_t *w);
 
 void flux_watcher_destroy (flux_watcher_t *w);
+
+double flux_watcher_next_wakeup (flux_watcher_t *w);
 
 
 DESCRIPTION
@@ -32,6 +34,11 @@ This may be called from within a flux_watcher_f callback.
 `flux_watcher_destroy()` destroys a flux_watcher_t object _w_,
 after stopping it.  It is not safe to destroy a watcher object within a
 flux_watcher_f callback.
+
+`flux_watcher_next_wakeup()` returns the absolute time that the watcher
+is supposed to trigger next. This function only works for _timer_ and
+_periodic_ watchers, and will return a value less than zero with errno
+set to `EINVAL` otherwise.
 
 
 AUTHOR

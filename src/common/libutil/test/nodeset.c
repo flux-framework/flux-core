@@ -202,6 +202,26 @@ int main (int argc, char *argv[])
     nodeset_destroy (n);
 
 /********************************************/
+    /* Exercise iteration with nodeset_next_rank
+     */
+    n = nodeset_create_string ("0,2-3,7");
+    ok (n != NULL);
+    int r = nodeset_min (n);
+    ok (r == 0, "nodeset_min");
+    ok ((r = nodeset_next_rank (n, r)) == 2,
+        "nodeset_next_rank (n, min) returns second element");
+    ok ((r = nodeset_next_rank (n, r)) == 3,
+        "nodeset_next_rank works on third element");
+    ok ((r = nodeset_next_rank (n, r)) == 7,
+        "nodeset_next_rank works on fourth element");
+    ok ((r = nodeset_next_rank (n, r)) == NODESET_EOF,
+        "nodeset_next_rank detects end of nodeset");
+
+    ok ((r = nodeset_next_rank (n, 1)) == 2,
+        "nodeset_next_rank returns next rank even if arg not in set");
+
+
+/********************************************/
 
     /* Exercise nodeset_dup
      */

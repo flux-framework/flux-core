@@ -267,6 +267,115 @@ static void test_timer (flux_reactor_t *reactor)
     flux_watcher_destroy (w);
 }
 
+
+/* A reactor callback that immediately stops reactor without error */
+static bool do_stop_callback_ran = false;
+static void do_stop_reactor (flux_reactor_t *r, flux_watcher_t *w,
+                     int revents, void *arg)
+{
+    do_stop_callback_ran = true;
+    flux_reactor_stop (r);
+}
+
+double time_now ()
+{
+    struct timespec ts;
+    if (clock_gettime (CLOCK_REALTIME, &ts) < 0) {
+        fprintf (stderr, "clock_gettime: %s\n", strerror (errno));
+        return -1.;
+    }
+    return ts.tv_sec + ts.tv_nsec/1.e9;
+}
+
+/* Periodic watcher "reschedule callback* */
+static bool resched_called = false;
+static double resched_cb (flux_watcher_t *w, double now, void *arg)
+{
+    flux_reactor_t *r = arg;
+    ok (r != NULL, "resched callback called with proper arg");
+    resched_called = true;
+    return (now + .1);
+}
+
+static double resched_cb_negative (flux_watcher_t *w, double now, void *arg)
+{
+    return (now - 100.);
+}
+
+/*  These tests exercise most basic functionality of periodic watchers,
+ *   but we're not able to fully test whether periodic watcher respects
+ *   time jumps (as described in ev(7) man page) with these simple
+ *   tests.
+ */
+static void test_periodic (flux_reactor_t *reactor)
+{
+    flux_watcher_t *w;
+
+    errno = 0;
+    oneshot_errno = 0;
+    ok (!flux_periodic_watcher_create (reactor, -1, 0, NULL, oneshot, NULL)
+        && errno == EINVAL,
+        "periodic: creating negative offset fails with EINVAL");
+    ok (!flux_periodic_watcher_create (reactor, 0, -1, NULL, oneshot, NULL)
+        && errno == EINVAL,
+        "periodic: creating negative interval fails with EINVAL");
+    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, NULL, oneshot, NULL))
+        != NULL,
+        "periodic: creating zero offset/interval works");
+    flux_watcher_start (w);
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor ran to completion (single oneshot)");
+    ok (oneshot_ran == true,
+        "periodic: oneshot was executed");
+    oneshot_ran = false;
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    repeat_countdown = 5;
+    ok ((w = flux_periodic_watcher_create (reactor, 0.01, 0.01,
+                                           NULL, repeat, NULL)) != NULL,
+        "periodic: creating 10ms interval works");
+    flux_watcher_start (w);
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor ran to completion");
+    ok (repeat_countdown == 0, "repeat ran for expected number of times");
+    oneshot_ran = false;
+
+    /* test reset */
+    flux_periodic_watcher_reset (w, time_now () + 123., 0, NULL);
+    /* Give 1s error range, time may march forward between reset and now */
+    diag ("next wakeup = %.2f, now + offset = %.2f",
+          flux_watcher_next_wakeup (w), time_now () + 123.);
+    ok (fabs (flux_watcher_next_wakeup (w) - (time_now () + 123.)) <= .5,
+        "flux_periodic_watcher_reset works");
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, resched_cb,
+                                           do_stop_reactor, reactor)) != NULL,
+        "periodic: creating with resched callback works");
+    flux_watcher_start (w);
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor ran to completion");
+    ok (resched_called, "resched_cb was called");
+    ok (do_stop_callback_ran, "stop reactor callback was run");
+    oneshot_ran = false;
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    do_stop_callback_ran = false;
+    ok ((w = flux_periodic_watcher_create (reactor, 0, 0, resched_cb_negative,
+                                           do_stop_reactor, reactor)) != NULL,
+        "periodic: create watcher with misconfigured resched callback");
+    flux_watcher_start (w);
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "periodic: reactor stopped immediately");
+    ok (do_stop_callback_ran == false, "periodic: callback did not run");
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+}
+
 static int idle_count = 0;
 static void idle_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
@@ -539,6 +648,7 @@ int main (int argc, char *argv[])
         "reactor ran to completion (no watchers)");
 
     test_timer (reactor);
+    test_periodic (reactor);
     test_fd (reactor);
     test_zmq (reactor);
     test_idle (reactor);
