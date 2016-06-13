@@ -42,8 +42,8 @@ static const int default_critical_level = LOG_CRIT;
 static const int default_stderr_level = LOG_ERR;
 static const int default_level = LOG_DEBUG;
 
-#define LOG_MAGIC 0xe1e2e3e4
-struct log_struct {
+#define LOGBUF_MAGIC 0xe1e2e3e4
+struct logbuf_struct {
     int magic;
     flux_t h;
     uint32_t rank;
@@ -59,14 +59,14 @@ struct log_struct {
     zlist_t *sleepers;
 };
 
-struct log_entry {
+struct logbuf_entry {
     char *buf;
     int len;
     int seq;
 };
 
 struct sleeper {
-    log_sleeper_f fun;
+    logbuf_sleeper_f fun;
     flux_msg_t *msg;
     void *arg;
 };
@@ -79,7 +79,7 @@ static void sleeper_destroy (struct sleeper *s)
     }
 }
 
-static struct sleeper *sleeper_create (log_sleeper_f fun, flux_msg_t *msg,
+static struct sleeper *sleeper_create (logbuf_sleeper_f fun, flux_msg_t *msg,
                                        void *arg)
 {
     struct sleeper *s = xzmalloc (sizeof (*s));
@@ -89,7 +89,7 @@ static struct sleeper *sleeper_create (log_sleeper_f fun, flux_msg_t *msg,
     return s;
 }
 
-static void log_entry_destroy (struct log_entry *e)
+static void logbuf_entry_destroy (struct logbuf_entry *e)
 {
     if (e) {
         if (e->buf)
@@ -98,46 +98,46 @@ static void log_entry_destroy (struct log_entry *e)
     }
 }
 
-static struct log_entry *log_entry_create (const char *buf, int len)
+static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 {
-    struct log_entry *e = xzmalloc (sizeof (*e));
+    struct logbuf_entry *e = xzmalloc (sizeof (*e));
     e->buf = xzmalloc (len);
     memcpy (e->buf, buf, len);
     e->len = len;
     return e;
 }
 
-static void log_buf_trim (log_t *log, int size)
+static void logbuf_trim (logbuf_t *logbuf, int size)
 {
-    assert (log->magic == LOG_MAGIC);
-    struct log_entry *e;
-    while (zlist_size (log->buf) > size) {
-        e = zlist_pop (log->buf);
-        log_entry_destroy (e);
+    assert (logbuf->magic == LOGBUF_MAGIC);
+    struct logbuf_entry *e;
+    while (zlist_size (logbuf->buf) > size) {
+        e = zlist_pop (logbuf->buf);
+        logbuf_entry_destroy (e);
     }
 }
 
-void log_buf_clear (log_t *log, int seq_index)
+void logbuf_clear (logbuf_t *logbuf, int seq_index)
 {
-    struct log_entry *e;
+    struct logbuf_entry *e;
 
     if (seq_index == -1)
-        log_buf_trim (log, 0);
+        logbuf_trim (logbuf, 0);
     else {
-        while ((e = zlist_first (log->buf)) && e->seq <= seq_index) {
-            e = zlist_pop (log->buf);
-            log_entry_destroy (e);
+        while ((e = zlist_first (logbuf->buf)) && e->seq <= seq_index) {
+            e = zlist_pop (logbuf->buf);
+            logbuf_entry_destroy (e);
         }
     }
 }
 
-int log_buf_get (log_t *log, int seq_index, int *seq,
-                 const char **buf, int *len)
+int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
+                const char **buf, int *len)
 {
-    struct log_entry *e = zlist_first (log->buf);
+    struct logbuf_entry *e = zlist_first (logbuf->buf);
 
     while (e && e->seq <= seq_index)
-        e = zlist_next (log->buf);
+        e = zlist_next (logbuf->buf);
     if (!e) {
         errno = ENOENT;
         return -1;
@@ -151,50 +151,51 @@ int log_buf_get (log_t *log, int seq_index, int *seq,
     return 0;
 }
 
-int log_buf_sleepon (log_t *log, log_sleeper_f fun, flux_msg_t *msg, void *arg)
+int logbuf_sleepon (logbuf_t *logbuf, logbuf_sleeper_f fun,
+                    flux_msg_t *msg, void *arg)
 {
-    assert (log->magic == LOG_MAGIC);
+    assert (logbuf->magic == LOGBUF_MAGIC);
     struct sleeper *s = sleeper_create (fun, msg, arg);
-    if (zlist_append (log->sleepers, s) < 0) {
+    if (zlist_append (logbuf->sleepers, s) < 0) {
         errno = ENOMEM;
         return -1;
     }
     return 0;
 }
 
-void log_buf_disconnect (log_t *log, const char *uuid)
+void logbuf_disconnect (logbuf_t *logbuf, const char *uuid)
 {
-    assert (log->magic == LOG_MAGIC);
-    struct sleeper *s = zlist_first (log->sleepers);
+    assert (logbuf->magic == LOGBUF_MAGIC);
+    struct sleeper *s = zlist_first (logbuf->sleepers);
     while (s) {
         char *sender = NULL;
         if (flux_msg_get_route_first (s->msg, &sender) == 0 && sender) {
             if (!strcmp (uuid, sender)) {
-                zlist_remove (log->sleepers, s);
+                zlist_remove (logbuf->sleepers, s);
                 sleeper_destroy (s);
             }
             free (sender);
         }
-        s = zlist_next (log->sleepers);
+        s = zlist_next (logbuf->sleepers);
     }
 }
 
-static int log_buf_append (log_t *log, const char *buf, int len)
+static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (log->magic == LOG_MAGIC);
-    struct log_entry *e;
+    assert (logbuf->magic == LOGBUF_MAGIC);
+    struct logbuf_entry *e;
     struct sleeper *s;
 
-    if (log->ring_size > 0) {
-        log_buf_trim (log, log->ring_size - 1);
-        e = log_entry_create (buf, len);
-        e->seq = log->seq++;
-        if (zlist_append (log->buf, e) < 0) {
-            log_entry_destroy (e);
+    if (logbuf->ring_size > 0) {
+        logbuf_trim (logbuf, logbuf->ring_size - 1);
+        e = logbuf_entry_create (buf, len);
+        e->seq = logbuf->seq++;
+        if (zlist_append (logbuf->buf, e) < 0) {
+            logbuf_entry_destroy (e);
             errno = ENOMEM;
             return -1;
         }
-        while ((s = zlist_pop (log->sleepers))) {
+        while ((s = zlist_pop (logbuf->sleepers))) {
             s->fun (s->msg, s->arg);
             sleeper_destroy (s);
         }
@@ -202,105 +203,106 @@ static int log_buf_append (log_t *log, const char *buf, int len)
     return 0;
 }
 
-log_t *log_create (void)
+logbuf_t *logbuf_create (void)
 {
-    log_t *log = xzmalloc (sizeof (*log));
-    log->magic = LOG_MAGIC;
-    log->forward_level = default_forward_level;
-    log->critical_level = default_critical_level;
-    log->stderr_level = default_stderr_level;
-    log->level = default_level;
-    log->ring_size = default_ring_size;
-    if (!(log->buf = zlist_new ()))
+    logbuf_t *logbuf = xzmalloc (sizeof (*logbuf));
+    logbuf->magic = LOGBUF_MAGIC;
+    logbuf->forward_level = default_forward_level;
+    logbuf->critical_level = default_critical_level;
+    logbuf->stderr_level = default_stderr_level;
+    logbuf->level = default_level;
+    logbuf->ring_size = default_ring_size;
+    if (!(logbuf->buf = zlist_new ()))
         oom();
-    if (!(log->sleepers = zlist_new ()))
+    if (!(logbuf->sleepers = zlist_new ()))
         oom();
-    return log;
+    return logbuf;
 }
 
-void log_destroy (log_t *log)
+void logbuf_destroy (logbuf_t *logbuf)
 {
-    if (log) {
-        assert (log->magic == LOG_MAGIC);
-        log->magic = ~LOG_MAGIC;
-        if (log->buf) {
-            log_buf_trim (log, 0);
-            zlist_destroy (&log->buf);
+    if (logbuf) {
+        assert (logbuf->magic == LOGBUF_MAGIC);
+        logbuf->magic = ~LOGBUF_MAGIC;
+        if (logbuf->buf) {
+            logbuf_trim (logbuf, 0);
+            zlist_destroy (&logbuf->buf);
         }
-        if (log->sleepers) {
+        if (logbuf->sleepers) {
             struct sleeper *s;
-            while ((s = zlist_pop (log->sleepers)))
+            while ((s = zlist_pop (logbuf->sleepers)))
                 sleeper_destroy (s);
-            zlist_destroy (&log->sleepers);
+            zlist_destroy (&logbuf->sleepers);
         }
-        if (log->f)
-            (void)fclose (log->f);
-        if (log->filename)
-            free (log->filename);
-        free (log);
+        if (logbuf->f)
+            (void)fclose (logbuf->f);
+        if (logbuf->filename)
+            free (logbuf->filename);
+        logbuf->magic = ~LOGBUF_MAGIC;
+        free (logbuf);
     }
 }
 
-void log_set_flux (log_t *log, flux_t h)
+void logbuf_set_flux (logbuf_t *logbuf, flux_t h)
 {
-    assert (log->magic == LOG_MAGIC);
-    log->h = h;
+    assert (logbuf->magic == LOGBUF_MAGIC);
+    logbuf->h = h;
 }
 
-void log_set_rank (log_t *log, uint32_t rank)
+void logbuf_set_rank (logbuf_t *logbuf, uint32_t rank)
 {
-    log->rank = rank;
+    logbuf->rank = rank;
 }
 
-static int log_set_forward_level (log_t *log, int level)
+static int logbuf_set_forward_level (logbuf_t *logbuf, int level)
 {
     if (level < LOG_EMERG || level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
-    log->forward_level = level;
+    logbuf->forward_level = level;
     return 0;
 }
 
-static int log_set_critical_level (log_t *log, int level)
+static int logbuf_set_critical_level (logbuf_t *logbuf, int level)
 {
     if (level < LOG_EMERG || level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
-    log->critical_level = level;
+    logbuf->critical_level = level;
     return 0;
 }
 
-static int log_set_stderr_level (log_t *log, int level)
+static int logbuf_set_stderr_level (logbuf_t *logbuf, int level)
 {
     if (level < LOG_EMERG || level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
-    log->stderr_level = level;
+    logbuf->stderr_level = level;
     return 0;
 }
 
-static int log_set_level (log_t *log, int level)
+static int logbuf_set_level (logbuf_t *logbuf, int level)
 {
     if (level < LOG_EMERG || level > LOG_DEBUG) {
         errno = EINVAL;
         return -1;
     }
-    log->level = level;
+    logbuf->level = level;
     return 0;
 }
 
 
-static int log_set_ring_size (log_t *log, int size)
+static int logbuf_set_ring_size (logbuf_t *logbuf, int size)
 {
     if (size < 0) {
         errno = EINVAL;
         return -1;
     }
-    log_buf_trim (log, size);
-    log->ring_size = size;
+    logbuf_trim (logbuf, size);
+    logbuf->ring_size = size;
     return 0;
 }
 
@@ -308,56 +310,56 @@ static int log_set_ring_size (log_t *log, int size)
  * Allow other ranks to try to set this without effect
  * so that the same broker options can be used across a session.
  */
-static int log_set_filename (log_t *log, const char *destination)
+static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
 {
     FILE *f;
-    if (log->rank > 0)
+    if (logbuf->rank > 0)
         return 0;
     if (!(f = fopen (destination, "a")))
         return -1;
-    if (log->filename)
-        free (log->filename);
-    if (log->f)
-        fclose (log->f);
-    log->filename = xstrdup (destination);
-    log->f = f;
+    if (logbuf->filename)
+        free (logbuf->filename);
+    if (logbuf->f)
+        fclose (logbuf->f);
+    logbuf->filename = xstrdup (destination);
+    logbuf->f = f;
     return 0;
 }
 
 static int attr_get_log (const char *name, const char **val, void *arg)
 {
-    log_t *log = arg;
+    logbuf_t *logbuf = arg;
     static char s[32];
     int n, rc = -1;
 
     if (!strcmp (name, "log-forward-level")) {
-        n = snprintf (s, sizeof (s), "%d", log->forward_level);
+        n = snprintf (s, sizeof (s), "%d", logbuf->forward_level);
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-critical-level")) {
-        n = snprintf (s, sizeof (s), "%d", log->critical_level);
+        n = snprintf (s, sizeof (s), "%d", logbuf->critical_level);
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-stderr-level")) {
-        n = snprintf (s, sizeof (s), "%d", log->stderr_level);
+        n = snprintf (s, sizeof (s), "%d", logbuf->stderr_level);
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-ring-size")) {
-        n = snprintf (s, sizeof (s), "%d", log->ring_size);
+        n = snprintf (s, sizeof (s), "%d", logbuf->ring_size);
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-ring-used")) {
-        n = snprintf (s, sizeof (s), "%d", (int)zlist_size (log->buf));
+        n = snprintf (s, sizeof (s), "%d", (int)zlist_size (logbuf->buf));
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-count")) {
-        n = snprintf (s, sizeof (s), "%d", log->seq);
+        n = snprintf (s, sizeof (s), "%d", logbuf->seq);
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-filename")) {
-        *val = log->filename;
+        *val = logbuf->filename;
     } else if (!strcmp (name, "log-level")) {
-        n = snprintf (s, sizeof (s), "%d", log->level);
+        n = snprintf (s, sizeof (s), "%d", logbuf->level);
         assert (n < sizeof (s));
         *val = s;
     } else {
@@ -371,31 +373,31 @@ done:
 
 static int attr_set_log (const char *name, const char *val, void *arg)
 {
-    log_t *log = arg;
+    logbuf_t *logbuf = arg;
     int rc = -1;
 
     if (!strcmp (name, "log-forward-level")) {
         int level = strtol (val, NULL, 10);
-        if (log_set_forward_level (log, level) < 0)
+        if (logbuf_set_forward_level (logbuf, level) < 0)
             goto done;
     } else if (!strcmp (name, "log-critical-level")) {
         int level = strtol (val, NULL, 10);
-        if (log_set_critical_level (log, level) < 0)
+        if (logbuf_set_critical_level (logbuf, level) < 0)
             goto done;
     } else if (!strcmp (name, "log-stderr-level")) {
         int level = strtol (val, NULL, 10);
-        if (log_set_stderr_level (log, level) < 0)
+        if (logbuf_set_stderr_level (logbuf, level) < 0)
             goto done;
     } else if (!strcmp (name, "log-ring-size")) {
         int size = strtol (val, NULL, 10);
-        if (log_set_ring_size (log, size) < 0)
+        if (logbuf_set_ring_size (logbuf, size) < 0)
             goto done;
     } else if (!strcmp (name, "log-filename")) {
-        if (log_set_filename (log, val) < 0)
+        if (logbuf_set_filename (logbuf, val) < 0)
             goto done;
     } else if (!strcmp (name, "log-level")) {
         int level = strtol (val, NULL, 10);
-        if (log_set_level (log, level) < 0)
+        if (logbuf_set_level (logbuf, level) < 0)
             goto done;
     } else {
         errno = ENOENT;
@@ -406,7 +408,7 @@ done:
     return rc;
 }
 
-int log_register_attrs (log_t *log, attr_t *attrs)
+int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
 {
     char s[PATH_MAX];
     const char *val;
@@ -416,7 +418,7 @@ int log_register_attrs (log_t *log, attr_t *attrs)
      * Only allowed to be set on rank 0 (ignore initial value on rank > 0).
      * If unset, and persist-directory is set, make it ${persist-directory}/log
      */
-    if (log->rank == 0) {
+    if (logbuf->rank == 0) {
         if (attr_get (attrs, "log-filename", NULL, NULL) < 0
           && attr_get (attrs, "persist-directory", &val, NULL) == 0 && val) {
             if (snprintf (s, sizeof (s), "%s/log", val) >= sizeof (s)) {
@@ -429,10 +431,10 @@ int log_register_attrs (log_t *log, attr_t *attrs)
             }
         }
         if (attr_add_active (attrs, "log-filename", 0,
-                             attr_get_log, attr_set_log, log) < 0)
+                             attr_get_log, attr_set_log, logbuf) < 0)
             goto done;
         if (attr_add_active (attrs, "log-stderr-level", 0,
-                             attr_get_log, attr_set_log, log) < 0)
+                             attr_get_log, attr_set_log, logbuf) < 0)
             goto done;
     } else {
         (void)attr_delete (attrs, "log-filename", true);
@@ -444,43 +446,43 @@ int log_register_attrs (log_t *log, attr_t *attrs)
     }
 
     if (attr_add_active (attrs, "log-level", 0,
-                         attr_get_log, attr_set_log, log) < 0)
+                         attr_get_log, attr_set_log, logbuf) < 0)
         goto done;
     if (attr_add_active (attrs, "log-forward-level", 0,
-                         attr_get_log, attr_set_log, log) < 0)
+                         attr_get_log, attr_set_log, logbuf) < 0)
         goto done;
     if (attr_add_active (attrs, "log-critical-level", 0,
-                         attr_get_log, attr_set_log, log) < 0)
+                         attr_get_log, attr_set_log, logbuf) < 0)
         goto done;
     if (attr_add_active (attrs, "log-ring-size", 0,
-                         attr_get_log, attr_set_log, log) < 0)
+                         attr_get_log, attr_set_log, logbuf) < 0)
         goto done;
     if (attr_add_active (attrs, "log-ring-used", 0,
-                         attr_get_log, NULL, log) < 0)
+                         attr_get_log, NULL, logbuf) < 0)
         goto done;
     if (attr_add_active (attrs, "log-count", 0,
-                         attr_get_log, NULL, log) < 0)
+                         attr_get_log, NULL, logbuf) < 0)
         goto done;
     rc = 0;
 done:
     return rc;
 }
 
-int log_forward (log_t *log, const char *buf, int len)
+int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (log->magic == LOG_MAGIC);
+    assert (logbuf->magic == LOGBUF_MAGIC);
 
     flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc_raw (log->h, "cmb.log", buf, len,
+    if (!(rpc = flux_rpc_raw (logbuf->h, "cmb.log", buf, len,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         return -1;
     flux_rpc_destroy (rpc);
     return 0;
 }
 
-int log_append (log_t *log, const char *buf, int len)
+int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (log->magic == LOG_MAGIC);
+    assert (logbuf->magic == LOGBUF_MAGIC);
     bool logged_stderr = false;
     int rc = 0;
     uint32_t rank = FLUX_NODEID_ANY;
@@ -493,33 +495,33 @@ int log_append (log_t *log, const char *buf, int len)
         severity = STDLOG_SEVERITY (hdr.pri);
     }
 
-    if (rank == log->rank) {
-        if (severity <= log->level) {
-            if (log_buf_append (log, buf, len) < 0)
+    if (rank == logbuf->rank) {
+        if (severity <= logbuf->level) {
+            if (append_new_entry (logbuf, buf, len) < 0)
                 rc = -1;
         }
-        if (severity <= log->critical_level) {
+        if (severity <= logbuf->critical_level) {
             flux_log_fprint (buf, len, stderr);
             logged_stderr = true;
         }
     }
-    if (severity <= log->forward_level) {
-        if (log->rank == 0) {
-            flux_log_fprint (buf, len, log->f);
+    if (severity <= logbuf->forward_level) {
+        if (logbuf->rank == 0) {
+            flux_log_fprint (buf, len, logbuf->f);
         } else {
-            if (log_forward (log, buf, len) < 0)
+            if (logbuf_forward (logbuf, buf, len) < 0)
                 rc = -1;
         }
     }
-    if (!logged_stderr && severity <= log->stderr_level && log->rank == 0)
+    if (!logged_stderr && severity <= logbuf->stderr_level && logbuf->rank == 0)
         flux_log_fprint (buf, len, stderr);
     return rc;
 }
 
-void log_append_redirect (const char *buf, int len, void *arg)
+void logbuf_append_redirect (const char *buf, int len, void *arg)
 {
-    log_t *log = arg;
-    (void)log_append (log, buf, len);
+    logbuf_t *logbuf = arg;
+    (void)logbuf_append (logbuf, buf, len);
 }
 
 /*

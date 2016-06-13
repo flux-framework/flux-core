@@ -134,7 +134,7 @@ typedef struct {
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
-    log_t *log;
+    logbuf_t *logbuf;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     struct tbon_param tbon;
@@ -275,7 +275,7 @@ int main (int argc, char *argv[])
     ctx.heartbeat = heartbeat_create ();
     ctx.shutdown = shutdown_create ();
     ctx.attrs = attr_create ();
-    ctx.log = log_create ();
+    ctx.logbuf = logbuf_create ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
@@ -487,9 +487,9 @@ int main (int argc, char *argv[])
      * and rank to the log class.
      */
     flux_log_set_appname (ctx.h, "broker");
-    flux_log_set_redirect (ctx.h, log_append_redirect, ctx.log);
-    log_set_flux (ctx.log, ctx.h);
-    log_set_rank (ctx.log, ctx.rank);
+    flux_log_set_redirect (ctx.h, logbuf_append_redirect, ctx.logbuf);
+    logbuf_set_flux (ctx.logbuf, ctx.h);
+    logbuf_set_rank (ctx.logbuf, ctx.rank);
 
     /* Dummy up cached attributes on the broker's handle so logging's
      * use of flux_get_rank() etc will work despite limitations.
@@ -536,7 +536,7 @@ int main (int argc, char *argv[])
             || attr_add_active_int (ctx.attrs, "tbon.descendants",
                                 &ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || log_register_attrs (ctx.log, ctx.attrs) < 0
+            || logbuf_register_attrs (ctx.logbuf, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         log_err_exit ("configuring attributes");
     }
@@ -704,7 +704,7 @@ int main (int argc, char *argv[])
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    log_destroy (ctx.log);
+    logbuf_destroy (ctx.logbuf);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
     runlevel_destroy (ctx.runlevel);
@@ -2169,7 +2169,7 @@ static int cmb_log_cb (zmsg_t **zmsg, void *arg)
         log_msg ("%s: decode error", __FUNCTION__);
         goto done;
     }
-    if (log_append (ctx->log, buf, len) < 0)
+    if (logbuf_append (ctx->logbuf, buf, len) < 0)
         goto done;
 done:
     zmsg_destroy (zmsg); /* no reply */
@@ -2190,7 +2190,7 @@ static int cmb_dmesg_clear_cb (zmsg_t **zmsg, void *arg)
         errno = EPROTO;
         goto done;
     }
-    log_buf_clear (ctx->log, seq);
+    logbuf_clear (ctx->logbuf, seq);
     rc = 0;
 done:
     flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, NULL);
@@ -2218,12 +2218,12 @@ static void cmb_dmesg (const flux_msg_t *msg, void *arg)
         errno = EPROTO;
         goto done;
     }
-    if (log_buf_get (ctx->log, seq, &seq, &buf, &len) < 0) {
+    if (logbuf_get (ctx->logbuf, seq, &seq, &buf, &len) < 0) {
         if (follow && errno == ENOENT) {
             flux_msg_t *cpy = flux_msg_copy (msg, true);
             if (!cpy)
                 goto done;
-            if (log_buf_sleepon (ctx->log, cmb_dmesg, cpy, arg) < 0) {
+            if (logbuf_sleepon (ctx->logbuf, cmb_dmesg, cpy, arg) < 0) {
                 free (cpy);
                 goto done;
             }
@@ -2272,7 +2272,7 @@ static int cmb_disconnect_cb (zmsg_t **zmsg, void *arg)
         goto done;
 
     terminate_subprocesses_by_uuid (ctx, sender);
-    log_buf_disconnect (ctx->log, sender);
+    logbuf_disconnect (ctx->logbuf, sender);
 done:
     if (sender)
         free (sender);
