@@ -281,7 +281,7 @@ put_test_obj (kap_params_t *param)
             Begin = now ();
             if ( kvs_put_obj (param->pers.handle, k, o) < 0) {
                 fprintf (stderr, 
-                    "kvs_put failed %s", strerror(errno));
+                    "kvs_put failed %s", flux_strerror(errno));
                 goto error;
             }
             End = now ();
@@ -375,7 +375,7 @@ enforce_c_consistency (kap_params_t *param)
     zmsg_t * msg = flux_recv (param->pers.handle, FLUX_MATCH_EVENT, 0);
     if ( ! msg ) {
         fprintf (stderr,
-            "event recv failed: %s\n", strerror (errno));
+            "event recv failed: %s\n", flux_strerror (errno));
         goto error;
     }
     flux_msg_get_topic (msg, &tag);

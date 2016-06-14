@@ -117,25 +117,25 @@ static void *module_thread (void *arg)
     /* Connect to broker socket, enable logging, register built-in services
      */
     if (!(p->h = flux_open (uri, 0)))
-        err_exit ("flux_open %s", uri);
+        log_err_exit ("flux_open %s", uri);
     if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT,
                       p->zctx, sizeof (p->zctx)) < 0)
-        err_exit ("flux_opt_set ZEROMQ_CONTEXT");
+        log_err_exit ("flux_opt_set ZEROMQ_CONTEXT");
 
     rankstr = xasprintf ("%u", p->rank);
     if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        err ("%s: error faking rank attribute", p->name);
+        log_err ("%s: error faking rank attribute", p->name);
         goto done;
     }
-    flux_log_set_facility (p->h, p->name);
+    flux_log_set_appname (p->h, p->name);
     modservice_register (p->h, p);
 
     /* Block all signals
      */
     if (sigfillset (&signal_set) < 0)
-        err_exit ("%s: sigfillset", p->name);
+        log_err_exit ("%s: sigfillset", p->name);
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
-        errn_exit (errnum, "pthread_sigmask");
+        log_errn_exit (errnum, "pthread_sigmask");
 
     /* Run the module's main().
      */
@@ -291,7 +291,7 @@ static void module_destroy (module_t *p)
     if (p->t) {
         errnum = pthread_join (p->t, NULL);
         if (errnum)
-            errn_exit (errnum, "pthread_join");
+            log_errn_exit (errnum, "pthread_join");
     }
 
     assert (p->h == NULL);
@@ -384,7 +384,7 @@ void module_set_args (module_t *p, int argc, char * const argv[])
         p->argz_len = 0;
     }
     if (argv && (e = argz_create (argv, &p->argz, &p->argz_len)) != 0)
-        errn_exit (e, "argz_create");
+        log_errn_exit (e, "argz_create");
 }
 
 void module_add_arg (module_t *p, const char *arg)
@@ -393,7 +393,7 @@ void module_add_arg (module_t *p, const char *arg)
 
     assert (p->magic == MODULE_MAGIC);
     if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
-        errn_exit (e, "argz_add");
+        log_errn_exit (e, "argz_add");
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
@@ -491,7 +491,7 @@ module_t *module_add (modhash_t *mh, const char *path)
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
-        msg ("%s", dlerror ());
+        log_msg ("%s", dlerror ());
         errno = ENOENT;
         return NULL;
     }
@@ -529,14 +529,14 @@ module_t *module_add (modhash_t *mh, const char *path)
     /* Broker end of PAIR socket is opened here.
      */
     if (!(p->sock = zsocket_new (p->zctx, ZMQ_PAIR)))
-        err_exit ("zsocket_new");
+        log_err_exit ("zsocket_new");
     zsocket_set_hwm (p->sock, 0);
     if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
-        err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
+        log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
     if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
                                                  p->sock, FLUX_POLLIN,
                                                  module_cb, p)))
-        err_exit ("flux_zmq_watcher_create");
+        log_err_exit ("flux_zmq_watcher_create");
 
     /* Update the modhash.
      */

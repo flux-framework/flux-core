@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <errno.h>
 #include "reparent.h"
 #include "rpc.h"
 

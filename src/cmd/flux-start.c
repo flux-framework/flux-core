@@ -35,6 +35,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libpmi-server/simple.h"
@@ -110,25 +111,25 @@ int main (int argc, char *argv[])
 
     ctx->opts = optparse_create ("flux-start");
     if (optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option_table");
+        log_msg_exit ("optparse_add_option_table");
     if (optparse_set (ctx->opts, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_set usage");
+        log_msg_exit ("optparse_set usage");
     if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
     ctx->killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
                                                     default_killer_timeout), NULL);
     if (ctx->killer_timeout < 0.)
-        msg_exit ("--killer-timeout argument must be >= 0");
+        log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optind < argc) {
         if ((e = argz_create (argv + optind, &command, &len)) != 0)
-            errn_exit (e, "argz_creawte");
+            log_errn_exit (e, "argz_creawte");
         argz_stringify (command, len, ' ');
     }
 
     if (!(searchpath = getenv ("FLUX_EXEC_PATH")))
-        msg_exit ("FLUX_EXEC_PATH is not set");
+        log_msg_exit ("FLUX_EXEC_PATH is not set");
     if (!(ctx->broker_path = find_broker (searchpath)))
-        msg_exit ("Could not locate broker in %s", searchpath);
+        log_msg_exit ("Could not locate broker in %s", searchpath);
 
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
 
@@ -186,20 +187,20 @@ static int child_report (struct subprocess *p)
     int sig;
 
     if ((sig = subprocess_stopped (p)))
-        msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
+        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
     else if ((subprocess_continued (p)))
-        msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
+        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (SIGCONT));
     else if ((sig = subprocess_signaled (p)))
-        msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
+        log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (sig));
     else if (subprocess_exited (p)) {
         int rc = subprocess_exit_code (p);
         if (rc >= 128)
-            msg ("%d (pid %d) exited with rc=%d (%s)", cli->rank, pid, rc,
+            log_msg ("%d (pid %d) exited with rc=%d (%s)", cli->rank, pid, rc,
                                                        strsignal (rc - 128));
         else if (rc > 0)
-            msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, rc);
+            log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, rc);
     } else
-        msg ("%d (pid %d) status=%d", cli->rank, pid,
+        log_msg ("%d (pid %d) status=%d", cli->rank, pid,
                                       subprocess_exit_status (p));
     return 0;
 }
@@ -229,7 +230,7 @@ void add_arg (struct subprocess *p, const char *fmt, ...)
     arg = xvasprintf (fmt, ap);
     va_end (ap);
     if (subprocess_argv_append (p, arg) < 0)
-        err_exit ("subprocess_argv_append");
+        log_err_exit ("subprocess_argv_append");
     free (arg);
 }
 
@@ -239,7 +240,7 @@ void add_args_list (struct subprocess *p, optparse_t *opt, const char *name)
     optparse_getopt_iterator_reset (opt, name);
     while ((arg = optparse_getopt_next (opt, name)))
         if (subprocess_argv_append  (p, arg) < 0)
-            err_exit ("subprocess_argv_append");
+            log_err_exit ("subprocess_argv_append");
 }
 
 char *create_scratch_dir (struct context *ctx)
@@ -249,7 +250,7 @@ char *create_scratch_dir (struct context *ctx)
                                   tmpdir ? tmpdir : "/tmp", ctx->session_id);
 
     if (!mkdtemp (scratchdir))
-        err_exit ("mkdtemp %s", scratchdir);
+        log_err_exit ("mkdtemp %s", scratchdir);
     cleanup_push_string (cleanup_directory, scratchdir);
     return scratchdir;
 }
@@ -292,13 +293,13 @@ void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
     int rc;
     char *resp;
     if (dgetline (cli->fd, cli->buf, cli->buflen) < 0)
-        err_exit ("%s", __FUNCTION__);
+        log_err_exit ("%s", __FUNCTION__);
     rc = pmi_simple_server_request (ctx->pmi.srv, cli->buf, cli);
     if (rc < 0)
-        err_exit ("%s", __FUNCTION__);
+        log_err_exit ("%s", __FUNCTION__);
     while (pmi_simple_server_response (ctx->pmi.srv, &resp, &rcli) == 0) {
         if (dputline (rcli->fd, resp) < 0)
-            err_exit ("%s", __FUNCTION__);
+            log_err_exit ("%s", __FUNCTION__);
         free (resp);
     }
     if (rc == 1) {
@@ -375,7 +376,7 @@ int exec_broker (struct context *ctx, const char *cmd)
             goto nomem;
         memcpy (cpy, argz, argz_len);
         argz_stringify (cpy, argz_len, ' ');
-        msg ("%s", cpy);
+        log_msg ("%s", cpy);
         free (cpy);
     }
     if (!optparse_hasopt (ctx->opts, "noexec")) {
@@ -456,9 +457,9 @@ void client_dumpargs (struct client *cli)
 
     for (i = 0; i < argc; i++)
         if ((e = argz_add (&az, &az_len, subprocess_get_arg (cli->p, i))) != 0)
-            errn_exit (e, "argz_add");
+            log_errn_exit (e, "argz_add");
     argz_stringify (az, az_len, ' ');
-    msg ("%d: %s", cli->rank, az);
+    log_msg ("%d: %s", cli->rank, az);
     free (az);
 }
 
@@ -474,7 +475,7 @@ void pmi_server_initialize (struct context *ctx)
         oom ();
     ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size, "-", ctx);
     if (!ctx->pmi.srv)
-        err_exit ("pmi_simple_server_create");
+        log_err_exit ("pmi_simple_server_create");
 }
 
 void pmi_server_finalize (struct context *ctx)
@@ -494,15 +495,15 @@ int start_session (struct context *ctx, const char *cmd)
     int rank;
 
     if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
-        err_exit ("flux_reactor_create");
+        log_err_exit ("flux_reactor_create");
     if (!(ctx->timer = flux_timer_watcher_create (ctx->reactor,
                                                   ctx->killer_timeout, 0.,
                                                   killer, ctx)))
-        err_exit ("flux_timer_watcher_create");
+        log_err_exit ("flux_timer_watcher_create");
     if (!(ctx->sm = subprocess_manager_create ()))
-        err_exit ("subprocess_manager_create");
+        log_err_exit ("subprocess_manager_create");
     if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
-        err_exit ("subprocess_manager_set reactor");
+        log_err_exit ("subprocess_manager_set reactor");
     ctx->session_id = xasprintf ("%d", getpid ());
     ctx->scratch_dir = create_scratch_dir (ctx);
 
@@ -510,7 +511,7 @@ int start_session (struct context *ctx, const char *cmd)
 
     for (rank = 0; rank < ctx->size; rank++) {
         if (!(cli = client_create (ctx, rank, cmd)))
-            err_exit ("client_create");
+            log_err_exit ("client_create");
         if (optparse_hasopt (ctx->opts, "verbose"))
             client_dumpargs (cli);
         if (optparse_hasopt (ctx->opts, "noexec")) {
@@ -518,11 +519,11 @@ int start_session (struct context *ctx, const char *cmd)
             continue;
         }
         if (client_run (cli) < 0)
-            err_exit ("subprocess_run");
+            log_err_exit ("subprocess_run");
         ctx->count++;
     }
     if (flux_reactor_run (ctx->reactor, 0) < 0)
-        err_exit ("flux_reactor_run");
+        log_err_exit ("flux_reactor_run");
 
     pmi_server_finalize (ctx);
 

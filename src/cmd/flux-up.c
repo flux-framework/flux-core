@@ -114,7 +114,7 @@ int main (int argc, char *argv[])
         usage ();
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     if (!(ns = ns_fromkvs (h)))
         ns = ns_guess (h);
@@ -179,9 +179,9 @@ static ns_t *ns_guess (flux_t h)
     uint32_t size, rank;
 
     if (flux_get_rank (h, &rank) < 0)
-        err_exit ("flux_get_rank");
+        log_err_exit ("flux_get_rank");
     if (flux_get_size (h, &size) < 0)
-        err_exit ("flux_get_size");
+        log_err_exit ("flux_get_size");
     ns->ok = nodeset_create ();
     ns->slow = nodeset_create ();
     ns->fail = nodeset_create ();

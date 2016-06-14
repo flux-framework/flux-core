@@ -92,7 +92,7 @@ int main (int argc, char *argv[])
         name = argv[optind++];
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     for (i = 0; i < iter; i++) {
         char *tname = NULL;
@@ -101,9 +101,9 @@ int main (int argc, char *argv[])
             tname = xasprintf ("%s.%d", name, i);
         if (flux_barrier (h, tname, nprocs) < 0) {
             if (errno == EINVAL && tname == NULL)
-                msg_exit ("%s", "provide barrier name if not running as LWJ");
+                log_msg_exit ("%s", "provide barrier name if not running as LWJ");
             else
-                err_exit ("flux_barrier");
+                log_err_exit ("flux_barrier");
         }
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",

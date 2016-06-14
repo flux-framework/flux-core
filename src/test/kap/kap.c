@@ -13,6 +13,7 @@
 #include <float.h>
 #include <math.h>
 #include <values.h>
+#include <sys/time.h>
 
 #include "kap.h"
 

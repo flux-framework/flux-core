@@ -85,11 +85,11 @@ void *thread (void *arg)
     uint32_t rank;
 
     if (!(t->h = flux_open (NULL, 0))) {
-        err ("%d: flux_open", t->n);
+        log_err ("%d: flux_open", t->n);
         goto done;
     }
     if (flux_get_rank (t->h, &rank) < 0) {
-        err ("%d: flux_get_rank", t->n);
+        log_err ("%d: flux_get_rank", t->n);
         goto done;
     }
     for (i = 0; i < count; i++) {
@@ -99,13 +99,13 @@ void *thread (void *arg)
         if (sopt)
             monotime (&t0);
         if (kvs_put_int (t->h, key, 42) < 0)
-            err_exit ("%s", key);
+            log_err_exit ("%s", key);
         if (fopt) {
             if (kvs_fence (t->h, fence, fence_nprocs) < 0)
-                err_exit ("kvs_fence");
+                log_err_exit ("kvs_fence");
         } else {
             if (kvs_commit (t->h) < 0)
-                err_exit ("kvs_commit");
+                log_err_exit ("kvs_commit");
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
             oom ();
@@ -161,14 +161,14 @@ int main (int argc, char *argv[])
         if (!(thd[i].perf = zlist_new ()))
             oom ();
         if ((rc = pthread_attr_init (&thd[i].attr)))
-            errn (rc, "pthread_attr_init");
+            log_errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].t, &thd[i].attr, thread, &thd[i])))
-            errn (rc, "pthread_create");
+            log_errn (rc, "pthread_create");
     }
 
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].t, NULL)))
-            errn (rc, "pthread_join");
+            log_errn (rc, "pthread_join");
         if (sopt) {
             double *e;
             while ((e = zlist_pop (thd[i].perf))) {

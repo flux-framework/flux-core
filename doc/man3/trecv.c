@@ -8,14 +8,14 @@ int main (int argc, char **argv)
     const char *topic;
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     if (flux_event_subscribe (h, "") < 0)
-        err_exit ("flux_event_subscribe");
+        log_err_exit ("flux_event_subscribe");
     for (;;) {
         if ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0)))
-            err_exit ("flux_recv");
+            log_err_exit ("flux_recv");
         if (flux_msg_get_topic (msg, &topic) < 0)
-            err_exit ("flux_msg_get_topic");
+            log_err_exit ("flux_msg_get_topic");
         printf ("Event: %s\n", topic);
         flux_msg_destroy (msg);
     }

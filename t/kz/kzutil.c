@@ -34,6 +34,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/modules/libkz/kz.h"
@@ -136,9 +137,9 @@ int main (int argc, char *argv[])
     }
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     if (flux_get_rank (h, &rank) < 0)
-        err_exit ("flux_get_rank");
+        log_err_exit ("flux_get_rank");
 
     if (aopt) {
         attach (h, key, rawtty, kzoutflags, blocksize);
@@ -209,10 +210,10 @@ static void attach_stdout_ready_cb (kz_t *kz, void *arg)
     do {
         if ((len = kz_get (kz, &data)) < 0) {
             if (errno != EAGAIN)
-                err_exit ("kz_get stdout");
+                log_err_exit ("kz_get stdout");
         } else if (len > 0) {
             if (write_all (STDOUT_FILENO, data, len) < 0)
-                err_exit ("write_all stdout");
+                log_err_exit ("write_all stdout");
             free (data);
         }
     } while (len > 0);
@@ -231,10 +232,10 @@ static void attach_stderr_ready_cb (kz_t *kz, void *arg)
     do {
         if ((len = kz_get (kz, &data)) < 0) {
             if (errno != EAGAIN)
-                err_exit ("kz_get stderr");
+                log_err_exit ("kz_get stderr");
         } else if (len > 0) {
             if (write_all (STDERR_FILENO, data, len) < 0)
-                err_exit ("write_all stderr");
+                log_err_exit ("write_all stderr");
             free (data);
         }
     } while (len > 0);
@@ -255,15 +256,15 @@ static void attach_stdin_ready_cb (flux_reactor_t *r, flux_watcher_t *w,
     do  {
         if ((len = read (fd, buf, ctx->blocksize)) < 0) {
             if (errno != EAGAIN)
-                err_exit ("read stdin");
+                log_err_exit ("read stdin");
         } else if (len > 0) {
             if (kz_put (ctx->kz[0], buf, len) < 0)
-                err_exit ("kz_put");
+                log_err_exit ("kz_put");
         }
     } while (len > 0);
     if (len == 0) { /* EOF */
         if (kz_close (ctx->kz[0]) < 0)
-            err_exit ("kz_close");
+            log_err_exit ("kz_close");
     }
     free (buf);
 }
@@ -278,7 +279,7 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
     flux_reactor_t *r = flux_get_reactor (h);
     flux_watcher_t *w = NULL;
 
-    msg ("process attached to %s", key);
+    log_msg ("process attached to %s", key);
 
     ctx->h = h;
     ctx->blocksize = blocksize;
@@ -288,22 +289,22 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
      */
     if (rawtty) {
         if (fd_set_raw (fdin, &saved_tio, true) < 0)
-            err_exit ("fd_set_raw stdin");
+            log_err_exit ("fd_set_raw stdin");
     }
     if (fd_set_nonblocking (fdin, true) < 0)
-        err_exit ("fd_set_nonblocking stdin");
+        log_err_exit ("fd_set_nonblocking stdin");
 
     if (asprintf (&name, "%s.stdin", key) < 0)
         oom ();
     if (!(ctx->kz[0] = kz_open (h, name, kzoutflags)))
         if (errno == EEXIST)
-            err ("disabling stdin");
+            log_err ("disabling stdin");
         else
-            err_exit ("%s", name);
+            log_err_exit ("%s", name);
     else {
         if (!(w = flux_fd_watcher_create (r, fdin, FLUX_POLLIN,
                                 attach_stdin_ready_cb, ctx)))
-            err_exit ("flux_fd_watcher_create %s", name);
+            log_err_exit ("flux_fd_watcher_create %s", name);
         flux_watcher_start (w);
     }
     free (name);
@@ -311,18 +312,18 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
     if (asprintf (&name, "%s.stdout", key) < 0)
         oom ();
     if (!(ctx->kz[1] = kz_open (h, name, KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK)))
-        err_exit ("kz_open %s", name);
+        log_err_exit ("kz_open %s", name);
     if (kz_set_ready_cb (ctx->kz[1], attach_stdout_ready_cb, ctx) < 0)
-        err_exit ("kz_set_ready_cb %s", name);
+        log_err_exit ("kz_set_ready_cb %s", name);
     free (name);
     ctx->readers++;
 
     if (asprintf (&name, "%s.stderr", key) < 0)
         oom ();
     if (!(ctx->kz[2] = kz_open (h, name, KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK)))
-        err_exit ("kz_open %s", name);
+        log_err_exit ("kz_open %s", name);
     if (kz_set_ready_cb (ctx->kz[2], attach_stderr_ready_cb, ctx) < 0)
-        err_exit ("kz_set_ready_cb %s", name);
+        log_err_exit ("kz_set_ready_cb %s", name);
     free (name);
     ctx->readers++;
 
@@ -334,7 +335,7 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
      */
     if (ctx->readers > 0) {
         if (flux_reactor_run (r, 0) < 0)
-            err_exit ("flux_reactor_run");
+            log_err_exit ("flux_reactor_run");
     }
 
     (void)kz_close (ctx->kz[1]);
@@ -344,7 +345,7 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
      */
     if (rawtty) {
         if (fd_set_raw (fdin, &saved_tio, false) < 0)
-            err_exit ("fd_set_raw stdin");
+            log_err_exit ("fd_set_raw stdin");
     }
 
     flux_watcher_destroy (w);
@@ -359,21 +360,21 @@ static void copy_k2k (flux_t h, const char *src, const char *dst,
     bool eof = false;
 
     if (!(kzin = kz_open (h, src, KZ_FLAGS_READ | KZ_FLAGS_RAW)))
-        err_exit ("kz_open %s", src);
+        log_err_exit ("kz_open %s", src);
     if (!(kzout = kz_open (h, dst, kzoutflags | KZ_FLAGS_RAW)))
-        err_exit ("kz_open %s", dst);
+        log_err_exit ("kz_open %s", dst);
     while (!eof && (json_str = kz_get_json (kzin))) {
         if (kz_put_json (kzout, json_str) < 0)
-            err_exit ("kz_put_json %s", dst);
+            log_err_exit ("kz_put_json %s", dst);
         eof = zio_json_eof (json_str);
         free (json_str);
     }
     if (json_str == NULL)
-        err_exit ("kz_get %s", src);
+        log_err_exit ("kz_get %s", src);
     if (kz_close (kzin) < 0) 
-        err_exit ("kz_close %s", src);
+        log_err_exit ("kz_close %s", src);
     if (kz_close (kzout) < 0) 
-        err_exit ("kz_close %s", dst);
+        log_err_exit ("kz_close %s", dst);
 }
 
 static void copy_f2k (flux_t h, const char *src, const char *dst,
@@ -386,20 +387,20 @@ static void copy_f2k (flux_t h, const char *src, const char *dst,
 
     if (strcmp (src, "-") != 0) {
         if ((srcfd = open (src, O_RDONLY)) < 0)
-            err_exit ("%s", src);
+            log_err_exit ("%s", src);
     }
     if (!(kzout = kz_open (h, dst, kzoutflags)))
-        err_exit ("kz_open %s", dst);
+        log_err_exit ("kz_open %s", dst);
     data = xzmalloc (blocksize);
     while ((len = read (srcfd, data, blocksize)) > 0) {
         if (kz_put (kzout, data, len) < 0)
-            err_exit ("kz_put %s", dst);
+            log_err_exit ("kz_put %s", dst);
     }
     if (len < 0)
-        err_exit ("read %s", src);
+        log_err_exit ("read %s", src);
     free (data);
     if (kz_close (kzout) < 0) 
-        err_exit ("kz_close %s", dst);
+        log_err_exit ("kz_close %s", dst);
 }
 
 static void copy_k2f (flux_t h, const char *src, const char *dst)
@@ -410,23 +411,23 @@ static void copy_k2f (flux_t h, const char *src, const char *dst)
     int len;
 
     if (!(kzin = kz_open (h, src, KZ_FLAGS_READ)))
-        err_exit ("kz_open %s", src);
+        log_err_exit ("kz_open %s", src);
     if (strcmp (dst, "-") != 0) {
         if ((dstfd = creat (dst, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0)
-            err_exit ("%s", dst);
+            log_err_exit ("%s", dst);
     }
     while ((len = kz_get (kzin, &data)) > 0) {
         if (write_all (dstfd, data, len) < 0)
-            err_exit ("write_all %s", dst);
+            log_err_exit ("write_all %s", dst);
         free (data);
     }
     if (len < 0)
-        err_exit ("kz_get %s", src);
+        log_err_exit ("kz_get %s", src);
     if (kz_close (kzin) < 0) 
-        err_exit ("kz_close %s", src);
+        log_err_exit ("kz_close %s", src);
     if (dstfd != STDOUT_FILENO) {
         if (close (dstfd) < 0)
-            err_exit ("close %s", dst);
+            log_err_exit ("close %s", dst);
     }
 }
 
@@ -445,7 +446,7 @@ static void copy (flux_t h, const char *src, const char *dst, int kzoutflags,
     } else if (!isfile (src) && isfile (dst)) {
         copy_k2f (h, src, dst);
     } else {
-        err_exit ("copy src and dst cannot both be file");
+        log_err_exit ("copy src and dst cannot both be file");
     }
 }
 

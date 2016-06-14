@@ -87,19 +87,19 @@ int main (int argc, char *argv[])
         usage ();
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     if (!strcmp (cmd, "reparent")) {
         if (optind != argc - 1)
             usage ();
         if (flux_reparent (h, rank, argv[optind]) < 0)
-            err_exit ("flux_reparent");
+            log_err_exit ("flux_reparent");
     } else if (!strcmp (cmd, "idle")) {
         if (optind != argc)
             usage ();
         char *peers;
         if (!(peers = flux_lspeer (h, rank)))
-            err_exit ("flux_peer");
+            log_err_exit ("flux_peer");
         printf ("%s\n", peers);
         free (peers);
     } else if (!strcmp (cmd, "panic")) {
@@ -107,7 +107,7 @@ int main (int argc, char *argv[])
         size_t len = 0;
         if (optind < argc) {
             if ((e = argz_create (argv + optind, &msg, &len)) != 0)
-                errn_exit (e, "argz_create");
+                log_errn_exit (e, "argz_create");
             argz_stringify (msg, len, ' ');
         }
         flux_panic (h, rank, msg);
@@ -117,25 +117,25 @@ int main (int argc, char *argv[])
         if (optind != argc)
             usage ();
         if (flux_failover (h, rank) < 0)
-            err_exit ("flux_failover");
+            log_err_exit ("flux_failover");
     } else if (!strcmp (cmd, "recover")) {
         if (optind != argc)
             usage ();
         if (flux_recover (h, rank) < 0)
-            err_exit ("flux_recover");
+            log_err_exit ("flux_recover");
     } else if (!strcmp (cmd, "recover-all")) {
         if (optind != argc)
             usage ();
         if (flux_recover_all (h) < 0)
-            err_exit ("flux_recover_all");
+            log_err_exit ("flux_recover_all");
     } else if (!strcmp (cmd, "info")) {
         int arity;
         uint32_t rank, size;
         const char *s;
         if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0)
-            err_exit ("flux_get_rank/size");
+            log_err_exit ("flux_get_rank/size");
         if (!(s = flux_attr_get (h, "tbon.arity", NULL)))
-            err_exit ("flux_attr_get tbon.arity");
+            log_err_exit ("flux_attr_get tbon.arity");
         arity = strtoul (s, NULL, 10);
         printf ("rank=%d\n", rank);
         printf ("size=%d\n", size);

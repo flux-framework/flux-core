@@ -49,11 +49,11 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
             cmd = xasprintf ("man flux-%s", topic);
 
         if ((rc = system (cmd)) < 0)
-            err_exit ("man");
+            log_err_exit ("man");
         else if (WIFEXITED (rc) && ((rc = WEXITSTATUS (rc)) != 0))
             exit (rc);
         else if (WIFSIGNALED (rc))
-            errn_exit (1, "man: %s\n", strsignal (WTERMSIG (rc)));
+            log_errn_exit (1, "man: %s\n", strsignal (WTERMSIG (rc)));
         free (cmd);
     } else
         usage (optparse_get_parent (p));

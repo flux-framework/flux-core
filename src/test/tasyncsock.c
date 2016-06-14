@@ -67,6 +67,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 
 #ifndef ZMQ_IMMEDIATE
@@ -92,24 +93,24 @@ void send_czmq (char *buf, int len)
     zmsg_t *zmsg;
 
     if (!(zctx = zctx_new ()))
-        err_exit ("C: zctx_new");
+        log_err_exit ("C: zctx_new");
     if (lopt) /* zctx linger default = 0 (flush none) */
         zctx_set_linger (zctx, linger); 
     if (!(zs = zsocket_new (zctx, ZMQ_DEALER)))
-        err_exit ("C: zsocket_new");
+        log_err_exit ("C: zsocket_new");
     //if (lopt) // doesn't work here 
     //    zsocket_set_linger (zs, linger); 
     if (iopt)
         zsocket_set_immediate (zs, imm);
     //zsocket_set_sndhwm (zs, 0); /* unlimited */
     if (zsocket_connect (zs, "%s", uri) < 0)
-        err_exit ("C: zsocket_connect");
+        log_err_exit ("C: zsocket_connect");
     if (!(zmsg = zmsg_new ()))
         oom ();
     if (zmsg_pushmem (zmsg, buf, bufsize) < 0)
         oom ();
     if (zmsg_send (&zmsg, zs) < 0)
-        err_exit ("C: zmsg_send");
+        log_err_exit ("C: zmsg_send");
     if (sleep_usec > 0)
         usleep (sleep_usec);
     zctx_destroy (&zctx);
@@ -122,33 +123,33 @@ void send_raw (char *buf, int len)
     int hwm = 0;
 
     if (!(zctx = zmq_init (1)))
-        err_exit ("C: zmq_init");
+        log_err_exit ("C: zmq_init");
     if (!(zs = zmq_socket (zctx, ZMQ_DEALER)))
-        err_exit ("C: zmq_socket");
+        log_err_exit ("C: zmq_socket");
     if (iopt) {
         if (zmq_setsockopt (zs, ZMQ_IMMEDIATE, &imm, sizeof (imm)) < 0)
-            err_exit ("C: zmq_setsockopt ZMQ_IMMEDIATE %d", imm);
+            log_err_exit ("C: zmq_setsockopt ZMQ_IMMEDIATE %d", imm);
     }
     if (lopt) { /* zmq linger default = -1 (flush all) */
         if (zmq_setsockopt (zs, ZMQ_LINGER, &linger, sizeof (linger)) < 0)
-            err_exit ("C: zmq_setsockopt ZMQ_LINGER %d", linger);
+            log_err_exit ("C: zmq_setsockopt ZMQ_LINGER %d", linger);
     }
     if (zmq_setsockopt (zs, ZMQ_SNDHWM, &hwm, sizeof (hwm)) < 0)
-        err_exit ("C: zmq_setsockopt ZMQ_SNDHWM %d", linger);
+        log_err_exit ("C: zmq_setsockopt ZMQ_SNDHWM %d", linger);
     if (zmq_connect (zs, uri) < 0)
-        err_exit ("C: zmq_connect");
+        log_err_exit ("C: zmq_connect");
     if (zmq_send (zs, buf, bufsize, 0) < 0)
-        err_exit ("zmq_send");
+        log_err_exit ("zmq_send");
     if (sleep_usec > 0)
         usleep (sleep_usec);
     if (zmq_close (zs) < 0)
-        err_exit ("zmq_close");
+        log_err_exit ("zmq_close");
 #if ZMQ_VERSION_MAJOR < 4
     if (zmq_ctx_destroy (zctx) < 0)
-        err_exit ("zmq_ctx_destroy");
+        log_err_exit ("zmq_ctx_destroy");
 #else
     if (zmq_ctx_term (zctx) < 0)
-        err_exit ("zmq_ctx_term");
+        log_err_exit ("zmq_ctx_term");
 #endif
 }
 
@@ -161,7 +162,7 @@ void *thread (void *arg)
         buf = xzmalloc (bufsize);
     for (i = 0; i < iter; i++) {
         if (vopt)
-            msg ("sending %d of %d", i + 1, iter);
+            log_msg ("sending %d of %d", i + 1, iter);
         if (raw)
             send_raw (buf, bufsize);
         else
@@ -257,37 +258,37 @@ int main (int argc, char *argv[])
      * Store uri in global variable.
      */
     if (!(zctx = zctx_new ()))
-        err_exit ("S: zctx_new");
+        log_err_exit ("S: zctx_new");
     if (!(zs = zsocket_new (zctx, ZMQ_ROUTER)))
-        err_exit ("S: zsocket_new");
+        log_err_exit ("S: zsocket_new");
     zsocket_set_rcvhwm (zs, 0); /* unlimited */
     if (zsocket_bind (zs, "%s", uritmpl) < 0)
-        err_exit ("S: zsocket_bind");
+        log_err_exit ("S: zsocket_bind");
     uri = zsocket_last_endpoint (zs);
 
     /* Spawn thread which will be our client.
      */
     if ((rc = pthread_attr_init (&attr)))
-        errn (rc, "S: pthread_attr_init");
+        log_errn (rc, "S: pthread_attr_init");
     if ((rc = pthread_create (&tid, &attr, thread, NULL)))
-        errn (rc, "S: pthread_create");
+        log_errn (rc, "S: pthread_create");
 
     /* Handle 'iter' client messages with timeout
      */
     for (i = 0; i < iter; i++) {
         alarm (timeout_sec);
         if (!(zmsg = zmsg_recv (zs)))
-            err_exit ("S: zmsg_recv");
+            log_err_exit ("S: zmsg_recv");
         zmsg_destroy (&zmsg);
         alarm (0);
         if (vopt)
-            msg ("received message %d of %d", i + 1, iter);
+            log_msg ("received message %d of %d", i + 1, iter);
     }
 
     /* Wait for thread to terminate, then clean up.
      */
     if ((rc = pthread_join (tid, NULL)))
-        errn (rc, "S: pthread_join");
+        log_errn (rc, "S: pthread_join");
     zctx_destroy (&zctx); /* destroys sockets too */
 
     if (strstr (uri, "ipc://"))

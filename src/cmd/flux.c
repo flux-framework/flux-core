@@ -77,7 +77,7 @@ void usage (optparse_t *p)
                   def ? def : "",
                   val ? ":" : "",
                   val ? val : "") < 0)
-        err_exit ("faled to get command help list!");
+        log_err_exit ("faled to get command help list!");
 
     optparse_print_usage (p);
     fprintf (stderr, "\n");
@@ -92,25 +92,25 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
     };
     optparse_t *p = optparse_create ("flux");
     if (p == NULL)
-        err_exit ("optparse_create");
+        log_err_exit ("optparse_create");
     optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] COMMAND ARGS");
     e = optparse_add_option_table (p, opts);
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option_table() failed");
+        log_msg_exit ("optparse_add_option_table() failed");
 
     // Remove automatic `--help' in favor of our own usage() from above
     e = optparse_remove_option (p, "help");
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_remove_option (\"help\")");
+        log_msg_exit ("optparse_remove_option (\"help\")");
     e = optparse_add_option (p, &helpopt);
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option (\"help\")");
+        log_msg_exit ("optparse_add_option (\"help\")");
 
     // Don't print internal subcommands in --help (we print subcommands using
     //  emit_command_help() above.
     e = optparse_set (p, OPTPARSE_PRINT_SUBCMDS, 0);
     if (e != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_set (OPTPARSE_PRINT_SUBCMDS");
+        log_msg_exit ("optparse_set (OPTPARSE_PRINT_SUBCMDS");
 
     register_builtin_subcommands (p);
 
@@ -261,7 +261,7 @@ char *dir_self (void)
     if (!exe_path_valid) {
         memset (flux_exe_path, 0, MAXPATHLEN);
         if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
-            err_exit ("readlink (/proc/self/exe)");
+            log_err_exit ("readlink (/proc/self/exe)");
         flux_exe_dir = strip_trailing_dot_libs (dirname (flux_exe_path));
         exe_path_valid = true;
     }
@@ -310,11 +310,11 @@ void setup_keydir (struct environment *env, int flags)
     if (!dir) {
         struct passwd *pw = getpwuid (getuid ());
         if (!pw)
-            msg_exit ("Who are you!?!");
+            log_msg_exit ("Who are you!?!");
         dir = new_dir = xasprintf ("%s/.flux", pw->pw_dir);
     }
     if (!dir)
-        msg_exit ("Could not determine keydir");
+        log_msg_exit ("Could not determine keydir");
     environment_set (env, "FLUX_SEC_DIRECTORY", dir, 0);
     if (new_dir)
         free (new_dir);
@@ -328,7 +328,7 @@ void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
             dir ? "/" : "",
             prefix ? prefix : "", argv[0]);
     if (vopt)
-        msg ("trying to exec %s", path);
+        log_msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
     free (path);
 }
@@ -337,7 +337,7 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
 {
     if (strchr (argv[0], '/')) {
         exec_subcommand_dir (vopt, NULL, argv, NULL);
-        err_exit ("%s", argv[0]);
+        log_err_exit ("%s", argv[0]);
     } else {
         char *cpy = xstrdup (searchpath);
         char *dir, *saveptr = NULL, *a1 = cpy;
@@ -347,7 +347,7 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
+        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
     }
 }
 
@@ -365,7 +365,7 @@ flux_t builtin_get_flux_handle (optparse_t *p)
     if ((h = optparse_get_data (p, "flux_t")))
         flux_incref (h);
     else if ((h = flux_open (NULL, 0)) == NULL)
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     return h;
 }
 
@@ -375,7 +375,7 @@ static void register_builtin_subcommands (optparse_t *p)
     struct builtin_cmd *cmd = &builtin_cmds[0];
     while (cmd->reg_fn) {
         if (cmd->reg_fn (p) < 0)
-            msg_exit ("register builtin %s failed\n", cmd->name);
+            log_msg_exit ("register builtin %s failed\n", cmd->name);
         cmd++;
     }
 }

@@ -69,12 +69,12 @@ static void signal_ready (void)
     int rc;
 
     if ((rc = pthread_mutex_lock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_lock");
+        log_errn_exit (rc, "pthread_mutex_lock");
     start_count++;
     if ((rc = pthread_mutex_unlock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_unlock");
+        log_errn_exit (rc, "pthread_mutex_unlock");
     if ((rc = pthread_cond_signal (&start_cond)))
-        errn_exit (rc, "pthread_cond_signal");
+        log_errn_exit (rc, "pthread_cond_signal");
 }
 
 static void wait_ready (void)
@@ -82,13 +82,13 @@ static void wait_ready (void)
     int rc;
 
     if ((rc = pthread_mutex_lock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_lock");
+        log_errn_exit (rc, "pthread_mutex_lock");
     while (start_count < nthreads) {
         if ((rc = pthread_cond_wait (&start_cond, &start_lock)))
-            errn_exit (rc, "pthread_cond_wait");
+            log_errn_exit (rc, "pthread_cond_wait");
     }
     if ((rc = pthread_mutex_unlock (&start_lock)))
-        errn_exit (rc, "pthread_mutex_unlock");
+        log_errn_exit (rc, "pthread_mutex_unlock");
 }
 
 /* expect val: {-1,0,1,...,(changes - 1)}
@@ -98,11 +98,11 @@ static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
 {
     thd_t *t = arg;
     if (errnum != 0) {
-        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
     if (val == t->last_val) {
-        msg ("%d: %s: called with same value as last time: %d", t->n,
+        log_msg ("%d: %s: called with same value as last time: %d", t->n,
             __FUNCTION__, val);
         return -1;
     }
@@ -121,7 +121,7 @@ static int mt_watchnil_cb (const char *k, int val, void *arg, int errnum)
 {
     thd_t *t = arg;
     if (errnum != ENOENT) {
-        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
     t->nil_count++;
@@ -135,7 +135,7 @@ static int mt_watchstable_cb (const char *k, int val, void *arg, int errnum)
     thd_t *t = arg;
 
     if (errnum != 0) {
-        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
     t->stable_count++;
@@ -147,7 +147,7 @@ void *thread (void *arg)
     thd_t *t = arg;
 
     if (!(t->h = flux_open (NULL, 0))) {
-        err ("%d: flux_open", t->n);
+        log_err ("%d: flux_open", t->n);
         goto done;
     }
     signal_ready ();
@@ -155,19 +155,19 @@ void *thread (void *arg)
      * replies will arrive asynchronously and be handled by the reactor.
      */
     if (kvs_watch_int (t->h, key, mt_watch_cb, t) < 0) {
-        err ("%d: kvs_watch_int", t->n);
+        log_err ("%d: kvs_watch_int", t->n);
         goto done;
     }
     if (kvs_watch_int (t->h, "nonexistent-key", mt_watchnil_cb, t) < 0) {
-        err ("%d: kvs_watch_int", t->n);
+        log_err ("%d: kvs_watch_int", t->n);
         goto done;
     }
     if (kvs_watch_int (t->h, key_stable, mt_watchstable_cb, t) < 0) {
-        err ("%d: kvs_watch_int", t->n);
+        log_err ("%d: kvs_watch_int", t->n);
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (t->h), 0) < 0) {
-        err ("%d: flux_reactor_run", t->n);
+        log_err ("%d: flux_reactor_run", t->n);
         goto done;
     }
 done:
@@ -207,33 +207,33 @@ void test_mt (int argc, char **argv)
     thd = xzmalloc (sizeof (*thd) * nthreads);
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     /* Set initial value of 'key' to -1 */
     if (kvs_put_int (h, key, -1) < 0)
-        err_exit ("kvs_put_int %s", key);
+        log_err_exit ("kvs_put_int %s", key);
     key_stable = xasprintf ("%s-stable", key);
     if (kvs_put_int (h, key_stable, 0) < 0)
-        err_exit ("kvs_put_int %s", key);
+        log_err_exit ("kvs_put_int %s", key);
 
     if (kvs_commit (h) < 0)
-        err_exit ("kvs_commit");
+        log_err_exit ("kvs_commit");
 
     for (i = 0; i < nthreads; i++) {
         thd[i].n = i;
         thd[i].last_val = -42;
         if ((rc = pthread_attr_init (&thd[i].attr)))
-            errn (rc, "pthread_attr_init");
+            log_errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].tid, &thd[i].attr, thread, &thd[i])))
-            errn (rc, "pthread_create");
+            log_errn (rc, "pthread_create");
     }
     wait_ready ();
 
     for (i = 0; i < changes; i++) {
         if (kvs_put_int (h, key, i) < 0)
-            err_exit ("kvs_put_int %s", key);
+            log_err_exit ("kvs_put_int %s", key);
         if (kvs_commit (h) < 0)
-            err_exit ("kvs_commit");
+            log_err_exit ("kvs_commit");
     }
 
     /* Verify that callbacks were called the correct number of times.
@@ -244,19 +244,19 @@ void test_mt (int argc, char **argv)
      */
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
-            errn (rc, "pthread_join");
+            log_errn (rc, "pthread_join");
         if (thd[i].nil_count != 1) {
-            msg ("%d: nil callback called %d times (expected one)",
+            log_msg ("%d: nil callback called %d times (expected one)",
                  i, thd[i].nil_count);
             errors++;
         }
         if (thd[i].stable_count != 1) {
-            msg ("%d: stable callback called %d times (expected one)",
+            log_msg ("%d: stable callback called %d times (expected one)",
                  i, thd[i].stable_count);
             errors++;
         }
         if (thd[i].change_count > changes + 1) {
-            msg ("%d: changing callback called %d times (expected <= %d)",
+            log_msg ("%d: changing callback called %d times (expected <= %d)",
                  i, thd[i].change_count, changes + 1);
             errors++;
         }
@@ -272,13 +272,13 @@ void test_mt (int argc, char **argv)
 
 static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
 {
-    msg ("%s: value = %d errnum = %d", __FUNCTION__, val, errnum);
+    log_msg ("%s: value = %d errnum = %d", __FUNCTION__, val, errnum);
 
     flux_t h = arg;
     if (kvs_put_int (h, key, val + 1) < 0)
-        err_exit ("%s: kvs_put_int", __FUNCTION__);
+        log_err_exit ("%s: kvs_put_int", __FUNCTION__);
     if (kvs_commit (h) < 0)
-        err_exit ("%s: kvs_commit", __FUNCTION__);
+        log_err_exit ("%s: kvs_commit", __FUNCTION__);
     return (val == 0 ? -1 : 0);
 }
 
@@ -293,18 +293,18 @@ void test_selfmod (int argc, char **argv)
     }
     key = argv[0];
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     if (kvs_put_int (h, key, -1) < 0)
-        err_exit ("kvs_put_int");
+        log_err_exit ("kvs_put_int");
     if (kvs_commit (h) < 0)
-        err_exit ("kvs_commit");
+        log_err_exit ("kvs_commit");
     if (kvs_watch_int (h, key, selfmod_watch_cb, h) < 0)
-        err_exit ("kvs_watch_int");
+        log_err_exit ("kvs_watch_int");
 
-    msg ("reactor: start");
+    log_msg ("reactor: start");
     flux_reactor_run (flux_get_reactor (h), 0);
-    msg ("reactor: end");
+    log_msg ("reactor: end");
 
     flux_close (h);
 }
@@ -326,14 +326,14 @@ static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct timer_ctx *ctx = arg;
     static int count = 0;
-    msg ("%s", __FUNCTION__);
+    log_msg ("%s", __FUNCTION__);
     if (kvs_put_int (ctx->h, ctx->key, count++) < 0)
-        err_exit ("%s: kvs_put_int", __FUNCTION__);
+        log_err_exit ("%s: kvs_put_int", __FUNCTION__);
     if (kvs_commit (ctx->h) < 0)
-        err_exit ("%s: kvs_commit", __FUNCTION__);
+        log_err_exit ("%s: kvs_commit", __FUNCTION__);
     if (count == 10) {
         if (kvs_unwatch (ctx->h, ctx->key) < 0)
-            err_exit ("%s: kvs_unwatch", __FUNCTION__);
+            log_err_exit ("%s: kvs_unwatch", __FUNCTION__);
     } else if (count == 20)
         flux_reactor_stop (r);
 }
@@ -356,18 +356,18 @@ void test_unwatch (int argc, char **argv)
     }
     ctx.key = argv[0];
     if (!(ctx.h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     r = flux_get_reactor (ctx.h);
     if (kvs_watch_int (ctx.h, ctx.key, unwatch_watch_cb, &count) < 0)
-        err_exit ("kvs_watch_int %s", ctx.key);
+        log_err_exit ("kvs_watch_int %s", ctx.key);
     if (!(timer = flux_timer_watcher_create (r, 0.001, 0.001,
                                              unwatch_timer_cb, &ctx)))
-        err_exit ("flux_timer_watcher_create");
+        log_err_exit ("flux_timer_watcher_create");
     flux_watcher_start (timer);
     if (flux_reactor_run (r, 0) < 0)
-        err_exit ("flux_reactor_run");
+        log_err_exit ("flux_reactor_run");
     if (count != 10)
-        msg_exit ("watch called %d times (should be 10)", count);
+        log_msg_exit ("watch called %d times (should be 10)", count);
     flux_watcher_destroy (timer);
     flux_close (ctx.h);
 }
@@ -392,17 +392,17 @@ void test_unwatchloop (int argc, char **argv)
     }
     key = argv[0];
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     uint32_t avail = flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
     for (i = 0; i < 1000; i++) {
         if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
-            err_exit ("kvs_watch_int[%d] %s", i, key);
+            log_err_exit ("kvs_watch_int[%d] %s", i, key);
         if (kvs_unwatch (h, key) < 0)
-            err_exit ("kvs_unwatch[%d] %s", i, key);
+            log_err_exit ("kvs_unwatch[%d] %s", i, key);
     }
     uint32_t leaked = avail - flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
     if (leaked > 0)
-        msg_exit ("leaked %u matchtags", leaked);
+        log_msg_exit ("leaked %u matchtags", leaked);
 
     flux_close (h);
 }

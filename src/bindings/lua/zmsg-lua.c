@@ -168,7 +168,8 @@ static int l_zmsg_info_index (lua_State *L)
     if (strcmp (key, "matchtag") == 0) {
         uint32_t matchtag;
         if (flux_msg_get_matchtag (zi->zmsg, &matchtag) < 0)
-            return lua_pusherror (L, "zmsg: matchtag: %s", strerror (errno));
+            return lua_pusherror (L, "zmsg: matchtag: %s",
+                                  (char *)flux_strerror (errno));
         lua_pushnumber (L, matchtag);
         return (1);
     }

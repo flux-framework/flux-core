@@ -85,8 +85,8 @@ test_expect_success 'rc1 environment is as expected' '
 	FLUX_RC1_PATH=${FLUX_SOURCE_DIR}/t/rc/rc1-testenv flux start \
 		-o,-Slog-stderr-level=6,-Sinit.mode=normal \
 		/bin/true 2>&1 | tee rc1-test.log &&
-	grep "stderr-" rc1-test.log | grep -q broker.err &&
-	grep "stdout-" rc1-test.log | grep -q broker.info
+	grep "stderr-" rc1-test.log | egrep -q broker.*err &&
+	grep "stdout-" rc1-test.log | egrep -q broker.*info
 '
 
 test_done

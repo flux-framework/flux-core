@@ -117,7 +117,7 @@ static int cmd_nodeset (optparse_t *p, int ac, char *av[])
 
     for (i = 0; i < nsc; i++)
         if (!(nsv[i] = nodeset_create_string (av[ix + i])))
-            errn_exit (EINVAL, "%s", av[ix + i]);
+            log_errn_exit (EINVAL, "%s", av[ix + i]);
 
     if (optparse_hasopt (p, "intersection"))
         nsp = nsv_intersection (nsc, nsv);
@@ -128,7 +128,7 @@ static int cmd_nodeset (optparse_t *p, int ac, char *av[])
         const char *s = optparse_get_str (p, "subtract", "");
         nodeset_t *ns = nodeset_create_string (s);
         if (!ns)
-            errn_exit (EINVAL, "%s", s);
+            log_errn_exit (EINVAL, "%s", s);
         ns_subtract (nsp, ns);
     }
 

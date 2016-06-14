@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2016 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -25,71 +25,48 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <time.h>
+#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include "xzmalloc.h"
-#include "oom.h"
+#include "wallclock.h"
 
-void *xzmalloc (size_t size)
+/* Generate ISO 8601 timestamp that additionally conforms to RFC 5424 (syslog).
+ *
+ * Examples from RFC 5424:
+ *   1985-04-12T23:20:50.52Z
+ *   1985-04-12T19:20:50.52-04:00
+ *   2003-10-11T22:14:15.003Z
+ *   2003-08-24T05:14:15.000003-07:00
+ */
+
+int wallclock_get_zulu (char *buf, size_t len)
 {
-    void *new;
+    struct timespec ts;
+    struct tm tm;
+    time_t t;
 
-    new = malloc (size);
-    if (!new)
-        oom ();
-    memset (new, 0, size);
-    return new;
-}
-
-void *xrealloc (void *ptr, size_t size)
-{
-    void *new = realloc (ptr, size);
-    if (!new)
-        oom ();
-    return new;
-}
-
-char *xstrdup (const char *s)
-{
-    char *cpy = strdup (s);
-    if (!cpy)
-        oom ();
-    return cpy;
-}
-
-
-char *xvasprintf(const char *fmt, va_list ap)
-{
-    char *s;
-
-    if (vasprintf (&s, fmt, ap) < 0)
-        oom ();
-    return s;
-}
-
-char *xasprintf (const char *fmt, ...)
-{
-    va_list ap;
-    char *s;
-
-    va_start (ap, fmt);
-    s = xvasprintf (fmt, ap);
-    va_end (ap);
-    return s;
-}
-
-char *xstrsub (const char *str, char a, char b)
-{
-    char *cpy = xstrdup (str);
-    char *s = cpy;
-    while (*s) {
-        if (*s == a)
-            *s = b;
-        s++;
+    if (len < WALLCLOCK_MAXLEN) {
+        errno = EINVAL;
+        return -1;
     }
-    return cpy;
+    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
+        return -1;
+    t = ts.tv_sec;
+    if (!gmtime_r (&t, &tm)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (strftime (buf, len, "%FT%T", &tm) == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (snprintf (buf+19, len-19, ".%.6luZ", ts.tv_nsec/1000) >= len - 20) {
+        errno = EINVAL;
+        return -1;
+    }
+    return strlen (buf);
 }
 
 /*

@@ -37,7 +37,7 @@
 #include <stdbool.h>
 
 #include "veb.h"
-#include "log.h"
+#include "oom.h"
 #include "monotime.h"
 
 #include "nodeset.h"
@@ -492,7 +492,7 @@ static bool nodeset_op_string (nodeset_t *n, op_t op, const char *str)
 {
     char *cpy;
     int len;
-    char *p, *s, *saveptr, *a1;
+    char *p, *s, *saveptr = NULL, *a1;
     uint32_t lo, hi;
     int count = 0;
 

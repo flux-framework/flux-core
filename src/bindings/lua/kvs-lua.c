@@ -93,7 +93,8 @@ static int l_kvsdir_kvsdir_new (lua_State *L)
     key = luaL_checkstring (L, 2);
 
     if (kvsdir_get_dir (d, &new, key) < 0)
-        return lua_pusherror (L, "kvsdir_get_dir: %s", strerror (errno));
+        return lua_pusherror (L, "kvsdir_get_dir: %s",
+                              (char *)flux_strerror (errno));
 
     return lua_push_kvsdir (L, new);
 }
@@ -140,7 +141,7 @@ static int l_kvsdir_newindex (lua_State *L)
     if (rc < 0)
         return lua_pusherror (L, "kvsdir_put (key=%s, type=%s): %s",
                            key, lua_typename (L, lua_type (L, 3)),
-                           strerror (errno));
+                           flux_strerror (errno));
     return (0);
 }
 
@@ -206,7 +207,8 @@ static int l_kvsdir_commit (lua_State *L)
     kvsdir_t *d = lua_get_kvsdir (L, 1);
     if (lua_isnoneornil (L, 2)) {
         if (kvs_commit (kvsdir_handle (d)) < 0)
-            return lua_pusherror (L, "kvs_commit: %s", strerror (errno));
+            return lua_pusherror (L, "kvs_commit: %s",
+                                  (char *)flux_strerror (errno));
     }
     lua_pushboolean (L, true);
     return (1);
@@ -217,7 +219,8 @@ static int l_kvsdir_unlink (lua_State *L)
     kvsdir_t *d = lua_get_kvsdir (L, 1);
     const char *key = luaL_checkstring (L, 2);
     if (kvsdir_unlink (d, key) < 0)
-            return lua_pusherror (L, "unlink: %s", strerror (errno));
+            return lua_pusherror (L, "unlink: %s",
+                                  (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
 }
@@ -249,7 +252,8 @@ static int l_kvsdir_watch (lua_State *L)
 err:
     free (key);
     if (rc < 0)
-        return lua_pusherror (L, "kvs_watch: %s", strerror (errno));
+        return lua_pusherror (L, "kvs_watch: %s",
+                              (char *)flux_strerror (errno));
 
     json_object_to_lua (L, o);
     json_object_put (o);

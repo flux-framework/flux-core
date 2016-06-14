@@ -23,10 +23,10 @@ void send_watch_requests (flux_t h, const char *key)
     json_object_object_add (in, "noexist", NULL);
     Jadd_bool (in, ".flag_first", true);
     if (!(r = flux_rpc_multi (h, "kvs.watch", Jtostr (in), "all", 0)))
-        err_exit ("flux_rpc_multi kvs.watch");
+        log_err_exit ("flux_rpc_multi kvs.watch");
     while (!flux_rpc_completed (r)) {
         if (flux_rpc_get (r, NULL, &json_str) < 0)
-            err_exit ("kvs.watch");
+            log_err_exit ("kvs.watch");
     }
     flux_rpc_destroy (r);
     Jput (in);
@@ -42,12 +42,12 @@ int count_watchers (flux_t h)
     flux_rpc_t *r;
 
     if (!(r = flux_rpc_multi (h, "kvs.stats.get", NULL, "all", 0)))
-        err_exit ("flux_rpc_multi kvs.stats.get");
+        log_err_exit ("flux_rpc_multi kvs.stats.get");
     while (!flux_rpc_completed (r)) {
         if (flux_rpc_get (r, NULL, &json_str) < 0)
-            err_exit ("kvs.stats.get");
+            log_err_exit ("kvs.stats.get");
         if (!(out = Jfromstr (json_str)) || !Jget_int (out, "#watchers", &n))
-            msg_exit ("error decoding stats payload");
+            log_msg_exit ("error decoding stats payload");
         count += n;
         Jput (out);
     }
@@ -64,20 +64,20 @@ int main (int argc, char **argv)
      * The number of watchers should return to the original count.
      */
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     w0 = count_watchers (h);
     send_watch_requests (h, "nonexist");
     w1 = count_watchers (h) - w0;
-    msg ("test watchers: %d", w1);
+    log_msg ("test watchers: %d", w1);
     flux_close (h);
-    msg ("disconnected");
+    log_msg ("disconnected");
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
     w2 = count_watchers (h) - w0;
-    msg ("test watchers: %d", w2);
+    log_msg ("test watchers: %d", w2);
     if (w2 != 0)
-        err_exit ("Test failure, watchers were not removed on disconnect");
+        log_err_exit ("Test failure, watchers were not removed on disconnect");
 
     return (0);
 }

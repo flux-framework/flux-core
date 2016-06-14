@@ -42,185 +42,21 @@
 
 static char *prog = "flux";
 
-typedef struct {
-    char *s;
-    int n;
-} match_t;
-
-static match_t facility_tab[] = {
-    { "daemon", LOG_DAEMON },
-    { "local0", LOG_LOCAL0 },
-    { "local1", LOG_LOCAL1 },
-    { "local2", LOG_LOCAL2 },
-    { "local3", LOG_LOCAL3 },
-    { "local4", LOG_LOCAL4 },
-    { "local5", LOG_LOCAL5 },
-    { "local6", LOG_LOCAL6 },
-    { "local7", LOG_LOCAL7 },
-    { "user",   LOG_USER },
-    { NULL,     0},
-};
-
-static match_t level_tab[] = {
-    { "emerg",  LOG_EMERG },
-    { "alert",  LOG_ALERT },
-    { "crit",   LOG_CRIT },
-    { "err",    LOG_ERR },
-    { "warning", LOG_WARNING },
-    { "notice", LOG_NOTICE },
-    { "info",   LOG_INFO },
-    { "debug",  LOG_DEBUG },
-    { NULL,     0},
-};
-
-typedef enum { DEST_LOGF, DEST_SYSLOG } dest_t;
-
-static dest_t dest = DEST_LOGF;
-
-static char *filename = NULL;
-static FILE *logf = NULL;
-
-static int syslog_facility = LOG_DAEMON;
-static int syslog_level = LOG_ERR;
-
-static int
-_match (const char *s, match_t *m)
-{
-    int i;
-
-    for (i = 0; m[i].s != NULL; i++)
-        if (!strcasecmp (m[i].s, s))
-            return m[i].n;
-    return -1;
-}
-
-static char *
-_rmatch (int n, match_t *m)
-{
-    int i;
-
-    for (i = 0; m[i].s != NULL; i++)
-        if (m[i].n == n)
-            return m[i].s;
-    return NULL;
-}
-
-const char *
-log_leveltostr (int n)
-{
-    return _rmatch (n, level_tab);
-}
-
-int
-log_strtolevel (const char *s)
-{
-    return _match (s, level_tab);
-}
-
 void
 log_init (char *p)
 {
     prog = basename (p);
-    logf = stderr;
-    openlog (prog, LOG_NDELAY | LOG_PID, syslog_facility);
 }
 
 void
 log_fini (void)
 {
-    closelog ();
-    if (logf != NULL)
-        fflush (logf);
-    if (logf != stdout && logf != stderr && logf != NULL)
-        fclose (logf);
-}
-
-static void
-_set_syslog_facility (char *s)
-{
-    int n = _match (s, facility_tab);
-
-    if (n < 0)
-        msg_exit ("unknown syslog facility: %s", s);
-    syslog_facility = n;
-    closelog ();
-    openlog (prog, LOG_NDELAY | LOG_PID, syslog_facility);
-}
-
-static void
-_set_syslog_level (char *s)
-{
-    int n = _match (s, level_tab);
-
-    if (n < 0)
-        msg_exit ("unknown syslog level: %s", s);
-    syslog_level = n;
-}
-
-void
-log_set_dest (char *s)
-{
-    char *fac, *lev;
-    FILE *f;
-
-    if (strcmp (s, "syslog") == 0) {
-        dest = DEST_SYSLOG;
-    } else if (strncmp (s, "syslog:", 7) == 0) {
-        if (!(fac = strdup (s + 7)))
-            msg_exit ("out of memory");
-        if ((lev = strchr (fac, ':')))
-            *lev++ = '\0';
-        _set_syslog_facility (fac);
-        if (lev)
-            _set_syslog_level (lev);
-        free (fac);
-        dest = DEST_SYSLOG;
-    } else {
-        if (strcmp (s, "stderr") == 0)
-            logf = stderr;
-        else if (strcmp (s, "stdout") == 0)
-            logf = stdout;
-        else if ((f = fopen (s, "a"))) {
-            if (logf != stdout && logf != stderr && logf != NULL)
-                fclose (logf);
-            logf = f;
-            filename = s;
-        } else
-            err_exit ("could not open %s for writing", s);
-        dest = DEST_LOGF;
-    }
-}
-
-char *
-log_get_dest (void)
-{
-    int len = PATH_MAX + 1;
-    char *res = malloc (len);
-
-    if (!res)
-        goto done;
-    switch (dest) {
-        case DEST_SYSLOG:
-            snprintf (res, PATH_MAX + 1, "syslog:%s:%s",
-                      _rmatch (syslog_facility, facility_tab),
-                      _rmatch (syslog_level, level_tab));
-            break;
-        case DEST_LOGF:
-            if (!logf)
-                logf = stderr;
-            snprintf (res, len, "%s", logf == stdout ? "stdout" :
-                                      logf == stderr ? "stderr" : 
-                                      logf == NULL   ? "unknown" : filename);
-            break;
-    }
-done:
-    return res;
 }
 
 static void
 _verr (int errnum, const char *fmt, va_list ap)
 {
-    char *msg;
+    char *msg = NULL;
     char buf[128];
     const char *s = zmq_strerror (errnum);
 
@@ -228,42 +64,22 @@ _verr (int errnum, const char *fmt, va_list ap)
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
         msg = buf;
     }
-    switch (dest) {
-        case DEST_LOGF:
-            if (!logf)
-                logf = stderr;
-            fprintf (logf, "%s: %s: %s\n", prog, msg, s);
-            fflush (logf);
-            break;
-        case DEST_SYSLOG:
-            syslog (syslog_level, "%s: %s", msg, s);
-            break;
-    }
+    fprintf (stderr, "%s: %s: %s\n", prog, msg, s);
     if (msg != buf)
         free (msg);
 }
 
-void
-log_msg (const char *fmt, va_list ap)
+static void
+_vlog (const char *fmt, va_list ap)
 {
-    char *msg;
+    char *msg = NULL;
     char buf[128];
 
     if (vasprintf (&msg, fmt, ap) < 0) {
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
         msg = buf;
     }
-    switch (dest) {
-        case DEST_LOGF:
-            if (!logf)
-                logf = stderr;
-            fprintf (logf, "%s: %s\n", prog, msg);
-            fflush (logf);
-            break;
-        case DEST_SYSLOG:
-            syslog (syslog_level, "%s", msg);
-            break;
-    }
+    fprintf (stderr, "%s: %s\n", prog, msg);
     if (msg != buf)
         free (msg);
 }
@@ -271,7 +87,7 @@ log_msg (const char *fmt, va_list ap)
 /* Log message and errno string, then exit.
  */
 void
-err_exit (const char *fmt, ...)
+log_err_exit (const char *fmt, ...)
 {
     va_list ap;
 
@@ -284,7 +100,7 @@ err_exit (const char *fmt, ...)
 /* Log message and errno string.
  */
 void
-err (const char *fmt, ...)
+log_err (const char *fmt, ...)
 {
     va_list ap;
 
@@ -293,10 +109,11 @@ err (const char *fmt, ...)
     va_end (ap);
 }
 
+
 /* Log message and errnum string, then exit.
  */
 void
-errn_exit (int errnum, const char *fmt, ...)
+log_errn_exit (int errnum, const char *fmt, ...)
 {
     va_list ap;
 
@@ -309,7 +126,7 @@ errn_exit (int errnum, const char *fmt, ...)
 /* Log message and errnum string.
  */
 void
-errn (int errnum, const char *fmt, ...)
+log_errn (int errnum, const char *fmt, ...)
 {
     va_list ap;
 
@@ -321,12 +138,12 @@ errn (int errnum, const char *fmt, ...)
 /* Log message, then exit.
  */
 void
-msg_exit (const char *fmt, ...)
+log_msg_exit (const char *fmt, ...)
 {
     va_list ap;
 
     va_start (ap, fmt);
-    log_msg (fmt, ap);
+    _vlog (fmt, ap);
     va_end (ap);
     exit (1);
 }
@@ -334,42 +151,13 @@ msg_exit (const char *fmt, ...)
 /* Log message.
  */
 void
-msg (const char *fmt, ...)
+log_msg (const char *fmt, ...)
 {
     va_list ap;
 
     va_start (ap, fmt);
-    log_msg (fmt, ap);
+    _vlog (fmt, ap);
     va_end (ap);
-}
-
-int check_int (int res,
-               const char *fmt,
-               ...  )
-{
-    if (res < 0) {
-        va_list ap;
-        va_start (ap, fmt);
-        log_msg (fmt, ap);
-        va_end (ap);
-        exit (1);
-    }
-    return res;
-}
-
-
-void *check_ptr (void *res,
-                 const char *fmt,
-                 ... )
-{
-    if (res == NULL) {
-        va_list ap;
-        va_start (ap, fmt);
-        log_msg (fmt, ap);
-        va_end (ap);
-        exit (1);
-    }
-    return res;
 }
 
 /*

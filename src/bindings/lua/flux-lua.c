@@ -243,7 +243,7 @@ static int l_flux_new (lua_State *L)
 {
     flux_t f = flux_open (NULL, 0);
     if (f == NULL)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     return (lua_push_flux_handle (L, f));
 }
 
@@ -263,7 +263,7 @@ static int l_flux_kvsdir_new (lua_State *L)
     }
 
     if (kvs_get_dir (f, &dir, path) < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     return lua_push_kvsdir (L, dir);
 }
 
@@ -281,7 +281,7 @@ static int l_flux_kvs_symlink (lua_State *L)
         return lua_pusherror (L, "target expected in arg #3");
 
     if (kvs_symlink (f, key, target) < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
 }
@@ -296,7 +296,7 @@ static int l_flux_kvs_unlink (lua_State *L)
         return lua_pusherror (L, "key expected in arg #2");
 
     if (kvs_unlink (f, key) < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
 }
@@ -341,7 +341,7 @@ int l_flux_kvs_commit (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     if (kvs_commit (f) < 0)
-         return lua_pusherror (L, strerror (errno));
+         return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
 }
@@ -365,7 +365,7 @@ int l_flux_kvs_put (lua_State *L)
     }
     if (rc < 0)
         return lua_pusherror (L, "kvsdir_put (%s): %s",
-                                key, strerror (errno));
+                                key, (char *)flux_strerror (errno));
 
     lua_pushboolean (L, true);
     return (1);
@@ -381,11 +381,12 @@ int l_flux_kvs_get (lua_State *L)
     if (key == NULL)
         return lua_pusherror (L, "key required");
     if (kvs_get (f, key, &json_str) < 0)
-        return lua_pusherror (L, "kvs_get: %s", strerror (errno));
+        return lua_pusherror (L, "kvs_get: %s", (char *)flux_strerror (errno));
     if (!(o = json_tokener_parse (json_str))
         || (json_object_to_lua (L, o) < 0)) {
         free (json_str);
-        return lua_pusherror (L, "json_tokener_parse: %s", strerror (errno));
+        return lua_pusherror (L, "json_tokener_parse: %s",
+                              (char *)flux_strerror (errno));
     }
     free (json_str);
     json_object_put (o);
@@ -472,12 +473,12 @@ static int l_flux_send (lua_State *L)
 
     matchtag = flux_matchtag_alloc (f, 0);
     if (matchtag == FLUX_MATCHTAG_NONE)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
 
     rc = flux_json_request (f, nodeid, matchtag, tag, o);
     json_object_put (o);
     if (rc < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
 
     return l_pushresult (L, matchtag);
 }
@@ -539,7 +540,7 @@ error:
         zmsg_destroy (&zmsg);
         errno = saved_errno;
     }
-    return lua_pusherror (L, strerror (errno));
+    return lua_pusherror (L, (char *)flux_strerror (errno));
 }
 
 static int l_flux_rpc (lua_State *L)
@@ -563,7 +564,7 @@ static int l_flux_rpc (lua_State *L)
 
     if (flux_json_rpc (f, nodeid, tag, o, &resp) < 0) {
         json_object_put (o);
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     }
     json_object_put (o);
     json_object_to_lua (L, resp);
@@ -599,7 +600,7 @@ static int l_flux_getattr (lua_State *L)
     const char *name = luaL_checkstring (L, 2);
     const char *val = flux_attr_get (f, name, &flags);
     if (val == NULL)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushstring (L, val);
     push_attr_flags (L, flags);
     return (2);
@@ -674,13 +675,13 @@ static int l_flux_recv_event (lua_State *L)
     zmsg_t *zmsg = NULL;
 
     if (!(zmsg = flux_recvmsg_match (f, match, 0)))
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_topic (zmsg, &topic) < 0
             || flux_msg_get_payload_json (zmsg, &json_str) < 0
             || (json_str && !(o = json_tokener_parse (json_str)))) {
         zmsg_destroy (&zmsg);
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     }
 
     /* FIXME: create empty JSON object if message payload was empty,
@@ -846,7 +847,7 @@ static int l_flux_recvmsg (lua_State *L)
         match.matchtag = lua_tointeger (L, 2);
 
     if (!(zmsg = flux_recvmsg_match (f, match, false)))
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_type (zmsg, &type) < 0)
         type = FLUX_MSGTYPE_ANY;
@@ -953,7 +954,8 @@ static int l_msghandler_add (lua_State *L)
     mh = l_flux_ref_create (L, f, 2, "msghandler");
     if (flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh) < 0) {
         l_flux_ref_destroy (mh, "msghandler");
-        return lua_pusherror (L, "flux_msghandler_add: %s", strerror (errno));
+        return lua_pusherror (L, "flux_msghandler_add: %s",
+                             (char *)flux_strerror (errno));
     }
 
     return (1);
@@ -1060,7 +1062,8 @@ static int l_kvswatcher_remove (lua_State *L)
     l_flux_ref_gettable (kw, "kvswatcher");
     lua_getfield (L, -1, "key");
     if (kvs_unwatch (kw->flux, lua_tostring (L, -1)) < 0)
-        return (lua_pusherror (L, "kvs_unwatch: %s", strerror (errno)));
+        return (lua_pusherror (L, "kvs_unwatch: %s",
+                               (char *)flux_strerror (errno)));
     /*
      *  Destroy reftable and allow garbage collection
      */
@@ -1272,7 +1275,8 @@ static int l_iowatcher_add (lua_State *L)
         kz_t *kz;
         const char *key = lua_tostring (L, -1);
         if ((kz = kz_open (f, key, flags)) == NULL)
-            return lua_pusherror (L, "kz_open: %s", strerror (errno));
+            return lua_pusherror (L, "kz_open: %s",
+                                  (char *)flux_strerror (errno));
         iow = l_flux_ref_create (L, f, 2, "iowatcher");
         lua_push_kz (L, kz);
         lua_setfield (L, 2, "kz");
@@ -1377,7 +1381,8 @@ static int l_fdwatcher_add (lua_State *L)
     fw->arg = (void *) w;
     if (w == NULL) {
         l_flux_ref_destroy (fw, "watcher");
-        return lua_pusherror (L, "flux_fd_watcher_create: %s", strerror (errno));
+        return lua_pusherror (L, "flux_fd_watcher_create: %s",
+                             (char *)flux_strerror (errno));
     }
     flux_watcher_start (w);
     return (1);
@@ -1472,7 +1477,7 @@ static int l_stat_watcher_add (lua_State *L)
     if (w == NULL) {
         l_flux_ref_destroy (sw, "watcher");
         return lua_pusherror (L, "flux_stat_watcher_create: %s",
-                                 strerror (errno));
+                                 (char *)flux_strerror (errno));
     }
 
     flux_watcher_start (w);
@@ -1602,7 +1607,8 @@ static int l_timeout_handler_add (lua_State *L)
     id = flux_tmouthandler_add (f, ms, oneshot, timeout_handler, (void *) to);
     if (id < 0) {
         l_flux_ref_destroy (to, "timeout_handler");
-        return lua_pusherror (L, "flux_tmouthandler_add: %s", strerror (errno));
+        return lua_pusherror (L, "flux_tmouthandler_add: %s",
+                              (char *)flux_strerror (errno));
     }
 
     /*
@@ -1766,7 +1772,7 @@ static int l_signal_handler_add (lua_State *L)
     lua_pop (L, 1);
 
     if ((fd = signalfd (-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
-        return lua_pusherror (L, "signalfd: %s", strerror (errno));
+        return lua_pusherror (L, "signalfd: %s", (char *)flux_strerror (errno));
 
     lua_getfield (L, 2, "handler");
     if (lua_isnil (L, -1))
@@ -1779,7 +1785,8 @@ static int l_signal_handler_add (lua_State *L)
     if (flux_fdhandler_add (f, fd, ZMQ_POLLIN | ZMQ_POLLERR,
         (FluxFdHandler) signal_handler,
         (void *) sigh) < 0)
-        return lua_pusherror (L, "flux_fdhandler_add: %s", strerror (errno));
+        return lua_pusherror (L, "flux_fdhandler_add: %s",
+                              (char *)flux_strerror (errno));
 
     /*
      *  Get a copy of the underlying sighandler reftable on the stack
@@ -1966,7 +1973,7 @@ static int l_kz_write (lua_State *L)
     const char *s = lua_tolstring (L, 2, &len);
 
     if (kz_put (kz, (char *) s, len) < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, (char *)flux_strerror (errno));
     return (1); /* len */
 }
 
@@ -1976,7 +1983,7 @@ static int l_kz_read (lua_State *L)
     kz_t *kz = lua_get_kz (L, 1);
     char *s = NULL;
     if ((rc = kz_get (kz, &s)) < 0)
-        return lua_pusherror (L, "kz_get: %s", strerror (errno));
+        return lua_pusherror (L, "kz_get: %s", (char *)flux_strerror (errno));
     // return table
     lua_newtable (L);
     lua_pushboolean (L, rc == 0);

@@ -45,6 +45,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 
 #if CZMQ_VERSION_MAJOR < 2
 #define zmsg_pushstrf zmsg_pushstr
@@ -61,13 +62,13 @@ void *thread (void *arg)
     int i;
 
     if (!(sec = flux_sec_create ()))
-        err_exit ("C: flux_sec_create");
+        log_err_exit ("C: flux_sec_create");
     if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
-        err_exit ("C: flux_sec_disable ALL");
+        log_err_exit ("C: flux_sec_disable ALL");
     if (flux_sec_enable (sec, FLUX_SEC_TYPE_MUNGE) < 0)
-        err_exit ("C: flux_sec_enable MUNGE");
+        log_err_exit ("C: flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
-        err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
+        log_err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
 
     if (!(zmsg = zmsg_new ()))
         oom ();
@@ -76,10 +77,10 @@ void *thread (void *arg)
             oom ();
     //zmsg_dump (zmsg);
     if (flux_sec_munge_zmsg (sec, &zmsg) < 0)
-        err_exit ("C: flux_sec_munge_zmsg: %s", flux_sec_errstr (sec));
+        log_err_exit ("C: flux_sec_munge_zmsg: %s", flux_sec_errstr (sec));
     //zmsg_dump (zmsg);
     if (zmsg_send (&zmsg, cs) < 0)
-        err_exit ("C: zmsg_send");
+        log_err_exit ("C: zmsg_send");
 
     flux_sec_destroy (sec);
 
@@ -106,47 +107,47 @@ int main (int argc, char *argv[])
     nframes = strtoul (argv[1], NULL, 10);
 
     if (!(sec = flux_sec_create ()))
-        err_exit ("flux_sec_create");
+        log_err_exit ("flux_sec_create");
     if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
-        err_exit ("flux_sec_disable ALL");
+        log_err_exit ("flux_sec_disable ALL");
     if (flux_sec_enable (sec, FLUX_SEC_TYPE_MUNGE) < 0)
-        err_exit ("flux_sec_enable MUNGE");
+        log_err_exit ("flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
-        err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
+        log_err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
 
     if (!(zctx = zctx_new ()))
-        err_exit ("S: zctx_new");
+        log_err_exit ("S: zctx_new");
     if (!(zs = zsocket_new (zctx, ZMQ_SUB)))
-        err_exit ("S: zsocket_new");
+        log_err_exit ("S: zsocket_new");
     if (zsocket_bind (zs, "%s", uri) < 0)
-        err_exit ("S: zsocket_bind");
+        log_err_exit ("S: zsocket_bind");
     zsocket_set_subscribe (zs, "");
 
     if (!(cs = zsocket_new (zctx, ZMQ_PUB)))
-        err_exit ("S: zsocket_new");
+        log_err_exit ("S: zsocket_new");
     if (zsocket_connect (cs, "%s", uri) < 0)
-        err_exit ("S: zsocket_connect");
+        log_err_exit ("S: zsocket_connect");
 
     if ((rc = pthread_attr_init (&attr)))
-        errn (rc, "S: pthread_attr_init");
+        log_errn (rc, "S: pthread_attr_init");
     if ((rc = pthread_create (&tid, &attr, thread, NULL)))
-        errn (rc, "S: pthread_create");
+        log_errn (rc, "S: pthread_create");
 
     /* Handle one client message.
      */
     if (!(zmsg = zmsg_recv (zs)))
-        err_exit ("S: zmsg_recv");
+        log_err_exit ("S: zmsg_recv");
     //zmsg_dump (zmsg);
     if (flux_sec_unmunge_zmsg (sec, &zmsg) < 0)
-        err_exit ("S: flux_sec_unmunge_zmsg: %s", flux_sec_errstr (sec));
+        log_err_exit ("S: flux_sec_unmunge_zmsg: %s", flux_sec_errstr (sec));
     //zmsg_dump (zmsg);
     if ((n = zmsg_size (zmsg) != nframes))
-        msg_exit ("S: expected %d frames, got %d", nframes, n);
+        log_msg_exit ("S: expected %d frames, got %d", nframes, n);
 
     /* Wait for thread to terminate, then clean up.
      */
     if ((rc = pthread_join (tid, NULL)))
-        errn (rc, "S: pthread_join");
+        log_errn (rc, "S: pthread_join");
     zctx_destroy (&zctx); /* destroys sockets too */
 
     flux_sec_destroy (sec);

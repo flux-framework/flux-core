@@ -221,14 +221,14 @@ int PMI_Init (int *spawned)
     ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "lwj.%d.pmi", ctx->appnum);
     if (!(ctx->h = flux_open (NULL, 0))) {
-        fprintf (stderr, "flux_open: %s", strerror (errno));
+        fprintf (stderr, "flux_open: %s", flux_strerror (errno));
         goto done_destroy;
     }
     if (flux_get_rank (ctx->h, &ctx->cmb_rank) < 0) {
-        fprintf (stderr, "flux_get_rank: %s", strerror (errno));
+        fprintf (stderr, "flux_get_rank: %s", flux_strerror (errno));
         goto done_destroy;
     }
-    flux_log_set_facility (ctx->h, "libpmi");
+    flux_log_set_appname (ctx->h, "libpmi");
     *spawned = ctx->spawned;
     ret = PMI_SUCCESS;
 done:

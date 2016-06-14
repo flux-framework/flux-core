@@ -49,7 +49,7 @@ int main (int argc, char *argv[])
 
     log_init ("flux-event");
     if (!(p = optparse_create ("flux-event")))
-        err_exit ("optparse_create");
+        log_err_exit ("optparse_create");
 
     event_pub_register (p);
     event_sub_register (p);
@@ -61,11 +61,11 @@ int main (int argc, char *argv[])
     }
 
     if (!(h = flux_open (NULL, 0)))
-        err_exit ("flux_open");
+        log_err_exit ("flux_open");
 
     optparse_set_data (p, "handle", h);
     if (optparse_run_subcommand (p, argc, argv) < 0)
-        err_exit ("subcommand");
+        log_err_exit ("subcommand");
 
     flux_close (h);
     optparse_destroy (p);
@@ -77,9 +77,9 @@ static void event_pub_register (optparse_t *parent)
 {
     optparse_t *p = optparse_add_subcommand (parent, "pub", event_pub);
     if (p == NULL)
-        err_exit ("optparse_add_subcommand");
+        log_err_exit ("optparse_add_subcommand");
     if (optparse_set (p, OPTPARSE_USAGE, "topic [json]") != OPTPARSE_SUCCESS)
-        err_exit ("optparse_set (USAGE)");
+        log_err_exit ("optparse_set (USAGE)");
 }
 
 static int event_pub (optparse_t *p, int argc, char **argv)
@@ -96,22 +96,22 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     }
 
     if (!(h = optparse_get_data (p, "handle")))
-        err_exit ("failed to get handle");
+        log_err_exit ("failed to get handle");
 
     n = optparse_optind (p);
     if (n < argc - 1) {
         size_t len = 0;
         json_object *o;
         if ((e = argz_create (argv + n + 1, &json_str, &len)) != 0)
-            errn_exit (e, "argz_create");
+            log_errn_exit (e, "argz_create");
         argz_stringify (json_str, len, ' ');
         if (*json_str != '{' || !(o = json_tokener_parse (json_str)))
-            msg_exit ("JSON argument must be a valid JSON object");
+            log_msg_exit ("JSON argument must be a valid JSON object");
         json_object_put (o);
     }
     if (!(msg = flux_event_encode (topic, json_str))
               || flux_send (h, msg, 0) < 0)
-        err_exit ("sending event");
+        log_err_exit ("sending event");
     if (json_str)
         free (json_str);
     flux_msg_destroy (msg);
@@ -123,7 +123,7 @@ static void subscribe_all (flux_t h, int tc, char **tv)
     int i;
     for (i = 0; i < tc; i++) {
         if (flux_event_subscribe (h, tv[i]) < 0)
-            err_exit ("flux_event_subscribe");
+            log_err_exit ("flux_event_subscribe");
     }
 }
 
@@ -132,7 +132,7 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
     int i;
     for (i = 0; i < tc; i++) {
         if (flux_event_unsubscribe (h, tv[i]) < 0)
-            err_exit ("flux_event_unsubscribe");
+            log_err_exit ("flux_event_unsubscribe");
     }
 }
 
@@ -153,14 +153,14 @@ void event_sub_register (optparse_t *op)
     };
 
     if (!(p = optparse_add_subcommand (op, "sub", event_sub)))
-        err_exit ("optparse_add_subcommand");
+        log_err_exit ("optparse_add_subcommand");
 
     if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
-        err_exit ("event sub: optparse_add_option_table");
+        log_err_exit ("event sub: optparse_add_option_table");
 
     e = optparse_set (p, OPTPARSE_USAGE, "[options] [topic...]");
     if (e != OPTPARSE_SUCCESS)
-        err_exit ("optparse_set (USAGE) failed");
+        log_err_exit ("optparse_set (USAGE) failed");
 }
 
 static int event_sub (optparse_t *p, int argc, char **argv)
@@ -171,7 +171,7 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     bool raw = false;
 
     if (!(h = optparse_get_data (p, "handle")))
-        err_exit ("failed to get handle");
+        log_err_exit ("failed to get handle");
 
     /* Since output is line-based with undeterministic amount of time
      * between lines, force stdout to be line buffered so our output
@@ -183,7 +183,7 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     if (n < argc)
         subscribe_all (h, argc - n, argv + n);
     else if (flux_event_subscribe (h, "") < 0)
-        err_exit ("flux_event_subscribe");
+        log_err_exit ("flux_event_subscribe");
 
     n = 0;
     count = optparse_get_int (p, "count", 0);
@@ -212,7 +212,7 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     if (argc > 1)
         unsubscribe_all (h, argc - 1, argv + 1);
     else if (flux_event_unsubscribe (h, "") < 0)
-        err_exit ("flux_event_subscribe");
+        log_err_exit ("flux_event_subscribe");
     return (0);
 }
 

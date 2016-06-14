@@ -118,18 +118,18 @@ static ctx_t *ctx_create (flux_t h)
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     ctx->h = h;
     if (!(ctx->reactor = flux_reactor_create (SIGCHLD)))
-        err_exit ("flux_reactor_create");
+        log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (h, ctx->reactor) < 0)
-        err_exit ("flux_set_reactor");
+        log_err_exit ("flux_set_reactor");
     if (!(ctx->clients = zlist_new ()))
         oom ();
     if (!(ctx->subscriptions = zhash_new ()))
         oom ();
     ctx->session_owner = geteuid ();
     if (!(ctx->sm = subprocess_manager_create ()))
-        err_exit ("subprocess_manager_create");
+        log_err_exit ("subprocess_manager_create");
     if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
-        err_exit ("subprocess_manager_set reactor");
+        log_err_exit ("subprocess_manager_set reactor");
     subprocess_manager_set (ctx->sm, SM_WAIT_FLAGS, WNOHANG);
 
     return ctx;
@@ -171,18 +171,18 @@ static client_t * client_create (ctx_t *ctx, int rfd, int wfd)
     c->outw = flux_fd_watcher_create (ctx->reactor, c->wfd,
                                       FLUX_POLLOUT, client_write_cb, c);
     if (!c->inw || !c->outw) {
-        flux_log (h, LOG_ERR, "flux_fd_watcher_create: %s", strerror (errno));
+        flux_log_error (h, "flux_fd_watcher_create");
         goto error;
     }
     flux_watcher_start (c->inw);
     flux_msg_iobuf_init (&c->inbuf);
     flux_msg_iobuf_init (&c->outbuf);
     if (set_nonblock (c->rfd, true) < 0) {
-        flux_log (h, LOG_ERR, "set_nonblock: %s", strerror (errno));
+        flux_log_error (h, "set_nonblock");
         goto error;
     }
     if (c->wfd != c->rfd && set_nonblock (c->wfd, true) < 0) {
-        flux_log (h, LOG_ERR, "set_nonblock: %s", strerror (errno));
+        flux_log_error (h, "set_nonblock");
         goto error;
     }
 
@@ -258,8 +258,8 @@ static int global_subscribe (ctx_t *ctx, const char *topic)
 
     if (!(sub = zhash_lookup (ctx->subscriptions, topic))) {
         if (flux_event_subscribe (ctx->h, topic) < 0) {
-            flux_log (ctx->h, LOG_ERR, "%s: flux_event_subscribe %s: %s",
-                      __FUNCTION__, topic, strerror (errno));
+            flux_log_error (ctx->h, "%s: flux_event_subscribe %s",
+                            __FUNCTION__, topic);
             goto done;
         }
         sub = subscription_create (topic);
@@ -516,12 +516,10 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
      */
     if (!(rmsg = flux_response_encode (topic, rc < 0 ? errno : 0, NULL))
                     || flux_msg_set_matchtag (rmsg, matchtag) < 0)
-        flux_log (c->ctx->h, LOG_ERR, "%s: encoding response: %s",
-                  __FUNCTION__, strerror (errno));
+        flux_log_error (c->ctx->h, "%s: encoding response", __FUNCTION__);
 
     else if (client_send_nocopy (c, &rmsg) < 0)
-        flux_log (c->ctx->h, LOG_ERR, "%s: client_send_nocopy: %s",
-                  __FUNCTION__, strerror (errno));
+        flux_log_error (c->ctx->h, "%s: client_send_nocopy", __FUNCTION__);
     flux_msg_destroy (rmsg);
     return true;
 }
@@ -549,11 +547,11 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
             return;
         }
         if (errno != ECONNRESET && errno != EPROTO)
-            flux_log (h, LOG_ERR, "flux_msg_recvfd: %s", strerror (errno));
+            flux_log_error (h, "flux_msg_recvfd");
         goto disconnect;
     }
     if (flux_msg_get_type (msg, &type) < 0) {
-        flux_log (h, LOG_ERR, "flux_msg_get_type: %s", strerror (errno));
+        flux_log_error (h, "flux_msg_get_type");
         goto disconnect;
     }
     switch (type) {
@@ -561,19 +559,18 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
             if (!internal_request (c, msg)) {
                 /* insert disconnect notifier before forwarding request */
                 if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
-                    flux_log (h, LOG_ERR, "disconnect_update:  %s",
-                              strerror (errno));
+                    flux_log_error (h, "disconnect_update");
                     goto disconnect;
                 }
                 if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
                     oom (); /* FIXME */
                 if (flux_send (h, msg, 0) < 0)
-                    err ("%s: flux_send", __FUNCTION__);
+                    log_err ("%s: flux_send", __FUNCTION__);
             }
             break;
         case FLUX_MSGTYPE_EVENT:
             if (flux_send (h, msg, 0) < 0)
-                err ("%s: flux_send", __FUNCTION__);
+                log_err ("%s: flux_send", __FUNCTION__);
             break;
         default:
             flux_log (h, LOG_ERR, "drop unexpected %s",
@@ -621,10 +618,9 @@ static void response_cb (flux_t h, flux_msg_handler_t *w,
                 const char *topic = "unknown";
                 (void)flux_msg_get_type (msg, &type);
                 (void)flux_msg_get_topic (msg, &topic);
-                flux_log (h, LOG_ERR, "send %s %s to client %.*s: %s",
-                          topic, flux_msg_typestr (type),
-                          5, zuuid_str (c->uuid),
-                          strerror (errno));
+                flux_log_error (h, "send %s %s to client %.*s",
+                                topic, flux_msg_typestr (type),
+                                5, zuuid_str (c->uuid));
                 errno = 0;
             }
             break;
@@ -649,8 +645,7 @@ static void event_cb (flux_t h, flux_msg_handler_t *w,
     int count = 0;
 
     if (flux_msg_get_topic (msg, &topic) < 0) {
-        flux_log (h, LOG_ERR, "%s: dropped: %s",
-                  __FUNCTION__, strerror (errno));
+        flux_log_error (h, "%s: dropped", __FUNCTION__);
         return;
     }
     c = zlist_first (ctx->clients);
@@ -661,10 +656,9 @@ static void event_cb (flux_t h, flux_msg_handler_t *w,
                 const char *topic = "unknown";
                 (void)flux_msg_get_type (msg, &type);
                 (void)flux_msg_get_topic (msg, &topic);
-                flux_log (h, LOG_ERR, "send %s %s to client %.*s: %s",
-                          topic, flux_msg_typestr (type),
-                          5, zuuid_str (c->uuid),
-                          strerror (errno));
+                flux_log_error (h, "send %s %s to client %.*s",
+                                topic, flux_msg_typestr (type),
+                                5, zuuid_str (c->uuid));
                 errno = 0;
             }
             count++;
@@ -709,7 +703,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
         int cfd;
 
         if ((cfd = accept4 (fd, NULL, NULL, SOCK_CLOEXEC)) < 0) {
-            flux_log (h, LOG_ERR, "accept: %s", strerror (errno));
+            flux_log_error (h, "accept");
             goto done;
         }
         if (check_cred (ctx, cfd) < 0) {
@@ -724,7 +718,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
             oom ();
     }
     if (revents & FLUX_POLLERR) {
-        flux_log (h, LOG_ERR, "poll listen fd: %s", strerror (errno));
+        flux_log_error (h, "poll listen fd");
     }
 done:
     return;
@@ -737,11 +731,11 @@ static int listener_init (ctx_t *ctx, char *sockpath)
 
     fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) {
-        flux_log (ctx->h, LOG_ERR, "socket: %s", strerror (errno));
+        flux_log_error (ctx->h, "socket");
         goto done;
     }
     if (remove (sockpath) < 0 && errno != ENOENT) {
-        flux_log (ctx->h, LOG_ERR, "remove %s: %s", sockpath, strerror (errno));
+        flux_log_error (ctx->h, "remove %s", sockpath);
         goto error_close;
     }
     memset (&addr, 0, sizeof (struct sockaddr_un));
@@ -749,11 +743,11 @@ static int listener_init (ctx_t *ctx, char *sockpath)
     strncpy (addr.sun_path, sockpath, sizeof (addr.sun_path) - 1);
 
     if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0) {
-        flux_log (ctx->h, LOG_ERR, "bind: %s", strerror (errno));
+        flux_log_error (ctx->h, "bind");
         goto error_close;
     }
     if (listen (fd, LISTEN_BACKLOG) < 0) {
-        flux_log (ctx->h, LOG_ERR, "listen: %s", strerror (errno));
+        flux_log_error (ctx->h, "listen");
         goto error_close;
     }
 done:
@@ -927,17 +921,17 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     if (strstr (job, "://")) {
         if (!(h = flux_open (job, 0)))
-            err_exit ("%s", job);
+            log_err_exit ("%s", job);
     } else {
         char *uri = findjob (job);
         if (!uri)
-            err_exit ("%s", job);
+            log_err_exit ("%s", job);
         if (!(h = flux_open (uri, 0)))
-            err_exit ("%s", uri);
+            log_err_exit ("%s", uri);
          free (uri);
     }
 
-    flux_log_set_facility (h, "proxy");
+    flux_log_set_appname (h, "proxy");
     ctx = ctx_create (h);
 
     ctx->listen_fd = -1;
@@ -945,7 +939,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     if (optparse_hasopt (p, "stdio")) {
         client_t *c;
         if (!(c = client_create (ctx, STDIN_FILENO, STDOUT_FILENO)))
-            err_exit ("error creating stdio client");
+            log_err_exit ("error creating stdio client");
         if (zlist_append (ctx->clients, c) < 0)
             oom ();
         ctx->oneshot = true;
@@ -956,7 +950,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
                                  tmpdir ? tmpdir : "/tmp");
         assert (n < sizeof (workpath));
         if (!mkdtemp (workpath))
-            err_exit ("error creating proxy socket directory");
+            log_err_exit ("error creating proxy socket directory");
         cleanup_push_string(cleanup_directory, workpath);
 
         /* Write proxy pid to broker.pid file.
@@ -966,7 +960,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         assert (n < sizeof (pidfile));
         FILE *f = fopen (pidfile, "w");
         if (!f || fprintf (f, "%d", getpid ()) < 0 || fclose (f) == EOF)
-            err_exit ("%s", pidfile);
+            log_err_exit ("%s", pidfile);
         cleanup_push_string(cleanup_file, pidfile);
 
         /* Listen on socket
@@ -986,20 +980,20 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         /* Create child
          */
         if (child_create (ctx, ac - optind, av + optind, workpath) < 0)
-            err_exit ("child_create");
+            log_err_exit ("child_create");
    }
 
     /* Create/start event/response message watchers
      */
     if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_msg_watcher_addvec: %s", strerror (errno));
+        flux_log_error (h, "flux_msg_watcher_addvec");
         goto done;
     }
 
     /* Start reactor
      */
     if (flux_reactor_run (ctx->reactor, 0) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
+        flux_log_error (h, "flux_reactor_run");
         goto done;
     }
 done:
@@ -1007,7 +1001,7 @@ done:
     flux_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
         if (close (ctx->listen_fd) < 0)
-            flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
+            flux_log_error (h, "close listen_fd");
     }
     if (ctx->clients) {
         client_t *c;
