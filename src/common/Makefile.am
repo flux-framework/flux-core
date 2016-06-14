@@ -18,7 +18,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL) $(LIBRT)
+	$(LIBDL) $(LIBRT) $(LIBCALIPER)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la

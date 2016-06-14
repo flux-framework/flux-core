@@ -69,6 +69,17 @@ X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 
+LIBCALIPER=
+AC_ARG_ENABLE(caliper,
+	[  --enable-caliper[=OPTS]   Use caliper for profiling. [default=no] [OPTS=no/yes]], ,
+	[enable_caliper="no"])
+
+if test "$enable_caliper" = "yes"; then
+    AC_SUBST([LIBCALIPER], ["-lcaliper"])
+    AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
+    AC_DEFINE([PROFILING], [1], [Compile in profiling hooks])
+fi
+
 AC_MSG_CHECKING(--enable-python argument)
 AC_ARG_ENABLE(python,
 	[  --enable-python[=OPTS]   Include Python bindings. [default=yes] [OPTS=no/yes]], ,
