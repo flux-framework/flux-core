@@ -7,6 +7,7 @@ compiler:
   - clang
   - gcc+coverage
   - gcc+install
+  - gcc+cppcheck
 
 cache:
   directories:
@@ -46,6 +47,8 @@ before_install:
   - case "$CC" in *+coverage) CC=${CC//+*}; export COVERAGE=t;; esac
   # Check if we should test installed flux:
   - case "$CC" in *+install)  CC=${CC//+*}; export T_INSTALL=t;; esac
+  # Check if we are only running cppcheck
+  - case "$CC" in *+cppcheck)  CC=${CC//+*}; export CPPCHECK=t;; esac
 
   - test "$TRAVIS_PULL_REQUEST" == "false" || export CCACHE_READONLY=1
   - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
@@ -80,6 +83,8 @@ script:
  - if test "$COVERAGE" = "t" ; then ARGS="--enable-code-coverage"; MAKECMDS="make && make check-code-coverage && lcov -l flux*-coverage.info"; fi
  # Use make install for T_INSTALL:
  - if test "$T_INSTALL" = "t" ; then ARGS="--prefix=/tmp/flux"; MAKECMDS="make && make install && /tmp/flux/bin/flux keygen && FLUX_TEST_INSTALLED_PATH=/tmp/flux/bin make check"; fi
+ # Use src/test/cppcheck.sh instead of make?:
+ - if test "$CPPCHECK" = "t" ; then MAKECMDS="sh -x src/test/cppcheck.sh"; fi
 
  - export FLUX_TESTS_LOGFILE=t
  - if test "$COVERITY_SCAN_BRANCH" != "1" ; then ./autogen.sh && ./configure ${ARGS} && eval ${MAKECMDS}; fi
