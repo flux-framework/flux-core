@@ -39,6 +39,7 @@ int main (int argc, char *argv[])
         "msglist_pop returns 'foo'");
     ok ((e = msglist_pollevents (ml)) >= 0 && e == POLLOUT,
         "msglist_pollevents on empty msglist returns POLLOUT");
+    // cppcheck-suppress doubleFree
     free (msg);
 
     ok ((pfd.fd = msglist_pollfd (ml)) >= 0,
