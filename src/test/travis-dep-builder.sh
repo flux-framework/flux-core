@@ -147,21 +147,24 @@ mkdir -p ${prefix}/lib/systemd/system
 
 for url in $checkouts; do
     name=$(basename ${url} .git)
-    if check_cache "$name"; then
+    sha1="${checkout_sha1[$name]}"
+    make_opts="${extra_make_opts[$name]}"
+    configure_opts="${extra_configure_opts[$name]}"
+    if check_cache "$name:$sha1:$make_opts:$configure_opts"; then
        say "Using cached version of ${name}"
        continue
     fi
     git clone ${url} ${name} || die "Failed to clone ${url}"
     (
       cd ${name} || die "cd failed"
-      if test -n "${checkout_sha1[$name]}"; then
-        git checkout ${checkout_sha1[$name]}
+      if test -n "$sha1"; then
+        git checkout $sha1
       fi
       test -x configure && CC=gcc ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
-                  ${extra_configure_opts[$name]} || : &&
-      make PREFIX=${prefix} ${extra_make_opts[$name]} &&
-      make PREFIX=${prefix} ${extra_make_opts[$name]} install
+                  $configure_opts || : &&
+      make PREFIX=${prefix} $make_opts &&
+      make PREFIX=${prefix} $make_opts install
     ) || die "Failed to build and install $name"
     add_cache "$name"
 done
