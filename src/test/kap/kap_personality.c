@@ -451,8 +451,10 @@ kap_commfab_perf_summary (kap_config_t *kc,
         getf = fopen (GETS_OUT_FN, "w");
         wallf = fopen (WALL_CLOCK_OUT_FN, "w");
         if (!putf || !commitf 
-            || !syncf || !getf || !wallf )
-            return -1;
+            || !syncf || !getf || !wallf ) {
+            rc = -1;
+            goto out;
+        }
     }
 
     rc += metric_summary(kc, p, &Puts, "Puts", 
@@ -486,7 +488,17 @@ kap_commfab_perf_summary (kap_config_t *kc,
     rc += phase_summary (p, Begin_All, End_All,
                         "Total",
                          wallf);
-
+out:
+    if (putf)
+        fclose (putf);
+    if (commitf)
+        fclose (commitf);
+    if (syncf)
+        fclose (syncf);
+    if (getf)
+        fclose (getf);
+    if (wallf)
+        fclose (wallf);
     return (rc < 0)? -1 : 0;
 } 
 
