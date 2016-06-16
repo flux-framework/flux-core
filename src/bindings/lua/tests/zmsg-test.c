@@ -67,8 +67,11 @@ static int l_zi_resp_cb (lua_State *L,
     const char *json_str = NULL;
     if (resp)
         json_str = json_object_to_json_string (resp);
-    if (flux_msg_set_payload_json (*zmsg, json_str) < 0)
+    if (flux_msg_set_payload_json (*zmsg, json_str) < 0) {
+        zmsg_destroy (zmsg);
+        free (zmsg);
         return lua_pusherror (L, "flux_msg_set_payload_json: %s", strerror (errno));
+    }
 
     return lua_push_zmsg_info (L, zmsg_info_create (zmsg, FLUX_MSGTYPE_RESPONSE));
 }
@@ -77,8 +80,10 @@ static int l_cmb_zmsg_create_type (lua_State *L, int type)
 {
     struct zmsg_info *zi;
 	zmsg_t **zmsg = malloc (sizeof (*zmsg));
-	if ((*zmsg = l_cmb_zmsg_encode (L)) == NULL)
+	if ((*zmsg = l_cmb_zmsg_encode (L)) == NULL) {
+        free (zmsg);
         return luaL_error (L, "Failed to encode zmsg");
+    }
     zi = zmsg_info_create (zmsg, type);
     zmsg_info_register_resp_cb (zi, l_zi_resp_cb, NULL);
 
