@@ -199,6 +199,7 @@ print_config (kap_config_t *kap_conf)
         "   instance_num: %lu\n", kap_conf->instance_num);
     fprintf (fptr, 
         "   redundant_val: %u\n", kap_conf->redundant_val);
+    fclose (fptr);
 }
 
 
