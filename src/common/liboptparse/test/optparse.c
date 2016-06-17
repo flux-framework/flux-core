@@ -1,5 +1,5 @@
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/optparse.h"
+#include "src/common/liboptparse/optparse.h"
 #include "src/common/libutil/sds.h"
 
 static void *myfatal_h = NULL;

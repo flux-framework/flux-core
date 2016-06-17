@@ -1,5 +1,5 @@
 SUBDIRS = libtap libev libsophia libminilzo libpmi-client libpmi-server \
-	  liblsd libutil libflux libsubprocess libcompat
+	  liblsd libutil libflux libsubprocess libcompat liboptparse
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LDFLAGS)
@@ -23,14 +23,25 @@ libflux_internal_la_LIBADD = \
 	$(LIBDL) $(LIBRT)
 libflux_internal_la_LDFLAGS = -Wl,--no-undefined
 
-lib_LTLIBRARIES = libflux-core.la
+lib_LTLIBRARIES = libflux-core.la libflux-optparse.la
+
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
 	libflux-internal.la
+libflux_core_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libflux-core.map \
+        -shared -export-dynamic --disable-static \
+        -Wl,--no-undefined
 
-libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map \
-			  -shared -export-dynamic --disable-static \
-			  -Wl,--no-undefined
+libflux_optparse_la_SOURCES =
+libflux_optparse_la_LIBADD = \
+	$(builddir)/liboptparse/liboptparse.la \
+	$(builddir)/liblsd/liblsd.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD)
+libflux_optparse_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libflux-optparse.map \
+	-shared -export-dynamic --disable-static \
+	-Wl,--no-undefined
 
-EXTRA_DIST = version.map
+EXTRA_DIST = libflux-core.map libflux-optparse.map

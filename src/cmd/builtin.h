@@ -23,9 +23,9 @@
 \*****************************************************************************/
 
 #include <flux/core.h>
+#include <flux/optparse.h>
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/optparse.h"
 
 typedef int (*register_cmd_f) (optparse_t *p);
 

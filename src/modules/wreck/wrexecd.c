@@ -43,7 +43,7 @@
 
 #include <flux/core.h>
 
-#include "src/common/libutil/optparse.h"
+#include "src/common/liboptparse/optparse.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"

@@ -180,6 +180,7 @@ AC_CONFIG_FILES( \
   src/common/libflux/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
+  src/common/liboptparse/Makefile \
   src/lib/Makefile \
   src/lib/libpmi/Makefile \
   src/bindings/Makefile \
