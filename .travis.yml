@@ -27,6 +27,9 @@ addons:
       - aspell
       - aspell-en
       - ccache
+      - apport # for coredumps
+      - gdb
+
   coverity_scan:
     project:
       name: "grondo/flux-core"
@@ -64,9 +67,7 @@ before_install:
   - echo '#error Non-build-tree flux/core.h!' > $HOME/local/include/flux/core.h
 
 script:
- - export LD_PRELOAD=libSegFault.so
- - export SEGFAULT_USE_ALTSTACK=1
- - export LIBC_FATAL_STDERR_=1
+ - ulimit -c unlimited
  - export CC="ccache $CC"
  - export MAKECMDS="make distcheck"
  # Ensure travis builds libev such that libfaketime will work:
@@ -97,3 +98,4 @@ after_success:
 after_failure:
  - find . -name t[0-9]*.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - find . -name *.broker.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
+ - src/test/backtrace-all.sh
