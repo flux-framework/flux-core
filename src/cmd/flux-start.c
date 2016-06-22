@@ -31,12 +31,12 @@
 #include <libgen.h>
 #include <argz.h>
 #include <flux/core.h>
+#include <flux/optparse.h>
 #include <czmq.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/optparse.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libpmi-server/simple.h"
 #include "src/common/libsubprocess/subprocess.h"

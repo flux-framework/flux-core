@@ -82,6 +82,7 @@
 #include <sys/time.h>
 #include <ctype.h>
 #include <flux/core.h>
+#include <flux/optparse.h>
 #include <czmq.h>
 
 #include "src/modules/kvs/kvs_deprecated.h"
@@ -90,7 +91,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libutil/optparse.h"
 
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;

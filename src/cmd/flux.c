@@ -36,12 +36,12 @@
 #include <glob.h>
 #include <assert.h>
 #include <flux/core.h>
+#include <flux/optparse.h>
 #include <pwd.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/optparse.h"
 #include "src/common/libutil/environment.h"
 
 #include "cmdhelp.h"
