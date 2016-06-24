@@ -48,6 +48,8 @@
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libsubprocess/zio.h"
+#include "src/common/libpmi-server/simple.h"
+
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/libkz/kz.h"
 
@@ -74,6 +76,10 @@ struct task_info {
     /*  IO */
     zio_t *zio[3];
     kz_t  *kz[3];
+
+    int pmi_fds[2];
+    zio_t *pmi_zio;           /* zio reader for pmi-simple server */
+    zio_t *pmi_client;        /* zio writer for pmi-simple client */
 };
 
 struct prog_ctx {
@@ -85,6 +91,9 @@ struct prog_ctx {
 
     flux_watcher_t *fdw;
     flux_msg_handler_t *mw;
+
+    struct pmi_simple_server *pmi;
+    unsigned int barrier_sequence;
 
     uint32_t noderank;
 
@@ -369,6 +378,48 @@ int task_kz_put_lines (struct task_info *t, kz_t *kz, const char *data, int len)
     return (count);
 }
 
+static void wreck_pmi_close (struct task_info *t)
+{
+    if (t->pmi_zio)
+        zio_destroy (t->pmi_zio);
+    t->pmi_zio = NULL;
+    if (t->pmi_client)
+        zio_destroy (t->pmi_client);
+    t->pmi_client = NULL;
+}
+
+static int wreck_pmi_send (void *cli, const char *s)
+{
+    struct task_info *t = cli;
+    return zio_write (t->pmi_client, (void *) s, strlen (s));
+}
+
+static void wreck_pmi_line (struct task_info *t, const char *line)
+{
+    struct prog_ctx *ctx = t->ctx;
+    int rc;
+    if ((rc = pmi_simple_server_request (ctx->pmi, line, t)) < 0)
+        wlog_fatal (ctx, 1, "pmi_simple_server_request: %s\n",
+                    strerror (errno));
+    if (rc == 1)
+        wreck_pmi_close (t);
+}
+
+static int wreck_pmi_cb (zio_t *z, const char *s, int len, void *arg)
+{
+    struct task_info *t = arg;
+    struct prog_ctx *ctx = t->ctx;
+
+    if (len > 0) /* !eof */
+        wreck_pmi_line (t, s);
+    else {
+        /* client closed connection? */
+        wlog_debug (ctx, "wreck_pmi_cb: client closed PMI_FD");
+        wreck_pmi_close (t);
+    }
+    return (0);
+}
+
 int io_cb (zio_t *z, const char *s, int len, void *arg)
 {
     struct task_info *t = arg;
@@ -429,6 +480,27 @@ kz_t *task_kz_open (struct task_info *t, int type)
     return (kz);
 }
 
+static void task_pmi_setup (struct task_info *t)
+{
+    /* Setup socketpair for pmi-simple server */
+    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, t->pmi_fds) < 0)
+        wlog_fatal (t->ctx, 1, "socketpair: %s", strerror (errno));
+
+    /* ZIO object for reading pmi-simple server requests */
+    t->pmi_zio = zio_reader_create ("pmi", t->pmi_fds[0], NULL, (void *) t);
+    if (t->pmi_zio == NULL)
+        wlog_fatal (t->ctx, 1, "zio_reader_create: %s", strerror (errno));
+
+    zio_set_line_buffered (t->pmi_zio, 1);
+    zio_set_send_cb (t->pmi_zio, wreck_pmi_cb);
+    zio_set_raw_output (t->pmi_zio);
+
+    t->pmi_client = zio_writer_create ("pmi", t->pmi_fds[0], t);
+    if (t->pmi_client == NULL)
+        wlog_fatal (t->ctx, 1, "zio_writer_create: %s", strerror (errno));
+}
+
+
 struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 {
     int i;
@@ -456,6 +528,9 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     for (i = 0; i < NR_IO; i++)
         t->kz [i] = task_kz_open (t, i);
     kz_set_ready_cb (t->kz [IN], (kz_ready_f) kz_stdin, t);
+
+    if (!prog_ctx_getopt (ctx, "no-pmi-server"))
+        task_pmi_setup (t);
 
     return (t);
 }
@@ -496,6 +571,7 @@ void task_info_destroy (struct task_info *t)
         kvsdir_destroy (t->kvs);
     if (t->f)
         flux_close (t->f);
+    wreck_pmi_close (t);
     free (t);
 }
 
@@ -582,6 +658,9 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     if (ctx->flux)
         flux_close (ctx->flux);
+
+    if (ctx->pmi)
+        pmi_simple_server_destroy (ctx->pmi);
 
     free (ctx);
 }
@@ -917,16 +996,11 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     return (0);
 }
 
-void close_if_gt (void *minfdp, int fd)
+void close_task_fd_check (void *arg, int fd)
 {
-    int minfd = *((int *) minfdp);
-    if (fd >= minfd)
+    struct task_info *t = arg;
+    if (fd >= 3 && fd != t->pmi_fds[1])
         close (fd);
-}
-
-void close_from (int minfd)
-{
-    fdwalk (close_if_gt, (void *)&minfd);
 }
 
 static int dup_fd (int fd, int newfd)
@@ -947,6 +1021,11 @@ void child_io_setup (struct task_info *t)
         wlog_fatal (t->ctx, 1, "close: %s", flux_strerror (errno));
 
     /*
+     *  Close parent end of PMI_FD
+     */
+    close (t->pmi_fds[0]);
+
+    /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
      */
     if (  (dup_fd (zio_src_fd (t->zio [IN]), STDIN_FILENO) < 0)
@@ -954,7 +1033,7 @@ void child_io_setup (struct task_info *t)
        || (dup_fd (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
         wlog_fatal (t->ctx, 1, "dup2: %s", flux_strerror (errno));
 
-    close_from (3);
+    fdwalk (close_task_fd_check, (void *)t);
 }
 
 void close_child_fds (struct task_info *t)
@@ -963,6 +1042,8 @@ void close_child_fds (struct task_info *t)
             || zio_close_dst_fd (t->zio [OUT]) < 0
             || zio_close_dst_fd (t->zio [ERR]) < 0)
         wlog_fatal (t->ctx, 1, "close: %s", flux_strerror (errno));
+    close (t->pmi_fds[1]);
+    t->pmi_fds[1] = -1;
 }
 
 void send_job_state_event (struct prog_ctx *ctx, const char *state)
@@ -1216,6 +1297,12 @@ int exec_command (struct prog_ctx *ctx, int i)
         prog_ctx_setenv  (ctx, "FLUX_URI", getenv ("FLUX_URI"));
         prog_ctx_setenvf (ctx, "FLUX_TASK_RANK", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "FLUX_TASK_LOCAL_ID", 1, "%d", i);
+
+        if (ctx->pmi) {
+            prog_ctx_setenvf (ctx, "PMI_FD", 1, "%d", t->pmi_fds[1]);
+            prog_ctx_setenvf (ctx, "PMI_RANK", 1, "%d", t->globalid);
+            prog_ctx_setenvf (ctx, "PMI_SIZE", 1, "%d", t->ctx->total_ntasks);
+        }
 
         if (prog_ctx_getopt (ctx, "stop-children-in-exec")) {
             /* Stop process on exec with parent attached */
@@ -1843,8 +1930,11 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
         return wlog_err (ctx, "flux_event_subscribe (hb): %s",
                         flux_strerror (errno));
 
-    for (i = 0; i < ctx->nprocs; i++)
+    for (i = 0; i < ctx->nprocs; i++) {
         task_info_io_setup (ctx->task [i]);
+        zio_flux_attach (ctx->task[i]->pmi_zio, ctx->flux);
+        zio_flux_attach (ctx->task[i]->pmi_client, ctx->flux);
+    }
 
     ctx->mw = flux_msg_handler_create (ctx->flux,
             FLUX_MATCH_EVENT,
@@ -1862,6 +1952,116 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
 
     return (0);
 }
+
+static int wreck_pmi_kvs_put (void *arg, const char *kvsname,
+        const char *key, const char *val)
+{
+    struct prog_ctx *ctx = arg;
+    char *kvskey;
+    int rc;
+
+    if (asprintf (&kvskey, "%s.%s", kvsname, key) < 0) {
+        wlog_err (ctx, "pmi_kvs_put: asprintf: %s", strerror (errno));
+        return (-1);
+    }
+
+    rc = kvs_put_string (ctx->flux, kvskey, val);
+    free (kvskey);
+    return (rc);
+}
+
+
+static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
+        char *val, int len)
+{
+    struct prog_ctx *ctx = arg;
+    char *kvskey = NULL;
+    char *s = NULL;
+    int rc = 0;
+
+    if (asprintf (&kvskey, "%s.%s", kvsname, key) < 0) {
+        wlog_err (ctx, "pmi_kvs_get: asprintf: %s", strerror (errno));
+        return (-1);
+    }
+
+    if (kvs_get_string (ctx->flux, kvskey, &s) < 0) {
+        wlog_err (ctx, "pmi_kvs_get: kvs_get_string: %s", strerror (errno));
+        free (kvskey);
+        return (-1);
+    }
+
+    if (strlen (s) >= len) {
+        rc = -1;
+        errno = ENOSPC;
+    }
+    else
+        strcpy (val, s);
+
+    free (s);
+    free (kvskey);
+
+    return (rc);
+}
+
+static void wreck_barrier_complete (flux_rpc_t *rpc, void *arg)
+{
+    struct prog_ctx *ctx = arg;
+    int rc = kvs_fence_finish (rpc);
+    pmi_simple_server_barrier_complete (ctx->pmi, rc);
+    flux_rpc_destroy (rpc);
+}
+
+static int wreck_pmi_barrier_enter (void *arg)
+{
+    struct prog_ctx *ctx = arg;
+    char *name;
+    flux_rpc_t *rpc;
+
+    if (asprintf (&name, "lwj.%ju.%u", ctx->id, ctx->barrier_sequence++) < 0) {
+        wlog_err (ctx, "pmi_barrier_enter: asprintf: %s", strerror (errno));
+        return (-1);
+    }
+    if ((rpc = kvs_fence_begin (ctx->flux, name, ctx->nnodes)) == NULL) {
+        wlog_err (ctx, "pmi_barrier_enter: kvs_fence_begin: %s",
+                  strerror (errno));
+        goto out;
+    }
+    if (flux_rpc_then (rpc, wreck_barrier_complete, ctx) < 0) {
+        wlog_err (ctx, "pmi_barrier_enter: rpc_then: %s", strerror (errno));
+        flux_rpc_destroy (rpc);
+    }
+out:
+    free (name);
+    return (rpc == NULL ? -1 : 0);
+}
+
+
+static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
+{
+    char *kvsname;
+    struct pmi_simple_ops ops = {
+        .kvs_put = wreck_pmi_kvs_put,
+        .kvs_get = wreck_pmi_kvs_get,
+        .barrier_enter = wreck_pmi_barrier_enter,
+        .response_send = wreck_pmi_send
+    };
+    if (asprintf (&kvsname, "lwj.%lu.pmi", ctx->id) < 0) {
+        flux_log_error (ctx->flux, "initialize_pmi: asprintf");
+        return (-1);
+    }
+    ctx->barrier_sequence = 0;
+    ctx->pmi = pmi_simple_server_create (&ops, (int) ctx->id,
+                                         ctx->total_ntasks,
+                                         ctx->nprocs,
+                                         kvsname,
+                                         ctx);
+    if (!ctx->pmi)
+        flux_log_error (ctx->flux, "pmi_simple_server_create");
+    free (kvsname);
+    return (ctx->pmi == NULL ? -1 : 0);
+}
+
+
 
 static void daemonize ()
 {
@@ -1949,6 +2149,9 @@ int main (int ac, char **av)
     if ((parent_fd = optparse_get_int (p, "parent-fd", -1)) >= 0)
         prog_ctx_signal_parent (parent_fd);
     prog_ctx_reactor_init (ctx);
+
+    if (!prog_ctx_getopt (ctx, "no-pmi-server") && prog_ctx_initialize_pmi (ctx) < 0)
+        wlog_fatal (ctx, 1, "failed to initialize pmi-server");
 
     if (exec_commands (ctx) == 0) {
 
