@@ -25,7 +25,7 @@ end
 
 function rexecd_task_init ()
     local env = wreck.environ
-    env['MPIRUN_RANK'] = wreck.taskid
+    env['MPIRUN_RANK'] = wreck.globalid
 end
 
 -- vi: ts=4 sw=4 expandtab
