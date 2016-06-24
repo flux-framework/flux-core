@@ -64,6 +64,7 @@ struct pmi_simple_server {
     int appnum;
     char *kvsname;
     int universe_size;
+    int local_procs;
     zlist_t *barrier;
     zlist_t *responses;
 };
@@ -71,6 +72,7 @@ struct pmi_simple_server {
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     int appnum,
                                                     int universe_size,
+                                                    int local_procs,
                                                     const char *kvsname,
                                                     void *arg)
 {
@@ -80,6 +82,7 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
     pmi->appnum = appnum;
     pmi->kvsname = xstrdup (kvsname);
     pmi->universe_size = universe_size;
+    pmi->local_procs = local_procs;
     if (!(pmi->barrier = zlist_new ()))
         oom ();
     if (!(pmi->responses = zlist_new ()))
@@ -113,6 +116,39 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
 int pmi_simple_server_get_maxrequest (struct pmi_simple_server *pmi)
 {
     return (KVS_KEY_MAX + KVS_VAL_MAX + KVS_NAME_MAX + MAX_PROTO_OVERHEAD);
+}
+
+static int barrier_enter (struct pmi_simple_server *pmi, void *client)
+{
+    struct pmi_response *r = xzmalloc (sizeof (*r));
+
+    r->msg = xasprintf ("cmd=barrier_out\n");
+    r->client = client;
+    if (zlist_append (pmi->barrier, r) < 0)
+        oom ();
+    return 0;
+}
+
+static int barrier_exit (struct pmi_simple_server *pmi, int rc)
+{
+    struct pmi_response *r;
+
+    while ((r = zlist_pop (pmi->barrier))) {
+        /* XXX the protocol doesn't allow an error to be returned
+         * for the barrier operation, so we return "barrier_failed"
+         * instead of "barrier_out", which should trigger a protocol error.
+         * We throw our rc code in there without expectation that it's
+         * going anywhere useful, unless client prints the unexpected
+         * message it received.
+         */
+        if (rc != 0) {
+            free (r->msg);
+            r->msg = xasprintf ("cmd=barrier_failed rc=%d\n", rc);
+        }
+        if (zlist_append (pmi->responses, r) < 0)
+            oom ();
+    }
+    return 0;
 }
 
 #define S_(x) #x
@@ -157,15 +193,12 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
                           result == 0 ? "success" : "failure",
                           result == 0 ? val : "");
     } else if (!strcmp (buf, "cmd=barrier_in")) {
-        struct pmi_response *r = xzmalloc (sizeof (*r));
-        r->msg = xasprintf ("cmd=barrier_out\n");
-        r->client = client;
-        if (zlist_append (pmi->barrier, r) < 0)
-            oom ();
-        if (pmi->ops.barrier (pmi->arg) == 1) {
-            while ((r = zlist_pop (pmi->barrier)))
-                if (zlist_append (pmi->responses, r) < 0)
-                    oom ();
+        barrier_enter (pmi, client);
+        if (zlist_size (pmi->barrier) == pmi->local_procs) {
+            if (pmi->ops.barrier_enter)
+                pmi->ops.barrier_enter (pmi->arg);
+            else
+                barrier_exit (pmi, 0);
         }
     } else if (!strcmp (buf, "cmd=finalize")) {
         resp = xasprintf ("cmd=finalize_ack\n");
@@ -182,6 +215,11 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             oom ();
     }
     return rc;
+}
+
+int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc)
+{
+    return barrier_exit (pmi, rc);
 }
 
 int pmi_simple_server_response (struct pmi_simple_server *pmi,

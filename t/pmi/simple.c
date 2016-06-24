@@ -17,7 +17,6 @@ struct context {
     int exit_rc;
     zhash_t *kvs;
     struct pmi_simple_server *pmi;
-    int barrier;
     int size;
     char *buf;
     int buflen;
@@ -48,17 +47,6 @@ static int s_kvs_get (void *arg, const char *kvsname, const char *key,
         rc = 0;
     }
     return rc;
-}
-
-static int s_barrier (void *arg)
-{
-    diag ("%s", __FUNCTION__);
-    struct context *ctx = arg;
-    if (++ctx->barrier == ctx->size) {
-        ctx->barrier = 0;
-        return 1;
-    }
-    return 0;
 }
 
 static int dgetline (int fd, char *buf, int len)
@@ -156,7 +144,7 @@ int main (int argc, char *argv[])
     struct pmi_simple_ops ops = {
         .kvs_put = s_kvs_put,
         .kvs_get = s_kvs_get,
-        .barrier = s_barrier,
+        .barrier_enter = NULL,
     };
     pmi_t *cli;
     int spawned = -1, initialized = -1;
@@ -170,10 +158,10 @@ int main (int argc, char *argv[])
     if (!(ctx.kvs = zhash_new ()))
         oom ();
     ctx.size = 1;
-    ctx.barrier = 0;
     ok (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, ctx.fds) == 0,
         "socketpair returned client,server file descriptors");
-    ctx.pmi = pmi_simple_server_create (&ops, 42, ctx.size, "bleepgorp", &ctx);
+    ctx.pmi = pmi_simple_server_create (&ops, 42, ctx.size, ctx.size,
+                                        "bleepgorp", &ctx);
     ok (ctx.pmi != NULL,
         "created simple pmi server context");
     ctx.buflen = pmi_simple_server_get_maxrequest (ctx.pmi);

@@ -43,7 +43,6 @@
 
 struct pmi_server {
     zhash_t *kvs;
-    int barrier;
     struct pmi_simple_server *srv;
 };
 
@@ -329,16 +328,6 @@ int pmi_kvs_get (void *arg, const char *kvsname,
     return 0;
 }
 
-int pmi_barrier (void *arg)
-{
-    struct context *ctx = arg;
-    if (++ctx->pmi.barrier == ctx->size) {
-        ctx->pmi.barrier = 0;
-        return 1;
-    }
-    return 0;
-}
-
 int execvp_argz (const char *cmd, char *argz, size_t argz_len)
 {
     char **av = malloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
@@ -468,12 +457,13 @@ void pmi_server_initialize (struct context *ctx)
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
-        .barrier = pmi_barrier,
+        .barrier_enter = NULL,
     };
     int appnum = strtol (ctx->session_id, NULL, 10);
     if (!(ctx->pmi.kvs = zhash_new()))
         oom ();
-    ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size, "-", ctx);
+    ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size,
+                                             ctx->size, "-", ctx);
     if (!ctx->pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }
