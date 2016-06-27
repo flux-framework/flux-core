@@ -55,11 +55,10 @@ static int dgetline (int fd, char *buf, int len)
     while (i < len - 1) {
         if (read (fd, &buf[i], 1) <= 0)
             return -1;
-        if (buf[i] == '\n')
+        if (buf[i++] == '\n')
             break;
-        i++;
     }
-    if (buf[i] != '\n') {
+    if (buf[i - 1] != '\n') {
         errno = EPROTO;
         return -1;
     }
@@ -79,12 +78,17 @@ static int dputline (int fd, const char *buf)
     return count;
 }
 
+static int s_send_response (void *client, const char *buf)
+{
+    int *rfd = client;
+    return dputline (*rfd, buf);
+}
+
 static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
     struct context *ctx = arg;
-    int *rfd, fd = flux_fd_watcher_get_fd (w);
-    char *resp;
+    int fd = flux_fd_watcher_get_fd (w);
     int rc;
 
     if (dgetline (fd, ctx->buf, ctx->buflen) < 0) {
@@ -97,14 +101,6 @@ static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
         diag ("pmi_simple_server_request: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
-    }
-    while (pmi_simple_server_response (ctx->pmi, &resp, &rfd) == 0) {
-        if (dputline (*rfd, resp) < 0) {
-            diag ("dputline: %s", strerror (errno));
-            flux_reactor_stop_error (r);
-            return;
-        }
-        free (resp);
     }
     if (rc == 1) {
         close (fd);
@@ -145,6 +141,7 @@ int main (int argc, char *argv[])
         .kvs_put = s_kvs_put,
         .kvs_get = s_kvs_get,
         .barrier_enter = NULL,
+        .response_send = s_send_response,
     };
     pmi_t *cli;
     int spawned = -1, initialized = -1;
