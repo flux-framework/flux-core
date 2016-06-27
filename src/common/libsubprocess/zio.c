@@ -72,6 +72,7 @@ struct zio_ctx {
     void *     dstsock; /*  ZMQ dst socket                                   */
     cbuf_t     buf;     /*  Buffer for I/O (if needed)                       */
     size_t     buffersize;
+    int        lines;   /*  For line buffered, arg to cbuf_read_line()       */
 
     unsigned   flags;   /*  Flags for state and options of zio object        */
 
@@ -260,6 +261,7 @@ static zio_t *zio_allocate (const char *name, int reader, void *arg)
     z->io_type = reader ? ZIO_READER : ZIO_WRITER;
     z->flags = ZIO_BUFFERED | ZIO_LINE_BUFFERED;
     z->buffersize = 4096;
+    z->lines = -1;
 
     z->srcfd = z->dstfd = -1;
     z->prefix = NULL;
@@ -360,10 +362,11 @@ int zio_set_buffered (zio_t *zio, size_t buffersize)
     return (0);
 }
 
-int zio_set_line_buffered (zio_t *zio)
+int zio_set_line_buffered (zio_t *zio, int lines)
 {
     int rc = zio_set_buffered (zio, 4096);
     zio->flags |= ZIO_LINE_BUFFERED;
+    zio->lines = lines;
     return (rc);
 }
 
@@ -419,7 +422,7 @@ static int zio_fd_read (zio_t *zio, void *dst, int len)
     assert (zio->buf);
 
     if (zio_line_buffered (zio) && !zio_eof (zio))
-        return cbuf_read_line (zio->buf, dst, len, -1);
+        return cbuf_read_line (zio->buf, dst, len, zio->lines);
     else
         return cbuf_read (zio->buf, dst, len);
 }
