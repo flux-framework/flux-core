@@ -30,11 +30,14 @@ test_expect_success 'mpi hello world runs as a singleton' '
 '
 
 test_expect_success 'mpi hello world runs on all ranks' '
-	run_program 5 ${SIZE} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello
+	run_program 5 ${SIZE} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
+		| grep -q "There are ${SIZE} tasks"
 '
 
 test_expect_success 'mpi hello world runs oversubscribed' '
-	run_program 5 $((${SIZE}*4)) ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello
+	NTASKS=$((${SIZE}*4)); \
+	run_program 5 ${NTASKS} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
+		| grep -q "There are ${NTASKS} tasks"
 '
 
 test_done
