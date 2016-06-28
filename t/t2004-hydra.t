@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Test that MICH Hydra can launch Flux'
+test_description='Test that MPICH Hydra can launch Flux'
 
 # Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
@@ -33,7 +33,7 @@ test_expect_success 'Flux libpmi-client wire protocol works with Hydra' '
 '
 
 test_expect_success 'Hydra can launch Flux' '
-	mpiexec.hydra -n 4 flux broker \
+	mpiexec.hydra -n 4 flux start \
 		flux comms info >flux_out &&
 	grep size=4 flux_out
 '

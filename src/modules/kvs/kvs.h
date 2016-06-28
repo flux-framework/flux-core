@@ -160,6 +160,13 @@ int kvs_commit (flux_t h);
  */
 int kvs_fence (flux_t h, const char *name, int nprocs);
 
+/* kvs_fence_begin() sends the fence request and returns immediately.
+ * kvs_fence_finish() blocks until the response is received, then returns.
+ * Use flux_rpc_then() to arrange for the fence to complete asynchronously.
+ */
+flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs);
+int kvs_fence_finish (flux_rpc_t *rpc);
+
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.

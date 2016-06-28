@@ -43,7 +43,6 @@
 
 struct pmi_server {
     zhash_t *kvs;
-    int barrier;
     struct pmi_simple_server *srv;
 };
 
@@ -261,11 +260,10 @@ static int dgetline (int fd, char *buf, int len)
     while (i < len - 1) {
         if (read (fd, &buf[i], 1) <= 0)
             return -1;
-        if (buf[i] == '\n')
+        if (buf[i++] == '\n')
             break;
-        i++;
     }
-    if (buf[i] != '\n') {
+    if (buf[i - 1] != '\n') {
         errno = EPROTO;
         return -1;
     }
@@ -285,23 +283,23 @@ static int dputline (int fd, const char *buf)
     return count;
 }
 
+static int pmi_response_send (void *client, const char *buf)
+{
+    struct client *cli = client;
+    return dputline (cli->fd, buf);
+}
+
 void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
                     int revents, void *arg)
 {
-    struct client *rcli, *cli = arg;
+    struct client *cli = arg;
     struct context *ctx = cli->ctx;
     int rc;
-    char *resp;
     if (dgetline (cli->fd, cli->buf, cli->buflen) < 0)
         log_err_exit ("%s", __FUNCTION__);
     rc = pmi_simple_server_request (ctx->pmi.srv, cli->buf, cli);
     if (rc < 0)
         log_err_exit ("%s", __FUNCTION__);
-    while (pmi_simple_server_response (ctx->pmi.srv, &resp, &rcli) == 0) {
-        if (dputline (rcli->fd, resp) < 0)
-            log_err_exit ("%s", __FUNCTION__);
-        free (resp);
-    }
     if (rc == 1) {
         close (cli->fd);
         cli->fd = -1;
@@ -326,16 +324,6 @@ int pmi_kvs_get (void *arg, const char *kvsname,
     if (!v || strlen (v) >= len)
         return -1;
     strcpy (val, v);
-    return 0;
-}
-
-int pmi_barrier (void *arg)
-{
-    struct context *ctx = arg;
-    if (++ctx->pmi.barrier == ctx->size) {
-        ctx->pmi.barrier = 0;
-        return 1;
-    }
     return 0;
 }
 
@@ -468,12 +456,14 @@ void pmi_server_initialize (struct context *ctx)
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
-        .barrier = pmi_barrier,
+        .barrier_enter = NULL,
+        .response_send = pmi_response_send,
     };
     int appnum = strtol (ctx->session_id, NULL, 10);
     if (!(ctx->pmi.kvs = zhash_new()))
         oom ();
-    ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size, "-", ctx);
+    ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size,
+                                             ctx->size, "-", ctx);
     if (!ctx->pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }

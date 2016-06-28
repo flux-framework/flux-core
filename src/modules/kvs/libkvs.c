@@ -1296,22 +1296,45 @@ done:
     return rc;
 }
 
-int kvs_fence (flux_t h, const char *name, int nprocs)
+flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
 {
     JSON in = NULL;
     flux_rpc_t *rpc = NULL;
-    const char *json_str;
-    int rc = -1;
+    int saved_errno = errno;
 
     if (!(in = kp_tcommit_enc (NULL, NULL, name, nprocs)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+done:
+    saved_errno = errno;
+    Jput (in);
+    errno = saved_errno;
+    return rpc;
+}
+
+int kvs_fence_finish (flux_rpc_t *rpc)
+{
+    const char *json_str;
+
+    /* N.B. response has a payload but we ignore it in this context
+     * (not in others).  The flux_rpc_get() will fail with EPROTO
+     * if there is a payload and we don't ask to see it.
+     */
+    return flux_rpc_get (rpc, NULL, &json_str);
+}
+
+int kvs_fence (flux_t h, const char *name, int nprocs)
+{
+    flux_rpc_t *rpc = NULL;
+    int rc = -1;
+
+    if (!(rpc = kvs_fence_begin (h, name, nprocs)))
+        goto done;
+    if (kvs_fence_finish (rpc) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (rpc);
     return rc;
 }

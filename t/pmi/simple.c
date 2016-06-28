@@ -17,7 +17,6 @@ struct context {
     int exit_rc;
     zhash_t *kvs;
     struct pmi_simple_server *pmi;
-    int barrier;
     int size;
     char *buf;
     int buflen;
@@ -50,28 +49,16 @@ static int s_kvs_get (void *arg, const char *kvsname, const char *key,
     return rc;
 }
 
-static int s_barrier (void *arg)
-{
-    diag ("%s", __FUNCTION__);
-    struct context *ctx = arg;
-    if (++ctx->barrier == ctx->size) {
-        ctx->barrier = 0;
-        return 1;
-    }
-    return 0;
-}
-
 static int dgetline (int fd, char *buf, int len)
 {
     int i = 0;
     while (i < len - 1) {
         if (read (fd, &buf[i], 1) <= 0)
             return -1;
-        if (buf[i] == '\n')
+        if (buf[i++] == '\n')
             break;
-        i++;
     }
-    if (buf[i] != '\n') {
+    if (buf[i - 1] != '\n') {
         errno = EPROTO;
         return -1;
     }
@@ -91,12 +78,17 @@ static int dputline (int fd, const char *buf)
     return count;
 }
 
+static int s_send_response (void *client, const char *buf)
+{
+    int *rfd = client;
+    return dputline (*rfd, buf);
+}
+
 static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
     struct context *ctx = arg;
-    int *rfd, fd = flux_fd_watcher_get_fd (w);
-    char *resp;
+    int fd = flux_fd_watcher_get_fd (w);
     int rc;
 
     if (dgetline (fd, ctx->buf, ctx->buflen) < 0) {
@@ -109,14 +101,6 @@ static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
         diag ("pmi_simple_server_request: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
-    }
-    while (pmi_simple_server_response (ctx->pmi, &resp, &rfd) == 0) {
-        if (dputline (*rfd, resp) < 0) {
-            diag ("dputline: %s", strerror (errno));
-            flux_reactor_stop_error (r);
-            return;
-        }
-        free (resp);
     }
     if (rc == 1) {
         close (fd);
@@ -156,7 +140,8 @@ int main (int argc, char *argv[])
     struct pmi_simple_ops ops = {
         .kvs_put = s_kvs_put,
         .kvs_get = s_kvs_get,
-        .barrier = s_barrier,
+        .barrier_enter = NULL,
+        .response_send = s_send_response,
     };
     pmi_t *cli;
     int spawned = -1, initialized = -1;
@@ -170,10 +155,10 @@ int main (int argc, char *argv[])
     if (!(ctx.kvs = zhash_new ()))
         oom ();
     ctx.size = 1;
-    ctx.barrier = 0;
     ok (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, ctx.fds) == 0,
         "socketpair returned client,server file descriptors");
-    ctx.pmi = pmi_simple_server_create (&ops, 42, ctx.size, "bleepgorp", &ctx);
+    ctx.pmi = pmi_simple_server_create (&ops, 42, ctx.size, ctx.size,
+                                        "bleepgorp", &ctx);
     ok (ctx.pmi != NULL,
         "created simple pmi server context");
     ctx.buflen = pmi_simple_server_get_maxrequest (ctx.pmi);

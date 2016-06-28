@@ -4,15 +4,15 @@
 struct pmi_simple_server;
 
 /* User-provided service implementation.
- * put/get return 0 on success, -1 on failure.
- * barrier returns 0 if incomplete, 1 if complete.
+ * All return 0 on success, -1 on failure.
  */
 struct pmi_simple_ops {
     int (*kvs_put)(void *arg, const char *kvsname,
                    const char *key, const char *val);
     int (*kvs_get)(void *arg, const char *kvsname,
                    const char *key, char *val, int len);
-    int (*barrier)(void *arg);
+    int (*barrier_enter)(void *arg);
+    int (*response_send)(void *client, const char *buf);
 };
 
 /* Create/destroy protocol engine.
@@ -20,6 +20,7 @@ struct pmi_simple_ops {
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     int appnum,
                                                     int universe_size,
+                                                    int local_procs,
                                                     const char *kvsname,
                                                     void *arg);
 void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
@@ -30,19 +31,15 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
 int pmi_simple_server_get_maxrequest (struct pmi_simple_server *pmi);
 
 /* Put null-terminated request with sending client reference to protocol
- * engine.  Caller should remove the trailing newline.
+ * engine.  The request should end with a newline.
  * Return 0 on success, -1 on failure.
  */
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf, void *client);
 
-/* Get next null-terminated response and destination client reference
- * from protocol engine.  Response is ready to send, trailing newline included.
- * Caller must free response.
- * Return 0 on success, -1 on failure (no more responses).
+/* Finalize a barrier.  Set rc to 0 for success, -1 for failure.
  */
-int pmi_simple_server_response (struct pmi_simple_server *pmi,
-                                char **buf, void *client);
+int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc);
 
 #endif /* ! _FLUX_CORE_PMI_SIMPLE_SERVER_H */
 
