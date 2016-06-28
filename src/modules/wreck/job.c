@@ -189,33 +189,6 @@ out:
     return (rc);
 }
 
-static int wait_for_lwj_watch_init (flux_t h, int64_t id)
-{
-    int rc;
-    const char *json_str;
-    json_object *rpc_o;
-    flux_rpc_t *rpc;
-
-    rpc_o = Jnew ();
-    Jadd_str (rpc_o, "key", "lwj.next-id");
-    Jadd_int64 (rpc_o, "val", id);
-
-    rpc = flux_rpc (h, "sim_sched.lwj-watch",
-                    json_object_to_json_string (rpc_o),
-                    FLUX_NODEID_ANY, 0);
-    json_object_put (rpc_o);
-
-    rc = flux_rpc_get (rpc, NULL, &json_str);
-    if (rc >= 0) {
-        json_object *rpc_resp = json_tokener_parse (json_str);
-        if (rpc_resp) {
-	        Jget_int (rpc_resp, "rc", &rc);
-	        json_object_put (rpc_resp);
-        }
-    }
-    return rc;
-}
-
 static bool ping_sched (flux_t h)
 {
     bool retval = false;
@@ -272,23 +245,12 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
                  && sched_loaded (h))) {
         json_object *jobinfo = NULL;
         int64_t id;
-        bool should_workaround = false;
         char *state;
 
         if ((id = next_jobid (h)) < 0) {
             if (flux_respond (h, msg, errno, NULL) < 0)
                 flux_log_error (h, "job_request: flux_respond");
             goto out;
-        }
-
-        //"Fix" for Race Condition
-        if (!Jget_bool (o, "race_workaround", &should_workaround)) {
-            should_workaround = false;
-        } else if (should_workaround) {
-            if (wait_for_lwj_watch_init (h, id) < 0) {
-              flux_respond (h, msg, errno, NULL);
-              goto out;
-            }
         }
 
         if ( (kvs_job_new (h, id) < 0)
