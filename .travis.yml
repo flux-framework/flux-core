@@ -79,6 +79,9 @@ script:
  #  spurious timeouts.
  - export FLUX_TEST_SIZE_MAX=5
 
+ # Invoke MPI tests
+ - export TEST_MPI=t
+
  # Enable coverage for $CC-coverage build
  # We can't use distcheck here, it doesn't play well with coverage testing:
  - if test "$COVERAGE" = "t" ; then ARGS="--enable-code-coverage"; MAKECMDS="make && make check-code-coverage && lcov -l flux*-coverage.info"; fi

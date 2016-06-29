@@ -20,24 +20,29 @@ run_program() {
 	local timeout=$1
 	local ntasks=$2
 	local nnodes=$3
+        local opts=$4
 	shift 3
-	run_timeout $timeout flux wreckrun -l -o stdio-delay-commit \
+	run_timeout $timeout flux wreckrun -l -o $OPTS \
 		    -n${ntasks} -N${nnodes} $*
 }
 
-test_expect_success 'mpi hello world runs as a singleton' '
-	run_program 5 1 1 ${FLUX_BUILD_DIR}/t/mpi/hello
-'
+for OPTS in "stdio-delay-commit"; do
+  test_expect_success "mpi hello singleton with $OPTS" '
+	run_program 5 1 1 ${FLUX_BUILD_DIR}/t/mpi/hello >single.$OPTS
+  '
 
-test_expect_success 'mpi hello world runs on all ranks' '
+  test_expect_success "mpi hello all ranks with $OPTS" '
 	run_program 5 ${SIZE} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
-		| grep -q "There are ${SIZE} tasks"
-'
+		| tee allranks.$OPTS \
+		&& grep -q "There are ${SIZE} tasks" allranks.$OPTS
+  '
 
-test_expect_success 'mpi hello world runs oversubscribed' '
+  test_expect_success "mpi hello oversubscribed with $OPTS" '
 	NTASKS=$((${SIZE}*4)); \
 	run_program 5 ${NTASKS} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
-		| grep -q "There are ${NTASKS} tasks"
-'
+		| tee oversub.$OPTS \
+		&& grep -q "There are ${NTASKS} tasks" oversub.$OPTS
+  '
+done
 
 test_done

@@ -113,7 +113,13 @@ int zio_flux_attach (zio_t *z, flux_t h);
  */
 int zio_set_unbuffered (zio_t *zio);
 int zio_set_buffered (zio_t *zio, size_t bufsize);
-int zio_set_line_buffered (zio_t *zio);
+
+/*
+ *  Line buffer zio object, and send data (or invoke callback) for
+ *   every N [lines]. If lines == -1, then send as many lines as
+ *   are available (e.g. multiple lines may be received per callback)
+ */
+int zio_set_line_buffered (zio_t *zio, int lines);
 
 /*
  *  Enable zio debug output for this zio object. Optional
