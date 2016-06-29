@@ -1104,17 +1104,10 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
 int rexec_state_change (struct prog_ctx *ctx, const char *state)
 {
-    int rc;
     char *name;
-
-    if (strcmp (state, "running") == 0)
-        rc = asprintf (&name, "lwj.%lu.startup", ctx->id);
-    else
-        rc = asprintf (&name, "lwj.%lu.shutdown", ctx->id);
-    if (rc < 0) {
-        errno = ENOMEM;
-        wlog_fatal (ctx, 1, "rexec_state_change: asprintf: %s", flux_strerror (errno));
-    }
+    if (asprintf (&name, "lwj.%ju.%s", ctx->id, state) < 0)
+        wlog_fatal (ctx, 1, "rexec_state_change: asprintf: %s",
+                    flux_strerror (errno));
 
     /* Wait for all wrexecds to finish and commit */
     if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
@@ -1985,7 +1978,8 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
     }
 
     if (kvs_get_string (ctx->flux, kvskey, &s) < 0) {
-        wlog_err (ctx, "pmi_kvs_get: kvs_get_string: %s", strerror (errno));
+        wlog_err (ctx, "pmi_kvs_get: kvs_get_string(%s): %s",
+                  kvskey, strerror (errno));
         free (kvskey);
         return (-1);
     }
