@@ -68,6 +68,21 @@ test_expect_success 'pmi: wreck sets FLUX_LOCAL_RANKS single task per node' '
 	test_cmp expected_clique2 output_clique2
 '
 
+test_expect_success 'pmi: wreck preputs PMI_process_mapping into kvs' '
+	cat <<-EOF >print-pmi-map.sh &&
+	#!/bin/sh
+        if test \${FLUX_TASK_RANK} -eq 0; then
+	  flux kvs get lwj.\${FLUX_JOB_ID}.pmi.PMI_process_mapping
+        fi
+	EOF
+	chmod +x print-pmi-map.sh &&
+	run_timeout 5 flux wreckrun -l -N4 -n4 ./print-pmi-map.sh >output_map &&
+	cat >expected_map <<-EOF &&
+	0: (vector,(0,4,1))
+	EOF
+	test_cmp expected_map output_map
+'
+
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
 	run_program 10 ${SIZE} ${SIZE} \
 	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
