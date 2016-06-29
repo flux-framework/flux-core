@@ -65,6 +65,7 @@ dist_wreckscripts_SCRIPTS = \
         lua.d/output.lua \
         lua.d/input.lua \
 	lua.d/mvapich.lua \
+	lua.d/pmi-mapping.lua \
 	lua.d/intel_mpi.lua
    
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
