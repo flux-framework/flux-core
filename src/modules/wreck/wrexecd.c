@@ -86,6 +86,7 @@ struct prog_ctx {
     flux_t   flux;
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
+    int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
 
@@ -662,6 +663,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     if (ctx->pmi)
         pmi_simple_server_destroy (ctx->pmi);
 
+    free (ctx->cores_per_node);
+
     free (ctx);
 }
 
@@ -746,13 +749,18 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
     return (rc < 0 ? -1 : ncores);
 }
 
-/*
- *  Get total number of nodes in this job from lwj.%d.rank dir
- */
-int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
+static int *cores_per_node_create (struct prog_ctx *ctx, int *nodeids, int n)
+{
+    int i;
+    int * cores_per_node = xzmalloc (sizeof (int) * n);
+    for (i = 0; i < n; i++)
+        cores_per_node [i] = cores_on_node (ctx, nodeids [i]);
+    return (cores_per_node);
+}
+
+static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
 {
     int n = 0;
-    int j;
     kvsdir_t *rank = NULL;
     kvsitr_t *i;
     const char *key;
@@ -760,18 +768,13 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     uint32_t size;
 
     if (flux_get_size (ctx->flux, &size) < 0)
-        return (-1);
-    nodeids = malloc (size * sizeof (int));
-    if (nodeids == NULL)
-        return (-1);
+        return (NULL);
+    nodeids = xzmalloc (size * sizeof (int));
 
-    if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0) {
-        wlog_err (ctx, "get_dir (%s.rank) failed: %s",
-                 kvsdir_key (ctx->kvs),
-                 flux_strerror (errno));
-        ctx->nnodes = size;
-        ctx->nodeid = ctx->noderank;
-    }
+    if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0)
+        wlog_fatal (ctx, 1, "get_dir (%s.rank) failed: %s",
+                    kvsdir_key (ctx->kvs),
+                    flux_strerror (errno));
 
     i = kvsitr_create (rank);
     while ((key = kvsitr_next (i))) {
@@ -781,17 +784,30 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     kvsitr_destroy (i);
     kvsdir_destroy (rank);
     ctx->nnodes = n;
-
     qsort (nodeids, n, sizeof (int), &cmp_int);
-    for (j = 0; j < n; j++) {
-        int ncores;
-        if (nodeids[j] == ctx->noderank) {
-            ctx->nodeid = j;
+
+    *lenp = n;
+    return (nodeids);
+}
+
+/*
+ *  Get total number of nodes in this job from lwj.%d.rank dir
+ */
+int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
+{
+    int i, n = 0;
+    int * nodeids = nodeid_map_create (ctx, &n);
+    if (nodeids == NULL)
+        wlog_fatal (ctx, 1, "Failed to create nodeid map");
+
+    ctx->cores_per_node = cores_per_node_create (ctx, nodeids, n);
+
+    for (i = 0; i < n; i++) {
+        if (nodeids[i] == ctx->noderank) {
+            ctx->nodeid = i;
             break;
         }
-        if ((ncores = cores_on_node (ctx, nodeids[j])) < 0)
-            wlog_fatal (ctx, 1, "Failed to get ncores for node%d", nodeids[j]);
-        ctx->globalbasis += ncores;
+        ctx->globalbasis += ctx->cores_per_node [i];
     }
     free (nodeids);
     wlog_debug (ctx, "lwj.%ld: node%d: basis=%d",
