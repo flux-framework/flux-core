@@ -26,7 +26,7 @@ run_program() {
 		    -n${ntasks} -N${nnodes} $*
 }
 
-for OPTS in "stdio-delay-commit" "stdio-delay-commit,no-pmi-server"; do
+for OPTS in "stdio-delay-commit"; do
   test_expect_success "mpi hello singleton with $OPTS" '
 	run_program 5 1 1 ${FLUX_BUILD_DIR}/t/mpi/hello >single.$OPTS
   '
