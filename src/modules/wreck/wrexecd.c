@@ -1499,6 +1499,20 @@ static int l_wreck_log_error (lua_State *L)
     return wreck_log_error (L, 0);
 }
 
+static int l_wreck_cores_per_node (struct prog_ctx *ctx, lua_State *L)
+{
+    int i;
+    int t;
+    lua_newtable (L);
+    t = lua_gettop (L);
+    for (i = 0; i < ctx->nnodes; i++) {
+        lua_pushnumber (L, i);
+        lua_pushnumber (L, ctx->cores_per_node [i]);
+        lua_settable (L, t);
+    }
+    return (1);
+}
+
 static int l_wreck_index (lua_State *L)
 {
     struct task_info *t;
@@ -1613,6 +1627,12 @@ static int l_wreck_index (lua_State *L)
         lua_pushcfunction (L, l_wreck_log_error);
         return (1);
     }
+    if (strcmp (key, "nnodes") == 0) {
+        lua_pushnumber (L, ctx->nnodes);
+        return (1);
+    }
+    if (strcmp (key, "cores_per_node") == 0)
+        return (l_wreck_cores_per_node (ctx, L));
     return (0);
 }
 
