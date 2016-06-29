@@ -1724,12 +1724,9 @@ int rexecd_init (struct prog_ctx *ctx)
         /*  Only update job state and print initialization error message
          *   on rank 0.
          */
-        if (ctx->nodeid == 0) {
-            if (update_job_state (ctx, "failed") < 0)
-                wlog_err (ctx, "update_job_state failed!");
-            else
-                wlog_err (ctx, "Error in initialization, terminating job");
-        }
+        if (rexec_state_change (ctx, "failed") < 0)
+            wlog_err (ctx, "failed to update job state!");
+        wlog_err (ctx, "Error in initialization, terminating job");
         ctx->errnum = errnum;
     }
     free (name);
@@ -2137,8 +2134,8 @@ int main (int ac, char **av)
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
 
-    if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
-        wlog_fatal (ctx, 1, "update_job_state");
+    if (rexec_state_change (ctx, "starting") < 0)
+        wlog_fatal (ctx, 1, "rexec_state_change");
 
     if ((parent_fd = optparse_get_int (p, "parent-fd", -1)) >= 0)
         prog_ctx_signal_parent (parent_fd);
