@@ -1093,12 +1093,6 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     free (key);
     json_object_put (to);
 
-    if (kvs_commit (ctx->flux) < 0)
-        return (-1);
-
-    /* Also emit event to avoid racy kvs_watch for clients */
-    send_job_state_event (ctx, state);
-
     return (0);
 }
 
@@ -1109,13 +1103,17 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         wlog_fatal (ctx, 1, "rexec_state_change: asprintf: %s",
                     flux_strerror (errno));
 
+    /* Rank 0 writes new job state */
+    if ((ctx->nodeid == 0) && update_job_state (ctx, state) < 0)
+        wlog_fatal (ctx, 1, "update_job_state");
+
     /* Wait for all wrexecds to finish and commit */
     if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
         wlog_fatal (ctx, 1, "kvs_fence");
 
-    /* Rank 0 updates job state */
-    if ((ctx->nodeid == 0) && update_job_state (ctx, state) < 0)
-        wlog_fatal (ctx, 1, "update_job_state");
+    /* Also emit event to avoid racy kvs_watch for clients */
+    if (ctx->nodeid == 0)
+        send_job_state_event (ctx, state);
 
     free (name);
     return (0);
