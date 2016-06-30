@@ -63,7 +63,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
-#include "src/common/libpmi-client/pmi-client.h"
+#include "src/common/libpmi/client.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
 

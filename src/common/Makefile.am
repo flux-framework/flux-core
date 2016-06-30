@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev libminilzo libpmi-client libpmi \
+SUBDIRS = libtap libev libminilzo libpmi \
 	  liblsd libutil libflux libsubprocess libcompat liboptparse
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
@@ -14,7 +14,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
-	$(builddir)/libpmi-client/libpmi-client.la \
+	$(builddir)/libpmi/libpmi.la \
 	$(builddir)/libpmi/libpmi-simple.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \

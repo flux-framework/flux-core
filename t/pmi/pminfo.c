@@ -9,7 +9,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libpmi-client/pmi-client.h"
+#include "src/common/libpmi/client.h"
 
 #define OPTIONS "l:"
 static const struct option longopts[] = {

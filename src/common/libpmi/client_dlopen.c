@@ -31,8 +31,8 @@
 #include <sys/types.h>
 #include <dlfcn.h>
 
-#include "pmi-client.h"
-#include "pmi-impl.h"
+#include "client.h"
+#include "client_impl.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
