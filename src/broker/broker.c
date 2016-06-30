@@ -1079,7 +1079,7 @@ static int boot_pmi (ctx_t *ctx)
     int *clique_ranks = NULL;
     char ipaddr[HOST_NAME_MAX + 1];
     const char *child_uri, *relay_uri;
-    int id_len, kvsname_len, key_len, val_len;
+    int kvsname_len, key_len, val_len;
     char *id = NULL;
     char *kvsname = NULL;
     char *key = NULL;
@@ -1118,16 +1118,7 @@ static int boot_pmi (ctx_t *ctx)
     /* Get id string.
      */
     if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
-        e = pmi_get_id_length_max (pmi, &id_len);
-        if (e == PMI_SUCCESS) {
-            id = xzmalloc (id_len);
-            if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
-                log_msg ("pmi_get_rank: %s", pmi_strerror (e));
-                goto done;
-            }
-        } else { /* No pmi_get_id() available? */
-            id = xasprintf ("%d", appnum);
-        }
+        id = xasprintf ("%d", appnum);
         if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
