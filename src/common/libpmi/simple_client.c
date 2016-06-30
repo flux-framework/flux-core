@@ -35,9 +35,7 @@
 
 #include "simple_client.h"
 #include "dgetline.h"
-
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
+#include "keyval.h"
 
 #define BUFSIZE 1024
 
@@ -47,34 +45,47 @@ struct pmi_simple_client {
     int size;
     int spawned;
     int initialized;
-    int kvsname_max;
-    int keylen_max;
-    int vallen_max;
+    unsigned int kvsname_max;
+    unsigned int keylen_max;
+    unsigned int vallen_max;
     char buf[BUFSIZE];
 };
 
 int pmi_simple_client_init (struct pmi_simple_client *pmi, int *spawned)
 {
     int result = PMI_FAIL;
-    int rc, vers, subvers;
+    unsigned int vers, subvers;
+    int rc;
 
     if (dprintf (pmi->fd, "cmd=init pmi_version=1 pmi_subversion=1\n") < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (pmi->buf,
-                "cmd=response_to_init pmi_version=%d pmi_subversion=%d rc=%d",
-                &vers, &subvers, &rc) != 3)
+    if (keyval_parse_isword (pmi->buf, "cmd", "response_to_init") < 0)
         goto done;
-    if (vers != 1 || subvers != 1 || rc != 0)
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
         goto done;
+    }
+    if (keyval_parse_uint (pmi->buf, "pmi_version", &vers) < 0
+            || keyval_parse_uint (pmi->buf, "pmi_subversion", &subvers) < 0)
+        goto done;
+    if (vers != 1 || subvers != 1)
+        goto done;
+
     if (dprintf (pmi->fd, "cmd=get_maxes\n") < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (pmi->buf,
-                "cmd=maxes kvsname_max=%d keylen_max=%d vallen_max=%d",
-                &pmi->kvsname_max, &pmi->keylen_max, &pmi->vallen_max) != 3)
+    if (keyval_parse_isword (pmi->buf, "cmd", "maxes") < 0)
+        goto done;
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
+        goto done;
+    }
+    if (keyval_parse_uint (pmi->buf, "kvsname_max", &pmi->kvsname_max) < 0
+            || keyval_parse_uint (pmi->buf, "keylen_max", &pmi->keylen_max) < 0
+            || keyval_parse_uint (pmi->buf, "vallen_max", &pmi->vallen_max) < 0)
         goto done;
     pmi->initialized = 1;
     if (spawned)
@@ -94,13 +105,18 @@ int pmi_simple_client_initialized (struct pmi_simple_client *pmi,
 int pmi_simple_client_finalize (struct pmi_simple_client *pmi)
 {
     int result = PMI_FAIL;
+    int rc;
 
     if (dprintf (pmi->fd, "cmd=finalize\n") < 0)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (strcmp (pmi->buf, "cmd=finalize_ack") != 0)
+    if (keyval_parse_isword (pmi->buf, "cmd", "finalize_ack") < 0)
         goto done;
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
+        goto done;
+    }
     result = PMI_SUCCESS;
 done:
     return result;
@@ -125,7 +141,7 @@ int pmi_simple_client_get_rank (struct pmi_simple_client *pmi, int *rank)
 int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum)
 {
     int result = PMI_FAIL;
-    int num;
+    int rc;
 
     if (!pmi->initialized)
         goto done;
@@ -133,9 +149,14 @@ int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (pmi->buf, "cmd=appnum appnum=%d", &num) != 1)
+    if (keyval_parse_isword (pmi->buf, "cmd", "appnum") < 0)
         goto done;
-    *appnum = num;
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
+        goto done;
+    }
+    if (keyval_parse_int (pmi->buf, "appnum", appnum) < 0)
+        goto done;
     result = PMI_SUCCESS;
 done:
     return result;
@@ -145,7 +166,7 @@ int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
                                          int *universe_size)
 {
     int result = PMI_FAIL;
-    int size;
+    int rc;
 
     if (!pmi->initialized)
         goto done;
@@ -153,9 +174,14 @@ int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (pmi->buf, "cmd=universe_size size=%d", &size) != 1)
+    if (keyval_parse_isword (pmi->buf, "cmd", "universe_size") < 0)
         goto done;
-    *universe_size = size;
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
+        goto done;
+    }
+    if (keyval_parse_int (pmi->buf, "size", universe_size) < 0)
+        goto done;
     result = PMI_SUCCESS;
 done:
     return result;
@@ -182,6 +208,7 @@ int pmi_simple_client_lookup_name (struct pmi_simple_client *pmi,
 int pmi_simple_client_barrier (struct pmi_simple_client *pmi)
 {
     int result = PMI_FAIL;
+    int rc;
 
     if (!pmi->initialized)
         goto done;
@@ -189,8 +216,12 @@ int pmi_simple_client_barrier (struct pmi_simple_client *pmi)
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (strcmp (pmi->buf, "cmd=barrier_out") != 0)
+    if (keyval_parse_isword (pmi->buf, "cmd", "barrier_out") < 0)
         goto done;
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
+        goto done;
+    }
     result = PMI_SUCCESS;
 done:
     return result;
@@ -207,8 +238,8 @@ int pmi_simple_client_abort (struct pmi_simple_client *pmi,
 int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
                                        char *kvsname, int length)
 {
-    char val[BUFSIZE + 1];
     int result = PMI_FAIL;
+    int rc;
 
     if (!pmi->initialized)
         goto done;
@@ -216,11 +247,14 @@ int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (pmi->buf, "cmd=my_kvsname kvsname=%" S(BUFSIZE) "s", val) != 1)
+    if (keyval_parse_isword (pmi->buf, "cmd", "my_kvsname") < 0)
         goto done;
-    if (strlen (val) >= length)
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
         goto done;
-    strcpy (kvsname, val);
+    }
+    if (keyval_parse_word (pmi->buf, "kvsname", kvsname, length) < 0)
+        goto done;
     result = PMI_SUCCESS;
 done:
     return result;
@@ -258,6 +292,7 @@ int pmi_simple_client_kvs_put (struct pmi_simple_client *pmi,
                                const char *value)
 {
     int result = PMI_FAIL;
+    int rc;
 
     if (!pmi->initialized)
         goto done;
@@ -266,8 +301,12 @@ int pmi_simple_client_kvs_put (struct pmi_simple_client *pmi,
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (strcmp (pmi->buf, "cmd=put_result rc=0 msg=success") != 0)
+    if (keyval_parse_isword (pmi->buf, "cmd", "put_result") < 0)
         goto done;
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
+        goto done;
+    }
     result = PMI_SUCCESS;
 done:
     return result;
@@ -283,8 +322,8 @@ int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
                                const char *kvsname,
                                const char *key, char *value, int len)
 {
-    char val[BUFSIZE + 1];
     int result = PMI_FAIL;
+    int rc;
 
     if (!pmi->initialized)
         goto done;
@@ -292,12 +331,14 @@ int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
         goto done;
     if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (pmi->buf, "cmd=get_result rc=0 msg=success value=%"
-                                                    S(BUFSIZE) "s", val) != 1)
+    if (keyval_parse_isword (pmi->buf, "cmd", "get_result") < 0)
         goto done;
-    if (strlen (val) >= len)
+    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+        result = rc;
         goto done;
-    strcpy (value, val);
+    }
+    if (keyval_parse_string (pmi->buf, "value", value, len) < 0)
+        goto done;
     result = PMI_SUCCESS;
 done:
     return result;
@@ -328,9 +369,11 @@ void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
 
 struct pmi_simple_client *pmi_simple_client_create (void)
 {
-    struct pmi_simple_client *pmi = xzmalloc (sizeof (*pmi));
+    struct pmi_simple_client *pmi = calloc (1, sizeof (*pmi));
     const char *s;
 
+    if (!pmi)
+        return NULL;
     if (!(s = getenv ("PMI_FD")))
         goto error;
     pmi->fd = strtol (s, NULL, 10);
