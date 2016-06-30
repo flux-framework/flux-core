@@ -35,26 +35,21 @@
 #include <czmq.h>
 
 #include "simple_server.h"
+#include "keyval.h"
+#include "pmi.h"
 
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
-
-/* N.B. These values cannot be numeric expressions as they are incorporated
- * into sscanf conversion specifiers with preprocessor trick, hence these
- * definitions may seem backwards.
- */
-#define KVS_KEY_MAX_SCAN  63
-#define KVS_VAL_MAX_SCAN  511
-#define KVS_NAME_MAX_SCAN 63
-
-#define KVS_KEY_MAX     (KVS_KEY_MAX_SCAN+1)
-#define KVS_VAL_MAX     (KVS_VAL_MAX_SCAN+1)
-#define KVS_NAME_MAX    (KVS_NAME_MAX_SCAN+1)
+#define KVS_KEY_MAX         64
+#define KVS_VAL_MAX         512
+#define KVS_NAME_MAX        64
 
 #define MAX_PROTO_OVERHEAD  64
 
 #define MAX_PROTO_LINE \
     (KVS_KEY_MAX + KVS_VAL_MAX + KVS_NAME_MAX + MAX_PROTO_OVERHEAD)
+
+struct client {
+    zlist_t *mcmd;
+};
 
 struct pmi_simple_server {
     void *arg;
@@ -64,6 +59,7 @@ struct pmi_simple_server {
     int universe_size;
     int local_procs;
     zlist_t *barrier;
+    zhash_t *clients;
     int debug;
 };
 
@@ -74,20 +70,35 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     const char *kvsname,
                                                     void *arg)
 {
-    struct pmi_simple_server *pmi = xzmalloc (sizeof (*pmi));
+    struct pmi_simple_server *pmi = calloc (1, sizeof (*pmi));
     const char *s;
+    int saved_errno;
 
+    if (!pmi) {
+        errno = ENOMEM;
+        goto error;
+    }
     pmi->ops = *ops;
     pmi->arg = arg;
     pmi->appnum = appnum;
-    pmi->kvsname = xstrdup (kvsname);
+    if (!(pmi->kvsname = strdup (kvsname))) {
+        errno = ENOMEM;
+        goto error;
+    }
     pmi->universe_size = universe_size;
     pmi->local_procs = local_procs;
     if ((s = getenv ("PMI_DEBUG")))
         pmi->debug = strtoul (s, NULL, 10);
-    if (!(pmi->barrier = zlist_new ()))
-        oom ();
+    if (!(pmi->barrier = zlist_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     return pmi;
+error:
+    saved_errno = errno;
+    pmi_simple_server_destroy (pmi);
+    errno = saved_errno;
+    return NULL;
 }
 
 void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
@@ -96,6 +107,7 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
         if (pmi->kvsname)
             free (pmi->kvsname);
         zlist_destroy (&pmi->barrier);
+        zhash_destroy (&pmi->clients);
         free (pmi);
     }
 }
@@ -105,10 +117,122 @@ int pmi_simple_server_get_maxrequest (struct pmi_simple_server *pmi)
     return (MAX_PROTO_LINE);
 }
 
+static void client_destroy (void *arg)
+{
+    struct client *c = arg;
+
+    if (c) {
+        if (c->mcmd) {
+            char *cpy;
+            while ((cpy = zlist_pop (c->mcmd)))
+                free (cpy);
+            zlist_destroy (&c->mcmd);
+        }
+        free (c);
+    }
+}
+
+static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
+                         struct client *c)
+{
+    char resp[MAX_PROTO_LINE+1];
+    char *buf = zlist_first (c->mcmd);
+    int rc = 0;
+
+    resp[0] = '\0';
+    if (keyval_parse_isword (buf, "mcmd", "spawn") == 0) {
+        /* FIXME - spawn not implemented */
+        snprintf (resp, sizeof (resp), "cmd=spawn_result rc=-1\n");
+    }
+    /* unknown mcmd */
+    else {
+        errno = EPROTO;
+        rc = -1;
+    }
+    if (resp[0] != '\0') {
+        if (pmi->debug)
+            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        if (pmi->ops.response_send (client, resp) < 0)
+            rc = -1;
+    }
+    return rc;
+}
+
+static int mcmd_begin (struct pmi_simple_server *pmi, void *client,
+                       const char *buf)
+{
+    struct client *c;
+    char ptrkey[2*sizeof (void *) + 1];
+    char *cpy = NULL;
+
+    if (!pmi->clients && !(pmi->clients = zhash_new ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    snprintf (ptrkey, sizeof (ptrkey), "%p", client);
+    if ((c = zhash_lookup (pmi->clients, ptrkey)) != NULL)
+        return -1; /* in progress */
+    if (!(c = calloc (1, sizeof (*c)))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (!(c->mcmd = zlist_new ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_update (pmi->clients, ptrkey, c);
+    zhash_freefn (pmi->clients, ptrkey, client_destroy);
+    if (!(cpy = strdup (buf)) || zlist_append (c->mcmd, cpy) < 0) {
+        if (cpy)
+            free (cpy);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+static int mcmd_inprogress (struct pmi_simple_server *pmi, void *client)
+{
+    char ptrkey[2*sizeof (void *) + 1];
+
+    snprintf (ptrkey, sizeof (ptrkey), "%p", client);
+    if (!pmi->clients || !zhash_lookup (pmi->clients, ptrkey))
+        return 0;
+    return 1;
+}
+
+static int mcmd_append (struct pmi_simple_server *pmi, void *client,
+                        const char *buf)
+{
+    struct client *c;
+    char ptrkey[2*sizeof (void *) + 1];
+    char *cpy = NULL;
+    int rc = 0;
+
+    snprintf (ptrkey, sizeof (ptrkey), "%p", client);
+    if (!pmi->clients || !(c = zhash_lookup (pmi->clients, ptrkey))) {
+        errno = EPROTO;
+        return -1; /* not in progress */
+    }
+    if (!(cpy = strdup (buf)) || zlist_append (c->mcmd, cpy) < 0) {
+        if (cpy)
+            free (cpy);
+        errno = ENOMEM;
+        return -1;
+    }
+    if (!strcmp (buf, "endcmd\n")) {
+        rc = mcmd_execute (pmi, client, c);
+        zhash_delete (pmi->clients, ptrkey);
+    }
+    return rc;
+}
+
 static int barrier_enter (struct pmi_simple_server *pmi, void *client)
 {
-    if (zlist_append (pmi->barrier, client) < 0)
-        oom ();
+    if (zlist_append (pmi->barrier, client) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
     return 0;
 }
 
@@ -119,17 +243,7 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
     int ret = 0;
 
     while ((client = zlist_pop (pmi->barrier))) {
-        /* XXX the protocol doesn't allow an error to be returned
-         * for the barrier operation, so we return "barrier_failed"
-         * instead of "barrier_out", which should trigger a protocol error.
-         * We throw our rc code in there without expectation that it's
-         * going anywhere useful, unless client prints the unexpected
-         * message it received.
-         */
-        if (rc != 0)
-            snprintf (resp, sizeof (resp), "cmd=barrier_failed rc=%d\n", rc);
-        else
-            snprintf (resp, sizeof (resp), "cmd=barrier_out\n");
+        snprintf (resp, sizeof (resp), "cmd=barrier_out rc=%d\n", rc);
         if (pmi->debug)
             fprintf (stderr, "S: (client=%p) %s", client, resp);
         if (pmi->ops.response_send (client, resp) < 0)
@@ -138,79 +252,180 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
     return ret;
 }
 
-#define S_(x) #x
-#define S(x) S_(x)
-
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf, void *client)
 {
-    char key[KVS_KEY_MAX];
-    char val[KVS_VAL_MAX];
-    char name[KVS_NAME_MAX];
     char resp[MAX_PROTO_LINE+1];
-    int send_response = 1;
     int rc = 0;
 
+    resp[0] = '\0';
     if (pmi->debug)
         fprintf (stderr, "C: (client=%p) %s", client, buf);
 
-    if (!strcmp (buf, "cmd=init pmi_version=1 pmi_subversion=1\n")) {
-        snprintf (resp, sizeof (resp),
-                  "cmd=response_to_init pmi_version=1 pmi_subversion=1 rc=0\n");
-    } else if (!strcmp (buf, "cmd=get_maxes\n")) {
-        snprintf (resp, sizeof (resp),
-                  "cmd=maxes kvsname_max=%d keylen_max=%d vallen_max=%d\n",
+    /* continue in-progress mcmd */
+    if (mcmd_inprogress (pmi, client)) {
+        rc = mcmd_append (pmi, client, buf);
+        goto done;
+    }
+
+    /* init */
+    if (keyval_parse_isword (buf, "cmd", "init") == 0) {
+        unsigned int pmi_version, pmi_subversion;
+        if (keyval_parse_uint (buf, "pmi_version", &pmi_version) < 0)
+            goto proto;
+        if (keyval_parse_uint (buf, "pmi_subversion", &pmi_subversion) < 0)
+            goto proto;
+        if (pmi_version < 1 || (pmi_version == 1 && pmi_subversion < 1))
+            snprintf (resp, sizeof (resp), "cmd=response_to_init rc=-1\n");
+        else
+            snprintf (resp, sizeof (resp), "cmd=response_to_init rc=0 "
+                      "pmi_version=1 pmi_subversion=1\n");
+    }
+    /* maxes */
+    else if (keyval_parse_isword (buf, "cmd", "get_maxes") == 0) {
+        snprintf (resp, sizeof (resp), "cmd=maxes rc=0 "
+                  "kvsname_max=%d keylen_max=%d vallen_max=%d\n",
                   KVS_NAME_MAX, KVS_KEY_MAX, KVS_VAL_MAX);
-    } else if (!strcmp (buf, "cmd=get_appnum\n")) {
-        snprintf (resp, sizeof (resp), "cmd=appnum appnum=%d\n", pmi->appnum);
-    } else if (!strcmp (buf, "cmd=get_my_kvsname\n")) {
-        snprintf (resp, sizeof (resp),
-                  "cmd=my_kvsname kvsname=%s\n", pmi->kvsname);
-    } else if (!strcmp (buf, "cmd=get_universe_size\n")) {
-        snprintf (resp, sizeof (resp), "cmd=universe_size size=%d\n",
+    }
+    /* abort */
+    else if (keyval_parse_isword (buf, "cmd", "abort") == 0) {
+        /* FIXME - terminate program */
+        snprintf (resp, sizeof (resp), "\n");
+    }
+    /* finalize */
+    else if (keyval_parse_isword (buf, "cmd", "finalize") == 0) {
+        snprintf (resp, sizeof (resp), "cmd=finalize_ack rc=0\n");
+        rc = 1; /* Indicates fd should be closed */
+    }
+    /* universe */
+    else if (keyval_parse_isword (buf, "cmd", "get_universe_size") == 0) {
+        snprintf (resp, sizeof (resp), "cmd=universe_size rc=0 size=%d\n",
                   pmi->universe_size);
-    } else if (sscanf (buf, "cmd=put"
-                            " kvsname=%" S(KVS_NAME_MAX_SCAN) "s"
-                            " key=%" S(KVS_KEY_MAX_SCAN) "s"
-                            " value=%" S(KVS_VAL_MAX_SCAN) "s",
-                            name, key, val) == 3) {
-        int result = pmi->ops.kvs_put (pmi->arg, name, key, val);
-        snprintf (resp, sizeof (resp), "cmd=put_result rc=%d msg=%s\n",
-                  result, result == 0 ? "success" : "failure");
-    } else if (sscanf (buf, "cmd=get"
-                            " kvsname=%" S(KVS_NAME_MAX_SCAN) "s"
-                            " key=%" S(KVS_KEY_MAX_SCAN) "s",
-                            name, key) == 2) {
-        int result = pmi->ops.kvs_get (pmi->arg, name, key, val, KVS_VAL_MAX);
-        snprintf (resp, sizeof (resp),
-                  "cmd=get_result rc=%d msg=%s value=%s\n", result,
-                  result == 0 ? "success" : "failure",
-                  result == 0 ? val : "");
-    } else if (!strcmp (buf, "cmd=barrier_in\n")) {
-        barrier_enter (pmi, client);
-        if (zlist_size (pmi->barrier) == pmi->local_procs) {
-            if (pmi->ops.barrier_enter)
-                pmi->ops.barrier_enter (pmi->arg);
-            else
+    }
+    /* appnum */
+    else if (keyval_parse_isword (buf, "cmd", "get_appnum") == 0) {
+        snprintf (resp, sizeof (resp), "cmd=appnum rc=0 appnum=%d\n",
+                  pmi->appnum);
+    }
+    /* kvsname */
+    else if (keyval_parse_isword (buf, "cmd", "get_my_kvsname") == 0) {
+        snprintf (resp, sizeof (resp), "cmd=my_kvsname rc=0 kvsname=%s\n",
+                  pmi->kvsname);
+    }
+    /* put */
+    else if (keyval_parse_isword (buf, "cmd", "put") == 0) {
+        char name[KVS_NAME_MAX];
+        char key[KVS_KEY_MAX];
+        char val[KVS_VAL_MAX];
+        int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
+        if (result < 0) {
+            if (result == EKV_VAL_LEN) {
+                result = PMI_ERR_INVALID_LENGTH;
+                goto put_respond;
+            }
+            goto proto;
+        }
+        result = keyval_parse_word (buf, "key", key, sizeof (key));
+        if (result < 0) {
+            if (result == EKV_VAL_LEN) {
+                result = PMI_ERR_INVALID_KEY_LENGTH;
+                goto put_respond;
+            }
+            goto proto;
+        }
+        result = keyval_parse_string (buf, "value", val, sizeof (val));
+        if (result < 0) {
+            if (result == EKV_VAL_LEN) {
+                result = PMI_ERR_INVALID_VAL_LENGTH;
+                goto put_respond;
+            }
+            goto proto;
+        }
+        if (pmi->ops.kvs_put (pmi->arg, name, key, val) < 0)
+            result = PMI_ERR_INVALID_KEY;
+put_respond:
+        snprintf (resp, sizeof (resp), "cmd=put_result rc=%d\n", result);
+    }
+    /* get */
+    else if (keyval_parse_isword (buf, "cmd", "get") == 0) {
+        char name[KVS_NAME_MAX];
+        char key[KVS_KEY_MAX];
+        char val[KVS_VAL_MAX];
+        int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
+        if (result < 0) {
+            if (result == EKV_VAL_LEN) {
+                result = PMI_ERR_INVALID_LENGTH;
+                goto get_respond;
+            }
+            goto proto;
+        }
+        result = keyval_parse_word (buf, "key", key, sizeof (key));
+        if (result < 0) {
+            if (result == EKV_VAL_LEN) {
+                result = PMI_ERR_INVALID_KEY_LENGTH;
+                goto get_respond;
+            }
+            goto proto;
+        }
+        if (pmi->ops.kvs_get (pmi->arg, name, key, val, sizeof (val)) < 0)
+            result = PMI_ERR_INVALID_KEY;
+get_respond:
+        if (result == 0)
+            snprintf (resp, sizeof (resp), "cmd=get_result rc=0 value=%s\n",
+                      val);
+        else
+            snprintf (resp, sizeof (resp), "cmd=get_result rc=%d\n", result);
+    }
+    /* barrier */
+    else if (keyval_parse_isword (buf, "cmd", "barrier_in") == 0) {
+        if (barrier_enter (pmi, client) < 0)
+            rc = -1;
+        else if (zlist_size (pmi->barrier) == pmi->local_procs) {
+            if (pmi->ops.barrier_enter) {
+                if (pmi->ops.barrier_enter (pmi->arg) < 0)
+                    if (barrier_exit (pmi, PMI_FAIL) < 0)
+                        rc = -1;
+            } else
                 if (barrier_exit (pmi, 0) < 0)
                     rc = -1;
         }
-        send_response = 0;
-    } else if (!strcmp (buf, "cmd=finalize\n")) {
-        snprintf (resp, sizeof (resp), "cmd=finalize_ack\n");
-        rc = 1; /* Indicates fd should be closed */
-    } else {
-        errno = EPROTO;
-        rc = -1;
-        send_response = 0;
     }
-    if (send_response) {
+    /* publish */
+    else if (keyval_parse_isword (buf, "cmd", "publish_name") == 0) {
+        /* FIXME - not implemented */
+        snprintf (resp, sizeof (resp), "cmd=publish_result rc=-1 msg=%s\n",
+                  "command not implemented");
+    }
+    /* unpublish */
+    else if (keyval_parse_isword (buf, "cmd", "unpublish_name") == 0) {
+        /* FIXME - not implemented */
+        snprintf (resp, sizeof (resp), "cmd=unpublish_result rc=-1 msg=%s\n",
+                  "command not implemented");
+    }
+    /* lookup */
+    else if (keyval_parse_isword (buf, "cmd", "lookup_name") == 0) {
+        /* FIXME - not implemented */
+        snprintf (resp, sizeof (resp), "cmd=lookup_result rc=-1 msg=%s\n",
+                  "command not implemented");
+    }
+    /* spawn */
+    else if (keyval_parse_isword (buf, "mcmd", "spawn") == 0) {
+        rc = mcmd_begin (pmi, client, buf);
+    }
+    /* unknown command */
+    else
+        goto proto;
+    if (resp[0] != '\0') {
         if (pmi->debug)
             fprintf (stderr, "S: (client=%p) %s", client, resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
     }
+done:
     return rc;
+proto:
+    errno = EPROTO;
+    return -1;
 }
 
 int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc)
