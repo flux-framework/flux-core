@@ -1261,7 +1261,7 @@ static int l_iowatcher_add (lua_State *L)
             return lua_pusherror (L, "Invalid fd=%d", fd);
         fd = dup (fd);
         iow = l_flux_ref_create (L, f, 2, "iowatcher");
-        zio = zio_reader_create ("", fd, NULL, iow);
+        zio = zio_reader_create ("", fd, iow);
         iow->arg = (void *) zio;
         if (!zio)
             fprintf (stderr, "failed to create zio!\n");
