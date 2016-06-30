@@ -38,7 +38,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libpmi-server/simple.h"
+#include "src/common/libpmi/simple_server.h"
 #include "src/common/libsubprocess/subprocess.h"
 
 struct pmi_server {

@@ -34,7 +34,7 @@
 #include <sys/param.h>
 #include <czmq.h>
 
-#include "simple.h"
+#include "simple_server.h"
 
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"

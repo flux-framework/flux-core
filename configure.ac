@@ -176,7 +176,7 @@ AC_CONFIG_FILES( \
   src/common/libev/Makefile \
   src/common/libminilzo/Makefile \
   src/common/libpmi-client/Makefile \
-  src/common/libpmi-server/Makefile \
+  src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \

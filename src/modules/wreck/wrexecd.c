@@ -48,7 +48,7 @@
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libsubprocess/zio.h"
-#include "src/common/libpmi-server/simple.h"
+#include "src/common/libpmi/simple_server.h"
 
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/libkz/kz.h"

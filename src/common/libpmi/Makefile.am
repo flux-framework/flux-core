@@ -9,8 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
-noinst_LTLIBRARIES = libpmi-server.la
+noinst_LTLIBRARIES = libpmi-simple.la
 
-libpmi_server_la_SOURCES = \
-	simple.h \
-	simple.c
+libpmi_simple_la_SOURCES = \
+	simple_server.h \
+	simple_server.c

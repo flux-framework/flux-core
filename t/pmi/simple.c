@@ -6,7 +6,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi-client/pmi-client.h"
-#include "src/common/libpmi-server/simple.h"
+#include "src/common/libpmi/simple_server.h"
 #include "src/common/libflux/reactor.h"
 
 #include "src/common/libtap/tap.h"
