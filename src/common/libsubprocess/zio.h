@@ -15,14 +15,14 @@ typedef void (*zio_log_f)    (const char *buf);
  *   (depending on buffer setting), and sends json-encoded output to
  *    [dst] zeromq socket.
  */
-zio_t *zio_reader_create (const char *name, int src, void *dst, void *arg);
+zio_t *zio_reader_create (const char *name, int srcfd, void *arg);
 
 /*
  *  Create a zio reader which reads from an internal pipe and sends
  *   json-encoded output to a zmq socket. Use zio_dst_fd() to get the
  *   file descriptor for the write side of the pipe.
  */
-zio_t *zio_pipe_reader_create (const char *name, void *dst, void *arg);
+zio_t *zio_pipe_reader_create (const char *name, void *arg);
 
 /*
  *  Create a zio "writer" object, that buffers data via zio_write_* interface

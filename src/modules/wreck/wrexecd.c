@@ -488,7 +488,7 @@ static void task_pmi_setup (struct task_info *t)
         wlog_fatal (t->ctx, 1, "socketpair: %s", strerror (errno));
 
     /* ZIO object for reading pmi-simple server requests */
-    t->pmi_zio = zio_reader_create ("pmi", t->pmi_fds[0], NULL, (void *) t);
+    t->pmi_zio = zio_reader_create ("pmi", t->pmi_fds[0], (void *) t);
     if (t->pmi_zio == NULL)
         wlog_fatal (t->ctx, 1, "zio_reader_create: %s", strerror (errno));
 
@@ -516,11 +516,11 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->f = NULL;
     t->kvs = NULL;
 
-    t->zio [OUT] = zio_pipe_reader_create ("stdout", NULL, (void *) t);
+    t->zio [OUT] = zio_pipe_reader_create ("stdout", (void *) t);
     zio_set_send_cb (t->zio [OUT], io_cb);
     zio_set_raw_output (t->zio [OUT]);
 
-    t->zio [ERR] = zio_pipe_reader_create ("stderr", NULL, (void *) t);
+    t->zio [ERR] = zio_pipe_reader_create ("stderr", (void *) t);
     zio_set_send_cb (t->zio [ERR], io_cb);
     zio_set_raw_output (t->zio [ERR]);
 

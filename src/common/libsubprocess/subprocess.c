@@ -287,9 +287,9 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
 
     if (!(p->zio_in = zio_pipe_writer_create ("stdin", (void *) p)))
         goto error;
-    if (!(p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p)))
+    if (!(p->zio_out = zio_pipe_reader_create ("stdout", (void *) p)))
         goto error;
-    if (!(p->zio_err = zio_pipe_reader_create ("stderr", NULL, (void *) p)))
+    if (!(p->zio_err = zio_pipe_reader_create ("stderr", (void *) p)))
         goto error;
 
     zio_set_send_cb (p->zio_out, output_handler);

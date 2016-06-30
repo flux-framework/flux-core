@@ -69,7 +69,6 @@ struct zio_ctx {
                             "Writer" reads json and writes to fd             */
     int        srcfd;   /*  srcfd for ZIO "reader"                           */
     int        dstfd;   /*  dstfd for ZIO "writer"                           */
-    void *     dstsock; /*  ZMQ dst socket                                   */
     cbuf_t     buf;     /*  Buffer for I/O (if needed)                       */
     size_t     buffersize;
     int        lines;   /*  For line buffered, arg to cbuf_read_line()       */
@@ -438,12 +437,6 @@ static char *zio_json_str_create (zio_t *zio, void *data, size_t len)
     return zio_json_encode (data, len, eof);
 }
 
-static int zio_sendmsg (zio_t *zio, const char *s, int len)
-{
-    zio_debug (zio, "sendmsg: %s\n", s);
-    return (*zio->send) (zio, s, len, zio->arg);
-}
-
 static int zio_send (zio_t *zio, char *p, size_t len)
 {
     int rc = -1;
@@ -451,12 +444,15 @@ static int zio_send (zio_t *zio, char *p, size_t len)
 
     zio_debug (zio, "zio_send (len=%d)\n", len);
 
+    if (!zio->send)
+        return rc;
+
     if (!(zio->flags & ZIO_RAW_OUTPUT)) {
         if (!(json_str = zio_json_str_create (zio, p, len)))
             goto done;
         p = json_str;
     }
-    rc = zio_sendmsg (zio, p, len);
+    rc = (*zio->send) (zio, p, len, zio->arg);
     if (rc >= 0 && len == 0)
         zio->flags |= ZIO_EOF_SENT;
 done:
@@ -897,29 +893,17 @@ int zio_flux_attach (zio_t *zio, flux_t h)
     return zio_reactor_attach (zio, flux_get_reactor (h));
 }
 
-int zio_zmsg_send (zio_t *zio, const char *json_str, int len, void *arg)
-{
-    zio_debug (zio, "%s: send: %s\n", zio->name, json_str);
-    if (!zio->dstsock)
-        return (-1);
-    zmsg_t *zmsg = zmsg_new ();
-    zmsg_pushstr (zmsg, json_str);
-    zmsg_pushstr (zmsg, zio_name (zio));
-    return (zmsg_send (&zmsg, zio->dstsock));
-}
-
-zio_t *zio_reader_create (const char *name, int srcfd, void *dst, void *arg)
+zio_t *zio_reader_create (const char *name, int srcfd, void *arg)
 {
     zio_t *zio = zio_allocate (name, 1, arg);
 
     zio->srcfd = srcfd;
     fd_set_nonblocking (zio->srcfd);
-    zio->dstsock = dst;
-    zio->send = zio_zmsg_send;
+    zio->send = NULL;
     return (zio);
 }
 
-zio_t *zio_pipe_reader_create (const char *name, void *dst, void *arg)
+zio_t *zio_pipe_reader_create (const char *name, void *arg)
 {
     zio_t *zio;
     int pfds[2];
@@ -927,7 +911,7 @@ zio_t *zio_pipe_reader_create (const char *name, void *dst, void *arg)
     if (pipe (pfds) < 0)
         return (NULL);
 
-    if ((zio = zio_reader_create (name, pfds[0], dst, arg)) == NULL) {
+    if ((zio = zio_reader_create (name, pfds[0], arg)) == NULL) {
         close (pfds[0]);
         close (pfds[1]);
         return (NULL);

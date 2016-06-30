@@ -124,7 +124,7 @@ int main (int argc, char **argv)
 
     /* simple reader tests
      */
-    ok ((zio = zio_pipe_reader_create ("test1", NULL, &c)) != NULL,
+    ok ((zio = zio_pipe_reader_create ("test1", &c)) != NULL,
         "reader: zio_pipe_reader_create works");
     ok ((name = zio_name (zio)) != NULL && !strcmp (name, "test1"),
         "reader: zio_name returns correct name");
