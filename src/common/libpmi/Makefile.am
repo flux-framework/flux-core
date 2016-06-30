@@ -28,9 +28,11 @@ libpmi_la_SOURCES = \
 	dgetline.c \
 	dgetline.h
 
-TESTS = test_keyval.t
+TESTS = test_keyval.t \
+	test_simple.t
 
 test_ldadd = \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -51,4 +53,8 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_keyval_t_SOURCES = test/keyval.c
 test_keyval_t_CPPFLAGS = $(test_cppflags)
 test_keyval_t_LDADD = $(test_ldadd)
+
+test_simple_t_SOURCES = test/simple.c
+test_simple_t_CPPFLAGS = $(test_cppflags)
+test_simple_t_LDADD = $(test_ldadd) $(LIBDL)
 
