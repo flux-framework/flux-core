@@ -24,7 +24,9 @@ libpmi_la_SOURCES = \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
-	keyval.h
+	keyval.h \
+	dgetline.c \
+	dgetline.h
 
 TESTS = test_keyval.t
 

@@ -34,6 +34,7 @@
 #include <sys/param.h>
 
 #include "simple_client.h"
+#include "dgetline.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -51,20 +52,6 @@ struct pmi_simple_client {
     int vallen_max;
     char buf[BUFSIZE];
 };
-
-static int dgetline (int fd, char *buf, int len)
-{
-    int i = 0;
-    while (i < len - 1) {
-        if (read (fd, &buf[i], 1) <= 0)
-            return -1;
-        if (buf[i] == '\n')
-            break;
-        i++;
-    }
-    buf[i] = '\0';
-    return 0;
-}
 
 int pmi_simple_client_init (struct pmi_simple_client *pmi, int *spawned)
 {
