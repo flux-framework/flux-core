@@ -33,34 +33,24 @@
 #include <string.h>
 #include <sys/param.h>
 
-#include "client.h"
-#include "client_impl.h"
+#include "simple_client.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
 #define BUFSIZE 1024
 
-struct simple_impl {
+struct pmi_simple_client {
     int fd;
     int rank;
     int size;
+    int spawned;
     int initialized;
     int kvsname_max;
     int keylen_max;
     int vallen_max;
     char buf[BUFSIZE];
 };
-
-void destroy_simple (void *arg)
-{
-    struct simple_impl *impl = arg;
-    if (impl) {
-        if (impl->fd != -1)
-            (void)close (impl->fd);
-        free (impl);
-    }
-}
 
 static int dgetline (int fd, char *buf, int len)
 {
@@ -76,91 +66,87 @@ static int dgetline (int fd, char *buf, int len)
     return 0;
 }
 
-static int simple_init (void *impl, int *spawned)
+int pmi_simple_client_init (struct pmi_simple_client *pmi, int *spawned)
 {
-    struct simple_impl *s = impl;
     int result = PMI_FAIL;
     int rc, vers, subvers;
 
-    if (dprintf (s->fd, "cmd=init pmi_version=1 pmi_subversion=1\n") < 0)
+    if (dprintf (pmi->fd, "cmd=init pmi_version=1 pmi_subversion=1\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (s->buf,
+    if (sscanf (pmi->buf,
                 "cmd=response_to_init pmi_version=%d pmi_subversion=%d rc=%d",
                 &vers, &subvers, &rc) != 3)
         goto done;
     if (vers != 1 || subvers != 1 || rc != 0)
         goto done;
-    if (dprintf (s->fd, "cmd=get_maxes\n") < 0)
+    if (dprintf (pmi->fd, "cmd=get_maxes\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (s->buf, "cmd=maxes kvsname_max=%d keylen_max=%d vallen_max=%d",
-                &s->kvsname_max, &s->keylen_max, &s->vallen_max) != 3)
+    if (sscanf (pmi->buf,
+                "cmd=maxes kvsname_max=%d keylen_max=%d vallen_max=%d",
+                &pmi->kvsname_max, &pmi->keylen_max, &pmi->vallen_max) != 3)
         goto done;
-    s->initialized = 1;
+    pmi->initialized = 1;
     if (spawned)
-        *spawned = PMI_FALSE;
+        *spawned = pmi->spawned;
     result = PMI_SUCCESS;
 done:
     return result;
 }
 
-static int simple_initialized (void *impl, int *initialized)
+int pmi_simple_client_initialized (struct pmi_simple_client *pmi,
+                                   int *initialized)
 {
-    struct simple_impl *s = impl;
-    *initialized = s->initialized;
+    *initialized = pmi->initialized;
     return PMI_SUCCESS;
 }
 
-static int simple_finalize (void *impl)
+int pmi_simple_client_finalize (struct pmi_simple_client *pmi)
 {
-    struct simple_impl *s = impl;
     int result = PMI_FAIL;
 
-    if (dprintf (s->fd, "cmd=finalize\n") < 0)
+    if (dprintf (pmi->fd, "cmd=finalize\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (strcmp (s->buf, "cmd=finalize_ack") != 0)
+    if (strcmp (pmi->buf, "cmd=finalize_ack") != 0)
         goto done;
     result = PMI_SUCCESS;
 done:
     return result;
 }
 
-static int simple_get_size (void *impl, int *size)
+int pmi_simple_client_get_size (struct pmi_simple_client *pmi, int *size)
 {
-    struct simple_impl *s = impl;
-    if (!s->initialized)
+    if (!pmi->initialized)
         return PMI_FAIL;
-    *size = s->size;
+    *size = pmi->size;
     return PMI_SUCCESS;
 }
 
-static int simple_get_rank (void *impl, int *rank)
+int pmi_simple_client_get_rank (struct pmi_simple_client *pmi, int *rank)
 {
-    struct simple_impl *s = impl;
-    if (!s->initialized)
+    if (!pmi->initialized)
         return PMI_FAIL;
-    *rank = s->rank;
+    *rank = pmi->rank;
     return PMI_SUCCESS;
 }
 
-static int simple_get_appnum (void *impl, int *appnum)
+int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum)
 {
-    struct simple_impl *s = impl;
     int result = PMI_FAIL;
     int num;
 
-    if (!s->initialized)
+    if (!pmi->initialized)
         goto done;
-    if (dprintf (s->fd, "cmd=get_appnum\n") < 0)
+    if (dprintf (pmi->fd, "cmd=get_appnum\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (s->buf, "cmd=appnum appnum=%d", &num) != 1)
+    if (sscanf (pmi->buf, "cmd=appnum appnum=%d", &num) != 1)
         goto done;
     *appnum = num;
     result = PMI_SUCCESS;
@@ -168,19 +154,19 @@ done:
     return result;
 }
 
-static int simple_get_universe_size (void *impl, int *universe_size)
+int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
+                                         int *universe_size)
 {
-    struct simple_impl *s = impl;
     int result = PMI_FAIL;
     int size;
 
-    if (!s->initialized)
+    if (!pmi->initialized)
         goto done;
-    if (dprintf (s->fd, "cmd=get_universe_size\n") < 0)
+    if (dprintf (pmi->fd, "cmd=get_universe_size\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (s->buf, "cmd=universe_size size=%d", &size) != 1)
+    if (sscanf (pmi->buf, "cmd=universe_size size=%d", &size) != 1)
         goto done;
     *universe_size = size;
     result = PMI_SUCCESS;
@@ -188,64 +174,62 @@ done:
     return result;
 }
 
-static int simple_publish_name (void *impl,
-        const char *service_name, const char *port)
+int pmi_simple_client_publish_name (struct pmi_simple_client *pmi,
+                                    const char *service_name, const char *port)
 {
     return PMI_FAIL;
 }
 
-static int simple_unpublish_name (void *impl,
-        const char *service_name)
+int pmi_simple_client_unpublish_name (struct pmi_simple_client *pmi,
+                                      const char *service_name)
 {
     return PMI_FAIL;
 }
 
-static int simple_lookup_name (void *impl,
-        const char *service_name, char *port)
+int pmi_simple_client_lookup_name (struct pmi_simple_client *pmi,
+                                   const char *service_name, char *port)
 {
     return PMI_FAIL;
 }
 
-static int simple_barrier (void *impl)
+int pmi_simple_client_barrier (struct pmi_simple_client *pmi)
 {
-    struct simple_impl *s = impl;
     int result = PMI_FAIL;
 
-    if (!s->initialized)
+    if (!pmi->initialized)
         goto done;
-    if (dprintf (s->fd, "cmd=barrier_in\n") < 0)
+    if (dprintf (pmi->fd, "cmd=barrier_in\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (strcmp (s->buf, "cmd=barrier_out") != 0)
+    if (strcmp (pmi->buf, "cmd=barrier_out") != 0)
         goto done;
     result = PMI_SUCCESS;
 done:
     return result;
 }
 
-static int simple_abort (void *impl,
-        int exit_code, const char *error_msg)
+int pmi_simple_client_abort (struct pmi_simple_client *pmi,
+                             int exit_code, const char *error_msg)
 {
     return PMI_FAIL;
 }
 
 #define S_(x) #x
 #define S(x) S_(x)
-static int simple_kvs_get_my_name (void *impl,
-        char *kvsname, int length)
+int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
+                                       char *kvsname, int length)
 {
-    struct simple_impl *s = impl;
     char val[BUFSIZE + 1];
     int result = PMI_FAIL;
 
-    if (!s->initialized)
+    if (!pmi->initialized)
         goto done;
-    if (dprintf (s->fd, "cmd=get_my_kvsname\n") < 0)
+    if (dprintf (pmi->fd, "cmd=get_my_kvsname\n") < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (s->buf, "cmd=my_kvsname kvsname=%" S(BUFSIZE) "s", val) != 1)
+    if (sscanf (pmi->buf, "cmd=my_kvsname kvsname=%" S(BUFSIZE) "s", val) != 1)
         goto done;
     if (strlen (val) >= length)
         goto done;
@@ -255,72 +239,73 @@ done:
     return result;
 }
 
-static int simple_kvs_get_name_length_max (void *impl, int *length)
+int pmi_simple_client_kvs_get_name_length_max (struct pmi_simple_client *pmi,
+                                               int *length)
 {
-    struct simple_impl *s = impl;
-    if (!s->initialized)
+    if (!pmi->initialized)
         return PMI_FAIL;
-    *length = s->kvsname_max;
+    *length = pmi->kvsname_max;
     return PMI_SUCCESS;
 }
 
-static int simple_kvs_get_key_length_max (void *impl, int *length)
+int pmi_simple_client_kvs_get_key_length_max (struct pmi_simple_client *pmi,
+                                              int *length)
 {
-    struct simple_impl *s = impl;
-    if (!s->initialized)
+    if (!pmi->initialized)
         return PMI_FAIL;
-    *length = s->keylen_max;
+    *length = pmi->keylen_max;
     return PMI_SUCCESS;
 }
 
-static int simple_kvs_get_value_length_max (void *impl, int *length)
+int pmi_simple_client_kvs_get_value_length_max (struct pmi_simple_client *pmi,
+                                                int *length)
 {
-    struct simple_impl *s = impl;
-    if (!s->initialized)
+    if (!pmi->initialized)
         return PMI_FAIL;
-    *length = s->vallen_max;
+    *length = pmi->vallen_max;
     return PMI_SUCCESS;
 }
 
-static int simple_kvs_put (void *impl,
-        const char *kvsname, const char *key, const char *value)
+int pmi_simple_client_kvs_put (struct pmi_simple_client *pmi,
+                               const char *kvsname, const char *key,
+                               const char *value)
 {
-    struct simple_impl *s = impl;
     int result = PMI_FAIL;
 
-    if (!s->initialized)
+    if (!pmi->initialized)
         goto done;
-    if (dprintf (s->fd, "cmd=put kvsname=%s key=%s value=%s\n",
-                kvsname, key, value) < 0)
+    if (dprintf (pmi->fd, "cmd=put kvsname=%s key=%s value=%s\n",
+                 kvsname, key, value) < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (strcmp (s->buf, "cmd=put_result rc=0 msg=success") != 0)
+    if (strcmp (pmi->buf, "cmd=put_result rc=0 msg=success") != 0)
         goto done;
     result = PMI_SUCCESS;
 done:
     return result;
 }
 
-static int simple_kvs_commit (void *impl, const char *kvsname)
+int pmi_simple_client_kvs_commit (struct pmi_simple_client *pmi,
+                                  const char *kvsname)
 {
     return PMI_SUCCESS; /* a no-op here */
 }
 
-static int simple_kvs_get (void *impl,
-        const char *kvsname, const char *key, char *value, int len)
+int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
+                               const char *kvsname,
+                               const char *key, char *value, int len)
 {
-    struct simple_impl *s = impl;
     char val[BUFSIZE + 1];
     int result = PMI_FAIL;
 
-    if (!s->initialized)
+    if (!pmi->initialized)
         goto done;
-    if (dprintf (s->fd, "cmd=get kvsname=%s key=%s\n", kvsname, key) < 0)
+    if (dprintf (pmi->fd, "cmd=get kvsname=%s key=%s\n", kvsname, key) < 0)
         goto done;
-    if (dgetline (s->fd, s->buf, sizeof (s->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
         goto done;
-    if (sscanf (s->buf, "cmd=get_result rc=0 msg=success value=%"
+    if (sscanf (pmi->buf, "cmd=get_result rc=0 msg=success value=%"
                                                     S(BUFSIZE) "s", val) != 1)
         goto done;
     if (strlen (val) >= len)
@@ -331,54 +316,50 @@ done:
     return result;
 }
 
-static int simple_spawn_multiple (void *impl,
-        int count,
-        const char *cmds[],
-        const char **argvs[],
-        const int maxprocs[],
-        const int info_keyval_sizesp[],
-        const pmi_keyval_t *info_keyval_vectors[],
-        int preput_keyval_size,
-        const pmi_keyval_t preput_keyval_vector[],
-        int errors[])
+int pmi_simple_client_spawn_multiple (struct pmi_simple_client *pmi,
+                                      int count,
+                                      const char *cmds[],
+                                      const char **argvs[],
+                                      const int maxprocs[],
+                                      const int info_keyval_sizesp[],
+                                      const PMI_keyval_t *info_keyval_vectors[],
+                                      int preput_keyval_size,
+                                      const PMI_keyval_t preput_keyval_vector[],
+                                      int errors[])
 {
     return PMI_FAIL;
 }
 
-pmi_t *pmi_create_simple (int fd, int rank, int size)
+void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
 {
-    struct simple_impl *s = xzmalloc (sizeof (*s));
-    pmi_t *pmi;
-
-    s->fd = fd;
-    s->rank = rank;
-    s->size = size;
-    if (!(pmi = pmi_create (s, destroy_simple))) {
-        destroy_simple (s);
-        return NULL;
+    if (pmi) {
+        if (pmi->fd != -1)
+            (void)close (pmi->fd);
+        free (pmi);
     }
-    pmi->init = simple_init;
-    pmi->initialized = simple_initialized;
-    pmi->finalize = simple_finalize;
-    pmi->get_size = simple_get_size;
-    pmi->get_rank = simple_get_rank;
-    pmi->get_appnum = simple_get_appnum;
-    pmi->get_universe_size = simple_get_universe_size;
-    pmi->publish_name = simple_publish_name;
-    pmi->unpublish_name = simple_unpublish_name;
-    pmi->lookup_name = simple_lookup_name;
-    pmi->barrier = simple_barrier;
-    pmi->abort = simple_abort;
-    pmi->kvs_get_my_name = simple_kvs_get_my_name;
-    pmi->kvs_get_name_length_max = simple_kvs_get_name_length_max;
-    pmi->kvs_get_key_length_max = simple_kvs_get_key_length_max;
-    pmi->kvs_get_value_length_max = simple_kvs_get_value_length_max;
-    pmi->kvs_put = simple_kvs_put;
-    pmi->kvs_commit = simple_kvs_commit;
-    pmi->kvs_get = simple_kvs_get;
-    pmi->spawn_multiple = simple_spawn_multiple;
+}
 
+struct pmi_simple_client *pmi_simple_client_create (void)
+{
+    struct pmi_simple_client *pmi = xzmalloc (sizeof (*pmi));
+    const char *s;
+
+    if (!(s = getenv ("PMI_FD")))
+        goto error;
+    pmi->fd = strtol (s, NULL, 10);
+    if (!(s = getenv ("PMI_RANK")))
+        goto error;
+    pmi->rank = strtol (s, NULL, 10);
+    if (!(s = getenv ("PMI_SIZE")))
+        goto error;
+    pmi->size = strtol (s, NULL, 10);
+    pmi->spawned = 0;
+    if ((s = getenv ("PMI_SPAWNED")))
+        pmi->spawned = strtol (s, NULL, 10);
     return pmi;
+error:
+    pmi_simple_client_destroy (pmi);
+    return NULL;
 }
 
 /*

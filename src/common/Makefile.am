@@ -15,7 +15,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libpmi/libpmi.la \
-	$(builddir)/libpmi/libpmi-simple.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \

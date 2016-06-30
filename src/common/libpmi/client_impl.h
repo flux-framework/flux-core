@@ -1,56 +1,46 @@
 #ifndef _FLUX_CORE_PMI_CLIENT_IMPL_H
 #define _FLUX_CORE_PMI_CLIENT_IMPL_H
 
-struct pmi_struct {
-    int (*init)(void *impl, int *spawned);
-    int (*initialized)(void *impl, int *initialized);
-    int (*finalize)(void *impl); int (*get_size)(void *impl, int *size);
-    int (*get_rank)(void *impl, int *rank);
-    int (*get_universe_size)(void *impl, int *size);
-    int (*get_appnum)(void *impl, int *appnum);
-    int (*publish_name)(void *impl, const char *service_name, const char *port);
-    int (*unpublish_name)(void *impl, const char *service_name);
-    int (*lookup_name)(void *impl, const char *service_name, char *port);
-    int (*barrier)(void *impl); int (*abort)(void *impl,
-            int exit_code, const char *error_msg);
-    int (*kvs_get_my_name)(void *impl, char *kvsname, int length);
-    int (*kvs_get_name_length_max)(void *impl, int *length);
-    int (*kvs_get_key_length_max)(void *impl, int *length);
-    int (*kvs_get_value_length_max)(void *impl, int *length);
-    int (*kvs_put)(void *impl,
-            const char *kvsname, const char *key, const char *value);
-    int (*kvs_commit)(void *impl, const char *kvsname);
-    int (*kvs_get)(void *impl,
-            const char *kvsname, const char *key, char *value, int len);
-    int (*spawn_multiple)(void *impl,
-            int count,
-            const char *cmds[],
-            const char **argvs[],
-            const int maxprocs[],
-            const int info_keyval_sizesp[],
-            const pmi_keyval_t *info_keyval_vectors[],
-            int preput_keyval_size,
-            const pmi_keyval_t preput_keyval_vector[],
-            int errors[]);
+typedef int (*pmi_init_f)(void *impl, int *spawned);
+typedef int (*pmi_finalize_f)(void *impl);
 
-    // deprecated
-    int (*get_id)(void *impl, char *id_str, int length);
-    int (*get_kvs_domain_id)(void *impl, char *id_str, int length);
-    int (*get_id_length_max)(void *impl, int *length);
-    int (*get_clique_size)(void *impl, int *size);
-    int (*get_clique_ranks)(void *impl, int *ranks, int length);
-    int (*kvs_create)(void *impl, char *kvsname, int length);
-    int (*kvs_destroy)(void *impl, const char *kvsname);
-    int (*kvs_iter_first)(void *impl, const char *kvsname,
-            char *key, int key_len, char *val, int val_len);
-    int (*kvs_iter_next)(void *impl, const char *kvsname,
-            char *key, int key_len, char *val, int val_len);
-    int (*parse_option)(void *impl, int num_args, char *args[], int *num_parsed,
-            pmi_keyval_t **keyvalp, int *size);
-    int (*args_to_keyval)(void *impl, int *argcp, char *((*argvp)[]),
-            pmi_keyval_t **keyvalp, int *size);
-    int (*free_keyvals)(void *impl, pmi_keyval_t keyvalp[], int size);
-    int (*get_options)(void *impl, char *str, int length);
+typedef int (*pmi_get_int_f)(void *impl, int *size);
+
+typedef int (*pmi_barrier_f)(void *impl);
+typedef int (*pmi_abort_f)(void *impl, int exit_code, const char *error_msg);
+typedef int (*pmi_kvs_get_my_name_f)(void *impl, char *kvsname, int length);
+typedef int (*pmi_kvs_put_f)(void *impl, const char *kvsname,
+                             const char *key, const char *value);
+typedef int (*pmi_kvs_commit_f)(void *impl, const char *kvsname);
+typedef int (*pmi_kvs_get_f)(void *impl, const char *kvsname,
+                             const char *key, char *value, int len);
+typedef int (*pmi_get_clique_ranks_f)(void *impl, int *ranks, int length);
+
+
+struct pmi_struct {
+    pmi_init_f init;
+    pmi_get_int_f initialized;
+    pmi_finalize_f finalize;
+
+    pmi_get_int_f get_size;
+    pmi_get_int_f get_rank;
+    pmi_get_int_f get_universe_size;
+    pmi_get_int_f get_appnum;
+
+    pmi_barrier_f barrier;
+    pmi_abort_f abort;
+
+    pmi_get_int_f kvs_get_name_length_max;
+    pmi_get_int_f kvs_get_key_length_max;
+    pmi_get_int_f kvs_get_value_length_max;
+
+    pmi_kvs_get_my_name_f kvs_get_my_name;
+    pmi_kvs_put_f kvs_put;
+    pmi_kvs_commit_f kvs_commit;
+    pmi_kvs_get_f kvs_get;
+
+    pmi_get_int_f get_clique_size;
+    pmi_get_clique_ranks_f get_clique_ranks;
 
     // internal
     void *impl;

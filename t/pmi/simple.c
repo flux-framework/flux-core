@@ -5,6 +5,7 @@
 
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/setenvf.h"
 #include "src/common/libpmi/client.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libflux/reactor.h"
@@ -166,7 +167,11 @@ int main (int argc, char *argv[])
     ok (pthread_create (&ctx.t, NULL, server_thread, &ctx) == 0,
         "pthread_create successfully started server");
 
-    ok ((cli = pmi_create_simple (ctx.fds[0], 0, ctx.size)) != NULL,
+    setenvf ("PMI_FD", 1, "%d", ctx.fds[0]);
+    setenvf ("PMI_RANK", 1, "%d", 0);
+    setenvf ("PMI_SIZE", 1, "%d", ctx.size);
+
+    ok ((cli = pmi_create_simple ()) != NULL,
         "pmi_create_simple OK");
     ok (pmi_initialized (cli, &initialized) == PMI_SUCCESS && initialized == 0,
         "pmi_initialized OK, initialized=0");
