@@ -12,7 +12,6 @@ Test that PMI works in a FLux-launched program
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} wreck
 echo "# $0: flux session size will be ${SIZE}"
-FLUX_PMI_LIBRARY=${FLUX_BUILD_DIR}/src/lib/libpmi/.libs/libpmi.so
 
 # Usage: run_program timeout ntasks nnodes
 run_program() {
@@ -85,32 +84,28 @@ test_expect_success 'pmi: wreck preputs PMI_process_mapping into kvs' '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
 	run_program 10 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    						>output_kvstest &&
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest >output_kvstest &&
 	grep -q "put phase" output_kvstest &&
 	grep -q "get phase" output_kvstest
 '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*size) pattern works' '
 	run_program 30 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    						-n >output_kvstest2 &&
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest -n >output_kvstest2 &&
 	grep -q "put phase" output_kvstest2 &&
 	grep -q "get phase" output_kvstest2
 '
 
 test_expect_success 'pmi: (put*16) / barrier / (get*16) pattern works' '
 	run_program 30 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    					-N 16 >output_kvstest3 &&
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest -N 16 >output_kvstest3 &&
 	grep -q "put phase" output_kvstest3 &&
 	grep -q "get phase" output_kvstest3
 '
 
 test_expect_success 'pmi: (put*16) / barrier / (get*16*size) pattern works' '
 	run_program 60 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    					-n -N 16 >output_kvstest4 &&
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest -n -N 16 >output_kvstest4 &&
 	grep -q "put phase" output_kvstest4 &&
 	grep -q "get phase" output_kvstest4
 '
