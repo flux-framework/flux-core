@@ -28,6 +28,9 @@ libpmi_la_SOURCES = \
 	dgetline.c \
 	dgetline.h
 
+fluxinclude_HEADERS = \
+	pmi.h
+
 TESTS = test_keyval.t \
 	test_simple.t
 
