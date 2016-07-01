@@ -63,7 +63,8 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
-#include "src/common/libpmi/client.h"
+#include "src/common/libpmi/pmi.h"
+#include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
 
@@ -1071,7 +1072,6 @@ done:
 
 static int boot_pmi (ctx_t *ctx)
 {
-    pmi_t *pmi = NULL;
     const char *scratch_dir;
     int spawned, size, rank, appnum;
     int relay_rank = -1, parent_rank;
@@ -1086,10 +1086,8 @@ static int boot_pmi (ctx_t *ctx)
     char *val = NULL;
     int e, rc = -1;
 
-    if (!(pmi = pmi_create_guess ()))
-        goto done;
-    if ((e = pmi_init (pmi, &spawned)) != PMI_SUCCESS) {
-        log_msg ("pmi_init: %s", pmi_strerror (e));
+    if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
+        log_msg ("PMI_Init: %s", pmi_strerror (e));
         goto done;
     }
 
@@ -1099,16 +1097,16 @@ static int boot_pmi (ctx_t *ctx)
 
     /* Get rank, size, appnum
      */
-    if ((e = pmi_get_size (pmi, &size)) != PMI_SUCCESS) {
-        log_msg ("pmi_get_size: %s", pmi_strerror (e));
+    if ((e = PMI_Get_size (&size)) != PMI_SUCCESS) {
+        log_msg ("PMI_Get_size: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_get_rank (pmi, &rank)) != PMI_SUCCESS) {
-        log_msg ("pmi_get_rank: %s", pmi_strerror (e));
+    if ((e = PMI_Get_rank (&rank)) != PMI_SUCCESS) {
+        log_msg ("PMI_Get_rank: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_get_appnum (pmi, &appnum)) != PMI_SUCCESS) {
-        log_msg ("pmi_get_appnum: %s", pmi_strerror (e));
+    if ((e = PMI_Get_appnum (&appnum)) != PMI_SUCCESS) {
+        log_msg ("PMI_Get_appnum: %s", pmi_strerror (e));
         goto done;
     }
     ctx->rank = rank;
@@ -1155,14 +1153,14 @@ static int boot_pmi (ctx_t *ctx)
      * alternate method to determine if ranks are co-located on a node.
      */
     if (ctx->enable_epgm) {
-        if ((e = pmi_get_clique_size (pmi, &clique_size)) != PMI_SUCCESS) {
-            log_msg ("pmi_get_clique_size: %s", pmi_strerror (e));
+        if ((e = PMI_Get_clique_size (&clique_size)) != PMI_SUCCESS) {
+            log_msg ("PMI_get_clique_size: %s", pmi_strerror (e));
             goto done;
         }
         clique_ranks = xzmalloc (sizeof (int) * clique_size);
-        if ((e = pmi_get_clique_ranks (pmi, clique_ranks, clique_size))
+        if ((e = PMI_Get_clique_ranks (clique_ranks, clique_size))
                                                           != PMI_SUCCESS) {
-            log_msg ("pmi_get_clique_ranks: %s", pmi_strerror (e));
+            log_msg ("PMI_Get_clique_ranks: %s", pmi_strerror (e));
             goto done;
         }
         if (clique_size > 1) {
@@ -1182,22 +1180,22 @@ static int boot_pmi (ctx_t *ctx)
     /* Prepare for PMI KVS operations by grabbing the kvsname,
      * and buffers for keys and values.
      */
-    if ((e = pmi_kvs_get_name_length_max (pmi, &kvsname_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_name_length_max: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_name_length_max (&kvsname_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_name_length_max: %s", pmi_strerror (e));
         goto done;
     }
     kvsname = xzmalloc (kvsname_len);
-    if ((e = pmi_kvs_get_my_name (pmi, kvsname, kvsname_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_my_name: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_my_name (kvsname, kvsname_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_my_name: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_kvs_get_key_length_max (pmi, &key_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_key_length_max: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_key_length_max (&key_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_key_length_max: %s", pmi_strerror (e));
         goto done;
     }
     key = xzmalloc (key_len);
-    if ((e = pmi_kvs_get_value_length_max (pmi, &val_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_value_length_max: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_value_length_max (&val_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_value_length_max: %s", pmi_strerror (e));
         goto done;
     }
     val = xzmalloc (val_len);
@@ -1221,8 +1219,8 @@ static int boot_pmi (ctx_t *ctx)
             log_msg ("pmi val string overflow");
             goto done;
         }
-        if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
-            log_msg ("pmi_kvs_put: %s", pmi_strerror (e));
+        if ((e = PMI_KVS_Put (kvsname, key, val)) != PMI_SUCCESS) {
+            log_msg ("PMI_KVS_Put: %s", pmi_strerror (e));
             goto done;
         }
     }
@@ -1238,20 +1236,20 @@ static int boot_pmi (ctx_t *ctx)
             log_msg ("pmi val string overflow");
             goto done;
         }
-        if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
-            log_msg ("pmi_kvs_put: %s", pmi_strerror (e));
+        if ((e = PMI_KVS_Put (kvsname, key, val)) != PMI_SUCCESS) {
+            log_msg ("PMI_KVS_Put: %s", pmi_strerror (e));
             goto done;
         }
     }
 
     /* Puts are complete, now we synchronize and begin our gets.
      */
-    if ((e = pmi_kvs_commit (pmi, kvsname)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_commit: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Commit (kvsname)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Commit: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_barrier (pmi)) != PMI_SUCCESS) {
-        log_msg ("pmi_barrier: %s", pmi_strerror (e));
+    if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
+        log_msg ("PMI_Barrier: %s", pmi_strerror (e));
         goto done;
     }
 
@@ -1263,8 +1261,7 @@ static int boot_pmi (ctx_t *ctx)
             log_msg ("pmi key string overflow");
             goto done;
         }
-        if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
-                                                            != PMI_SUCCESS) {
+        if ((e = PMI_KVS_Get (kvsname, key, val, val_len)) != PMI_SUCCESS) {
             log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
             goto done;
         }
@@ -1290,9 +1287,9 @@ static int boot_pmi (ctx_t *ctx)
                 log_msg ("pmi key string overflow");
                 goto done;
             }
-            if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
+            if ((e = PMI_KVS_Get (kvsname, key, val, val_len))
                                                             != PMI_SUCCESS) {
-                log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
+                log_msg ("PMI_KVS_Get: %s", pmi_strerror (e));
                 goto done;
             }
             overlay_set_event (ctx->overlay, "%s", val);
@@ -1308,7 +1305,7 @@ static int boot_pmi (ctx_t *ctx)
             cleanup_push_string (cleanup_file, eventfile);
         free (eventfile);
     }
-    pmi_finalize (pmi);
+    PMI_Finalize ();
     rc = 0;
 done:
     if (id)
@@ -1321,8 +1318,6 @@ done:
         free (key);
     if (val)
         free (val);
-    if (pmi)
-        pmi_destroy (pmi);
     if (rc != 0)
         errno = EPROTO;
     return rc;
