@@ -14,13 +14,13 @@ noinst_LTLIBRARIES = libpmi.la
 libpmi_la_SOURCES = \
 	simple_server.h \
 	simple_server.c \
-	client.c \
-	client.h \
-	client_impl.h \
-	client_dlopen.c \
 	simple_client.c \
 	simple_client.h \
-	pmi.h \
+	pmi.c \
+	wrap.c \
+	wrap.h \
+	single.c \
+	single.h \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
