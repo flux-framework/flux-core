@@ -21,6 +21,11 @@ AC_DEFINE([_GNU_SOURCE], 1,
           [Define _GNU_SOURCE so that we get all necessary prototypes])
 
 ##
+# Initialize pkg-config for PKG_CHECK_MODULES to avoid conditional issues
+##
+PKG_PROG_PKG_CONFIG
+
+##
 # Checks for programs
 ##
 AC_PROG_CC_C99
@@ -69,17 +74,6 @@ X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 
-LIBCALIPER=
-AC_ARG_ENABLE(caliper,
-	[  --enable-caliper[=OPTS]   Use caliper for profiling. [default=no] [OPTS=no/yes]], ,
-	[enable_caliper="no"])
-
-if test "$enable_caliper" = "yes"; then
-    AC_SUBST([LIBCALIPER], ["-lcaliper"])
-    AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
-    AC_DEFINE([PROFILING], [1], [Compile in profiling hooks])
-fi
-
 AC_MSG_CHECKING(--enable-python argument)
 AC_ARG_ENABLE(python,
 	[  --enable-python[=OPTS]   Include Python bindings. [default=yes] [OPTS=no/yes]], ,
@@ -122,6 +116,18 @@ PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_CODE_COVERAGE
+
+AC_ARG_ENABLE(caliper,
+	[  --enable-caliper[=OPTS]   Use caliper for profiling. [default=no] [OPTS=no/yes]], ,
+	[enable_caliper="no"])
+
+if test "$enable_caliper" = "yes"; then
+    PKG_CHECK_MODULES([CALIPER], [caliper], [], [])
+    CFLAGS="${CFLAGS} ${CALIPER_CFLAGS} "
+    LIBS="${LIBS} ${CALIPER_LIBS} -lrt "
+    AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
+fi
+
 
 ##
 # Embedded libev
