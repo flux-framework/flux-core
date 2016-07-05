@@ -54,22 +54,43 @@ struct pmi_context {
         struct pmi_simple_client *cli;
         struct pmi_single *single;
     };
+    int debug;
+    int rank; /* for debug */
 };
 
-static struct pmi_context ctx = { .type = IMPL_UNKNOWN };
+static struct pmi_context ctx = { .type = IMPL_UNKNOWN, .rank = -1 };
+
+#define DPRINTF(fmt,...) do { \
+    if (ctx.debug) fprintf (stderr, fmt, ##__VA_ARGS__); \
+} while (0)
+
+#define DRETURN(rc) do { \
+    DPRINTF ("%d: %s rc=%d %s\n", ctx.rank, __FUNCTION__, (rc), \
+            rc == PMI_SUCCESS ? "" : pmi_strerror (rc)); \
+    return (rc); \
+} while (0);
+
 
 int PMI_Init (int *spawned)
 {
     int result = PMI_ERR_INIT;
     const char *library;
+    const char *debug;
 
     if (ctx.type != IMPL_UNKNOWN)
         goto done;
+
+    if ((debug = getenv ("FLUX_PMI_DEBUG")))
+        ctx.debug = strtol (debug, NULL, 0);
+    else
+        ctx.debug = 0;
+    DPRINTF ("%s: %s\n", __FUNCTION__, flux_pmi_library);
 
     /* If PMI_FD is set, the simple protocol service is offered.
      * Use it directly.
      */
     if (getenv ("PMI_FD")) {
+        DPRINTF ("%s: PMI_FD is set, selecting simple_client\n", __FUNCTION__);
         if (!(ctx.cli = pmi_simple_client_create ()))
             goto done;
         result = pmi_simple_client_init (ctx.cli, spawned);
@@ -85,6 +106,7 @@ int PMI_Init (int *spawned)
      * Use it via the PMI v1 API provided in libpmix.so.
      */
     if (getenv ("PMIX_SERVER_URI")) {
+        DPRINTF ("%s: PMIX_SERVER_URI is set, use libpmix.so\n", __FUNCTION__);
         if (!(ctx.wrap = pmi_wrap_create ("libpmix.so")))
             goto done;
         result = pmi_wrap_init (ctx.wrap, spawned);
@@ -99,6 +121,7 @@ int PMI_Init (int *spawned)
     /* If PMI_LIBRARY is set, we are directed to open a specific library.
      */
     if ((library = getenv ("PMI_LIBRARY"))) {
+        DPRINTF ("%s: PMI_LIBRARY is set, use %s\n", __FUNCTION__, library);
         if (!(ctx.wrap = pmi_wrap_create (library)))
             goto done;
         result = pmi_wrap_init (ctx.wrap, spawned);
@@ -115,7 +138,7 @@ int PMI_Init (int *spawned)
      * Try to dlopen another PMI library, e.g. SLURM's.
      * If that fails, fall through to singleton.
      */
-    if ((ctx.wrap = pmi_wrap_create ("libpmi.so"))) {
+    if ((ctx.wrap = pmi_wrap_create (NULL))) {
         result = pmi_wrap_init (ctx.wrap, spawned);
         if (result != PMI_SUCCESS) {
             pmi_wrap_destroy (ctx.wrap);
@@ -128,6 +151,7 @@ int PMI_Init (int *spawned)
     /* Singleton.
      */
     if ((ctx.single = pmi_single_create ())) {
+        DPRINTF ("%s: library search failed, use singleton\n", __FUNCTION__);
         result = pmi_single_init (ctx.single, spawned);
         if (result != PMI_SUCCESS) {
             pmi_single_destroy (ctx.single);
@@ -137,7 +161,7 @@ int PMI_Init (int *spawned)
         ctx.type = IMPL_SINGLETON;
     }
 done:
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Initialized (int *initialized)
@@ -158,6 +182,7 @@ int PMI_Initialized (int *initialized)
             result = PMI_SUCCESS;
             break;
     }
+    DRETURN (result);
     return result;
 }
 
@@ -185,11 +210,12 @@ int PMI_Finalize (void)
             break;
     }
     ctx.type = IMPL_UNKNOWN;
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Abort (int exit_code, const char error_msg[])
 {
+    DPRINTF ("%d: %s\n", ctx.rank, __FUNCTION__);
     int result;
     switch (ctx.type) {
         case IMPL_SINGLETON:
@@ -205,7 +231,8 @@ int PMI_Abort (int exit_code, const char error_msg[])
             result = PMI_FAIL;
             break;
     }
-    return result;
+    /* unlikely to return */
+    DRETURN (result);
 }
 
 int PMI_Get_size (int *size)
@@ -225,7 +252,7 @@ int PMI_Get_size (int *size)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Get_rank (int *rank)
@@ -245,7 +272,9 @@ int PMI_Get_rank (int *rank)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    if (result == PMI_SUCCESS)
+        ctx.rank = *rank;
+    DRETURN (result);
 }
 
 int PMI_Get_universe_size (int *size)
@@ -265,7 +294,7 @@ int PMI_Get_universe_size (int *size)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Get_appnum (int *appnum)
@@ -285,7 +314,7 @@ int PMI_Get_appnum (int *appnum)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_KVS_Get_my_name (char kvsname[], int length)
@@ -305,6 +334,13 @@ int PMI_KVS_Get_my_name (char kvsname[], int length)
         default:
             result = PMI_FAIL;
             break;
+    }
+    if (result == PMI_SUCCESS) {
+        DPRINTF ("%d: %s (\"%s\") rc=%d\n", ctx.rank, __FUNCTION__,
+                 kvsname, result);
+    } else {
+        DPRINTF ("%d: %s rc=%d %s\n", ctx.rank, __FUNCTION__,
+                result, pmi_strerror (result));
     }
     return result;
 }
@@ -327,7 +363,7 @@ int PMI_KVS_Get_name_length_max (int *length)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_KVS_Get_key_length_max (int *length)
@@ -347,7 +383,7 @@ int PMI_KVS_Get_key_length_max (int *length)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_KVS_Get_value_length_max (int *length)
@@ -368,7 +404,7 @@ int PMI_KVS_Get_value_length_max (int *length)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
@@ -388,6 +424,9 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
             result = PMI_FAIL;
             break;
     }
+    DPRINTF ("%d: PMI_KVS_Put (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
+             ctx.rank, kvsname, key, value, result,
+             result == PMI_SUCCESS ? "" : pmi_strerror (result));
     return result;
 }
 
@@ -411,6 +450,13 @@ int PMI_KVS_Get (const char kvsname[], const char key[],
             result = PMI_FAIL;
             break;
     }
+    if (result == PMI_SUCCESS) {
+        DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\", \"%s\") rc=%d\n",
+                 ctx.rank, kvsname, key, value, result);
+    } else {
+        DPRINTF ("%d: PMI_KVS_Get (\"%s\", \"%s\") rc=%d %s\n",
+                 ctx.rank, kvsname, key, result, pmi_strerror (result));
+    }
     return result;
 }
 
@@ -431,7 +477,7 @@ int PMI_KVS_Commit (const char kvsname[])
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Barrier (void)
@@ -451,7 +497,7 @@ int PMI_Barrier (void)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Publish_name (const char service_name[], const char port[])
@@ -472,7 +518,7 @@ int PMI_Publish_name (const char service_name[], const char port[])
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Unpublish_name (const char service_name[])
@@ -492,7 +538,7 @@ int PMI_Unpublish_name (const char service_name[])
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Lookup_name (const char service_name[], char port[])
@@ -513,7 +559,7 @@ int PMI_Lookup_name (const char service_name[], char port[])
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Spawn_multiple(int count,
@@ -555,7 +601,7 @@ int PMI_Spawn_multiple(int count,
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 /* Old API funcs - signatures needed for ABI compliance.
@@ -572,7 +618,7 @@ int PMI_Get_clique_ranks (int ranks[], int length)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Get_clique_size (int *size)
@@ -586,66 +632,69 @@ int PMI_Get_clique_size (int *size)
             result = PMI_FAIL;
             break;
     }
-    return result;
+    DRETURN (result);
 }
 
 int PMI_Get_id_length_max (int *length)
 {
-    return PMI_KVS_Get_name_length_max (length);
+    int result = PMI_KVS_Get_name_length_max (length);
+    DRETURN (result);
 }
 
 int PMI_Get_id (char kvsname[], int length)
 {
-    return PMI_KVS_Get_my_name (kvsname, length);
+    int result = PMI_KVS_Get_my_name (kvsname, length);
+    DRETURN (result);
 }
 
 int PMI_Get_kvs_domain_id (char kvsname[], int length)
 {
-    return PMI_KVS_Get_my_name (kvsname, length);
+    int result = PMI_KVS_Get_my_name (kvsname, length);
+    DRETURN (result);
 }
 
 int PMI_KVS_Create (char kvsname[], int length)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_KVS_Destroy (const char kvsname[])
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_KVS_Iter_first (const char kvsname[], char key[], int key_len,
                         char val[], int val_len)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_KVS_Iter_next (const char kvsname[], char key[], int key_len,
                        char val[], int val_len)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_Parse_option (int num_args, char *args[], int *num_parsed,
                       PMI_keyval_t **keyvalp, int *size)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_Args_to_keyval (int *argcp, char *((*argvp)[]),
                         PMI_keyval_t **keyvalp, int *size)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_Free_keyvals (PMI_keyval_t keyvalp[], int size)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 int PMI_Get_options (char *str, int *length)
 {
-    return PMI_FAIL;
+    DRETURN (PMI_FAIL);
 }
 
 /*
