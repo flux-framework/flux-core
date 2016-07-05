@@ -591,17 +591,17 @@ int PMI_Get_clique_size (int *size)
 
 int PMI_Get_id_length_max (int *length)
 {
-    return PMI_FAIL;
+    return PMI_KVS_Get_name_length_max (length);
 }
 
 int PMI_Get_id (char kvsname[], int length)
 {
-    return PMI_FAIL;
+    return PMI_KVS_Get_my_name (kvsname, length);
 }
 
 int PMI_Get_kvs_domain_id (char kvsname[], int length)
 {
-    return PMI_FAIL;
+    return PMI_KVS_Get_my_name (kvsname, length);
 }
 
 int PMI_KVS_Create (char kvsname[], int length)
