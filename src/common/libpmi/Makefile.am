@@ -47,7 +47,10 @@ test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
 	$(AM_CPPFLAGS)
 
-check_PROGRAMS = $(TESTS)
+check_PROGRAMS = \
+	$(TESTS) \
+	test_pminfo \
+	test_kvstest
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -61,3 +64,10 @@ test_simple_t_SOURCES = test/simple.c
 test_simple_t_CPPFLAGS = $(test_cppflags)
 test_simple_t_LDADD = $(test_ldadd) $(LIBDL)
 
+test_pminfo_SOURCES = test/pminfo.c
+test_pminfo_CPPFLAGS = $(test_cppflags)
+test_pminfo_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvstest_SOURCES = test/kvstest.c
+test_kvstest_CPPFLAGS = $(test_cppflags)
+test_kvstest_LDADD = $(test_ldadd) $(LIBDL)

@@ -144,8 +144,6 @@ check_PROGRAMS = \
 	loop/multrpc.t \
 	loop/reduce.t \
 	loop/log.t \
-	pmi/kvstest \
-	pmi/pminfo \
 	kz/kzutil \
 	kvs/torture \
 	kvs/asyncfence \
@@ -218,14 +216,6 @@ loop_multrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_reduce_t_SOURCES = loop/reduce.c
 loop_reduce_t_CPPFLAGS = $(test_cppflags)
 loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
-
-pmi_kvstest_SOURCES = pmi/kvstest.c
-pmi_kvstest_CPPFLAGS = $(test_cppflags)
-pmi_kvstest_LDADD = $(test_ldadd) $(LIBRT)
-
-pmi_pminfo_SOURCES = pmi/pminfo.c
-pmi_pminfo_CPPFLAGS = $(test_cppflags)
-pmi_pminfo_LDADD = $(test_ldadd) $(LIBRT)
 
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
