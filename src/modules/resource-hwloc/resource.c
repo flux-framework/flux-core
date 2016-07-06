@@ -350,15 +350,6 @@ done:
     return rc;
 }
 
-static void load_event_cb (flux_t h,
-                           flux_msg_handler_t *watcher,
-                           const flux_msg_t *msg,
-                           void *arg)
-{
-    ctx_t *ctx = arg;
-    (void)load_hwloc (h, ctx);
-}
-
 static void reload_request_cb (flux_t h,
                                flux_msg_handler_t *watcher,
                                const flux_msg_t *msg,
@@ -465,7 +456,6 @@ done:
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_event_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb, NULL},
     FLUX_MSGHANDLER_TABLE_END};
