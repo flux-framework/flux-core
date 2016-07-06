@@ -44,6 +44,7 @@ typedef struct
     uint32_t rank;
     hwloc_topology_t topology;
     bool loaded;
+    bool walk_topology;
 } ctx_t;
 
 static int ctx_hwloc_init (flux_t h, ctx_t *ctx)
@@ -287,7 +288,8 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         kvs_put_int (h, obj_path, nobj);
         free (obj_path);
     }
-    if (walk_topology (h,
+    if (ctx->walk_topology &&
+        walk_topology (h,
                        ctx->topology,
                        hwloc_get_root_obj (ctx->topology),
                        base_path) < 0) {
@@ -302,7 +304,8 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
         free (kvs_hostname);
         unlink_if_exists (h, host_path);
-        if (walk_topology (h,
+        if (ctx->walk_topology &&
+            walk_topology (h,
                            ctx->topology,
                            hwloc_get_root_obj (ctx->topology),
                            host_path) < 0) {
@@ -455,6 +458,17 @@ done:
     Jput (out);
 }
 
+static void process_args (flux_t h, ctx_t *ctx, int argc, char **argv)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp (argv[i], "walk_topology") == 0)
+            ctx->walk_topology = true;
+        else
+            flux_log (h, LOG_ERR, "Unknown option: %s\n", argv[i]);
+    }
+}
+
 static struct flux_msg_handler_spec htab[] = {
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb, NULL},
@@ -467,6 +481,8 @@ int mod_main (flux_t h, int argc, char **argv)
 
     if (!(ctx = resource_hwloc_ctx_create (h)))
         goto done;
+
+    process_args (h, ctx, argc, argv);
 
     // Load hardware information immediately
     if (load_hwloc (h, ctx) < 0)
