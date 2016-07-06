@@ -120,7 +120,7 @@ done:
     return ret;
 }
 
-void freectx (ctx_t *ctx)
+static void resource_hwloc_ctx_destroy (ctx_t *ctx)
 {
     if (ctx) {
         if (ctx->topology)
@@ -129,7 +129,7 @@ void freectx (ctx_t *ctx)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *resource_hwloc_ctx_create (flux_t h)
 {
     ctx_t *ctx = xzmalloc (sizeof(ctx_t));
     if (flux_get_rank (h, &ctx->rank) < 0) {
@@ -142,7 +142,7 @@ static ctx_t *getctx (flux_t h)
     }
     return ctx;
 error:
-    freectx (ctx);
+    resource_hwloc_ctx_destroy (ctx);
     return NULL;
 }
 
@@ -475,7 +475,7 @@ int mod_main (flux_t h, int argc, char **argv)
     int rc = -1;
     ctx_t *ctx;
 
-    if (!(ctx = getctx (h)))
+    if (!(ctx = resource_hwloc_ctx_create (h)))
         goto done;
 
     // Load hardware information immediately
@@ -500,7 +500,7 @@ int mod_main (flux_t h, int argc, char **argv)
 done_delvec:
     flux_msg_handler_delvec (htab);
 done:
-    freectx (ctx);
+    resource_hwloc_ctx_destroy (ctx);
     return rc;
 }
 
