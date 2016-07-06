@@ -26,14 +26,17 @@ libpmi_la_SOURCES = \
 	keyval.c \
 	keyval.h \
 	dgetline.c \
-	dgetline.h
+	dgetline.h \
+	clique.c \
+	clique.h
 
 fluxinclude_HEADERS = \
 	pmi.h
 
 TESTS = test_keyval.t \
 	test_simple.t \
-	test_single.t
+	test_single.t \
+	test_clique.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -42,7 +45,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT)
+	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
@@ -63,16 +66,20 @@ test_keyval_t_LDADD = $(test_ldadd)
 
 test_simple_t_SOURCES = test/simple.c
 test_simple_t_CPPFLAGS = $(test_cppflags)
-test_simple_t_LDADD = $(test_ldadd) $(LIBDL)
+test_simple_t_LDADD = $(test_ldadd)
 
 test_single_t_SOURCES = test/single.c
 test_single_t_CPPFLAGS = $(test_cppflags)
-test_single_t_LDADD = $(test_ldadd) $(LIBDL)
+test_single_t_LDADD = $(test_ldadd)
+
+test_clique_t_SOURCES = test/clique.c
+test_clique_t_CPPFLAGS = $(test_cppflags)
+test_clique_t_LDADD = $(test_ldadd)
 
 test_pminfo_SOURCES = test/pminfo.c
 test_pminfo_CPPFLAGS = $(test_cppflags)
-test_pminfo_LDADD = $(test_ldadd) $(LIBDL)
+test_pminfo_LDADD = $(test_ldadd)
 
 test_kvstest_SOURCES = test/kvstest.c
 test_kvstest_CPPFLAGS = $(test_cppflags)
-test_kvstest_LDADD = $(test_ldadd) $(LIBDL)
+test_kvstest_LDADD = $(test_ldadd)

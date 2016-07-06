@@ -37,6 +37,7 @@
 #include "simple_client.h"
 #include "wrap.h"
 #include "single.h"
+#include "clique.h"
 
 typedef enum {
     IMPL_UNKNOWN,
@@ -618,6 +619,8 @@ int PMI_Get_clique_ranks (int ranks[], int length)
             result = PMI_FAIL;
             break;
     }
+    if (result == PMI_FAIL)
+        result = pmi_process_mapping_get_clique_ranks (ranks, length);
     DRETURN (result);
 }
 
@@ -632,6 +635,8 @@ int PMI_Get_clique_size (int *size)
             result = PMI_FAIL;
             break;
     }
+    if (result == PMI_FAIL)
+        result = pmi_process_mapping_get_clique_size (size);
     DRETURN (result);
 }
 
