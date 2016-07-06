@@ -13,7 +13,7 @@ fluxconnector_LTLIBRARIES = loop.la
 
 loop_la_SOURCES = loop.c
 
-loop_la_LDFLAGS = -module -Wl,--no-undefined \
+loop_la_LDFLAGS = -module $(san_ld_zdef_flag) \
 	-export-symbols-regex '^connector_init$$' \
 	--disable-static -avoid-version -shared -export-dynamic \
 	$(top_builddir)/src/common/libflux-internal.la \

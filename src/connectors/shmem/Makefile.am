@@ -13,7 +13,7 @@ fluxconnector_LTLIBRARIES = shmem.la
 
 shmem_la_SOURCES = shmem.c
 
-shmem_la_LDFLAGS = -module -Wl,--no-undefined \
+shmem_la_LDFLAGS = -module $(san_ld_zdef_flag) \
 	-export-symbols-regex '^connector_init$$' \
 	--disable-static -avoid-version -shared -export-dynamic \
 	$(top_builddir)/src/common/libflux-internal.la \
