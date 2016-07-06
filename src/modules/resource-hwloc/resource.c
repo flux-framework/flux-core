@@ -353,6 +353,29 @@ done:
     return rc;
 }
 
+static int decode_reload_request (flux_t h, ctx_t *ctx,
+                                  const flux_msg_t *msg)
+{
+    const char *json_str;
+    JSON in = NULL;
+    bool walk_topology = ctx->walk_topology;
+
+    if ((flux_request_decode (msg, NULL, &json_str) < 0)
+       || (!(in = Jfromstr (json_str)))) {
+        errno = EPROTO;
+        return (-1);
+    }
+
+    /*
+     *  Set ctx->walk_topology to value in payload, if given.
+     */
+    if (Jget_bool (in, "walk_topology", &walk_topology))
+        ctx->walk_topology = walk_topology;
+
+    Jput (in);
+    return (0);
+}
+
 static void reload_request_cb (flux_t h,
                                flux_msg_handler_t *watcher,
                                const flux_msg_t *msg,
@@ -361,7 +384,9 @@ static void reload_request_cb (flux_t h,
     ctx_t *ctx = arg;
     int errnum = 0;
 
-    if (ctx_hwloc_init (h, ctx) < 0 || load_hwloc (h, ctx) < 0)
+    if ((decode_reload_request (h, ctx, msg) < 0)
+        || (ctx_hwloc_init (h, ctx) < 0)
+        || (load_hwloc (h, ctx) < 0))
         errnum = errno;
     if (flux_respond (h, msg, errnum, "{}") < 0)
         flux_log_error (h, "flux_respond");
