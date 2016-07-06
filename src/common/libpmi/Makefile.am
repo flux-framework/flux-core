@@ -32,7 +32,8 @@ fluxinclude_HEADERS = \
 	pmi.h
 
 TESTS = test_keyval.t \
-	test_simple.t
+	test_simple.t \
+	test_single.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -63,6 +64,10 @@ test_keyval_t_LDADD = $(test_ldadd)
 test_simple_t_SOURCES = test/simple.c
 test_simple_t_CPPFLAGS = $(test_cppflags)
 test_simple_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_single_t_SOURCES = test/single.c
+test_single_t_CPPFLAGS = $(test_cppflags)
+test_single_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_pminfo_SOURCES = test/pminfo.c
 test_pminfo_CPPFLAGS = $(test_cppflags)
