@@ -195,8 +195,6 @@ static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
 
 static int boot_pmi (ctx_t *ctx);
-static int boot_single (ctx_t *ctx);
-static struct boot_method *lookup_boot_method (const char *name);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -205,13 +203,7 @@ static void init_attrs_from_environment (attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-static struct boot_method boot_table[] = {
-    { "pmi", boot_pmi },
-    { "single", boot_single },
-    { NULL, NULL },
-};
-
-#define OPTIONS "+vqM:X:k:s:T:g:Em:IS:"
+#define OPTIONS "+vqM:X:k:s:T:g:EIS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
@@ -223,7 +215,6 @@ static const struct option longopts[] = {
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
-    {"boot-method",     required_argument,  0, 'm'},
     {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
@@ -242,7 +233,6 @@ static void usage (void)
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
-" -m,--boot-method             Select bootstrap: pmi, single\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
     exit (1);
@@ -255,7 +245,6 @@ int main (int argc, char *argv[])
     zlist_t *sigwatchers;
     int security_clr = 0;
     int security_set = 0;
-    struct boot_method *boot_method = NULL;
     int e;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -337,11 +326,6 @@ int main (int argc, char *argv[])
             case 'I': /* --shared-ipc-namespace */
                 ctx.shared_ipc_namespace = true;
                 break;
-            case 'm': { /* --boot-method */
-                if (!(boot_method = lookup_boot_method (optarg)))
-                    log_msg_exit ("unknown boot method: %s", optarg);
-                break;
-            }
             case 'S': { /* --setattr ATTR=VAL */
                 char *val, *attr = xstrdup (optarg);
                 if ((val = strchr (attr, '=')))
@@ -425,31 +409,10 @@ int main (int argc, char *argv[])
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
     overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
 
-    /* Execute the selected boot method.
-     * At minimum, this must ensure that rank, size, and sid are set.
+    /* Boot with PMI.
      */
-    if (boot_method) {
-        int rc = boot_method->fun (&ctx);
-        if (ctx.verbose)
-            log_msg ("boot: %s: %s", boot_method->name,
-                 rc == 0 ? "ok" : "fail");
-        if (rc < 0)
-            log_msg_exit ("bootstrap failed");
-    } else {
-        if (ctx.verbose)
-            log_msg ("boot: no boot method specified");
-        int i, rc = -1;
-        for (i = 0; boot_table[i].name != NULL; i++) {
-            rc = boot_table[i].fun (&ctx);
-            if (ctx.verbose)
-                log_msg ("boot: %s: %s", boot_table[i].name,
-                     rc == 0 ? "ok" : "fail");
-            if (rc == 0)
-                break;
-        }
-        if (rc < 0)
-            log_msg_exit ("bootstrap failed");
-    }
+    if (boot_pmi (&ctx) < 0)
+        log_msg_exit ("bootstrap failed");
 
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
@@ -749,15 +712,6 @@ static void init_attrs_from_environment (attr_t *attrs)
         if (attr_add (attrs, m->attr, val, flags) < 0)
             log_err_exit ("attr_add %s", m->attr);
     }
-}
-
-static struct boot_method *lookup_boot_method (const char *name)
-{
-    int i;
-    for (i = 0; boot_table[i].name != NULL; i++)
-        if (!strcasecmp (boot_table[i].name, name))
-            break;
-    return boot_table[i].name ? &boot_table[i] : NULL;
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)
@@ -1320,25 +1274,6 @@ done:
         free (val);
     if (rc != 0)
         errno = EPROTO;
-    return rc;
-}
-
-static int boot_single (ctx_t *ctx)
-{
-    int rc = -1;
-    char *sid = xasprintf ("%d", getpid ());
-
-    ctx->rank = 0;
-    ctx->size = 1;
-
-    if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
-        if (attr_add (ctx->attrs, "session-id", sid,
-                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        goto done;
-    }
-    rc = 0;
-done:
-    free (sid);
     return rc;
 }
 

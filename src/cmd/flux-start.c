@@ -368,7 +368,6 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
     add_arg (cli->p, "%s", ctx->broker_path);
-    add_arg (cli->p, "--boot-method=PMI");
     add_arg (cli->p, "--shared-ipc-namespace");
     add_arg (cli->p, "--setattr=scratch-directory=%s", ctx->scratch_dir);
     add_args_list (cli->p, ctx->opts, "broker-opts");
