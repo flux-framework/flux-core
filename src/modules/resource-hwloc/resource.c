@@ -44,6 +44,7 @@ typedef struct
     uint32_t rank;
     hwloc_topology_t topology;
     bool loaded;
+    bool walk_topology;
 } ctx_t;
 
 static int ctx_hwloc_init (flux_t h, ctx_t *ctx)
@@ -120,7 +121,7 @@ done:
     return ret;
 }
 
-void freectx (ctx_t *ctx)
+static void resource_hwloc_ctx_destroy (ctx_t *ctx)
 {
     if (ctx) {
         if (ctx->topology)
@@ -129,7 +130,7 @@ void freectx (ctx_t *ctx)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *resource_hwloc_ctx_create (flux_t h)
 {
     ctx_t *ctx = xzmalloc (sizeof(ctx_t));
     if (flux_get_rank (h, &ctx->rank) < 0) {
@@ -142,7 +143,7 @@ static ctx_t *getctx (flux_t h)
     }
     return ctx;
 error:
-    freectx (ctx);
+    resource_hwloc_ctx_destroy (ctx);
     return NULL;
 }
 
@@ -287,7 +288,8 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         kvs_put_int (h, obj_path, nobj);
         free (obj_path);
     }
-    if (walk_topology (h,
+    if (ctx->walk_topology &&
+        walk_topology (h,
                        ctx->topology,
                        hwloc_get_root_obj (ctx->topology),
                        base_path) < 0) {
@@ -302,7 +304,8 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
         free (kvs_hostname);
         unlink_if_exists (h, host_path);
-        if (walk_topology (h,
+        if (ctx->walk_topology &&
+            walk_topology (h,
                            ctx->topology,
                            hwloc_get_root_obj (ctx->topology),
                            host_path) < 0) {
@@ -350,13 +353,27 @@ done:
     return rc;
 }
 
-static void load_event_cb (flux_t h,
-                           flux_msg_handler_t *watcher,
-                           const flux_msg_t *msg,
-                           void *arg)
+static int decode_reload_request (flux_t h, ctx_t *ctx,
+                                  const flux_msg_t *msg)
 {
-    ctx_t *ctx = arg;
-    (void)load_hwloc (h, ctx);
+    const char *json_str;
+    JSON in = NULL;
+    bool walk_topology = ctx->walk_topology;
+
+    if ((flux_request_decode (msg, NULL, &json_str) < 0)
+       || (!(in = Jfromstr (json_str)))) {
+        errno = EPROTO;
+        return (-1);
+    }
+
+    /*
+     *  Set ctx->walk_topology to value in payload, if given.
+     */
+    if (Jget_bool (in, "walk_topology", &walk_topology))
+        ctx->walk_topology = walk_topology;
+
+    Jput (in);
+    return (0);
 }
 
 static void reload_request_cb (flux_t h,
@@ -367,7 +384,9 @@ static void reload_request_cb (flux_t h,
     ctx_t *ctx = arg;
     int errnum = 0;
 
-    if (ctx_hwloc_init (h, ctx) < 0 || load_hwloc (h, ctx) < 0)
+    if ((decode_reload_request (h, ctx, msg) < 0)
+        || (ctx_hwloc_init (h, ctx) < 0)
+        || (load_hwloc (h, ctx) < 0))
         errnum = errno;
     if (flux_respond (h, msg, errnum, "{}") < 0)
         flux_log_error (h, "flux_respond");
@@ -464,8 +483,18 @@ done:
     Jput (out);
 }
 
+static void process_args (flux_t h, ctx_t *ctx, int argc, char **argv)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strcmp (argv[i], "walk_topology") == 0)
+            ctx->walk_topology = true;
+        else
+            flux_log (h, LOG_ERR, "Unknown option: %s\n", argv[i]);
+    }
+}
+
 static struct flux_msg_handler_spec htab[] = {
-    {FLUX_MSGTYPE_EVENT, "resource-hwloc.load", load_event_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb, NULL},
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb, NULL},
     FLUX_MSGHANDLER_TABLE_END};
@@ -475,8 +504,10 @@ int mod_main (flux_t h, int argc, char **argv)
     int rc = -1;
     ctx_t *ctx;
 
-    if (!(ctx = getctx (h)))
+    if (!(ctx = resource_hwloc_ctx_create (h)))
         goto done;
+
+    process_args (h, ctx, argc, argv);
 
     // Load hardware information immediately
     if (load_hwloc (h, ctx) < 0)
@@ -500,7 +531,7 @@ int mod_main (flux_t h, int argc, char **argv)
 done_delvec:
     flux_msg_handler_delvec (htab);
 done:
-    freectx (ctx);
+    resource_hwloc_ctx_destroy (ctx);
     return rc;
 }
 
