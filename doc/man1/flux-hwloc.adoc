@@ -43,8 +43,18 @@ For graphical output, try:  *flux hwloc lstopo --of graphical*.
 
 *reload* ['OPTIONS'] ['DIR']::
 Reload hwloc topology information, optionally loading hwloc XML files
-from `DIR/<rank>.xml` files. + 
-With *-r, --rank=*['RANKS'], only reload XML on provided nodeset 'RANKS'.
+from `DIR/<rank>.xml` files.
+Options:
+
+ --rank=['RANKS']:::
+ -r 'RANKS':::
+ Only reload XML on provided nodeset 'RANKS'.
+
+ --walk-topology=['yes|no']:::
+ -t ['yes|no']:::
+ If 'yes', force resource-hwloc module to walk full topology on each reloaded
+ rank and insert broken down topology into KVS under. If 'no', force disable
+ the topology walk if enabled by default in module.
 
 *topology*::
 Dump current aggregate topology XML for the current session to stdout.
