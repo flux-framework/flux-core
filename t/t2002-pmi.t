@@ -20,7 +20,6 @@ run_program() {
 	local ntasks=$2
 	local nnodes=$3
 	shift 3
-	export FLUX_PMI_TRACE=0x38
 	run_timeout $timeout flux wreckrun -l -o stdio-delay-commit \
 		    -n${ntasks} -N${nnodes} $*
 }
