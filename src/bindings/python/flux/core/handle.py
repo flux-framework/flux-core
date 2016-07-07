@@ -131,8 +131,8 @@ class Flux(Wrapper):
                            topic_glob='*',
                            args=None,
                            match_tag=flux.FLUX_MATCHTAG_NONE):
-        return MessageWatcher(self, type_mask, callback, topic_glob, match_tag,
-                              bsize, args)
+        return MessageWatcher(self, type_mask, callback, topic_glob,
+                              match_tag, args)
 
     def timer_watcher_create(self, after, callback, repeat=0.0, args=None):
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)
@@ -140,6 +140,11 @@ class Flux(Wrapper):
     def barrier(self, name, nprocs):
         _raw_barrier.barrier(self, name, nprocs)
 
+
+    def get_rank(self):
+        rank = ffi.new('uint32_t [1]')
+        self.flux_get_rank(rank)
+        return rank[0]
 
 def open(url, flags=0):
     """ Open a connection to the specified flux connector """

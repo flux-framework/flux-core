@@ -33,3 +33,7 @@ class TestHandle(unittest.TestCase):
         self.assertEqual(r['seq'], 1)
         self.assertEqual(r['pad'], 'stuff')
 
+    def test_get_rank(self):
+      """Get flux rank"""
+      rank = self.f.get_rank()
+      self.assertEqual(rank, 0)

@@ -65,9 +65,8 @@ class RPC(WrapperPimpl):
     return bool(self.pimpl.completed())
 
   def get_str(self):
-    c_nodeid = ffi.new('uint32_t [1]')
     j_str = ffi.new('char *[1]')
-    self.pimpl.get(c_nodeid, j_str)
+    self.pimpl.get(ffi.NULL, j_str)
     return ffi.string(j_str[0])
 
   def get(self):
