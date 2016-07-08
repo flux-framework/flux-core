@@ -852,7 +852,7 @@ static void job_state_cb (flux_t h, flux_msg_handler_t *w,
 
     if (flux_event_decode (msg, NULL, &json_str) < 0
             || !(o = Jfromstr (json_str))
-            || Jget_int64 (o, "lwj", &jobid) < 0) {
+            || !Jget_int64 (o, "lwj", &jobid)) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }

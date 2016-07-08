@@ -56,12 +56,12 @@ static bool cronodate_check_next (struct cronodate *d,
     struct tm tm;
     int rc;
 
-    ok (string_to_tm (expected, &tm) >= 0,
+    ok (string_to_tm (expected, &tm),
         "string_to_tm (expected=%s)", expected);
     if ((t_exp = mktime (&tm)) < (time_t) 0)
         return false;
 
-    ok (string_to_tm (start, &tm) >= 0,
+    ok (string_to_tm (start, &tm),
         "string_to_tm (start=%s)", start);
     strftime (buf, sizeof (buf), "%Y-%m-%d %H:%M:%S %Z", &tm);
     diag ("start = %s", buf);
@@ -219,7 +219,7 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_YEAR, "*") >= 0, "date glob set, year = *");
 
     // Impossible date returns error
-    ok (string_to_tm ("2016-06-06 08:00:00", &tm) >= 0, "string_to_tm");
+    ok (string_to_tm ("2016-06-06 08:00:00", &tm), "string_to_tm");
     rc = cronodate_next (d, &tm);
     ok (rc < 0, "cronodate_next() fails when now is >= matching date");
 
@@ -228,11 +228,11 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_SEC, "0") >= 0, "date glob set, sec = 0");
     ok (cronodate_set (d, TM_MIN, "0") >= 0, "date glob set, min = 0");
     ok (cronodate_set (d, TM_HOUR, "8") >= 0, "date glob set, hour = 0");
-    ok (string_to_tv ("2016-06-06 07:00:00.3", &tv) >= 0, "string_to_tv");
+    ok (string_to_tv ("2016-06-06 07:00:00.3", &tv), "string_to_tv");
 
     x = cronodate_remaining (d, tv_to_double (&tv));
     ok (almost_is (x, 3599.700), "cronodate_remaining works: got %.3fs", x);
-    ok (string_to_tv ("2016-06-06 08:00:00", &tv) >= 0, "string_to_tv");
+    ok (string_to_tv ("2016-06-06 08:00:00", &tv), "string_to_tv");
     x = cronodate_remaining (d, tv_to_double (&tv));
     ok (almost_is (x, 24*60*60), "cronodate_remaining works: got %.3fs", x);
 

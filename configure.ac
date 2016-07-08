@@ -29,6 +29,7 @@ if test "$GCC" = yes; then
   GCCWARN="-Wall -Werror -Wno-strict-aliasing -Wno-error=deprecated-declarations"
   AC_SUBST([GCCWARN])
 fi
+X_AC_ENABLE_SANITIZER
 LT_INIT
 AC_PROG_AWK
 AC_CHECK_PROG(A2X,[a2x],[a2x])
@@ -156,10 +157,10 @@ AC_SUBST(fluxluadir)
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
-fluxmod_ldflags="-Wl,--no-undefined -avoid-version -export-symbols-regex '^mod_(main|name|service)\$\$' --disable-static -shared -export-dynamic"
+fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name|service)\$\$' --disable-static -shared -export-dynamic"
 AC_SUBST(fluxmod_ldflags)
 
-fluxlib_ldflags="-shared -export-dynamic --disable-static -Wl,--no-undefined"
+fluxlib_ldflags="-shared -export-dynamic --disable-static $san_ld_zdef_flag"
 AC_SUBST(fluxlib_ldflags)
 
 ##

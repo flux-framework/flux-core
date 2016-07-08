@@ -219,7 +219,7 @@ int main (int argc, char *argv[])
 
     ok ((r = nodeset_next_rank (n, 1)) == 2,
         "nodeset_next_rank returns next rank even if arg not in set");
-
+    nodeset_destroy (n);
 
 /********************************************/
 

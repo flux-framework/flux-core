@@ -21,7 +21,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) $(LIBRT)
-libflux_internal_la_LDFLAGS = -Wl,--no-undefined
+libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la
 
@@ -32,7 +32,7 @@ libflux_core_la_LIBADD = \
 libflux_core_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-core.map \
         -shared -export-dynamic --disable-static \
-        -Wl,--no-undefined
+        $(san_ld_zdef_flag)
 
 libflux_optparse_la_SOURCES =
 libflux_optparse_la_LIBADD = \
@@ -42,6 +42,6 @@ libflux_optparse_la_LIBADD = \
 libflux_optparse_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-optparse.map \
 	-shared -export-dynamic --disable-static \
-	-Wl,--no-undefined
+	$(san_ld_zdef_flag)
 
 EXTRA_DIST = libflux-core.map libflux-optparse.map

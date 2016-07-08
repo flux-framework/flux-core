@@ -53,7 +53,7 @@ noinst_LTLIBRARIES = \
 
 luamod_ldflags = \
 	-avoid-version -module -shared --disable-static \
-	-Wl,--no-undefined
+	$(san_ld_zdef_flag)
 
 luamod_libadd = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
