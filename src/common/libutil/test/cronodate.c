@@ -1,29 +1,50 @@
 
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include <math.h>
+#include <errno.h>
+#include <string.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/approxidate.h"
 #include "src/common/libutil/cronodate.h"
 
-static int approxidate_tm (char *s, struct tm *tm)
+static bool string_to_tm (char *s, struct tm *tmp)
 {
-    struct timeval tv;
+    char *p = strptime (s,"%Y-%m-%d %H:%M:%S", tmp);
+    if (p == NULL || *p != '\0')
+        return (false);
+    return (true);
+}
+
+static bool string_to_tv (char *s, struct timeval *tvp)
+{
     time_t t;
-    if (approxidate (s, &tv) < 0)
-        return (-1);
-    t = tv.tv_sec;
-    if (localtime_r (&t, tm) == NULL)
-        return (-1);
-    return (0);
+    struct tm tm;
+    char *p = strptime (s, "%Y-%m-%d %H:%M:%S", &tm);
+
+    if ((t = mktime (&tm)) == (time_t) -1)
+        return (false);
+
+    tvp->tv_sec = t;
+    tvp->tv_usec = 0;
+    if (*p == '.') {
+        char *q;
+        double d = strtod (p, &q);
+        if (*q != '\0') {
+            diag ("Failed to convert usecs %s", p);
+            return (false);
+        }
+        tvp->tv_usec = (long) (d * 1.0e6);
+    }
+    return (true);
 }
 
 static bool cronodate_check_match (struct cronodate *d, char *s)
 {
     struct tm tm;
-    ok (approxidate_tm (s, &tm) >= 0, "approxidate (%s)", s);
+    ok (string_to_tm (s, &tm), "string_to_tm (%s)", s);
     return cronodate_match (d, &tm);
 }
 
@@ -35,18 +56,23 @@ static bool cronodate_check_next (struct cronodate *d,
     struct tm tm;
     int rc;
 
-    ok (approxidate_tm (expected, &tm) >= 0,
-        "approxidate (expected=%s)", expected);
+    ok (string_to_tm (expected, &tm) >= 0,
+        "string_to_tm (expected=%s)", expected);
     if ((t_exp = mktime (&tm)) < (time_t) 0)
         return false;
 
-    ok (approxidate_tm (start, &tm) >= 0,
-        "approxidate (start=%s)", start);
+    ok (string_to_tm (start, &tm) >= 0,
+        "string_to_tm (start=%s)", start);
+    strftime (buf, sizeof (buf), "%Y-%m-%d %H:%M:%S %Z", &tm);
+    diag ("start = %s", buf);
     rc = cronodate_next (d, &tm);
-    strftime (buf, sizeof (buf), "%Y-%m-%d %H:%M:%S", &tm);
+    strftime (buf, sizeof (buf), "%Y-%m-%d %H:%M:%S %Z", &tm);
     ok (rc >= 0, "cronodate_next() = %s", buf);
-    if ((t = mktime (&tm)) < (time_t) 0)
+    if ((t = mktime (&tm)) < (time_t) 0) {
+        diag ("mktime: %s", strerror (errno));
         return false;
+    }
+    diag ("expected %d, got  %d", t_exp, t);
     return (t == t_exp);
 }
 
@@ -68,9 +94,11 @@ int main (int argc, char *argv[])
     struct tm tm;
     struct timeval tv;
     struct cronodate *d;
-    
-    
+
     plan (NO_PLAN);
+
+    // Force TZ to GMT
+    setenv ("TZ", "", 1);
 
     ok (tm_unit_min (TM_SEC) == 0, "check min value for tm_sec");
     ok (tm_unit_min (TM_MIN) == 0, "check min value for tm_min");
@@ -132,27 +160,27 @@ int main (int argc, char *argv[])
     ok (d != NULL, "cronodate_create()");
     /* match all dates */
     cronodate_fillset (d);
-    ok (cronodate_check_match (d, "1/1/2001 12:45:33"), "date matches after fillset");
-    
+    ok (cronodate_check_match (d, "2001-01-01 12:45:33"), "date matches after fillset");
+
     ok (cronodate_set (d, TM_SEC, "5") >= 0, "cronodate_set, sec=5");
-    ok (cronodate_check_match (d, "oct 10, 2001 00:00:05"), "date matches");
-    ok (!cronodate_check_match (d, "oct 10, 2001 00:00:06"), "date doesn't match");
+    ok (cronodate_check_match (d, "2001-10-10 00:00:05"), "date matches");
+    ok (!cronodate_check_match (d, "2001-10-10 00:00:06"), "date doesn't match");
 
     ok (cronodate_set (d, TM_MIN, "5") >= 0, "cronodate_set, min=5");
-    ok (cronodate_check_match (d, "oct 10, 2001 00:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "oct 10, 2001 00:06:05"), "date doesn't match");
+    ok (cronodate_check_match (d, "2001-10-10 00:05:05"), "date matches");
+    ok (!cronodate_check_match (d, "2001-10-10 00:06:05"), "date doesn't match");
 
     ok (cronodate_set (d, TM_HOUR, "5") >= 0, "cronodate_set, hour=5");
-    ok (cronodate_check_match (d, "oct 10, 2001 05:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "oct 10, 2001 06:05:05"), "date doesn't match");
+    ok (cronodate_check_match (d, "2001-10-10 05:05:05"), "date matches");
+    ok (!cronodate_check_match (d, "2001-10-10 06:05:05"), "date doesn't match");
 
     ok (cronodate_set (d, TM_MDAY, "10") >= 0, "cronodate_set, mday = 10");
-    ok (cronodate_check_match (d, "oct 10, 2001 05:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "oct 11, 2001 05:05:05"), "date doesn't match");
+    ok (cronodate_check_match (d, "2001-10-10 05:05:05"), "date matches");
+    ok (!cronodate_check_match (d, "2001-10-11 05:05:05"), "date doesn't match");
 
     ok (cronodate_set (d, TM_MON, "9") >= 0, "cronodate_set MON=9 (Oct)");
-    ok (cronodate_check_match (d, "oct 10, 2001 05:05:05"), "date matches");
-    ok (!cronodate_check_match (d, "jan 10, 2001 05:05:05"), "date doesn't match");
+    ok (cronodate_check_match (d, "2001-10-10 05:05:05"), "date matches");
+    ok (!cronodate_check_match (d, "2001-01-10 05:05:05"), "date doesn't match");
 
     cronodate_fillset (d);
 
@@ -160,19 +188,19 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_SEC, "0") >= 0, "date glob set, sec = 0");
     ok (cronodate_set (d, TM_MIN, "0") >= 0, "date glob set, min = 0");
     ok (cronodate_set (d, TM_HOUR, "0") >= 0, "date glob set, hour = 0");
-    ok (cronodate_check_next (d, "may 27, 2016 3:45:22", "may 28, 2016 00:00:00"),
+    ok (cronodate_check_next (d, "2016-05-27 3:45:22", "2016-05-28 00:00:00"),
         "cronodate_next returned next midnight");
-    
-    ok (cronodate_check_next (d, "dec 31, 2016 3:45:22", "jan 1, 2017 00:00:00"),
+
+    ok (cronodate_check_next (d, "2016-12-31 3:45:22", "2017-01-01 00:00:00"),
         "cronodate_next rolled over to following year");
 
     cronodate_fillset (d);
     // Run every 10 min on 5s
     ok (cronodate_set (d, TM_SEC, "5") >= 0, "set sec = 5");
     ok (cronodate_set (d, TM_MIN, "5,15,25,35,45,55") >= 0, "set sec = 5");
-    ok (cronodate_check_next (d, "oct 10, 2016 3:00:00", "oct 10, 2016 3:05:05"),
+    ok (cronodate_check_next (d, "2016-10-10 3:00:00", "2016-10-10 3:05:05"),
         "cronodate_next worked for minutes");
-    ok (cronodate_check_next (d, "oct 10, 2016 3:05:05", "oct 10, 2016 3:15:05"),
+    ok (cronodate_check_next (d, "2016-10-10 3:05:05", "2016-10-10 3:15:05"),
         "cronodate_next worked for next increment");
 
     cronodate_fillset (d);
@@ -181,9 +209,9 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_MIN, "0") >= 0, "date glob set, min = 0");
     ok (cronodate_set (d, TM_HOUR, "8") >= 0, "date glob set, hour = 0");
     ok (cronodate_set (d, TM_WDAY, "1") >= 0, "date glob set, wday = 1 (Mon)");
-    ok (cronodate_check_next (d, "jun 1, 2016 10:45:00", "jun 06, 2016 08:00:00"),
+    ok (cronodate_check_next (d, "2016-06-01 10:45:00", "2016-06-06 08:00:00"),
         "cronodate_next worked for next monday");
-    ok (cronodate_check_next (d, "jun 06, 2016 08:00:00", "jun 13, 2016 08:00:00"),
+    ok (cronodate_check_next (d, "2016-06-06 08:00:00", "2016-06-13 08:00:00"),
         "cronodate_next returns next matching date when current matches ");
 
     ok (cronodate_set (d, TM_MON, "6") >= 0, "date glob set, mon = 6");
@@ -191,7 +219,7 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_YEAR, "*") >= 0, "date glob set, year = *");
 
     // Impossible date returns error
-    ok (approxidate_tm ("jun 06, 2016 08:00:00", &tm) >= 0, "approxidate");
+    ok (string_to_tm ("2016-06-06 08:00:00", &tm) >= 0, "string_to_tm");
     rc = cronodate_next (d, &tm);
     ok (rc < 0, "cronodate_next() fails when now is >= matching date");
 
@@ -200,11 +228,11 @@ int main (int argc, char *argv[])
     ok (cronodate_set (d, TM_SEC, "0") >= 0, "date glob set, sec = 0");
     ok (cronodate_set (d, TM_MIN, "0") >= 0, "date glob set, min = 0");
     ok (cronodate_set (d, TM_HOUR, "8") >= 0, "date glob set, hour = 0");
-    ok (approxidate ("jun 06, 2016 07:00:00.3", &tv) >= 0, "approxidate");
-    
+    ok (string_to_tv ("2016-06-06 07:00:00.3", &tv) >= 0, "string_to_tv");
+
     x = cronodate_remaining (d, tv_to_double (&tv));
     ok (almost_is (x, 3599.700), "cronodate_remaining works: got %.3fs", x);
-    ok (approxidate ("jun 06, 2016 08:00:00.0", &tv) >= 0, "approxidate");
+    ok (string_to_tv ("2016-06-06 08:00:00", &tv) >= 0, "string_to_tv");
     x = cronodate_remaining (d, tv_to_double (&tv));
     ok (almost_is (x, 24*60*60), "cronodate_remaining works: got %.3fs", x);
 
