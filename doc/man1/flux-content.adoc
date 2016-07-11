@@ -59,9 +59,8 @@ BACKING STORE
 -------------
 The rank 0 cache retains all content until a module providing
 the "content-backing" service is loaded which can offload content
-to some other place.  Examples of modules providing this service
-are *content-sqlite* and *content-sophia*.  The *content-sqlite*
-module is loaded by default.
+to some other place.  The *content-sqlite* module provides this
+service, and is loaded by default.
 
 Content database files are stored persistently on rank 0 if the
 persist-directory broker attribute is set to a directory name for
