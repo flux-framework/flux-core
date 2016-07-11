@@ -10,6 +10,9 @@
 #if HAVE_LIBJUDY
 #include <Judy.h>
 #endif
+#if HAVE_SOPHIA
+#include <sophia.h>
+#endif
 #include <sqlite3.h>
 
 #include "src/common/libutil/xzmalloc.h"
@@ -19,7 +22,6 @@
 #if HAVE_LSD_HASH
 #include "src/common/liblsd/hash.h"
 #endif
-#include "src/common/libsophia/sophia.h"
 #if HAVE_HATTRIE
 #include "src/common/libhat-trie/hat-trie.h"
 #endif
@@ -337,6 +339,7 @@ struct hash_impl *create_judy (void)
 /* sophia
  */
 
+#if HAVE_SOPHIA
 void log_sophia_error (void *env, const char *fmt, ...)
 {
     va_list ap;
@@ -463,6 +466,7 @@ struct hash_impl *create_sophia (void)
 
     return impl;
 }
+#endif
 
 #if HAVE_HATTRIE
 void insert_hat (struct hash_impl *impl, zlist_t *items)
@@ -669,8 +673,10 @@ int main (int argc, char *argv[])
     else if (!strcmp (argv[1], "judy"))
         impl = create_judy ();
 #endif
+#if HAVE_SOPHIA
     else if (!strcmp (argv[1], "sophia"))
         impl = create_sophia ();
+#endif
 #if HAVE_HATTRIE
     else if (!strcmp (argv[1], "hat"))
         impl = create_hat ();
