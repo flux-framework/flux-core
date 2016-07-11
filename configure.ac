@@ -174,7 +174,6 @@ AC_CONFIG_FILES( \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
-  src/common/libsophia/Makefile \
   src/common/libminilzo/Makefile \
   src/common/libpmi-client/Makefile \
   src/common/libpmi-server/Makefile \
@@ -199,7 +198,6 @@ AC_CONFIG_FILES( \
   src/modules/Makefile \
   src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
-  src/modules/content-sophia/Makefile \
   src/modules/content-sqlite/Makefile \
   src/modules/libkz/Makefile \
   src/modules/libjsc/Makefile \

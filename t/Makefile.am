@@ -43,7 +43,6 @@ TESTS = \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
-	t0013-content-sophia.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
@@ -106,7 +105,6 @@ check_SCRIPTS = \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
-	t0013-content-sophia.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
