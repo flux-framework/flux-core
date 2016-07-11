@@ -3,7 +3,6 @@ SUBDIRS = \
  barrier \
  connector-local \
  kvs \
- content-sophia \
  content-sqlite \
  libkz \
  live \
