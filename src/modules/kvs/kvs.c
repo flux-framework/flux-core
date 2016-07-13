@@ -86,6 +86,7 @@
 #include "waitqueue.h"
 #include "proto.h"
 #include "cache.h"
+#include "json_dirent.h"
 
 typedef char href_t[SHA1_STRING_SIZE];
 
@@ -237,32 +238,6 @@ static bool store_by_reference (json_object *o)
     return false;
 }
 
-static json_object *dirent_create (char *type, void *arg)
-{
-    json_object *o = Jnew ();
-    bool valid_type = false;
-
-    if (!strcmp (type, "FILEREF") || !strcmp (type, "DIRREF")) {
-        char *ref = arg;
-
-        Jadd_str (o, type, ref);
-        valid_type = true;
-    } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")
-                                         || !strcmp (type, "LINKVAL")) {
-        json_object *val = arg;
-
-        if (val)
-            json_object_get (val);
-        else
-            val = Jnew ();
-        json_object_object_add (o, type, val);
-        valid_type = true;
-    }
-    assert (valid_type == true);
-
-    return o;
-}
-
 static commit_t *commit_create (void)
 {
     commit_t *c = xzmalloc (sizeof (*c));
@@ -283,12 +258,7 @@ static void commit_destroy (commit_t *c)
 
 static void commit_add (commit_t *c, const char *key, json_object *dirent)
 {
-    json_object *op = Jnew ();
-    Jadd_str (op, "key", key);
-    json_object_object_add (op, "dirent", dirent);
-    if (!c->ops)
-        c->ops = Jnew_ar ();
-    json_object_array_add (c->ops, op);
+    dirent_append (&c->ops, key, dirent);
 }
 
 static fence_t *fence_create (int nprocs)

@@ -21,7 +21,9 @@ kvs_la_SOURCES = \
 	waitqueue.c \
 	waitqueue.h \
 	proto.c \
-	proto.h
+	proto.h \
+	json_dirent.c \
+	json_dirent.h
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
