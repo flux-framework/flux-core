@@ -375,4 +375,10 @@ test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir2 --count 1000000
 '
 
+# async fence
+
+test_expect_success 'kvs: async kvs_fence allows puts with fence in progress' '
+	${FLUX_BUILD_DIR}/t/kvs/asyncfence
+'
+
 test_done
