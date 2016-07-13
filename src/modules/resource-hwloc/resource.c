@@ -147,12 +147,6 @@ error:
     return NULL;
 }
 
-void unlink_if_exists (flux_t h, const char *path)
-{
-    if (!kvs_unlink (h, path))  // if the unlink succeeds
-        kvs_commit (h);  // ensure the unlink is committed before proceeding
-}
-
 static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
 {
     char *xml_path = NULL;
@@ -160,7 +154,7 @@ static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
     int buflen = 0, ret = -1;
 
     xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, ctx->rank);
-    unlink_if_exists (h, xml_path);
+    (void)kvs_unlink (h, xml_path);
     if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
         flux_log (h, LOG_ERR, "hwloc_topology_export_xmlbuffer");
         goto done;
@@ -279,7 +273,7 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
     int depth = hwloc_topology_get_depth (ctx->topology);
 
     base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, ctx->rank);
-    unlink_if_exists (h, base_path);
+    (void)kvs_unlink (h, base_path);
     for (i = 0; i < depth; ++i) {
         int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
         hwloc_obj_type_t t = hwloc_get_depth_type (ctx->topology, i);
@@ -303,7 +297,7 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
         char *kvs_hostname = escape_kvs_key (hostname);
         char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
         free (kvs_hostname);
-        unlink_if_exists (h, host_path);
+        (void) kvs_unlink (h, host_path);
         if (ctx->walk_topology &&
             walk_topology (h,
                            ctx->topology,
