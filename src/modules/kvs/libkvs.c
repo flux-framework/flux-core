@@ -45,10 +45,12 @@
 
 #include "kvs_deprecated.h"
 #include "proto.h"
+#include "json_dirent.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shastring.h"
 
 struct kvsdir_struct {
     flux_t handle;
@@ -83,6 +85,8 @@ typedef struct {
     char *cwd;
     zlist_t *dirstack;
     flux_msg_handler_t *w;
+    zlist_t *commits;
+    json_object *ops;   /* JSON array of put, unlink, etc operations */
 } kvsctx_t;
 
 static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
@@ -98,6 +102,7 @@ static void freectx (void *arg)
             flux_msg_handler_destroy (ctx->w);
         if (ctx->cwd)
             free (ctx->cwd);
+        Jput (ctx->ops);
         free (ctx);
     }
 }
@@ -1090,13 +1095,14 @@ done:
  ** PUT
  **/
 
-/* N.B. kvs_put() of a NULL value is the same as kvs_unlink().
+/* Append the key and dirent value to the 'ops' array, to be sent
+ * with the next commit/fence request.
  */
 int kvs_put (flux_t h, const char *key, const char *json_str)
 {
-    flux_rpc_t *rpc = NULL;
-    JSON in = NULL;
+    kvsctx_t *ctx = getctx (h);
     char *k = NULL;
+    int value_len;
     int rc = -1;
 
     if (!h || !key) {
@@ -1104,18 +1110,50 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tput_enc (k, json_str, false, false)))
-        goto done;
-    if (!(rpc = flux_rpc (h, "kvs.put", Jtostr (in), FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
-        goto done;
+    /* kvs_put() of a NULL value means unlink.
+     * A 'op' with a NULL dirent accomplishes this.
+     */
+    if (json_str == NULL) {
+        dirent_append (&ctx->ops, k, NULL);
+    }
+    /* Put value to the content store, and commit its blobref to the KVS.
+     * It only makes sense to do this if value is larger than the blobref!
+     * Content.store success response == in memory on rank 0, thus safe
+     * to reference from KVS as any rank could fetch it following commit.
+     */
+    else if ((value_len = strlen (json_str)) > SHA1_STRING_SIZE) {
+        char *blobref;
+        int blobref_size;
+        flux_rpc_t *rpc;
+        if (!(rpc = flux_rpc_raw (h, "content.store", json_str, value_len,
+                                  FLUX_NODEID_ANY, 0)))
+            goto done;
+        if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
+            flux_rpc_destroy (rpc);
+            goto done;
+        }
+        if (!blobref || blobref[blobref_size - 1] != '\0') {
+            flux_rpc_destroy (rpc);
+            errno = EPROTO;
+            goto done;
+        }
+        dirent_append (&ctx->ops, k, dirent_create ("FILEREF", blobref));
+        flux_rpc_destroy (rpc);
+    }
+    /* Value is small, commit directly (becomes part of the directory object).
+     */
+    else {
+        JSON val;
+        if (!(val = Jfromstr (json_str))) {
+            errno = EINVAL;
+            goto done;
+        }
+        dirent_append (&ctx->ops, k, dirent_create ("FILEVAL", val));
+        Jput (val);
+    }
     rc = 0;
 done:
-    Jput (in);
-    if (k)
-        free (k);
-    flux_rpc_destroy (rpc);
+    free (k);
     return rc;
 }
 
@@ -1218,58 +1256,40 @@ int kvs_unlink (flux_t h, const char *key)
 
 int kvs_symlink (flux_t h, const char *key, const char *target)
 {
-    flux_rpc_t *rpc = NULL;
-    JSON in = NULL;
+    kvsctx_t *ctx = getctx (h);
     JSON val = NULL;
     char *k = NULL;
-    int rc = -1;
 
     if (!h || !key || !target) {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
-    k = pathcat (kvs_getcwd (h), key);
     if (!(val = json_object_new_string (target))) {
         errno = ENOMEM;
-        goto done;
+        return -1;
     }
-    if (!(in = kp_tput_enc (k, Jtostr (val), true, false)))
-        goto done;
-    if (!(rpc = flux_rpc (h, "kvs.put", Jtostr (in), FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    Jput (in);
+    k = pathcat (kvs_getcwd (h), key);
+    dirent_append (&ctx->ops, k, dirent_create ("LINKVAL", val));
+    free (k);
     Jput (val);
-    if (k)
-        free (k);
-    flux_rpc_destroy (rpc);
-    return rc;
+    return 0;
 }
 
 int kvs_mkdir (flux_t h, const char *key)
 {
-    JSON in = NULL;
+    kvsctx_t *ctx = getctx (h);
+    JSON val = Jnew ();
     char *k = NULL;
-    flux_rpc_t *rpc = NULL;
-    int rc = -1;
 
+    if (!h || !key) {
+        errno = EINVAL;
+        return -1;
+    }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tput_enc (k, NULL, false, true)))
-        goto done;
-    if (!(rpc = flux_rpc (h, "kvs.put", Jtostr (in), FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    Jput (in);
-    if (k)
-        free (k);
-    flux_rpc_destroy (rpc);
-    return rc;
+    dirent_append (&ctx->ops, k, dirent_create ("DIRVAL", val));
+    free (k);
+    Jput (val);
+    return 0;
 }
 
 /**
@@ -1278,13 +1298,16 @@ done:
 
 int kvs_commit (flux_t h)
 {
+    kvsctx_t *ctx = getctx (h);
     JSON in = NULL;
     flux_rpc_t *rpc = NULL;
     const char *json_str;
     int rc = -1;
 
-    if (!(in = kp_tcommit_enc (NULL, NULL, NULL, 0)))
+    if (!(in = kp_tcommit_enc (NULL, ctx->ops, NULL, 0)))
         goto done;
+    Jput (ctx->ops);
+    ctx->ops = NULL;
     if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
     if (flux_rpc_get (rpc, NULL, &json_str) < 0)
@@ -1298,12 +1321,15 @@ done:
 
 flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
 {
+    kvsctx_t *ctx = getctx (h);
     JSON in = NULL;
     flux_rpc_t *rpc = NULL;
     int saved_errno = errno;
 
-    if (!(in = kp_tcommit_enc (NULL, NULL, name, nprocs)))
+    if (!(in = kp_tcommit_enc (NULL, ctx->ops, name, nprocs)))
         goto done;
+    Jput (ctx->ops);
+    ctx->ops = NULL;
     if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
 done:

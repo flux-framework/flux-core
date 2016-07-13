@@ -38,6 +38,7 @@ fluxcoreinclude_HEADERS = kvs.h
 libflux_kvs_la_SOURCES = \
 	libkvs.c \
 	proto.c \
+	json_dirent.c \
 	kvs_deprecated.h
 libflux_kvs_la_LDFLAGS = $(fluxlib_ldflags) \
 			 -export-symbols-regex '^(kvs|kvsdir|kvsitr)_.*'
