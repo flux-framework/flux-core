@@ -86,13 +86,9 @@
 #include "waitqueue.h"
 #include "proto.h"
 #include "cache.h"
+#include "json_dirent.h"
 
 typedef char href_t[SHA1_STRING_SIZE];
-
-/* Large values are stored in dirents by reference; small values by value.
- *  (-1 = all by reference, 0 = all by value)
- */
-#define LARGE_VAL (sizeof (href_t) + 1)
 
 /* Break cycles in symlink references.
  */
@@ -228,41 +224,6 @@ error:
     return NULL;
 }
 
-static bool store_by_reference (json_object *o)
-{
-    if (LARGE_VAL == -1)
-        return true;
-    if (strlen (json_object_to_json_string (o)) >= LARGE_VAL)
-        return true;
-    return false;
-}
-
-static json_object *dirent_create (char *type, void *arg)
-{
-    json_object *o = Jnew ();
-    bool valid_type = false;
-
-    if (!strcmp (type, "FILEREF") || !strcmp (type, "DIRREF")) {
-        char *ref = arg;
-
-        Jadd_str (o, type, ref);
-        valid_type = true;
-    } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")
-                                         || !strcmp (type, "LINKVAL")) {
-        json_object *val = arg;
-
-        if (val)
-            json_object_get (val);
-        else
-            val = Jnew ();
-        json_object_object_add (o, type, val);
-        valid_type = true;
-    }
-    assert (valid_type == true);
-
-    return o;
-}
-
 static commit_t *commit_create (void)
 {
     commit_t *c = xzmalloc (sizeof (*c));
@@ -279,16 +240,6 @@ static void commit_destroy (commit_t *c)
         flux_msg_destroy (c->request);
         free (c);
     }
-}
-
-static void commit_add (commit_t *c, const char *key, json_object *dirent)
-{
-    json_object *op = Jnew ();
-    Jadd_str (op, "key", key);
-    json_object_object_add (op, "dirent", dirent);
-    if (!c->ops)
-        c->ops = Jnew_ar ();
-    json_object_array_add (c->ops, op);
 }
 
 static fence_t *fence_create (int nprocs)
@@ -1136,68 +1087,6 @@ done:
         free (p.sender);
 }
 
-static void put_request_cb (flux_t h, flux_msg_handler_t *w,
-                            const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    href_t ref;
-    const char *key;
-    JSON val = NULL;
-    bool dir = false;
-    bool link = false;
-    struct timespec t0;
-    char *sender = NULL;
-    commit_t *commit;
-    int rc = -1;
-
-    monotime (&t0);
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (flux_msg_get_route_first (msg, &sender) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_tput_dec (in, &key, &val, &link, &dir) < 0)
-        goto done;
-    if (!(commit = zhash_lookup (ctx->commits, sender))) {
-        commit = commit_create ();
-        commit->state = COMMIT_PUT;
-        zhash_insert (ctx->commits, sender, commit);
-        zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
-    }
-    if (commit->state != COMMIT_PUT) { /* commit already in progress */
-        errno = EINVAL;
-        goto done;
-    }
-    if (json_object_get_type (val) == json_type_null) {
-        if (dir) {
-            JSON empty_dir = Jnew ();
-            store (ctx, empty_dir, ref);
-            commit_add (commit, key, dirent_create ("DIRREF", ref));
-        } else
-            commit_add (commit, key, NULL);
-    } else if (link) {
-        commit_add (commit, key, dirent_create ("LINKVAL", val));
-    } else if (store_by_reference (val)) {
-        store (ctx, Jget (val), ref);
-        commit_add (commit, key, dirent_create ("FILEREF", ref));
-    } else {
-        commit_add (commit, key, dirent_create ("FILEVAL", val));
-    }
-    tstat_push (&ctx->stats.put_time, monotime_since (t0));
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-    Jput (in);
-    if (sender)
-        free (sender);
-}
-
 static void commit_response_cb (flux_t h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
@@ -1710,7 +1599,6 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.disconnect",       disconnect_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",          unwatch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },

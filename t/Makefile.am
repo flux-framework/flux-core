@@ -150,6 +150,7 @@ check_PROGRAMS = \
 	pmi/pminfo \
 	kz/kzutil \
 	kvs/torture \
+	kvs/asyncfence \
 	kvs/hashtest \
 	kvs/watch \
 	kvs/watch_disconnect \
@@ -246,6 +247,12 @@ kz_kzutil_LDADD = \
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
 kvs_torture_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_asyncfence_SOURCES = kvs/asyncfence.c
+kvs_asyncfence_CPPFLAGS = $(test_cppflags)
+kvs_asyncfence_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
