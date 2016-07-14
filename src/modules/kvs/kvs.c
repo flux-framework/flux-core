@@ -375,20 +375,6 @@ error:
     return -1;
 }
 
-/* N.B. cache may have expired (if not dirty) so consider object
- * states of missing and incomplete to be "not dirty" in this context.
- */
-static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t *wait)
-{
-    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
-
-    if (cache_entry_get_dirty (hp)) {
-        cache_entry_wait (hp, wait);
-        return true;
-    }
-    return false;
-}
-
 static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
     struct cache_entry *hp;
@@ -1150,35 +1136,6 @@ error:
     return -1;
 }
 
-/* If commit contains references to dirty hash entries (store in progress),
- * arrange for commit_request_cb () to be restarted once these are all clean.
- * Return true if handler should stall; false if there are no dirty references.
- */
-static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t *wait)
-{
-    int i, len;
-    const char *ref, *key;
-    json_object *op, *dirent;
-    bool dirty = false;
-
-    if (c->ops) {
-        len = json_object_array_length (c->ops);
-        for (i = 0; i < len; i++) {
-            if (!(op = json_object_array_get_idx (c->ops, i))
-                    || !Jget_str (op, "key", &key)
-                    || !Jget_obj (op, "dirent", &dirent))
-                continue;
-            if ((Jget_str (dirent, "FILEREF", &ref)
-                    || Jget_str (dirent, "DIRREF", &ref))
-                    && store_isdirty (ctx, ref, wait)) {
-                dirty = true;
-                break;
-            }
-        }
-    }
-    return dirty;
-}
-
 static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
                             const char *sender,
                             const char *rootdir, int rootseq)
@@ -1202,15 +1159,14 @@ done:
     Jput (out);
 }
 
-static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
+static void commit_slave (flux_t h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     JSON in = NULL;
     JSON ops = NULL;
     commit_t *c = NULL;
-    wait_t *wait;
     char *sender = NULL;
     const char *arg_sender;
     int nprocs;
@@ -1257,74 +1213,130 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     if (fence && !c->fence)
         c->fence = xstrdup (fence);
 
-    if (ctx->master && c->state != COMMIT_NEW) { /* XXX */
+    FASSERT (h, c->state == COMMIT_NEW);
+    c->state = COMMIT_UPSTREAM;
+    send_upstream_commit (ctx, c, sender, fence, nprocs);
+    if (!(fence && internal)) {
+        FASSERT (h, c->request == NULL);
+        if (!(c->request = flux_msg_copy (msg, false)))
+            goto error;
+    }
+    Jput (in);
+    Jput (ops);
+    if (sender)
+        free (sender);
+    return;
+error:
+    saved_errno = errno;
+    Jput (in);
+    Jput (ops);
+    if (sender)
+        free (sender);
+    if (flux_respond (h, msg, saved_errno, NULL) < 0)
+        flux_log_error (h, "%s", __FUNCTION__);
+}
+
+static void commit_master (flux_t h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
+{
+    ctx_t *ctx = arg;
+    const char *json_str;
+    JSON in = NULL;
+    JSON ops = NULL;
+    commit_t *c = NULL;
+    char *sender = NULL;
+    const char *arg_sender;
+    int nprocs;
+    const char *fence = NULL;
+    bool internal = false;
+    int saved_errno;
+
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
+    if (!(in = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (flux_msg_get_route_first (msg, &sender) < 0)
+        goto error;
+    if (kp_tcommit_dec (in, &arg_sender, &ops, &fence, &nprocs) < 0)
+        goto error;
+
+    /* Commits generated internally will contain .arg_sender.  If present,
+     * we should ignore the true sender and use it to hash the commit.
+     */
+    if (arg_sender) {
+        free (sender);
+        sender = xstrdup (arg_sender);
+        internal = true;
+    }
+    /* issue 109:  fence is terminated by an event that may allow a client
+     * to send a new commit/fence before internal state of old fence is
+     * cleared from upstream ranks.
+     */
+    if ((c = zhash_lookup (ctx->commits, sender))
+                    && c->state == COMMIT_UPSTREAM
+                    && c->fence && (!fence || strcmp (c->fence, fence) != 0)) {
+        zhash_delete (ctx->commits, sender);
+    }
+    if (!(c = zhash_lookup (ctx->commits, sender))) {
+        c = commit_create ();
+        c->state = COMMIT_NEW;
+        c->ops = ops;
+        ops = NULL;
+        zhash_insert (ctx->commits, sender, c);
+        zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
+    }
+    if (fence && !c->fence)
+        c->fence = xstrdup (fence);
+
+    if (c->state != COMMIT_NEW) { /* XXX */
         flux_log (h, LOG_ERR, "XXX master encountered old commit state=%d"
                 " fence_name=%s",
                 c->state, c->fence ? c->fence : "");
         goto done;
     }
 
-    /* Master: apply the commit and generate a response (subject to rate lim)
-     */
-    if (ctx->master) {
-        FASSERT (h, c->state == COMMIT_NEW);
-        if (!(fence && internal)) { /* setting c->request means reply needed */
-            FASSERT (h, c->request == NULL);
-            if (!(c->request = flux_msg_copy (msg, false)))
-                goto error;
-        }
-        if (fence) {
-            c->state = COMMIT_FENCE;
-            fence_t *f;
-            if (!(f = zhash_lookup (ctx->fences, fence))) {
-                f = fence_create (nprocs);
-                zhash_insert (ctx->fences, fence, f);
-                zhash_freefn (ctx->fences, fence,
-                              (zhash_free_fn *)fence_destroy);
-            }
-            /* Once count is reached, apply all the commits comprising the
-             * fence.  We only time this part as otherwise we would be timing
-             * synchronization which may have nothing to do with us.
-             */
-            if (++f->count == f->nprocs) {
-                struct timespec t0;
-                monotime (&t0);
-                commit_apply_fence (ctx, fence);
-                tstat_push (&ctx->stats.fence_time,  monotime_since (t0));
-                zhash_delete (ctx->fences, fence);
-            }
-        } else {
-            c->state = COMMIT_MASTER;
-            double since = monotime_since (ctx->commit_time) * 1E-3;
-            if (since < min_commit_window) {
-                if (!ctx->commit_timer_armed) {
-                    flux_timer_watcher_reset (ctx->commit_timer,
-                                              min_commit_window - since, 0.);
-                    flux_watcher_start (ctx->commit_timer);
-                    ctx->commit_timer_armed = true;
-                }
-            } else
-                commit_apply_all (ctx);
-        }
-
-    /* Slave: commit must wait for any referenced hash entries to be stored
-     * upstream, then stash request msg in the commit_t and send a new internal
-     * commit upstream.
-     */
-    } else {
-        FASSERT (h, c->state == COMMIT_NEW);
-        wait = wait_create (h, w, msg, commit_request_cb, arg);
-        if (commit_dirty (ctx, c, wait))
-            goto done; /* stall */
-        wait_destroy (wait, NULL);
-        c->state = COMMIT_UPSTREAM;
-        send_upstream_commit (ctx, c, sender, fence, nprocs);
-        if (!(fence && internal)) {
-            FASSERT (h, c->request == NULL);
-            if (!(c->request = flux_msg_copy (msg, false)))
-                goto error;
-        }
+    FASSERT (h, c->state == COMMIT_NEW);
+    if (!(fence && internal)) { /* setting c->request means reply needed */
+        FASSERT (h, c->request == NULL);
+        if (!(c->request = flux_msg_copy (msg, false)))
+            goto error;
     }
+    if (fence) {
+        c->state = COMMIT_FENCE;
+        fence_t *f;
+        if (!(f = zhash_lookup (ctx->fences, fence))) {
+            f = fence_create (nprocs);
+            zhash_insert (ctx->fences, fence, f);
+            zhash_freefn (ctx->fences, fence,
+                          (zhash_free_fn *)fence_destroy);
+        }
+        /* Once count is reached, apply all the commits comprising the
+         * fence.  We only time this part as otherwise we would be timing
+         * synchronization which may have nothing to do with us.
+         */
+        if (++f->count == f->nprocs) {
+            struct timespec t0;
+            monotime (&t0);
+            commit_apply_fence (ctx, fence);
+            tstat_push (&ctx->stats.fence_time,  monotime_since (t0));
+            zhash_delete (ctx->fences, fence);
+        }
+    } else {
+        c->state = COMMIT_MASTER;
+        double since = monotime_since (ctx->commit_time) * 1E-3;
+        if (since < min_commit_window) {
+            if (!ctx->commit_timer_armed) {
+                flux_timer_watcher_reset (ctx->commit_timer,
+                                          min_commit_window - since, 0.);
+                flux_watcher_start (ctx->commit_timer);
+                ctx->commit_timer_armed = true;
+            }
+        } else
+            commit_apply_all (ctx);
+    }
+
 done:
     Jput (in);
     Jput (ops);
@@ -1339,6 +1351,16 @@ error:
         free (sender);
     if (flux_respond (h, msg, saved_errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
+}
+
+static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
+{
+    ctx_t *ctx = arg;
+    if (ctx->master)
+        commit_master (h, w, msg, arg);
+    else
+        commit_slave (h, w, msg, arg);
 }
 
 /* For wait_version().
