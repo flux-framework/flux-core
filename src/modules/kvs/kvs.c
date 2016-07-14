@@ -113,8 +113,7 @@ typedef struct {
     struct timespec t0;     /* commit begin timestamp */
     char *fence;            /* fence name, if applicable */
     enum {
-        COMMIT_PUT,         /* put is still appending items to this commit */
-        COMMIT_STORE,       /* stores running for objs referenced by commit */
+        COMMIT_NEW,
         COMMIT_UPSTREAM,    /* upstream commit running */
         COMMIT_MASTER,      /* (master only) commit ASAP */
         COMMIT_FENCE,       /* (master only) commit upon fence count==nprocs */
@@ -1249,21 +1248,17 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
-        c->state = COMMIT_STORE;
+        c->state = COMMIT_NEW;
         c->ops = ops;
         ops = NULL;
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
-    } else if (c->state == COMMIT_PUT) {
-        c->state = COMMIT_STORE;
-        if (!fence)
-            monotime (&c->t0);
     }
     if (fence && !c->fence)
         c->fence = xstrdup (fence);
 
-    if (ctx->master && c->state != COMMIT_STORE) { /* XXX */
-        flux_log (h, LOG_ERR, "XXX encountered old commit state=%d"
+    if (ctx->master && c->state != COMMIT_NEW) { /* XXX */
+        flux_log (h, LOG_ERR, "XXX master encountered old commit state=%d"
                 " fence_name=%s",
                 c->state, c->fence ? c->fence : "");
         goto done;
@@ -1272,7 +1267,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
     /* Master: apply the commit and generate a response (subject to rate lim)
      */
     if (ctx->master) {
-        FASSERT (h, c->state == COMMIT_STORE);
+        FASSERT (h, c->state == COMMIT_NEW);
         if (!(fence && internal)) { /* setting c->request means reply needed */
             FASSERT (h, c->request == NULL);
             if (!(c->request = flux_msg_copy (msg, false)))
@@ -1317,7 +1312,7 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
      * commit upstream.
      */
     } else {
-        FASSERT (h, c->state == COMMIT_STORE);
+        FASSERT (h, c->state == COMMIT_NEW);
         wait = wait_create (h, w, msg, commit_request_cb, arg);
         if (commit_dirty (ctx, c, wait))
             goto done; /* stall */
