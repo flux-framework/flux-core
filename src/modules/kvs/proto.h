@@ -28,10 +28,8 @@ int kp_tunwatch_dec (json_object *o, const char **key);
 
 /* kvs.commit
  */
-json_object *kp_tcommit_enc (const char *sender, json_object *ops,
-                             const char *fence, int nprocs);
-int kp_tcommit_dec (json_object *o, const char **sender, json_object **ops,
-                    const char **fence, int *nprocs);
+json_object *kp_tcommit_enc (const char *sender, json_object *ops);
+int kp_tcommit_dec (json_object *o, const char **sender, json_object **ops);
 
 json_object *kp_rcommit_enc (int rootseq, const char *rootdir,
                              const char *sender);
@@ -47,9 +45,9 @@ int kp_rgetroot_dec (json_object *o, int *rootseq, const char **rootdir);
 /* kvs.setroot (event)
  */
 json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
-                              json_object *root, const char *fence);
+                              json_object *root);
 int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
-                     json_object **root, const char **fence);
+                     json_object **root);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

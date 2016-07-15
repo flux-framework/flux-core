@@ -304,26 +304,20 @@ done:
 /* kvs.commit
  */
 
-JSON kp_tcommit_enc (const char *sender, JSON ops,
-                     const char *fence, int nprocs)
+JSON kp_tcommit_enc (const char *sender, JSON ops)
 {
     JSON o = Jnew ();
     Jadd_obj (o, "ops", ops); /* takes a ref on ops */
     if (sender)
         Jadd_str (o, ".arg_sender", sender);
-    if (fence) {
-        Jadd_str (o, ".arg_fence", fence);
-        Jadd_int (o, ".arg_nprocs", nprocs);
-    }
     return o;
 }
 
-int kp_tcommit_dec (JSON o, const char **sender, JSON *ops,
-                    const char **fence, int *nprocs)
+int kp_tcommit_dec (JSON o, const char **sender, JSON *ops)
 {
     int rc = -1;
 
-    if (!sender || !ops || !fence || !nprocs) {
+    if (!sender || !ops) {
         errno = EINVAL;
         goto done;
     }
@@ -333,10 +327,6 @@ int kp_tcommit_dec (JSON o, const char **sender, JSON *ops,
         Jget (*ops);
     *sender = NULL;
     (void)Jget_str (o, ".arg_sender", sender);
-    *fence = NULL;
-    (void)Jget_str (o, ".arg_fence", fence);
-    *nprocs = 1;
-    (void)Jget_int (o, ".arg_nprocs", nprocs);
 
     rc = 0;
 done:
@@ -416,8 +406,7 @@ done:
 /* kvs.setroot (event)
  */
 
-JSON kp_tsetroot_enc (int rootseq, const char *rootdir,
-                      JSON root, const char *fence)
+JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root)
 {
     JSON o = NULL;
 
@@ -428,8 +417,6 @@ JSON kp_tsetroot_enc (int rootseq, const char *rootdir,
     o = Jnew ();
     Jadd_int (o, "rootseq", rootseq);
     Jadd_str (o, "rootdir", rootdir);
-    if (fence)
-        Jadd_str (o, "fence", fence);
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
 done:
@@ -437,11 +424,11 @@ done:
 }
 
 int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root, const char **fence)
+                     JSON *root)
 {
     int rc = -1;
 
-    if (!o || !rootseq || !rootdir || !root || !fence) {
+    if (!o || !rootseq || !rootdir || !root) {
         errno = EINVAL;
         goto done;
     }
@@ -449,8 +436,6 @@ int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
         errno = EPROTO;
         goto done;
     }
-    *fence = NULL;
-    (void)Jget_str (o, "fence", fence);
     *root = NULL;
     (void)Jget_obj (o, "rootdirval", root);
     rc = 0;

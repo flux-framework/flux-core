@@ -1309,7 +1309,7 @@ int kvs_commit (flux_t h)
     const char *json_str;
     int rc = -1;
 
-    if (!(in = kp_tcommit_enc (NULL, ctx->ops, NULL, 0)))
+    if (!(in = kp_tcommit_enc (NULL, ctx->ops)))
         goto done;
     Jput (ctx->ops);
     ctx->ops = NULL;
@@ -1324,6 +1324,7 @@ done:
     return rc;
 }
 
+#if 0
 flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
 {
     kvsctx_t *ctx = getctx (h);
@@ -1400,6 +1401,7 @@ done:
     flux_rpc_destroy (rpc);
     return rc;
 }
+#endif
 
 int kvs_get_version (flux_t h, int *versionp)
 {
