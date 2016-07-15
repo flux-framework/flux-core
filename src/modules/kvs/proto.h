@@ -1,15 +1,6 @@
 /* N.B. Decode functions return pointers to storage owned by the json object.
  */
 
-/* kvs.put
- */
-json_object *kp_tput_enc (const char *key, const char *json_str,
-                          bool link, bool dir);
-int kp_tput_dec (json_object *o, const char **key, json_object **val,
-                 bool *link, bool *dir);
-/* put response is just errnum */
-
-
 /* kvs.get
  */
 json_object *kp_tget_enc (const char *key, bool dir, bool link);

@@ -7,29 +7,6 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-void test_put (void)
-{
-    JSON o;
-    bool dir = false;
-    bool link = false;
-    const char *key = NULL;
-    JSON val = NULL;
-    int i;
-
-    val = Jnew ();
-    Jadd_int (val, "i", 2);
-    o = kp_tput_enc ("a", Jtostr (val), false, true);
-    ok (o != NULL,
-        "kp_tput_snec works");
-    val = NULL;
-    ok (kp_tput_dec (o, &key, &val, &dir, &link) == 0
-        && !dir && link,
-        "kp_tput_dec works");
-    ok (val && Jget_int (val, "i", &i) && i == 2,
-        "kp_tput_dec returned encoded object");
-    Jput (o); /* owns val */
-}
-
 void test_get (void)
 {
     JSON o;
@@ -203,9 +180,8 @@ void test_setroot (void)
 int main (int argc, char *argv[])
 {
 
-    plan (31);
+    plan (NO_PLAN);
 
-    test_put (); // 3
     test_get (); // 8
     test_watch (); // 7
     test_unwatch (); // 2
