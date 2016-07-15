@@ -99,6 +99,28 @@ void test_unwatch (void)
     Jput (o);
 }
 
+void test_fence (void)
+{
+    JSON o, out;
+    JSON ops = Jnew_ar();
+    int nprocs;
+    const char *name;
+
+    ok ((o = kp_tfence_enc ("foo", 42, ops)) != NULL,
+        "kp_tfence_enc works");
+    name = NULL;
+    nprocs = 0;
+    out = NULL;
+    ok (kp_tfence_dec (o, &name, &nprocs, &out) == 0
+        && name != NULL && !strcmp (name, "foo")
+        && nprocs == 42 && out != NULL,
+        "kp_tfence_dec works");
+    Jput (out);
+    Jput (o);
+
+    Jput (ops);
+}
+
 void test_commit (void)
 {
     JSON o;
@@ -161,15 +183,15 @@ void test_getroot (void)
 void test_setroot (void)
 {
     JSON o;
-    const char *rootdir;
+    const char *rootdir, *fence = NULL;
     int rootseq;
     JSON root;
 
-    ok ((o = kp_tsetroot_enc (42, "abc", NULL)) != NULL,
+    ok ((o = kp_tsetroot_enc (42, "abc", NULL, "foo")) != NULL,
         "kp_tsetroot_enc works");
-    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root) == 0
+    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &fence) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "abc")
-        && root == NULL,
+        && root == NULL && fence != NULL && !strcmp (fence, "foo"),
         "kp_tsetroot_dec works");
     Jput (o);
 }
@@ -185,6 +207,7 @@ int main (int argc, char *argv[])
     test_commit (); // 7
     test_getroot (); // 2
     test_setroot (); // 2
+    test_fence ();
 
     done_testing();
     return (0);

@@ -1324,7 +1324,6 @@ done:
     return rc;
 }
 
-#if 0
 flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
 {
     kvsctx_t *ctx = getctx (h);
@@ -1336,16 +1335,16 @@ flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
     if (ctx->fence_ops)
         fence_ops = zhash_lookup (ctx->fence_ops, name);
     if (fence_ops) {
-        if (!(in = kp_tcommit_enc (NULL, fence_ops, name, nprocs)))
+        if (!(in = kp_tfence_enc (name, nprocs, fence_ops)))
             goto done;
         zhash_delete (ctx->fence_ops, name);
     } else {
-        if (!(in = kp_tcommit_enc (NULL, ctx->ops, name, nprocs)))
+        if (!(in = kp_tfence_enc (name, nprocs, ctx->ops)))
             goto done;
         Jput (ctx->ops);
         ctx->ops = NULL;
     }
-    if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (!(rpc = flux_rpc (h, "kvs.fence", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
 done:
     saved_errno = errno;
@@ -1356,13 +1355,7 @@ done:
 
 int kvs_fence_finish (flux_rpc_t *rpc)
 {
-    const char *json_str;
-
-    /* N.B. response has a payload but we ignore it in this context
-     * (not in others).  The flux_rpc_get() will fail with EPROTO
-     * if there is a payload and we don't ask to see it.
-     */
-    return flux_rpc_get (rpc, NULL, &json_str);
+    return flux_rpc_get (rpc, NULL, NULL);
 }
 
 void kvs_fence_set_context (flux_t h, const char *name)
@@ -1401,7 +1394,6 @@ done:
     flux_rpc_destroy (rpc);
     return rc;
 }
-#endif
 
 int kvs_get_version (flux_t h, int *versionp)
 {

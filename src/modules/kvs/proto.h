@@ -36,6 +36,12 @@ json_object *kp_rcommit_enc (int rootseq, const char *rootdir,
 int kp_rcommit_dec (json_object *o, int *rootseq, const char **rootdir,
                     const char **sender);
 
+/* kvs.fence
+ */
+json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops);
+int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
+                   json_object **ops);
+
 /* kvs.getroot
  */
 /* empty request payload */
@@ -45,9 +51,9 @@ int kp_rgetroot_dec (json_object *o, int *rootseq, const char **rootdir);
 /* kvs.setroot (event)
  */
 json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
-                              json_object *root);
+                              json_object *root, const char *fence);
 int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
-                     json_object **root);
+                     json_object **root, const char **fence);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

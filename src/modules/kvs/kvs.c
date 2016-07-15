@@ -118,6 +118,15 @@ typedef struct {
     } state;
 } commit_t;
 
+typedef struct {
+    json_object *ops;
+    zlist_t *requests;
+    char *name;
+    int nprocs;
+    int count;
+    int rc;
+} fence_t;
+
 /* Statistics gathered for kvs.stats.get, etc.
  */
 typedef struct {
@@ -133,7 +142,8 @@ typedef struct {
     struct cache *cache;    /* SHA1 => cache_entry */
     href_t rootdir;         /* current root SHA1 */
     int rootseq;            /* current root version (for ordering) */
-    zhash_t *commits;       /* hash of pending put/commits by sender name */
+    zhash_t *commits;       /* hash of pending commits by sender name */
+    zhash_t *fences;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     stats_t stats;
@@ -151,7 +161,7 @@ enum {
     KVS_GET_FILEVAL = 2,
 };
 
-static int setroot_event_send (ctx_t *ctx);
+static int setroot_event_send (ctx_t *ctx, const char *fence);
 static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
                             const char *sender,
                             const char *rootdir, int rootseq);
@@ -165,6 +175,7 @@ static void freectx (void *arg)
     if (ctx) {
         cache_destroy (ctx->cache);
         zhash_destroy (&ctx->commits);
+        zhash_destroy (&ctx->fences);
         if (ctx->watchlist)
             wait_queue_destroy (ctx->watchlist);
         flux_watcher_destroy (ctx->commit_timer);
@@ -486,16 +497,17 @@ static json_object *commit_apply_start (ctx_t *ctx)
     return copydir (rootdir); /* do not corrupt store by modifying orig. */
 }
 
-static void commit_apply_ops (ctx_t *ctx, json_object *rootcpy, commit_t *c)
+static void commit_apply_ops (ctx_t *ctx, json_object *rootcpy,
+                              json_object *ops)
 {
     int i, len;
     json_object *op, *dirent;
     const char *key;
 
-    if (c->ops) {
-        len = json_object_array_length (c->ops);
+    if (ops) {
+        len = json_object_array_length (ops);
         for (i = 0; i < len; i++) {
-            if (!(op = json_object_array_get_idx (c->ops, i))
+            if (!(op = json_object_array_get_idx (ops, i))
                     || !Jget_str (op, "key", &key))
                 continue;
             dirent = NULL;
@@ -538,14 +550,14 @@ static int commit_apply_all (ctx_t *ctx)
         c = zhash_lookup (ctx->commits, key);
         assert (c != NULL);
         if (c->state == COMMIT_MASTER) {
-            commit_apply_ops (ctx, rootcpy, c);
+            commit_apply_ops (ctx, rootcpy, c->ops);
             count++;
         }
         key = zlist_next (keys);
     }
 
     if (commit_apply_finish (ctx, rootcpy))
-        setroot_event_send (ctx);
+        setroot_event_send (ctx, NULL);
 
     while ((key = zlist_pop (keys))) {
         c = zhash_lookup (ctx->commits, key);
@@ -562,6 +574,24 @@ static int commit_apply_all (ctx_t *ctx)
     zlist_destroy (&keys);
     tstat_push (&ctx->stats.commit_merges, count);
     return count;
+}
+
+/* Commit all the ops for a particular fence (rank 0 only).
+ * The setroot event will cause responses to be sent to the fence requests
+ * and clean up the fence_t state.
+ */
+static int commit_apply_fence (ctx_t *ctx, fence_t *f)
+{
+    JSON rootcpy;
+
+    flux_log (ctx->h, LOG_DEBUG, "%s %s %d ops",
+              __FUNCTION__, f->name, json_object_array_length (f->ops));
+
+    rootcpy = commit_apply_start (ctx);
+    commit_apply_ops (ctx, rootcpy, f->ops);
+    (void)commit_apply_finish (ctx, rootcpy);
+    setroot_event_send (ctx, f->name);
+    return 0;
 }
 
 /* This timeout fires when the window for coalescing commits
@@ -1219,6 +1249,225 @@ static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
         commit_slave (h, w, msg, arg);
 }
 
+static void fence_destroy (fence_t *f)
+{
+    if (f) {
+        if (f->name)
+            free (f->name);
+        Jput (f->ops);
+        if (f->requests) {
+            flux_msg_t *msg;
+            while ((msg = zlist_pop (f->requests)))
+                flux_msg_destroy (msg);
+            /* FIXME: respond with error here? */
+            zlist_destroy (&f->requests);
+        }
+    }
+}
+
+static fence_t *fence_create (const char *name, int nprocs)
+{
+    fence_t *f;
+
+    if (!(f = calloc (1, sizeof (*f))) || !(f->ops = json_object_new_array ())
+                                       || !(f->requests = zlist_new ())
+                                       || !(f->name = strdup (name))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    f->nprocs = nprocs;
+    return f;
+error:
+    fence_destroy (f);
+    return NULL;
+}
+
+static int fence_append_ops (fence_t *f, JSON ops)
+{
+    JSON op;
+    int i;
+
+    if (ops) {
+        for (i = 0; i < json_object_array_length (ops); i++) {
+            if ((op = json_object_array_get_idx (ops, i)))
+                if (json_object_array_add (f->ops, Jget (op)) < 0) {
+                    Jput (op);
+                    errno = ENOMEM;
+                    return -1;
+                }
+        }
+    }
+    return 0;
+}
+
+static int fence_append_request (fence_t *f, const flux_msg_t *request)
+{
+    flux_msg_t *cpy = flux_msg_copy (request, false);
+    if (!cpy)
+        return -1;
+    if (zlist_push (f->requests, cpy) < 0) {
+        flux_msg_destroy (cpy);
+        return -1;
+    }
+    return 0;
+}
+
+static int fence_add (ctx_t *ctx, fence_t *f)
+{
+    if (!ctx->fences && !(ctx->fences = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (zhash_insert (ctx->fences, f->name, f) < 0) {
+        errno = EEXIST;
+        goto error;
+    }
+    zhash_freefn (ctx->fences, f->name, (zhash_free_fn *)fence_destroy);
+    return 0;
+error:
+    return -1;
+}
+
+static fence_t *fence_lookup (ctx_t *ctx, const char *name)
+{
+    if (!ctx->fences)
+        return NULL;
+    return zhash_lookup (ctx->fences, name);
+}
+
+static void fence_finalize (ctx_t *ctx, fence_t *f)
+{
+    flux_msg_t *msg;
+
+    while ((msg = zlist_pop (f->requests))) {
+        if (flux_respond (ctx->h, msg, f->rc, NULL) < 0)
+            flux_log_error (ctx->h, "%s", __FUNCTION__);
+        flux_msg_destroy (msg);
+    }
+    zhash_delete (ctx->fences, f->name);
+}
+
+static void fence_finalize_byname (ctx_t *ctx, const char*name)
+{
+    fence_t *f = fence_lookup (ctx, name);
+    if (f)
+        fence_finalize (ctx, f);
+}
+
+/* kvs.relayfence (master only, no response).
+ */
+static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
+                                   const flux_msg_t *msg, void *arg)
+{
+    ctx_t *ctx = arg;
+    const char *json_str, *name;
+    int nprocs;
+    JSON in = NULL;
+    JSON ops = NULL;
+    fence_t *f;
+
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (h, "%s request decode", __FUNCTION__);
+        goto done;
+    }
+    if (!(in = Jfromstr (json_str))
+                    || kp_tfence_dec (in, &name, &nprocs, &ops) < 0) {
+        errno = EPROTO;
+        flux_log_error (h, "%s payload decode", __FUNCTION__);
+        goto done;
+    }
+    /* FIXME: generate a kvs.fence.abort (or similar) if an error
+     * occurs after we know the fence name
+     */
+    if (!(f = fence_lookup (ctx, name))) {
+        if (!(f = fence_create (name, nprocs))) {
+            flux_log_error (h, "%s fence_create %s", __FUNCTION__, name);
+            goto done;
+        }
+        if (fence_add (ctx, f) < 0) {
+            flux_log_error (h, "%s fence_add %s", __FUNCTION__, name);
+            fence_destroy (f);
+            goto done;
+        }
+    }
+    if (fence_append_ops (f, ops) < 0) {
+        flux_log_error (h, "%s fence_append_ops %s", __FUNCTION__, name);
+        goto done;
+    }
+    f->count++;
+    flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
+              __FUNCTION__, name, f->count, f->nprocs);
+    if (f->count == f->nprocs) {
+        if (commit_apply_fence (ctx, f) < 0) {
+            flux_log_error (h, "%s commit_apply_fence %s", __FUNCTION__, name);
+            goto done;
+        }
+    }
+done:
+    Jput (in);
+}
+
+/* kvs.fence
+ * Sent from users to local kvs module.
+ */
+static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
+{
+    ctx_t *ctx = arg;
+    const char *json_str, *name;
+    int nprocs;
+    JSON in = NULL;
+    JSON ops = NULL;
+    fence_t *f;
+
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
+    if (!(in = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (kp_tfence_dec (in, &name, &nprocs, &ops) < 0) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(f = fence_lookup (ctx, name))) {
+        if (!(f = fence_create (name, nprocs)))
+            goto error;
+        if (fence_add (ctx, f) < 0) {
+            fence_destroy (f);
+            goto error;
+        }
+    }
+    if (fence_append_request (f, msg) < 0)
+        goto error;
+    if (ctx->master) {
+        if (fence_append_ops (f, ops) < 0)
+            goto error;
+        f->count++;
+        flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
+                  __FUNCTION__, name, f->count, f->nprocs);
+        if (f->count == f->nprocs) {
+            if (commit_apply_fence (ctx, f) < 0)
+                goto error;
+        }
+    }
+    else {
+        flux_rpc_t *rpc = flux_rpc (h, "kvs.relayfence", json_str,
+                                    0, FLUX_RPC_NORESPONSE);
+        if (!rpc)
+            goto error;
+        flux_rpc_destroy (rpc);
+    }
+    Jput (in);
+    return;
+
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s", __FUNCTION__);
+    Jput (in);
+}
+
+
 /* For wait_version().
  */
 static void sync_request_cb (flux_t h, flux_msg_handler_t *w,
@@ -1317,6 +1566,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
     int rootseq;
     const char *json_str;
     const char *rootdir;
+    const char *fence = NULL;
     JSON root = NULL;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
@@ -1328,10 +1578,12 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
         goto done;
     }
-    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root) < 0) {
+    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &fence) < 0) {
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
+    if (fence)
+        fence_finalize_byname (ctx, fence);
     if (root) {
         href_t ref;
         Jget (root);
@@ -1342,7 +1594,7 @@ done:
     Jput (out);
 }
 
-static int setroot_event_send (ctx_t *ctx)
+static int setroot_event_send (ctx_t *ctx, const char *fence)
 {
     JSON in = NULL;
     JSON root = NULL;
@@ -1353,7 +1605,7 @@ static int setroot_event_send (ctx_t *ctx)
         bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
     }
-    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root)))
+    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, fence)))
         goto done;
     if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
         goto done;
@@ -1471,6 +1723,8 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
     { FLUX_MSGTYPE_RESPONSE, "kvs.commit",          commit_response_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.fence",            fence_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence",       relayfence_request_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1486,11 +1740,9 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         return -1;
     }
-    if (!ctx->master) {
-        if (flux_event_subscribe (h, "kvs.setroot") < 0) {
-            flux_log_error (h, "flux_event_subscribe");
-            return -1;
-        }
+    if (flux_event_subscribe (h, "kvs.setroot") < 0) {
+        flux_log_error (h, "flux_event_subscribe");
+        return -1;
     }
     if (flux_event_subscribe (h, "kvs.dropcache") < 0) {
         flux_log_error (h, "flux_event_subscribe");

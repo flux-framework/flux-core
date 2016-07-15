@@ -368,6 +368,40 @@ done:
     return rc;
 }
 
+/* kvs.fence
+ */
+JSON kp_tfence_enc (const char *name, int nprocs, JSON ops)
+{
+    JSON o = Jnew ();
+    JSON empty_ops = NULL;
+
+    Jadd_str (o, "name", name);
+    Jadd_int (o, "nprocs", nprocs);
+    if (!ops)
+        ops = empty_ops = Jnew_ar();
+    Jadd_obj (o, "ops", ops); /* takes a ref on ops */
+    Jput (empty_ops);
+    return o;
+}
+
+int kp_tfence_dec (JSON o, const char **name, int *nprocs, JSON *ops)
+{
+    int rc = -1;
+
+    if (!name || !nprocs || !ops) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!Jget_obj (o, "ops", ops) || !Jget_str (o, "name", name)
+                                  || !Jget_int (o, "nprocs", nprocs)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 /* kvs.getroot
  */
 
@@ -406,7 +440,8 @@ done:
 /* kvs.setroot (event)
  */
 
-JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root)
+JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
+                      const char *fence)
 {
     JSON o = NULL;
 
@@ -419,12 +454,14 @@ JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root)
     Jadd_str (o, "rootdir", rootdir);
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
+    if (fence)
+        Jadd_str (o, "fence", fence);
 done:
     return o;
 }
 
 int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root)
+                     JSON *root, const char **fence)
 {
     int rc = -1;
 
@@ -438,6 +475,8 @@ int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
     }
     *root = NULL;
     (void)Jget_obj (o, "rootdirval", root);
+    *fence = NULL;
+    (void)Jget_str (o, "fence", fence);
     rc = 0;
 done:
     return rc;
