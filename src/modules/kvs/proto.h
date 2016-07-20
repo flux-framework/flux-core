@@ -1,15 +1,6 @@
 /* N.B. Decode functions return pointers to storage owned by the json object.
  */
 
-/* kvs.put
- */
-json_object *kp_tput_enc (const char *key, const char *json_str,
-                          bool link, bool dir);
-int kp_tput_dec (json_object *o, const char **key, json_object **val,
-                 bool *link, bool *dir);
-/* put response is just errnum */
-
-
 /* kvs.get
  */
 json_object *kp_tget_enc (const char *key, bool dir, bool link);
@@ -37,15 +28,19 @@ int kp_tunwatch_dec (json_object *o, const char **key);
 
 /* kvs.commit
  */
-json_object *kp_tcommit_enc (const char *sender, json_object *ops,
-                             const char *fence, int nprocs);
-int kp_tcommit_dec (json_object *o, const char **sender, json_object **ops,
-                    const char **fence, int *nprocs);
+json_object *kp_tcommit_enc (const char *sender, json_object *ops);
+int kp_tcommit_dec (json_object *o, const char **sender, json_object **ops);
 
 json_object *kp_rcommit_enc (int rootseq, const char *rootdir,
                              const char *sender);
 int kp_rcommit_dec (json_object *o, int *rootseq, const char **rootdir,
                     const char **sender);
+
+/* kvs.fence
+ */
+json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops);
+int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
+                   json_object **ops);
 
 /* kvs.getroot
  */

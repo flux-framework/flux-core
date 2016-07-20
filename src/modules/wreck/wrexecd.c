@@ -95,6 +95,7 @@ struct prog_ctx {
 
     struct pmi_simple_server *pmi;
     unsigned int barrier_sequence;
+    char barrier_name[64];
 
     uint32_t noderank;
 
@@ -1988,8 +1989,9 @@ static int wreck_pmi_kvs_put (void *arg, const char *kvsname,
         wlog_err (ctx, "pmi_kvs_put: asprintf: %s", strerror (errno));
         return (-1);
     }
-
+    kvs_fence_set_context (ctx->flux, ctx->barrier_name);
     rc = kvs_put_string (ctx->flux, kvskey, val);
+    kvs_fence_clear_context (ctx->flux);
     free (kvskey);
     return (rc);
 }
@@ -2028,25 +2030,28 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
     return (rc);
 }
 
+static void wreck_barrier_next (struct prog_ctx *ctx)
+{
+    snprintf (ctx->barrier_name, sizeof (ctx->barrier_name), "lwj.%ju.%u",
+              ctx->id, ctx->barrier_sequence++);
+}
+
 static void wreck_barrier_complete (flux_rpc_t *rpc, void *arg)
 {
     struct prog_ctx *ctx = arg;
     int rc = kvs_fence_finish (rpc);
     pmi_simple_server_barrier_complete (ctx->pmi, rc);
     flux_rpc_destroy (rpc);
+    wreck_barrier_next (ctx);
 }
 
 static int wreck_pmi_barrier_enter (void *arg)
 {
     struct prog_ctx *ctx = arg;
-    char *name;
     flux_rpc_t *rpc;
 
-    if (asprintf (&name, "lwj.%ju.%u", ctx->id, ctx->barrier_sequence++) < 0) {
-        wlog_err (ctx, "pmi_barrier_enter: asprintf: %s", strerror (errno));
-        return (-1);
-    }
-    if ((rpc = kvs_fence_begin (ctx->flux, name, ctx->nnodes)) == NULL) {
+    if ((rpc = kvs_fence_begin (ctx->flux, ctx->barrier_name,
+                                           ctx->nnodes)) == NULL) {
         wlog_err (ctx, "pmi_barrier_enter: kvs_fence_begin: %s",
                   strerror (errno));
         goto out;
@@ -2056,7 +2061,6 @@ static int wreck_pmi_barrier_enter (void *arg)
         flux_rpc_destroy (rpc);
     }
 out:
-    free (name);
     return (rpc == NULL ? -1 : 0);
 }
 
@@ -2075,6 +2079,7 @@ static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
         return (-1);
     }
     ctx->barrier_sequence = 0;
+    wreck_barrier_next (ctx);
     ctx->pmi = pmi_simple_server_create (&ops, (int) ctx->id,
                                          ctx->total_ntasks,
                                          ctx->nprocs,

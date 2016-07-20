@@ -85,8 +85,9 @@ typedef struct {
     char *cwd;
     zlist_t *dirstack;
     flux_msg_handler_t *w;
-    zlist_t *commits;
     json_object *ops;   /* JSON array of put, unlink, etc operations */
+    zhash_t *fence_ops;
+    JSON fence_context;
 } kvsctx_t;
 
 static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
@@ -98,6 +99,7 @@ static void freectx (void *arg)
     if (ctx) {
         zhash_destroy (&ctx->watchers);
         zlist_destroy (&ctx->dirstack);
+        zhash_destroy (&ctx->fence_ops);
         if (ctx->w)
             flux_msg_handler_destroy (ctx->w);
         if (ctx->cwd)
@@ -1104,6 +1106,7 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
     char *k = NULL;
     int value_len;
     int rc = -1;
+    JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
@@ -1114,7 +1117,7 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
      * A 'op' with a NULL dirent accomplishes this.
      */
     if (json_str == NULL) {
-        dirent_append (&ctx->ops, k, NULL);
+        dirent_append (ops, k, NULL);
     }
     /* Put value to the content store, and commit its blobref to the KVS.
      * It only makes sense to do this if value is larger than the blobref!
@@ -1137,7 +1140,7 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
             errno = EPROTO;
             goto done;
         }
-        dirent_append (&ctx->ops, k, dirent_create ("FILEREF", blobref));
+        dirent_append (ops, k, dirent_create ("FILEREF", blobref));
         flux_rpc_destroy (rpc);
     }
     /* Value is small, commit directly (becomes part of the directory object).
@@ -1148,7 +1151,7 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
             errno = EINVAL;
             goto done;
         }
-        dirent_append (&ctx->ops, k, dirent_create ("FILEVAL", val));
+        dirent_append (ops, k, dirent_create ("FILEVAL", val));
         Jput (val);
     }
     rc = 0;
@@ -1259,6 +1262,7 @@ int kvs_symlink (flux_t h, const char *key, const char *target)
     kvsctx_t *ctx = getctx (h);
     JSON val = NULL;
     char *k = NULL;
+    JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key || !target) {
         errno = EINVAL;
@@ -1269,7 +1273,7 @@ int kvs_symlink (flux_t h, const char *key, const char *target)
         return -1;
     }
     k = pathcat (kvs_getcwd (h), key);
-    dirent_append (&ctx->ops, k, dirent_create ("LINKVAL", val));
+    dirent_append (ops, k, dirent_create ("LINKVAL", val));
     free (k);
     Jput (val);
     return 0;
@@ -1280,13 +1284,14 @@ int kvs_mkdir (flux_t h, const char *key)
     kvsctx_t *ctx = getctx (h);
     JSON val = Jnew ();
     char *k = NULL;
+    JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
         return -1;
     }
     k = pathcat (kvs_getcwd (h), key);
-    dirent_append (&ctx->ops, k, dirent_create ("DIRVAL", val));
+    dirent_append (ops, k, dirent_create ("DIRVAL", val));
     free (k);
     Jput (val);
     return 0;
@@ -1304,7 +1309,7 @@ int kvs_commit (flux_t h)
     const char *json_str;
     int rc = -1;
 
-    if (!(in = kp_tcommit_enc (NULL, ctx->ops, NULL, 0)))
+    if (!(in = kp_tcommit_enc (NULL, ctx->ops)))
         goto done;
     Jput (ctx->ops);
     ctx->ops = NULL;
@@ -1325,12 +1330,21 @@ flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
     JSON in = NULL;
     flux_rpc_t *rpc = NULL;
     int saved_errno = errno;
+    JSON fence_ops = NULL;
 
-    if (!(in = kp_tcommit_enc (NULL, ctx->ops, name, nprocs)))
-        goto done;
-    Jput (ctx->ops);
-    ctx->ops = NULL;
-    if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (ctx->fence_ops)
+        fence_ops = zhash_lookup (ctx->fence_ops, name);
+    if (fence_ops) {
+        if (!(in = kp_tfence_enc (name, nprocs, fence_ops)))
+            goto done;
+        zhash_delete (ctx->fence_ops, name);
+    } else {
+        if (!(in = kp_tfence_enc (name, nprocs, ctx->ops)))
+            goto done;
+        Jput (ctx->ops);
+        ctx->ops = NULL;
+    }
+    if (!(rpc = flux_rpc (h, "kvs.fence", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
 done:
     saved_errno = errno;
@@ -1341,13 +1355,29 @@ done:
 
 int kvs_fence_finish (flux_rpc_t *rpc)
 {
-    const char *json_str;
+    return flux_rpc_get (rpc, NULL, NULL);
+}
 
-    /* N.B. response has a payload but we ignore it in this context
-     * (not in others).  The flux_rpc_get() will fail with EPROTO
-     * if there is a payload and we don't ask to see it.
-     */
-    return flux_rpc_get (rpc, NULL, &json_str);
+void kvs_fence_set_context (flux_t h, const char *name)
+{
+    kvsctx_t *ctx = getctx (h);
+
+    if (name) {
+        if (!ctx->fence_ops && !(ctx->fence_ops = zhash_new ()))
+            oom ();
+        if (!(ctx->fence_context = zhash_lookup (ctx->fence_ops, name))) {
+            ctx->fence_context = Jnew_ar ();
+            if (zhash_insert (ctx->fence_ops, name, ctx->fence_context) < 0)
+                oom ();
+            zhash_freefn (ctx->fence_ops, name, (zhash_free_fn *)Jput);
+        }
+    } else
+        ctx->fence_context = NULL;
+}
+
+void kvs_fence_clear_context (flux_t h)
+{
+    kvs_fence_set_context (h, NULL);
 }
 
 int kvs_fence (flux_t h, const char *name, int nprocs)

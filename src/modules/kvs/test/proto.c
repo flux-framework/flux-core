@@ -7,29 +7,6 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-void test_put (void)
-{
-    JSON o;
-    bool dir = false;
-    bool link = false;
-    const char *key = NULL;
-    JSON val = NULL;
-    int i;
-
-    val = Jnew ();
-    Jadd_int (val, "i", 2);
-    o = kp_tput_enc ("a", Jtostr (val), false, true);
-    ok (o != NULL,
-        "kp_tput_snec works");
-    val = NULL;
-    ok (kp_tput_dec (o, &key, &val, &dir, &link) == 0
-        && !dir && link,
-        "kp_tput_dec works");
-    ok (val && Jget_int (val, "i", &i) && i == 2,
-        "kp_tput_dec returned encoded object");
-    Jput (o); /* owns val */
-}
-
 void test_get (void)
 {
     JSON o;
@@ -122,21 +99,42 @@ void test_unwatch (void)
     Jput (o);
 }
 
+void test_fence (void)
+{
+    JSON o, out;
+    JSON ops = Jnew_ar();
+    int nprocs;
+    const char *name;
+
+    ok ((o = kp_tfence_enc ("foo", 42, ops)) != NULL,
+        "kp_tfence_enc works");
+    name = NULL;
+    nprocs = 0;
+    out = NULL;
+    ok (kp_tfence_dec (o, &name, &nprocs, &out) == 0
+        && name != NULL && !strcmp (name, "foo")
+        && nprocs == 42 && out != NULL,
+        "kp_tfence_dec works");
+    Jput (out);
+    Jput (o);
+
+    Jput (ops);
+}
+
 void test_commit (void)
 {
     JSON o;
-    const char *sender = NULL, *fence = NULL;
+    const char *sender = NULL;
     JSON ops = NULL;
     JSON op1, op2;
-    int nprocs = 0;
     const char *rootdir;
     int rootseq;
     int len;
 
-    ok ((o = kp_tcommit_enc (NULL, NULL, NULL, 0)) != NULL,
+    ok ((o = kp_tcommit_enc (NULL, NULL)) != NULL,
         "kp_tcommit_enc (external commit) works");
-    ok (kp_tcommit_dec (o, &sender, &ops, &fence, &nprocs) == 0
-        && sender == NULL && ops == NULL && fence == NULL && nprocs == 1,
+    ok (kp_tcommit_dec (o, &sender, &ops) == 0
+        && sender == NULL && ops == NULL,
         "kp_tcommit_dec (external commit) works");
     Jput (o);
 
@@ -147,13 +145,11 @@ void test_commit (void)
     Jadd_ar_obj (ops, op2);
     Jput (op1);
     Jput (op2);
-    ok ((o = kp_tcommit_enc ("sender", ops, "fence", 1024)) != NULL,
+    ok ((o = kp_tcommit_enc ("sender", ops)) != NULL,
         "kp_tcommit_enc (internal commit) works");
     Jput (ops);
-    ok (kp_tcommit_dec (o, &sender, &ops, &fence, &nprocs) == 0
-        && sender != NULL && !strcmp (sender, "sender")
-        && fence != NULL  && !strcmp (fence, "fence")
-        && nprocs == 1024,
+    ok (kp_tcommit_dec (o, &sender, &ops) == 0
+        && sender != NULL && !strcmp (sender, "sender"),
         "kp_tcommit_dec (internal commit) works");
     Jput (o);
     ok (Jget_ar_len (ops, &len) && len == 2,
@@ -187,15 +183,15 @@ void test_getroot (void)
 void test_setroot (void)
 {
     JSON o;
-    const char *rootdir, *fence;
+    const char *rootdir, *fence = NULL;
     int rootseq;
     JSON root;
 
-    ok ((o = kp_tsetroot_enc (42, "abc", NULL, "xyz")) != NULL,
+    ok ((o = kp_tsetroot_enc (42, "abc", NULL, "foo")) != NULL,
         "kp_tsetroot_enc works");
     ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &fence) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "abc")
-        && root == NULL && fence != NULL && !strcmp (fence, "xyz"),
+        && root == NULL && fence != NULL && !strcmp (fence, "foo"),
         "kp_tsetroot_dec works");
     Jput (o);
 }
@@ -203,15 +199,15 @@ void test_setroot (void)
 int main (int argc, char *argv[])
 {
 
-    plan (31);
+    plan (NO_PLAN);
 
-    test_put (); // 3
     test_get (); // 8
     test_watch (); // 7
     test_unwatch (); // 2
     test_commit (); // 7
     test_getroot (); // 2
     test_setroot (); // 2
+    test_fence ();
 
     done_testing();
     return (0);

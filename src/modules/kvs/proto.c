@@ -51,72 +51,6 @@
 
 #include "proto.h"
 
-/* kvs.put
- */
-JSON kp_tput_enc (const char *key, const char *json_str, bool link, bool dir)
-{
-    JSON o = NULL;
-    JSON val = NULL;
-
-    if (!key) {
-        errno = EINVAL;
-        goto error;
-    }
-    o = Jnew ();
-    if (json_str) {
-        if (!(val = Jfromstr (json_str))) {
-            errno = EINVAL;
-            goto error;
-        }
-    }
-    json_object_object_add (o, key, val);
-    if (dir)
-        Jadd_bool (o, ".flag_mkdir", true);
-    if (link)
-        Jadd_bool (o, ".flag_symlink", true);
-    return o;
-error:
-    Jput (o);
-    return NULL;
-}
-
-int kp_tput_dec (JSON o, const char **key, JSON *val, bool *link, bool *dir)
-{
-    json_object_iter iter;
-    int rc = -1;
-    const char *k = NULL;
-    JSON v = NULL;
-
-    if (!o || !dir || !link || !key) {
-        errno = EINVAL;
-        goto done;
-    }
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6))
-            continue;
-        if (k) {
-            errno = EPROTO;
-            goto done;
-        }
-        k = iter.key;
-        v = iter.val;
-    }
-    if (!k) {
-        errno = EPROTO;
-        goto done;
-    }
-    *key = k;
-    *val = v;
-    *dir = false;
-    (void)Jget_bool (o, ".flag_mkdir", dir);
-    *link = false;
-    (void)Jget_bool (o, ".flag_symlink", link);
-
-    rc = 0;
-done:
-    return rc;
-}
-
 /* kvs.get
  */
 
@@ -370,26 +304,20 @@ done:
 /* kvs.commit
  */
 
-JSON kp_tcommit_enc (const char *sender, JSON ops,
-                     const char *fence, int nprocs)
+JSON kp_tcommit_enc (const char *sender, JSON ops)
 {
     JSON o = Jnew ();
     Jadd_obj (o, "ops", ops); /* takes a ref on ops */
     if (sender)
         Jadd_str (o, ".arg_sender", sender);
-    if (fence) {
-        Jadd_str (o, ".arg_fence", fence);
-        Jadd_int (o, ".arg_nprocs", nprocs);
-    }
     return o;
 }
 
-int kp_tcommit_dec (JSON o, const char **sender, JSON *ops,
-                    const char **fence, int *nprocs)
+int kp_tcommit_dec (JSON o, const char **sender, JSON *ops)
 {
     int rc = -1;
 
-    if (!sender || !ops || !fence || !nprocs) {
+    if (!sender || !ops) {
         errno = EINVAL;
         goto done;
     }
@@ -399,10 +327,6 @@ int kp_tcommit_dec (JSON o, const char **sender, JSON *ops,
         Jget (*ops);
     *sender = NULL;
     (void)Jget_str (o, ".arg_sender", sender);
-    *fence = NULL;
-    (void)Jget_str (o, ".arg_fence", fence);
-    *nprocs = 1;
-    (void)Jget_int (o, ".arg_nprocs", nprocs);
 
     rc = 0;
 done:
@@ -436,6 +360,40 @@ int kp_rcommit_dec (JSON o, int *rootseq, const char **rootdir,
     }
     if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
                                           || !Jget_str (o, "sender", sender)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+/* kvs.fence
+ */
+JSON kp_tfence_enc (const char *name, int nprocs, JSON ops)
+{
+    JSON o = Jnew ();
+    JSON empty_ops = NULL;
+
+    Jadd_str (o, "name", name);
+    Jadd_int (o, "nprocs", nprocs);
+    if (!ops)
+        ops = empty_ops = Jnew_ar();
+    Jadd_obj (o, "ops", ops); /* takes a ref on ops */
+    Jput (empty_ops);
+    return o;
+}
+
+int kp_tfence_dec (JSON o, const char **name, int *nprocs, JSON *ops)
+{
+    int rc = -1;
+
+    if (!name || !nprocs || !ops) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!Jget_obj (o, "ops", ops) || !Jget_str (o, "name", name)
+                                  || !Jget_int (o, "nprocs", nprocs)) {
         errno = EPROTO;
         goto done;
     }
@@ -482,8 +440,8 @@ done:
 /* kvs.setroot (event)
  */
 
-JSON kp_tsetroot_enc (int rootseq, const char *rootdir,
-                      JSON root, const char *fence)
+JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
+                      const char *fence)
 {
     JSON o = NULL;
 
@@ -494,10 +452,10 @@ JSON kp_tsetroot_enc (int rootseq, const char *rootdir,
     o = Jnew ();
     Jadd_int (o, "rootseq", rootseq);
     Jadd_str (o, "rootdir", rootdir);
-    if (fence)
-        Jadd_str (o, "fence", fence);
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
+    if (fence)
+        Jadd_str (o, "fence", fence);
 done:
     return o;
 }
@@ -507,7 +465,7 @@ int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
 {
     int rc = -1;
 
-    if (!o || !rootseq || !rootdir || !root || !fence) {
+    if (!o || !rootseq || !rootdir || !root) {
         errno = EINVAL;
         goto done;
     }
@@ -515,10 +473,10 @@ int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
         errno = EPROTO;
         goto done;
     }
-    *fence = NULL;
-    (void)Jget_str (o, "fence", fence);
     *root = NULL;
     (void)Jget_obj (o, "rootdirval", root);
+    *fence = NULL;
+    (void)Jget_str (o, "fence", fence);
     rc = 0;
 done:
     return rc;
