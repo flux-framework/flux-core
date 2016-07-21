@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev libminilzo libpmi-client libpmi-server \
+SUBDIRS = libtap libev libminilzo libpmi \
 	  liblsd libutil libflux libsubprocess libcompat liboptparse
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
@@ -14,8 +14,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
-	$(builddir)/libpmi-client/libpmi-client.la \
-	$(builddir)/libpmi-server/libpmi-server.la \
+	$(builddir)/libpmi/libpmi.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
@@ -23,6 +22,7 @@ libflux_internal_la_LIBADD = \
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la
+fluxlib_LTLIBRARIES = libpmi.la
 
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
@@ -43,4 +43,13 @@ libflux_optparse_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
-EXTRA_DIST = libflux-core.map libflux-optparse.map
+libpmi_la_SOURCES =
+libpmi_la_LIBADD = \
+	$(builddir)/libpmi/libpmi.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
+libpmi_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libpmi.map \
+	-shared -export-dynamic --disable-static \
+	-Wl,--no-undefined
+
+EXTRA_DIST = libflux-core.map libflux-optparse.map libpmi.map

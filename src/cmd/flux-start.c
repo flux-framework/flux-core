@@ -38,7 +38,8 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libpmi-server/simple.h"
+#include "src/common/libpmi/simple_server.h"
+#include "src/common/libpmi/dgetline.h"
 #include "src/common/libsubprocess/subprocess.h"
 
 struct pmi_server {
@@ -254,35 +255,6 @@ char *create_scratch_dir (struct context *ctx)
     return scratchdir;
 }
 
-static int dgetline (int fd, char *buf, int len)
-{
-    int i = 0;
-    while (i < len - 1) {
-        if (read (fd, &buf[i], 1) <= 0)
-            return -1;
-        if (buf[i++] == '\n')
-            break;
-    }
-    if (buf[i - 1] != '\n') {
-        errno = EPROTO;
-        return -1;
-    }
-    buf[i] = '\0';
-    return 0;
-}
-
-static int dputline (int fd, const char *buf)
-{
-    int len = strlen (buf);
-    int n, count = 0;
-    while (count < len) {
-        if ((n = write (fd, buf + count, len - count)) < 0)
-            return n;
-        count += n;
-    }
-    return count;
-}
-
 static int pmi_response_send (void *client, const char *buf)
 {
     struct client *cli = client;
@@ -396,7 +368,6 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
     add_arg (cli->p, "%s", ctx->broker_path);
-    add_arg (cli->p, "--boot-method=PMI");
     add_arg (cli->p, "--shared-ipc-namespace");
     add_arg (cli->p, "--setattr=scratch-directory=%s", ctx->scratch_dir);
     add_args_list (cli->p, ctx->opts, "broker-opts");

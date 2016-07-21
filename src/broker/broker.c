@@ -63,7 +63,8 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
-#include "src/common/libpmi-client/pmi-client.h"
+#include "src/common/libpmi/pmi.h"
+#include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
 
@@ -194,8 +195,6 @@ static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
 
 static int boot_pmi (ctx_t *ctx);
-static int boot_single (ctx_t *ctx);
-static struct boot_method *lookup_boot_method (const char *name);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -204,13 +203,7 @@ static void init_attrs_from_environment (attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-static struct boot_method boot_table[] = {
-    { "pmi", boot_pmi },
-    { "single", boot_single },
-    { NULL, NULL },
-};
-
-#define OPTIONS "+vqM:X:k:s:T:g:Em:IS:"
+#define OPTIONS "+vqM:X:k:s:T:g:EIS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
@@ -222,7 +215,6 @@ static const struct option longopts[] = {
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
-    {"boot-method",     required_argument,  0, 'm'},
     {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
@@ -241,7 +233,6 @@ static void usage (void)
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
-" -m,--boot-method             Select bootstrap: pmi, single\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
     exit (1);
@@ -254,7 +245,6 @@ int main (int argc, char *argv[])
     zlist_t *sigwatchers;
     int security_clr = 0;
     int security_set = 0;
-    struct boot_method *boot_method = NULL;
     int e;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -336,11 +326,6 @@ int main (int argc, char *argv[])
             case 'I': /* --shared-ipc-namespace */
                 ctx.shared_ipc_namespace = true;
                 break;
-            case 'm': { /* --boot-method */
-                if (!(boot_method = lookup_boot_method (optarg)))
-                    log_msg_exit ("unknown boot method: %s", optarg);
-                break;
-            }
             case 'S': { /* --setattr ATTR=VAL */
                 char *val, *attr = xstrdup (optarg);
                 if ((val = strchr (attr, '=')))
@@ -424,31 +409,10 @@ int main (int argc, char *argv[])
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
     overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
 
-    /* Execute the selected boot method.
-     * At minimum, this must ensure that rank, size, and sid are set.
+    /* Boot with PMI.
      */
-    if (boot_method) {
-        int rc = boot_method->fun (&ctx);
-        if (ctx.verbose)
-            log_msg ("boot: %s: %s", boot_method->name,
-                 rc == 0 ? "ok" : "fail");
-        if (rc < 0)
-            log_msg_exit ("bootstrap failed");
-    } else {
-        if (ctx.verbose)
-            log_msg ("boot: no boot method specified");
-        int i, rc = -1;
-        for (i = 0; boot_table[i].name != NULL; i++) {
-            rc = boot_table[i].fun (&ctx);
-            if (ctx.verbose)
-                log_msg ("boot: %s: %s", boot_table[i].name,
-                     rc == 0 ? "ok" : "fail");
-            if (rc == 0)
-                break;
-        }
-        if (rc < 0)
-            log_msg_exit ("bootstrap failed");
-    }
+    if (boot_pmi (&ctx) < 0)
+        log_msg_exit ("bootstrap failed");
 
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
@@ -748,15 +712,6 @@ static void init_attrs_from_environment (attr_t *attrs)
         if (attr_add (attrs, m->attr, val, flags) < 0)
             log_err_exit ("attr_add %s", m->attr);
     }
-}
-
-static struct boot_method *lookup_boot_method (const char *name)
-{
-    int i;
-    for (i = 0; boot_table[i].name != NULL; i++)
-        if (!strcasecmp (boot_table[i].name, name))
-            break;
-    return boot_table[i].name ? &boot_table[i] : NULL;
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)
@@ -1071,7 +1026,6 @@ done:
 
 static int boot_pmi (ctx_t *ctx)
 {
-    pmi_t *pmi = NULL;
     const char *scratch_dir;
     int spawned, size, rank, appnum;
     int relay_rank = -1, parent_rank;
@@ -1079,17 +1033,15 @@ static int boot_pmi (ctx_t *ctx)
     int *clique_ranks = NULL;
     char ipaddr[HOST_NAME_MAX + 1];
     const char *child_uri, *relay_uri;
-    int id_len, kvsname_len, key_len, val_len;
+    int kvsname_len, key_len, val_len;
     char *id = NULL;
     char *kvsname = NULL;
     char *key = NULL;
     char *val = NULL;
     int e, rc = -1;
 
-    if (!(pmi = pmi_create_guess ()))
-        goto done;
-    if ((e = pmi_init (pmi, &spawned)) != PMI_SUCCESS) {
-        log_msg ("pmi_init: %s", pmi_strerror (e));
+    if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
+        log_msg ("PMI_Init: %s", pmi_strerror (e));
         goto done;
     }
 
@@ -1099,16 +1051,16 @@ static int boot_pmi (ctx_t *ctx)
 
     /* Get rank, size, appnum
      */
-    if ((e = pmi_get_size (pmi, &size)) != PMI_SUCCESS) {
-        log_msg ("pmi_get_size: %s", pmi_strerror (e));
+    if ((e = PMI_Get_size (&size)) != PMI_SUCCESS) {
+        log_msg ("PMI_Get_size: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_get_rank (pmi, &rank)) != PMI_SUCCESS) {
-        log_msg ("pmi_get_rank: %s", pmi_strerror (e));
+    if ((e = PMI_Get_rank (&rank)) != PMI_SUCCESS) {
+        log_msg ("PMI_Get_rank: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_get_appnum (pmi, &appnum)) != PMI_SUCCESS) {
-        log_msg ("pmi_get_appnum: %s", pmi_strerror (e));
+    if ((e = PMI_Get_appnum (&appnum)) != PMI_SUCCESS) {
+        log_msg ("PMI_Get_appnum: %s", pmi_strerror (e));
         goto done;
     }
     ctx->rank = rank;
@@ -1118,16 +1070,7 @@ static int boot_pmi (ctx_t *ctx)
     /* Get id string.
      */
     if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
-        e = pmi_get_id_length_max (pmi, &id_len);
-        if (e == PMI_SUCCESS) {
-            id = xzmalloc (id_len);
-            if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
-                log_msg ("pmi_get_rank: %s", pmi_strerror (e));
-                goto done;
-            }
-        } else { /* No pmi_get_id() available? */
-            id = xasprintf ("%d", appnum);
-        }
+        id = xasprintf ("%d", appnum);
         if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
@@ -1164,14 +1107,14 @@ static int boot_pmi (ctx_t *ctx)
      * alternate method to determine if ranks are co-located on a node.
      */
     if (ctx->enable_epgm) {
-        if ((e = pmi_get_clique_size (pmi, &clique_size)) != PMI_SUCCESS) {
-            log_msg ("pmi_get_clique_size: %s", pmi_strerror (e));
+        if ((e = PMI_Get_clique_size (&clique_size)) != PMI_SUCCESS) {
+            log_msg ("PMI_get_clique_size: %s", pmi_strerror (e));
             goto done;
         }
         clique_ranks = xzmalloc (sizeof (int) * clique_size);
-        if ((e = pmi_get_clique_ranks (pmi, clique_ranks, clique_size))
+        if ((e = PMI_Get_clique_ranks (clique_ranks, clique_size))
                                                           != PMI_SUCCESS) {
-            log_msg ("pmi_get_clique_ranks: %s", pmi_strerror (e));
+            log_msg ("PMI_Get_clique_ranks: %s", pmi_strerror (e));
             goto done;
         }
         if (clique_size > 1) {
@@ -1191,22 +1134,22 @@ static int boot_pmi (ctx_t *ctx)
     /* Prepare for PMI KVS operations by grabbing the kvsname,
      * and buffers for keys and values.
      */
-    if ((e = pmi_kvs_get_name_length_max (pmi, &kvsname_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_name_length_max: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_name_length_max (&kvsname_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_name_length_max: %s", pmi_strerror (e));
         goto done;
     }
     kvsname = xzmalloc (kvsname_len);
-    if ((e = pmi_kvs_get_my_name (pmi, kvsname, kvsname_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_my_name: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_my_name (kvsname, kvsname_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_my_name: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_kvs_get_key_length_max (pmi, &key_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_key_length_max: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_key_length_max (&key_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_key_length_max: %s", pmi_strerror (e));
         goto done;
     }
     key = xzmalloc (key_len);
-    if ((e = pmi_kvs_get_value_length_max (pmi, &val_len)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_get_value_length_max: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Get_value_length_max (&val_len)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Get_value_length_max: %s", pmi_strerror (e));
         goto done;
     }
     val = xzmalloc (val_len);
@@ -1230,8 +1173,8 @@ static int boot_pmi (ctx_t *ctx)
             log_msg ("pmi val string overflow");
             goto done;
         }
-        if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
-            log_msg ("pmi_kvs_put: %s", pmi_strerror (e));
+        if ((e = PMI_KVS_Put (kvsname, key, val)) != PMI_SUCCESS) {
+            log_msg ("PMI_KVS_Put: %s", pmi_strerror (e));
             goto done;
         }
     }
@@ -1247,20 +1190,20 @@ static int boot_pmi (ctx_t *ctx)
             log_msg ("pmi val string overflow");
             goto done;
         }
-        if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
-            log_msg ("pmi_kvs_put: %s", pmi_strerror (e));
+        if ((e = PMI_KVS_Put (kvsname, key, val)) != PMI_SUCCESS) {
+            log_msg ("PMI_KVS_Put: %s", pmi_strerror (e));
             goto done;
         }
     }
 
     /* Puts are complete, now we synchronize and begin our gets.
      */
-    if ((e = pmi_kvs_commit (pmi, kvsname)) != PMI_SUCCESS) {
-        log_msg ("pmi_kvs_commit: %s", pmi_strerror (e));
+    if ((e = PMI_KVS_Commit (kvsname)) != PMI_SUCCESS) {
+        log_msg ("PMI_KVS_Commit: %s", pmi_strerror (e));
         goto done;
     }
-    if ((e = pmi_barrier (pmi)) != PMI_SUCCESS) {
-        log_msg ("pmi_barrier: %s", pmi_strerror (e));
+    if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
+        log_msg ("PMI_Barrier: %s", pmi_strerror (e));
         goto done;
     }
 
@@ -1272,8 +1215,7 @@ static int boot_pmi (ctx_t *ctx)
             log_msg ("pmi key string overflow");
             goto done;
         }
-        if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
-                                                            != PMI_SUCCESS) {
+        if ((e = PMI_KVS_Get (kvsname, key, val, val_len)) != PMI_SUCCESS) {
             log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
             goto done;
         }
@@ -1299,9 +1241,9 @@ static int boot_pmi (ctx_t *ctx)
                 log_msg ("pmi key string overflow");
                 goto done;
             }
-            if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
+            if ((e = PMI_KVS_Get (kvsname, key, val, val_len))
                                                             != PMI_SUCCESS) {
-                log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
+                log_msg ("PMI_KVS_Get: %s", pmi_strerror (e));
                 goto done;
             }
             overlay_set_event (ctx->overlay, "%s", val);
@@ -1317,7 +1259,7 @@ static int boot_pmi (ctx_t *ctx)
             cleanup_push_string (cleanup_file, eventfile);
         free (eventfile);
     }
-    pmi_finalize (pmi);
+    PMI_Finalize ();
     rc = 0;
 done:
     if (id)
@@ -1330,29 +1272,8 @@ done:
         free (key);
     if (val)
         free (val);
-    if (pmi)
-        pmi_destroy (pmi);
     if (rc != 0)
         errno = EPROTO;
-    return rc;
-}
-
-static int boot_single (ctx_t *ctx)
-{
-    int rc = -1;
-    char *sid = xasprintf ("%d", getpid ());
-
-    ctx->rank = 0;
-    ctx->size = 1;
-
-    if (attr_get (ctx->attrs, "session-id", NULL, NULL) < 0) {
-        if (attr_add (ctx->attrs, "session-id", sid,
-                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        goto done;
-    }
-    rc = 0;
-done:
-    free (sid);
     return rc;
 }
 

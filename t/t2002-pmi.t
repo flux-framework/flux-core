@@ -12,7 +12,7 @@ Test that PMI works in a FLux-launched program
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} wreck
 echo "# $0: flux session size will be ${SIZE}"
-FLUX_PMI_LIBRARY=${FLUX_BUILD_DIR}/src/lib/libpmi/.libs/libpmi.so
+KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 
 # Usage: run_program timeout ntasks nnodes
 run_program() {
@@ -20,7 +20,6 @@ run_program() {
 	local ntasks=$2
 	local nnodes=$3
 	shift 3
-	export FLUX_PMI_TRACE=0x38
 	run_timeout $timeout flux wreckrun -l -o stdio-delay-commit \
 		    -n${ntasks} -N${nnodes} $*
 }
@@ -84,33 +83,25 @@ test_expect_success 'pmi: wreck preputs PMI_process_mapping into kvs' '
 '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
-	run_program 10 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    						>output_kvstest &&
+	run_program 10 ${SIZE} ${SIZE} ${KVSTEST} >output_kvstest &&
 	grep -q "put phase" output_kvstest &&
 	grep -q "get phase" output_kvstest
 '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*size) pattern works' '
-	run_program 30 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    						-n >output_kvstest2 &&
+	run_program 30 ${SIZE} ${SIZE} ${KVSTEST} -n >output_kvstest2 &&
 	grep -q "put phase" output_kvstest2 &&
 	grep -q "get phase" output_kvstest2
 '
 
 test_expect_success 'pmi: (put*16) / barrier / (get*16) pattern works' '
-	run_program 30 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    					-N 16 >output_kvstest3 &&
+	run_program 30 ${SIZE} ${SIZE} ${KVSTEST} -N 16 >output_kvstest3 &&
 	grep -q "put phase" output_kvstest3 &&
 	grep -q "get phase" output_kvstest3
 '
 
 test_expect_success 'pmi: (put*16) / barrier / (get*16*size) pattern works' '
-	run_program 60 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/t/pmi/kvstest --library=${FLUX_PMI_LIBRARY} \
-	    					-n -N 16 >output_kvstest4 &&
+	run_program 60 ${SIZE} ${SIZE} ${KVSTEST} -n -N 16 >output_kvstest4 &&
 	grep -q "put phase" output_kvstest4 &&
 	grep -q "get phase" output_kvstest4
 '
