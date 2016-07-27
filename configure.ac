@@ -124,7 +124,7 @@ AC_ARG_ENABLE(caliper,
 if test "$enable_caliper" = "yes"; then
     PKG_CHECK_MODULES([CALIPER], [caliper], [], [])
     CFLAGS="${CFLAGS} ${CALIPER_CFLAGS} "
-    LIBS="${LIBS} ${CALIPER_LIBS} -lrt "
+    LIBS="${LIBS} $(pkg-config --libs-only-L ) -lcaliper-stub -lrt "
     AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
 fi
 
