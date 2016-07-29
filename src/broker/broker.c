@@ -242,6 +242,23 @@ static void usage (void)
     exit (1);
 }
 
+static int setup_profiling (const char *program, int rank)
+{
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.type", "main");
+    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
+    cali_begin_string_byname ("binary", program);
+    cali_begin_int_byname ("flux.rank", rank);
+    // TODO: this is a stopgap until we have better control over
+    // instrumemtation in child processes. If we want to see what children
+    // that load libflux are up to, this should be disabled
+    unsetenv ("CALI_SERVICES_ENABLE");
+    unsetenv ("CALI_CONFIG_PROFILE");
+#endif
+    return (0);
+}
+
+
 int main (int argc, char *argv[])
 {
     int c;
@@ -437,17 +454,7 @@ int main (int argc, char *argv[])
         log_err_exit ("attr_set_flags session-id");
 
     // Setup profiling
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.type", "main");
-    cali_begin_int_byname ("flux.tid", syscall(SYS_gettid));
-    cali_begin_string_byname ("binary", argv[0]);
-    cali_begin_int_byname ("flux.rank", ctx.rank);
-    // TODO: this is a stopgap until we have better control over
-    // instrumemtation in child processes. If we want to see what children
-    // that load libflux are up to, this should be disabled
-    unsetenv ("CALI_SERVICES_ENABLE");
-    unsetenv ("CALI_CONFIG_PROFILE");
-#endif
+    setup_profiling (argv[0], ctx.rank);
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.

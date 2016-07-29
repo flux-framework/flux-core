@@ -104,6 +104,17 @@ struct modhash_struct {
     heartbeat_t *heartbeat;
 };
 
+static int setup_module_profiling (module_t *p)
+{
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.type", "module");
+    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
+    cali_begin_int_byname ("flux.rank", p->rank);
+    cali_begin_string_byname ("flux.name", p->name);
+#endif
+    return (0);
+}
+
 static void *module_thread (void *arg)
 {
     module_t *p = arg;
@@ -119,12 +130,7 @@ static void *module_thread (void *arg)
 
     assert (p->zctx);
 
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.type", "module");
-    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_int_byname ("flux.rank", p->rank);
-    cali_begin_string_byname ("flux.name", p->name);
-#endif
+    setup_module_profiling (p);
 
     /* Connect to broker socket, enable logging, register built-in services
      */
