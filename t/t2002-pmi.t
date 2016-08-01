@@ -13,6 +13,7 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} wreck
 echo "# $0: flux session size will be ${SIZE}"
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
+PMINFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pminfo
 
 # Usage: run_program timeout ntasks nnodes
 run_program() {
@@ -99,6 +100,18 @@ test_expect_success 'pmi: wreck preputs PMI_process_mapping into kvs' '
 	0: (vector,(0,4,1))
 	EOF
 	test_cmp expected_map output_map
+'
+
+test_expect_success 'pmi: PMI reports correct rank, size' '
+	run_program 5 4 4 ${PMINFO} | sed -e"s/ appnum.*$//" \
+				    | sort >output_pminfo &&
+	cat >expected_pminfo <<-EOF &&
+	0: 0: size=4
+	1: 1: size=4
+	2: 2: size=4
+	3: 3: size=4
+	EOF
+	test_cmp expected_pminfo output_pminfo
 '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
