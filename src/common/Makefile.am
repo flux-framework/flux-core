@@ -51,6 +51,7 @@ libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
-	-Wl,--no-undefined
+	$(san_ld_zdef_flag)
+
 
 EXTRA_DIST = libflux-core.map libflux-optparse.map libpmi.map
