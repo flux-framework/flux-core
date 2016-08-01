@@ -121,6 +121,30 @@ test_expect_success 'pmi: dlopen failsafe works' '
 	grep -q "PMI_Init: operation failed" failsafe_output
 '
 
+test_expect_success 'pmi: wreck sets clique for multiple tasks per node' '
+	run_timeout 5 flux wreckrun -N1 -n4 ${PMINFO} --clique \
+						| sort >output_pmclique &&
+	cat >expected_pmclique <<-EOT &&
+	0: clique=0,1,2,3
+	1: clique=0,1,2,3
+	2: clique=0,1,2,3
+	3: clique=0,1,2,3
+	EOT
+	test_cmp expected_pmclique output_pmclique
+'
+
+test_expect_success 'pmi: wreck sets clique for single task per node' '
+	run_timeout 5 flux wreckrun -N4 ${PMINFO} --clique \
+						| sort >output_pmclique2 &&
+	cat >expected_pmclique2 <<-EOF  &&
+	0: clique=0
+	1: clique=1
+	2: clique=2
+	3: clique=3
+	EOF
+	test_cmp expected_pmclique2 output_pmclique2
+'
+
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
 	run_program 10 ${SIZE} ${SIZE} ${KVSTEST} >output_kvstest &&
 	grep -q "put phase" output_kvstest &&
