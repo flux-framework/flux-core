@@ -11,6 +11,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
+#include "src/common/libpmi/clique.h"
 
 #define OPTIONS "l:c"
 static const struct option longopts[] = {
@@ -81,29 +82,32 @@ int main(int argc, char *argv[])
      */
     if (copt) {
         int clen;
+        int *clique;
+        char *s;
 
         e = PMI_Get_clique_size (&clen);
         if (e == PMI_SUCCESS) {
-            char *s;
-            int *clique = xzmalloc (sizeof (clique[0]) * clen);
+            clique = xzmalloc (sizeof (clique[0]) * clen);
             e = PMI_Get_clique_ranks (clique, clen);
             if (e != PMI_SUCCESS)
                 log_msg_exit ("%d: PMI_Get_clique_ranks: %s",
                               rank, pmi_strerror(e));
-            s = cliquetostr (clen, clique);
-            printf ("%d: clique=%s\n", rank, s);
-            free (clique);
-            free (s);
         }
         else {
-            char *val = xzmalloc (val_len);
-            e = PMI_KVS_Get (kvsname, "PMI_process_mapping", val, val_len);
+            e = pmi_process_mapping_get_clique_size (&clen);
             if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_KVS_Get PMI_process_mapping: %s",
-                              rank, pmi_strerror(e));
-            printf ("%d: mapping=%s\n", rank, val);
-            free (val);
+                log_msg_exit ("%d: PMI_process_mapping: %s",
+                              rank, pmi_strerror (e));
+            clique = xzmalloc (sizeof (clique[0]) * clen);
+            e = pmi_process_mapping_get_clique_ranks (clique, clen);
+            if (e != PMI_SUCCESS)
+                log_msg_exit ("%d: PMI_process_mapping: %s",
+                              rank, pmi_strerror (e));
         }
+        s = cliquetostr (clen, clique);
+        printf ("%d: clique=%s\n", rank, s);
+        free (clique);
+        free (s);
     }
     /* Generic info
      */
