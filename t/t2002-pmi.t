@@ -24,6 +24,13 @@ run_program() {
 		    -n${ntasks} -N${nnodes} $*
 }
 
+# Requires lwj == 1
+test_expect_success 'pmi: wreck sets FLUX_JOB_ID' '
+	run_program 5 ${SIZE} ${SIZE} printenv FLUX_JOB_ID >output_appnum &&
+        test `wc -l < output_appnum` = ${SIZE} &&
+	test `cut -d: -f2 output_appnum | uniq` -eq 1
+'
+
 test_expect_success 'pmi: wreck sets FLUX_JOB_SIZE' '
 	run_program 5 ${SIZE} ${SIZE} printenv FLUX_JOB_SIZE >output_size &&
         test `wc -l < output_size` -eq ${SIZE} &&
@@ -39,15 +46,6 @@ test_expect_success 'pmi: wreck sets FLUX_TASK_RANK' '
 	3: 3
 	EOF
 	test_cmp expected_rank output_rank
-'
-
-# FIXME: this test hardwires the expectations that job ID's are
-# assigned in a particular sequence.  We don't really care about that,
-# just that it's set to an integer that be returned by PMI_Get_appnum().
-test_expect_success 'pmi: wreck sets FLUX_JOB_ID' '
-	run_program 5 ${SIZE} ${SIZE} printenv FLUX_JOB_ID >output_appnum &&
-        test `wc -l < output_appnum` = ${SIZE} &&
-	test `cut -d: -f2 output_appnum | uniq` -eq 3
 '
 
 test_expect_success 'pmi: wreck sets FLUX_LOCAL_RANKS multiple tasks per node' '
