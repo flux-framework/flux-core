@@ -28,6 +28,10 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#if HAVE_CALIPER
+#include <caliper/cali.h>
+#include <sys/syscall.h>
+#endif
 
 #include "request.h"
 #include "response.h"
@@ -225,8 +229,14 @@ static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
         errno = EINVAL;
         goto done;
     }
+#if HAVE_CALIPER
+    cali_begin_string_byname("flux.message.rpc", "single");
+#endif
     if (!rpc->rx_msg && !(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
         goto done;
+#if HAVE_CALIPER
+    cali_end_byname("flux.message.rpc");
+#endif
     flux_msg_destroy (rpc->rx_msg_consumed); /* invalidate last-got payload */
     rpc->rx_msg_consumed = rpc->rx_msg;
     rpc->rx_msg = NULL;
@@ -335,8 +345,11 @@ bool flux_rpc_completed (flux_rpc_t *rpc)
     return false;
 }
 
-flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
-                      uint32_t nodeid, int flags)
+flux_rpc_t *flux_rpc (flux_t h,
+                      const char *topic,
+                      const char *json_str,
+                      uint32_t nodeid,
+                      int flags)
 {
     flux_rpc_t *rpc;
     int rx_expected = 1;
@@ -345,17 +358,31 @@ flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
         rx_expected = 0;
     if (!(rpc = rpc_create (h, rx_expected)))
         goto error;
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.message.rpc", "single");
+    cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
+    cali_begin_int_byname ("flux.message.response_expected",
+                           !(flags & FLUX_RPC_NORESPONSE));
+#endif
     if (rpc_request_send (rpc, topic, json_str, nodeid) < 0)
         goto error;
+#if HAVE_CALIPER
+    cali_end_byname ("flux.message.response_expected");
+    cali_end_byname ("flux.message.rpc.nodeid");
+    cali_end_byname ("flux.message.rpc");
+#endif
     return rpc;
 error:
     flux_rpc_destroy (rpc);
     return NULL;
 }
 
-flux_rpc_t *flux_rpc_raw (flux_t h, const char *topic,
-                          const void *data, int len,
-                          uint32_t nodeid, int flags)
+flux_rpc_t *flux_rpc_raw (flux_t h,
+                          const char *topic,
+                          const void *data,
+                          int len,
+                          uint32_t nodeid,
+                          int flags)
 {
     flux_rpc_t *rpc;
     int rx_expected = 1;
@@ -364,16 +391,28 @@ flux_rpc_t *flux_rpc_raw (flux_t h, const char *topic,
         rx_expected = 0;
     if (!(rpc = rpc_create (h, rx_expected)))
         goto error;
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.message.rpc", "single");
+    cali_begin_int_byname ("flux.message.response_expected",
+                           !(flags & FLUX_RPC_NORESPONSE));
+#endif
     if (rpc_request_send_raw (rpc, topic, data, len, nodeid) < 0)
         goto error;
+#if HAVE_CALIPER
+    cali_end_byname ("flux.message.response_expected");
+    cali_end_byname ("flux.message.rpc");
+#endif
     return rpc;
 error:
     flux_rpc_destroy (rpc);
     return NULL;
 }
 
-flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
-                            const char *nodeset, int flags)
+flux_rpc_t *flux_rpc_multi (flux_t h,
+                            const char *topic,
+                            const char *json_str,
+                            const char *nodeset,
+                            int flags)
 {
     nodeset_t *ns = NULL;
     nodeset_iterator_t *itr = NULL;
@@ -405,12 +444,27 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
         goto error;
     if (!(itr = nodeset_iterator_create (ns)))
         goto error;
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.message.rpc", "multi");
+    cali_begin_int_byname ("flux.message.response_expected",
+                           !(flags & FLUX_RPC_NORESPONSE));
+#endif
     for (i = 0; i < count; i++) {
         uint32_t nodeid = nodeset_next (itr);
         assert (nodeid != NODESET_EOF);
+#if HAVE_CALIPER
+        cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
+#endif
         if (rpc_request_send (rpc, topic, json_str, nodeid) < 0)
             goto error;
+#if HAVE_CALIPER
+        cali_end_byname ("flux.message.rpc.nodeid");
+#endif
     }
+#if HAVE_CALIPER
+    cali_end_byname ("flux.message.response_expected");
+    cali_end_byname ("flux.message.rpc");
+#endif
     nodeset_iterator_destroy (itr);
     return rpc;
 error:
@@ -422,7 +476,6 @@ error:
         nodeset_destroy (ns);
     return NULL;
 }
-
 const char *flux_rpc_type_get (flux_rpc_t *rpc)
 {
     return rpc->type;

@@ -28,6 +28,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <czmq.h>
+#if HAVE_CALIPER
+#include <caliper/cali.h>
+#endif
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
@@ -277,6 +280,15 @@ static int connect_socket (ctx_t *ctx)
 
 flux_t connector_init (const char *path, int flags)
 {
+#if HAVE_CALIPER
+    cali_id_t uuid   = cali_create_attribute ("flux.uuid",
+                                              CALI_TYPE_STRING,
+                                              CALI_ATTR_SKIP_EVENTS);
+    size_t length = strlen(path);
+    cali_push_snapshot ( CALI_SCOPE_PROCESS | CALI_SCOPE_THREAD,
+                         1, &uuid, (const void **)&path, &length);
+#endif
+
     ctx_t *ctx = NULL;
     if (!path) {
         errno = EINVAL;
