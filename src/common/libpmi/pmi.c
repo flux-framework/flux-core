@@ -72,7 +72,7 @@ static struct pmi_context ctx = { .type = IMPL_UNKNOWN, .rank = -1 };
 
 int PMI_Init (int *spawned)
 {
-    int result = PMI_ERR_INIT;
+    int result = PMI_FAIL;
     const char *library;
     const char *debug;
 
@@ -204,7 +204,7 @@ int PMI_Finalize (void)
             ctx.cli = NULL;
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     ctx.type = IMPL_UNKNOWN;
@@ -226,7 +226,7 @@ int PMI_Abort (int exit_code, const char error_msg[])
             result = pmi_simple_client_abort (ctx.cli, exit_code, error_msg);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     /* unlikely to return */
@@ -247,7 +247,7 @@ int PMI_Get_size (int *size)
             result = pmi_simple_client_get_size (ctx.cli, size);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -267,7 +267,7 @@ int PMI_Get_rank (int *rank)
             result = pmi_simple_client_get_rank (ctx.cli, rank);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     if (result == PMI_SUCCESS)
@@ -289,7 +289,7 @@ int PMI_Get_universe_size (int *size)
             result = pmi_simple_client_get_universe_size (ctx.cli, size);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -309,7 +309,7 @@ int PMI_Get_appnum (int *appnum)
             result = pmi_simple_client_get_appnum (ctx.cli, appnum);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -330,7 +330,7 @@ int PMI_KVS_Get_my_name (char kvsname[], int length)
                                                         length);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     if (result == PMI_SUCCESS) {
@@ -358,7 +358,7 @@ int PMI_KVS_Get_name_length_max (int *length)
                                                                 length);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -378,7 +378,7 @@ int PMI_KVS_Get_key_length_max (int *length)
             result = pmi_simple_client_kvs_get_key_length_max (ctx.cli, length);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -399,7 +399,7 @@ int PMI_KVS_Get_value_length_max (int *length)
                                                                  length);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -419,7 +419,7 @@ int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
             result = pmi_simple_client_kvs_put (ctx.cli, kvsname, key, value);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DPRINTF ("%d: PMI_KVS_Put (\"%s\", \"%s\", \"%s\") rc=%d %s\n",
@@ -445,7 +445,7 @@ int PMI_KVS_Get (const char kvsname[], const char key[],
                                                 key, value, length);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     if (result == PMI_SUCCESS) {
@@ -472,7 +472,7 @@ int PMI_KVS_Commit (const char kvsname[])
             result = pmi_simple_client_kvs_commit (ctx.cli, kvsname);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -492,7 +492,7 @@ int PMI_Barrier (void)
             result = pmi_simple_client_barrier (ctx.cli);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -513,7 +513,7 @@ int PMI_Publish_name (const char service_name[], const char port[])
                                                      service_name, port);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -533,7 +533,7 @@ int PMI_Unpublish_name (const char service_name[])
             result = pmi_simple_client_unpublish_name (ctx.cli, service_name);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -554,7 +554,7 @@ int PMI_Lookup_name (const char service_name[], char port[])
                                                     service_name, port);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -596,7 +596,7 @@ int PMI_Spawn_multiple(int count,
                                                        errors);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     DRETURN (result);
@@ -613,7 +613,7 @@ int PMI_Get_clique_ranks (int ranks[], int length)
             result = pmi_wrap_get_clique_ranks (ctx.wrap, ranks, length);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     if (result == PMI_FAIL)
@@ -629,7 +629,7 @@ int PMI_Get_clique_size (int *size)
             result = pmi_wrap_get_clique_size (ctx.wrap, size);
             break;
         default:
-            result = PMI_FAIL;
+            result = PMI_ERR_INIT;
             break;
     }
     if (result == PMI_FAIL)
