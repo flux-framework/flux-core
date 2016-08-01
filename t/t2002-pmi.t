@@ -3,7 +3,7 @@
 
 test_description='Test that PMI works in a Flux-launched program 
 
-Test that PMI works in a FLux-launched program 
+Test that PMI works in a Flux-launched program 
 '
 
 . `dirname $0`/sharness.sh
@@ -63,6 +63,27 @@ test_expect_success 'pmi: wreck sets FLUX_LOCAL_RANKS single task per node' '
 	3: 3
 	EOF
 	test_cmp expected_clique2 output_clique2
+'
+
+test_expect_success 'pmi: wreck sets PMI_SIZE' '
+	run_program 5 ${SIZE} ${SIZE} printenv PMI_SIZE >output_size &&
+        test `wc -l < output_size` -eq ${SIZE} &&
+	test `cut -d: -f2 output_size | uniq` -eq ${SIZE}
+'
+
+test_expect_success 'pmi: wreck sets PMI_RANK' '
+	run_program 5 4 4 printenv PMI_RANK | sort >output_rank &&
+	cat >expected_rank <<-EOF  &&
+	0: 0
+	1: 1
+	2: 2
+	3: 3
+	EOF
+	test_cmp expected_rank output_rank
+'
+
+test_expect_success 'pmi: wreck sets PMI_FD' '
+	run_program 1 1 1 printenv PMI_FD >/dev/null
 '
 
 test_expect_success 'pmi: wreck preputs PMI_process_mapping into kvs' '
