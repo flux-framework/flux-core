@@ -14,6 +14,7 @@ test_under_flux ${SIZE} wreck
 echo "# $0: flux session size will be ${SIZE}"
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 PMINFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pminfo
+LIBPMI=${FLUX_BUILD_DIR}/src/common/.libs/libpmi.so
 
 # Usage: run_program timeout ntasks nnodes
 run_program() {
@@ -112,6 +113,12 @@ test_expect_success 'pmi: PMI reports correct rank, size' '
 	3: 3: size=4
 	EOF
 	test_cmp expected_pminfo output_pminfo
+'
+
+test_expect_success 'pmi: dlopen failsafe works' '
+	test_must_fail run_program 5 1 1 ${PMINFO} --library ${LIBPMI} \
+					2>failsafe_output &&
+	grep -q "PMI_Init: operation failed" failsafe_output
 '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
