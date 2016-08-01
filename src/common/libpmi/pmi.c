@@ -46,8 +46,6 @@ typedef enum {
     IMPL_SINGLETON,
 } implementation_t;
 
-const char flux_pmi_library[] = PACKAGE_STRING;
-
 struct pmi_context {
     implementation_t type;
     union {
@@ -85,7 +83,6 @@ int PMI_Init (int *spawned)
         ctx.debug = strtol (debug, NULL, 0);
     else
         ctx.debug = 0;
-    DPRINTF ("%s: %s\n", __FUNCTION__, flux_pmi_library);
 
     /* If PMI_FD is set, the simple protocol service is offered.
      * Use it directly.

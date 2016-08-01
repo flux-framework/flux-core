@@ -338,7 +338,7 @@ struct pmi_wrap *pmi_wrap_create (const char *libname)
     struct pmi_wrap *pmi = calloc (1, sizeof (*pmi));
     const char *s;
     int debug = 0;
-    char *name, *libver;
+    char *name;
     zlist_t *libs = NULL;
 
     if (!pmi)
@@ -359,11 +359,9 @@ struct pmi_wrap *pmi_wrap_create (const char *libname)
                              __FUNCTION__, name);
             }
         }
-        else if ((libver = dlsym (pmi->dso, "flux_pmi_library"))) {
-            if (debug) {
-                fprintf (stderr, "%s: skipping %s (%s)\n",
-                         __FUNCTION__, name, libver);
-            }
+        else if (dlsym (pmi->dso, "flux_pmi_library")) {
+            if (debug)
+                fprintf (stderr, "%s: skipping %s\n", __FUNCTION__, name);
             dlclose (pmi->dso);
             pmi->dso = NULL;
         }

@@ -49,6 +49,7 @@ libpmi_la_LIBADD = \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
 libpmi_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libpmi.map \
+	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	-Wl,--no-undefined
 
