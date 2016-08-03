@@ -42,6 +42,10 @@
 #include <argz.h>
 #include <czmq.h>
 #include <flux/core.h>
+#if HAVE_CALIPER
+#include <caliper/cali.h>
+#include <sys/syscall.h>
+#endif
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -50,6 +54,7 @@
 #include "heartbeat.h"
 #include "module.h"
 #include "modservice.h"
+
 
 #define MODULE_MAGIC    0xfeefbe01
 struct module_struct {
@@ -99,6 +104,17 @@ struct modhash_struct {
     heartbeat_t *heartbeat;
 };
 
+static int setup_module_profiling (module_t *p)
+{
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.type", "module");
+    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
+    cali_begin_int_byname ("flux.rank", p->rank);
+    cali_begin_string_byname ("flux.name", p->name);
+#endif
+    return (0);
+}
+
 static void *module_thread (void *arg)
 {
     module_t *p = arg;
@@ -113,6 +129,8 @@ static void *module_thread (void *arg)
     flux_msg_t *msg;
 
     assert (p->zctx);
+
+    setup_module_profiling (p);
 
     /* Connect to broker socket, enable logging, register built-in services
      */

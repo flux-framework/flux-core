@@ -38,6 +38,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/setenvf.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libsubprocess/subprocess.h"
@@ -79,10 +80,19 @@ char *create_scratch_dir (struct context *ctx);
 struct client *client_create (struct context *ctx, int rank, const char *cmd);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
+static void setup_profiling_env (struct context *ctx);
 
 const char *default_killer_timeout = "1.0";
 
 const int default_size = 1;
+
+#ifndef HAVE_CALIPER
+static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
+                                 const char *optarg)
+{
+    log_msg_exit ("Error: --caliper-profile used but no Caliper support found");
+}
+#endif /* !HAVE_CALIPER */
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
@@ -96,6 +106,17 @@ static struct optparse_option opts[] = {
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
     { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "After a broker exits, kill other brokers after SECONDS", },
+
+/* Option group 1, these options will be listed after those above */
+    { .group = 1,
+      .name = "caliper-profile", .key = 1001, .has_arg = 1,
+      .arginfo = "PROFILE",
+      .usage = "Enable profiling in brokers using Caliper configuration "
+               "profile named `PROFILE'",
+#ifndef HAVE_CALIPER
+      .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
+#endif /* !HAVE_CALIPER */
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -131,6 +152,8 @@ int main (int argc, char *argv[])
     if (!(ctx->broker_path = find_broker (searchpath)))
         log_msg_exit ("Could not locate broker in %s", searchpath);
 
+    setup_profiling_env (ctx);
+
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
 
     if (ctx->size == 1) {
@@ -150,6 +173,34 @@ int main (int argc, char *argv[])
 
     return status;
 }
+
+static void setup_profiling_env (struct context *ctx)
+{
+#if HAVE_CALIPER
+    const char *profile;
+    /*
+     *  If --profile was used, set or append libcaliper.so in LD_PRELOAD
+     *   to subprocess environment, swapping stub symbols for the actual
+     *   libcaliper symbols.
+     */
+    if (optparse_getopt (ctx->opts, "caliper-profile", &profile) == 1) {
+        const char *pl = getenv ("LD_PRELOAD");
+        int rc = setenvf ("LD_PRELOAD", 1, "%s%s%s",
+                          pl ? pl : "",
+                          pl ? " ": "",
+                          "libcaliper.so");
+        if (rc < 0)
+            log_err_exit ("Unable to set LD_PRELOAD in environment");
+
+        if ((profile != NULL) &&
+            (setenv ("CALI_CONFIG_PROFILE", profile, 1) < 0))
+                log_err_exit ("setenv (CALI_CONFIG_PROFILE)");
+        setenv ("CALI_LOG_VERBOSITY", "0", 0);
+    }
+#endif
+}
+
+
 
 char *find_broker (const char *searchpath)
 {

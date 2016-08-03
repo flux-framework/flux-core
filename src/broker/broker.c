@@ -54,6 +54,10 @@
   #error gperftools headers not configured
 #endif
 #endif /* WITH_TCMALLOC */
+#if HAVE_CALIPER
+#include <caliper/cali.h>
+#include <sys/syscall.h>
+#endif
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -238,6 +242,23 @@ static void usage (void)
     exit (1);
 }
 
+static int setup_profiling (const char *program, int rank)
+{
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.type", "main");
+    cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
+    cali_begin_string_byname ("binary", program);
+    cali_begin_int_byname ("flux.rank", rank);
+    // TODO: this is a stopgap until we have better control over
+    // instrumemtation in child processes. If we want to see what children
+    // that load libflux are up to, this should be disabled
+    unsetenv ("CALI_SERVICES_ENABLE");
+    unsetenv ("CALI_CONFIG_PROFILE");
+#endif
+    return (0);
+}
+
+
 int main (int argc, char *argv[])
 {
     int c;
@@ -246,6 +267,7 @@ int main (int argc, char *argv[])
     int security_clr = 0;
     int security_set = 0;
     int e;
+
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -430,6 +452,9 @@ int main (int argc, char *argv[])
 
     if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_set_flags session-id");
+
+    // Setup profiling
+    setup_profiling (argv[0], ctx.rank);
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
