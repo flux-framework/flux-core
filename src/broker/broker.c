@@ -442,6 +442,11 @@ int main (int argc, char *argv[])
     cali_begin_int_byname ("flux.tid", syscall(SYS_gettid));
     cali_begin_string_byname ("binary", argv[0]);
     cali_begin_int_byname ("flux.rank", ctx.rank);
+    // TODO: this is a stopgap until we have better control over
+    // instrumemtation in child processes. If we want to see what children
+    // that load libflux are up to, this should be disabled
+    unsetenv ("CALI_SERVICES_ENABLE");
+    unsetenv ("CALI_CONFIG_PROFILE");
 #endif
 
     /* Create directory for sockets, and a subdirectory specific
