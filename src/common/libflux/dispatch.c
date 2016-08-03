@@ -26,17 +26,21 @@
 #include "config.h"
 #endif
 #include <czmq.h>
+#if HAVE_CALIPER
+#include <caliper/cali.h>
+#include <sys/syscall.h>
+#endif
 
 #include "message.h"
 #include "reactor.h"
 #include "dispatch.h"
 #include "response.h"
+#include "info.h"
 #include "flog.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/coproc.h"
 #include "src/common/libutil/iterators.h"
-
 
 /* Fastpath for RPCs:
  * fastpath array translates response matchtags to message handlers,
@@ -51,6 +55,7 @@ struct fastpath {
     int len;
 };
 
+
 struct dispatch {
     flux_t h;
     zlist_t *handlers;
@@ -61,6 +66,10 @@ struct dispatch {
     flux_watcher_t *w;
     int running_count;
     int usecount;
+#if HAVE_CALIPER
+    cali_id_t prof_msg_type;
+    cali_id_t prof_msg_topic;
+#endif
 };
 
 #define HANDLER_MAGIC 0x44433322
@@ -144,7 +153,14 @@ static struct dispatch *dispatch_get (flux_t h)
             goto nomem;
         fastpath_init (&d->norm);
         fastpath_init (&d->group);
-
+#if HAVE_CALIPER
+        d->prof_msg_type = cali_create_attribute("flux.message.type",
+                                                 CALI_TYPE_STRING,
+                                                 CALI_ATTR_SKIP_EVENTS);
+        d->prof_msg_topic = cali_create_attribute("flux.message.topic",
+                                                  CALI_TYPE_STRING,
+                                                  CALI_ATTR_DEFAULT);
+#endif
         flux_aux_set (h, "flux::dispatch", d, dispatch_destroy);
     }
     return d;
@@ -556,15 +572,30 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         rc = 0; /* ignore mangled message */
         goto done;
     }
+
+    const char * topic;
+    flux_msg_get_topic(msg, &topic);
     /* Add any new handlers here, making handler creation
      * safe to call during handlers list traversal below.
      */
     if (transfer_items_zlist (d->handlers_new, d->handlers) < 0)
         goto done;
+
+#if defined(HAVE_CALIPER)
+    cali_begin_string(d->prof_msg_type, flux_msg_typestr(type));
+    cali_begin_string(d->prof_msg_topic, topic);
+#endif
+
     if ((flux_flags_get (d->h) & FLUX_O_COPROC))
         match = dispatch_message_coproc (d, msg, type);
     else
         match = dispatch_message (d, msg, type);
+
+#if defined(HAVE_CALIPER)
+    cali_end(d->prof_msg_topic);
+    cali_end(d->prof_msg_type);
+#endif
+
     if (match < 0)
         goto done;
     /* Destroy handlers here, making handler destruction

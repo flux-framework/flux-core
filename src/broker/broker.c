@@ -54,6 +54,10 @@
   #error gperftools headers not configured
 #endif
 #endif /* WITH_TCMALLOC */
+#if HAVE_CALIPER
+#include <caliper/cali.h>
+#include <sys/syscall.h>
+#endif
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -247,6 +251,7 @@ int main (int argc, char *argv[])
     int security_set = 0;
     int e;
 
+
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
 
@@ -430,6 +435,14 @@ int main (int argc, char *argv[])
 
     if (attr_set_flags (ctx.attrs, "session-id", FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_set_flags session-id");
+
+    // Setup profiling
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.type", "main");
+    cali_begin_int_byname ("flux.tid", syscall(SYS_gettid));
+    cali_begin_string_byname ("binary", argv[0]);
+    cali_begin_int_byname ("flux.rank", ctx.rank);
+#endif
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
