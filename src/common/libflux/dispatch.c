@@ -69,6 +69,7 @@ struct dispatch {
 #if HAVE_CALIPER
     cali_id_t prof_msg_type;
     cali_id_t prof_msg_topic;
+    cali_id_t prof_msg_dispatch;
 #endif
 };
 
@@ -154,12 +155,15 @@ static struct dispatch *dispatch_get (flux_t h)
         fastpath_init (&d->norm);
         fastpath_init (&d->group);
 #if HAVE_CALIPER
-        d->prof_msg_type = cali_create_attribute("flux.message.type",
-                                                 CALI_TYPE_STRING,
-                                                 CALI_ATTR_SKIP_EVENTS);
-        d->prof_msg_topic = cali_create_attribute("flux.message.topic",
+        d->prof_msg_type = cali_create_attribute ("flux.message.type",
                                                   CALI_TYPE_STRING,
-                                                  CALI_ATTR_DEFAULT);
+                                                  CALI_ATTR_SKIP_EVENTS);
+        d->prof_msg_topic = cali_create_attribute ("flux.message.topic",
+                                                   CALI_TYPE_STRING,
+                                                   CALI_ATTR_SKIP_EVENTS);
+        d->prof_msg_dispatch = cali_create_attribute ("flux.message.dispatch",
+                                                      CALI_TYPE_BOOL,
+                                                      CALI_ATTR_DEFAULT);
 #endif
         flux_aux_set (h, "flux::dispatch", d, dispatch_destroy);
     }
@@ -553,8 +557,10 @@ done:
     return rc;
 }
 
-static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
-                       int revents, void *arg)
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *hw,
+                       int revents,
+                       void *arg)
 {
     struct dispatch *d = arg;
     flux_msg_t *msg = NULL;
@@ -573,8 +579,8 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         goto done;
     }
 
-    const char * topic;
-    flux_msg_get_topic(msg, &topic);
+    const char *topic;
+    flux_msg_get_topic (msg, &topic);
     /* Add any new handlers here, making handler creation
      * safe to call during handlers list traversal below.
      */
@@ -582,8 +588,11 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         goto done;
 
 #if defined(HAVE_CALIPER)
-    cali_begin_string(d->prof_msg_type, flux_msg_typestr(type));
-    cali_begin_string(d->prof_msg_topic, topic);
+    cali_begin_string (d->prof_msg_type, flux_msg_typestr (type));
+    cali_begin_string (d->prof_msg_topic, topic);
+    cali_begin (d->prof_msg_dispatch);
+    cali_end (d->prof_msg_topic);
+    cali_end (d->prof_msg_type);
 #endif
 
     if ((flux_flags_get (d->h) & FLUX_O_COPROC))
@@ -592,8 +601,11 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         match = dispatch_message (d, msg, type);
 
 #if defined(HAVE_CALIPER)
-    cali_end(d->prof_msg_topic);
-    cali_end(d->prof_msg_type);
+    cali_begin_string (d->prof_msg_type, flux_msg_typestr (type));
+    cali_begin_string (d->prof_msg_topic, topic);
+    cali_end (d->prof_msg_dispatch);
+    cali_end (d->prof_msg_topic);
+    cali_end (d->prof_msg_type);
 #endif
 
     if (match < 0)
@@ -601,10 +613,12 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
     /* Destroy handlers here, making handler destruction
      * safe to call during handlers list traversal above.
      */
-    if (delete_items_zlist (d->handlers_new, item_test_destroyed,
+    if (delete_items_zlist (d->handlers_new,
+                            item_test_destroyed,
                             (flux_free_f)free_msg_handler) < 0)
         goto done;
-    if (delete_items_zlist (d->handlers, item_test_destroyed,
+    if (delete_items_zlist (d->handlers,
+                            item_test_destroyed,
                             (flux_free_f)free_msg_handler) < 0)
         goto done;
     /* Message matched nothing.
@@ -618,7 +632,9 @@ static void handle_cb (flux_reactor_t *r, flux_watcher_t *hw,
         } else if (flux_flags_get (d->h) & FLUX_O_TRACE) {
             const char *topic = NULL;
             (void)flux_msg_get_topic (msg, &topic);
-            fprintf (stderr, "nomatch: %s '%s'\n", flux_msg_typestr (type),
+            fprintf (stderr,
+                     "nomatch: %s '%s'\n",
+                     flux_msg_typestr (type),
                      topic ? topic : "");
         }
     }
