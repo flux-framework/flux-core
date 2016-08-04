@@ -28,7 +28,9 @@ addons:
   apt:
     sources:
       - ubuntu-toolchain-r-test
+      - llvm-toolchain-precise
     packages:
+      - clang-3.8
       - gcc-4.9
       - g++-4.9
       - lua5.1
