@@ -105,8 +105,7 @@ if test -n "$print_env"; then
     exit 0
 fi
 
-$(print_env)
-
+eval $(print_env)
 
 check_cache ()
 {
@@ -135,7 +134,6 @@ pip install --user $pips || die "Failed to install required python packages"
 luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
 
 # install rocks
-eval `luarocks --local path`
 for p in ${!lua_rocks[@]}; do
     if ! lua -l$p -e '' >/dev/null 2>&1; then
         luarocks --local install ${lua_rocks[$p]}
