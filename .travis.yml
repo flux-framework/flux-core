@@ -14,6 +14,8 @@ matrix:
       env: T_INSTALL=t
     - compiler: gcc
       env: CPPCHECK=t
+    - compiler: gcc
+      env: CC=gcc-4.9
 
 cache:
   directories:
@@ -25,7 +27,10 @@ cache:
 addons:
   apt:
     sources:
+      - ubuntu-toolchain-r-test
     packages:
+      - gcc-4.9
+      - g++-4.9
       - lua5.1
       - liblua5.1-0-dev
       - luarocks
