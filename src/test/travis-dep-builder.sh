@@ -40,6 +40,10 @@ declare -A extra_make_opts=(\
 ["cppcheck"]="CFGDIR=/${prefix}/etc/cppcheck CXX=g++ CC=gcc"
 )
 
+declare -A extra_cmake_opts=(\
+["Caliper"]="-DCMAKE_C_COMPILER=/usr/bin/gcc-4.9 -DCMAKE_CXX_COMPILER=g++-4.9"
+)
+
 #
 #  Python pip packages
 #
@@ -152,6 +156,7 @@ for url in $checkouts; do
     name=$(basename ${url} .git)
     sha1="${checkout_sha1[$name]}"
     make_opts="${extra_make_opts[$name]}"
+    cmake_opts="${extra_cmake_opts[$name]}"
     configure_opts="${extra_configure_opts[$name]}"
     if check_cache "$name:$sha1:$make_opts:$configure_opts"; then
        say "Using cached version of ${name}"
