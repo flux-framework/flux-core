@@ -158,7 +158,8 @@ for url in $checkouts; do
     make_opts="${extra_make_opts[$name]}"
     cmake_opts="${extra_cmake_opts[$name]}"
     configure_opts="${extra_configure_opts[$name]}"
-    if check_cache "$name:$sha1:$make_opts:$configure_opts"; then
+    cache_name="$name:$sha1:$make_opts:$configure_opts:$cmake_opts"
+    if check_cache "$cache_name"; then
        say "Using cached version of ${name}"
        continue
     fi
@@ -183,7 +184,7 @@ for url in $checkouts; do
       make PREFIX=${prefix} $make_opts &&
       make PREFIX=${prefix} $make_opts install
     ) || die "Failed to build and install $name"
-    add_cache "$name"
+    add_cache "$cache_name"
 done
 
 for pkg in $downloads; do
