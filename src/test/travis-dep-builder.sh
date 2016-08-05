@@ -35,7 +35,7 @@ declare -A checkout_sha1=(\
 
 declare -A extra_make_opts=(\
 ["libfaketime"]="LIBDIRNAME=/lib"
-["cppcheck"]="CFGDIR=/${prefix}/etc/cppcheck"
+["cppcheck"]="CFGDIR=/${prefix}/etc/cppcheck CXX=g++ CC=gcc"
 )
 
 #
