@@ -161,9 +161,18 @@ for url in $checkouts; do
       if test -n "$sha1"; then
         git checkout $sha1
       fi
-      test -x configure && CC=gcc ./configure --prefix=${prefix} \
-                  --sysconfdir=${prefix}/etc \
-                  $configure_opts || : &&
+
+      # Do we need to create a Makefile?
+      if ! test -f Makefile; then
+        if test -x configure; then
+          CC=gcc CXX=g++ ./configure --prefix=${prefix} \
+                           --sysconfdir=${prefix}/etc \
+                           $configure_opts
+        elif test -f CMakeLists.txt; then
+            mkdir build && cd build
+            cmake -DCMAKE_INSTALL_PREFIX=${prefix} $cmake_opts ..
+        fi
+      fi
       make PREFIX=${prefix} $make_opts &&
       make PREFIX=${prefix} $make_opts install
     ) || die "Failed to build and install $name"
