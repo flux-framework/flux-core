@@ -17,8 +17,8 @@ matrix:
     - compiler: gcc
       env: CC=gcc-4.9
     - compiler: clang
-      env: COMPILER_NAME=clang CC=clang-3.8 CXX=clang++-3.8
-
+      env: ARGS=--enable-caliper CC=clang-3.8 CXX=clang++-3.8
+      
 cache:
   directories:
     - $HOME/local
@@ -95,9 +95,9 @@ script:
 
  # Enable coverage for $CC-coverage build
  # We can't use distcheck here, it doesn't play well with coverage testing:
- - if test "$COVERAGE" = "t" ; then ARGS="--enable-code-coverage"; MAKECMDS="make && make check-code-coverage && lcov -l flux*-coverage.info"; fi
+ - if test "$COVERAGE" = "t" ; then ARGS="$ARGS --enable-code-coverage"; MAKECMDS="make && make check-code-coverage && lcov -l flux*-coverage.info"; fi
  # Use make install for T_INSTALL:
- - if test "$T_INSTALL" = "t" ; then ARGS="--prefix=/tmp/flux"; MAKECMDS="make && make install && /tmp/flux/bin/flux keygen && FLUX_TEST_INSTALLED_PATH=/tmp/flux/bin make check"; fi
+ - if test "$T_INSTALL" = "t" ; then ARGS="$ARGS --prefix=/tmp/flux"; MAKECMDS="make && make install && /tmp/flux/bin/flux keygen && FLUX_TEST_INSTALLED_PATH=/tmp/flux/bin make check"; fi
  # Use src/test/cppcheck.sh instead of make?:
  - if test "$CPPCHECK" = "t" ; then MAKECMDS="sh -x src/test/cppcheck.sh"; fi
 
