@@ -26,11 +26,13 @@ declare -A extra_configure_opts=(\
 
 checkouts="\
 https://github.com/wolfcw/libfaketime.git \
-https://github.com/danmar/cppcheck.git"
+https://github.com/danmar/cppcheck.git \
+https://github.com/LLNL/Caliper.git"
 
 declare -A checkout_sha1=(\
 ["libfaketime"]="b68f2820c4091075fbc205965ec6976f6d241aaa" \
-["cppcheck"]="7466a49b216d4ba5e25b48381d85a8c3b2d3a228"
+["cppcheck"]="7466a49b216d4ba5e25b48381d85a8c3b2d3a228" \
+["Caliper"]="be6b488bedb75012e60d3062f8cd2749032985fe" \
 )
 
 declare -A extra_make_opts=(\
