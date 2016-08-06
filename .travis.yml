@@ -12,8 +12,8 @@ matrix:
       env: COVERAGE=t ARGS=--enable-caliper
     - compiler: gcc
       env: T_INSTALL=t
-    - compiler: gcc
-      env: CPPCHECK=t
+    - compiler: clang
+      env: CPPCHECK=t ARGS=--enable-sanitizer CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
       env: CC=gcc-4.9
     - compiler: clang
@@ -99,7 +99,7 @@ script:
  # Use make install for T_INSTALL:
  - if test "$T_INSTALL" = "t" ; then ARGS="$ARGS --prefix=/tmp/flux"; MAKECMDS="make && make install && /tmp/flux/bin/flux keygen && FLUX_TEST_INSTALLED_PATH=/tmp/flux/bin make check"; fi
  # Use src/test/cppcheck.sh instead of make?:
- - if test "$CPPCHECK" = "t" ; then MAKECMDS="sh -x src/test/cppcheck.sh"; fi
+ - if test "$CPPCHECK" = "t" ; then MAKECMDS="sh -x src/test/cppcheck.sh && make"; fi
 
  - export FLUX_TESTS_LOGFILE=t
  - if test "$COVERITY_SCAN_BRANCH" != "1" ; then ./autogen.sh && ./configure ${ARGS} && eval ${MAKECMDS}; fi
