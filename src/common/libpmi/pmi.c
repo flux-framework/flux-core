@@ -158,7 +158,16 @@ int PMI_Init (int *spawned)
         }
         ctx.type = IMPL_SINGLETON;
     }
+
 done:
+    /* Cache the rank for logging.
+     */
+    if (ctx.debug && result == PMI_SUCCESS) {
+        int debug_save = ctx.debug;
+        ctx.debug = 0;
+        (void)PMI_Get_rank (&ctx.rank);
+        ctx.debug = debug_save;
+    }
     DRETURN (result);
 }
 
