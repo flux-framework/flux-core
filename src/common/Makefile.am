@@ -22,7 +22,7 @@ libflux_internal_la_LIBADD = \
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la
-fluxlib_LTLIBRARIES = libpmi.la
+fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
@@ -53,5 +53,14 @@ libpmi_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
+libpmi2_la_SOURCES =
+libpmi2_la_LIBADD = \
+	$(builddir)/libpmi/libpmi.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBDL)
+libpmi2_la_LDFLAGS = \
+        -Wl,--version-script=$(srcdir)/libpmi2.map \
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
 
-EXTRA_DIST = libflux-core.map libflux-optparse.map libpmi.map
+
+EXTRA_DIST = libflux-core.map libflux-optparse.map libpmi.map libpmi2.map

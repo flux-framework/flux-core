@@ -39,7 +39,7 @@
 #include "pmi.h"
 
 #define KVS_KEY_MAX         64
-#define KVS_VAL_MAX         512
+#define KVS_VAL_MAX         1024
 #define KVS_NAME_MAX        64
 
 #define MAX_PROTO_OVERHEAD  64
