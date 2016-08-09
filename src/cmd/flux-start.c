@@ -106,6 +106,8 @@ static struct optparse_option opts[] = {
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
     { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "After a broker exits, kill other brokers after SECONDS", },
+    { .name = "trace-pmi-server",.key = 1000, .has_arg = 0, .arginfo = NULL,
+      .usage = "Trace pmi simple server protocol exchange", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
@@ -473,7 +475,7 @@ void client_dumpargs (struct client *cli)
     free (az);
 }
 
-void pmi_server_initialize (struct context *ctx)
+void pmi_server_initialize (struct context *ctx, int flags)
 {
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
@@ -485,7 +487,7 @@ void pmi_server_initialize (struct context *ctx)
     if (!(ctx->pmi.kvs = zhash_new()))
         oom ();
     ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size,
-                                             ctx->size, "-", ctx);
+                                             ctx->size, "-", flags, ctx);
     if (!ctx->pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }
@@ -505,6 +507,7 @@ int start_session (struct context *ctx, const char *cmd)
 {
     struct client *cli;
     int rank;
+    int flags = 0;
 
     if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
@@ -519,7 +522,10 @@ int start_session (struct context *ctx, const char *cmd)
     ctx->session_id = xasprintf ("%d", getpid ());
     ctx->scratch_dir = create_scratch_dir (ctx);
 
-    pmi_server_initialize (ctx);
+    if (optparse_hasopt (ctx->opts, "trace-pmi-server"))
+        flags |= PMI_SIMPLE_SERVER_TRACE;
+
+    pmi_server_initialize (ctx, flags);
 
     for (rank = 0; rank < ctx->size; rank++) {
         if (!(cli = client_create (ctx, rank, cmd)))

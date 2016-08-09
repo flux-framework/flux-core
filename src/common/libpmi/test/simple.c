@@ -148,7 +148,7 @@ int main (int argc, char *argv[])
     ok (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, ctx.fds) == 0,
         "socketpair returned client,server file descriptors");
     ctx.pmi = pmi_simple_server_create (&ops, 42, ctx.size, ctx.size,
-                                        "bleepgorp", &ctx);
+                                        "bleepgorp", 0, &ctx);
     ok (ctx.pmi != NULL,
         "created simple pmi server context");
     ctx.buflen = pmi_simple_server_get_maxrequest (ctx.pmi);

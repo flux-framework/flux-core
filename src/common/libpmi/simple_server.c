@@ -60,7 +60,7 @@ struct pmi_simple_server {
     int local_procs;
     zlist_t *barrier;
     zhash_t *clients;
-    int debug;
+    int flags;
 };
 
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
@@ -68,10 +68,10 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     int universe_size,
                                                     int local_procs,
                                                     const char *kvsname,
+                                                    int flags,
                                                     void *arg)
 {
     struct pmi_simple_server *pmi = calloc (1, sizeof (*pmi));
-    const char *s;
     int saved_errno;
 
     if (!pmi) {
@@ -87,12 +87,11 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
     }
     pmi->universe_size = universe_size;
     pmi->local_procs = local_procs;
-    if ((s = getenv ("PMI_DEBUG")))
-        pmi->debug = strtoul (s, NULL, 10);
     if (!(pmi->barrier = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    pmi->flags = flags;
     return pmi;
 error:
     saved_errno = errno;
@@ -150,7 +149,7 @@ static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
         rc = -1;
     }
     if (resp[0] != '\0') {
-        if (pmi->debug)
+        if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
             fprintf (stderr, "S: (client=%p) %s", client, resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
@@ -244,7 +243,7 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 
     while ((client = zlist_pop (pmi->barrier))) {
         snprintf (resp, sizeof (resp), "cmd=barrier_out rc=%d\n", rc);
-        if (pmi->debug)
+        if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
             fprintf (stderr, "S: (client=%p) %s", client, resp);
         if (pmi->ops.response_send (client, resp) < 0)
             ret = -1;
@@ -259,7 +258,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     int rc = 0;
 
     resp[0] = '\0';
-    if (pmi->debug)
+    if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
         fprintf (stderr, "C: (client=%p) %s", client, buf);
 
     /* continue in-progress mcmd */
@@ -416,7 +415,7 @@ get_respond:
     else
         goto proto;
     if (resp[0] != '\0') {
-        if (pmi->debug)
+        if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
             fprintf (stderr, "S: (client=%p) %s", client, resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;

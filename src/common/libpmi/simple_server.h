@@ -15,6 +15,10 @@ struct pmi_simple_ops {
     int (*response_send)(void *client, const char *buf);
 };
 
+enum {
+    PMI_SIMPLE_SERVER_TRACE = 1,
+};
+
 /* Create/destroy protocol engine.
  */
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
@@ -22,6 +26,7 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     int universe_size,
                                                     int local_procs,
                                                     const char *kvsname,
+                                                    int flags,
                                                     void *arg);
 void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
 
