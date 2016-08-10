@@ -69,8 +69,7 @@ struct client {
     struct subprocess *p;
     flux_watcher_t *w;
     struct context *ctx;
-    char *buf;
-    int buflen;
+    char buf[SIMPLE_MAX_PROTO_LINE];
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
@@ -320,7 +319,7 @@ void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct client *cli = arg;
     struct context *ctx = cli->ctx;
     int rc;
-    if (dgetline (cli->fd, cli->buf, cli->buflen) < 0)
+    if (dgetline (cli->fd, cli->buf, sizeof (cli->buf)) < 0)
         log_err_exit ("%s", __FUNCTION__);
     rc = pmi_simple_server_request (ctx->pmi.srv, cli->buf, cli);
     if (rc < 0)
@@ -415,8 +414,6 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     cli->ctx = ctx;
     if (!(cli->p = subprocess_create (ctx->sm)))
         goto fail;
-    cli->buflen = pmi_simple_server_get_maxrequest (ctx->pmi.srv);
-    cli->buf = xzmalloc (cli->buflen);
     subprocess_set_context (cli->p, "cli", cli);
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
@@ -454,8 +451,6 @@ void client_destroy (struct client *cli)
             close (cli->fd);
         if (cli->p)
             subprocess_destroy (cli->p);
-        if (cli->buf)
-            free (cli->buf);
         free (cli);
     }
 }

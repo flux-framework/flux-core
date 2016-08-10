@@ -20,8 +20,7 @@ struct context {
     zhash_t *kvs;
     struct pmi_simple_server *pmi;
     int size;
-    char *buf;
-    int buflen;
+    char buf[SIMPLE_MAX_PROTO_LINE];
 };
 
 static int s_kvs_put (void *arg, const char *kvsname, const char *key,
@@ -64,7 +63,7 @@ static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
     int fd = flux_fd_watcher_get_fd (w);
     int rc;
 
-    if (dgetline (fd, ctx->buf, ctx->buflen) < 0) {
+    if (dgetline (fd, ctx->buf, sizeof (ctx->buf)) < 0) {
         diag ("dgetline: %s", strerror (errno));
         flux_reactor_stop_error (r);
         return;
@@ -151,8 +150,6 @@ int main (int argc, char *argv[])
                                         "bleepgorp", 0, &ctx);
     ok (ctx.pmi != NULL,
         "created simple pmi server context");
-    ctx.buflen = pmi_simple_server_get_maxrequest (ctx.pmi);
-    ctx.buf = xzmalloc (ctx.buflen);
     ok (pthread_create (&ctx.t, NULL, server_thread, &ctx) == 0,
         "pthread_create successfully started server");
 

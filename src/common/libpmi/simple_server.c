@@ -38,14 +38,6 @@
 #include "keyval.h"
 #include "pmi.h"
 
-#define KVS_KEY_MAX         64
-#define KVS_VAL_MAX         1024
-#define KVS_NAME_MAX        64
-
-#define MAX_PROTO_OVERHEAD  64
-
-#define MAX_PROTO_LINE \
-    (KVS_KEY_MAX + KVS_VAL_MAX + KVS_NAME_MAX + MAX_PROTO_OVERHEAD)
 
 struct client {
     zlist_t *mcmd;
@@ -111,11 +103,6 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
     }
 }
 
-int pmi_simple_server_get_maxrequest (struct pmi_simple_server *pmi)
-{
-    return (MAX_PROTO_LINE);
-}
-
 static void client_destroy (void *arg)
 {
     struct client *c = arg;
@@ -134,7 +121,7 @@ static void client_destroy (void *arg)
 static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
                          struct client *c)
 {
-    char resp[MAX_PROTO_LINE+1];
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
     char *buf = zlist_first (c->mcmd);
     int rc = 0;
 
@@ -237,7 +224,7 @@ static int barrier_enter (struct pmi_simple_server *pmi, void *client)
 
 static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 {
-    char resp[MAX_PROTO_LINE+1];
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
     void *client;
     int ret = 0;
 
@@ -254,7 +241,7 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf, void *client)
 {
-    char resp[MAX_PROTO_LINE+1];
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
     int rc = 0;
 
     resp[0] = '\0';
@@ -284,7 +271,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     else if (keyval_parse_isword (buf, "cmd", "get_maxes") == 0) {
         snprintf (resp, sizeof (resp), "cmd=maxes rc=0 "
                   "kvsname_max=%d keylen_max=%d vallen_max=%d\n",
-                  KVS_NAME_MAX, KVS_KEY_MAX, KVS_VAL_MAX);
+                  SIMPLE_KVS_NAME_MAX, SIMPLE_KVS_KEY_MAX, SIMPLE_KVS_VAL_MAX);
     }
     /* abort */
     else if (keyval_parse_isword (buf, "cmd", "abort") == 0) {
@@ -313,9 +300,9 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     }
     /* put */
     else if (keyval_parse_isword (buf, "cmd", "put") == 0) {
-        char name[KVS_NAME_MAX];
-        char key[KVS_KEY_MAX];
-        char val[KVS_VAL_MAX];
+        char name[SIMPLE_KVS_NAME_MAX];
+        char key[SIMPLE_KVS_KEY_MAX];
+        char val[SIMPLE_KVS_VAL_MAX];
         int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
         if (result < 0) {
             if (result == EKV_VAL_LEN) {
@@ -347,9 +334,9 @@ put_respond:
     }
     /* get */
     else if (keyval_parse_isword (buf, "cmd", "get") == 0) {
-        char name[KVS_NAME_MAX];
-        char key[KVS_KEY_MAX];
-        char val[KVS_VAL_MAX];
+        char name[SIMPLE_KVS_NAME_MAX];
+        char key[SIMPLE_KVS_KEY_MAX];
+        char val[SIMPLE_KVS_VAL_MAX];
         int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
         if (result < 0) {
             if (result == EKV_VAL_LEN) {
