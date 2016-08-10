@@ -313,6 +313,12 @@ static int pmi_response_send (void *client, const char *buf)
     return dputline (cli->fd, buf);
 }
 
+static void pmi_debug_trace (void *client, const char *buf)
+{
+    struct client *cli = client;
+    fprintf (stderr, "%d: %s", cli->rank, buf);
+}
+
 void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
                     int revents, void *arg)
 {
@@ -477,6 +483,7 @@ void pmi_server_initialize (struct context *ctx, int flags)
         .kvs_get = pmi_kvs_get,
         .barrier_enter = NULL,
         .response_send = pmi_response_send,
+        .debug_trace = pmi_debug_trace,
     };
     int appnum = strtol (ctx->session_id, NULL, 10);
     if (!(ctx->pmi.kvs = zhash_new()))

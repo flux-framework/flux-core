@@ -55,6 +55,21 @@ struct pmi_simple_server {
     int flags;
 };
 
+static void trace (struct pmi_simple_server *pmi,
+                   void *client, const char *fmt, ...)
+{
+    va_list ap;
+
+    if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE)) {
+        char buf[SIMPLE_MAX_PROTO_LINE];
+        va_start (ap, fmt);
+        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+        va_end (ap);
+        if (pmi->ops.debug_trace)
+            pmi->ops.debug_trace (client, buf);
+    }
+}
+
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     int appnum,
                                                     int universe_size,
@@ -136,8 +151,7 @@ static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
         rc = -1;
     }
     if (resp[0] != '\0') {
-        if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
-            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        trace (pmi, client, "S: %s", resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
     }
@@ -230,8 +244,7 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 
     while ((client = zlist_pop (pmi->barrier))) {
         snprintf (resp, sizeof (resp), "cmd=barrier_out rc=%d\n", rc);
-        if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
-            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        trace (pmi, client, "S: %s", resp);
         if (pmi->ops.response_send (client, resp) < 0)
             ret = -1;
     }
@@ -245,8 +258,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     int rc = 0;
 
     resp[0] = '\0';
-    if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
-        fprintf (stderr, "C: (client=%p) %s", client, buf);
+    trace (pmi, client, "C: %s", buf);
 
     /* continue in-progress mcmd */
     if (mcmd_inprogress (pmi, client)) {
@@ -402,8 +414,7 @@ get_respond:
     else
         goto proto;
     if (resp[0] != '\0') {
-        if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE))
-            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        trace (pmi, client, "S: %s", resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
     }

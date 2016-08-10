@@ -16,7 +16,7 @@ struct pmi_simple_server;
 
 
 /* User-provided service implementation.
- * All return 0 on success, -1 on failure.
+ * Integer return: 0 on success, -1 on failure.
  */
 struct pmi_simple_ops {
     int (*kvs_put)(void *arg, const char *kvsname,
@@ -25,6 +25,7 @@ struct pmi_simple_ops {
                    const char *key, char *val, int len);
     int (*barrier_enter)(void *arg);
     int (*response_send)(void *client, const char *buf);
+    void (*debug_trace)(void *client, const char *buf);
 };
 
 enum {
