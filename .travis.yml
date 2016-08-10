@@ -113,3 +113,22 @@ after_failure:
  - find . -name t[0-9]*.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - find . -name *.broker.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - src/test/backtrace-all.sh
+
+before_deploy:
+  # Get anchor (formatted properly) and base URI for latest tag in NEWS file
+  - export ANCHOR=$(sed -n '/^flux-core v[0-9]/{s/\.//g; s/\s/-/gp;Q}' NEWS.md)
+  - export TAG_URI="https://github.com/${TRAVIS_REPO_SLUG}/blob/${TRAVIS_TAG}"
+
+deploy:
+  provider: releases
+  skip_cleanup: true
+  file: flux-core.*.tar.gz
+  prerelease: true
+  body: "View [Release Notes](${TAG_URI}/NEWS.md#${ANCHOR}) for flux-core ${TRAVIS_TAG}"
+  api_key:
+    secure: I7ckZ7Ei9oLIe8WZ8OH3EgZz81IFCIekx+v/+g3sJa6q15URlfZhVVFtiUpsJRktHcb39AflWZiEIX+HdUZyXtuTt9IES1XBIKH7x/zUL0x6f1DZKAhBx9ktYzdO/M+SpmDUg6RYxcdjVmSHZ9u935TDo104U+dY0990ZSFrpco=
+  on:
+    # Only deploy from first job in build matrix
+    condition: $TRAVIS_JOB_NUMBER = $TRAVIS_BUILD_NUMBER.1
+    tags: true
+    repo: flux-framework/flux-core
