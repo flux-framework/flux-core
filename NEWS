@@ -1,6 +1,6 @@
-=========================================================================
-Release Notes for flux-core version 0.3.0                     26 Apr 2016
-=========================================================================
+
+flux-core version 0.3.0 - 2016-04-26
+------------------------------------
 
 * Add support for launching Intel MPI, OpenMPI using PMIv1.
   Use the broker circular log buffer for PMI tracing.
@@ -75,9 +75,9 @@ Release Notes for flux-core version 0.3.0                     26 Apr 2016
 
 * Test suite improvements/fixes.
 
-=========================================================================
-Release Notes for flux-core version 0.2.0                     16 Feb 2016
-=========================================================================
+
+flux-core version 0.2.0 - 2016-02-16
+------------------------------------
 
 * Avoid putting the Flux libpmi.so in the system ld.so path on systems
   where Flux is installed to the default system prefix, as this could
@@ -95,9 +95,8 @@ Release Notes for flux-core version 0.2.0                     16 Feb 2016
 
 * Test suite fixes.
 
-=========================================================================
-Release Notes for flux-core version 0.1.0                     27 Jan 2016
-=========================================================================
+flux-core version 0.1.0 - 2016-01-27
+------------------------------------
 
 Initial release for build testing only.
 
