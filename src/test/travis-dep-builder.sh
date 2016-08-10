@@ -26,16 +26,22 @@ declare -A extra_configure_opts=(\
 
 checkouts="\
 https://github.com/wolfcw/libfaketime.git \
-https://github.com/danmar/cppcheck.git"
+https://github.com/danmar/cppcheck.git \
+https://github.com/LLNL/Caliper.git"
 
 declare -A checkout_sha1=(\
 ["libfaketime"]="b68f2820c4091075fbc205965ec6976f6d241aaa" \
-["cppcheck"]="7466a49b216d4ba5e25b48381d85a8c3b2d3a228"
+["cppcheck"]="7466a49b216d4ba5e25b48381d85a8c3b2d3a228" \
+["Caliper"]="be6b488bedb75012e60d3062f8cd2749032985fe" \
 )
 
 declare -A extra_make_opts=(\
 ["libfaketime"]="LIBDIRNAME=/lib"
-["cppcheck"]="CFGDIR=/${prefix}/etc/cppcheck"
+["cppcheck"]="CFGDIR=/${prefix}/etc/cppcheck CXX=g++ CC=gcc"
+)
+
+declare -A extra_cmake_opts=(\
+["Caliper"]="-DCMAKE_C_COMPILER=/usr/bin/gcc-4.9 -DCMAKE_CXX_COMPILER=g++-4.9"
 )
 
 #
@@ -95,7 +101,7 @@ print_env () {
     echo "export LD_LIBRARY_PATH=${prefix}/lib:$LD_LIBRARY_PATH"
     echo "export CPPFLAGS=-I${prefix}/include"
     echo "export LDFLAGS=-L${prefix}/lib"
-    echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig"
+    echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig:${prefix}/share/pkgconfig"
     echo "export PATH=${PATH}:${HOME}/.local/bin:${HOME}/local/usr/bin:${HOME}/local/bin"
     luarocks path --bin
 }
@@ -105,8 +111,7 @@ if test -n "$print_env"; then
     exit 0
 fi
 
-$(print_env)
-
+eval $(print_env)
 
 check_cache ()
 {
@@ -135,7 +140,6 @@ pip install --user $pips || die "Failed to install required python packages"
 luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
 
 # install rocks
-eval `luarocks --local path`
 for p in ${!lua_rocks[@]}; do
     if ! lua -l$p -e '' >/dev/null 2>&1; then
         luarocks --local install ${lua_rocks[$p]}
@@ -152,8 +156,10 @@ for url in $checkouts; do
     name=$(basename ${url} .git)
     sha1="${checkout_sha1[$name]}"
     make_opts="${extra_make_opts[$name]}"
+    cmake_opts="${extra_cmake_opts[$name]}"
     configure_opts="${extra_configure_opts[$name]}"
-    if check_cache "$name:$sha1:$make_opts:$configure_opts"; then
+    cache_name="$name:$sha1:$make_opts:$configure_opts:$cmake_opts"
+    if check_cache "$cache_name"; then
        say "Using cached version of ${name}"
        continue
     fi
@@ -163,13 +169,22 @@ for url in $checkouts; do
       if test -n "$sha1"; then
         git checkout $sha1
       fi
-      test -x configure && CC=gcc ./configure --prefix=${prefix} \
-                  --sysconfdir=${prefix}/etc \
-                  $configure_opts || : &&
+
+      # Do we need to create a Makefile?
+      if ! test -f Makefile; then
+        if test -x configure; then
+          CC=gcc CXX=g++ ./configure --prefix=${prefix} \
+                           --sysconfdir=${prefix}/etc \
+                           $configure_opts
+        elif test -f CMakeLists.txt; then
+            mkdir build && cd build
+            cmake -DCMAKE_INSTALL_PREFIX=${prefix} $cmake_opts ..
+        fi
+      fi
       make PREFIX=${prefix} $make_opts &&
       make PREFIX=${prefix} $make_opts install
     ) || die "Failed to build and install $name"
-    add_cache "$name"
+    add_cache "$cache_name"
 done
 
 for pkg in $downloads; do

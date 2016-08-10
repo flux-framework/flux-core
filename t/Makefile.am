@@ -58,6 +58,7 @@ TESTS = \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
 	t2006-joblog.t \
+	t2007-caliper.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
@@ -121,6 +122,7 @@ check_SCRIPTS = \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
 	t2006-joblog.t \
+	t2007-caliper.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
         issues/t0441-kvs-put-get.sh \
