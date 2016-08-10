@@ -1,0 +1,16 @@
+coverage:
+ precision: 2
+ round: down
+ range: "50...100"
+ ignore:
+ - ".*/test/*.c"
+ - ".*/tests/*.c"
+ - ".*/man3/*.c"
+ - ".*/libtap/*"
+ - ".*/libjsonc/*"
+ - ".*/libev/*"
+ - ".*/usr/*"
+ - ".*/bindings/python/*"
+ - ".*/common/liblsd/*"
+ - ".*/common/libutil/sds.*"
+ - ".*/common/libminilzo/*"
