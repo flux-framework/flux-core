@@ -107,7 +107,7 @@ script:
 after_success:
  - ccache -s
  # Upload results to coveralls.io for first job of N
- - if test "$COVERAGE" = "t" ; then coveralls-lcov flux*-coverage.info ; fi
+ - if test "$COVERAGE" = "t" ; then coveralls-lcov flux*-coverage.info; bash <(curl -s https://codecov.io/bash) ; fi
 
 after_failure:
  - find . -name t[0-9]*.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
