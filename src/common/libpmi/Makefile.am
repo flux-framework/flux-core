@@ -17,6 +17,7 @@ libpmi_la_SOURCES = \
 	simple_client.c \
 	simple_client.h \
 	pmi.c \
+	pmi2.c \
 	wrap.c \
 	wrap.h \
 	single.c \
@@ -31,7 +32,8 @@ libpmi_la_SOURCES = \
 	clique.h
 
 fluxinclude_HEADERS = \
-	pmi.h
+	pmi.h \
+	pmi2.h
 
 TESTS = test_keyval.t \
 	test_simple.t \

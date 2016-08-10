@@ -2064,6 +2064,11 @@ out:
     return (rpc == NULL ? -1 : 0);
 }
 
+static void wreck_pmi_debug_trace (void *client, const char *buf)
+{
+    struct task_info *t = client;
+    fprintf (stderr, "%d: %s", t->globalid, buf);
+}
 
 static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
 {
@@ -2072,18 +2077,23 @@ static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
         .kvs_put = wreck_pmi_kvs_put,
         .kvs_get = wreck_pmi_kvs_get,
         .barrier_enter = wreck_pmi_barrier_enter,
-        .response_send = wreck_pmi_send
+        .response_send = wreck_pmi_send,
+        .debug_trace = wreck_pmi_debug_trace,
     };
+    int flags = 0;
     if (asprintf (&kvsname, "lwj.%lu.pmi", ctx->id) < 0) {
         flux_log_error (ctx->flux, "initialize_pmi: asprintf");
         return (-1);
     }
+    if (prog_ctx_getopt (ctx, "trace-pmi-server"))
+        flags |= PMI_SIMPLE_SERVER_TRACE;
     ctx->barrier_sequence = 0;
     wreck_barrier_next (ctx);
     ctx->pmi = pmi_simple_server_create (&ops, (int) ctx->id,
                                          ctx->total_ntasks,
                                          ctx->nprocs,
                                          kvsname,
+                                         flags,
                                          ctx);
     if (!ctx->pmi)
         flux_log_error (ctx->flux, "pmi_simple_server_create");

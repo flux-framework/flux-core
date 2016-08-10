@@ -69,8 +69,7 @@ struct client {
     struct subprocess *p;
     flux_watcher_t *w;
     struct context *ctx;
-    char *buf;
-    int buflen;
+    char buf[SIMPLE_MAX_PROTO_LINE];
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
@@ -106,6 +105,8 @@ static struct optparse_option opts[] = {
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
     { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "After a broker exits, kill other brokers after SECONDS", },
+    { .name = "trace-pmi-server",.key = 1000, .has_arg = 0, .arginfo = NULL,
+      .usage = "Trace pmi simple server protocol exchange", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
@@ -312,13 +313,19 @@ static int pmi_response_send (void *client, const char *buf)
     return dputline (cli->fd, buf);
 }
 
+static void pmi_debug_trace (void *client, const char *buf)
+{
+    struct client *cli = client;
+    fprintf (stderr, "%d: %s", cli->rank, buf);
+}
+
 void pmi_simple_cb (flux_reactor_t *r, flux_watcher_t *w,
                     int revents, void *arg)
 {
     struct client *cli = arg;
     struct context *ctx = cli->ctx;
     int rc;
-    if (dgetline (cli->fd, cli->buf, cli->buflen) < 0)
+    if (dgetline (cli->fd, cli->buf, sizeof (cli->buf)) < 0)
         log_err_exit ("%s", __FUNCTION__);
     rc = pmi_simple_server_request (ctx->pmi.srv, cli->buf, cli);
     if (rc < 0)
@@ -413,8 +420,6 @@ struct client *client_create (struct context *ctx, int rank, const char *cmd)
     cli->ctx = ctx;
     if (!(cli->p = subprocess_create (ctx->sm)))
         goto fail;
-    cli->buflen = pmi_simple_server_get_maxrequest (ctx->pmi.srv);
-    cli->buf = xzmalloc (cli->buflen);
     subprocess_set_context (cli->p, "cli", cli);
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
@@ -452,8 +457,6 @@ void client_destroy (struct client *cli)
             close (cli->fd);
         if (cli->p)
             subprocess_destroy (cli->p);
-        if (cli->buf)
-            free (cli->buf);
         free (cli);
     }
 }
@@ -473,19 +476,20 @@ void client_dumpargs (struct client *cli)
     free (az);
 }
 
-void pmi_server_initialize (struct context *ctx)
+void pmi_server_initialize (struct context *ctx, int flags)
 {
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
         .barrier_enter = NULL,
         .response_send = pmi_response_send,
+        .debug_trace = pmi_debug_trace,
     };
     int appnum = strtol (ctx->session_id, NULL, 10);
     if (!(ctx->pmi.kvs = zhash_new()))
         oom ();
     ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size,
-                                             ctx->size, "-", ctx);
+                                             ctx->size, "-", flags, ctx);
     if (!ctx->pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }
@@ -505,6 +509,7 @@ int start_session (struct context *ctx, const char *cmd)
 {
     struct client *cli;
     int rank;
+    int flags = 0;
 
     if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
@@ -519,7 +524,10 @@ int start_session (struct context *ctx, const char *cmd)
     ctx->session_id = xasprintf ("%d", getpid ());
     ctx->scratch_dir = create_scratch_dir (ctx);
 
-    pmi_server_initialize (ctx);
+    if (optparse_hasopt (ctx->opts, "trace-pmi-server"))
+        flags |= PMI_SIMPLE_SERVER_TRACE;
+
+    pmi_server_initialize (ctx, flags);
 
     for (rank = 0; rank < ctx->size; rank++) {
         if (!(cli = client_create (ctx, rank, cmd)))

@@ -36,6 +36,7 @@ local lwj_options = {
     ['stdio-commit-on-close'] = "Commit to kvs on stdio close in each task",
     ['stop-children-in-exec'] = "Start tasks in STOPPED state for debugger",
     ['no-pmi-server'] =         "Do not start simple-pmi server",
+    ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
 }
 
 local default_opts = {

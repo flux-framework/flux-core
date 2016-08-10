@@ -38,14 +38,6 @@
 #include "keyval.h"
 #include "pmi.h"
 
-#define KVS_KEY_MAX         64
-#define KVS_VAL_MAX         512
-#define KVS_NAME_MAX        64
-
-#define MAX_PROTO_OVERHEAD  64
-
-#define MAX_PROTO_LINE \
-    (KVS_KEY_MAX + KVS_VAL_MAX + KVS_NAME_MAX + MAX_PROTO_OVERHEAD)
 
 struct client {
     zlist_t *mcmd;
@@ -60,18 +52,33 @@ struct pmi_simple_server {
     int local_procs;
     zlist_t *barrier;
     zhash_t *clients;
-    int debug;
+    int flags;
 };
+
+static void trace (struct pmi_simple_server *pmi,
+                   void *client, const char *fmt, ...)
+{
+    va_list ap;
+
+    if ((pmi->flags & PMI_SIMPLE_SERVER_TRACE)) {
+        char buf[SIMPLE_MAX_PROTO_LINE];
+        va_start (ap, fmt);
+        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+        va_end (ap);
+        if (pmi->ops.debug_trace)
+            pmi->ops.debug_trace (client, buf);
+    }
+}
 
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
                                                     int appnum,
                                                     int universe_size,
                                                     int local_procs,
                                                     const char *kvsname,
+                                                    int flags,
                                                     void *arg)
 {
     struct pmi_simple_server *pmi = calloc (1, sizeof (*pmi));
-    const char *s;
     int saved_errno;
 
     if (!pmi) {
@@ -87,12 +94,11 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
     }
     pmi->universe_size = universe_size;
     pmi->local_procs = local_procs;
-    if ((s = getenv ("PMI_DEBUG")))
-        pmi->debug = strtoul (s, NULL, 10);
     if (!(pmi->barrier = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
+    pmi->flags = flags;
     return pmi;
 error:
     saved_errno = errno;
@@ -110,11 +116,6 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
         zhash_destroy (&pmi->clients);
         free (pmi);
     }
-}
-
-int pmi_simple_server_get_maxrequest (struct pmi_simple_server *pmi)
-{
-    return (MAX_PROTO_LINE);
 }
 
 static void client_destroy (void *arg)
@@ -135,7 +136,7 @@ static void client_destroy (void *arg)
 static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
                          struct client *c)
 {
-    char resp[MAX_PROTO_LINE+1];
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
     char *buf = zlist_first (c->mcmd);
     int rc = 0;
 
@@ -150,8 +151,7 @@ static int mcmd_execute (struct pmi_simple_server *pmi, void *client,
         rc = -1;
     }
     if (resp[0] != '\0') {
-        if (pmi->debug)
-            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        trace (pmi, client, "S: %s", resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
     }
@@ -238,14 +238,13 @@ static int barrier_enter (struct pmi_simple_server *pmi, void *client)
 
 static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 {
-    char resp[MAX_PROTO_LINE+1];
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
     void *client;
     int ret = 0;
 
     while ((client = zlist_pop (pmi->barrier))) {
         snprintf (resp, sizeof (resp), "cmd=barrier_out rc=%d\n", rc);
-        if (pmi->debug)
-            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        trace (pmi, client, "S: %s", resp);
         if (pmi->ops.response_send (client, resp) < 0)
             ret = -1;
     }
@@ -255,12 +254,11 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf, void *client)
 {
-    char resp[MAX_PROTO_LINE+1];
+    char resp[SIMPLE_MAX_PROTO_LINE+1];
     int rc = 0;
 
     resp[0] = '\0';
-    if (pmi->debug)
-        fprintf (stderr, "C: (client=%p) %s", client, buf);
+    trace (pmi, client, "C: %s", buf);
 
     /* continue in-progress mcmd */
     if (mcmd_inprogress (pmi, client)) {
@@ -285,7 +283,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     else if (keyval_parse_isword (buf, "cmd", "get_maxes") == 0) {
         snprintf (resp, sizeof (resp), "cmd=maxes rc=0 "
                   "kvsname_max=%d keylen_max=%d vallen_max=%d\n",
-                  KVS_NAME_MAX, KVS_KEY_MAX, KVS_VAL_MAX);
+                  SIMPLE_KVS_NAME_MAX, SIMPLE_KVS_KEY_MAX, SIMPLE_KVS_VAL_MAX);
     }
     /* abort */
     else if (keyval_parse_isword (buf, "cmd", "abort") == 0) {
@@ -314,9 +312,9 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     }
     /* put */
     else if (keyval_parse_isword (buf, "cmd", "put") == 0) {
-        char name[KVS_NAME_MAX];
-        char key[KVS_KEY_MAX];
-        char val[KVS_VAL_MAX];
+        char name[SIMPLE_KVS_NAME_MAX];
+        char key[SIMPLE_KVS_KEY_MAX];
+        char val[SIMPLE_KVS_VAL_MAX];
         int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
         if (result < 0) {
             if (result == EKV_VAL_LEN) {
@@ -348,9 +346,9 @@ put_respond:
     }
     /* get */
     else if (keyval_parse_isword (buf, "cmd", "get") == 0) {
-        char name[KVS_NAME_MAX];
-        char key[KVS_KEY_MAX];
-        char val[KVS_VAL_MAX];
+        char name[SIMPLE_KVS_NAME_MAX];
+        char key[SIMPLE_KVS_KEY_MAX];
+        char val[SIMPLE_KVS_VAL_MAX];
         int result = keyval_parse_word (buf, "kvsname", name, sizeof (name));
         if (result < 0) {
             if (result == EKV_VAL_LEN) {
@@ -416,8 +414,7 @@ get_respond:
     else
         goto proto;
     if (resp[0] != '\0') {
-        if (pmi->debug)
-            fprintf (stderr, "S: (client=%p) %s", client, resp);
+        trace (pmi, client, "S: %s", resp);
         if (pmi->ops.response_send (client, resp) < 0)
             rc = -1;
     }

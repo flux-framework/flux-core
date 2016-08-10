@@ -34,10 +34,9 @@
 #include <sys/param.h>
 
 #include "simple_client.h"
+#include "simple_server.h"
 #include "dgetline.h"
 #include "keyval.h"
-
-#define BUFSIZE 1024
 
 struct pmi_simple_client {
     int fd;
@@ -48,45 +47,53 @@ struct pmi_simple_client {
     unsigned int kvsname_max;
     unsigned int keylen_max;
     unsigned int vallen_max;
-    char buf[BUFSIZE];
+    char *buf;
+    int buflen;
 };
 
 int pmi_simple_client_init (struct pmi_simple_client *pmi, int *spawned)
 {
     int result = PMI_FAIL;
     unsigned int vers, subvers;
+    char buf[SIMPLE_MAX_PROTO_LINE];
     int rc;
 
     if (dprintf (pmi->fd, "cmd=init pmi_version=1 pmi_subversion=1\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, buf, sizeof (buf)) < 0)
         goto done;
-    if (keyval_parse_isword (pmi->buf, "cmd", "response_to_init") < 0)
+    if (keyval_parse_isword (buf, "cmd", "response_to_init") < 0)
         goto done;
-    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0) {
         result = rc;
         goto done;
     }
-    if (keyval_parse_uint (pmi->buf, "pmi_version", &vers) < 0
-            || keyval_parse_uint (pmi->buf, "pmi_subversion", &subvers) < 0)
+    if (keyval_parse_uint (buf, "pmi_version", &vers) < 0
+            || keyval_parse_uint (buf, "pmi_subversion", &subvers) < 0)
         goto done;
     if (vers != 1 || subvers != 1)
         goto done;
 
     if (dprintf (pmi->fd, "cmd=get_maxes\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, buf, sizeof (buf)) < 0)
         goto done;
-    if (keyval_parse_isword (pmi->buf, "cmd", "maxes") < 0)
+    if (keyval_parse_isword (buf, "cmd", "maxes") < 0)
         goto done;
-    if (keyval_parse_int (pmi->buf, "rc", &rc) == 0 && rc != 0) {
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0) {
         result = rc;
         goto done;
     }
-    if (keyval_parse_uint (pmi->buf, "kvsname_max", &pmi->kvsname_max) < 0
-            || keyval_parse_uint (pmi->buf, "keylen_max", &pmi->keylen_max) < 0
-            || keyval_parse_uint (pmi->buf, "vallen_max", &pmi->vallen_max) < 0)
+    if (keyval_parse_uint (buf, "kvsname_max", &pmi->kvsname_max) < 0
+            || keyval_parse_uint (buf, "keylen_max", &pmi->keylen_max) < 0
+            || keyval_parse_uint (buf, "vallen_max", &pmi->vallen_max) < 0)
         goto done;
+    pmi->buflen = pmi->keylen_max + pmi->vallen_max + pmi->kvsname_max
+                                  + SIMPLE_MAX_PROTO_OVERHEAD;
+    if (!(pmi->buf = calloc (1, pmi->buflen))) {
+        result = PMI_ERR_NOMEM;
+        goto done;
+    }
     pmi->initialized = 1;
     if (spawned)
         *spawned = pmi->spawned;
@@ -109,7 +116,7 @@ int pmi_simple_client_finalize (struct pmi_simple_client *pmi)
 
     if (dprintf (pmi->fd, "cmd=finalize\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "finalize_ack") < 0)
         goto done;
@@ -147,7 +154,7 @@ int pmi_simple_client_get_appnum (struct pmi_simple_client *pmi, int *appnum)
         goto done;
     if (dprintf (pmi->fd, "cmd=get_appnum\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "appnum") < 0)
         goto done;
@@ -172,7 +179,7 @@ int pmi_simple_client_get_universe_size (struct pmi_simple_client *pmi,
         goto done;
     if (dprintf (pmi->fd, "cmd=get_universe_size\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "universe_size") < 0)
         goto done;
@@ -214,7 +221,7 @@ int pmi_simple_client_barrier (struct pmi_simple_client *pmi)
         goto done;
     if (dprintf (pmi->fd, "cmd=barrier_in\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "barrier_out") < 0)
         goto done;
@@ -245,7 +252,7 @@ int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
         goto done;
     if (dprintf (pmi->fd, "cmd=get_my_kvsname\n") < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "my_kvsname") < 0)
         goto done;
@@ -299,7 +306,7 @@ int pmi_simple_client_kvs_put (struct pmi_simple_client *pmi,
     if (dprintf (pmi->fd, "cmd=put kvsname=%s key=%s value=%s\n",
                  kvsname, key, value) < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "put_result") < 0)
         goto done;
@@ -329,7 +336,7 @@ int pmi_simple_client_kvs_get (struct pmi_simple_client *pmi,
         goto done;
     if (dprintf (pmi->fd, "cmd=get kvsname=%s key=%s\n", kvsname, key) < 0)
         goto done;
-    if (dgetline (pmi->fd, pmi->buf, sizeof (pmi->buf)) < 0)
+    if (dgetline (pmi->fd, pmi->buf, pmi->buflen) < 0)
         goto done;
     if (keyval_parse_isword (pmi->buf, "cmd", "get_result") < 0)
         goto done;
@@ -363,6 +370,8 @@ void pmi_simple_client_destroy (struct pmi_simple_client *pmi)
     if (pmi) {
         if (pmi->fd != -1)
             (void)close (pmi->fd);
+        if (pmi->buf)
+            free (pmi->buf);
         free (pmi);
     }
 }
