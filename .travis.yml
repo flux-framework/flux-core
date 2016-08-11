@@ -118,11 +118,14 @@ before_deploy:
   # Get anchor (formatted properly) and base URI for latest tag in NEWS file
   - export ANCHOR=$(sed -n '/^flux-core v[0-9]/{s/\.//g; s/\s/-/gp;Q}' NEWS.md)
   - export TAG_URI="https://github.com/${TRAVIS_REPO_SLUG}/blob/${TRAVIS_TAG}"
+  - export TARBALL=$(echo flux-core*.tar.gz)
+  - ls -l $TARBALL
+  - echo "Deploying tag ${TRAVIS_TAG} as $TARBALL"
 
 deploy:
   provider: releases
   skip_cleanup: true
-  file: flux-core*.tar.gz
+  file: $TARBALL
   prerelease: true
   body: "View [Release Notes](${TAG_URI}/NEWS.md#${ANCHOR}) for flux-core ${TRAVIS_TAG}"
   api_key:
