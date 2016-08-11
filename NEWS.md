@@ -1,3 +1,66 @@
+flux-core version 0.4.0 - 2016-08-11
+------------------------------------
+
+#### Scalability improvements
+
+* don't store broken-down hwloc topology in the KVS (#716)
+
+* route rank-addressed requests via TBON (#689)
+
+* streamline matchtag handling (#687)
+
+* keep active jobs in a separate KVS namespace from "archived" jobs (#609)
+
+#### New features
+
+* implement PMI-1 simple server in wrexecd (#706)
+
+* add skeletal PMI-2 library (based on PMI-1) (#747)
+
+* make libflux-optparse.so available externally (#702)
+
+* asynchronous KVS fence and rewritten fence path in KVS module (#707, #729)
+
+* `flux-cron`, a cron/at-like service (#626)
+
+* `flux-proxy` and `ssh://` connector (#645)
+
+#### Other changes
+
+* Use RFC 5424 log format for internal logging, not ad hoc JSON (#691)
+
+* Add wreck lua.d MPI personalities (#669, #743, #747)
+
+* Improved command line for launching flux from slurm/flux (#658)
+
+* Assorted code cleanup.
+
+* Automatic github release upload on tags (#744)
+
+#### Deprecations
+
+* Sophia content backing store module (#727)
+
+* mrpc KVS based muti-RPC interface (#689)
+
+* ZPL config file (#674)
+
+* Ring overlay network (#689)
+
+#### Testing
+
+* Print backtraces for any core files generated in travis-ci (#703)
+
+* Add cppcheck target to travis-ci (#701)
+
+* configure --enable-sanitizer for AddressSanitizer, ThreadSanitizer (#694)
+
+* caliper based profiling (#741)
+
+* coverage uploaded to CodeCof (#751)
+
+* improved test coverage
+
 
 flux-core version 0.3.0 - 2016-04-26
 ------------------------------------
