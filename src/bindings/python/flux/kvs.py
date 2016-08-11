@@ -69,6 +69,8 @@ def put(flux_handle, key, value):
 def commit(flux_handle):
     return _raw.kvs_commit(flux_handle)
 
+def dropcache(flux_handle):
+  return _raw.dropcache(flux_handle)
 
 def watch_once(flux_handle, key):
     """ Watches the selected key until the next change, then returns the updated value of the key """
