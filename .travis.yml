@@ -122,7 +122,7 @@ before_deploy:
 deploy:
   provider: releases
   skip_cleanup: true
-  file: flux-core.*.tar.gz
+  file: flux-core*.tar.gz
   prerelease: true
   body: "View [Release Notes](${TAG_URI}/NEWS.md#${ANCHOR}) for flux-core ${TRAVIS_TAG}"
   api_key:
