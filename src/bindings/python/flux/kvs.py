@@ -1,13 +1,10 @@
 from _kvs import ffi, lib
 import flux
-from flux.wrapper import Wrapper, WrapperPimpl, WrapperBase
+from flux.wrapper import Wrapper, WrapperPimpl
 import flux.json_c as json_c
 import json
 import collections
-import contextlib
 import errno
-import os
-import sys
 
 class KVSWrapper(Wrapper):
   # This empty class accepts new methods, preventing accidental overloading
