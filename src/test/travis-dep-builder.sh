@@ -113,10 +113,16 @@ fi
 
 eval $(print_env)
 
+sanitize ()
+{
+    # Sanitize cache name
+    echo $1 | sed 's/[\t /\]/_/g'
+}
+
 check_cache ()
 {
     test -n "$cachedir" || return 1
-    local url=$1
+    local url=$(sanitize $1)
     local cachefile="${cachedir}/${url}"
     test -f "${cachefile}" || return 1
     test -n "$cacheage"    || return 0
@@ -130,7 +136,7 @@ add_cache ()
 {
     test -n "$cachedir" || return 0
     mkdir -p "${cachedir}" &&
-    touch "${cachedir}/${1}"
+    touch "${cachedir}/$(sanitize ${1})"
 }
 
 pip help >/dev/null 2>&1 || die "Required command pip not installed"
