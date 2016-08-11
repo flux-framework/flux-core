@@ -262,7 +262,12 @@ def walk(directory, topdown=False, flux_handle=None):
 @ffi.callback('kvs_set_f')
 def KVSWatchWrapper(key, value, arg, errnum):
     (cb, real_arg) = ffi.from_handle(arg)
-    ret = cb(ffi.string(key), json.loads(ffi.string(value)), real_arg, errnum)
+    if errnum == errno.ENOENT:
+      value = None
+    else:
+      value = json.loads(ffi.string(value))
+    key = ffi.string(key)
+    ret = cb(key, value, real_arg, errnum)
     return ret if ret is not None else 0
 
 
