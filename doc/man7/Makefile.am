@@ -1,8 +1,8 @@
 MAN7_FILES = \
 	flux-broker-attributes.7
 
-ADOC_FILES  = $(MAN1_FILES:%.7=%.adoc)
-XML_FILES   = $(MAN1_FILES:%.7=%.xml)
+ADOC_FILES  = $(MAN7_FILES:%.7=%.adoc)
+XML_FILES   = $(MAN7_FILES:%.7=%.xml)
 
 if HAVE_A2X
 dist_man_MANS = $(MAN7_FILES)
