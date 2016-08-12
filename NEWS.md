@@ -1,3 +1,11 @@
+flux-core version 0.4.1 - 2016-08-12
+------------------------------------
+
+* python `kvs_watch()` fix (#759)
+
+* include man7 in distribution (#762)
+
+
 flux-core version 0.4.0 - 2016-08-11
 ------------------------------------
 
