@@ -1,13 +1,10 @@
 from _kvs import ffi, lib
 import flux
-from flux.wrapper import Wrapper, WrapperPimpl, WrapperBase
+from flux.wrapper import Wrapper, WrapperPimpl
 import flux.json_c as json_c
 import json
 import collections
-import contextlib
 import errno
-import os
-import sys
 
 class KVSWrapper(Wrapper):
   # This empty class accepts new methods, preventing accidental overloading
@@ -69,6 +66,8 @@ def put(flux_handle, key, value):
 def commit(flux_handle):
     return _raw.kvs_commit(flux_handle)
 
+def dropcache(flux_handle):
+  return _raw.dropcache(flux_handle)
 
 def watch_once(flux_handle, key):
     """ Watches the selected key until the next change, then returns the updated value of the key """
@@ -262,7 +261,12 @@ def walk(directory, topdown=False, flux_handle=None):
 @ffi.callback('kvs_set_f')
 def KVSWatchWrapper(key, value, arg, errnum):
     (cb, real_arg) = ffi.from_handle(arg)
-    ret = cb(ffi.string(key), json.loads(ffi.string(value)), real_arg, errnum)
+    if errnum == errno.ENOENT:
+      value = None
+    else:
+      value = json.loads(ffi.string(value))
+    key = ffi.string(key)
+    ret = cb(key, value, real_arg, errnum)
     return ret if ret is not None else 0
 
 
