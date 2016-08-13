@@ -90,7 +90,7 @@ while true; do
       -v|--verbose)          verbose=t;     shift   ;;
       -c|--cachedir)         cachedir="$2"; shift 2 ;;
       -e|--max-cache-age)    cacheage="$2"; shift 2 ;;
-      -p|--prefix)           prefix="$2";   shift   ;;
+      -p|--prefix)           prefix="$2";   shift 2 ;;
       -P|--printenv)         print_env=1;   shift   ;;
       --)                    shift ; break;         ;;
       *)                     die "Invalid option '$1'\n$usage" ;;
