@@ -1181,11 +1181,9 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     opterr = 0;
 
-    while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
+    while ((c = getopt_long (argc, argv, optstring, optz, &li)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
-        if (c == -1)
-            break;
         if (c == '?') {
             (*p->log_fn) ("%s: unrecognized option '%s'\n",
                           fullname, argv[optind-1]);
