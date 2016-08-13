@@ -1165,7 +1165,7 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
-    int li;
+    int li = -1;
     const char *fullname = NULL;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
@@ -1194,7 +1194,18 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
             break;
         }
 
-        opt = list_find_first (p->option_list, (ListFindF) by_val, &c);
+        /* If li is a valid index, then a long option was used and we can
+         *  use this index into optz to get corresponding option name,
+         *  otherwise, assume a short option and use returned character
+         *  to find option by its key/value.
+         */
+        if (li >= 0)
+            opt = find_option_info (p, optz[li].name);
+        else
+            opt = list_find_first (p->option_list, (ListFindF) by_val, &c);
+
+        /* Reset li for next iteration */
+        li = -1;
         if (opt == NULL) {
             (*p->log_fn) ("ugh, didn't find option associated with char %c\n", c);
             continue;
