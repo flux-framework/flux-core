@@ -1,16 +1,19 @@
 coverage:
- precision: 2
  round: down
  range: "50...100"
  ignore:
- - ".*/test/*.c"
- - ".*/tests/*.c"
+ - ".*/t/.*"
+ - ".*/test/.*"
+ - ".*/tests/.*"
  - ".*/man3/*.c"
- - ".*/libtap/*"
- - ".*/libjsonc/*"
- - ".*/libev/*"
- - ".*/usr/*"
- - ".*/bindings/python/*"
- - ".*/common/liblsd/*"
+ - ".*/common/libtap/.*"
+ - ".*/common/libjsonc/.*"
+ - ".*/common/liblsd/.*"
+ - ".*/common/libev/.*"
+ - ".*/bindings/python/.*"
  - ".*/common/libutil/sds.*"
- - ".*/common/libminilzo/*"
+ - ".*/common/libminilzo/.*"
+ - ".*/usr/.*"
+
+comment:
+ layout: "header, diff, changes, tree"
