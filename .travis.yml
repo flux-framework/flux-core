@@ -116,7 +116,7 @@ after_failure:
 
 before_deploy:
   # Get anchor (formatted properly) and base URI for latest tag in NEWS file
-  - export ANCHOR=$(sed -n '/^flux-core v[0-9]/{s/\.//g; s/\s/-/gp;Q}' NEWS.md)
+  - export ANCHOR=$(sed -n '/^flux-core version/{s/\.//g; s/\s/-/gp;Q}' NEWS.md)
   - export TAG_URI="https://github.com/${TRAVIS_REPO_SLUG}/blob/${TRAVIS_TAG}"
   - export TARBALL=$(echo flux-core*.tar.gz)
   - ls -l $TARBALL
