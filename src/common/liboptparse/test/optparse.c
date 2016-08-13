@@ -359,6 +359,65 @@ void test_multiret (void)
     optparse_destroy (p);
 }
 
+void test_long_only (void)
+{
+    int rc;
+    const char *optarg;
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("long-only-test");
+    struct optparse_option opts [] = {
+    { .name = "basic", .key = 'b', .has_arg = 1,
+      .arginfo = "B", .usage = "This is a basic argument" },
+    { .name = "long-only", .has_arg = 1,
+      .arginfo = "L", .usage = "This is a long-only option" },
+    { .name = "again-long-only", .has_arg = 0,
+      .usage = "Another long-only" },
+      OPTPARSE_TABLE_END,
+    };
+
+    char *av[] = { "long-only-test",
+                   "-b", "one", "--again-long-only",
+                   NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    ok (p != NULL, "optparse_create");
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    optind = optparse_parse_args (p, ac, av);
+    ok (optind == ac, "parse options, verify optind");
+
+    rc = optparse_getopt (p, "basic", &optarg);
+    ok (rc == 1, "got -b");
+    is (optarg, "one", "got correct argument to --basic option");
+
+    optarg = NULL;
+    // Ensure we got correct long-only option
+    ok (optparse_hasopt (p, "again-long-only"), "Got --again-long-only");
+    ok (!optparse_hasopt (p, "long-only"), "And didn't get --long-only");
+
+    char *av2[] = { "long-only-test", "--again-long-only", "-bxxx",
+                    "--long-only=foo", NULL };
+    ac = sizeof (av2) / sizeof(av2[0]) - 1;
+
+    optind = optparse_parse_args (p, ac, av2);
+    ok (optind == ac, "parse options, verify optind");
+
+    optarg = NULL;
+    rc = optparse_getopt (p, "basic", &optarg);
+    ok (rc == 2, "got -b", rc); // second use of --basic
+    is (optarg, "xxx", "got correct argument to --basic option");
+
+    // Ensure we got correct long-only option
+    ok (optparse_hasopt (p, "again-long-only"), "Got --again-long-only");
+    rc = optparse_getopt (p, "long-only", &optarg);
+    ok (rc == 1, "got --long-only");
+    is (optarg, "foo", "got correct argument to --long-only option");
+
+    optparse_destroy (p);
+}
+
 int subcmd (optparse_t *p, int ac, char **av)
 {
     return (0);
@@ -580,7 +639,7 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (138);
+    plan (151);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
@@ -588,6 +647,7 @@ int main (int argc, char *argv[])
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
     test_subcommand (); /* 47 tests */
+    test_long_only (); /* 13 tests */
 
     done_testing ();
     return (0);
