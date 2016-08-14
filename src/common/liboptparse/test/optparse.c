@@ -188,7 +188,20 @@ This is some doc for group 1\n\
                               uldBeBrokenAcrossLines.\n",
         "Usage output with message autosplit across lines");
 
+    ok (setenv ("COLUMNS", "120", 1) >= 0, "Set COLUMNS=120");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should be split across lines nicely.\n\
+  -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatShouldBeBrokenAcrossLines.\n",
+        "Usage output with COLUMNS=120 not split across lines");
 
+    /* Unset COLUMNS again */
+    unsetenv ("COLUMNS");
     optparse_destroy (p);
 }
 
@@ -709,10 +722,10 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (163);
+    plan (166);
 
     test_convenience_accessors (); /* 24 tests */
-    test_usage_output (); /* 32 tests */
+    test_usage_output (); /* 35 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
