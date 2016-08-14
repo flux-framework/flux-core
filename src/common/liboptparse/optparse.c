@@ -408,7 +408,7 @@ static int get_term_columns ()
     if ((val = getenv ("COLUMNS"))) {
         char *p;
         long lval = strtol (val, &p, 10);
-        if (p && (*p != '\0'))
+        if (p && (*p == '\0'))
             cols = (int) lval;
     }
     /*
