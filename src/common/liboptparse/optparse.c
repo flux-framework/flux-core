@@ -385,8 +385,9 @@ static char * get_next_segment (char **from, int width, char *buf, int bufsiz)
         /*
          *      Need to break up a word. Use user-supplied buffer.
          */
-        strncpy (buf, seg, width+1);
+        strncpy (buf, seg, width);
         buf [width - 1]  = '-';
+        buf [width] = '\0';
         /*
          * Adjust from to character eaten by '-'
          *  And return pointer to buf.
