@@ -167,6 +167,28 @@ This is some doc for group 1\n\
                               be split across lines nicely.\n",
         "Usage output with message autosplit across lines");
 
+    // Add an option whose description will break up a word
+    opt = ((struct optparse_option) {
+            .name = "option-C", .key = 'C', .group = 1,
+            .usage = "ThisOptionHasAVeryLongWordInTheDescriptionThatShouldBeBrokenAcrossLines."
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should\n\
+                              be split across lines nicely.\n\
+  -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatSho-\n\
+                              uldBeBrokenAcrossLines.\n",
+        "Usage output with message autosplit across lines");
+
+
     optparse_destroy (p);
 }
 
@@ -687,10 +709,10 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (160);
+    plan (163);
 
     test_convenience_accessors (); /* 24 tests */
-    test_usage_output (); /* 29 tests */
+    test_usage_output (); /* 32 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
