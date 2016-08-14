@@ -418,6 +418,54 @@ void test_long_only (void)
     optparse_destroy (p);
 }
 
+void test_optional_argument (void)
+{
+    int rc;
+    const char *optarg;
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("optarg");
+    struct optparse_option opts [] = {
+    { .name = "basic", .key = 'b', .has_arg = 1,
+      .arginfo = "B", .usage = "This is a basic argument" },
+    { .name = "optional-arg", .has_arg = 2, .key = 'o',
+      .arginfo = "OPTIONAL", .usage = "This has an optional argument" },
+      OPTPARSE_TABLE_END,
+    };
+
+    char *av[] = { "optarg",
+                   "--optional-arg", "extra-args",
+                   NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    optind = optparse_parse_args (p, ac, av);
+    ok (optind == (ac - 1), "parse options, verify optind");
+
+    ok (optparse_hasopt (p, "optional-arg"),
+        "found optional-arg option with no args");
+    optarg = NULL;
+    rc = optparse_getopt (p, "optional-arg", &optarg);
+    ok (rc == 1, "saw --optional-arg once", rc);
+    is (optarg, NULL, "no argument to --optional-arg");
+
+    char *av2[] = { "optarg",
+                   "--optional-arg=foo", "extra-args",
+                   NULL };
+    ac = sizeof (av2) / sizeof (av2[0]) - 1;
+
+    optind = optparse_parse_args (p, ac, av2);
+    ok (optind == (ac - 1), "parse options, verify optind");
+    ok (optparse_hasopt (p, "optional-arg"),
+        "found optional-arg option with args");
+
+    rc = optparse_getopt (p, "optional-arg", &optarg);
+    ok (rc == 2, "saw --optional-arg again", rc);
+    is (optarg, "foo", "got argument to --optional-arg");
+
+}
+
 int subcmd (optparse_t *p, int ac, char **av)
 {
     return (0);
@@ -639,7 +687,7 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (151);
+    plan (160);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
@@ -648,6 +696,7 @@ int main (int argc, char *argv[])
     test_data (); /* 8 tests */
     test_subcommand (); /* 47 tests */
     test_long_only (); /* 13 tests */
+    test_optional_argument (); /* 9 tests */
 
     done_testing ();
     return (0);
