@@ -645,12 +645,12 @@ int main (int argc, char *argv[])
                   heartbeat_get_rate (ctx.heartbeat));
 
     /* Send hello message to parent.
-     * Report progress every second.
+     * Report progress every 10s.
      * Start init once wireup is complete.
      */
     hello_set_flux (ctx.hello, ctx.h);
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
-    hello_set_timeout (ctx.hello, 1.0);
+    hello_set_timeout (ctx.hello, 10.0);
     if (hello_start (ctx.hello) < 0)
         log_err_exit ("hello_start");
 
