@@ -67,6 +67,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
+#include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libsubprocess/zio.h"
@@ -198,7 +199,7 @@ static int create_scratchdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
 
-static int boot_pmi (ctx_t *ctx);
+static int boot_pmi (ctx_t *ctx, double *elapsed_sec);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -433,7 +434,8 @@ int main (int argc, char *argv[])
 
     /* Boot with PMI.
      */
-    if (boot_pmi (&ctx) < 0)
+    double pmi_elapsed_sec;
+    if (boot_pmi (&ctx, &pmi_elapsed_sec) < 0)
         log_msg_exit ("bootstrap failed");
 
     assert (ctx.rank != FLUX_NODEID_ANY);
@@ -534,6 +536,8 @@ int main (int argc, char *argv[])
         if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
             log_err_exit ("configuring runlevel attributes");
     }
+
+    flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", pmi_elapsed_sec);
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
@@ -1050,7 +1054,7 @@ done:
     return rc;
 }
 
-static int boot_pmi (ctx_t *ctx)
+static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
 {
     const char *scratch_dir;
     int spawned, size, rank, appnum;
@@ -1065,6 +1069,9 @@ static int boot_pmi (ctx_t *ctx)
     char *key = NULL;
     char *val = NULL;
     int e, rc = -1;
+    struct timespec start_time;
+
+    monotime (&start_time);
 
     if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
         log_msg ("PMI_Init: %s", pmi_strerror (e));
@@ -1288,6 +1295,7 @@ static int boot_pmi (ctx_t *ctx)
     PMI_Finalize ();
     rc = 0;
 done:
+    *elapsed_sec = monotime_since (start_time) / 1000;
     if (id)
         free (id);
     if (clique_ranks)
