@@ -58,6 +58,10 @@ void test_usage_output (void)
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option");
 
+    e = optparse_set (p, OPTPARSE_USAGE, "[MOAR OPTIONS]");
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (USAGE)");
+
+    // Reset usage works:
     e = optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]");
     ok (e == OPTPARSE_SUCCESS, "optparse_set (USAGE)");
 
@@ -722,10 +726,10 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (166);
+    plan (167);
 
     test_convenience_accessors (); /* 24 tests */
-    test_usage_output (); /* 35 tests */
+    test_usage_output (); /* 36 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
