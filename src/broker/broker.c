@@ -744,14 +744,14 @@ static void hello_update_cb (hello_t *hello, void *arg)
     ctx_t *ctx = arg;
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
-                  hello_get_nodeset (hello));
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete) %.1fs",
+                  hello_get_nodeset (hello), hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
     } else  {
-        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
-                  hello_get_nodeset (hello));
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete) %.1fs",
+                  hello_get_nodeset (hello), hello_get_time (hello));
     }
     if (ctx->hello_timeout != 0
                         && hello_get_time (hello) >= ctx->hello_timeout) {
