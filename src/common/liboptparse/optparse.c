@@ -385,8 +385,9 @@ static char * get_next_segment (char **from, int width, char *buf, int bufsiz)
         /*
          *      Need to break up a word. Use user-supplied buffer.
          */
-        strncpy (buf, seg, width+1);
+        strncpy (buf, seg, width);
         buf [width - 1]  = '-';
+        buf [width] = '\0';
         /*
          * Adjust from to character eaten by '-'
          *  And return pointer to buf.
@@ -407,7 +408,7 @@ static int get_term_columns ()
     if ((val = getenv ("COLUMNS"))) {
         char *p;
         long lval = strtol (val, &p, 10);
-        if (p && (*p != '\0'))
+        if (p && (*p == '\0'))
             cols = (int) lval;
     }
     /*
@@ -1165,7 +1166,7 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
-    int li;
+    int li = -1;
     const char *fullname = NULL;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
@@ -1181,11 +1182,9 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     opterr = 0;
 
-    while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
+    while ((c = getopt_long (argc, argv, optstring, optz, &li)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
-        if (c == -1)
-            break;
         if (c == '?') {
             (*p->log_fn) ("%s: unrecognized option '%s'\n",
                           fullname, argv[optind-1]);
@@ -1194,7 +1193,18 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
             break;
         }
 
-        opt = list_find_first (p->option_list, (ListFindF) by_val, &c);
+        /* If li is a valid index, then a long option was used and we can
+         *  use this index into optz to get corresponding option name,
+         *  otherwise, assume a short option and use returned character
+         *  to find option by its key/value.
+         */
+        if (li >= 0)
+            opt = find_option_info (p, optz[li].name);
+        else
+            opt = list_find_first (p->option_list, (ListFindF) by_val, &c);
+
+        /* Reset li for next iteration */
+        li = -1;
         if (opt == NULL) {
             (*p->log_fn) ("ugh, didn't find option associated with char %c\n", c);
             continue;

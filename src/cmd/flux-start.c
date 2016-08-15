@@ -105,12 +105,12 @@ static struct optparse_option opts[] = {
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
     { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
       .usage = "After a broker exits, kill other brokers after SECONDS", },
-    { .name = "trace-pmi-server",.key = 1000, .has_arg = 0, .arginfo = NULL,
+    { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
       .usage = "Trace pmi simple server protocol exchange", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
-      .name = "caliper-profile", .key = 1001, .has_arg = 1,
+      .name = "caliper-profile", .has_arg = 1,
       .arginfo = "PROFILE",
       .usage = "Enable profiling in brokers using Caliper configuration "
                "profile named `PROFILE'",

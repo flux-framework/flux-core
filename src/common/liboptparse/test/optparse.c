@@ -58,6 +58,10 @@ void test_usage_output (void)
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option");
 
+    e = optparse_set (p, OPTPARSE_USAGE, "[MOAR OPTIONS]");
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (USAGE)");
+
+    // Reset usage works:
     e = optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]");
     ok (e == OPTPARSE_SUCCESS, "optparse_set (USAGE)");
 
@@ -167,6 +171,41 @@ This is some doc for group 1\n\
                               be split across lines nicely.\n",
         "Usage output with message autosplit across lines");
 
+    // Add an option whose description will break up a word
+    opt = ((struct optparse_option) {
+            .name = "option-C", .key = 'C', .group = 1,
+            .usage = "ThisOptionHasAVeryLongWordInTheDescriptionThatShouldBeBrokenAcrossLines."
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should\n\
+                              be split across lines nicely.\n\
+  -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatSho-\n\
+                              uldBeBrokenAcrossLines.\n",
+        "Usage output with message autosplit across lines");
+
+    ok (setenv ("COLUMNS", "120", 1) >= 0, "Set COLUMNS=120");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should be split across lines nicely.\n\
+  -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatShouldBeBrokenAcrossLines.\n",
+        "Usage output with COLUMNS=120 not split across lines");
+
+    /* Unset COLUMNS again */
+    unsetenv ("COLUMNS");
     optparse_destroy (p);
 }
 
@@ -357,6 +396,113 @@ void test_multiret (void)
     ok (rc == 5, "Iterator reset indicates 2 options to iterate");
 
     optparse_destroy (p);
+}
+
+void test_long_only (void)
+{
+    int rc;
+    const char *optarg;
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("long-only-test");
+    struct optparse_option opts [] = {
+    { .name = "basic", .key = 'b', .has_arg = 1,
+      .arginfo = "B", .usage = "This is a basic argument" },
+    { .name = "long-only", .has_arg = 1,
+      .arginfo = "L", .usage = "This is a long-only option" },
+    { .name = "again-long-only", .has_arg = 0,
+      .usage = "Another long-only" },
+      OPTPARSE_TABLE_END,
+    };
+
+    char *av[] = { "long-only-test",
+                   "-b", "one", "--again-long-only",
+                   NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    ok (p != NULL, "optparse_create");
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    optind = optparse_parse_args (p, ac, av);
+    ok (optind == ac, "parse options, verify optind");
+
+    rc = optparse_getopt (p, "basic", &optarg);
+    ok (rc == 1, "got -b");
+    is (optarg, "one", "got correct argument to --basic option");
+
+    optarg = NULL;
+    // Ensure we got correct long-only option
+    ok (optparse_hasopt (p, "again-long-only"), "Got --again-long-only");
+    ok (!optparse_hasopt (p, "long-only"), "And didn't get --long-only");
+
+    char *av2[] = { "long-only-test", "--again-long-only", "-bxxx",
+                    "--long-only=foo", NULL };
+    ac = sizeof (av2) / sizeof(av2[0]) - 1;
+
+    optind = optparse_parse_args (p, ac, av2);
+    ok (optind == ac, "parse options, verify optind");
+
+    optarg = NULL;
+    rc = optparse_getopt (p, "basic", &optarg);
+    ok (rc == 2, "got -b", rc); // second use of --basic
+    is (optarg, "xxx", "got correct argument to --basic option");
+
+    // Ensure we got correct long-only option
+    ok (optparse_hasopt (p, "again-long-only"), "Got --again-long-only");
+    rc = optparse_getopt (p, "long-only", &optarg);
+    ok (rc == 1, "got --long-only");
+    is (optarg, "foo", "got correct argument to --long-only option");
+
+    optparse_destroy (p);
+}
+
+void test_optional_argument (void)
+{
+    int rc;
+    const char *optarg;
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("optarg");
+    struct optparse_option opts [] = {
+    { .name = "basic", .key = 'b', .has_arg = 1,
+      .arginfo = "B", .usage = "This is a basic argument" },
+    { .name = "optional-arg", .has_arg = 2, .key = 'o',
+      .arginfo = "OPTIONAL", .usage = "This has an optional argument" },
+      OPTPARSE_TABLE_END,
+    };
+
+    char *av[] = { "optarg",
+                   "--optional-arg", "extra-args",
+                   NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    optind = optparse_parse_args (p, ac, av);
+    ok (optind == (ac - 1), "parse options, verify optind");
+
+    ok (optparse_hasopt (p, "optional-arg"),
+        "found optional-arg option with no args");
+    optarg = NULL;
+    rc = optparse_getopt (p, "optional-arg", &optarg);
+    ok (rc == 1, "saw --optional-arg once", rc);
+    is (optarg, NULL, "no argument to --optional-arg");
+
+    char *av2[] = { "optarg",
+                   "--optional-arg=foo", "extra-args",
+                   NULL };
+    ac = sizeof (av2) / sizeof (av2[0]) - 1;
+
+    optind = optparse_parse_args (p, ac, av2);
+    ok (optind == (ac - 1), "parse options, verify optind");
+    ok (optparse_hasopt (p, "optional-arg"),
+        "found optional-arg option with args");
+
+    rc = optparse_getopt (p, "optional-arg", &optarg);
+    ok (rc == 2, "saw --optional-arg again", rc);
+    is (optarg, "foo", "got argument to --optional-arg");
+
 }
 
 int subcmd (optparse_t *p, int ac, char **av)
@@ -580,14 +726,16 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (138);
+    plan (167);
 
     test_convenience_accessors (); /* 24 tests */
-    test_usage_output (); /* 29 tests */
+    test_usage_output (); /* 36 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
     test_subcommand (); /* 47 tests */
+    test_long_only (); /* 13 tests */
+    test_optional_argument (); /* 9 tests */
 
     done_testing ();
     return (0);
