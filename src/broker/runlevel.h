@@ -3,7 +3,7 @@
 
 typedef struct runlevel runlevel_t;
 
-typedef void (*runlevel_cb_f)(runlevel_t *r, int level, int rc,
+typedef void (*runlevel_cb_f)(runlevel_t *r, int level, int rc, double elapsed,
                               const char *exit_string, void *arg);
 typedef void (*runlevel_io_cb_f)(runlevel_t *r, const char *name,
                                  const char *msg, void *arg);

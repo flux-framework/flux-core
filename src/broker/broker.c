@@ -188,7 +188,7 @@ static void load_modules (ctx_t *ctx, const char *default_modules);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
-static void runlevel_cb (runlevel_t *r, int level, int rc,
+static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *state, void *arg);
 static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg);
@@ -814,14 +814,14 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 /* Handle completion of runlevel subprocess.
  */
-static void runlevel_cb (runlevel_t *r, int level, int rc,
+static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *exit_string, void *arg)
 {
     ctx_t *ctx = arg;
     int new_level = -1;
 
     flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
-              "Run level %d %s (rc=%d)", level, exit_string, rc);
+              "Run level %d %s (rc=%d) %.1fs", level, exit_string, rc, elapsed);
 
     switch (level) {
         case 1: /* init completed */

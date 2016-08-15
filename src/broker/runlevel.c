@@ -35,12 +35,14 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/monotime.h"
 
 #include "attr.h"
 #include "runlevel.h"
 
 struct level {
     struct subprocess *subprocess;
+    struct timespec start;
 };
 
 struct runlevel {
@@ -187,9 +189,10 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
     if (r->rc[level].subprocess) {
         if (subprocess_run (r->rc[level].subprocess) < 0)
             return -1;
+        monotime (&r->rc[level].start);
     } else {
         if (r->cb)
-            r->cb (r, r->level, 0, "Not configured", r->cb_arg);
+            r->cb (r, r->level, 0, 0., "Not configured", r->cb_arg);
     }
     return 0;
 }
@@ -211,7 +214,7 @@ int runlevel_set_level (runlevel_t *r, int level)
                 return -1;
         } else  {
             if (r->cb)
-                r->cb (r, r->level, 0, "Skipped mode=none", r->cb_arg);
+                r->cb (r, r->level, 0, 0., "Skipped mode=none", r->cb_arg);
         }
     }
     return 0;
@@ -234,8 +237,10 @@ static int subprocess_cb (struct subprocess *p)
     assert (r->rc[r->level].subprocess == p);
     r->rc[r->level].subprocess = NULL;
 
-    if (r->cb)
-        r->cb (r, r->level, rc, exit_string, r->cb_arg);
+    if (r->cb) {
+        double elapsed = monotime_since (r->rc[r->level].start) / 1000;
+        r->cb (r, r->level, rc, elapsed, exit_string, r->cb_arg);
+    }
 
     subprocess_destroy (p);
 
