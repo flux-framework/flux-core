@@ -1938,7 +1938,7 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
     if (module_stop (p) < 0)
         goto done;
-    flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
+    flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
     rc = 0;
 done:
     if (name)
@@ -1989,7 +1989,7 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
         goto done;
     }
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
-    flux_log (ctx->h, LOG_INFO, "insmod %s", name);
+    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
     rc = 0;
 done:
     if (name)
@@ -2687,7 +2687,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      * and remove the module (which calls pthread_join).
      */
     if (status == FLUX_MODSTATE_EXITED) {
-        flux_log (ctx->h, LOG_INFO, "module %s exited", name);
+        flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
         svc_remove (ctx->services, module_get_name (p));
         while ((msg = module_pop_rmmod (p))) {
             if (flux_respond (ctx->h, msg, 0, NULL) < 0)
