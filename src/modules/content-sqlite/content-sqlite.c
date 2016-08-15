@@ -445,7 +445,7 @@ void shutdown_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
     if (ctx->broker_shutdown) {
-        flux_log (h, LOG_INFO, "shutdown: skipping");
+        flux_log (h, LOG_DEBUG, "shutdown: instance is terminating, don't reload to cache");
         goto done;
     }
     while (sqlite3_step (ctx->dump_stmt) == SQLITE_ROW) {

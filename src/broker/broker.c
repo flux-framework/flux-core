@@ -67,6 +67,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
+#include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libsubprocess/zio.h"
@@ -188,7 +189,7 @@ static void load_modules (ctx_t *ctx, const char *default_modules);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
-static void runlevel_cb (runlevel_t *r, int level, int rc,
+static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *state, void *arg);
 static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg);
@@ -198,7 +199,7 @@ static int create_scratchdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
 static int create_dummyattrs (ctx_t *ctx);
 
-static int boot_pmi (ctx_t *ctx);
+static int boot_pmi (ctx_t *ctx, double *elapsed_sec);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -433,7 +434,8 @@ int main (int argc, char *argv[])
 
     /* Boot with PMI.
      */
-    if (boot_pmi (&ctx) < 0)
+    double pmi_elapsed_sec;
+    if (boot_pmi (&ctx, &pmi_elapsed_sec) < 0)
         log_msg_exit ("bootstrap failed");
 
     assert (ctx.rank != FLUX_NODEID_ANY);
@@ -534,6 +536,8 @@ int main (int argc, char *argv[])
         if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
             log_err_exit ("configuring runlevel attributes");
     }
+
+    flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", pmi_elapsed_sec);
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
@@ -645,12 +649,12 @@ int main (int argc, char *argv[])
                   heartbeat_get_rate (ctx.heartbeat));
 
     /* Send hello message to parent.
-     * Report progress every second.
+     * Report progress every 10s.
      * Start init once wireup is complete.
      */
     hello_set_flux (ctx.hello, ctx.h);
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
-    hello_set_timeout (ctx.hello, 1.0);
+    hello_set_timeout (ctx.hello, 10.0);
     if (hello_start (ctx.hello) < 0)
         log_err_exit ("hello_start");
 
@@ -744,14 +748,15 @@ static void hello_update_cb (hello_t *hello, void *arg)
     ctx_t *ctx = arg;
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
-                  hello_get_nodeset (hello));
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete) %.1fs",
+                  hello_get_nodeset (hello), hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
+        overlay_set_idle_warning (ctx->overlay, 3);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
     } else  {
-        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete)",
-                  hello_get_nodeset (hello));
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete) %.1fs",
+                  hello_get_nodeset (hello), hello_get_time (hello));
     }
     if (ctx->hello_timeout != 0
                         && hello_get_time (hello) >= ctx->hello_timeout) {
@@ -814,14 +819,14 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 /* Handle completion of runlevel subprocess.
  */
-static void runlevel_cb (runlevel_t *r, int level, int rc,
+static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *exit_string, void *arg)
 {
     ctx_t *ctx = arg;
     int new_level = -1;
 
     flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
-              "Run level %d %s (rc=%d)", level, exit_string, rc);
+              "Run level %d %s (rc=%d) %.1fs", level, exit_string, rc, elapsed);
 
     switch (level) {
         case 1: /* init completed */
@@ -1049,7 +1054,7 @@ done:
     return rc;
 }
 
-static int boot_pmi (ctx_t *ctx)
+static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
 {
     const char *scratch_dir;
     int spawned, size, rank, appnum;
@@ -1064,6 +1069,9 @@ static int boot_pmi (ctx_t *ctx)
     char *key = NULL;
     char *val = NULL;
     int e, rc = -1;
+    struct timespec start_time;
+
+    monotime (&start_time);
 
     if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
         log_msg ("PMI_Init: %s", pmi_strerror (e));
@@ -1287,6 +1295,7 @@ static int boot_pmi (ctx_t *ctx)
     PMI_Finalize ();
     rc = 0;
 done:
+    *elapsed_sec = monotime_since (start_time) / 1000;
     if (id)
         free (id);
     if (clique_ranks)
@@ -1938,7 +1947,7 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
     if (module_stop (p) < 0)
         goto done;
-    flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
+    flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
     rc = 0;
 done:
     if (name)
@@ -1989,7 +1998,7 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
         goto done;
     }
     zmsg_destroy (zmsg); /* zmsg will be replied to later */
-    flux_log (ctx->h, LOG_INFO, "insmod %s", name);
+    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
     rc = 0;
 done:
     if (name)
@@ -2687,7 +2696,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      * and remove the module (which calls pthread_join).
      */
     if (status == FLUX_MODSTATE_EXITED) {
-        flux_log (ctx->h, LOG_INFO, "module %s exited", name);
+        flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
         svc_remove (ctx->services, module_get_name (p));
         while ((msg = module_pop_rmmod (p))) {
             if (flux_respond (ctx->h, msg, 0, NULL) < 0)

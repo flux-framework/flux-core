@@ -35,14 +35,20 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/monotime.h"
 
 #include "attr.h"
 #include "runlevel.h"
 
+struct level {
+    struct subprocess *subprocess;
+    struct timespec start;
+};
+
 struct runlevel {
     int level;
     struct subprocess_manager *sm;
-    struct subprocess *rc[4];
+    struct level rc[4];
     runlevel_cb_f cb;
     void *cb_arg;
     runlevel_io_cb_f io_cb;
@@ -68,8 +74,8 @@ void runlevel_destroy (runlevel_t *r)
     if (r) {
         int i;
         for (i = 0; i < 4; i++) {
-            if (r->rc[i])
-                subprocess_destroy (r->rc[i]);
+            if (r->rc[i].subprocess)
+                subprocess_destroy (r->rc[i].subprocess);
         }
         free (r);
     }
@@ -180,12 +186,13 @@ void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg)
 
 static int runlevel_start_subprocess (runlevel_t *r, int level)
 {
-    if (r->rc[level]) {
-        if (subprocess_run (r->rc[level]) < 0)
+    if (r->rc[level].subprocess) {
+        if (subprocess_run (r->rc[level].subprocess) < 0)
             return -1;
+        monotime (&r->rc[level].start);
     } else {
         if (r->cb)
-            r->cb (r, r->level, 0, "Not configured", r->cb_arg);
+            r->cb (r, r->level, 0, 0., "Not configured", r->cb_arg);
     }
     return 0;
 }
@@ -207,7 +214,7 @@ int runlevel_set_level (runlevel_t *r, int level)
                 return -1;
         } else  {
             if (r->cb)
-                r->cb (r, r->level, 0, "Skipped mode=none", r->cb_arg);
+                r->cb (r, r->level, 0, 0., "Skipped mode=none", r->cb_arg);
         }
     }
     return 0;
@@ -227,11 +234,13 @@ static int subprocess_cb (struct subprocess *p)
     int rc = subprocess_exit_code (p);
     const char *exit_string = subprocess_exit_string (p);
 
-    assert (r->rc[r->level] == p);
-    r->rc[r->level] = NULL;
+    assert (r->rc[r->level].subprocess == p);
+    r->rc[r->level].subprocess = NULL;
 
-    if (r->cb)
-        r->cb (r, r->level, rc, exit_string, r->cb_arg);
+    if (r->cb) {
+        double elapsed = monotime_since (r->rc[r->level].start) / 1000;
+        r->cb (r, r->level, rc, elapsed, exit_string, r->cb_arg);
+    }
 
     subprocess_destroy (p);
 
@@ -283,7 +292,7 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
     if (!shell)
         shell = "/bin/bash";
 
-    if (level < 1 || level > 3 || r->rc[level] != NULL || !r->sm) {
+    if (level < 1 || level > 3 || r->rc[level].subprocess != NULL || !r->sm) {
         errno = EINVAL;
         goto error;
     }
@@ -309,7 +318,7 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
         if (subprocess_set_context (p, "runlevel_t", r) < 0)
             goto error;
     }
-    r->rc[level] = p;
+    r->rc[level].subprocess = p;
     return 0;
 error:
     if (p)

@@ -52,7 +52,7 @@ static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
         return (-1);
     }
 
-    flux_log (h, LOG_INFO, "Setting job %ld to %s", jobid, state);
+    flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
     if ((rc = kvs_put_string (h, key, state)) < 0) {
         flux_log_error (h, "kvs_put_string (%s)", key);
         goto out;
@@ -232,7 +232,7 @@ static void job_request_cb (flux_t h, flux_msg_handler_t *w,
     const char *topic;
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto out;
-    flux_log (h, LOG_INFO, "got request %s", topic);
+    flux_log (h, LOG_DEBUG, "got request %s", topic);
     if (flux_msg_get_payload_json (msg, &json_str) < 0)
         goto out;
     if (json_str && !(o = json_tokener_parse (json_str)))
