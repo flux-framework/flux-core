@@ -70,6 +70,8 @@ struct overlay_struct {
     bool event_munge;
 
     struct endpoint *relay;
+
+    int idle_warning;
 };
 
 typedef struct {
@@ -174,6 +176,11 @@ void overlay_set_flux (overlay_t *ov, flux_t h)
         log_err_exit ("flux_event_subscribe");
 }
 
+void overlay_set_idle_warning (overlay_t *ov, int heartbeats)
+{
+    ov->idle_warning = heartbeats;
+}
+
 json_object *overlay_lspeer_encode (overlay_t *ov)
 {
     JSON out = Jnew ();
@@ -195,14 +202,15 @@ void overlay_log_idle_children (overlay_t *ov)
     child_t *child;
     int idle;
 
-    FOREACH_ZHASH (ov->children, uuid, child) {
-        idle = ov->epoch - child->lastseen;
-        if (idle >= 3)
-            flux_log (ov->h, LOG_CRIT, "child %s idle for %d heartbeats",
-                      uuid, idle);
+    if (ov->idle_warning > 0) {
+        FOREACH_ZHASH (ov->children, uuid, child) {
+            idle = ov->epoch - child->lastseen;
+            if (idle >= ov->idle_warning)
+                flux_log (ov->h, LOG_CRIT, "child %s idle for %d heartbeats",
+                          uuid, idle);
+        }
     }
 }
-
 
 void overlay_mute_child (overlay_t *ov, const char *uuid)
 {

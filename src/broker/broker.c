@@ -747,6 +747,7 @@ static void hello_update_cb (hello_t *hello, void *arg)
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete) %.1fs",
                   hello_get_nodeset (hello), hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
+        overlay_set_idle_warning (ctx->overlay, 3);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
     } else  {
