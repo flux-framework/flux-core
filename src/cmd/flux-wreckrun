@@ -176,6 +176,41 @@ wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), jobid)
 local lwj, err = f:kvsdir ("lwj.%d", jobid)
 if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", jobid, err) end
 
+--
+--  Check if job state is "complete" and all IO from tasks have closed:
+--
+local function check_job_completed ()
+    if state == "failed" then
+       log:dump()
+       wreck:die ("job %d failed\n", jobid)
+    end
+    if (not taskio or taskio:complete()) and
+       (state == "complete" or state == "reaped") then
+        local rc = lwj_return_code (f, wreck, jobid)
+        if rc == 0 then
+            wreck:verbose ("All tasks completed successfully.\n");
+        end
+        os.exit (rc)
+    end
+end
+
+
+--
+--  Install watcher for this job's state before issuing any run request,
+--  (So that no state events are missed)
+--
+local kw, err = f:kvswatcher  {
+    key = string.format ("lwj.%d.state", jobid),
+    handler = function (kw, result)
+        if result then
+            state = result
+            wreck:verbose ("%-4.03fs: State = %s\n", tt:get0(), result)
+            check_job_completed ()
+        end
+    end
+}
+
+
 --if wreck:getopt ("i") then
 -- Always run in "immediate" mode for now:
 if true then
@@ -215,24 +250,6 @@ else
 end
 
 --
---  Check if job state is "complete" and all IO from tasks have closed:
---
-local function check_job_completed ()
-    if state == "failed" then
-       log:dump()
-       wreck:die ("job %d failed\n", jobid)
-    end
-    if taskio:complete() and
-       (state == "complete" or state == "reaped") then
-        local rc = lwj_return_code (f, wreck, jobid)
-        if rc == 0 then
-            wreck:verbose ("All tasks completed successfully.\n");
-        end
-        os.exit (rc)
-    end
-end
-
---
 --  Open output to all tasks:
 --
 taskio, err = ioattach {
@@ -264,20 +281,6 @@ f:iowatcher {
     handler = function (iow, data)
         if data.data then kz:write (data.data) end
         if data.eof  then kz:close ()          end
-    end
-}
-
---
---  Finally, a kvswatcher for the LWJ state:
---
-local kw, err = f:kvswatcher  {
-    key = string.format ("lwj.%d.state", jobid),
-    handler = function (kw, result)
-        if result then
-            state = result
-            wreck:verbose ("%-4.03fs: State = %s\n", tt:get0(), result)
-            check_job_completed ()
-        end
     end
 }
 
