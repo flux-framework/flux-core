@@ -256,13 +256,15 @@ prog:SubCommand {
     if not lwj then
         self:die ("Failed to get lwj info: %s\n", err)
     end
-    local fmt = "%6s %12s %12s %12s %12s\n"
-    printf (fmt, "ID", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
+    local fmt = "%6s %12s %12s %12s %12s %12s\n"
+    printf (fmt, "ID", "NTASKS", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
     for id in lwj:keys() do
         if tonumber (id) then
             local j, err = LWJ.open (f, id)
             if not j then self:die ("job%d: %s", id, err) end
-            printf (fmt, id, seconds_to_string (j.t0),
+            printf (fmt, id,
+                    j.ntasks,
+                    seconds_to_string (j.t0),
                     seconds_to_string (j.t1),
                     seconds_to_string (j.t2),
                     seconds_to_string (j.runtime))
