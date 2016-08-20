@@ -40,7 +40,7 @@
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
 
-const char *sql_create_table = "CREATE TABLE objects("
+const char *sql_create_table = "CREATE TABLE if not exists objects("
                                "  hash CHAR(20) PRIMARY KEY,"
                                "  size INT,"
                                "  object BLOB"
