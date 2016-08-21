@@ -94,6 +94,7 @@ TESTS = \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2009-hostlist.t \
+	t2010-kvs-snapshot-restore.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
@@ -207,6 +208,7 @@ check_SCRIPTS = \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2009-hostlist.t \
+	t2010-kvs-snapshot-restore.t \
 	t2100-aggregate.t \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
