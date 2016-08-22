@@ -101,7 +101,7 @@ const int max_lastuse_age = 5;
 /* Coalesce commits that arrive within min_commit_window seconds
  * of previous update.
  */
-const double min_commit_window = 1E-3;
+const double min_commit_window = 5E-2;
 
 /* Include root directory in kvs.setroot event.
  */
@@ -150,7 +150,7 @@ typedef struct {
     flux_t h;
     bool master;            /* for now minimize flux_get_rank() calls */
     int epoch;              /* tracks current heartbeat epoch */
-    struct timespec commit_time; /* time of most recent commit */
+    double commit_timestamp; /* time of most recent commit */
     bool commit_timer_armed;
     struct json_tokener *tok;
     flux_watcher_t *commit_timer;
@@ -215,6 +215,7 @@ static ctx_t *getctx (flux_t h)
             errno = ENOMEM;
             goto error;
         }
+        ctx->commit_timestamp = flux_reactor_now (flux_get_reactor (h));
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
@@ -521,19 +522,19 @@ static bool commit_apply_finish (ctx_t *ctx, json_object *rootcpy)
 {
     href_t ref;
 
+    ctx->commit_timestamp = flux_reactor_now (flux_get_reactor (ctx->h));
     commit_unroll (ctx, rootcpy);
     store (ctx, rootcpy, ref);
     if (!strcmp (ref, ctx->rootdir))
         return false;
     setroot (ctx, ref, ctx->rootseq + 1);
-    monotime (&ctx->commit_time);
     return true;
 }
 
 /* Apply all the commits found in ctx->commits in COMMIT_MASTER state.
  * Return the number of commits applied.
  */
-static int commit_apply_all (ctx_t *ctx)
+static void commit_apply_all (ctx_t *ctx)
 {
     json_object *rootcpy;
     char *key;
@@ -573,7 +574,9 @@ static int commit_apply_all (ctx_t *ctx)
     }
     zlist_destroy (&keys);
     tstat_push (&ctx->stats.commit_merges, count);
-    return count;
+
+    if (count > 1)
+        flux_log (ctx->h, LOG_DEBUG, "coalesced %d commits", count);
 }
 
 /* Commit all the ops for a particular fence (rank 0 only).
@@ -601,13 +604,9 @@ static void commit_timeout_handler (flux_reactor_t *r, flux_watcher_t *w,
                                     int revents, void *arg)
 {
     ctx_t *ctx = arg;
-    int count;
 
     ctx->commit_timer_armed = false;
-
-    count = commit_apply_all (ctx);
-    if (count > 1)
-        flux_log (ctx->h, LOG_DEBUG, "coalesced %d commits", count);
+    commit_apply_all (ctx);
 }
 
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
@@ -1212,7 +1211,8 @@ static void commit_master (flux_t h, flux_msg_handler_t *w,
         goto error;
 
     c->state = COMMIT_MASTER;
-    double since = monotime_since (ctx->commit_time) * 1E-3;
+    double now = flux_reactor_now (flux_get_reactor (h));
+    double since = now - ctx->commit_timestamp;
     if (since < min_commit_window) {
         if (!ctx->commit_timer_armed) {
             flux_timer_watcher_reset (ctx->commit_timer,
