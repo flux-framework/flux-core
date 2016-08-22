@@ -872,12 +872,16 @@ static void prog_ctx_kz_err_open (struct prog_ctx *ctx)
 {
     int n;
     char key [64];
+    int kz_flags =
+        KZ_FLAGS_NOCOMMIT_OPEN |
+        KZ_FLAGS_NOCOMMIT_CLOSE |
+        KZ_FLAGS_WRITE;
 
     n = snprintf (key, sizeof (key), "lwj.%ju.log.%d",
                   (uintmax_t) ctx->id, ctx->nodeid);
     if ((n < 0) || (n > sizeof (key)))
         wlog_fatal (ctx, 1, "snprintf: %s", flux_strerror (errno));
-    if (!(ctx->kz_err = kz_open (ctx->flux, key, KZ_FLAGS_WRITE)))
+    if (!(ctx->kz_err = kz_open (ctx->flux, key, kz_flags)))
         wlog_fatal (ctx, 1, "kz_open (%s): %s", key, flux_strerror (errno));
 }
 
