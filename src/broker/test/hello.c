@@ -6,115 +6,26 @@
 
 #include "src/common/libtap/tap.h"
 
+static flux_t h;
+
 void fatal_err (const char *message, void *arg)
 {
     BAIL_OUT ("fatal error: %s", message);
 }
 
-static int hello_count = 0;
 void hello_cb (hello_t *hello, void *arg)
 {
-    char *prefix = arg;
-    ok (hello_complete (hello) == true,
-        "%s: hello_complete returned true: %s", prefix,
-        hello_get_nodeset (hello));
-    hello_count++;
-}
-
-static int hello_request = 0;
-void hello_request_cb (flux_t h, flux_msg_handler_t *w,
-                       const flux_msg_t *msg, void *arg)
-{
-    hello_t *hello = arg;
-    int rank;
-    int rc = hello_decode (msg, &rank);
-
-    ok (rc == 0 && hello_recvmsg (hello, msg) == 0,
-        "size=3: hello_recvmsg works, rank %d", rank);
-    if (rank == 2)
-        flux_msg_handler_stop (w);
-    hello_request++;
-}
-
-void check_codec (void)
-{
-    flux_msg_t *msg;
-    int rank;
-
-    ok ((msg = hello_encode (42)) != NULL,
-        "hello_encode works");
-    ok (hello_decode (msg, &rank) == 0 && rank == 42,
-        "hello_decode works, returns encoded rank");
-    flux_msg_destroy (msg);
-}
-
-void check_size1 (flux_t h)
-{
-    hello_t *hello;
-    char *prefix = "size=1";
-
-    hello_count = 0;
-    ok ((hello = hello_create ()) != NULL,
-        "%s: hello_create works", prefix);
-    hello_set_flux (hello, h);
-    hello_set_callback (hello, hello_cb, prefix);
-    hello_set_timeout (hello, 0.1);
-    ok (hello_start (hello) == 0,
-        "%s: hello_start works", prefix);
-    ok (hello_count == 1,
-        "%s: hello callback was called once", prefix);
-
-    hello_destroy (hello);
-}
-
-void check_size3 (flux_t h)
-{
-    hello_t *hello;
-    flux_msg_handler_t *w;
-    char *prefix = "size=3";
-
-    flux_attr_fake (h, "size", "3", FLUX_ATTRFLAG_IMMUTABLE);
-    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
-
-    hello_count = hello_request = 0;
-    ok ((hello = hello_create ()) != NULL,
-        "%s: hello_create works", prefix);
-    hello_set_flux (hello, h);
-    hello_set_callback (hello, hello_cb, prefix);
-    hello_set_timeout (hello, 0.1);
-
-    w = flux_msg_handler_create (h, FLUX_MATCH_REQUEST,
-                                 hello_request_cb, hello);
-    ok (w != NULL,
-        "%s: created cmb.hello watcher", prefix);
-    flux_msg_handler_start (w);
-
-    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
-    ok (hello_start (hello) == 0,
-        "%s: (rank 0) hello_start works", prefix);
-
-    flux_attr_fake (h, "rank", "1", FLUX_ATTRFLAG_IMMUTABLE);
-    ok (hello_start (hello) == 0,
-        "%s: (rank 1) hello_start works", prefix);
-
-    flux_attr_fake (h, "rank", "2", FLUX_ATTRFLAG_IMMUTABLE);
-    ok (hello_start (hello) == 0,
-        "%s: (rank 2) hello_start works", prefix);
-
-    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
-        "%s: flux reactor exited normally", prefix);
-
-    flux_msg_handler_destroy (w);
-    hello_destroy (hello);
+    int *ip = arg;
+    (*ip)++;
 }
 
 int main (int argc, char **argv)
 {
-    flux_t h;
+    hello_t *hello;
+    uint32_t rank, size;
+    int cb_counter = 0;
 
-    plan (2+1+4+9);
-
-    check_codec (); // 2
+    plan (NO_PLAN);
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
                   flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
@@ -124,9 +35,63 @@ int main (int argc, char **argv)
         BAIL_OUT ("can't continue without loop handle");
     flux_fatal_set (h, fatal_err, NULL);
 
-    check_size1 (h); // 4
+    /* Simulate a single rank session.
+     * Since broker attrs are not set, hwm defaults to 1 (self).
+     * It will immediately complete so no need to start reactor.
+     */
+    flux_attr_fake (h, "size", "1", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    ok (flux_get_size (h, &size) == 0 && size == 1,
+        "size == 1");
+    ok (flux_get_rank (h, &rank) == 0 && rank == 0,
+        "rank == 0");
 
-    check_size3 (h); // 9
+    ok ((hello = hello_create ()) != NULL,
+        "hello_create works");
+    hello_set_flux (hello, h);
+    hello_set_callback (hello, hello_cb, &cb_counter);
+    ok (hello_get_count (hello) == 0,
+        "hello_get_count returned 0");
+    ok (hello_complete (hello) == 0,
+        "hello_complete returned false");
+    ok (hello_start (hello) == 0,
+        "hello_start works");
+    ok (cb_counter == 1,
+        "callback was called");
+    ok (hello_get_count (hello) == 1,
+        "hello_get_count returned 1");
+    ok (hello_complete (hello) != 0,
+        "hello_complete returned true");
+    hello_destroy (hello);
+
+    /* Simulate a 2 node session.
+     * Same procedure as above except the session will not complete.
+     */
+    flux_attr_fake (h, "size", "3", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
+    ok (flux_get_size (h, &size) == 0 && size == 3,
+        "size == 1");
+    ok (flux_get_rank (h, &rank) == 0 && rank == 0,
+        "rank == 0");
+
+    cb_counter = 0;
+    ok ((hello = hello_create ()) != NULL,
+        "hello_create works");
+    hello_set_flux (hello, h);
+    hello_set_callback (hello, hello_cb, &cb_counter);
+    ok (hello_get_count (hello) == 0,
+        "hello_get_count returned 0");
+    ok (hello_complete (hello) == 0,
+        "hello_complete returned false");
+    ok (hello_start (hello) == 0,
+        "hello_start works");
+    ok (cb_counter == 1,
+        "callback was called once (for self)");
+    ok (hello_get_count (hello) == 1,
+        "hello_get_count returned 1");
+    ok (hello_complete (hello) == 0,
+        "hello_complete returned false");
+    hello_destroy (hello);
 
     flux_close (h);
 

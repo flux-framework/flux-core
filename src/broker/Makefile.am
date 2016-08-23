@@ -88,7 +88,7 @@ test_heartbeat_t_SOURCES = test/heartbeat.c heartbeat.c attr.c
 test_heartbeat_t_CPPFLAGS = $(test_cppflags)
 test_heartbeat_t_LDADD = $(test_ldadd)
 
-test_hello_t_SOURCES = test/hello.c hello.c
+test_hello_t_SOURCES = test/hello.c hello.c attr.c
 test_hello_t_CPPFLAGS = $(test_cppflags)
 test_hello_t_LDADD = $(test_ldadd)
 
