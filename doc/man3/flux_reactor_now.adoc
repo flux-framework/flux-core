@@ -15,6 +15,8 @@ double flux_reactor_now (flux_reactor_t *r);
 
 void flux_reactor_now_update (flux_reactor_t *r);
 
+double flux_reactor_time (void);
+
 
 DESCRIPTION
 -----------
@@ -30,6 +32,9 @@ simultaneous.
 This may be useful when the reactor has not run for a while and timing
 calculations relative to reactor time need to be made, for example when
 creating timer watchers.
+
+`flux_reactor_time()` returns the system time as a double.
+Reactor time is a snapshot of `flux_reactor_time()`.
 
 Note: the Flux reactor is based on libev.  For additional information
 on the behavior of reactor time, refer to the libev documentation on

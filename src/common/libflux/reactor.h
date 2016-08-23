@@ -41,6 +41,7 @@ void flux_reactor_stop_error (flux_reactor_t *r);
 
 double flux_reactor_now (flux_reactor_t *r);
 void flux_reactor_now_update (flux_reactor_t *r);
+double flux_reactor_time (void);
 
 /* Watchers
  */
