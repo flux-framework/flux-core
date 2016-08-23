@@ -29,9 +29,6 @@ The number of ranks in the comms session.
 session-id::
 The identity of the comms session.
 
-tbon-arity::
-The branching factor of the tree based overlay network.
-
 scratch-directory::
 A temporary directory available for scratch storage within
 the session.  This directory _may_ be shared by multiple ranks.
@@ -54,6 +51,24 @@ persist-filesystem::
 If defined, and persist-directory is not defined, the rank
 0 broker chooses a unique name for persist-directory within
 persist-filesystem and creates it automatically.
+
+
+TOPOLOGY ATTRIBUTES
+-------------------
+tbon.arity::
+Branching factor of the tree based overlay network.
+
+tbon.descendants::
+Number of descendants "below" this node of the tree based
+overlay network, not including this node.
+
+tbon.level::
+The level of this node in the tree based overlay network.
+Root is level 0.
+
+tbon.maxlevel::
+The maximum level number in the tree based overlay network.
+Maxlevel is 0 for a size=1 instance.
 
 
 SOCKET ATTRIBUTES
