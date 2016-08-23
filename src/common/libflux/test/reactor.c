@@ -211,12 +211,12 @@ static void repeat (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_stop (w);
 }
 
-static bool oneshot_ran = false;
+static bool oneshot_runs = 0;
 static int oneshot_errno = 0;
 static void oneshot (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
-    oneshot_ran = true;
+    oneshot_runs++;
     if (oneshot_errno != 0) {
         errno = oneshot_errno;
         flux_reactor_stop_error (r);
@@ -226,6 +226,12 @@ static void oneshot (flux_reactor_t *r, flux_watcher_t *w,
 static void test_timer (flux_reactor_t *reactor)
 {
     flux_watcher_t *w;
+    double elapsed, t0, t[] = { 0.001, 0.010, 0.050, 0.100, 0.200 };
+    int i, rc;
+
+    /* in case this test runs a while after last reactor run.
+     */
+    flux_reactor_now_update (reactor);
 
     errno = 0;
     ok (!flux_timer_watcher_create (reactor, -1, 0, oneshot, NULL)
@@ -235,17 +241,20 @@ static void test_timer (flux_reactor_t *reactor)
         && errno == EINVAL,
         "timer: creating negative repeat fails with EINVAL");
     ok ((w = flux_timer_watcher_create (reactor, 0, 0, oneshot, NULL)) != NULL,
-        "timer: creating zero timeout works");
+        "timer: creating zero timeout oneshot works");
     flux_watcher_start (w);
+    oneshot_runs = 0;
+    t0 = flux_reactor_now (reactor);
     ok (flux_reactor_run (reactor, 0) == 0,
-        "timer: reactor ran to completion (single oneshot)");
-    ok (oneshot_ran == true,
-        "timer: oneshot was executed");
-    oneshot_ran = false;
+        "timer: reactor exited normally");
+    elapsed = flux_reactor_now (reactor) - t0;
+    ok (oneshot_runs == 1,
+        "timer: oneshot was executed once (%.3fs)", elapsed);
+    oneshot_runs = 0;
     ok (flux_reactor_run (reactor, 0) == 0,
-        "timer: reactor ran to completion (expired oneshot)");
-    ok (oneshot_ran == false,
-        "timer: expired oneshot was not re-executed");
+        "timer: reactor exited normally");
+    ok (oneshot_runs == 0,
+        "timer: expired oneshot didn't run");
 
     errno = 0;
     oneshot_errno = ESRCH;
@@ -255,16 +264,36 @@ static void test_timer (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
-    ok ((w = flux_timer_watcher_create (reactor, 0.01, 0.01, repeat, NULL))
+    ok ((w = flux_timer_watcher_create (reactor, 0.001, 0.001, repeat, NULL))
         != NULL,
         "timer: creating 1ms timeout with 1ms repeat works");
     flux_watcher_start (w);
+    repeat_countdown = 10;
+    t0 = flux_reactor_now (reactor);
     ok (flux_reactor_run (reactor, 0) == 0,
-        "timer: reactor ran to completion (single repeat)");
+        "timer: reactor exited normally");
+    elapsed = flux_reactor_now (reactor) - t0;
     ok (repeat_countdown == 0,
-        "timer: repeat timer stopped itself after countdown");
+        "timer: repeat timer ran 10x and stopped itself");
+    ok (elapsed >= 0.001*10,
+        "timer: elapsed time is >= 10*1ms (%.3fs)", elapsed);
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
+
+    oneshot_errno = 0;
+    ok ((w = flux_timer_watcher_create (reactor, 0, 0, oneshot, NULL)) != NULL,
+        "timer: creating timer watcher works");
+    for (i = 0; i < sizeof (t) / sizeof (t[0]); i++) {
+        flux_timer_watcher_reset (w, t[i], 0);
+        flux_watcher_start (w);
+        t0 = flux_reactor_now (reactor);
+        oneshot_runs = 0;
+        rc = flux_reactor_run (reactor, 0);
+        elapsed = flux_reactor_now (reactor) - t0;
+        ok (rc == 0 && oneshot_runs == 1 && elapsed >= t[i],
+            "timer: reactor ran %.3fs oneshot at >= time (%.3fs)", t[i], elapsed);
+    }
+
 }
 
 
@@ -323,11 +352,12 @@ static void test_periodic (flux_reactor_t *reactor)
         != NULL,
         "periodic: creating zero offset/interval works");
     flux_watcher_start (w);
+    oneshot_runs = 0;
     ok (flux_reactor_run (reactor, 0) == 0,
-        "periodic: reactor ran to completion (single oneshot)");
-    ok (oneshot_ran == true,
-        "periodic: oneshot was executed");
-    oneshot_ran = false;
+        "periodic: reactor ran to completion");
+    ok (oneshot_runs == 1,
+        "periodic: oneshot was executed once");
+    oneshot_runs = 0;
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
@@ -339,7 +369,7 @@ static void test_periodic (flux_reactor_t *reactor)
     ok (flux_reactor_run (reactor, 0) == 0,
         "periodic: reactor ran to completion");
     ok (repeat_countdown == 0, "repeat ran for expected number of times");
-    oneshot_ran = false;
+    oneshot_runs = 0;
 
     /* test reset */
     flux_periodic_watcher_reset (w, time_now () + 123., 0, NULL);
@@ -359,7 +389,7 @@ static void test_periodic (flux_reactor_t *reactor)
         "periodic: reactor ran to completion");
     ok (resched_called, "resched_cb was called");
     ok (do_stop_callback_ran, "stop reactor callback was run");
-    oneshot_ran = false;
+    oneshot_runs = 0;
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
