@@ -146,6 +146,12 @@ end
 is (n, #keys, "keys() iterator returned correct number of keys")
 
 -- KVS watcher creation
+
+-- Force creation of new handle and reactor here so that
+--  reactor time is guaranteed to be updated, and our timeout
+--  used below is relative to now and not last active reactor time.
+--
+local f = check_userdata_return ("flux.new", flux.new())
 local data = { key = "testkey", value = "testvalue" }
 
 local count = 0
@@ -185,6 +191,11 @@ to:remove()
 
 ok (kw:remove(), "Can remove kvswatcher without error")
 
+-- Again, force creation of new handle and reactor here so that
+--  reactor time is guarateed to be updated, and our timeout
+--  used below is relative to now and not last active reactor time.
+--
+local f = check_userdata_return ("flux.new", flux.new())
 
 --
 -- Again, but this time ensure callback is not called more than the

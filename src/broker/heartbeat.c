@@ -158,8 +158,9 @@ int heartbeat_start (heartbeat_t *hb)
     if (flux_get_rank (hb->h, &rank) < 0)
         return -1;
     if (rank == 0) {
-        if (!(hb->timer = flux_timer_watcher_create (flux_get_reactor (hb->h),
-                                                     hb->rate, hb->rate,
+        flux_reactor_t *r = flux_get_reactor (hb->h);
+        flux_reactor_now_update (r);
+        if (!(hb->timer = flux_timer_watcher_create (r, hb->rate, hb->rate,
                                                      timer_cb, hb)))
             return -1;
         flux_watcher_start (hb->timer);

@@ -32,7 +32,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libutil/monotime.h"
 
 #include "heartbeat.h"
 #include "hello.h"
@@ -46,7 +45,7 @@ struct hello_struct {
     flux_t h;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
-    struct timespec start;
+    double start;
 };
 
 
@@ -80,9 +79,9 @@ void hello_set_timeout (hello_t *hello, double seconds)
 
 double hello_get_time (hello_t *hello)
 {
-    if (!monotime_isset (hello->start))
-        return 0;
-    return monotime_since (hello->start) / 1000;
+    if (hello->start == 0. || hello->reactor == NULL)
+        return 0.;
+    return flux_reactor_now (hello->reactor) - hello->start;
 }
 
 void hello_set_callback (hello_t *hello, hello_cb_f cb, void *arg)
@@ -174,7 +173,8 @@ int hello_start (hello_t *hello)
     if (flux_get_rank (hello->h, &rank) < 0)
         goto done;
     if (rank == 0) {
-        monotime (&hello->start);
+        flux_reactor_now_update (hello->reactor);
+        hello->start = flux_reactor_now (hello->reactor);
         if (!(hello->timer = flux_timer_watcher_create (hello->reactor,
                                                         hello->timeout,
                                                         hello->timeout,

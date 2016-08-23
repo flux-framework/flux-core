@@ -351,7 +351,8 @@ test_expect_success 'flux-wreck: kill' '
 '
 test_expect_success 'flux-wreck: ls works' '
 	flux wreckrun -n2 -N2 hostname &&
-	flux wreck ls | tail -1 | grep "hostname$"
+	flux wreck ls | sort -n >ls.out &&
+	tail -1 ls.out | grep "hostname$"
 '
 
 flux module list | grep -q sched || test_set_prereq NO_SCHED

@@ -140,6 +140,21 @@ int flux_reactor_run (flux_reactor_t *r, int flags)
     return r->loop_rc;
 }
 
+double flux_reactor_time (void)
+{
+    return ev_time ();
+}
+
+double flux_reactor_now (flux_reactor_t *r)
+{
+    return ev_now (r->loop);
+}
+
+void flux_reactor_now_update (flux_reactor_t *r)
+{
+    return ev_now_update (r->loop);
+}
+
 void flux_reactor_stop (flux_reactor_t *r)
 {
     r->loop_rc = 0;
