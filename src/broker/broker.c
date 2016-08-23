@@ -149,7 +149,6 @@ typedef struct {
     bool enable_epgm;
     bool shared_ipc_namespace;
     hello_t *hello;
-    double hello_timeout;
     flux_t enclosing_h;
     runlevel_t *runlevel;
 
@@ -208,7 +207,7 @@ static void init_attrs_from_environment (attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "+vqM:X:k:s:T:g:EIS:"
+#define OPTIONS "+vqM:X:k:s:g:EIS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
@@ -216,7 +215,6 @@ static const struct option longopts[] = {
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
-    {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
@@ -234,7 +232,6 @@ static void usage (void)
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
-" -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
@@ -336,9 +333,6 @@ int main (int argc, char *argv[])
             case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
                     log_err_exit ("heartrate `%s'", optarg);
-                break;
-            case 'T':   /* --timeout SECS */
-                ctx.hello_timeout = strtod (optarg, NULL);
                 break;
             case 'g':   /* --shutdown-grace SECS */
                 ctx.shutdown_grace = strtod (optarg, NULL);
@@ -527,6 +521,7 @@ int main (int argc, char *argv[])
             || attr_add_active_int (ctx.attrs, "tbon.descendants",
                                 &ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || hello_register_attrs (ctx.hello, ctx.attrs) < 0
             || logbuf_register_attrs (ctx.logbuf, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         log_err_exit ("configuring attributes");
@@ -649,12 +644,11 @@ int main (int argc, char *argv[])
                   heartbeat_get_rate (ctx.heartbeat));
 
     /* Send hello message to parent.
-     * Report progress every 10s.
+     * N.B. uses tbon topology attributes set above.
      * Start init once wireup is complete.
      */
     hello_set_flux (ctx.hello, ctx.h);
     hello_set_callback (ctx.hello, hello_update_cb, &ctx);
-    hello_set_timeout (ctx.hello, 10.0);
     if (hello_start (ctx.hello) < 0)
         log_err_exit ("hello_start");
 
@@ -748,21 +742,16 @@ static void hello_update_cb (hello_t *hello, void *arg)
     ctx_t *ctx = arg;
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete) %.1fs",
-                  hello_get_nodeset (hello), hello_get_time (hello));
+        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (complete) %.1fs",
+                  hello_get_count (hello), ctx->size, hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         overlay_set_idle_warning (ctx->overlay, 3);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
+        /* FIXME: shutdown hello protocol */
     } else  {
-        flux_log (ctx->h, LOG_INFO, "nodeset: %s (incomplete) %.1fs",
-                  hello_get_nodeset (hello), hello_get_time (hello));
-    }
-    if (ctx->hello_timeout != 0
-                        && hello_get_time (hello) >= ctx->hello_timeout) {
-        shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 1,
-                      "hello timeout after %.1fs", ctx->hello_timeout);
-        hello_set_timeout (hello, 0);
+        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (incomplete) %.1fs",
+                  hello_get_count (hello), ctx->size, hello_get_time (hello));
     }
 }
 
@@ -1291,6 +1280,10 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
         if (ctx->rank == 0)
             cleanup_push_string (cleanup_file, eventfile);
         free (eventfile);
+    }
+    if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
+        log_msg ("PMI_Barrier: %s", pmi_strerror (e));
+        goto done;
     }
     PMI_Finalize ();
     rc = 0;
@@ -2235,15 +2228,6 @@ done:
     return 0;
 }
 
-static int cmb_hello_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    if (ctx->rank == 0)
-        hello_recvmsg (ctx->hello, *zmsg);
-    zmsg_destroy (zmsg); /* no reply */
-    return 0;
-}
-
 static int cmb_sub_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2433,7 +2417,6 @@ static struct internal_service services[] = {
     { "cmb.exec.write", NULL,   cmb_write_cb,       },
     { "cmb.processes",  NULL,   cmb_ps_cb,          },
     { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
-    { "cmb.hello",      NULL,   cmb_hello_cb,       },
     { "cmb.sub",        NULL,   cmb_sub_cb,         },
     { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
     { "cmb.seq.fetch",  "[0]",  cmb_seq             },
@@ -2443,6 +2426,7 @@ static struct internal_service services[] = {
     { "cmb.heaptrace.dump", NULL, cmb_heaptrace_dump_cb  },
     { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
+    { "hello",          NULL,   requeue_for_service },
     { NULL, NULL, },
 };
 
