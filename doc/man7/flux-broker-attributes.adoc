@@ -29,9 +29,6 @@ The number of ranks in the comms session.
 session-id::
 The identity of the comms session.
 
-tbon-arity::
-The branching factor of the tree based overlay network.
-
 scratch-directory::
 A temporary directory available for scratch storage within
 the session.  This directory _may_ be shared by multiple ranks.
@@ -54,6 +51,24 @@ persist-filesystem::
 If defined, and persist-directory is not defined, the rank
 0 broker chooses a unique name for persist-directory within
 persist-filesystem and creates it automatically.
+
+
+TOPOLOGY ATTRIBUTES
+-------------------
+tbon.arity::
+Branching factor of the tree based overlay network.
+
+tbon.descendants::
+Number of descendants "below" this node of the tree based
+overlay network, not including this node.
+
+tbon.level::
+The level of this node in the tree based overlay network.
+Root is level 0.
+
+tbon.maxlevel::
+The maximum level number in the tree based overlay network.
+Maxlevel is 0 for a size=1 instance.
 
 
 SOCKET ATTRIBUTES
@@ -160,10 +175,24 @@ content-purge-target-entries::
 If possible, the cache size purged periodically so that the total
 number of entries stays at or below this value.
 
-content-purge-target-size
+content-purge-target-size::
 If possible, the cache size purged periodically so that the total
 size of the cache stays at or below this value.
 
+
+WIREUP ATTRIBUTES
+-----------------
+hello.timeout::
+The reduction timeout (in seconds) for the broker wireup protocol.
+Before the timeout, a topology-based high water mark is applied
+at each node of the tree based overlay network.  After the timeout,
+new wireup information is forwarded upstream without delay.
+Set to 0 to disable the timeout.
+
+hello.hwm::
+The reduction high water mark for the broker wireup protocol,
+normally calculated based on the topology.
+Set to 0 to disable the high water mark.
 
 AUTHOR
 ------

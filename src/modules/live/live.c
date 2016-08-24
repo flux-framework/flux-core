@@ -196,6 +196,9 @@ static ctx_t *getctx (flux_t h)
             flux_log_error (h, "zlist_new/zhash_new");
             goto error;
         }
+        /* FIXME: reduction is no longer scaled by TBON height.
+         * If we need this, it will need to be calculated here.
+         */
         ctx->r = flux_reduce_create (h, hello_ops,
                                      reduce_timeout, ctx,
                                      FLUX_REDUCE_TIMEDFLUSH);

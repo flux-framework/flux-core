@@ -319,3 +319,6 @@ RTT
 wakeup
 crontab
 appname
+maxlevel
+wireup
+hwm

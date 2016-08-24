@@ -83,8 +83,8 @@ _flags_ is the logical "or" of zero or more of the following flags:
 
 FLUX_REDUCE_TIMEDFLUSH::
 When an item of a new batch is appended to the reduction handle, a reactor
-timer is started on handle _h_, by default for a fraction of the configured
-_timeout_.  When the timer expires, any items in the queue are flushed.
+timer is started on handle _h_ for _timeout_ seconds.  When the timer
+expires, any items in the queue are flushed.
 
 FLUX_REDUCE_HWMFLUSH::
 A high water mark for the number of messages appended to the handle
@@ -109,22 +109,11 @@ subsequent high water mark comparisons must count reduced messages.
 If HWMFLUSH policy is selected, _op.itemweight_ must be provided
 to interrogate an item for the number of unreduced items it represents.
 
-Under TIMEDFLUSH policy, the default _timeout_ is scaled as a linear
-function of height in the tree based overlay network.  Let H be the maximum
-tree height plus one, and h be this rank's height.  The scaled timeout t is
-given by:
-
-t = (H - h) * (_timeout_ / H)
-
-The tree height is calculated from static tree geometry returned by
-`flux_get_rank(3)`, `flux_get_size(3)`, and `flux_get_arity(3)`.
-The height of rank 0 is defined to be zero.
-
 `flux_reduce_opt_get()` and `flux_reduce_opt_set()` may be used to get
 or set internal options.  The valid options are:
 
 FLUX_REDUCE_OPT_TIMER::
-Get/set the calculated timeout value used for TIMEDFLUSH policy.
+Get/set the timeout value used for TIMEDFLUSH policy.
 The units are seconds and the value type is double.
 
 FLUX_REDUCE_OPT_HWM::
