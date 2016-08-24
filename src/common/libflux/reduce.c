@@ -74,31 +74,6 @@ static void timer_cb (flux_reactor_t *reactor, flux_watcher_t *w,
     flush_current (r);
 }
 
-/* Scale the timeout based on our height in the tree,
- * small at the leaves and 100% at the root.
- * (calculations based on maxlevel + 1 so timeout is nonzero at
- * the leaves - there may be multiple items to reduce there).
- */
-static int scale_timeout (flux_reduce_t *r, double timeout)
-{
-    uint32_t maxlevel, level;
-    const char *s;
-
-    if (!(s = flux_attr_get (r->h, "tbon.level", NULL)))
-        return -1;
-    level = strtoul (s, NULL, 10);
-    if (!(s = flux_attr_get (r->h, "tbon.maxlevel", NULL)))
-        return -1;
-    maxlevel = strtoul (s, NULL, 10);
-    maxlevel++; /* see note above */
-    if (level > 0)
-        r->timeout = (maxlevel - level) * (timeout / level);
-    else
-        r->timeout = timeout;
-    return 0;
-}
-
-
 flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
                                    double timeout, void *arg, int flags)
 {
@@ -122,14 +97,11 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
 
     r->arg = arg;
     r->flags = flags;
+    r->timeout = timeout;
     if (!(r->items = zlist_new ()))
         oom ();
     if ((flags & FLUX_REDUCE_TIMEDFLUSH)) {
-        if (scale_timeout (r, timeout) < 0) {
-            flux_reduce_destroy (r);
-            return NULL;
-        }
-        if (!(r->timer = flux_timer_watcher_create (r->reactor, r->timeout, 0,
+        if (!(r->timer = flux_timer_watcher_create (r->reactor, 0., 0.,
                                                     timer_cb, r))) {
             flux_reduce_destroy (r);
             return NULL;
