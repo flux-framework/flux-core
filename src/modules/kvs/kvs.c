@@ -344,7 +344,7 @@ done:
 }
 
 static int content_store_request_send (ctx_t *ctx, const href_t ref,
-                                   json_object *val)
+                                       json_object *val, bool now)
 {
     flux_rpc_t *rpc;
     const char *data = Jtostr (val);
@@ -354,7 +354,10 @@ static int content_store_request_send (ctx_t *ctx, const href_t ref,
     if (!(rpc = flux_rpc_raw (ctx->h, "content.store",
                               data, size, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_rpc_then (rpc, content_store_completion, ctx) < 0)
+    if (now) {
+        content_store_completion (rpc, ctx);
+        flux_rpc_destroy (rpc);
+    } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0)
         goto error;
     return 0;
 error:
@@ -384,7 +387,7 @@ static void store (ctx_t *ctx, json_object *o, href_t ref)
         hp = cache_entry_create (o);
         cache_insert (ctx->cache, ref, hp);
         cache_entry_set_dirty (hp, true);
-        if (content_store_request_send (ctx, ref, o) < 0)
+        if (content_store_request_send (ctx, ref, o, true) < 0)
             flux_log_error (ctx->h, "content_store");
     }
 }
