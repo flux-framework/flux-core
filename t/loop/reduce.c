@@ -268,7 +268,7 @@ void test_timed (flux_t h)
         BAIL_OUT();
     ok (flux_reduce_opt_get (r, FLUX_REDUCE_OPT_TIMEOUT, &timeout,
                              sizeof (timeout)) == 0 && timeout == 0.1,
-        "timed: timeout scaled by 1.0 on rank 0");
+        "timed: flux_reduce_opt_get TIMEOUT returned timeout");
 
     /* Append 100 items in batch 0 before starting reactor.
      * Reduction occurs at each append.
