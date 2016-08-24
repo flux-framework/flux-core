@@ -59,6 +59,12 @@ OPTIONS
 	Detach immediately after issuing a run request and print new jobid
 	to stdout.
 
+--wait-until='state'::
+-w 'state'::
+	Ignore all stdio, and instead just wait until the job reaches
+        a state of 'state' (i.e. "starting", "running", or "complete") and
+        exit immediately.
+
 --output='FILENAME'::
 -O 'FILENAME'::
 	Duplicate stdout and stderr from tasks to a file or files. 'FILENAME'
