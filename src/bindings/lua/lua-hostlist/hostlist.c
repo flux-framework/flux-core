@@ -95,7 +95,7 @@
 #define HOSTLIST_CHUNK    16
 
 /* max host range: anything larger will be assumed to be an error */
-#define MAX_RANGE    16384    /* 16K Hosts */
+#define MAX_RANGE    1048576    /* 16K Hosts */
 
 /* max host suffix value */
 #define MAX_HOST_SUFFIX 1<<25

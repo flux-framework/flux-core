@@ -1970,7 +1970,13 @@ static int l_kz_write (lua_State *L)
 {
     kz_t *kz = lua_get_kz (L, 1);
     size_t len;
-    const char *s = lua_tolstring (L, 2, &len);
+    const char *s = luaL_checkstring (L, 2);
+    len = strlen (s);
+
+    if (kz == NULL) {
+        fprintf (stderr, "kz_write: kz == NULL!\n ");
+        return lua_pusherror (L, "kz_write: no such kz object!\n");
+    }
 
     if (kz_put (kz, (char *) s, len) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));

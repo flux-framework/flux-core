@@ -265,6 +265,10 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 test_expect_success 'wreckrun: --detach supported' '
 	flux wreckrun --detach /bin/true | grep "^[0-9]"
 '
+test_expect_success 'wreckrun: --wait-until supported' '
+	flux wreckrun -v --wait-until=complete /bin/true >wuntil.out 2>wuntil.err &&
+	tail -1 wuntil.err | grep "complete"
+'
 
 WAITFILE="$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua"
 

@@ -173,7 +173,7 @@ function input_start (f, input)
     f:iowatcher {
         fd = input.fd,
         handler = function (iow, r)
-            input.kz:write (r.data)
+            if r.data then input.kz:write (r.data) end
             if r.eof then input.kz:close () end
         end
     }
