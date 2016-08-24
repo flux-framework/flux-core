@@ -139,6 +139,8 @@ wreck:add_options ({
         usage = "execute Lua CODE before launch." },
     { name = 'detach', char = "d",
         usage = "Detach immediately after starting job" },
+    { name = 'wait-until', char = "w", arg = "STATE",
+        usage = "Do not process stdio, but block until 'STATE'" },
 })
 
 if not wreck:parse_cmdline (arg) then
@@ -205,6 +207,9 @@ local kw, err = f:kvswatcher  {
         if result then
             state = result
             wreck:verbose ("%-4.03fs: State = %s\n", tt:get0(), result)
+            if wreck.opts.w and state == wreck.opts.w then
+                os.exit (0)
+            end
             check_job_completed ()
         end
     end
@@ -249,40 +254,43 @@ else
     lwj:commit()
 end
 
---
---  Open output to all tasks:
---
-taskio, err = ioattach {
+-- Only process stdio if no --wait-until option used
+if not wreck.opts.w then
+  --
+  --  Open output to all tasks:
+  --
+  taskio, err = ioattach {
      flux = f,
      jobid = jobid,
      ntasks = wreck.ntasks,
      labelio = wreck.opts.l,
      on_completion = check_job_completed
-}
-if not taskio then wreck:die ("error opening task io: %s\n", err) end
+  }
+  if not taskio then wreck:die ("error opening task io: %s\n", err) end
+
+  --
+  --  Open stdin
+  --
+  local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
+  if not kz then wreck:die (err) end
+
+  --
+  --  Add a file descriptor iowatcher for this script's stdin:
+  --
+  f:iowatcher {
+    fd = posix.fileno (io.input()),
+    handler = function (iow, data)
+        if data.data then kz:write (data.data) end
+        if data.eof  then kz:close ()          end
+    end
+  }
+end
 
 log, err = logstream {
      flux = f,
      jobid = jobid,
 }
 if not log then wreck:die ("error opening log stream: %s\n", err) end
-
---
---  Open stdin
---
-local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
-if not kz then wreck:die (err) end
-
---
---  Add a file descriptor iowatcher for this script's stdin:
---
-f:iowatcher {
-    fd = posix.fileno (io.input()),
-    handler = function (iow, data)
-        if data.data then kz:write (data.data) end
-        if data.eof  then kz:close ()          end
-    end
-}
 
 local s, err = f:sighandler {
     sigmask = { posix.SIGINT, posix.SIGTERM },
