@@ -320,6 +320,8 @@ prog:SubCommand {
     usage = "Remove all eligible lwj entries." },
   { name = "max",  char = "m", arg = "N",
     usage = "Maximum number of entries to target." },
+  { name = "keep", char = "k", arg = "CODE",
+    usage = "Keep entries where CODE is true" },
  },
  description = "Purge old jobs entries from kvs",
  handler = function (self, arg)
@@ -337,11 +339,22 @@ prog:SubCommand {
     for x in lwj:keys () do
         if tonumber (x) then table.insert (ids, x) end
     end
-    if verbose then self:log ("%4.03fs: got lwj list\n", tt:get0()) end
+    if verbose then
+        self:log ("%4.03fs: got lwj list (%d entries)\n", tt:get0(), #ids)
+    end
 
     local total = #ids
     local target = tonumber (self.opt.t)
     local max = tonumber (self.opt.m) or math.huge
+    local keep = function (id) return false end
+    if self.opt.k then
+        local err
+        keep, err =
+            loadstring ('local id = tonumber (...); return '..self.opt.k)
+        if not keep then
+            self:die ("Failed to compile --keep option: %s\n", err)
+        end
+    end
 
     -- Without --target-size option, just list current number of lwj entries
     if not target then
@@ -360,21 +373,26 @@ prog:SubCommand {
         (function() -- anonymous function used for early return
             local completed = f:kvsdir ("lwj-complete")
             for hb in completed:keys () do
+                local hb_unlink = true
                 local d = completed [hb]
                 for id in d:keys() do
-                    table.insert (r, id)
-                    if self.opt.R then
-                        local t, target = f:kvs_type ("lwj."..id)
-                        if t == "symlink" then
-                            f:kvs_unlink (target)
+                    if keep (id) then
+                        hb_unlink = false
+                    else
+                        table.insert (r, id)
+                        if self.opt.R then
+                            local t, target = f:kvs_type ("lwj."..id)
+                            if t == "symlink" then
+                                f:kvs_unlink (target)
+                            end
+                            f:kvs_unlink ("lwj."..id)
+                            f:kvs_unlink ("lwj-complete."..hb.."."..id)
                         end
-                        f:kvs_unlink ("lwj."..id)
-                        f:kvs_unlink ("lwj-complete."..hb.."."..id)
+                        n = n - 1
+                        if n == 0 then return end
                     end
-                    n = n - 1
-                    if n == 0 then return end
                 end
-                if self.opt.R then
+                if self.opt.R and hb_unlink then
                     f:kvs_unlink ("lwj-complete."..hb)
                 end
             end
@@ -383,8 +401,6 @@ prog:SubCommand {
         -- gather ids to remove in hostlist for condensed output:
         --
         local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
-        local idstring = tostring (hl):match ("%[?([^]]+)%]?")
-
         if self.opt.R then
             lwj:commit()
             if verbose then
@@ -395,8 +411,13 @@ prog:SubCommand {
                       tt:get0(), #hl)
         end
 
-        self:log ("%s %d lwj entries: %s\n",
-                  self.opt.R and "removed" or "would remove", #hl, idstring)
+        local idstring = ""
+        if #hl > 0 then
+            idstring = ": "..tostring (hl):match ("%[?([^]]+)%]?")
+        end
+        self:log ("%s %d lwj entries%s\n",
+                  self.opt.R and "removed" or "would remove", #hl,
+                  idstring)
         if verbose then
             self:log ("%4.03fs: all done.\n", tt:get0());
         end
