@@ -9,7 +9,8 @@ SUBDIRS = \
  wreck \
  libjsc \
  resource-hwloc \
- cron
+ cron \
+ aggregator
 
 if HAVE_PYTHON
 # SUBDIRS += pymod
