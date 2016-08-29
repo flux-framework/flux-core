@@ -64,15 +64,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <getopt.h>
 #include <libgen.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <stdbool.h>
-#include <ctype.h>
 #include <sys/time.h>
 #include <czmq.h>
-#include <fnmatch.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/sha1.h"
@@ -98,25 +94,9 @@ typedef char href_t[SHA1_STRING_SIZE];
  */
 const int max_lastuse_age = 5;
 
-/* Coalesce commits that arrive within min_commit_window seconds
- * of previous update.
- */
-const double min_commit_window = 5E-2;
-
 /* Include root directory in kvs.setroot event.
  */
 const bool event_includes_rootdir = true;
-
-typedef struct {
-    json_object *ops;       /* array of { "key":fqkey, "dirent":dirent } */
-    flux_msg_t *request;    /* request message */
-    struct timespec t0;     /* commit begin timestamp */
-    enum {
-        COMMIT_NEW,
-        COMMIT_UPSTREAM,    /* upstream commit running */
-        COMMIT_MASTER,      /* (master only) commit ASAP */
-    } state;
-} commit_t;
 
 typedef struct {
     json_object *ops;
@@ -142,7 +122,6 @@ typedef struct {
     struct cache *cache;    /* SHA1 => cache_entry */
     href_t rootdir;         /* current root SHA1 */
     int rootseq;            /* current root version (for ordering) */
-    zhash_t *commits;       /* hash of pending commits by sender name */
     zhash_t *fences;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
@@ -150,10 +129,7 @@ typedef struct {
     flux_t h;
     bool master;            /* for now minimize flux_get_rank() calls */
     int epoch;              /* tracks current heartbeat epoch */
-    double commit_timestamp; /* time of most recent commit */
-    bool commit_timer_armed;
     struct json_tokener *tok;
-    flux_watcher_t *commit_timer;
 } ctx_t;
 
 enum {
@@ -162,23 +138,15 @@ enum {
 };
 
 static int setroot_event_send (ctx_t *ctx, const char *fence);
-static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
-                            const char *sender,
-                            const char *rootdir, int rootseq);
-
-static void commit_timeout_handler (flux_reactor_t *r, flux_watcher_t *w,
-                                    int revents, void *arg);
 
 static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
     if (ctx) {
         cache_destroy (ctx->cache);
-        zhash_destroy (&ctx->commits);
         zhash_destroy (&ctx->fences);
         if (ctx->watchlist)
             wait_queue_destroy (ctx->watchlist);
-        flux_watcher_destroy (ctx->commit_timer);
         if (ctx->tok)
             json_tokener_free (ctx->tok);
         free (ctx);
@@ -196,9 +164,8 @@ static ctx_t *getctx (flux_t h)
         if (!(r = flux_get_reactor (h)))
             goto error;
         ctx->cache = cache_create ();
-        ctx->commits = zhash_new ();
         ctx->watchlist = wait_queue_create ();
-        if (!ctx->cache || !ctx->commits || !ctx->watchlist) {
+        if (!ctx->cache || !ctx->watchlist) {
             errno = ENOMEM;
             goto error;
         }
@@ -207,37 +174,16 @@ static ctx_t *getctx (flux_t h)
             goto error;
         if (rank == 0)
             ctx->master = true;
-        if (!(ctx->commit_timer = flux_timer_watcher_create (r,
-                                                min_commit_window, 0.,
-                                                commit_timeout_handler, ctx)))
-            goto error;
         if (!(ctx->tok = json_tokener_new ())) {
             errno = ENOMEM;
             goto error;
         }
-        ctx->commit_timestamp = flux_reactor_now (flux_get_reactor (h));
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
 error:
     freectx (ctx);
     return NULL;
-}
-
-static commit_t *commit_create (void)
-{
-    commit_t *c = xzmalloc (sizeof (*c));
-    return c;
-}
-
-static void commit_destroy (commit_t *c)
-{
-    if (c) {
-        if (c->ops)
-            json_object_put (c->ops);
-        flux_msg_destroy (c->request);
-        free (c);
-    }
 }
 
 static void content_load_completion (flux_rpc_t *rpc, void *arg)
@@ -525,61 +471,12 @@ static bool commit_apply_finish (ctx_t *ctx, json_object *rootcpy)
 {
     href_t ref;
 
-    ctx->commit_timestamp = flux_reactor_now (flux_get_reactor (ctx->h));
     commit_unroll (ctx, rootcpy);
     store (ctx, rootcpy, ref);
     if (!strcmp (ref, ctx->rootdir))
         return false;
     setroot (ctx, ref, ctx->rootseq + 1);
     return true;
-}
-
-/* Apply all the commits found in ctx->commits in COMMIT_MASTER state.
- * Return the number of commits applied.
- */
-static void commit_apply_all (ctx_t *ctx)
-{
-    json_object *rootcpy;
-    char *key;
-    zlist_t *keys;
-    commit_t *c;
-    int count = 0;
-
-    rootcpy = commit_apply_start (ctx);
-
-    if (!(keys = zhash_keys (ctx->commits)))
-        oom ();
-    key = zlist_first (keys);
-    while (key) {
-        c = zhash_lookup (ctx->commits, key);
-        assert (c != NULL);
-        if (c->state == COMMIT_MASTER) {
-            commit_apply_ops (ctx, rootcpy, c->ops);
-            count++;
-        }
-        key = zlist_next (keys);
-    }
-
-    if (commit_apply_finish (ctx, rootcpy))
-        setroot_event_send (ctx, NULL);
-
-    while ((key = zlist_pop (keys))) {
-        c = zhash_lookup (ctx->commits, key);
-        assert (c != NULL);
-        if (c->state == COMMIT_MASTER) {
-            FASSERT (ctx->h, c->request != NULL);
-            commit_respond (ctx, c->request, key, NULL, 0);
-            if (monotime_isset (c->t0))
-                tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
-            zhash_delete (ctx->commits, key);
-        }
-        free (key);
-    }
-    zlist_destroy (&keys);
-    tstat_push (&ctx->stats.commit_merges, count);
-
-    if (count > 1)
-        flux_log (ctx->h, LOG_DEBUG, "coalesced %d commits", count);
 }
 
 /* Commit all the ops for a particular fence (rank 0 only).
@@ -598,18 +495,6 @@ static int commit_apply_fence (ctx_t *ctx, fence_t *f)
     (void)commit_apply_finish (ctx, rootcpy);
     setroot_event_send (ctx, f->name);
     return 0;
-}
-
-/* This timeout fires when the window for coalescing commits
- * has expired.
- */
-static void commit_timeout_handler (flux_reactor_t *r, flux_watcher_t *w,
-                                    int revents, void *arg)
-{
-    ctx_t *ctx = arg;
-
-    ctx->commit_timer_armed = false;
-    commit_apply_all (ctx);
 }
 
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
@@ -1013,240 +898,6 @@ done:
         free (p.sender);
 }
 
-static void commit_response_cb (flux_t h, flux_msg_handler_t *w,
-                                const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    const char *rootdir, *sender;
-    int rootseq;
-    commit_t *commit;
-
-    if (flux_response_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_rcommit_dec (in, &rootseq, &rootdir, &sender) < 0)
-        goto done;
-
-    /* Update the cache on this node.
-     * If we have already advanced here or beyond, this is a no-op.
-     */
-    setroot (ctx, rootdir, rootseq);
-
-    /* Find the original commit_t associated with this request and respond.
-     */
-    if ((commit = zhash_lookup (ctx->commits, sender))) {
-        FASSERT (ctx->h, commit->state == COMMIT_UPSTREAM);
-        FASSERT (ctx->h, commit->request != NULL);
-        commit_respond (ctx, commit->request, sender, rootdir, rootseq);
-        if (monotime_isset (commit->t0))
-            tstat_push (&ctx->stats.commit_time,  monotime_since (commit->t0));
-        zhash_delete (ctx->commits, sender);
-    }
-done:
-    Jput (in);
-}
-
-/* Send a new commit request upstream.
- * When the response is recieved, we will look up this commit_t by sender
- * and respond to c->request (if set).
- */
-static int send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender)
-{
-    flux_rpc_t *rpc = NULL;
-    JSON in;
-
-    if (!(in = kp_tcommit_enc (sender, c->ops)))
-        goto error;
-    if (!(rpc = flux_rpc (ctx->h, "kvs.commit", Jtostr (in),
-                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
-        goto error;
-    flux_rpc_destroy (rpc);
-    Jput (c->ops);
-    c->ops = NULL;
-    Jput (in);
-    return 0;
-error:
-    flux_log_error (ctx->h, "%s", __FUNCTION__);
-    Jput (in);
-    return -1;
-}
-
-static void commit_respond (ctx_t *ctx, const flux_msg_t *msg,
-                            const char *sender,
-                            const char *rootdir, int rootseq)
-{
-    JSON out = NULL;
-    int rc = -1;
-
-    if (!msg)
-        return;
-    if (!rootdir) {
-        rootdir = ctx->rootdir;
-        rootseq = ctx->rootseq;
-    }
-    if (!(out = kp_rcommit_enc (rootseq, rootdir, sender)))
-        goto done;
-    rc = 0;
-done:
-    if (flux_respond (ctx->h, msg, rc < 0 ? errno : 0,
-                                   rc < 0 ? NULL : Jtostr (out)) < 0)
-        flux_log_error (ctx->h, "%s", __FUNCTION__);
-    Jput (out);
-}
-
-static void commit_slave (flux_t h, flux_msg_handler_t *w,
-                          const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    JSON ops = NULL;
-    commit_t *c = NULL;
-    char *sender = NULL;
-    const char *arg_sender;
-    int saved_errno;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto error;
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (flux_msg_get_route_first (msg, &sender) < 0)
-        goto error;
-    if (kp_tcommit_dec (in, &arg_sender, &ops) < 0)
-        goto error;
-
-    /* Commits generated internally will contain .arg_sender.  If present,
-     * we should ignore the true sender and use it to hash the commit.
-     */
-    if (arg_sender) {
-        free (sender);
-        sender = xstrdup (arg_sender);
-    }
-    if (!(c = zhash_lookup (ctx->commits, sender))) {
-        c = commit_create ();
-        c->state = COMMIT_NEW;
-        c->ops = ops;
-        ops = NULL;
-        zhash_insert (ctx->commits, sender, c);
-        zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
-    }
-
-    FASSERT (h, c->state == COMMIT_NEW);
-    c->state = COMMIT_UPSTREAM;
-    send_upstream_commit (ctx, c, sender);
-    FASSERT (h, c->request == NULL);
-    if (!(c->request = flux_msg_copy (msg, false)))
-        goto error;
-    Jput (in);
-    Jput (ops);
-    if (sender)
-        free (sender);
-    return;
-error:
-    saved_errno = errno;
-    Jput (in);
-    Jput (ops);
-    if (sender)
-        free (sender);
-    if (flux_respond (h, msg, saved_errno, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-}
-
-static void commit_master (flux_t h, flux_msg_handler_t *w,
-                           const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    JSON in = NULL;
-    JSON ops = NULL;
-    commit_t *c = NULL;
-    char *sender = NULL;
-    const char *arg_sender;
-    int saved_errno;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto error;
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (flux_msg_get_route_first (msg, &sender) < 0)
-        goto error;
-    if (kp_tcommit_dec (in, &arg_sender, &ops) < 0)
-        goto error;
-
-    /* Commits generated internally will contain .arg_sender.  If present,
-     * we should ignore the true sender and use it to hash the commit.
-     */
-    if (arg_sender) {
-        free (sender);
-        sender = xstrdup (arg_sender);
-    }
-    if (!(c = zhash_lookup (ctx->commits, sender))) {
-        c = commit_create ();
-        c->state = COMMIT_NEW;
-        c->ops = ops;
-        ops = NULL;
-        zhash_insert (ctx->commits, sender, c);
-        zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
-    }
-    if (c->state != COMMIT_NEW) { /* XXX */
-        flux_log (h, LOG_ERR, "XXX master encountered old commit state=%d",
-                c->state);
-        goto done;
-    }
-
-    FASSERT (h, c->state == COMMIT_NEW);
-    FASSERT (h, c->request == NULL);
-    if (!(c->request = flux_msg_copy (msg, false)))
-        goto error;
-
-    c->state = COMMIT_MASTER;
-    double now = flux_reactor_now (flux_get_reactor (h));
-    double since = now - ctx->commit_timestamp;
-    if (since < min_commit_window) {
-        if (!ctx->commit_timer_armed) {
-            flux_timer_watcher_reset (ctx->commit_timer,
-                                      min_commit_window - since, 0.);
-            flux_watcher_start (ctx->commit_timer);
-            ctx->commit_timer_armed = true;
-        }
-    } else
-        commit_apply_all (ctx);
-
-done:
-    Jput (in);
-    Jput (ops);
-    if (sender)
-        free (sender);
-    return;
-error:
-    saved_errno = errno;
-    Jput (in);
-    Jput (ops);
-    if (sender)
-        free (sender);
-    if (flux_respond (h, msg, saved_errno, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-}
-
-static void commit_request_cb (flux_t h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    if (ctx->master)
-        commit_master (h, w, msg, arg);
-    else
-        commit_slave (h, w, msg, arg);
-}
-
 static void fence_destroy (fence_t *f)
 {
     if (f) {
@@ -1641,7 +1292,6 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
         return;
     (void)wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
     (void)cache_wait_destroy_match (ctx->cache, disconnect_cmp, sender);
-    zhash_delete (ctx->commits, sender);
     free (sender);
 }
 
@@ -1668,7 +1318,6 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     add_tstat (o, "obj size (KiB)", &ts, 1E-3);
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
-    Jadd_int (o, "#pending commits", zhash_size (ctx->commits));
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
     add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
     add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
@@ -1719,8 +1368,6 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
-    { FLUX_MSGTYPE_RESPONSE, "kvs.commit",          commit_response_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.fence",            fence_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.relayfence",       relayfence_request_cb },
     FLUX_MSGHANDLER_TABLE_END,
