@@ -277,6 +277,7 @@ static void r_sink (flux_reduce_t *r, int batch, void *arg)
  */
 static void r_forward (flux_reduce_t *r, int batch, void *arg)
 {
+    flux_rpc_t *rpc;
     hello_t *hello = arg;
     int count = (uintptr_t)flux_reduce_pop (r);
     JSON in = Jnew ();
@@ -286,9 +287,10 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
 
     Jadd_int (in, "count", count);
     Jadd_int (in, "batch", batch);
-    if (flux_rpc (hello->h, "hello.join", Jtostr (in),
-                  FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE) < 0)
+    if (!(rpc = flux_rpc (hello->h, "hello.join", Jtostr (in),
+                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         log_err_exit ("hello: flux_rpc");
+    flux_rpc_destroy (rpc);
     Jput (in);
 }
 
