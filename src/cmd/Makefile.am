@@ -56,7 +56,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-exec \
 	flux-topo \
 	flux-ps \
-	flux-cron
+	flux-cron \
+	flux-aggregate
 
 if HAVE_PYTHON
 dist_fluxcmd_SCRIPTS+= \
