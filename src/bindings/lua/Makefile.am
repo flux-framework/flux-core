@@ -57,6 +57,7 @@ luamod_ldflags = \
 
 luamod_libadd = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
