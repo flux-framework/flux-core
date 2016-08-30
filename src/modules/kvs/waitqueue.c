@@ -25,11 +25,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/monotime.h"
 
 #include "waitqueue.h"
 
@@ -44,10 +44,10 @@ struct handler {
 #define WAIT_MAGIC 0xafad7777
 struct wait_struct {
     int magic;
-    char *id;
     int usecount;
-    struct timespec t0;
-    struct handler hand;
+    wait_cb_f cb;
+    void *cb_arg;
+    struct handler hand; /* optional special case */
 };
 
 #define WAITQUEUE_MAGIC 0xafad7778
@@ -56,33 +56,43 @@ struct waitqueue_struct {
     zlist_t *q;
 };
 
-wait_t *wait_create (flux_t h, flux_msg_handler_t *wh, const flux_msg_t *msg,
-                     flux_msg_handler_f cb, void *arg)
+wait_t *wait_create (wait_cb_f cb, void *arg)
 {
-    wait_t *w = xzmalloc (sizeof (*w));
+    wait_t *w = calloc (1, sizeof (*w));
+    if (!w) {
+        errno = ENOMEM;
+        return NULL;
+    }
     w->magic = WAIT_MAGIC;
+    w->cb = cb;
+    w->cb_arg = arg;
+    return w;
+}
+
+wait_t *wait_create_msg_handler (flux_t h, flux_msg_handler_t *wh,
+                                 const flux_msg_t *msg,
+                                 flux_msg_handler_f cb, void *arg)
+{
+    wait_t *w = wait_create (NULL, NULL);
+    if (!w)
+        return NULL;
     w->hand.cb = cb;
     w->hand.arg = arg;
     w->hand.h = h;
     w->hand.w = wh;
     if (!(w->hand.msg = flux_msg_copy (msg, true))) {
-        wait_destroy (w, NULL);
+        wait_destroy (w);
         errno = ENOMEM;
         return NULL;
     }
-    monotime (&w->t0);
     return w;
 }
 
-void wait_destroy (wait_t *w, double *msec)
+void wait_destroy (wait_t *w)
 {
     assert (w->magic == WAIT_MAGIC);
     assert (w->usecount == 0);
-    if (msec)
-        *msec = monotime_since (w->t0);
     flux_msg_destroy (w->hand.msg);
-    if (w->id)
-        free (w->id);
     w->magic = ~WAIT_MAGIC;
     free (w);
 }
@@ -103,7 +113,7 @@ void wait_queue_destroy (waitqueue_t *q)
     assert (q->magic == WAITQUEUE_MAGIC);
     while ((w = zlist_pop (q->q))) {
         if (--w->usecount == 0)
-            wait_destroy (w, NULL);
+            wait_destroy (w);
     }
     zlist_destroy (&q->q);
     q->magic = ~WAITQUEUE_MAGIC;
@@ -125,14 +135,16 @@ void wait_addqueue (waitqueue_t *q, wait_t *w)
     w->usecount++;
 }
 
-void wait_runone (wait_t *w)
+static void wait_runone (wait_t *w)
 {
     assert (w->magic == WAIT_MAGIC);
 
     if (--w->usecount == 0) {
-        if (w->hand.cb)
+        if (w->cb)
+            w->cb (w->cb_arg);
+        else if (w->hand.cb)
             w->hand.cb (w->hand.h, w->hand.w, w->hand.msg, w->hand.arg);
-        wait_destroy (w, NULL);
+        wait_destroy (w);
     }
 }
 
@@ -155,7 +167,7 @@ void wait_runqueue (waitqueue_t *q)
     }
 }
 
-int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
+int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
 {
     zlist_t *tmp = NULL;
     wait_t *w;
@@ -180,7 +192,7 @@ int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg)
         while ((w = zlist_pop (tmp))) {
             zlist_remove (q->q, w);
             if (--w->usecount == 0)
-                wait_destroy (w, NULL);
+                wait_destroy (w);
         }
     }
     rc = count;

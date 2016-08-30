@@ -223,8 +223,7 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
         *dirtyp = dirty;
 }
 
-int cache_wait_destroy_match (struct cache *cache,
-                              wait_compare_f cb, void *arg)
+int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
 {
     const char *key;
     struct cache_entry *hp;
@@ -233,7 +232,7 @@ int cache_wait_destroy_match (struct cache *cache,
 
     FOREACH_ZHASH (cache->zh, key, hp) {
         if (hp->waitlist) {
-            if ((n = wait_destroy_match (hp->waitlist, cb, arg)) < 0)
+            if ((n = wait_destroy_msg (hp->waitlist, cb, arg)) < 0)
                 goto done;
             count += n;
         }

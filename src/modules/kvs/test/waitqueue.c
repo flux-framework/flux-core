@@ -47,9 +47,9 @@ int main (int argc, char *argv[])
     msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
     ok (msg != NULL,
         "flux_msg_create works");
-    w = wait_create (NULL, NULL, msg, msghand, &count);
+    w = wait_create_msg_handler (NULL, NULL, msg, msghand, &count);
     ok (w != NULL,
-        "wait_create works");
+        "wait_create_msg_handler works");
     flux_msg_destroy (msg);
 
     wait_addqueue (q, w);
@@ -73,7 +73,7 @@ int main (int argc, char *argv[])
         if (flux_msg_enable_route (msg) < 0
             || flux_msg_push_route (msg, s) < 0)
             break;
-        w = wait_create (NULL, NULL, msg, msghand, &count);
+        w = wait_create_msg_handler (NULL, NULL, msg, msghand, &count);
         if (!w)
             break;
         wait_addqueue (q, w);
@@ -81,12 +81,12 @@ int main (int argc, char *argv[])
     }
     ok (wait_queue_length (q) == 20,
         "wait_addqueue 20x works");
-    wait_destroy_match (q, msgcmp, NULL);
+    wait_destroy_msg (q, msgcmp, NULL);
     ok (wait_queue_length (q) == 17,
         "wait_destroy_match on sender works");
-    wait_destroy_match (q, msgcmp2, NULL);
+    wait_destroy_msg (q, msgcmp2, NULL);
     ok (wait_queue_length (q) == 0,
-        "all-match wait_destroy_match works");
+        "all-match wait_destroy_msg works");
 
     wait_queue_destroy (q);
     wait_queue_destroy (q2);

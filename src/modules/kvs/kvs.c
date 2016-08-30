@@ -110,10 +110,6 @@ typedef struct {
 /* Statistics gathered for kvs.stats.get, etc.
  */
 typedef struct {
-    tstat_t commit_time;
-    tstat_t commit_merges;
-    tstat_t get_time;
-    tstat_t put_time;
     int faults;
     int noop_stores;
 } stats_t;
@@ -716,7 +712,6 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     JSON root, val;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
-    double msec;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
@@ -727,7 +722,7 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     if (kp_tget_dec (in, &key, &dir, &link) < 0)
         goto done;
-    if (!(wait = wait_create (h, w, msg, get_request_cb, arg)))
+    if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
     if (!load (ctx, ctx->rootdir, wait, &root))
         goto stall;
@@ -744,8 +739,7 @@ done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0,
                               rc < 0 ? NULL : Jtostr (out)) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
-    wait_destroy (wait, &msec);
-    tstat_push (&ctx->stats.get_time, msec);
+    wait_destroy (wait);
 stall:
     Jput (in);
     Jput (out);
@@ -786,7 +780,7 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     if (kp_twatch_dec (in, &key, &oval, &once, &first, &dir, &link) < 0)
         goto done;
-    if (!(wait = wait_create (h, w, msg, watch_request_cb, arg)))
+    if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, arg)))
         goto done;
     if (!load (ctx, ctx->rootdir, wait, &root))
         goto stall;
@@ -813,7 +807,8 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
             goto done;
         if (flux_msg_set_payload_json (cpy, Jtostr (in2)) < 0)
             goto done;
-        if (!(watcher = wait_create (h, w, cpy, watch_request_cb, arg)))
+        if (!(watcher = wait_create_msg_handler (h, w, cpy,
+                                                 watch_request_cb, arg)))
             goto done;
         wait_addqueue (ctx->watchlist, watcher);
     }
@@ -824,7 +819,7 @@ done:
                                   rc < 0 ? NULL : Jtostr (out)) < 0)
             flux_log_error (h, "%s", __FUNCTION__);
     }
-    wait_destroy (wait, NULL);
+    wait_destroy (wait);
 stall:
     Jput (val);
     Jput (in);
@@ -885,9 +880,9 @@ static void unwatch_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     if (flux_msg_get_route_first (msg, &p.sender) < 0)
         goto done;
-    if (wait_destroy_match (ctx->watchlist, unwatch_cmp, &p) < 0)
+    if (wait_destroy_msg (ctx->watchlist, unwatch_cmp, &p) < 0)
         goto done;
-    if (cache_wait_destroy_match (ctx->cache, unwatch_cmp, &p) < 0)
+    if (cache_wait_destroy_msg (ctx->cache, unwatch_cmp, &p) < 0)
         goto done;
     rc = 0;
 done:
@@ -1137,7 +1132,7 @@ static void sync_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
     if (ctx->rootseq < rootseq) {
-        if (!(wait = wait_create (h, w, msg, sync_request_cb, arg)))
+        if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
             goto done;
         wait_addqueue (ctx->watchlist, wait);
         goto done; /* stall */
@@ -1290,8 +1285,8 @@ static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    (void)wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
-    (void)cache_wait_destroy_match (ctx->cache, disconnect_cmp, sender);
+    (void)wait_destroy_msg (ctx->watchlist, disconnect_cmp, sender);
+    (void)cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender);
     free (sender);
 }
 
@@ -1319,11 +1314,6 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    add_tstat (o, "gets (sec)", &ctx->stats.get_time, 1E-3);
-    add_tstat (o, "puts (sec)", &ctx->stats.put_time, 1E-3);
-    add_tstat (o, "commits (sec)", &ctx->stats.commit_time, 1E-3);
-    add_tstat (o, "commits per update",
-                                &ctx->stats.commit_merges, 1);
     Jadd_int (o, "#no-op stores", ctx->stats.noop_stores);
     Jadd_int (o, "#faults", ctx->stats.faults);
     Jadd_int (o, "store revision", ctx->rootseq);
