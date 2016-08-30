@@ -98,15 +98,6 @@ const int max_lastuse_age = 5;
  */
 const bool event_includes_rootdir = true;
 
-typedef struct {
-    json_object *ops;
-    zlist_t *requests;
-    char *name;
-    int nprocs;
-    int count;
-    int rc;
-} fence_t;
-
 /* Statistics gathered for kvs.stats.get, etc.
  */
 typedef struct {
@@ -119,6 +110,7 @@ typedef struct {
     href_t rootdir;         /* current root SHA1 */
     int rootseq;            /* current root version (for ordering) */
     zhash_t *fences;
+    zlist_t *ready;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     stats_t stats;
@@ -128,10 +120,18 @@ typedef struct {
     struct json_tokener *tok;
 } ctx_t;
 
-enum {
-    KVS_GET_DIRVAL = 1,
-    KVS_GET_FILEVAL = 2,
-};
+typedef struct {
+    json_object *ops;
+    zlist_t *requests;
+    char *name;
+    int nprocs;
+    int count;
+    int rc;
+    ctx_t *ctx;
+    json_object *rootcpy;   /* working copy of root dir */
+    int rootcpy_stored:1;
+    href_t newroot;
+} fence_t;
 
 static int setroot_event_send (ctx_t *ctx, const char *fence);
 
@@ -141,6 +141,7 @@ static void freectx (void *arg)
     if (ctx) {
         cache_destroy (ctx->cache);
         zhash_destroy (&ctx->fences);
+        zlist_destroy (&ctx->ready);
         if (ctx->watchlist)
             wait_queue_destroy (ctx->watchlist);
         if (ctx->tok)
@@ -161,7 +162,9 @@ static ctx_t *getctx (flux_t h)
             goto error;
         ctx->cache = cache_create ();
         ctx->watchlist = wait_queue_create ();
-        if (!ctx->cache || !ctx->watchlist) {
+        ctx->fences = zhash_new ();
+        ctx->ready = zlist_new ();
+        if (!ctx->cache || !ctx->watchlist || !ctx->fences || !ctx->ready) {
             errno = ENOMEM;
             goto error;
         }
@@ -238,7 +241,7 @@ error:
 static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
-    bool done = true;
+    bool stall = false;
 
     /* Create an incomplete hash entry if none found.
      */
@@ -253,13 +256,13 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
      * arrange to stall caller if wait_t was provided.
      */
     if (!cache_entry_get_valid (hp)) {
-        cache_entry_wait (hp, wait);
-        done = false; /* stall */
+        cache_entry_wait_valid (hp, wait);
+        stall = true;
     }
 
-    if (done && op)
+    if (!stall && op)
         *op = cache_entry_get_json (hp);
-    return done;
+    return !stall;
 }
 
 static void content_store_completion (flux_rpc_t *rpc, void *arg)
@@ -307,12 +310,15 @@ error:
     return -1;
 }
 
-static void store (ctx_t *ctx, json_object *o, href_t ref)
+/* Return false and enqueue waiter on cache object if dirty.
+ */
+static bool store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
 {
     struct cache_entry *hp;
     SHA1_CTX sha1_ctx;
     const char *s = json_object_to_json_string (o);
     uint8_t hash[SHA1_DIGEST_SIZE];
+    bool dirty = false;
 
     SHA1_Init (&sha1_ctx);
     SHA1_Update (&sha1_ctx, (uint8_t *)s, strlen (s) + 1);
@@ -329,9 +335,16 @@ static void store (ctx_t *ctx, json_object *o, href_t ref)
         hp = cache_entry_create (o);
         cache_insert (ctx->cache, ref, hp);
         cache_entry_set_dirty (hp, true);
-        if (content_store_request_send (ctx, ref, o, true) < 0)
+        if (content_store_request_send (ctx, ref, o, wait ? false : true) < 0)
             flux_log_error (ctx->h, "content_store");
+        /* FIXME: handle error */
     }
+    if (cache_entry_get_dirty (hp)) {
+        if (wait)
+            cache_entry_wait_notdirty (hp, wait);
+        dirty = true;
+    }
+    return !dirty;
 }
 
 static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
@@ -358,32 +371,42 @@ static json_object *copydir (json_object *dir)
     return cpy;
 }
 
-static void commit_unroll (ctx_t *ctx, json_object *dir)
+/* Store DIRVAL objects, converting them to DIRREFs.
+ * Return false and enqueue wait_t on cache object(s) if any are dirty.
+ */
+static bool commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
 {
     json_object_iter iter;
     json_object *subdir;
     href_t ref;
+    bool dirty = false;
 
     json_object_object_foreachC (dir, iter) {
         if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
-            commit_unroll (ctx, subdir); /* depth first */
+            if (!commit_unroll (ctx, subdir, wait)) /* depth first */
+                dirty = true;
             json_object_get (subdir);
-            store (ctx, subdir, ref);
+            if (!store (ctx, subdir, ref, wait))
+                dirty = true;
             json_object_object_add (dir, iter.key,
                                     dirent_create ("DIRREF", ref));
         }
     }
+    return !dirty;
 }
 
 /* link (key, dirent) into directory 'dir'.
+ * Returns false if it stalled loading a DIRREF.
  */
-static void commit_link_dirent (ctx_t *ctx, json_object *rootdir,
-                                const char *key, json_object *dirent)
+static bool commit_link_dirent (ctx_t *ctx, json_object *rootdir,
+                                const char *key, json_object *dirent,
+                                wait_t *wait)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
     json_object *dir = rootdir;
     json_object *o, *subdir = NULL, *subdirent;
+    bool stall = false;
 
     /* This is the first part of a key with multiple path components.
      * Make sure that it is a directory in DIRVAL form, then recurse
@@ -401,15 +424,18 @@ static void commit_link_dirent (ctx_t *ctx, json_object *rootdir,
         } else if (json_object_object_get_ex (subdirent, "DIRVAL", &o)) {
             subdir = o;
         } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
-            bool stall = !load (ctx, json_object_get_string (o), NULL, &subdir);
-            FASSERT (ctx->h, stall == false);
+            if (!load (ctx, json_object_get_string (o), wait, &subdir)) {
+                stall = true;
+                goto done;
+            }
             subdir = copydir (subdir);/* do not corrupt store by modify orig. */
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
         } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
             FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
             char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
-            commit_link_dirent (ctx, rootdir, nkey, dirent);
+            if (!commit_link_dirent (ctx, rootdir, nkey, dirent, wait))
+                stall = true;
             free (nkey);
             goto done;
         } else {
@@ -431,66 +457,97 @@ static void commit_link_dirent (ctx_t *ctx, json_object *rootdir,
         json_object_object_del (dir, name);
 done:
     free (cpy);
+    return !stall;
 }
 
-static json_object *commit_apply_start (ctx_t *ctx)
+/* Commit all the ops for a particular commit/fence request (rank 0 only).
+ * The setroot event will cause responses to be sent to the fence requests
+ * and clean up the fence_t state.  This function is idempotent.
+ */
+static void commit_apply_fence (fence_t *f)
 {
-    json_object *rootdir = NULL;
-    bool stall = !load (ctx, ctx->rootdir, NULL, &rootdir);
+    ctx_t *ctx = f->ctx;
+    wait_t *wait = wait_create ((wait_cb_f)commit_apply_fence, f);
 
-    FASSERT (ctx->h, !stall);
-    FASSERT (ctx->h, rootdir != NULL);
-    return copydir (rootdir); /* do not corrupt store by modifying orig. */
-}
+    if (!wait)
+        oom ();
 
-static void commit_apply_ops (ctx_t *ctx, json_object *rootcpy,
-                              json_object *ops)
-{
-    int i, len;
-    json_object *op, *dirent;
-    const char *key;
+    /* Make a copy of the root directory.
+     */
+    if (!f->rootcpy) {
+        json_object *rootdir;
+        if (!load (ctx, ctx->rootdir, wait, &rootdir))
+            goto stall;
+        f->rootcpy = copydir (rootdir);
+    }
 
-    if (ops) {
-        len = json_object_array_length (ops);
+    /* Apply each op (e.g. key = val) in sequence to the root copy.
+     * A side effect of walking key paths is to convert DIRREFs to DIRVALs
+     * in the copy. This allows the commit to be self-contained in the rootcpy
+     * until it is unrolled later on.
+     */
+    if (f->ops) {
+        int i, len = json_object_array_length (f->ops);
+        json_object *op, *dirent;
+        const char *key;
+        bool stall = false;
+
         for (i = 0; i < len; i++) {
-            if (!(op = json_object_array_get_idx (ops, i))
+            if (!(op = json_object_array_get_idx (f->ops, i))
                     || !Jget_str (op, "key", &key))
                 continue;
             dirent = NULL;
             (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
-            commit_link_dirent (ctx, rootcpy, key, dirent);
+            if (!commit_link_dirent (ctx, f->rootcpy, key, dirent, wait)) {
+                assert (wait_get_usecount (wait) > 0);
+                stall = true;
+            }
         }
+        if (stall)
+            goto stall;
+        Jput (f->ops);
+        f->ops = NULL;
     }
-}
 
-static bool commit_apply_finish (ctx_t *ctx, json_object *rootcpy)
-{
-    href_t ref;
+    /* Unroll the root copy.
+     * When a DIRVAL is found, store an object and replace it with a DIRREF.
+     * Finally, store the unrolled root copy as an object and keep its
+     * reference in f->newroot.
+     */
+    if (!f->rootcpy_stored) {
+        bool dirty = false;
+        if (!commit_unroll (ctx, f->rootcpy, wait)) {
+            assert (wait_get_usecount (wait) > 0);
+            dirty = true;
+        }
+        if (!store (ctx, f->rootcpy, f->newroot, wait)) {
+            assert (wait_get_usecount (wait) > 0);
+            dirty = true;
+        }
+        f->rootcpy_stored = true; /* cache takes ownership of rootcpy */
+        if (dirty)
+            goto stall;
+    }
 
-    commit_unroll (ctx, rootcpy);
-    store (ctx, rootcpy, ref);
-    if (!strcmp (ref, ctx->rootdir))
-        return false;
-    setroot (ctx, ref, ctx->rootseq + 1);
-    return true;
-}
-
-/* Commit all the ops for a particular fence (rank 0 only).
- * The setroot event will cause responses to be sent to the fence requests
- * and clean up the fence_t state.
- */
-static int commit_apply_fence (ctx_t *ctx, fence_t *f)
-{
-    JSON rootcpy;
-
-    //flux_log (ctx->h, LOG_DEBUG, "%s %s %d ops",
-    //          __FUNCTION__, f->name, json_object_array_length (f->ops));
-
-    rootcpy = commit_apply_start (ctx);
-    commit_apply_ops (ctx, rootcpy, f->ops);
-    (void)commit_apply_finish (ctx, rootcpy);
+    /* This is the transaction that finalizes the commit by replacing
+     * ctx->rootdir with f->newroot, incrementing the root seq,
+     * and sending out the setroot event for "eventual consistency"
+     * of other nodes.
+     */
+    setroot (ctx, f->newroot, ctx->rootseq + 1);
     setroot_event_send (ctx, f->name);
-    return 0;
+    wait_destroy (wait);
+
+    /* Completed: remove from 'ready' list and start another, if any.
+     * N.B. fence_t remains in the fences hash until event is received.
+     */
+    zlist_remove (ctx->ready, f);
+    if ((f = zlist_first (ctx->ready)))
+        commit_apply_fence (f);
+    return;
+
+stall:
+    return;
 }
 
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
@@ -909,7 +966,7 @@ static void fence_destroy (fence_t *f)
     }
 }
 
-static fence_t *fence_create (const char *name, int nprocs)
+static fence_t *fence_create (ctx_t *ctx, const char *name, int nprocs)
 {
     fence_t *f;
 
@@ -920,6 +977,7 @@ static fence_t *fence_create (const char *name, int nprocs)
         goto error;
     }
     f->nprocs = nprocs;
+    f->ctx = ctx;
     return f;
 error:
     fence_destroy (f);
@@ -958,10 +1016,6 @@ static int fence_append_request (fence_t *f, const flux_msg_t *request)
 
 static int fence_add (ctx_t *ctx, fence_t *f)
 {
-    if (!ctx->fences && !(ctx->fences = zhash_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
     if (zhash_insert (ctx->fences, f->name, f) < 0) {
         errno = EEXIST;
         goto error;
@@ -974,8 +1028,6 @@ error:
 
 static fence_t *fence_lookup (ctx_t *ctx, const char *name)
 {
-    if (!ctx->fences)
-        return NULL;
     return zhash_lookup (ctx->fences, name);
 }
 
@@ -1024,7 +1076,7 @@ static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
      * occurs after we know the fence name
      */
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (name, nprocs))) {
+        if (!(f = fence_create (ctx, name, nprocs))) {
             flux_log_error (h, "%s fence_create %s", __FUNCTION__, name);
             goto done;
         }
@@ -1042,10 +1094,10 @@ static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
     //flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
     //          __FUNCTION__, name, f->count, f->nprocs);
     if (f->count == f->nprocs) {
-        if (commit_apply_fence (ctx, f) < 0) {
-            flux_log_error (h, "%s commit_apply_fence %s", __FUNCTION__, name);
-            goto done;
-        }
+        if (zlist_append (ctx->ready, f) < 0)
+            oom ();
+        if (zlist_size (ctx->ready) == 1)
+            commit_apply_fence (f);
     }
 done:
     Jput (in);
@@ -1075,7 +1127,7 @@ static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
         goto error;
     }
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (name, nprocs)))
+        if (!(f = fence_create (ctx, name, nprocs)))
             goto error;
         if (fence_add (ctx, f) < 0) {
             fence_destroy (f);
@@ -1091,8 +1143,10 @@ static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
         // flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
         //          __FUNCTION__, name, f->count, f->nprocs);
         if (f->count == f->nprocs) {
-            if (commit_apply_fence (ctx, f) < 0)
-                goto error;
+            if (zlist_append (ctx->ready, f) < 0)
+                oom ();
+            if (zlist_size (ctx->ready) == 1)
+                commit_apply_fence (f);
         }
     }
     else {
@@ -1231,7 +1285,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
     if (root) {
         href_t ref;
         Jget (root);
-        store (ctx, root, ref);
+        store (ctx, root, ref, NULL);
     }
     setroot (ctx, rootdir, rootseq);
 done:
@@ -1391,7 +1445,7 @@ int mod_main (flux_t h, int argc, char **argv)
         json_object *rootdir = Jnew ();
         href_t href;
 
-        store (ctx, rootdir, href);
+        store (ctx, rootdir, href, NULL);
         setroot (ctx, href, 0);
     } else {
         href_t href;

@@ -31,7 +31,8 @@ void cache_entry_set_json (struct cache_entry *hp, json_object *o);
  * once cache entry becomes valid or not dirty at completion of a
  * load or store RPC.
  */
-void cache_entry_wait (struct cache_entry *hp, wait_t *wait);
+void cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait);
+void cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait);
 
 /* Create/destroy the cache container and its contents.
  */

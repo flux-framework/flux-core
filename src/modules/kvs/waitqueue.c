@@ -56,6 +56,11 @@ struct waitqueue_struct {
     zlist_t *q;
 };
 
+int wait_get_usecount (wait_t *w)
+{
+    return w->usecount;
+}
+
 wait_t *wait_create (wait_cb_f cb, void *arg)
 {
     wait_t *w = calloc (1, sizeof (*w));

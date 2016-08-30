@@ -13,6 +13,7 @@ typedef void (*wait_cb_f)(void *arg);
  */
 wait_t *wait_create (wait_cb_f cb, void *arg);
 void wait_destroy (wait_t *wait);
+int wait_get_usecount (wait_t *wait);
 
 /* Create/destroy/get length of a waitqueue_t.
  */
