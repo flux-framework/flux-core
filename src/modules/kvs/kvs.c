@@ -487,8 +487,8 @@ static int commit_apply_fence (ctx_t *ctx, fence_t *f)
 {
     JSON rootcpy;
 
-    flux_log (ctx->h, LOG_DEBUG, "%s %s %d ops",
-              __FUNCTION__, f->name, json_object_array_length (f->ops));
+    //flux_log (ctx->h, LOG_DEBUG, "%s %s %d ops",
+    //          __FUNCTION__, f->name, json_object_array_length (f->ops));
 
     rootcpy = commit_apply_start (ctx);
     commit_apply_ops (ctx, rootcpy, f->ops);
@@ -1044,8 +1044,8 @@ static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
     f->count++;
-    flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
-              __FUNCTION__, name, f->count, f->nprocs);
+    //flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
+    //          __FUNCTION__, name, f->count, f->nprocs);
     if (f->count == f->nprocs) {
         if (commit_apply_fence (ctx, f) < 0) {
             flux_log_error (h, "%s commit_apply_fence %s", __FUNCTION__, name);
@@ -1093,8 +1093,8 @@ static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
         if (fence_append_ops (f, ops) < 0)
             goto error;
         f->count++;
-        flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
-                  __FUNCTION__, name, f->count, f->nprocs);
+        // flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
+        //          __FUNCTION__, name, f->count, f->nprocs);
         if (f->count == f->nprocs) {
             if (commit_apply_fence (ctx, f) < 0)
                 goto error;
