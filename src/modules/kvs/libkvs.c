@@ -1301,25 +1301,41 @@ int kvs_mkdir (flux_t h, const char *key)
  ** Commit/synchronization
  **/
 
+flux_rpc_t *kvs_commit_begin (flux_t h)
+{
+    zuuid_t *uuid = NULL;
+    flux_rpc_t *rpc = NULL;
+    int saved_errno;
+
+    if (!(uuid = zuuid_new ())) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (!(rpc = kvs_fence_begin (h, zuuid_str (uuid), 1)))
+        goto done;
+done:
+    saved_errno = errno;
+    zuuid_destroy (&uuid);
+    errno = saved_errno;
+    return rpc;
+}
+
+int kvs_commit_finish (flux_rpc_t *rpc)
+{
+    return flux_rpc_get (rpc, NULL, NULL);
+}
+
 int kvs_commit (flux_t h)
 {
-    kvsctx_t *ctx = getctx (h);
-    JSON in = NULL;
     flux_rpc_t *rpc = NULL;
-    const char *json_str;
     int rc = -1;
 
-    if (!(in = kp_tcommit_enc (NULL, ctx->ops)))
+    if (!(rpc = kvs_commit_begin (h)))
         goto done;
-    Jput (ctx->ops);
-    ctx->ops = NULL;
-    if (!(rpc = flux_rpc (h, "kvs.commit", Jtostr (in), FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (kvs_commit_finish (rpc) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (rpc);
     return rc;
 }

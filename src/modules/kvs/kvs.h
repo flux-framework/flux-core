@@ -152,6 +152,13 @@ int kvs_mkdir (flux_t h, const char *key);
  */
 int kvs_commit (flux_t h);
 
+/* kvs_commit_begin() sends the commit request and returns immediately.
+ * kvs_commit_finish() blocks until the response is received, then returns.
+ * Use flux_rpc_then() to arrange for the commit to complete asynchronously.
+ */
+flux_rpc_t *kvs_commit_begin (flux_t h);
+int kvs_commit_finish (flux_rpc_t *rpc);
+
 /* kvs_fence() is a collective commit operation.  nprocs tasks make the
  * call with identical arguments.  It is internally optimized to minimize
  * the work that needs to be done.  Once the call returns, all changes
