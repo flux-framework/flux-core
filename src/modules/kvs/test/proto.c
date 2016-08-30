@@ -121,51 +121,6 @@ void test_fence (void)
     Jput (ops);
 }
 
-void test_commit (void)
-{
-    JSON o;
-    const char *sender = NULL;
-    JSON ops = NULL;
-    JSON op1, op2;
-    const char *rootdir;
-    int rootseq;
-    int len;
-
-    ok ((o = kp_tcommit_enc (NULL, NULL)) != NULL,
-        "kp_tcommit_enc (external commit) works");
-    ok (kp_tcommit_dec (o, &sender, &ops) == 0
-        && sender == NULL && ops == NULL,
-        "kp_tcommit_dec (external commit) works");
-    Jput (o);
-
-    op1 = Jnew ();
-    op2 = Jnew ();
-    ops = Jnew_ar ();
-    Jadd_ar_obj (ops, op1);
-    Jadd_ar_obj (ops, op2);
-    Jput (op1);
-    Jput (op2);
-    ok ((o = kp_tcommit_enc ("sender", ops)) != NULL,
-        "kp_tcommit_enc (internal commit) works");
-    Jput (ops);
-    ok (kp_tcommit_dec (o, &sender, &ops) == 0
-        && sender != NULL && !strcmp (sender, "sender"),
-        "kp_tcommit_dec (internal commit) works");
-    Jput (o);
-    ok (Jget_ar_len (ops, &len) && len == 2,
-        "kp_tcommit_dec returned encoded correct number of ops");
-    Jput (ops);
-
-    ok ((o = kp_rcommit_enc (42, "abc", "def")) != NULL,
-        "kp_rcommit_enc works");
-    ok (kp_rcommit_dec (o, &rootseq, &rootdir, &sender) == 0
-        && rootseq == 42
-        && rootdir != NULL && !strcmp (rootdir, "abc")
-        && sender != NULL && !strcmp (sender, "def"),
-        "kp_rcommid_dec works");
-    Jput (o);
-}
-
 void test_getroot (void)
 {
     JSON o;
@@ -201,12 +156,11 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    test_get (); // 8
-    test_watch (); // 7
-    test_unwatch (); // 2
-    test_commit (); // 7
-    test_getroot (); // 2
-    test_setroot (); // 2
+    test_get ();
+    test_watch ();
+    test_unwatch ();
+    test_getroot ();
+    test_setroot ();
     test_fence ();
 
     done_testing();
