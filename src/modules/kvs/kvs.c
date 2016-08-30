@@ -828,7 +828,6 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     bool dir = false;
     bool link = false;
     const char *key;
-    char *sender = NULL;
     JSON root, val;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
@@ -836,8 +835,6 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (flux_msg_get_route_first (msg, &sender) < 0)
         goto done;
     if (!(in = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -867,8 +864,6 @@ done:
 stall:
     Jput (in);
     Jput (out);
-    if (sender)
-        free (sender);
 }
 
 static bool compare_json (json_object *o1, json_object *o2)
