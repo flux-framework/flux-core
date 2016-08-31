@@ -79,27 +79,29 @@ wait_t *wait_create_msg_handler (flux_t h, flux_msg_handler_t *wh,
                                  flux_msg_handler_f cb, void *arg)
 {
     wait_t *w = wait_create (NULL, NULL);
-    if (!w)
-        return NULL;
-    w->hand.cb = cb;
-    w->hand.arg = arg;
-    w->hand.h = h;
-    w->hand.w = wh;
-    if (!(w->hand.msg = flux_msg_copy (msg, true))) {
-        wait_destroy (w);
-        errno = ENOMEM;
-        return NULL;
+    if (w) {
+        w->hand.cb = cb;
+        w->hand.arg = arg;
+        w->hand.h = h;
+        w->hand.w = wh;
+        if (msg && !(w->hand.msg = flux_msg_copy (msg, true))) {
+            wait_destroy (w);
+            errno = ENOMEM;
+            return NULL;
+        }
     }
     return w;
 }
 
 void wait_destroy (wait_t *w)
 {
-    assert (w->magic == WAIT_MAGIC);
-    assert (w->usecount == 0);
-    flux_msg_destroy (w->hand.msg);
-    w->magic = ~WAIT_MAGIC;
-    free (w);
+    if (w) {
+        assert (w->magic == WAIT_MAGIC);
+        assert (w->usecount == 0);
+        flux_msg_destroy (w->hand.msg);
+        w->magic = ~WAIT_MAGIC;
+        free (w);
+    }
 }
 
 waitqueue_t *wait_queue_create (void)
@@ -113,16 +115,17 @@ waitqueue_t *wait_queue_create (void)
 
 void wait_queue_destroy (waitqueue_t *q)
 {
-    wait_t *w;
-
-    assert (q->magic == WAITQUEUE_MAGIC);
-    while ((w = zlist_pop (q->q))) {
-        if (--w->usecount == 0)
-            wait_destroy (w);
+    if (q) {
+        wait_t *w;
+        assert (q->magic == WAITQUEUE_MAGIC);
+        while ((w = zlist_pop (q->q))) {
+            if (--w->usecount == 0)
+                wait_destroy (w);
+        }
+        zlist_destroy (&q->q);
+        q->magic = ~WAITQUEUE_MAGIC;
+        free (q);
     }
-    zlist_destroy (&q->q);
-    q->magic = ~WAITQUEUE_MAGIC;
-    free (q);
 }
 
 int wait_queue_length (waitqueue_t *q)
@@ -142,8 +145,6 @@ void wait_addqueue (waitqueue_t *q, wait_t *w)
 
 static void wait_runone (wait_t *w)
 {
-    assert (w->magic == WAIT_MAGIC);
-
     if (--w->usecount == 0) {
         if (w->cb)
             w->cb (w->cb_arg);

@@ -4,12 +4,28 @@
 #include <stdbool.h>
 #include <flux/core.h>
 
+/* A wait_t represents a waiter, which may be waiting on multiple things.
+ * A waitqueue_t represents an object that can can change state and wake up
+ * multiple waiters.
+ *
+ * A wait_t may be added to multiple waitqueue_t's, and multiple wait_t's
+ * may be added to a single waitqueue_t.
+ *
+ * When a wait_t is added to a waitqueue_t, it's usecount is incremented.
+ * When one is removed from a waitqueue_t, its usecount is decremented.
+ * Once a wait_t's usecount reaches zero, its callback is called and the
+ * wait_t is destroyed.
+ *
+ * When a waitqueue_t is "run", all wait_t's are removed from it.
+ */
+
 typedef struct wait_struct wait_t;
 typedef struct waitqueue_struct waitqueue_t;
 
 typedef void (*wait_cb_f)(void *arg);
 
-/* Create/destroy a wait_t.
+/* Create/destroy/get usecount of a wait_t.
+ * Normally a wait_t is destroyed via wait_runqueue().
  */
 wait_t *wait_create (wait_cb_f cb, void *arg);
 void wait_destroy (wait_t *wait);
@@ -22,16 +38,13 @@ void wait_queue_destroy (waitqueue_t *q);
 int wait_queue_length (waitqueue_t *q);
 
 /* Add a wait_t to a queue.
- * You may add a wait_t to multiple queues.
- * Each wait_addqueue increases a wait_t's usecount by one.
  */
 void wait_addqueue (waitqueue_t *q, wait_t *wait);
 
-/* Dequeue all wait_t's from the specified queue.
- * This decreases a wait_t's usecount by one.  If the usecount reaches zero,
- * the callback is called and the wait_t is destroyed.
- * Note: wait_runqueue() empties the waitqueue_t before invoking callbacks,
- * so it is OK to manipulate the waitqueue_t.
+/* Remove all wait_t's from the specified queue.
+ * Note: wait_runqueue() empties the waitqueue_t before invoking wait_t
+ * callbacks for waiters that have a usecount of zero, hence it is safe
+ * to manipulate the waitqueue_t from the callback.
  */
 void wait_runqueue (waitqueue_t *q);
 
