@@ -47,9 +47,11 @@ libflux_kvs_la_LIBADD =  $(top_builddir)/src/common/libflux-internal.la \
 
 TESTS = \
 	test_waitqueue.t \
-	test_proto.t
+	test_proto.t \
+	test_cache.t
 
 test_ldadd = \
+        $(top_builddir)/src/modules/kvs/cache.o \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/proto.o \
         $(top_builddir)/src/modules/kvs/libflux-kvs.la \
@@ -75,3 +77,7 @@ test_waitqueue_t_LDADD = $(test_ldadd)
 test_proto_t_SOURCES = test/proto.c
 test_proto_t_CPPFLAGS = $(test_cppflags)
 test_proto_t_LDADD = $(test_ldadd)
+
+test_cache_t_SOURCES = test/cache.c
+test_cache_t_CPPFLAGS = $(test_cppflags)
+test_cache_t_LDADD = $(test_ldadd)
