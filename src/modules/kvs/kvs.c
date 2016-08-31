@@ -121,6 +121,7 @@ typedef struct {
     flux_watcher_t *prep_w;
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
+    int commit_merge;
 } ctx_t;
 
 typedef struct {
@@ -194,6 +195,7 @@ static ctx_t *getctx (flux_t h)
             flux_watcher_start (ctx->prep_w);
             flux_watcher_start (ctx->check_w);
         }
+        ctx->commit_merge = 1;
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
@@ -485,6 +487,7 @@ static void commit_apply_fence (fence_t *f)
 {
     ctx_t *ctx = f->ctx;
     wait_t *wait = wait_create ((wait_cb_f)commit_apply_fence, f);
+    int count;
 
     if (!wait)
         oom ();
@@ -503,7 +506,7 @@ static void commit_apply_fence (fence_t *f)
      * in the copy. This allows the commit to be self-contained in the rootcpy
      * until it is unrolled later on.
      */
-    if (f->ops) {
+    if (f->ops && !f->rootcpy_stored) {
         int i, len = json_object_array_length (f->ops);
         json_object *op, *dirent;
         const char *key;
@@ -522,8 +525,6 @@ static void commit_apply_fence (fence_t *f)
         }
         if (stall)
             goto stall;
-        Jput (f->ops);
-        f->ops = NULL;
     }
 
     /* Unroll the root copy.
@@ -551,11 +552,17 @@ static void commit_apply_fence (fence_t *f)
      * and sending out the setroot event for "eventual consistency"
      * of other nodes.
      */
+    if (Jget_ar_len (f->names, &count) && count > 1) {
+        int opcount = 0;
+        (void)Jget_ar_len (f->ops, &opcount);
+        flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
+                  count, opcount);
+    }
     setroot (ctx, f->newroot, ctx->rootseq + 1);
     setroot_event_send (ctx, f->names);
     wait_destroy (wait);
 
-    /* Completed: remove from 'ready' list and start another, if any.
+    /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
     zlist_remove (ctx->ready, f);
@@ -575,6 +582,42 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
+/* Merge ready commits, where merging consists of popping the "donor"
+ * commit off the ready list, and appending its ops to the top commit.
+ * The top commit can be appended to if it hasn't started, or is still
+ * building the rootcpy, e.g. stalled walking the namespace.
+ */
+void commit_merge_all (ctx_t *ctx)
+{
+    fence_t *f = zlist_first (ctx->ready);
+
+    if (f && !f->rootcpy_stored) {
+        fence_t *nf;
+        nf = zlist_pop (ctx->ready);
+        assert (nf == f);
+        while ((nf = zlist_pop (ctx->ready))) {
+            int i, len;
+
+            if (Jget_ar_len (nf->names, &len)) {
+                for (i = 0; i < len; i++) {
+                    const char *name;
+                    if (Jget_ar_str (nf->names, i, &name))
+                        Jadd_ar_str (f->names, name);
+                }
+            }
+            if (Jget_ar_len (nf->ops, &len)) {
+                for (i = 0; i < len; i++) {
+                    json_object *op;
+                    if (Jget_ar_obj (nf->ops, i, &op))
+                        Jadd_ar_obj (f->ops, Jget (op));
+                }
+            }
+        }
+        if (zlist_push (ctx->ready, f) < 0)
+            oom ();
+    }
+}
+
 void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                       int revents, void *arg)
 {
@@ -582,8 +625,13 @@ void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
     fence_t *f;
 
     flux_watcher_stop (ctx->idle_w);
-    if ((f = zlist_first (ctx->ready)) && !f->blocked)
-        commit_apply_fence (f);
+
+    if ((f = zlist_first (ctx->ready))) {
+        if (ctx->commit_merge)
+            commit_merge_all (ctx);
+        if (!f->blocked)
+            commit_apply_fence (f);
+    }
 }
 
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
@@ -1087,11 +1135,24 @@ static void fence_finalize (ctx_t *ctx, fence_t *f)
         zhash_delete (ctx->fences, name);
 }
 
-static void fence_finalize_byname (ctx_t *ctx, const char *name)
+static void fence_finalize_bynames (ctx_t *ctx, json_object *names)
 {
-    fence_t *f = fence_lookup (ctx, name);
-    if (f)
-        fence_finalize (ctx, f);
+    int i, len;
+    const char *name;
+    fence_t *f;
+
+    if (!Jget_ar_len (names, &len)) {
+        flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);
+        return;
+    }
+    for (i = 0; i < len; i++) {
+        if (!Jget_ar_str (names, i, &name)) {
+            flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
+            return;
+        }
+        if ((f = fence_lookup (ctx, name)))
+            fence_finalize (ctx, f);
+    }
 }
 
 /* kvs.relayfence (rank 0 only, no response).
@@ -1306,7 +1367,6 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
     const char *rootdir;
     JSON root = NULL;
     JSON names = NULL;
-    int i, nnames;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
@@ -1321,20 +1381,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
-    if (!Jget_ar_len (names, &nnames)) {
-        errno = EPROTO;
-        flux_log_error (ctx->h, "%s: decoding names array", __FUNCTION__);
-        goto done;
-    }
-    for (i = 0; i < nnames; i++) {
-        const char *name;
-        if (!Jget_ar_str (names, i, &name)) {
-            errno = EPROTO;
-            flux_log_error (ctx->h, "%s: decoding name[%d]", __FUNCTION__, i);
-            goto done;
-        }
-        fence_finalize_byname (ctx, name);
-    }
+    fence_finalize_bynames (ctx, names);
     if (root) {
         href_t ref;
         Jget (root);
@@ -1470,6 +1517,18 @@ static struct flux_msg_handler_spec handlers[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+static void process_args (ctx_t *ctx, int ac, char **av)
+{
+    int i;
+
+    for (i = 0; i < ac; i++) {
+        if (strncmp (av[i], "commit-merge=", 13) == 0)
+            ctx->commit_merge = strtoul (av[i]+13, NULL, 10);
+        else
+            flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
+    }
+}
+
 int mod_main (flux_t h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
@@ -1478,6 +1537,7 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log_error (h, "error creating KVS context");
         return -1;
     }
+    process_args (ctx, argc, argv);
     if (flux_event_subscribe (h, "hb") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         return -1;
