@@ -19,6 +19,7 @@ void test_get (void)
     o = kp_tget_enc ("foo", false, true);
     ok (o != NULL,
         "kp_tget_enc works");
+    diag ("get request: %s", Jtostr (o));
     ok (kp_tget_dec (o, &key, &dir, &link) == 0 && dir == false && link == true,
         "kp_tget_dec works");
     like (key, "^foo$",
@@ -31,6 +32,7 @@ void test_get (void)
     val = NULL; /* val now owned by o */
     ok (o != NULL,
         "kp_rget_enc works");
+    diag ("get response: %s", Jtostr (o));
     ok (kp_rget_dec (o, &val) == 0,
         "kp_rget_dec works");
     ok (val && Jget_int (val, "i", &i) && i == 42,
@@ -41,6 +43,7 @@ void test_get (void)
     ok (o != NULL,
         "kp_rget_enc works with NULL value");
     errno = 0;
+    diag ("get response: %s", Jtostr (o));
     ok (kp_rget_dec (o, &val) < 0 && errno == ENOENT,
         "kp_rget_dec returns error with errno = ENOENT if val is NULL");
     Jput (o);
@@ -63,6 +66,7 @@ void test_watch (void)
     ok (o != NULL,
         "kp_twatch_enc works");
     val = NULL;
+    diag ("watch request: %s", Jtostr (o));
     ok (kp_twatch_dec (o, &key, &val, &once, &first, &dir, &link) == 0
         && once == false && first == true && dir == false && link == true,
         "kp_twatch_dec works");
@@ -79,6 +83,7 @@ void test_watch (void)
     ok (o != NULL,
         "kp_rwatch_enc works");
     val = NULL;
+    diag ("watch response: %s", Jtostr (o));
     ok (kp_rwatch_dec (o, &val) == 0,
         "kp_rewatch_dec works");
     ok (val && Jget_str (val, "str", &s) && !strcmp (s, "snerg"),
@@ -94,6 +99,7 @@ void test_unwatch (void)
     o = kp_tunwatch_enc ("foo");
     ok (o != NULL,
         "kp_tunwatch_enc works");
+    diag ("unwatch: %s", Jtostr (o));
     ok (kp_tunwatch_dec (o, &key) == 0 && !strcmp (key, "foo"),
         "kp_tunwatch_dec works and returns encoded key");
     Jput (o);
@@ -111,6 +117,7 @@ void test_fence (void)
     name = NULL;
     nprocs = 0;
     out = NULL;
+    diag ("fence: %s", Jtostr (o));
     ok (kp_tfence_dec (o, &name, &nprocs, &out) == 0
         && name != NULL && !strcmp (name, "foo")
         && nprocs == 42 && out != NULL,
@@ -129,6 +136,8 @@ void test_getroot (void)
 
     ok ((o = kp_rgetroot_enc (42, "blah")) != NULL,
         "kp_rgetroot_enc works");
+    diag ("getroot: %s", Jtostr (o));
+    diag ("getroot: %s", Jtostr (o));
     ok (kp_rgetroot_dec (o, &rootseq, &rootdir) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "blah"),
         "kp_rgetroot_dec works");
@@ -138,15 +147,22 @@ void test_getroot (void)
 void test_setroot (void)
 {
     JSON o;
-    const char *rootdir, *fence = NULL;
+    const char *rootdir, *name;
     int rootseq;
-    JSON root;
+    JSON root, names;
 
-    ok ((o = kp_tsetroot_enc (42, "abc", NULL, "foo")) != NULL,
+    names = Jnew_ar ();
+    Jadd_ar_str (names, "foo");
+    ok ((o = kp_tsetroot_enc (42, "abc", NULL, names)) != NULL,
         "kp_tsetroot_enc works");
-    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &fence) == 0
+    Jput (names);
+
+    diag ("setroot: %s", Jtostr (o));
+
+    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &names) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "abc")
-        && root == NULL && fence != NULL && !strcmp (fence, "foo"),
+        && root == NULL && names != NULL && Jget_ar_str (names, 0, &name)
+        && !strcmp (name, "foo"),
         "kp_tsetroot_dec works");
     Jput (o);
 }

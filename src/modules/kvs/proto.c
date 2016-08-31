@@ -374,42 +374,41 @@ done:
  */
 
 JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
-                      const char *fence)
+                      JSON names)
 {
     JSON o = NULL;
+    int n;
 
-    if (!rootdir) {
+    if (!rootdir || !names || !Jget_ar_len (names, &n) || n < 1) {
         errno = EINVAL;
         goto done;
     }
     o = Jnew ();
     Jadd_int (o, "rootseq", rootseq);
     Jadd_str (o, "rootdir", rootdir);
+    Jadd_obj (o, "names", names);         /* takes a ref */
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
-    if (fence)
-        Jadd_str (o, "fence", fence);
 done:
     return o;
 }
 
 int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root, const char **fence)
+                     JSON *root, JSON *names)
 {
     int rc = -1;
 
-    if (!o || !rootseq || !rootdir || !root) {
+    if (!o || !rootseq || !rootdir || !root || !names) {
         errno = EINVAL;
         goto done;
     }
-    if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)){
+    if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
+                                          || !Jget_obj (o, "names", names)) {
         errno = EPROTO;
         goto done;
     }
     *root = NULL;
     (void)Jget_obj (o, "rootdirval", root);
-    *fence = NULL;
-    (void)Jget_str (o, "fence", fence);
     rc = 0;
 done:
     return rc;

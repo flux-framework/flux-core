@@ -126,7 +126,7 @@ typedef struct {
 typedef struct {
     json_object *ops;
     zlist_t *requests;
-    char *name;
+    json_object *names;
     int nprocs;
     int count;
     int rc;
@@ -137,7 +137,7 @@ typedef struct {
     href_t newroot;
 } fence_t;
 
-static int setroot_event_send (ctx_t *ctx, const char *fence);
+static int setroot_event_send (ctx_t *ctx, json_object *names);
 void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg);
 void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -555,7 +555,7 @@ static void commit_apply_fence (fence_t *f)
      * of other nodes.
      */
     setroot (ctx, f->newroot, ctx->rootseq + 1);
-    setroot_event_send (ctx, f->name);
+    setroot_event_send (ctx, f->names);
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list and start another, if any.
@@ -583,6 +583,7 @@ void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     ctx_t *ctx = arg;
     fence_t *f;
+
     flux_watcher_stop (ctx->idle_w);
     if ((f = zlist_first (ctx->ready)) && !f->blocked)
         commit_apply_fence (f);
@@ -991,8 +992,7 @@ done:
 static void fence_destroy (fence_t *f)
 {
     if (f) {
-        if (f->name)
-            free (f->name);
+        Jput (f->names);
         Jput (f->ops);
         if (f->requests) {
             flux_msg_t *msg;
@@ -1009,13 +1009,14 @@ static fence_t *fence_create (ctx_t *ctx, const char *name, int nprocs)
     fence_t *f;
 
     if (!(f = calloc (1, sizeof (*f))) || !(f->ops = json_object_new_array ())
-                                       || !(f->requests = zlist_new ())
-                                       || !(f->name = strdup (name))) {
+                                       || !(f->requests = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
     f->nprocs = nprocs;
     f->ctx = ctx;
+    f->names = Jnew_ar ();
+    Jadd_ar_str (f->names, name);
     return f;
 error:
     fence_destroy (f);
@@ -1054,11 +1055,17 @@ static int fence_append_request (fence_t *f, const flux_msg_t *request)
 
 static int fence_add (ctx_t *ctx, fence_t *f)
 {
-    if (zhash_insert (ctx->fences, f->name, f) < 0) {
+    const char *name;
+
+    if (!Jget_ar_str (f->names, 0, &name)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (zhash_insert (ctx->fences, name, f) < 0) {
         errno = EEXIST;
         goto error;
     }
-    zhash_freefn (ctx->fences, f->name, (zhash_free_fn *)fence_destroy);
+    zhash_freefn (ctx->fences, name, (zhash_free_fn *)fence_destroy);
     return 0;
 error:
     return -1;
@@ -1072,16 +1079,18 @@ static fence_t *fence_lookup (ctx_t *ctx, const char *name)
 static void fence_finalize (ctx_t *ctx, fence_t *f)
 {
     flux_msg_t *msg;
+    const char *name;
 
     while ((msg = zlist_pop (f->requests))) {
         if (flux_respond (ctx->h, msg, f->rc, NULL) < 0)
             flux_log_error (ctx->h, "%s", __FUNCTION__);
         flux_msg_destroy (msg);
     }
-    zhash_delete (ctx->fences, f->name);
+    if (Jget_ar_str (f->names, 0, &name))
+        zhash_delete (ctx->fences, name);
 }
 
-static void fence_finalize_byname (ctx_t *ctx, const char*name)
+static void fence_finalize_byname (ctx_t *ctx, const char *name)
 {
     fence_t *f = fence_lookup (ctx, name);
     if (f)
@@ -1298,8 +1307,9 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
     int rootseq;
     const char *json_str;
     const char *rootdir;
-    const char *fence = NULL;
     JSON root = NULL;
+    JSON names = NULL;
+    int i, nnames;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
@@ -1310,12 +1320,24 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
         goto done;
     }
-    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &fence) < 0) {
+    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names) < 0) {
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
-    if (fence)
-        fence_finalize_byname (ctx, fence);
+    if (!Jget_ar_len (names, &nnames)) {
+        errno = EPROTO;
+        flux_log_error (ctx->h, "%s: decoding names array", __FUNCTION__);
+        goto done;
+    }
+    for (i = 0; i < nnames; i++) {
+        const char *name;
+        if (!Jget_ar_str (names, i, &name)) {
+            errno = EPROTO;
+            flux_log_error (ctx->h, "%s: decoding name[%d]", __FUNCTION__, i);
+            goto done;
+        }
+        fence_finalize_byname (ctx, name);
+    }
     if (root) {
         href_t ref;
         Jget (root);
@@ -1326,7 +1348,7 @@ done:
     Jput (out);
 }
 
-static int setroot_event_send (ctx_t *ctx, const char *fence)
+static int setroot_event_send (ctx_t *ctx, json_object *names)
 {
     JSON in = NULL;
     JSON root = NULL;
@@ -1337,7 +1359,7 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
         bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
     }
-    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, fence)))
+    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
         goto done;
     if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
         goto done;
