@@ -118,6 +118,9 @@ typedef struct {
     bool master;            /* for now minimize flux_get_rank() calls */
     int epoch;              /* tracks current heartbeat epoch */
     struct json_tokener *tok;
+    flux_watcher_t *prep_w;
+    flux_watcher_t *idle_w;
+    flux_watcher_t *check_w;
 } ctx_t;
 
 typedef struct {
@@ -129,11 +132,16 @@ typedef struct {
     int rc;
     ctx_t *ctx;
     json_object *rootcpy;   /* working copy of root dir */
+    int blocked:1;
     int rootcpy_stored:1;
     href_t newroot;
 } fence_t;
 
 static int setroot_event_send (ctx_t *ctx, const char *fence);
+void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
+                     int revents, void *arg);
+void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg);
 
 static void freectx (void *arg)
 {
@@ -146,6 +154,9 @@ static void freectx (void *arg)
             wait_queue_destroy (ctx->watchlist);
         if (ctx->tok)
             json_tokener_free (ctx->tok);
+        flux_watcher_destroy (ctx->prep_w);
+        flux_watcher_destroy (ctx->check_w);
+        flux_watcher_destroy (ctx->idle_w);
         free (ctx);
     }
 }
@@ -176,6 +187,15 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->tok = json_tokener_new ())) {
             errno = ENOMEM;
             goto error;
+        }
+        if (rank == 0) {
+            ctx->prep_w = flux_prepare_watcher_create (r, commit_prep_cb, ctx);
+            ctx->check_w = flux_prepare_watcher_create (r, commit_check_cb,ctx);
+            ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
+            if (!ctx->prep_w || !ctx->check_w || !ctx->idle_w)
+                goto error;
+            flux_watcher_start (ctx->prep_w);
+            flux_watcher_start (ctx->check_w);
         }
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
@@ -542,12 +562,30 @@ static void commit_apply_fence (fence_t *f)
      * N.B. fence_t remains in the fences hash until event is received.
      */
     zlist_remove (ctx->ready, f);
-    if ((f = zlist_first (ctx->ready)))
-        commit_apply_fence (f);
     return;
 
 stall:
+    f->blocked = 1;
     return;
+}
+
+void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
+                     int revents, void *arg)
+{
+    ctx_t *ctx = arg;
+    fence_t *f;
+    if ((f = zlist_first (ctx->ready)) && !f->blocked)
+        flux_watcher_start (ctx->idle_w);
+}
+
+void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    ctx_t *ctx = arg;
+    fence_t *f;
+    flux_watcher_stop (ctx->idle_w);
+    if ((f = zlist_first (ctx->ready)) && !f->blocked)
+        commit_apply_fence (f);
 }
 
 static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
@@ -1096,8 +1134,6 @@ static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
     if (f->count == f->nprocs) {
         if (zlist_append (ctx->ready, f) < 0)
             oom ();
-        if (zlist_size (ctx->ready) == 1)
-            commit_apply_fence (f);
     }
 done:
     Jput (in);
@@ -1145,8 +1181,6 @@ static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
         if (f->count == f->nprocs) {
             if (zlist_append (ctx->ready, f) < 0)
                 oom ();
-            if (zlist_size (ctx->ready) == 1)
-                commit_apply_fence (f);
         }
     }
     else {
