@@ -115,7 +115,7 @@ typedef struct {
     int watchlist_lastrun_epoch;
     stats_t stats;
     flux_t h;
-    bool master;            /* for now minimize flux_get_rank() calls */
+    uint32_t rank;
     int epoch;              /* tracks current heartbeat epoch */
     struct json_tokener *tok;
     flux_watcher_t *prep_w;
@@ -164,7 +164,6 @@ static void freectx (void *arg)
 static ctx_t *getctx (flux_t h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "kvssrv");
-    uint32_t rank;
     flux_reactor_t *r;
 
     if (!ctx) {
@@ -180,15 +179,13 @@ static ctx_t *getctx (flux_t h)
             goto error;
         }
         ctx->h = h;
-        if (flux_get_rank (h, &rank) < 0)
+        if (flux_get_rank (h, &ctx->rank) < 0)
             goto error;
-        if (rank == 0)
-            ctx->master = true;
         if (!(ctx->tok = json_tokener_new ())) {
             errno = ENOMEM;
             goto error;
         }
-        if (rank == 0) {
+        if (ctx->rank == 0) {
             ctx->prep_w = flux_prepare_watcher_create (r, commit_prep_cb, ctx);
             ctx->check_w = flux_prepare_watcher_create (r, commit_check_cb,ctx);
             ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
@@ -1097,7 +1094,7 @@ static void fence_finalize_byname (ctx_t *ctx, const char *name)
         fence_finalize (ctx, f);
 }
 
-/* kvs.relayfence (master only, no response).
+/* kvs.relayfence (rank 0 only, no response).
  */
 static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
@@ -1181,7 +1178,7 @@ static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
     }
     if (fence_append_request (f, msg) < 0)
         goto error;
-    if (ctx->master) {
+    if (ctx->rank == 0) {
         if (fence_append_ops (f, ops) < 0)
             goto error;
         f->count++;
@@ -1497,7 +1494,7 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         return -1;
     }
-    if (ctx->master) {
+    if (ctx->rank == 0) {
         json_object *rootdir = Jnew ();
         href_t href;
 
