@@ -285,12 +285,13 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
     return !stall;
 }
 
-static void content_store_completion (flux_rpc_t *rpc, void *arg)
+static int content_store_get (flux_rpc_t *rpc, void *arg)
 {
     ctx_t *ctx = arg;
     struct cache_entry *hp;
     const char *blobref;
     int blobref_size;
+    int rc = -1;
 
     if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
@@ -304,8 +305,15 @@ static void content_store_completion (flux_rpc_t *rpc, void *arg)
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     hp = cache_lookup (ctx->cache, blobref, ctx->epoch);
     cache_entry_set_dirty (hp, false);
+    rc = 0;
 done:
     flux_rpc_destroy (rpc);
+    return rc;
+}
+
+static void content_store_completion (flux_rpc_t *rpc, void *arg)
+{
+    (void)content_store_get (rpc, arg);
 }
 
 static int content_store_request_send (ctx_t *ctx, const href_t ref,
@@ -320,7 +328,8 @@ static int content_store_request_send (ctx_t *ctx, const href_t ref,
                               data, size, FLUX_NODEID_ANY, 0)))
         goto error;
     if (now) {
-        content_store_completion (rpc, ctx);
+        if (content_store_get (rpc, ctx) < 0)
+            goto error;
         flux_rpc_destroy (rpc);
     } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0)
         goto error;
@@ -330,41 +339,52 @@ error:
     return -1;
 }
 
-/* Return false and enqueue waiter on cache object if dirty.
+/* Store object 'o' under key 'ref' in local cache.
+ * If 'wait' is NULL, flush to content cache synchronously; otherwise,
+ * do it asynchronously and push wait onto cache object's wait queue.
+ * FIXME: asynchronous errors need to be propagated back to caller.
  */
-static bool store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
+static int store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
 {
     struct cache_entry *hp;
     SHA1_CTX sha1_ctx;
     const char *s = json_object_to_json_string (o);
     uint8_t hash[SHA1_DIGEST_SIZE];
-    bool dirty = false;
+    int rc = -1;
 
     SHA1_Init (&sha1_ctx);
     SHA1_Update (&sha1_ctx, (uint8_t *)s, strlen (s) + 1);
     SHA1_Final (&sha1_ctx, hash);
     sha1_hashtostr (hash, ref);
 
-    if ((hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (cache_entry_get_valid (hp)) {
-            ctx->stats.noop_stores++;
-            json_object_put (o);
-        } else
-            cache_entry_set_json (hp, o);
-    } else {
-        hp = cache_entry_create (o);
+    if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+        hp = cache_entry_create (NULL);
         cache_insert (ctx->cache, ref, hp);
+    }
+    if (cache_entry_get_valid (hp)) {
+        ctx->stats.noop_stores++;
+        json_object_put (o);
+    } else {
+        cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
-        if (content_store_request_send (ctx, ref, o, wait ? false : true) < 0)
-            flux_log_error (ctx->h, "content_store");
-        /* FIXME: handle error */
     }
     if (cache_entry_get_dirty (hp)) {
-        if (wait)
+        if (wait) {
+            if (content_store_request_send (ctx, ref, o, false) < 0) {
+                flux_log_error (ctx->h, "content_store");
+                goto done;
+            }
             cache_entry_wait_notdirty (hp, wait);
-        dirty = true;
+        } else {
+            if (content_store_request_send (ctx, ref, o, true) < 0) {
+                flux_log_error (ctx->h, "content_store");
+                goto done;
+            }
+        }
     }
-    return !dirty;
+    rc = 0;
+done:
+    return rc;
 }
 
 static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
@@ -394,25 +414,27 @@ static json_object *copydir (json_object *dir)
 /* Store DIRVAL objects, converting them to DIRREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
  */
-static bool commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
+static int commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
 {
     json_object_iter iter;
     json_object *subdir;
     href_t ref;
-    bool dirty = false;
+    int rc = -1;
 
     json_object_object_foreachC (dir, iter) {
         if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
-            if (!commit_unroll (ctx, subdir, wait)) /* depth first */
-                dirty = true;
+            if (commit_unroll (ctx, subdir, wait) < 0) /* depth first */
+                goto done;
             json_object_get (subdir);
-            if (!store (ctx, subdir, ref, wait))
-                dirty = true;
+            if (store (ctx, subdir, ref, wait) < 0)
+                goto done;
             json_object_object_add (dir, iter.key,
                                     dirent_create ("DIRREF", ref));
         }
     }
-    return !dirty;
+    rc = 0;
+done:
+    return rc;
 }
 
 /* link (key, dirent) into directory 'dir'.
@@ -488,11 +510,15 @@ done:
 static void commit_apply_fence (fence_t *f)
 {
     ctx_t *ctx = f->ctx;
-    wait_t *wait = wait_create ((wait_cb_f)commit_apply_fence, f);
+    wait_t *wait = NULL;
     int count;
 
-    if (!wait)
-        oom ();
+    if (f->errnum)
+        goto done;
+    if (!(wait = wait_create ((wait_cb_f)commit_apply_fence, f))) {
+        f->errnum = errno;
+        goto done;
+    }
 
     /* Make a copy of the root directory.
      */
@@ -532,20 +558,16 @@ static void commit_apply_fence (fence_t *f)
     /* Unroll the root copy.
      * When a DIRVAL is found, store an object and replace it with a DIRREF.
      * Finally, store the unrolled root copy as an object and keep its
-     * reference in f->newroot.
+     * reference in f->newroot.  Flushes to content cache are asynchronous
+     * but we don't proceed until they are completed.
      */
     if (!f->rootcpy_stored) {
-        bool dirty = false;
-        if (!commit_unroll (ctx, f->rootcpy, wait)) {
-            assert (wait_get_usecount (wait) > 0);
-            dirty = true;
-        }
-        if (!store (ctx, f->rootcpy, f->newroot, wait)) {
-            assert (wait_get_usecount (wait) > 0);
-            dirty = true;
-        }
+        if (commit_unroll (ctx, f->rootcpy, wait) < 0)
+            f->errnum = errno;
+        else if (store (ctx, f->rootcpy, f->newroot, wait) < 0)
+            f->errnum = errno;
         f->rootcpy_stored = true; /* cache takes ownership of rootcpy */
-        if (dirty)
+        if (wait_get_usecount (wait) > 0)
             goto stall;
     }
 
@@ -554,6 +576,7 @@ static void commit_apply_fence (fence_t *f)
      * and sending out the setroot event for "eventual consistency"
      * of other nodes.
      */
+done:
     if (f->errnum == 0) {
         if (Jget_ar_len (f->names, &count) && count > 1) {
             int opcount = 0;
@@ -1618,7 +1641,10 @@ int mod_main (flux_t h, int argc, char **argv)
         json_object *rootdir = Jnew ();
         href_t href;
 
-        store (ctx, rootdir, href, NULL);
+        if (store (ctx, rootdir, href, NULL) < 0) {
+            flux_log_error (h, "storing root object");
+            return -1;
+        }
         setroot (ctx, href, 0);
     } else {
         href_t href;
