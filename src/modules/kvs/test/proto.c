@@ -167,6 +167,32 @@ void test_setroot (void)
     Jput (o);
 }
 
+void test_error (void)
+{
+    JSON o;
+    JSON names;
+    const char *name[3];
+    int errnum;
+
+    names = Jnew_ar ();
+    Jadd_ar_str (names, "foo");
+    Jadd_ar_str (names, "bar");
+    Jadd_ar_str (names, "baz");
+    ok ((o = kp_terror_enc (names, 42)) != NULL,
+       "kp_terror_enc works");
+    Jput (names);
+
+    diag ("error: %s", Jtostr (o));
+
+    ok (kp_terror_dec (o, &names, &errnum) == 0
+        && Jget_ar_str (names, 0, &name[0]) && !strcmp (name[0], "foo")
+        && Jget_ar_str (names, 1, &name[1]) && !strcmp (name[1], "bar")
+        && Jget_ar_str (names, 2, &name[2]) && !strcmp (name[2], "baz")
+        && errnum == 42,
+        "kp_terror_dec works");
+    Jput (o);
+}
+
 int main (int argc, char *argv[])
 {
 
@@ -178,6 +204,7 @@ int main (int argc, char *argv[])
     test_getroot ();
     test_setroot ();
     test_fence ();
+    test_error ();
 
     done_testing();
     return (0);

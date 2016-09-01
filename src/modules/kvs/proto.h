@@ -46,6 +46,11 @@ json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
 int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
                      json_object **root, json_object **names);
 
+/* kvs.error (event)
+ */
+json_object *kp_terror_enc (json_object *names, int errnum);
+int kp_terror_dec (json_object *o, json_object **names, int *errnum);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

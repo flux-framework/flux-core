@@ -414,6 +414,41 @@ done:
     return rc;
 }
 
+/* kvs.error (event)
+ */
+
+json_object *kp_terror_enc (json_object *names, int errnum)
+{
+    JSON o = NULL;
+    int n;
+
+    if (!names || !Jget_ar_len (names, &n) || n < 1 || errnum == 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    o = Jnew ();
+    Jadd_obj (o, "names", names);         /* takes a ref */
+    Jadd_int (o, "errnum", errnum);
+done:
+    return o;
+}
+
+int kp_terror_dec (JSON o, json_object **names, int *errnum)
+{
+    int rc = -1;
+    if (!o || !names || !errnum) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!Jget_obj (o, "names", names) || !Jget_int (o, "errnum", errnum)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
