@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 --
 -- Issue #505: Ensure msghandler can be installed from within an event handler.
 --

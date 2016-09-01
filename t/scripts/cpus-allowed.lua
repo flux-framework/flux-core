@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 --
 --  Thin frontend to Lua affinity bindings, run cpu_set_t methods against
 --   the current cpumask and print the result.

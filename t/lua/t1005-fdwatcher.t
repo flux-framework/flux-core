@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 --
 --  Basic flux fdwatcher test
 --

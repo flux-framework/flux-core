@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 --
 --  waitfile.lua : Wait until a named file appears and contains a pattern
 --

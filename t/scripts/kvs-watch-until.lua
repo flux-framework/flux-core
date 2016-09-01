@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 --
 --  Exit only if/when all ranks have exited 'unknown' state
 --
