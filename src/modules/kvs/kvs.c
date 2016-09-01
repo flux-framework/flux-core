@@ -1382,10 +1382,23 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     }
     fence_finalize_bynames (ctx, names);
+    /* Copy of root object (corresponding to rootdir blobref) was included
+     * in the setroot event as an optimization, since it would otherwise
+     * be loaded from the content store on next KVS access - immediate
+     * if there are watchers.  Store this object in the KVS cache
+     * with clear dirty bit as it is already valid in the content store.
+     */
     if (root) {
-        href_t ref;
-        Jget (root);
-        store (ctx, root, ref, NULL);
+        struct cache_entry *hp;
+        if ((hp = cache_lookup (ctx->cache, rootdir, ctx->epoch))) {
+            if (!cache_entry_get_valid (hp))
+                cache_entry_set_json (hp, Jget (root));
+            if (cache_entry_get_dirty (hp))
+                cache_entry_set_dirty (hp, false);
+        } else {
+            hp = cache_entry_create (Jget (root));
+            cache_insert (ctx->cache, rootdir, hp);
+        }
     }
     setroot (ctx, rootdir, rootseq);
 done:
