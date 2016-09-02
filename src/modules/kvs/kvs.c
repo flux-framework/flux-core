@@ -437,17 +437,23 @@ done:
 }
 
 /* link (key, dirent) into directory 'dir'.
- * Returns false if it stalled loading a DIRREF.
  */
-static bool commit_link_dirent (ctx_t *ctx, json_object *rootdir,
-                                const char *key, json_object *dirent,
-                                wait_t *wait)
+static int commit_link_dirent (ctx_t *ctx, json_object *rootdir,
+                               const char *key, json_object *dirent,
+                               wait_t *wait)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
     json_object *dir = rootdir;
     json_object *o, *subdir = NULL, *subdirent;
-    bool stall = false;
+    int rc = -1;
+
+    /* Special case root
+     */
+    if (strcmp (name, ".") == 0) {
+        errno = EINVAL;
+        goto done;
+    }
 
     /* This is the first part of a key with multiple path components.
      * Make sure that it is a directory in DIRVAL form, then recurse
@@ -457,7 +463,7 @@ static bool commit_link_dirent (ctx_t *ctx, json_object *rootdir,
         *next++ = '\0';
         if (!json_object_object_get_ex (dir, name, &subdirent)) {
             if (!dirent) /* key deletion - it doesn't exist so return */
-                goto done;
+                goto success;
             if (!(subdir = json_object_new_object ()))
                 oom ();
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
@@ -465,23 +471,23 @@ static bool commit_link_dirent (ctx_t *ctx, json_object *rootdir,
         } else if (json_object_object_get_ex (subdirent, "DIRVAL", &o)) {
             subdir = o;
         } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
-            if (!load (ctx, json_object_get_string (o), wait, &subdir)) {
-                stall = true;
-                goto done;
-            }
+            if (!load (ctx, json_object_get_string (o), wait, &subdir))
+                goto success; /* stall */
             subdir = copydir (subdir);/* do not corrupt store by modify orig. */
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
         } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
             FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
             char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
-            if (!commit_link_dirent (ctx, rootdir, nkey, dirent, wait))
-                stall = true;
+            if (commit_link_dirent (ctx, rootdir, nkey, dirent, wait) < 0) {
+                free (nkey);
+                goto done;
+            }
             free (nkey);
-            goto done;
+            goto success;
         } else {
             if (!dirent) /* key deletion - it doesn't exist so return */
-                goto done;
+                goto success;
             if (!(subdir = json_object_new_object ()))
                 oom ();
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
@@ -496,9 +502,11 @@ static bool commit_link_dirent (ctx_t *ctx, json_object *rootdir,
         json_object_object_add (dir, name, json_object_get (dirent));
     else
         json_object_object_del (dir, name);
+success:
+    rc = 0;
 done:
     free (cpy);
-    return !stall;
+    return rc;
 }
 
 /* Commit all the ops for a particular commit/fence request (rank 0 only).
@@ -537,7 +545,6 @@ static void commit_apply_fence (fence_t *f)
         int i, len = json_object_array_length (f->ops);
         json_object *op, *dirent;
         const char *key;
-        bool stall = false;
 
         for (i = 0; i < len; i++) {
             if (!(op = json_object_array_get_idx (f->ops, i))
@@ -545,13 +552,15 @@ static void commit_apply_fence (fence_t *f)
                 continue;
             dirent = NULL;
             (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
-            if (!commit_link_dirent (ctx, f->rootcpy, key, dirent, wait)) {
-                assert (wait_get_usecount (wait) > 0);
-                stall = true;
+            if (commit_link_dirent (ctx, f->rootcpy, key, dirent, wait) < 0) {
+                f->errnum = errno;
+                break;
             }
         }
-        if (stall)
+        if (wait_get_usecount (wait) > 0)
             goto stall;
+        if (f->errnum != 0)
+            goto done;
     }
 
     /* Unroll the root copy.

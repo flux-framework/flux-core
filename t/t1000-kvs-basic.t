@@ -291,6 +291,10 @@ test_expect_success 'kvs: kvsdir_get_size works' '
 	test "$OUTPUT" = "3"
 '
 
+test_expect_success 'kvs: put key of . fails' '
+	test_must_fail flux kvs put .=1
+'
+
 # Keep the next two tests in order
 test_expect_success 'kvs: symlink: dangling link' '
 	flux kvs unlink $TEST &&
