@@ -367,14 +367,11 @@ static int store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
     } else {
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
-    }
-    if (cache_entry_get_dirty (hp)) {
         if (wait) {
             if (content_store_request_send (ctx, ref, o, false) < 0) {
                 flux_log_error (ctx->h, "content_store");
                 goto done;
             }
-            cache_entry_wait_notdirty (hp, wait);
         } else {
             if (content_store_request_send (ctx, ref, o, true) < 0) {
                 flux_log_error (ctx->h, "content_store");
@@ -382,6 +379,8 @@ static int store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
             }
         }
     }
+    if (wait && cache_entry_get_dirty (hp))
+        cache_entry_wait_notdirty (hp, wait);
     rc = 0;
 done:
     return rc;
