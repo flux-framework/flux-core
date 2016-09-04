@@ -87,7 +87,7 @@ if [ -z "$existing_data" ]; then
         ./soak-workload.sh -j ${NJOBS} ${heap_option}
 
     echo Extracting ${DATFILE} from ${LOGFILE}
-    grep soak ${LOGFILE} | sed -e 's/[^:]*: //' >${DATFILE}
+    grep 'soak.info' ${LOGFILE} | cut -d' ' -f3- >${DATFILE}
 fi
 
 echo Plotting to ${PNGFILE}

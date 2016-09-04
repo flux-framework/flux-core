@@ -26,23 +26,14 @@ json_object *kp_tunwatch_enc (const char *key);
 int kp_tunwatch_dec (json_object *o, const char **key);
 /* unwatch response is just errnum */
 
-/* kvs.commit
- */
-json_object *kp_tcommit_enc (const char *sender, json_object *ops);
-int kp_tcommit_dec (json_object *o, const char **sender, json_object **ops);
-
-json_object *kp_rcommit_enc (int rootseq, const char *rootdir,
-                             const char *sender);
-int kp_rcommit_dec (json_object *o, int *rootseq, const char **rootdir,
-                    const char **sender);
-
 /* kvs.fence
+ * kvs.relayfence
  */
 json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops);
 int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
                    json_object **ops);
 
-/* kvs.getroot
+/* kvs.getroot (request)
  */
 /* empty request payload */
 json_object *kp_rgetroot_enc (int rootseq, const char *rootdir);
@@ -51,9 +42,14 @@ int kp_rgetroot_dec (json_object *o, int *rootseq, const char **rootdir);
 /* kvs.setroot (event)
  */
 json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
-                              json_object *root, const char *fence);
+                              json_object *root, json_object *names);
 int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
-                     json_object **root, const char **fence);
+                     json_object **root, json_object **names);
+
+/* kvs.error (event)
+ */
+json_object *kp_terror_enc (json_object *names, int errnum);
+int kp_terror_dec (json_object *o, json_object **names, int *errnum);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

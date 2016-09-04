@@ -301,73 +301,6 @@ done:
     return rc;
 }
 
-/* kvs.commit
- */
-
-JSON kp_tcommit_enc (const char *sender, JSON ops)
-{
-    JSON o = Jnew ();
-    Jadd_obj (o, "ops", ops); /* takes a ref on ops */
-    if (sender)
-        Jadd_str (o, ".arg_sender", sender);
-    return o;
-}
-
-int kp_tcommit_dec (JSON o, const char **sender, JSON *ops)
-{
-    int rc = -1;
-
-    if (!sender || !ops) {
-        errno = EINVAL;
-        goto done;
-    }
-    *ops = NULL;
-    (void)Jget_obj (o, "ops", ops);
-    if (*ops)
-        Jget (*ops);
-    *sender = NULL;
-    (void)Jget_str (o, ".arg_sender", sender);
-
-    rc = 0;
-done:
-    return rc;
-}
-
-JSON kp_rcommit_enc (int rootseq, const char *rootdir, const char *sender)
-{
-    JSON o = NULL;
-
-    if (!rootdir || !sender) {
-        errno = EINVAL;
-        goto done;
-    }
-    o = Jnew ();
-    Jadd_int (o, "rootseq", rootseq);
-    Jadd_str (o, "rootdir", rootdir);
-    Jadd_str (o, "sender", sender);
-done:
-    return o;
-}
-
-int kp_rcommit_dec (JSON o, int *rootseq, const char **rootdir,
-                    const char **sender)
-{
-    int rc = -1;
-
-    if (!rootseq || !rootdir || !sender) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
-                                          || !Jget_str (o, "sender", sender)) {
-        errno = EPROTO;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 /* kvs.fence
  */
 JSON kp_tfence_enc (const char *name, int nprocs, JSON ops)
@@ -441,42 +374,76 @@ done:
  */
 
 JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
-                      const char *fence)
+                      JSON names)
 {
     JSON o = NULL;
+    int n;
 
-    if (!rootdir) {
+    if (!rootdir || !names || !Jget_ar_len (names, &n) || n < 1) {
         errno = EINVAL;
         goto done;
     }
     o = Jnew ();
     Jadd_int (o, "rootseq", rootseq);
     Jadd_str (o, "rootdir", rootdir);
+    Jadd_obj (o, "names", names);         /* takes a ref */
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
-    if (fence)
-        Jadd_str (o, "fence", fence);
 done:
     return o;
 }
 
 int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root, const char **fence)
+                     JSON *root, JSON *names)
 {
     int rc = -1;
 
-    if (!o || !rootseq || !rootdir || !root) {
+    if (!o || !rootseq || !rootdir || !root || !names) {
         errno = EINVAL;
         goto done;
     }
-    if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)){
+    if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
+                                          || !Jget_obj (o, "names", names)) {
         errno = EPROTO;
         goto done;
     }
     *root = NULL;
     (void)Jget_obj (o, "rootdirval", root);
-    *fence = NULL;
-    (void)Jget_str (o, "fence", fence);
+    rc = 0;
+done:
+    return rc;
+}
+
+/* kvs.error (event)
+ */
+
+json_object *kp_terror_enc (json_object *names, int errnum)
+{
+    JSON o = NULL;
+    int n;
+
+    if (!names || !Jget_ar_len (names, &n) || n < 1 || errnum == 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    o = Jnew ();
+    Jadd_obj (o, "names", names);         /* takes a ref */
+    Jadd_int (o, "errnum", errnum);
+done:
+    return o;
+}
+
+int kp_terror_dec (JSON o, json_object **names, int *errnum)
+{
+    int rc = -1;
+    if (!o || !names || !errnum) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!Jget_obj (o, "names", names) || !Jget_int (o, "errnum", errnum)) {
+        errno = EPROTO;
+        goto done;
+    }
     rc = 0;
 done:
     return rc;

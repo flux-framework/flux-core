@@ -19,6 +19,7 @@ void test_get (void)
     o = kp_tget_enc ("foo", false, true);
     ok (o != NULL,
         "kp_tget_enc works");
+    diag ("get request: %s", Jtostr (o));
     ok (kp_tget_dec (o, &key, &dir, &link) == 0 && dir == false && link == true,
         "kp_tget_dec works");
     like (key, "^foo$",
@@ -31,6 +32,7 @@ void test_get (void)
     val = NULL; /* val now owned by o */
     ok (o != NULL,
         "kp_rget_enc works");
+    diag ("get response: %s", Jtostr (o));
     ok (kp_rget_dec (o, &val) == 0,
         "kp_rget_dec works");
     ok (val && Jget_int (val, "i", &i) && i == 42,
@@ -41,6 +43,7 @@ void test_get (void)
     ok (o != NULL,
         "kp_rget_enc works with NULL value");
     errno = 0;
+    diag ("get response: %s", Jtostr (o));
     ok (kp_rget_dec (o, &val) < 0 && errno == ENOENT,
         "kp_rget_dec returns error with errno = ENOENT if val is NULL");
     Jput (o);
@@ -63,6 +66,7 @@ void test_watch (void)
     ok (o != NULL,
         "kp_twatch_enc works");
     val = NULL;
+    diag ("watch request: %s", Jtostr (o));
     ok (kp_twatch_dec (o, &key, &val, &once, &first, &dir, &link) == 0
         && once == false && first == true && dir == false && link == true,
         "kp_twatch_dec works");
@@ -79,6 +83,7 @@ void test_watch (void)
     ok (o != NULL,
         "kp_rwatch_enc works");
     val = NULL;
+    diag ("watch response: %s", Jtostr (o));
     ok (kp_rwatch_dec (o, &val) == 0,
         "kp_rewatch_dec works");
     ok (val && Jget_str (val, "str", &s) && !strcmp (s, "snerg"),
@@ -94,6 +99,7 @@ void test_unwatch (void)
     o = kp_tunwatch_enc ("foo");
     ok (o != NULL,
         "kp_tunwatch_enc works");
+    diag ("unwatch: %s", Jtostr (o));
     ok (kp_tunwatch_dec (o, &key) == 0 && !strcmp (key, "foo"),
         "kp_tunwatch_dec works and returns encoded key");
     Jput (o);
@@ -111,6 +117,7 @@ void test_fence (void)
     name = NULL;
     nprocs = 0;
     out = NULL;
+    diag ("fence: %s", Jtostr (o));
     ok (kp_tfence_dec (o, &name, &nprocs, &out) == 0
         && name != NULL && !strcmp (name, "foo")
         && nprocs == 42 && out != NULL,
@@ -121,51 +128,6 @@ void test_fence (void)
     Jput (ops);
 }
 
-void test_commit (void)
-{
-    JSON o;
-    const char *sender = NULL;
-    JSON ops = NULL;
-    JSON op1, op2;
-    const char *rootdir;
-    int rootseq;
-    int len;
-
-    ok ((o = kp_tcommit_enc (NULL, NULL)) != NULL,
-        "kp_tcommit_enc (external commit) works");
-    ok (kp_tcommit_dec (o, &sender, &ops) == 0
-        && sender == NULL && ops == NULL,
-        "kp_tcommit_dec (external commit) works");
-    Jput (o);
-
-    op1 = Jnew ();
-    op2 = Jnew ();
-    ops = Jnew_ar ();
-    Jadd_ar_obj (ops, op1);
-    Jadd_ar_obj (ops, op2);
-    Jput (op1);
-    Jput (op2);
-    ok ((o = kp_tcommit_enc ("sender", ops)) != NULL,
-        "kp_tcommit_enc (internal commit) works");
-    Jput (ops);
-    ok (kp_tcommit_dec (o, &sender, &ops) == 0
-        && sender != NULL && !strcmp (sender, "sender"),
-        "kp_tcommit_dec (internal commit) works");
-    Jput (o);
-    ok (Jget_ar_len (ops, &len) && len == 2,
-        "kp_tcommit_dec returned encoded correct number of ops");
-    Jput (ops);
-
-    ok ((o = kp_rcommit_enc (42, "abc", "def")) != NULL,
-        "kp_rcommit_enc works");
-    ok (kp_rcommit_dec (o, &rootseq, &rootdir, &sender) == 0
-        && rootseq == 42
-        && rootdir != NULL && !strcmp (rootdir, "abc")
-        && sender != NULL && !strcmp (sender, "def"),
-        "kp_rcommid_dec works");
-    Jput (o);
-}
-
 void test_getroot (void)
 {
     JSON o;
@@ -174,6 +136,8 @@ void test_getroot (void)
 
     ok ((o = kp_rgetroot_enc (42, "blah")) != NULL,
         "kp_rgetroot_enc works");
+    diag ("getroot: %s", Jtostr (o));
+    diag ("getroot: %s", Jtostr (o));
     ok (kp_rgetroot_dec (o, &rootseq, &rootdir) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "blah"),
         "kp_rgetroot_dec works");
@@ -183,16 +147,49 @@ void test_getroot (void)
 void test_setroot (void)
 {
     JSON o;
-    const char *rootdir, *fence = NULL;
+    const char *rootdir, *name;
     int rootseq;
-    JSON root;
+    JSON root, names;
 
-    ok ((o = kp_tsetroot_enc (42, "abc", NULL, "foo")) != NULL,
+    names = Jnew_ar ();
+    Jadd_ar_str (names, "foo");
+    ok ((o = kp_tsetroot_enc (42, "abc", NULL, names)) != NULL,
         "kp_tsetroot_enc works");
-    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &fence) == 0
+    Jput (names);
+
+    diag ("setroot: %s", Jtostr (o));
+
+    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &names) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "abc")
-        && root == NULL && fence != NULL && !strcmp (fence, "foo"),
+        && root == NULL && names != NULL && Jget_ar_str (names, 0, &name)
+        && !strcmp (name, "foo"),
         "kp_tsetroot_dec works");
+    Jput (o);
+}
+
+void test_error (void)
+{
+    JSON o;
+    JSON names;
+    const char *name[3];
+    int errnum;
+
+    names = Jnew_ar ();
+    Jadd_ar_str (names, "foo");
+    Jadd_ar_str (names, "bar");
+    Jadd_ar_str (names, "baz");
+    ok ((o = kp_terror_enc (names, 42)) != NULL,
+       "kp_terror_enc works");
+    Jput (names);
+
+    diag ("error: %s", Jtostr (o));
+
+    ok (kp_terror_dec (o, &names, &errnum) == 0
+        && Jget_ar_str (names, 0, &name[0]) && !strcmp (name[0], "foo")
+        && Jget_ar_str (names, 1, &name[1]) && !strcmp (name[1], "bar")
+        && Jget_ar_str (names, 2, &name[2]) && !strcmp (name[2], "baz")
+        && errnum == 42,
+        "kp_terror_dec works");
     Jput (o);
 }
 
@@ -201,13 +198,13 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    test_get (); // 8
-    test_watch (); // 7
-    test_unwatch (); // 2
-    test_commit (); // 7
-    test_getroot (); // 2
-    test_setroot (); // 2
+    test_get ();
+    test_watch ();
+    test_unwatch ();
+    test_getroot ();
+    test_setroot ();
     test_fence ();
+    test_error ();
 
     done_testing();
     return (0);

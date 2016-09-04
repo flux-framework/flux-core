@@ -1,36 +1,35 @@
-#ifndef _FLUX_CORE_WAITQUEUE_H
-#define _FLUX_CORE_WAITQUEUE_H
+#ifndef _FLUX_KVS_WAITQUEUE_H
+#define _FLUX_KVS_WAITQUEUE_H
 
-#include <czmq.h>
 #include <stdbool.h>
 #include <flux/core.h>
 
-/* Waitqueues can be used to stall and restart a message handler.
- * The wait_t contains the message that is being worked on and the
- * message handler callback arguments needed to start the handler over.
+/* A wait_t represents a waiter, which may be waiting on multiple things.
+ * A waitqueue_t represents an object that can can change state and wake up
+ * multiple waiters.
  *
- * To stall a message handler, create a wait_t and thread it on one
- * or more waitqueue_t's using wait_addqueue(), then simply abort the
- * handler function.
+ * A wait_t may be added to multiple waitqueue_t's, and multiple wait_t's
+ * may be added to a single waitqueue_t.
  *
- * Presumably some other event creates conditions where the handler
- * can be restarted without stalling.
+ * When a wait_t is added to a waitqueue_t, it's usecount is incremented.
+ * When one is removed from a waitqueue_t, its usecount is decremented.
+ * Once a wait_t's usecount reaches zero, its callback is called and the
+ * wait_t is destroyed.
  *
- * When conditions are such that the waiters on a waitqueue_t should
- * try again, run wait_runqueue ().  Once a wait_t is no longer threaded
- * on any waitqueue_t's (its usecount == 0), the handler is restarted.
+ * When a waitqueue_t is "run", all wait_t's are removed from it.
  */
 
 typedef struct wait_struct wait_t;
 typedef struct waitqueue_struct waitqueue_t;
 
-typedef bool (*wait_compare_f)(const flux_msg_t *msg, void *arg);
+typedef void (*wait_cb_f)(void *arg);
 
-/* Create/destroy a wait_t.
+/* Create/destroy/get usecount of a wait_t.
+ * Normally a wait_t is destroyed via wait_runqueue().
  */
-wait_t *wait_create (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
-                     flux_msg_handler_f cb, void *arg);
-void wait_destroy (wait_t *wait, double *msec);
+wait_t *wait_create (wait_cb_f cb, void *arg);
+void wait_destroy (wait_t *wait);
+int wait_get_usecount (wait_t *wait);
 
 /* Create/destroy/get length of a waitqueue_t.
  */
@@ -39,32 +38,32 @@ void wait_queue_destroy (waitqueue_t *q);
 int wait_queue_length (waitqueue_t *q);
 
 /* Add a wait_t to a queue.
- * You may add a wait_t to multiple queues.
- * Each wait_addqueue increases a wait_t's usecount by one.
  */
 void wait_addqueue (waitqueue_t *q, wait_t *wait);
 
-/* Run one wait_t.
- * This decreases the wait_t's usecount by one.  If the usecount reaches zero,
- * the message handler is restarted and the wait_t is destroyed.
- */
-void wait_runone (wait_t *wait);
-
-/* Dequeue all wait_t's from the specified queue.
- * This decreases a wait_t's usecount by one.  If the usecount reaches zero,
- * the message handler is restarted and the wait_t is destroyed.
- * Note: wait_runqueue() empties the waitqueue_t before invoking message
- * handlers, so it is OK to manipulate the waitqueue_t (for example
- * calling wait_addqueue()) from within a handler that was queued on it.
+/* Remove all wait_t's from the specified queue.
+ * Note: wait_runqueue() empties the waitqueue_t before invoking wait_t
+ * callbacks for waiters that have a usecount of zero, hence it is safe
+ * to manipulate the waitqueue_t from the callback.
  */
 void wait_runqueue (waitqueue_t *q);
 
-/* Destroy all wait_t's on 'q' containing messages that 'cb' returns true on.
- * Return the number of wait_t's matched or -1 on error.
+/* Specialized wait_t for restarting message handlers (must be idempotent!).
+ * The message handler will be reinvoked once the wait_t usecount reaches zero.
+ * Message will be copied and destroyed with the wait_t.
  */
-int wait_destroy_match (waitqueue_t *q, wait_compare_f cb, void *arg);
+wait_t *wait_create_msg_handler (flux_t h, flux_msg_handler_t *w,
+                                 const flux_msg_t *msg,
+                                 flux_msg_handler_f cb, void *arg);
 
-#endif /* !_FLUX_CORE_WAITQUEUE_H */
+/* Destroy all wait_t's fitting message match critieria, tested with
+ * wait_test_msg_f callback.
+ */
+typedef bool (*wait_test_msg_f)(const flux_msg_t *msg, void *arg);
+int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg);
+
+
+#endif /* !_FLUX_KVS_WAITQUEUE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

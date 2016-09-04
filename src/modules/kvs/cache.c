@@ -50,7 +50,8 @@
 #include "cache.h"
 
 struct cache_entry {
-    waitqueue_t *waitlist;  /* waiters for valid or !dirty */
+    waitqueue_t *waitlist_notdirty;
+    waitqueue_t *waitlist_valid;
     json_object *o;         /* value object */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
@@ -87,8 +88,8 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val)
             hp->dirty = 1;
         else if (!val && hp->dirty) {
             hp->dirty = 0;
-            if (hp->waitlist)
-                wait_runqueue (hp->waitlist);
+            if (hp->waitlist_notdirty)
+                wait_runqueue (hp->waitlist_notdirty);
         }
     }
 }
@@ -107,8 +108,8 @@ void cache_entry_set_json (struct cache_entry *hp, json_object *o)
             Jput (o); /* no-op, 'o' is assumed identical to hp->o */
         } else if (o && !hp->o) {
             hp->o = o;
-            if (hp->waitlist)
-                wait_runqueue (hp->waitlist);
+            if (hp->waitlist_valid)
+                wait_runqueue (hp->waitlist_valid);
         } else if (!o && hp->o) {
             Jput (hp->o);
             hp->o = NULL;
@@ -122,18 +123,29 @@ void cache_entry_destroy (void *arg)
     if (hp) {
         if (hp->o)
             json_object_put (hp->o);
-        if (hp->waitlist)
-            wait_queue_destroy (hp->waitlist);
+        if (hp->waitlist_notdirty)
+            wait_queue_destroy (hp->waitlist_notdirty);
+        if (hp->waitlist_valid)
+            wait_queue_destroy (hp->waitlist_valid);
         free (hp);
     }
 }
 
-void cache_entry_wait (struct cache_entry *hp, wait_t *wait)
+void cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait)
 {
     if (wait) {
-        if (!hp->waitlist)
-            hp->waitlist = wait_queue_create ();
-        wait_addqueue (hp->waitlist, wait);
+        if (!hp->waitlist_notdirty)
+            hp->waitlist_notdirty = wait_queue_create ();
+        wait_addqueue (hp->waitlist_notdirty, wait);
+    }
+}
+
+void cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait)
+{
+    if (wait) {
+        if (!hp->waitlist_valid)
+            hp->waitlist_valid = wait_queue_create ();
+        wait_addqueue (hp->waitlist_valid, wait);
     }
 }
 
@@ -223,8 +235,7 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
         *dirtyp = dirty;
 }
 
-int cache_wait_destroy_match (struct cache *cache,
-                              wait_compare_f cb, void *arg)
+int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
 {
     const char *key;
     struct cache_entry *hp;
@@ -232,8 +243,13 @@ int cache_wait_destroy_match (struct cache *cache,
     int rc = -1;
 
     FOREACH_ZHASH (cache->zh, key, hp) {
-        if (hp->waitlist) {
-            if ((n = wait_destroy_match (hp->waitlist, cb, arg)) < 0)
+        if (hp->waitlist_valid) {
+            if ((n = wait_destroy_msg (hp->waitlist_valid, cb, arg)) < 0)
+                goto done;
+            count += n;
+        }
+        if (hp->waitlist_notdirty) {
+            if ((n = wait_destroy_msg (hp->waitlist_notdirty, cb, arg)) < 0)
                 goto done;
             count += n;
         }

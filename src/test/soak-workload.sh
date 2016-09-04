@@ -26,7 +26,7 @@ for i in `seq 1 $njobs`; do
     elapsed=$(/usr/bin/time -f "%e" flux wreckrun --ntasks $size /bin/true 2>&1)
     broker_rss=$(flux comms-stats --rusage cmb --parse maxrss)
     content_k=$(du -sk $contentdir | cut -f1)
-    flux logger --priority soak.info $i $elapsed $broker_rss $content_k
+    flux logger --severity=info --appname=soak $i $elapsed $broker_rss $content_k
     if [ -n "${heap_prefix}" ]; then
         flux heaptrace dump lwj.$i
     fi
