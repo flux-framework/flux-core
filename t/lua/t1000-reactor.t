@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 --
 --  Basic flux reactor testing using ping interface to kvs
 --

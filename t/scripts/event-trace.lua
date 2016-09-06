@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 local flux = require 'flux'
 local s = arg[1]
 local exitevent = arg[2]

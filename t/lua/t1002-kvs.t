@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 
 local test = require 'fluxometer'.init (...)
 test:start_session{ size=4 }

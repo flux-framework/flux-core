@@ -1,4 +1,4 @@
-#!/usr/bin/lua
+#!/usr/bin/env lua
 
 local test = require 'fluxometer'.init (...)
 local posix = require_ok ('posix')
