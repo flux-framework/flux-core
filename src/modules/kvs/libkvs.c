@@ -340,7 +340,7 @@ int kvs_get (flux_t h, const char *key, char **val)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, false, false)))
+    if (!(in = kp_tget_enc (k, 0)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -411,7 +411,7 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
     key = xvasprintf (fmt, ap);
     va_end (ap);
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, true, false)))
+    if (!(in = kp_tget_enc (k, KVS_PROTO_READDIR)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -452,7 +452,7 @@ int kvs_get_symlink (flux_t h, const char *key, char **val)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, false, true)))
+    if (!(in = kp_tget_enc (k, KVS_PROTO_READLINK)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -781,7 +781,7 @@ done:
  * adding to the watcher state; else retire the matchtag.
  */
 static int watch_rpc (flux_t h, const char *key, JSON *val,
-                      bool once, bool directory, uint32_t *matchtag)
+                      int flags, uint32_t *matchtag)
 {
     struct flux_match match = { .typemask = FLUX_MSGTYPE_RESPONSE,
                                 .topic_glob = NULL };
@@ -795,14 +795,15 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
 
     /* Send the request.
      */
-    assert (once || matchtag != NULL);
+    assert ((flags & KVS_PROTO_ONCE) || matchtag != NULL);
     match.matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
     if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
     }
-    if (!(in = kp_twatch_enc (key, *val, once,
-                              once ? false : true, directory, false)))
+    if (!(flags & KVS_PROTO_ONCE))
+        flags |= KVS_PROTO_FIRST;
+    if (!(in = kp_twatch_enc (key, *val, flags)))
         goto done;
     if (!(request_msg = flux_request_encode ("kvs.watch", Jtostr (in))))
         goto done;
@@ -845,7 +846,7 @@ int kvs_watch_once_obj (flux_t h, const char *key, json_object **valp)
 {
     int rc = -1;
 
-    if (watch_rpc (h, key, valp, true, false, NULL) < 0)
+    if (watch_rpc (h, key, valp, KVS_PROTO_ONCE, NULL) < 0)
         goto done;
     if (*valp == NULL) {
         errno = ENOENT;
@@ -889,7 +890,7 @@ int kvs_watch_once_int (flux_t h, const char *key, int *valp)
 
     if (!(val = json_object_new_int (*valp)))
         oom ();
-    if (watch_rpc (h, key, &val, true, false, NULL) < 0)
+    if (watch_rpc (h, key, &val, KVS_PROTO_ONCE, NULL) < 0)
         goto done;
     if (!val) {
         errno = ENOENT;
@@ -919,7 +920,7 @@ int kvs_watch_once_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...)
         val = (*dirp)->o;
         json_object_get (val);
     }
-    if (watch_rpc (h, key, &val, true, true, NULL) < 0)
+    if (watch_rpc (h, key, &val, KVS_PROTO_ONCE | KVS_PROTO_READDIR, NULL) < 0)
         goto done;
     if (val == NULL) {
         errno = ENOENT;
@@ -944,7 +945,7 @@ int kvs_watch_obj (flux_t h, const char *key, kvs_set_obj_f set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_OBJECT, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -962,7 +963,7 @@ int kvs_watch (flux_t h, const char *key, kvs_set_f set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_JSONSTR, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -987,7 +988,7 @@ int kvs_watch_dir (flux_t h, kvs_set_dir_f set, void *arg, const char *fmt, ...)
         oom ();
     va_end (ap);
 
-    if (watch_rpc (h, key, &val, false, true, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, KVS_PROTO_READDIR, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_DIR, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -1008,7 +1009,7 @@ int kvs_watch_string (flux_t h, const char *key, kvs_set_string_f set,
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_STRING, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -1026,7 +1027,7 @@ int kvs_watch_int (flux_t h, const char *key, kvs_set_int_f set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_INT, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -1044,7 +1045,7 @@ int kvs_watch_int64 (flux_t h, const char *key, kvs_set_int64_f set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_INT64, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -1063,7 +1064,7 @@ int kvs_watch_double (flux_t h, const char *key, kvs_set_double_f set,
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_DOUBLE, matchtag, set, arg);
     dispatch_watch (h, wp, val);
@@ -1082,7 +1083,7 @@ int kvs_watch_boolean (flux_t h, const char *key, kvs_set_boolean_f set,
     json_object *val = NULL;
     int rc = -1;
 
-    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
+    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_BOOLEAN, matchtag, set, arg);
     dispatch_watch (h, wp, val);

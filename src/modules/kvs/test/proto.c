@@ -10,17 +10,16 @@
 void test_get (void)
 {
     JSON o;
-    bool dir = false;
-    bool link = false;
     const char *key = NULL;
     JSON val = NULL;
-    int i;
+    int i, flags;
 
-    o = kp_tget_enc ("foo", false, true);
+    o = kp_tget_enc ("foo", 42);
     ok (o != NULL,
         "kp_tget_enc works");
     diag ("get request: %s", Jtostr (o));
-    ok (kp_tget_dec (o, &key, &dir, &link) == 0 && dir == false && link == true,
+    flags = 0;
+    ok (kp_tget_dec (o, &key, &flags) == 0 && flags == 42,
         "kp_tget_dec works");
     like (key, "^foo$",
         "kp_tget_dec returned encoded key");
@@ -28,47 +27,37 @@ void test_get (void)
 
     val = Jnew ();
     Jadd_int (val, "i", 42);
-    o = kp_rget_enc ("foo", val);
+    o = kp_rget_enc (val);
     val = NULL; /* val now owned by o */
     ok (o != NULL,
         "kp_rget_enc works");
     diag ("get response: %s", Jtostr (o));
     ok (kp_rget_dec (o, &val) == 0,
         "kp_rget_dec works");
+    // get response: { "val": { "i": 42 } }
+    i = 0;
     ok (val && Jget_int (val, "i", &i) && i == 42,
         "kp_rget_dec returned encoded object");
     Jput (o); /* owns val */
-
-    o = kp_rget_enc ("foo", NULL);
-    ok (o != NULL,
-        "kp_rget_enc works with NULL value");
-    errno = 0;
-    diag ("get response: %s", Jtostr (o));
-    ok (kp_rget_dec (o, &val) < 0 && errno == ENOENT,
-        "kp_rget_dec returns error with errno = ENOENT if val is NULL");
-    Jput (o);
 }
 
 void test_watch (void)
 {
     JSON o;
-    bool dir = false;
-    bool once = false;
-    bool first = false;
-    bool link = false;
+    int flags;
     const char *key = NULL;
     const char *s = NULL;
     JSON val;
 
     val = Jnew ();
     Jadd_str (val, "s", "blatz");
-    o = kp_twatch_enc ("foo", val, false, true, false, true);
+    o = kp_twatch_enc ("foo", val, 42);
     ok (o != NULL,
         "kp_twatch_enc works");
     val = NULL;
     diag ("watch request: %s", Jtostr (o));
-    ok (kp_twatch_dec (o, &key, &val, &once, &first, &dir, &link) == 0
-        && once == false && first == true && dir == false && link == true,
+    flags = 0;
+    ok (kp_twatch_dec (o, &key, &val, &flags) == 0 && flags == 42,
         "kp_twatch_dec works");
     ok (key && !strcmp (key, "foo"),
         "kp_twatch_dec returned encoded key");
@@ -79,7 +68,7 @@ void test_watch (void)
 
     val = Jnew ();
     Jadd_str (val, "str", "snerg");
-    o = kp_rwatch_enc ("foo", val);
+    o = kp_rwatch_enc (val);
     ok (o != NULL,
         "kp_rwatch_enc works");
     val = NULL;

@@ -1,23 +1,30 @@
 /* N.B. Decode functions return pointers to storage owned by the json object.
  */
 
+// flags
+enum {
+    KVS_PROTO_READDIR = 1,      /* get, watch */
+    KVS_PROTO_READLINK = 2,     /* get, watch */
+    KVS_PROTO_ONCE = 4,         /* watch */
+    KVS_PROTO_FIRST = 8,        /* watch */
+};
+
 /* kvs.get
  */
-json_object *kp_tget_enc (const char *key, bool dir, bool link);
-int kp_tget_dec (json_object *o, const char **key, bool *dir, bool *link);
+json_object *kp_tget_enc (const char *key, int flags);
+int kp_tget_dec (json_object *o, const char **key, int *flags);
 
-json_object *kp_rget_enc (const char *key, json_object *val);
+json_object *kp_rget_enc (json_object *val);
 int kp_rget_dec (json_object *o, json_object **val);
 
 
 /* kvs.watch
  */
-json_object *kp_twatch_enc (const char *key, json_object *val,
-                            bool once, bool first, bool dir, bool link);
+json_object *kp_twatch_enc (const char *key, json_object *val, int flags);
 int kp_twatch_dec (json_object *o, const char **key, json_object **val,
-                   bool *once, bool *first, bool *dir, bool *link);
+                   int *flags);
 
-json_object *kp_rwatch_enc (const char *key, json_object *val);
+json_object *kp_rwatch_enc (json_object *val);
 int kp_rwatch_dec (json_object *o, json_object **val);
 
 /* kvs.unwatch
