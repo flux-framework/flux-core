@@ -1104,7 +1104,6 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
 {
     kvsctx_t *ctx = getctx (h);
     char *k = NULL;
-    int value_len;
     int rc = -1;
     JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
@@ -1119,32 +1118,6 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
     if (json_str == NULL) {
         dirent_append (ops, k, NULL);
     }
-    /* Put value to the content store, and commit its blobref to the KVS.
-     * It only makes sense to do this if value is larger than the blobref!
-     * Content.store success response == in memory on rank 0, thus safe
-     * to reference from KVS as any rank could fetch it following commit.
-     */
-    else if ((value_len = strlen (json_str)) > SHA1_STRING_SIZE) {
-        char *blobref;
-        int blobref_size;
-        flux_rpc_t *rpc;
-        if (!(rpc = flux_rpc_raw (h, "content.store", json_str, value_len,
-                                  FLUX_NODEID_ANY, 0)))
-            goto done;
-        if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
-            flux_rpc_destroy (rpc);
-            goto done;
-        }
-        if (!blobref || blobref[blobref_size - 1] != '\0') {
-            flux_rpc_destroy (rpc);
-            errno = EPROTO;
-            goto done;
-        }
-        dirent_append (ops, k, dirent_create ("FILEREF", blobref));
-        flux_rpc_destroy (rpc);
-    }
-    /* Value is small, commit directly (becomes part of the directory object).
-     */
     else {
         JSON val;
         if (!(val = Jfromstr (json_str))) {
