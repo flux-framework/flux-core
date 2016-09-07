@@ -408,6 +408,29 @@ local function task_status (lwj, taskid)
     return x, exit_message (t)
 end
 
+local function exit_status_aggregate (arg)
+    local flux = require 'flux'
+    local f = arg.flux
+    local lwj = arg.kvsdir
+    local msgs = {}
+
+    local exit_status = lwj.exit_status
+    if not exit_status then return nil, nil end
+
+    local s, max, core = flux.exitstatus (exit_status.max)
+    if s == "killed" then max = max + 128 end
+
+    for v in exit_status.values:keys () do
+        local msg, code, core = flux.exitstatus (v)
+        s = "exited with "
+        s = s .. (msg == "exited" and "exit code " or "signal ") .. code
+        msgs [s] = hostlist.new (exit_status.values [v])
+    end
+
+    return max, msgs
+end
+
+
 --- Return highest exit code from all tasks and task exit message list.
 -- Summarize job exit status for arg.jobid by returning max task exit code,
 -- along with a list of task exit messages to be optionally emitted to stdout.
@@ -415,14 +438,19 @@ end
 -- @param arg.flux  (optional) flux handle
 -- @return exit_cde, msg_list
 function wreck.status (arg)
+    local flux = require 'flux'
     local f = arg.flux
     local jobid = arg.jobid
     if not jobid then return nil, "required arg jobid" end
-
-    if not f then f = require 'flux'.new() end
+    if not f then f = flux.new() end
     local lwj = f:kvsdir ("lwj."..jobid)
     local max = 0
     local msgs = {}
+
+    if lwj.exit_status then
+        return exit_status_aggregate { flux = f, kvsdir = lwj }
+    end
+
     for taskid in lwj:keys () do
         local x, s = task_status (lwj, taskid)
         if x then
