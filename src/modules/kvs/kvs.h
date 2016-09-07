@@ -91,6 +91,10 @@ int kvs_put_int64 (flux_t h, const char *key, int64_t val);
 int kvs_put_double (flux_t h, const char *key, double val);
 int kvs_put_boolean (flux_t h, const char *key, bool val);
 
+/* As above but associate a preconstructed treeobj with key.
+ */
+int kvs_put_treeobj (flux_t h, const char *key, const char *treeobj);
+
 /* An iterator interface for walking the list of names in a kvsdir_t
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.
  * kvsitr_next() returns NULL when the last item is reached.

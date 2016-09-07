@@ -28,9 +28,11 @@
 #include <string.h>
 #include <json.h>
 #include <assert.h>
+#include <errno.h>
 
 #include "json_dirent.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/shastring.h"
 
 json_object *dirent_create (char *type, void *arg)
 {
@@ -69,6 +71,42 @@ void dirent_append (json_object **array, const char *key, json_object *dirent)
     json_object_array_add (*array, op);
 }
 
+int dirent_validate (json_object *dirent)
+{
+    JSON o;
+
+    if (!dirent)
+        goto error;
+    if ((o = Jobj_get (dirent, "DIRVAL"))) {
+        json_object_iter iter;
+        json_object_object_foreachC (o, iter) {
+            if (dirent_validate (iter.val) < 0)
+                goto error;
+        }
+    }
+    else if ((o = Jobj_get (dirent, "FILEVAL"))) {
+        /* Any json type is valid here */
+    }
+    else if ((o = Jobj_get (dirent, "LINKVAL"))) {
+        if (json_object_get_type (o) != json_type_string)
+            goto error;
+    }
+    else if ((o = Jobj_get (dirent, "DIRREF"))
+            || (o = Jobj_get (dirent, "FILEREF"))) {
+        if (json_object_get_type (o) != json_type_string)
+            goto error;
+        const char *s = json_object_get_string (o);
+        uint8_t hash[SHA1_DIGEST_SIZE];
+        if (sha1_strtohash (s, hash) < 0)
+            goto error;
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

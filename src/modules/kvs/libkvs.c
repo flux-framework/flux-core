@@ -1116,6 +1116,17 @@ done:
     return rc;
 }
 
+int kvs_put_treeobj (flux_t h, const char *key, const char *treeobj)
+{
+    JSON dirent;
+
+    if (!treeobj || !(dirent = Jfromstr (treeobj))
+                 || dirent_validate (dirent) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return kvs_put_dirent (h, key, dirent);
+}
 
 /* Append the key and dirent value to the 'ops' array, to be sent
  * with the next commit/fence request.
