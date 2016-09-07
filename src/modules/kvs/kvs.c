@@ -411,12 +411,14 @@ static json_object *copydir (json_object *dir)
 }
 
 /* Store DIRVAL objects, converting them to DIRREFs.
+ * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
  */
 static int commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
 {
     json_object_iter iter;
-    json_object *subdir;
+    json_object *subdir, *value;
+    const char *s;
     href_t ref;
     int rc = -1;
 
@@ -429,6 +431,15 @@ static int commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
                 goto done;
             json_object_object_add (dir, iter.key,
                                     dirent_create ("DIRREF", ref));
+        }
+        else if (json_object_object_get_ex (iter.val, "FILEVAL", &value)
+                                            && (s = Jtostr (value))
+                                            && strlen (s) > SHA1_STRING_SIZE) {
+            json_object_get (value);
+            if (store (ctx, value, ref, wait) < 0)
+                goto done;
+            json_object_object_add (dir, iter.key,
+                                    dirent_create ("FILEREF", ref));
         }
     }
     rc = 0;
