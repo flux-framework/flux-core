@@ -47,6 +47,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libpmi/simple_server.h"
 
@@ -1200,10 +1201,113 @@ int send_startup_message (struct prog_ctx *ctx)
     return (0);
 }
 
+
+static int
+exitstatus_watcher (const char *key, const char *str, void *arg, int err)
+{
+    struct prog_ctx *ctx = arg;
+    flux_t h = ctx->flux;
+    int count;
+    JSON o;
+
+    if (err || !(o = Jfromstr (str))) {
+        if (err != ENOENT)
+            flux_log (h, LOG_ERR, "exitstatus_watcher: %s",
+                    err ? flux_strerror (err) : "Jfromstr failed");
+        return (0);
+    }
+
+    /* Once count is fully populated, release the watch on the
+     *  exit_status dir so reactor loop can exit
+     */
+    if (Jget_int (o, "count", &count) && count == ctx->total_ntasks)
+        kvs_unwatch (h, key);
+
+    Jput (o);
+    return (0);
+}
+
+static JSON task_exit_tojson (struct task_info *t)
+{
+    char *key = NULL;
+    char *taskid = NULL;
+    struct prog_ctx *ctx = t->ctx;
+    JSON o, e;
+
+    if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) < 0)
+        return (NULL);
+    if (asprintf (&taskid, "%d", t->globalid) < 0) {
+        free (key);
+        return (NULL);
+    }
+
+    e = Jnew ();
+    Jadd_int64 (e, taskid, t->status);
+
+    o = Jnew ();
+    Jadd_str (o, "key", key);
+    Jadd_int (o, "total", ctx->total_ntasks);
+    json_object_object_add (o, "entries", e);
+
+    free (key);
+    free (taskid);
+    return (o);
+}
+
+static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
+{
+    int rc = 0;
+    char *key = NULL;
+    flux_t h = ctx->flux;
+
+    if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) <= 0) {
+        flux_log_error (h, "wait_for_aggregate: asprintf");
+        return (-1);
+    }
+    if ((rc = kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
+        flux_log_error (h, "kvs_watch_dir");
+    free (key);
+    return (rc);
+}
+
+static int aggregator_push_task_exit (struct task_info *t)
+{
+    int rc = 0;
+    flux_t h = t->ctx->flux;
+    flux_rpc_t *rpc;
+    JSON o = task_exit_tojson (t);
+
+    if (o == NULL) {
+        flux_log_error (h, "task_exit_tojson");
+        return (-1);
+    }
+
+    if (!(rpc = flux_rpc (h, "aggregator.push", Jtostr (o),
+                                FLUX_NODEID_ANY, 0))) {
+        flux_log_error (h, "flux_rpc");
+        rc = -1;
+    }
+
+    if (rpc && flux_rpc_get (rpc, NULL, NULL) < 0) {
+        flux_log_error (h, "flux_rpc_get");
+        rc = -1;
+    }
+
+    Jput (o);
+
+    if (t->ctx->noderank == 0 && t->id == 0)
+        rc = wait_for_task_exit_aggregate (t->ctx);
+
+    return (rc);
+}
+
 int send_exit_message (struct task_info *t)
 {
     char *key;
     struct prog_ctx *ctx = t->ctx;
+
+    if (!prog_ctx_getopt (ctx, "no-aggregate-task-exit"))
+        return aggregator_push_task_exit (t);
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
