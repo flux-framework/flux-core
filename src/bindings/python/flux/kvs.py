@@ -1,7 +1,6 @@
 from _kvs import ffi, lib
 import flux
 from flux.wrapper import Wrapper, WrapperPimpl
-import flux.json_c as json_c
 import json
 import collections
 import errno
@@ -17,9 +16,12 @@ _raw.kvsitr_next.set_error_check(lambda x: False)
 
 
 def get_key_direct(flux_handle, key):
-    j = json_c.Jobj()
-    _raw.get_obj(flux_handle, key, j.get_as_dptr())
-    return json.loads(j.as_str())
+    valp = ffi.new('char *[1]')
+    _raw.get(flux_handle, key, valp)
+    if valp[0] == ffi.NULL:
+      return None
+    else:
+      return json.loads(ffi.string(valp[0]))
 
 
 def exists(flux_handle, key):
@@ -59,8 +61,8 @@ def get(flux_handle, key):
     return get_dir(flux_handle, key)
 
 def put(flux_handle, key, value):
-    j = json_c.Jobj(json.dumps(value))
-    _raw.put_obj(flux_handle, key, j.get())
+    json_str = json.dumps(value)
+    _raw.put(flux_handle, key, json_str)
 
 
 def commit(flux_handle):
@@ -77,9 +79,12 @@ def watch_once(flux_handle, key):
         _raw.watch_once_dir(flux_handle, d)
         return d
     else:
-        j = json_c.Jobj()
-        _raw.watch_once(flux_handle, key, j.get_as_dptr())
-        return j.as_str()
+        out_json_str = ffi.new('char *[1]')
+        _raw.watch_once(flux_handle, key, out_json_str)
+        if out_json_str[0] == ffi.NULL:
+          return None
+        else:
+          return json.loads(ffi.string(out_json_str[0]))
 
 
 class KVSDir(WrapperPimpl, collections.MutableMapping):
@@ -123,6 +128,9 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         lib.free(c_str)
         return p_str
 
+    def exists(self, name):
+      return self.pimpl.exists(name)
+
     def __getitem__(self, key):
         try:
             return get(self.fh, self.key_at(key))
@@ -132,8 +140,8 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
     def __setitem__(self, key, value):
         # Turn it into json
-        j = json_c.Jobj(json.dumps(value))
-        self.pimpl.put_obj(key, j.get())
+        json_str = json.dumps(value)
+        self.pimpl.put(key, json_str)
 
     def __delitem__(self, key):
         self.pimpl.unlink(key)
@@ -227,9 +235,8 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
     def watch_once(self, flux_handle, key):
         """ Watches the selected key until the next change, then returns the updated value of the key """
-        j = json_c.Jobj()
-        self.pimpl.kvs_watch_once_dir(self.fh, self.handle, j.get_as_dptr())
-        return j.as_str()
+        full_key = self.key_at(key)
+        return watch_once(self.fh, full_key)
 
 
 def join(*args):
