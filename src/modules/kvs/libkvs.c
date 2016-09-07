@@ -1097,10 +1097,7 @@ done:
  ** PUT
  **/
 
-/* Append the key and dirent value to the 'ops' array, to be sent
- * with the next commit/fence request.
- */
-int kvs_put (flux_t h, const char *key, const char *json_str)
+static int kvs_put_dirent (flux_t h, const char *key, json_object *dirent)
 {
     kvsctx_t *ctx = getctx (h);
     char *k = NULL;
@@ -1112,24 +1109,34 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    /* kvs_put() of a NULL value means unlink.
-     * A 'op' with a NULL dirent accomplishes this.
-     */
-    if (json_str == NULL) {
-        dirent_append (ops, k, NULL);
-    }
-    else {
-        JSON val;
-        if (!(val = Jfromstr (json_str))) {
-            errno = EINVAL;
-            goto done;
-        }
-        dirent_append (ops, k, dirent_create ("FILEVAL", val));
-        Jput (val);
-    }
+    dirent_append (ops, k, dirent);
     rc = 0;
 done:
     free (k);
+    return rc;
+}
+
+
+/* Append the key and dirent value to the 'ops' array, to be sent
+ * with the next commit/fence request.
+ */
+int kvs_put (flux_t h, const char *key, const char *json_str)
+{
+    int rc = -1;
+    JSON val = NULL;
+
+    if (!json_str)
+        return kvs_unlink (h, key);
+
+    if (!(val = Jfromstr (json_str))) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (kvs_put_dirent (h, key, dirent_create ("FILEVAL", val)) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (val);
     return rc;
 }
 
@@ -1227,7 +1234,7 @@ done:
 
 int kvs_unlink (flux_t h, const char *key)
 {
-    return kvs_put (h, key, NULL);
+    return kvs_put_dirent (h, key, NULL);
 }
 
 int kvs_symlink (flux_t h, const char *key, const char *target)
