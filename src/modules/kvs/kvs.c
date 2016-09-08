@@ -811,6 +811,10 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
     bool isdir = false;
     int errnum = 0;
 
+    if (root == NULL) {
+        if (!load (ctx, ctx->rootdir, wait, &root))
+            goto stall;
+    }
     if (!strcmp (name, ".")) { /* special case root */
         if (!(flags & KVS_PROTO_READDIR)) {
             errnum = EISDIR;
@@ -901,7 +905,7 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     JSON out = NULL;
     int flags;
     const char *key;
-    JSON root, val;
+    JSON val;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
     int rc = -1;
@@ -916,9 +920,7 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
-    if (!load (ctx, ctx->rootdir, wait, &root))
-        goto stall;
-    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
+    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum != 0) {
         errno = lookup_errnum;
@@ -957,7 +959,6 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
     JSON in = NULL;
     JSON in2 = NULL;
     JSON out = NULL;
-    JSON root;
     JSON oval, val = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
@@ -977,9 +978,7 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, arg)))
         goto done;
-    if (!load (ctx, ctx->rootdir, wait, &root))
-        goto stall;
-    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
+    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum) {
         errno = lookup_errnum;
