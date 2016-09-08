@@ -117,6 +117,8 @@ struct prog_ctx {
      */
     zhash_t *options;
 
+    zhash_t *completion_refs;
+
     int argc;
     char **argv;
     char *envz;
@@ -667,7 +669,70 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     free (ctx->cores_per_node);
 
+    if (ctx->options)
+        zhash_destroy (&ctx->options);
+    if (ctx->completion_refs)
+        zhash_destroy (&ctx->completion_refs);
+
     free (ctx);
+}
+
+int prog_ctx_remove_completion_ref (struct prog_ctx *ctx, const char *fmt, ...)
+{
+    int rc = 0;
+    int *intp;
+    va_list ap;
+    char *ref = NULL;
+
+    va_start (ap, fmt);
+    if ((rc = vasprintf (&ref, fmt, ap)) < 0) {
+        flux_log_error (ctx->flux, "add_completion_ref: vasprintf");
+        goto out;
+    }
+    if (!(intp = zhash_lookup (ctx->completion_refs, ref))) {
+        errno = ENOENT;
+        goto out;
+    }
+    if (--(*intp) == 0) {
+        zhash_delete (ctx->completion_refs, ref);
+        if (zhash_size (ctx->completion_refs) == 0)
+            flux_reactor_stop (flux_get_reactor (ctx->flux));
+    }
+out:
+    free (ref);
+    va_end (ap);
+    return (rc);
+}
+
+int prog_ctx_add_completion_ref (struct prog_ctx *ctx, const char *fmt, ...)
+{
+    int rc = 0;
+    int *intp;
+    va_list ap;
+    char *ref = NULL;
+
+    va_start (ap, fmt);
+    if ((rc = vasprintf (&ref, fmt, ap)) < 0) {
+        flux_log_error (ctx->flux, "add_completion_ref: vasprintf");
+        goto out;
+    }
+    if (!(intp = zhash_lookup (ctx->completion_refs, ref))) {
+        if (!(intp = calloc (1, sizeof (*intp)))) {
+            flux_log_error (ctx->flux, "add_completion_ref: calloc");
+            goto out;
+        }
+        if (zhash_insert (ctx->completion_refs, ref, intp) < 0) {
+            flux_log_error (ctx->flux, "add_completion_ref: zhash_insert");
+            free (intp);
+            goto out;
+        }
+        zhash_freefn (ctx->completion_refs, ref, free);
+    }
+    rc = ++(*intp);
+out:
+    free (ref);
+    va_end (ap);
+    return (rc);
 }
 
 struct prog_ctx * prog_ctx_create (void)
@@ -677,7 +742,9 @@ struct prog_ctx * prog_ctx_create (void)
         wlog_fatal (ctx, 1, "malloc");
 
     memset (ctx, 0, sizeof (*ctx));
-    ctx->options = zhash_new ();
+    if (!(ctx->options = zhash_new ())
+        || !(ctx->completion_refs = zhash_new ()))
+        wlog_fatal (ctx, 1, "zhash_new");
 
     ctx->envz = NULL;
     ctx->envz_len = 0;
