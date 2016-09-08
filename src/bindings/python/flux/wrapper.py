@@ -141,6 +141,7 @@ class FunctionWrapper(object):
 
     def __call__(self, calling_object, *args_in):
         # print holder.__name__, 'got', calling_object, args_in
+        calling_object.ffi.errno = 0
         if self.trans_len == 0:
             try:
                 if self.add_handle:

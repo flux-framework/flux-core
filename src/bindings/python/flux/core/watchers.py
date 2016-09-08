@@ -3,8 +3,7 @@ from flux.core.inner import raw, ffi, lib
 import flux.message
 import abc
 
-__all__ = ['MessageWatcher', 'TimerWatcher']
-
+__all__ = ['MessageWatcher', 'TimerWatcher', 'FDWatcher']
 
 class Watcher(object):
     __metaclass__ = abc.ABCMeta

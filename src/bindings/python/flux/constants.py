@@ -31,3 +31,8 @@ FLUX_SEC_TYPE_MUNGE = 4
 FLUX_SEC_TYPE_ALL = 7
 
 FLUX_MATCHTAG_NONE = 0
+
+# constants for FDWatchers's 'events' arg
+FLUX_POLLIN = 1
+FLUX_POLLOUT = 2
+FLUX_POLLOUT = 4

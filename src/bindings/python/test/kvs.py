@@ -37,7 +37,7 @@ class TestKVS(unittest.TestCase):
         return kd
 
     def test_set_none(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(EnvironmentError):
             self.set_and_check_context('None', None)
 
     def test_set_int(self):
