@@ -7,6 +7,7 @@ enum {
     KVS_PROTO_READLINK = 2,     /* get, watch */
     KVS_PROTO_ONCE = 4,         /* watch */
     KVS_PROTO_FIRST = 8,        /* watch */
+    KVS_PROTO_TREEOBJ = 16,     /* get */
 };
 
 /* kvs.get

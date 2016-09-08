@@ -783,7 +783,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
     /* now terminal path component */
     if (json_object_object_get_ex (dir, name, &dirent) &&
         Jget_str (dirent, "LINKVAL", &link)) {
-        if (!(flags & KVS_PROTO_READLINK)) {
+        if (!(flags & KVS_PROTO_READLINK) && !(flags & KVS_PROTO_TREEOBJ)) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
             if (!walk (ctx, root, link, &dirent, wait, flags, depth))
@@ -807,8 +807,6 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
                     json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
-    const char *ref;
-    bool isdir = false;
     int errnum = 0;
 
     if (root == NULL) {
@@ -816,12 +814,15 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             goto stall;
     }
     if (!strcmp (name, ".")) { /* special case root */
-        if (!(flags & KVS_PROTO_READDIR)) {
-            errnum = EISDIR;
-            goto done;
+        if ((flags & KVS_PROTO_TREEOBJ)) {
+            val = dirent_create ("DIRREF", ctx->rootdir);
+        } else {
+            if (!(flags & KVS_PROTO_READDIR)) {
+                errnum = EISDIR;
+                goto done;
+            }
+            val = json_object_get (root);
         }
-        val = root;
-        isdir = true;
     } else {
         if (!walk (ctx, root, name, &dirent, wait, flags, 0))
             goto stall;
@@ -829,7 +830,11 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
             //errnum = ENOENT;
             goto done; /* a NULL response is not necessarily an error */
         }
-        if (Jget_str (dirent, "DIRREF", &ref)) {
+        if ((flags & KVS_PROTO_TREEOBJ)) {
+            val = json_object_get (dirent);
+            goto done;
+        }
+        if (json_object_object_get_ex (dirent, "DIRREF", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
                 goto done;
@@ -838,10 +843,10 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = EISDIR;
                 goto done;
             }
-            if (!load (ctx, ref, wait, &val))
+            if (!load (ctx, json_object_get_string (vp), wait, &val))
                 goto stall;
-            isdir = true;
-        } else if (Jget_str (dirent, "FILEREF", &ref)) {
+            val = copydir (val);
+        } else if (json_object_object_get_ex (dirent, "FILEREF", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
                 goto done;
@@ -850,8 +855,9 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = ENOTDIR;
                 goto done;
             }
-            if (!load (ctx, ref, wait, &val))
+            if (!load (ctx, json_object_get_string (vp), wait, &val))
                 goto stall;
+            val = json_object_get (val);
         } else if (json_object_object_get_ex (dirent, "DIRVAL", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
@@ -861,8 +867,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = EISDIR;
                 goto done;
             }
-            val = vp;
-            isdir = true;
+            val = copydir (vp);
         } else if (json_object_object_get_ex (dirent, "FILEVAL", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
@@ -872,21 +877,18 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = ENOTDIR;
                 goto done;
             }
-            val = vp;
+            val = json_object_get (vp);
         } else if (json_object_object_get_ex (dirent, "LINKVAL", &vp)) {
             if (!(flags & KVS_PROTO_READLINK) || (flags & KVS_PROTO_READDIR)) {
                 errnum = EPROTO;
                 goto done;
             }
-            val = vp;
+            val = json_object_get (vp);
         } else
-            log_msg_exit ("%s: corrupt internal storage", __FUNCTION__);
+            log_msg_exit ("%s: corrupt dirent: %s", __FUNCTION__,
+                          Jtostr (dirent));
     }
-    /* val now contains the requested object */
-    if (isdir)
-        val = copydir (val);
-    else
-        json_object_get (val);
+    /* val now contains the requested object (copied) */
 done:
     *valp = val;
     if (errnum != 0)
