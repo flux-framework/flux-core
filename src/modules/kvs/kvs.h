@@ -43,6 +43,10 @@ int kvs_get_double (flux_t h, const char *key, double *valp);
 int kvs_get_boolean (flux_t h, const char *key, bool *valp);
 int kvs_get_symlink (flux_t h, const char *key, char **valp);
 
+/* Get treeobj associated with a key.  Caller must free.
+ */
+int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
+
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
  * value and again each time the value changes.

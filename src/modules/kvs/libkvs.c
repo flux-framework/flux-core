@@ -42,6 +42,7 @@
 #include <stdarg.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <json.h>
 
 #include "kvs_deprecated.h"
 #include "proto.h"
@@ -442,6 +443,24 @@ int kvs_get_symlink (flux_t h, const char *key, char **val)
     }
     if (val)
         *val = xstrdup (json_object_get_string (v));
+    rc = 0;
+done:
+    Jput (v);
+    return rc;
+}
+
+int kvs_get_treeobj (flux_t h, const char *key, char **val)
+{
+    JSON v = NULL;
+    const char *s;
+    int rc = -1;
+
+    if (getobj (h, key, KVS_PROTO_TREEOBJ, &v) < 0)
+        goto done;
+    if (val) {
+        s = json_object_to_json_string_ext (v, JSON_C_TO_STRING_PLAIN);
+        *val = xstrdup (s);
+    }
     rc = 0;
 done:
     Jput (v);
