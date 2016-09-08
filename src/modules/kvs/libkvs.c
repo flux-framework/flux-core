@@ -1650,48 +1650,14 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
 
 int kvs_copy (flux_t h, const char *from, const char *to)
 {
-    char *json_str = NULL;
-    kvsdir_t *dir = NULL;
-    kvsitr_t *itr = NULL;
-    const char *name;
-    char *linkval = NULL;
-    int rc = -1;
-
-    if (kvs_get_symlink (h, from, &linkval) == 0) {
-        if (kvs_symlink (h, to, linkval) < 0)
-            goto done;
-    } else if (kvs_get_dir (h, &dir, "%s", from) < 0) {
-        if (errno != ENOTDIR)
-            goto done;
-        if (kvs_get (h, from, &json_str) < 0)
-            goto done;
-        if (kvs_put (h, to, json_str) < 0)
-            goto done;
-    } else {
-        if (!(itr = kvsitr_create (dir)))
-            goto done;
-        (void)kvs_unlink (h, to);
-        while ((name = kvsitr_next (itr)) != NULL) {
-            char *newfrom = xasprintf ("%s.%s", from, name);
-            char *newto = xasprintf ("%s.%s", to, name);
-            int nrc = kvs_copy (h, newfrom, newto);
-            free (newfrom);
-            free (newto);
-            if (nrc < 0)
-                goto done;
-        }
+    JSON dirent;
+    if (getobj (h, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
+        return -1;
+    if (kvs_put_dirent (h, to, dirent) < 0) {
+        Jput (dirent);
+        return -1;
     }
-    rc = 0;
-done:
-    if (json_str)
-        free (json_str);
-    if (dir)
-        kvsdir_destroy (dir);
-    if (itr)
-        kvsitr_destroy (itr);
-    if (linkval)
-        free (linkval);
-    return rc;
+    return 0;
 }
 
 int kvs_move (flux_t h, const char *from, const char *to)
