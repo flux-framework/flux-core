@@ -64,6 +64,8 @@ void cmd_copy (flux_t h, int argc, char **argv);
 void cmd_move (flux_t h, int argc, char **argv);
 void cmd_dir (flux_t h, int argc, char **argv);
 void cmd_dirsize (flux_t h, int argc, char **argv);
+void cmd_get_treeobj (flux_t h, int argc, char **argv);
+void cmd_put_treeobj (flux_t h, int argc, char **argv);
 
 
 void usage (void)
@@ -89,6 +91,8 @@ void usage (void)
 "       flux-kvs wait            version\n"
 "       flux-kvs dropcache\n"
 "       flux-kvs dropcache-all\n"
+"       flux-kvs get-treeobj     key\n"
+"       flux-kvs put-treeobj     key=treeobj\n"
 );
     exit (1);
 }
@@ -158,6 +162,10 @@ int main (int argc, char *argv[])
         cmd_dir (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirsize"))
         cmd_dirsize (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "get-treeobj"))
+        cmd_get_treeobj (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "put-treeobj"))
+        cmd_put_treeobj (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -626,6 +634,33 @@ void cmd_move (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_move %s %s", argv[0], argv[1]);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
+}
+
+void cmd_get_treeobj (flux_t h, int argc, char **argv)
+{
+    char *treeobj = NULL;
+    if (argc != 1)
+        log_msg_exit ("get-treeobj: specify key");
+    if (kvs_get_treeobj (h, argv[0], &treeobj) < 0)
+        log_err_exit ("kvs_get_treeobj %s", argv[0]);
+    printf ("%s\n", treeobj);
+    free (treeobj);
+}
+
+void cmd_put_treeobj (flux_t h, int argc, char **argv)
+{
+    if (argc != 1)
+        log_msg_exit ("put-treeobj: specify key=val");
+    char *key = xstrdup (argv[0]);
+    char *val = strchr (key, '=');
+    if (!val)
+        log_msg_exit ("put-treeobj: you must specify a value as key=val");
+    *val++ = '\0';
+    if (kvs_put_treeobj (h, key, val) < 0)
+        log_err_exit ("kvs_put_treeobj %s=%s", key, val);
+    if (kvs_commit (h) < 0)
+        log_err_exit ("kvs_commit");
+
 }
 
 /*
