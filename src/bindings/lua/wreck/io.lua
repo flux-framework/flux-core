@@ -166,6 +166,11 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
             of:write (data)
         end
     }
+    if not iow then
+        self:log ("ignoring %s: %s", key, err)
+        -- remove reference count
+        f:close ()
+    end
 end
 
 --- "start" all ioplex iowatchers on reactor.
