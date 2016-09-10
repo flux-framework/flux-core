@@ -1285,7 +1285,14 @@ static int l_iowatcher_add (lua_State *L)
         iow = l_flux_ref_create (L, f, 2, "iowatcher");
         lua_push_kz (L, kz);
         lua_setfield (L, 2, "kz");
-        kz_set_ready_cb (kz, (kz_ready_f) iowatcher_kz_ready_cb, (void *) iow);
+        if (kz_set_ready_cb (kz, (kz_ready_f) iowatcher_kz_ready_cb,
+                             (void *) iow) < 0) {
+            int saved_errno = errno;
+            // closed by gc
+            l_flux_ref_destroy (iow, "iowatcher");
+            return lua_pusherror (L, "kz_set_ready_cb: %s",
+                                  (char *) flux_strerror (saved_errno));
+        }
 
         /*  Callback may have been called and we should not trust Lua
          *   stack. Get iowatcher again so we return correct iow object
