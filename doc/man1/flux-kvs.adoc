@@ -111,6 +111,22 @@ Tell the local KVS to drop any cache it is holding.
 Send an event across the comms session instructing all KVS instances
 to drop their caches.
 
+*copy* 'source' 'destination':: 
+Copy 'source' key to 'destination' key.  If a directory is copied, a new
+reference is created; it is unnecessary for *copy* to recurse into 'source'.
+
+*move* 'source' 'destination':: 
+Like *copy*, but 'source' is unlinked after the copy.
+
+*get-treeobj* 'key'::
+Retrieve the directory entry associated with 'key'.
+A treeobj should be treated as an opaque string value, which
+may contain spaces.
+
+*put-treeobj* 'key="treeobj"'::
+Associate a new treeobj with 'key', overwriting the previous treeobj,
+if any.  A treeobj should be treated as an opaque string value, which
+may contain spaces.
 
 AUTHOR
 ------

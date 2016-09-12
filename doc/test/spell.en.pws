@@ -322,3 +322,6 @@ appname
 maxlevel
 wireup
 hwm
+recurse
+treeobj
+unlinked
