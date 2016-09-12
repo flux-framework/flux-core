@@ -260,6 +260,7 @@ kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
 kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/kvs/proto.o \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_hashtest_SOURCES = kvs/hashtest.c

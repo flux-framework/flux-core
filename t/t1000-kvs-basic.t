@@ -282,6 +282,79 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
+test_expect_success 'kvs: get-treeobj: returns directory reference for root' '
+	flux kvs unlink $TEST &&
+	flux kvs get-treeobj . | grep -q "DIRREF"
+'
+
+test_expect_success 'kvs: get-treeobj: returns directory reference for directory' '
+	flux kvs unlink $TEST &&
+	flux kvs mkdir $TEST.a &&
+	flux kvs get-treeobj $TEST.a | grep -q "DIRREF"
+'
+
+test_expect_success 'kvs: get-treeobj: returns value for small value' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a=b &&
+	flux kvs get-treeobj $TEST.a | grep -q "FILEVAL"
+'
+
+test_expect_success 'kvs: get-treeobj: returns value ref for large value' '
+	flux kvs unlink $TEST &&
+	dd if=/dev/zero bs=4096 count=1 | flux kvs copy-tokvs $TEST.a - &&
+	flux kvs get-treeobj $TEST.a | grep -q "FILEREF"
+'
+
+test_expect_success 'kvs: get-treeobj: returns link value for symlink' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.X=42 &&
+	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
+	flux kvs get-treeobj $TEST.a.b.link | grep -q LINKVAL
+'
+
+test_expect_success 'kvs: put-treeobj: can make root snapshot' '
+	flux kvs unlink $TEST &&
+	flux kvs get-treeobj . >snapshot &&
+	flux kvs put-treeobj $TEST.snap="`cat snapshot`" &&
+	flux kvs get-treeobj $TEST.snap >snapshot.cpy
+	test_cmp snapshot snapshot.cpy
+'
+
+test_expect_success 'kvs: put-treeobj: clobbers destination' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a=42 &&
+	flux kvs get-treeobj . >snapshot2 &&
+	flux kvs put-treeobj $TEST.a="`cat snapshot2`" &&
+	! flux kvs get $TEST.a &&
+	flux kvs dir $TEST.a
+'
+
+test_expect_success 'kvs: put-treeobj: fails bad dirent: not JSON' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs put-treeobj $TEST.a=xyz
+'
+
+test_expect_success 'kvs: put-treeobj: fails bad dirent: unknown type' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs put-treeobj $TEST.a="{\"ERSTWHILE\":\"fubar\"}"
+'
+
+test_expect_success 'kvs: put-treeobj: fails bad dirent: bad link type' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs put-treeobj $TEST.a="{\"LINKVAL\":42}"
+'
+
+test_expect_success 'kvs: put-treeobj: fails bad dirent: bad ref type' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs put-treeobj $TEST.a="{\"DIRREF\":{}}"
+'
+
+test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs put-treeobj $TEST.a="{\"DIRREF\":\"sha2-aaa\"}" &&
+	test_must_fail flux kvs put-treeobj $TEST.a="{\"DIRREF\":\"sha1-bbb\"}"
+'
+
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
 	flux kvs put $TEST.dirsize.a=1 &&

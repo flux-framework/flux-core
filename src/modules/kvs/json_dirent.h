@@ -14,6 +14,8 @@ json_object *dirent_create (char *type, void *arg);
  */
 void dirent_append (json_object **array, const char *key, json_object *dirent);
 
+int dirent_validate (json_object *dirent);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

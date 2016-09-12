@@ -22,16 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* The kvs protocol needs substantial revision and documentation in an RFC.
- * In particular, the original protocol was designed with requests and
- * responses arranged as dictionaries that could ship multiple key-value
- * pairs, with "flags" added to the dictionary as special keys that begin
- * with ".flag_".  In practice we only do one key-value per request now.
- * This way of arranging JSON objects does not lend itself to documentation
- * using JSON Content Rules, or to concise use of the json-c API, as one
- * must use an iterator to walk the keys of the dictionary.
- */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -54,7 +44,7 @@
 /* kvs.get
  */
 
-JSON kp_tget_enc (const char *key, bool dir, bool link)
+JSON kp_tget_enc (const char *key, int flags)
 {
     JSON o = NULL;
 
@@ -63,90 +53,49 @@ JSON kp_tget_enc (const char *key, bool dir, bool link)
         goto done;
     }
     o = Jnew ();
-    json_object_object_add (o, key, NULL);
-    if (dir)
-        Jadd_bool (o, ".flag_directory", true);
-    if (link)
-        Jadd_bool (o, ".flag_readlink", true);
+    Jadd_str (o, "key", key);
+    Jadd_int (o, "flags", flags);
 done:
     return o;
 }
 
-int kp_tget_dec (JSON o, const char **key, bool *dir, bool *link)
+int kp_tget_dec (JSON o, const char **key, int *flags)
 {
-    json_object_iter iter;
     int rc = -1;
-    const char *k = NULL;
 
-    if (!o || !dir || !link || !key) {
+    if (!o || !key || !flags) {
         errno = EINVAL;
         goto done;
     }
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6))
-            continue;
-        if (k) {
-            errno = EPROTO;
-            goto done;
-        }
-        k = iter.key;
-    }
-    if (!k) {
+    if (!Jget_str (o, "key", key) || !Jget_int (o, "flags", flags)) {
         errno = EPROTO;
         goto done;
     }
-    *key = k;
-    *dir = false;
-    (void)Jget_bool (o, ".flag_directory", dir);
-    *link = false;
-    (void)Jget_bool (o, ".flag_readlink", link);
-
     rc = 0;
 done:
     return rc;
 }
 
-JSON kp_rget_enc (const char *key, JSON val)
+JSON kp_rget_enc (JSON val)
 {
     JSON o = NULL;
 
-    if (!key) {
-        errno = EINVAL;
-        goto done;
-    }
     o = Jnew ();
-    json_object_object_add (o, key, val);
-done:
+    json_object_object_add (o, "val", val);
     return o;
 }
 
 int kp_rget_dec (JSON o, JSON *val)
 {
-    json_object_iter iter;
     int rc = -1;
-    const char *k = NULL;
     JSON v = NULL;
 
     if (!o || !val) {
         errno = EINVAL;
         goto done;
     }
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6))
-            continue;
-        if (k) {
-            errno = EPROTO;
-            goto done;
-        }
-        k = iter.key;
-        v = iter.val;
-    }
-    if (!k) {
+    if (!(v = Jobj_get (o, "val"))) {
         errno = EPROTO;
-        goto done;
-    }
-    if (!v) {
-        errno = ENOENT;
         goto done;
     }
     *val = v;
@@ -158,8 +107,7 @@ done:
 /* kvs.watch
  */
 
-JSON kp_twatch_enc (const char *key, JSON val,
-                    bool once, bool first, bool dir, bool link)
+JSON kp_twatch_enc (const char *key, JSON val, int flags)
 {
     JSON o = NULL;
 
@@ -168,100 +116,49 @@ JSON kp_twatch_enc (const char *key, JSON val,
         goto done;
     }
     o = Jnew ();
-    json_object_object_add (o, key, val);
-    if (once)
-        Jadd_bool (o, ".flag_once", true);
-    if (first)
-        Jadd_bool (o, ".flag_first", true);
-    if (dir)
-        Jadd_bool (o, ".flag_directory", true);
-    if (link)
-        Jadd_bool (o, ".flag_readlink", true);
+    Jadd_str (o, "key", key);
+    json_object_object_add (o, "val", val);
+    Jadd_int (o, "flags", flags);
 done:
     return o;
 }
 
-int kp_twatch_dec (JSON o, const char **key, JSON *val,
-                   bool *once, bool *first, bool *dir, bool *link)
+int kp_twatch_dec (JSON o, const char **key, JSON *val, int *flags)
 {
-    json_object_iter iter;
     int rc = -1;
-    const char *k = NULL;
-    JSON v = NULL;
 
-    if (!o || !key || !val || !once || !first || !dir || !link) {
+    if (!o || !key || !val) {
         errno = EINVAL;
         goto done;
     }
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6))
-            continue;
-        if (k) {
-            errno = EPROTO;
-            goto done;
-        }
-        k = iter.key;
-        v = iter.val;
-    }
-    if (!k) {
+    if (!Jget_str (o, "key", key) || !Jget_int (o, "flags", flags)) {
         errno = EPROTO;
         goto done;
     }
-    *key = k;
-    *val = v;
-    *once = false;
-    (void)Jget_bool (o, ".flag_once", once);
-    *first = false;
-    (void)Jget_bool (o, ".flag_first", first);
-    *dir = false;
-    (void)Jget_bool (o, ".flag_directory", dir);
-    *link = false;
-    (void)Jget_bool (o, ".flag_readlink", link);
+    *val = Jobj_get (o, "val"); /* may be NULL */
     rc = 0;
 done:
     return rc;
 }
 
-JSON kp_rwatch_enc (const char *key, JSON val)
+JSON kp_rwatch_enc (JSON val)
 {
     JSON o = NULL;
 
-    if (!key) {
-        errno = EINVAL;
-        goto done;
-    }
     o = Jnew ();
-    json_object_object_add (o, key, val);
-done:
+    json_object_object_add (o, "val", val);
     return o;
 }
 
 int kp_rwatch_dec (JSON o, JSON *val)
 {
-    json_object_iter iter;
     int rc = -1;
-    const char *k = NULL;
-    JSON v = NULL;
 
     if (!o || !val) {
         errno = EINVAL;
         goto done;
     }
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6))
-            continue;
-        if (k) {
-            errno = EPROTO;
-            goto done;
-        }
-        k = iter.key;
-        v = iter.val;
-    }
-    if (!k) {
-        errno = EPROTO;
-        goto done;
-    }
-    *val = v; /* don't convert NULL to ENOENT */
+    *val = Jobj_get (o, "val"); /* may be NULL */
     rc = 0;
 done:
     return rc;

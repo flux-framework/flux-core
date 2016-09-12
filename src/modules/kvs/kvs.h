@@ -43,6 +43,10 @@ int kvs_get_double (flux_t h, const char *key, double *valp);
 int kvs_get_boolean (flux_t h, const char *key, bool *valp);
 int kvs_get_symlink (flux_t h, const char *key, char **valp);
 
+/* Get treeobj associated with a key.  Caller must free.
+ */
+int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
+
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
  * value and again each time the value changes.
@@ -90,6 +94,10 @@ int kvs_put_int (flux_t h, const char *key, int val);
 int kvs_put_int64 (flux_t h, const char *key, int64_t val);
 int kvs_put_double (flux_t h, const char *key, double val);
 int kvs_put_boolean (flux_t h, const char *key, bool val);
+
+/* As above but associate a preconstructed treeobj with key.
+ */
+int kvs_put_treeobj (flux_t h, const char *key, const char *treeobj);
 
 /* An iterator interface for walking the list of names in a kvsdir_t
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.

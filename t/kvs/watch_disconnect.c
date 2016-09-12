@@ -7,6 +7,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/modules/kvs/proto.h"
 
 /* Current kvs_watch() API doesn't accept a rank, so we cheat and
  * build the minimal kvs.watch request message from scratch here.
@@ -16,12 +17,12 @@
  */
 void send_watch_requests (flux_t h, const char *key)
 {
-    JSON in = Jnew ();
+    JSON in;
     flux_rpc_t *r;
     const char *json_str;
 
-    json_object_object_add (in, "noexist", NULL);
-    Jadd_bool (in, ".flag_first", true);
+    if (!(in = kp_twatch_enc (key, NULL, KVS_PROTO_FIRST)))
+        log_err_exit ("kp_twatch_enc");
     if (!(r = flux_rpc_multi (h, "kvs.watch", Jtostr (in), "all", 0)))
         log_err_exit ("flux_rpc_multi kvs.watch");
     while (!flux_rpc_completed (r)) {
