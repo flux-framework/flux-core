@@ -13,6 +13,14 @@ type_ok (f, 'userdata', "create new flux handle")
 is (err, nil, "error is nil")
 
 local dir = f:kvsdir()
+dir['simpleval'] = "xxx"
+dir:commit()
+local iow, err = f:iowatcher {
+    key = "simpleval",
+    handler = function (iow, lines) end
+}
+is (iow, nil, "iowatcher returns error correctly")
+
 dir['iowatcher'] = nil
 dir:commit()
 

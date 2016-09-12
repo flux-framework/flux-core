@@ -147,6 +147,27 @@ is (n, #keys, "keys() iterator returned correct number of keys")
 
 -- KVS watcher creation
 
+-- kvswatch on directory should fail:
+f:kvs_put ("testdir.value", 42)
+f:kvs_commit ()
+local kw, err = f:kvswatcher {
+    key = "testdir",
+    handler = function () end
+}
+is (kw, nil, 'Error expected with kvswatch on directory')
+is (err, "Is a directory", 'Error message matches')
+
+local kw, err = f:kvswatcher {
+    key = "testdir",
+    isdir = true,
+    handler = function (kw, result)
+        type_ok (result, 'userdata', "result is kvsdir")
+        is (result.value, 42, "directory contents are as expected")
+    end
+}
+type_ok (kw, 'userdata', "f:kvswatcher with isdir kvswatcher object")
+is (err, nil, "no error from kvswatcher with isdir")
+
 -- Force creation of new handle and reactor here so that
 --  reactor time is guaranteed to be updated, and our timeout
 --  used below is relative to now and not last active reactor time.

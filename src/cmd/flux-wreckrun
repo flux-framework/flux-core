@@ -214,6 +214,7 @@ local kw, err = f:kvswatcher  {
         end
     end
 }
+if not kw then wreck:die ("kvs watch: %s\n", err) end
 
 
 --if wreck:getopt ("i") then
@@ -277,13 +278,14 @@ if not wreck.opts.w then
   --
   --  Add a file descriptor iowatcher for this script's stdin:
   --
-  f:iowatcher {
+  local iow, err = f:iowatcher {
     fd = posix.fileno (io.input()),
     handler = function (iow, data)
         if data.data then kz:write (data.data) end
         if data.eof  then kz:close ()          end
     end
   }
+  if not iow then wreck:die ("error opening stdin: %s\n", err) end
 end
 
 log, err = logstream {
