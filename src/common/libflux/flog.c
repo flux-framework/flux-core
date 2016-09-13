@@ -62,11 +62,13 @@ static void freectx (void *arg)
 static logctx_t *getctx (flux_t h)
 {
     logctx_t *ctx = (logctx_t *)flux_aux_get (h, "flux::log");
+    extern char *__progname;
+    // or glib-ism: program_invocation_short_name
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
-        snprintf (ctx->appname, sizeof (ctx->appname), "%s", STDLOG_NILVALUE);
         snprintf (ctx->procid, sizeof (ctx->procid), "%d", getpid ());
+        snprintf (ctx->appname, sizeof (ctx->appname), "%s", __progname);
         flux_aux_set (h, "flux::log", ctx, freectx);
     }
     return ctx;
