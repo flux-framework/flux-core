@@ -1,4 +1,3 @@
-/* adapted for TAP from plan9 style tests provided with libveb */
 #include <string.h>
 #include <stdlib.h>
 #include "src/common/libtap/tap.h"
@@ -414,9 +413,76 @@ void full_succ_load_test2 (void)
     free(T.D);
 }
 
+void Tset (Veb veb, uint from, uint to, uint value)
+{
+    while (from < to) {
+        if (value)
+            vebput (veb, from);
+        else
+            vebdel (veb, from);
+        from++;
+    }
+}
+
+uint Tisset (Veb veb, uint from, uint to, uint value)
+{
+    while (from < to) {
+        if (vebsucc (veb, from) == from) {
+            if (!value)
+                goto done;
+        } else {
+            if (value)
+                goto done;
+        }
+        from++;
+    }
+done:
+    return from;
+}
+
+void test_full_init (void)
+{
+    int i;
+    uint pos;
+    for (i = 0; i < 20; i++) {
+        uint size = 1UL<<i;
+        Veb T = vebnew (size, 1);
+        if (!T.D)
+            BAIL_OUT ("out of memory");
+        pos = Tisset (T, 0, size, 1);
+        if (pos < size)
+            diag ("bit %u for size %u not expected value", pos, size);
+        ok (pos == size,
+            "%s: %u all set", __FUNCTION__, size);
+        free (T.D);
+    }
+}
+
+void test_empty_init (void)
+{
+    int i;
+    uint pos;
+    for (i = 0; i < 20; i++) {
+        uint size = 1UL<<i;
+        Veb T = vebnew (size, 0);
+        if (!T.D)
+            BAIL_OUT ("out of memory");
+        pos = Tisset (T, 0, size, 0);
+        if (pos < size)
+            diag ("bit %u for size %u not expected value", pos, size);
+        ok (pos == size,
+            "%s: %u all clear", __FUNCTION__, size);
+        free (T.D);
+    }
+}
+
 int main(int argc, char** argv)
 {
     plan (NO_PLAN);
+
+    /* Plan9 style tests provided with libveb,
+     * adapted for TAP.
+     */
 
     empty_pred_test1();
     empty_pred_test2();
@@ -435,6 +501,11 @@ int main(int argc, char** argv)
     full_succ_test1();
     full_succ_load_test1();
     full_succ_load_test2();
+
+    /* Tests added for Flux.
+     */
+    test_empty_init ();
+    test_full_init ();
 
     done_testing();
 }
