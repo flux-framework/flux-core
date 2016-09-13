@@ -30,6 +30,7 @@ class RPC(WrapperPimpl):
           handle = lib.flux_rpc_multi(flux_handle, topic, payload, nodeid, flags)
         else:
           handle = lib.flux_rpc(flux_handle, topic, payload, nodeid, flags)
+      self.destroyer = flux_handle.flux_rpc_destroy()
 
       
       super(self.__class__, self).__init__(ffi, lib, 
@@ -39,10 +40,13 @@ class RPC(WrapperPimpl):
                                          'flux_rpc_',
                                          ],
                                        )
+    def cleanup(self):
+        if (not self.external) and self.handle is not None:
+            self.destroyer(self.handle)
+            self.handle = None
+
     def __del__(self):
-      pass
-      # if not self.external and self.handle is not None:
-      #   lib.flux_rpc_destroy(self.handle)
+        self.cleanup()
 
   def __init__(self,
                flux_handle,
@@ -57,6 +61,12 @@ class RPC(WrapperPimpl):
         nodeid,
         flags,
         handle)
+
+  def __enter__(self):
+      return self
+
+  def __exit__(self):
+      self.pimpl.cleanup()
 
   def check(self):
     return bool(self.pimpl.check())
