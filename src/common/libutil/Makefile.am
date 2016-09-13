@@ -86,7 +86,8 @@ TESTS = test_nodeset.t \
 	test_kary.t \
 	test_cronodate.t \
 	test_wallclock.t \
-	test_stdlog.t
+	test_stdlog.t \
+	test_veb.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -153,3 +154,7 @@ test_wallclock_t_LDADD = $(test_ldadd)
 test_stdlog_t_SOURCES = test/stdlog.c
 test_stdlog_t_CPPFLAGS = $(test_cppflags)
 test_stdlog_t_LDADD = $(test_ldadd)
+
+test_veb_t_SOURCES = test/veb.c
+test_veb_t_CPPFLAGS = $(test_cppflags)
+test_veb_t_LDADD = $(test_ldadd)
