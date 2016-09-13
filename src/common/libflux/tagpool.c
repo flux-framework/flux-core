@@ -62,6 +62,9 @@ struct tagpool {
     int             reg_avail;
     Veb             G;
     int             group_avail;
+    tagpool_grow_f  grow_cb;
+    void            *grow_arg;
+    int             grow_depth;
 };
 
 static void pool_set (Veb veb, uint32_t from, uint32_t to, uint8_t value)
@@ -109,14 +112,32 @@ void tagpool_destroy (struct tagpool *t)
     }
 }
 
-static uint32_t alloc_with_resize (Veb *veb, uint32_t max)
+void tagpool_set_grow_cb (struct tagpool *t, tagpool_grow_f cb, void *arg)
 {
-    uint32_t oldsize = veb->M;
-    uint32_t newsize = oldsize << 1;
-    uint32_t tag = vebsucc (*veb, 0);
+    t->grow_cb = cb;
+    t->grow_arg = arg;
+}
+
+static uint32_t alloc_with_resize (struct tagpool *t, int flags)
+{
+    Veb *veb = &t->R;
+    uint32_t max = TAGPOOL_COUNT_REGULAR;
+    uint32_t oldsize, newsize, tag;
+
+    if ((flags & TAGPOOL_FLAG_GROUP)) {
+        veb = &t->G;
+        max = TAGPOOL_COUNT_GROUP;
+    }
+    oldsize = veb->M;
+    newsize = oldsize << 1;
+    tag = vebsucc (*veb, 0);
 
     if (tag == veb->M && newsize <= max) {
-        //log_msg ("%s: resizing pool %u to %u", __FUNCTION__, oldsize, newsize);
+        if (t->grow_cb && t->grow_depth == 0) {
+            t->grow_depth++;
+            t->grow_cb (t->grow_arg, oldsize, newsize, flags);
+            t->grow_depth--;
+        }
         Veb new = vebnew (newsize, 0);
         if (new.D) {
             pool_set (new, oldsize, newsize, 1);
@@ -137,13 +158,13 @@ uint32_t tagpool_alloc (struct tagpool *t, int flags)
     uint32_t tag;
 
     if ((flags & TAGPOOL_FLAG_GROUP)) {
-        tag = alloc_with_resize (&t->G, TAGPOOL_COUNT_GROUP);
+        tag = alloc_with_resize (t, TAGPOOL_FLAG_GROUP);
         if (tag < t->G.M) {
             t->group_avail--;
             return tag<<FLUX_MATCHTAG_GROUP_SHIFT;
         }
     } else {
-        tag = alloc_with_resize (&t->R, TAGPOOL_COUNT_REGULAR);
+        tag = alloc_with_resize (t, 0);
         if (tag < t->R.M) {
             t->reg_avail--;
             return tag;

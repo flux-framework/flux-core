@@ -12,6 +12,9 @@ void tagpool_destroy (struct tagpool *t);
 uint32_t tagpool_alloc (struct tagpool *t, int flags);
 void tagpool_free (struct tagpool *t, uint32_t matchtag);
 
+typedef void (*tagpool_grow_f)(void *arg, uint32_t oldsize, uint32_t newsize, int flags);
+void tagpool_set_grow_cb (struct tagpool *t, tagpool_grow_f cb, void *arg);
+
 enum {
     TAGPOOL_ATTR_REGULAR_SIZE,
     TAGPOOL_ATTR_REGULAR_AVAIL,

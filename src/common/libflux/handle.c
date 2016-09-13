@@ -44,6 +44,7 @@
 #include "message.h"
 #include "tagpool.h"
 #include "dispatch.h" // for flux_sleep_on ()
+#include "flog.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/msglist.h"
@@ -84,6 +85,8 @@ struct flux_handle_struct {
     struct profiling_context prof;
 #endif
 };
+
+void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags);
 
 #if HAVE_CALIPER
 void profiling_context_init (struct profiling_context* prof)
@@ -358,6 +361,7 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->impl = impl;
     if (!(h->tagpool = tagpool_create ()))
         goto nomem;
+    tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
     if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         goto nomem;
     h->pollfd = -1;
@@ -470,6 +474,13 @@ void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs)
 void flux_clr_msgcounters (flux_t h)
 {
     memset (&h->msgcounters, 0, sizeof (h->msgcounters));
+}
+
+void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags)
+{
+    flux_t h = arg;
+    flux_log (h, LOG_INFO, "tagpool-%s expanded from %u to %u entries",
+              (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal", old, new);
 }
 
 uint32_t flux_matchtag_alloc (flux_t h, int flags)
