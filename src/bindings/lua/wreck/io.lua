@@ -169,7 +169,7 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     if not iow then
         self:log ("ignoring %s: %s", key, err)
         -- remove reference count
-        f:close ()
+        of:close ()
     end
 end
 
