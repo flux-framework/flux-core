@@ -5,6 +5,9 @@ import inspect
 import cffi
 from types import MethodType
 
+import traceback
+
+
 
 class MissingFunctionError(Exception):
     def __init__(self, name, c_name, name_list, arguments):
@@ -53,8 +56,6 @@ class ErrorPrinter(object):
 # A do-nothing class for checking for composition-based wrappers that offer a
 # handle attribute
 class WrapperBase(object):
-    __slots__ = ['_handle']
-
     def __init__(self):
         self._handle = None
 
@@ -68,8 +69,6 @@ class WrapperBase(object):
 
 
 class WrapperPimpl(WrapperBase):
-    __slots__ = ['pimpl']
-
     @property
     def handle(self):
         return self.pimpl.handle
@@ -78,21 +77,28 @@ class WrapperPimpl(WrapperBase):
     def handle(self, handle):
         self.pimpl.handle = handle
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type_arg, value, tb):
+        self.pimpl.__exit__(type_arg, value, tb)
 
 class WrongNumArguments(ValueError):
-    def __init__(self, name, signature, ftype, arguments):
+    def __init__(self, name, signature, ftype, arguments, htype):
         message = """
 The wrong number of arguments has been passed to wrapped C function:
 Expected {expected} arguments, received {received}
 Name: {name}
 C signature: {c_type}
 Arguments: {arguments}
+Handle type: {htype}
           """.format(
             name=name,
             c_type=signature,
             arguments=arguments,
             expected=len(ftype.args),
-            received=len(arguments), )
+            received=len(arguments),
+            htype=htype)
         super(WrongNumArguments, self).__init__(message)
 
 
@@ -159,7 +165,8 @@ class FunctionWrapper(object):
             if len(self.function_type.args) != len(args):
                 raise WrongNumArguments(self.name,
                                         self.ffi.getctype(self.function_type),
-                                        self.function_type, args)
+                                        self.function_type, args,
+                                        self.ffi.typeof(calling_object.handle) if calling_object.handle else "None")
             for i in self.arg_trans:
                 if args[i] is None:
                     args[i] = calling_object.ffi.NULL
@@ -186,6 +193,7 @@ class FunctionWrapper(object):
         return result
 
 
+
 class Wrapper(WrapperBase):
     """
     Forms a wrapper around an interface that dynamically searches for undefined
@@ -193,34 +201,28 @@ class Wrapper(WrapperBase):
     is found in the signature of an un-specified target function.
     """
 
-    __slots__ = [
-        'ffi',
-        'lib',
-        #'handle', # inherited from WrapperBase as _handle, wrapped by prop
-        'match',
-        'filter_match',
-        'prefixes',
-        'NULL',
-    ]
-
     def __init__(self, ffi, lib,
                  handle=None,
                  match=None,
                  filter_match=True,
-                 prefixes=[], ):
+                 prefixes=[],
+                 destructor=None, ):
+        self._handle = None
         super(Wrapper, self).__init__()
 
         self.ffi = ffi
         self.lib = lib
-        self.handle = handle
+        self._handle = handle
         self.match = match
         self.filter_match = filter_match
         self.prefixes = prefixes
+        self.destructor = destructor
 
         self.NULL = ffi.NULL
+        self.initialized = True
 
     def check_handle(self, name, t):
-        if self.match is not None and self.handle is not None:
+        if self.match is not None and self._handle is not None:
             if t.kind == 'function' and t.args[
                 0
             ] == self.match:  #first argument is of handle type
@@ -240,24 +242,25 @@ class Wrapper(WrapperBase):
 
     def __getattr__(self, name):
         fun = None
+        llib = self.__getattribute__("lib")
         if re.match('__.*__', name):
           # This is a python internal name, skip it
           raise AttributeError
         #try it bare
         try:
-            fun = getattr(self.lib, name)
+            fun = getattr(llib, name)
         except AttributeError:
             for prefix in self.prefixes:
                 try:
                     #wrap it
-                    fun = getattr(self.lib, prefix + name)
+                    fun = getattr(llib, prefix + name)
                     break
                 except AttributeError:
                     pass
         if fun is None:
             # Return a proxy class to generate a good error on call
             setattr(self.__class__, name, ErrorPrinter(name, self.prefixes))
-            return getattr(self, name)
+            return self.__getattribute__(name)
 
         if not callable(fun): # pragma: no cover
           return fun
@@ -266,4 +269,37 @@ class Wrapper(WrapperBase):
         new_method = MethodType(new_fun, None, self.__class__)
         # Store the wrapper function into the class to prevent a second lookup
         setattr(self.__class__, name, new_method)
-        return getattr(self, name)
+        return self.__getattribute__(name)
+
+    def __clear(self):
+        # avoid recursion
+        if not self.initialized:
+            return
+        h = self._handle
+        if h is None:
+            return
+        if self.destructor is None:
+            return
+        self.destructor(h)
+        # ensure we don't double destruct
+        self._handle = None
+
+    @property
+    def handle(self):
+        return self._handle
+
+    @handle.setter
+    def handle(self, h):
+        """ Override handle setter to clean up old handle if requested """
+        if self._handle is not None:
+            self.__clear()
+        self._handle = h
+
+    def __del__(self):
+        self.__clear()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type_arg, value, tb):
+        self.__clear()

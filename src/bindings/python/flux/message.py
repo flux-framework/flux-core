@@ -15,13 +15,7 @@ class Message(WrapperPimpl):
         def __init__(self,
                      type_id=flux.FLUX_MSGTYPE_REQUEST,
                      handle=None,
-                     destruct=False):
-            self.destruct = destruct
-            if handle is None:
-                self.external = False
-                handle = raw.flux_msg_create(type_id)
-            else:
-                self.external = True
+                     destruct=False,):
             super(self.__class__, self).__init__(
                 ffi, lib,
                 handle=handle,
@@ -29,17 +23,16 @@ class Message(WrapperPimpl):
                 prefixes=[
                     'flux_msg_',
                     'FLUX_MSG',
-                ], )
+                ],
+                destructor=raw.flux_msg_destroy if destruct else None,)
+            if handle is None:
+                self.handle = raw.flux_msg_create(type_id)
 
-        def __del__(self):
-            if ((not self.external or self.destruct) and
-                self.handle is not None and self.handle != ffi.NULL):
-                raw.flux_msg_destroy(self.handle)
 
     def __init__(self,
                  type_id=flux.FLUX_MSGTYPE_REQUEST,
                  handle=None,
-                 destruct=False):
+                 destruct=False,):
         self.pimpl = self.InnerWrapper(type_id, handle, destruct)
 
     @property

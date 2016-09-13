@@ -31,7 +31,9 @@ class TestWrapper(unittest.TestCase):
         core.Flux('loop://').rpc_create('topic').pimpl.flux_request_encode('request', 15)
 
     def test_set_pimpl_handle(self):
-        core.Flux('loop://').rpc_create('topic').handle = 17
+      f = core.Flux('loop://')
+      r = f.rpc_create('topic')
+      r.handle = f.rpc_create("other topic")
 
     def test_read_basic_value(self):
       self.assertGreater(flux.core.inner.raw.FLUX_NODEID_ANY, 0)

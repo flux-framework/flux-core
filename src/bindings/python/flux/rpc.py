@@ -1,5 +1,5 @@
 from flux.wrapper import Wrapper, WrapperPimpl
-from flux._core import ffi, lib
+from flux.core.inner import ffi, lib, raw
 import flux
 import json
 
@@ -13,10 +13,17 @@ class RPC(WrapperPimpl):
                  nodeid=flux.FLUX_NODEID_ANY,
                  flags=0,
                  handle=None):
-      self.external = False
-      if handle is not None:
-        self.external = True
-      else:
+      # hold a reference for destructor ordering
+      self.fh = flux_handle
+      super(self.__class__, self).__init__(ffi, lib,
+                                       handle=handle,
+                                       match=ffi.typeof(lib.flux_rpc).result,
+                                       prefixes=[
+                                         'flux_rpc_',
+                                         ],
+                                       destructor=raw.flux_rpc_destroy,
+                                       )
+      if handle is None:
         if isinstance(flux_handle, Wrapper):
           flux_handle = flux_handle.handle
 
@@ -27,26 +34,9 @@ class RPC(WrapperPimpl):
 
         if isinstance(nodeid, basestring):
           # String version is multiple nodeids
-          handle = lib.flux_rpc_multi(flux_handle, topic, payload, nodeid, flags)
+          self.handle = lib.flux_rpc_multi(flux_handle, topic, payload, nodeid, flags)
         else:
-          handle = lib.flux_rpc(flux_handle, topic, payload, nodeid, flags)
-      self.destroyer = flux_handle.flux_rpc_destroy()
-
-      
-      super(self.__class__, self).__init__(ffi, lib, 
-                                       handle=handle,
-                                       match=ffi.typeof(lib.flux_rpc).result,
-                                       prefixes=[
-                                         'flux_rpc_',
-                                         ],
-                                       )
-    def cleanup(self):
-        if (not self.external) and self.handle is not None:
-            self.destroyer(self.handle)
-            self.handle = None
-
-    def __del__(self):
-        self.cleanup()
+          self.handle = lib.flux_rpc(flux_handle, topic, payload, nodeid, flags)
 
   def __init__(self,
                flux_handle,
@@ -61,12 +51,6 @@ class RPC(WrapperPimpl):
         nodeid,
         flags,
         handle)
-
-  def __enter__(self):
-      return self
-
-  def __exit__(self):
-      self.pimpl.cleanup()
 
   def check(self):
     return bool(self.pimpl.check())

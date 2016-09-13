@@ -29,14 +29,6 @@ class Flux(Wrapper):
   """
 
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
-        self.external = True
-        self.handle = None
-        self.closer = raw.flux_close
-
-        if handle is None:
-            handle = raw.flux_open(url, flags)
-            self.external = False
-
         super(self.__class__, self).__init__(
             ffi, lib,
             handle=handle,
@@ -45,24 +37,11 @@ class Flux(Wrapper):
             prefixes=[
                 'flux_',
                 'FLUX_',
-            ], )
+            ],
+            destructor = raw.flux_close,)
 
-    def close(self):
-        if not self.external and self.handle is not None:
-            self.closer(self.handle)
-            self.handle = None
-
-    def __del__(self):
-        self.close()
-
-    def __enter__(self):
-        """Allow this to be used as a context manager"""
-        return self
-
-    def __exit__(self, type_arg, value, tb):
-        """Allow this to be used as a context manager"""
-        self.close()
-        return False
+        if handle is None:
+            self.handle = raw.flux_open(url, flags)
 
     def log(self, level, fstring):
         """Log to the flux logging facility
@@ -101,8 +80,8 @@ class Flux(Wrapper):
                  nodeid=flux.FLUX_NODEID_ANY,
                  flags=0):
         """ Create and send an RPC in one step """
-        r = RPC(self, topic, payload, nodeid, flags)
-        return r.get()
+        with RPC(self, topic, payload, nodeid, flags) as r:
+            return r.get()
 
     def rpc_create(self, topic,
                    payload=None,
