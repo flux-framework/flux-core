@@ -18,22 +18,42 @@ int main (int argc, char *argv[])
 
     /* Test regular
      */
+    tags[0] = tagpool_alloc (t, 0);
+    ok (tags[0] == 1,
+        "regular: allocated first tag");
+    tags[1] = tagpool_alloc (t, 0);
+    ok (tags[1] == 2,
+        "regular: allocated second tag");
+    tagpool_free (t, tags[0]);
+    tags[2] = tagpool_alloc (t, 0);
+    ok (tags[2] == 1,
+        "regular: got first tag again after it was freed");
+    tagpool_free (t, tags[1]);
+    tags[3] = tagpool_alloc (t, 0);
+    ok (tags[3] == 2,
+        "regular: got second tag again after it was freed");
+    tagpool_free (t, tags[2]);
+    tagpool_free (t, tags[3]);
 
     norm_size = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_SIZE);
     avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
     ok (avail == norm_size,
-        "regular: all tags available (%d/%d)", avail, norm_size);
+        "regular: all tags available");
 
+    ok (avail >= 256,
+        "regular: at least 256 tags available");
     for (i = 0; i < 256; i++) {
         tags[i] = tagpool_alloc (t, 0);
         if (tags[i] == FLUX_MATCHTAG_NONE)
             break;
     }
     ok (i == 256,
-        "regular: tagpool_alloc worked %d/256 times", i);
+        "regular: tagpool_alloc worked 256 times");
     avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
+    if (avail != norm_size - 256)
+        diag ("wrong number avail: %u of %u", avail, norm_size);
     ok (avail == norm_size - 256,
-        "regular: pool depleted by 256 (%d)", norm_size - avail);
+        "regular: pool depleted by 256");
 
     duplicates = 0;
     for (j = 0; j < i; j++) {
@@ -42,7 +62,7 @@ int main (int argc, char *argv[])
                 duplicates++;
     }
     ok (duplicates == 0,
-        "regular: allocated tags contain no duplicates (%d)", duplicates);
+        "regular: allocated tags contain no duplicates");
 
     while (--i >= 0)
         tagpool_free (t, tags[i]);
@@ -54,7 +74,7 @@ int main (int argc, char *argv[])
     while (tagpool_alloc (t, 0) != FLUX_MATCHTAG_NONE)
         count++;
     ok (count == norm_size,
-        "regular: tagpool_alloc returns FLUX_MATCHTAG_NONE eventually (%d)", count);
+        "regular: entire pool allocated by tagpool_alloc loop");
     avail = tagpool_getattr (t, TAGPOOL_ATTR_REGULAR_AVAIL);
     ok (avail == 0,
         "regular: pool is exhausted");
@@ -65,17 +85,19 @@ int main (int argc, char *argv[])
     grp_size = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_SIZE);
     avail = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL);
     ok (avail == grp_size,
-        "group: all tags available (%d/%d)", avail, grp_size);
+        "group: all tags available");
 
+    ok (avail >= 256,
+        "regular: at least 256 tags available");
     for (i = 0; i < 256; i++) {
         tags[i] = tagpool_alloc (t, TAGPOOL_FLAG_GROUP);
         if (tags[i] == FLUX_MATCHTAG_NONE)
             break;
     }
     ok (i == 256,
-        "group: tagpool_alloc worked 256 times (%d)", i);
+        "group: tagpool_alloc worked 256 times", i);
     ok (tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL) == grp_size - 256,
-        "group: pool depleted by 256 (%d)", grp_size - avail);
+        "group: pool depleted by 256");
 
     duplicates = 0;
     for (j = 0; j < i; j++) {
@@ -84,7 +106,7 @@ int main (int argc, char *argv[])
                 duplicates++;
     }
     ok (duplicates == 0,
-        "group: allocated tags contain no duplicates (%d)", duplicates);
+        "group: allocated tags contain no duplicates");
 
     while (--i >= 0)
         tagpool_free (t, tags[i]);
@@ -96,7 +118,7 @@ int main (int argc, char *argv[])
     while (tagpool_alloc (t, TAGPOOL_FLAG_GROUP) != FLUX_MATCHTAG_NONE)
         count++;
     ok (count == grp_size,
-        "group: tagpool_alloc returns FLUX_MATCHTAG_NONE eventually (%d)", count);
+        "group: entire poool allocated by tagpool_alloc loop");
     avail = tagpool_getattr (t, TAGPOOL_ATTR_GROUP_AVAIL);
     ok (avail == 0,
         "group: pool is exhausted");
