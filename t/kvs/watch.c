@@ -184,6 +184,7 @@ void usage (void)
 "              selfmod    key\n"
 "              unwatch    key\n"
 "              unwatchloop key\n"
+"              simulwatch key ntimes\n"
 );
     exit (1);
 
@@ -407,6 +408,40 @@ void test_unwatchloop (int argc, char **argv)
     flux_close (h);
 }
 
+static int simulwatch_cb (const char *key, int val, void *arg, int errnum)
+{
+    int *count = arg;
+    (*count)++;
+    return 0;
+}
+
+void test_simulwatch (int argc, char **argv)
+{
+    int i, max;
+    const char *key;
+    flux_t h;
+    int count = 0;
+
+    if (argc != 2) {
+        fprintf (stderr, "Usage: simulwatch key count\n");
+        exit (1);
+    }
+    key = argv[0];
+    max = strtoul (argv[1], NULL, 10);
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    for (i = 0; i < max; i++) {
+        if (kvs_watch_int (h, key, simulwatch_cb, &count) < 0)
+            log_err_exit ("kvs_watch_int[%d] %s", i, key);
+        if ((i % 1024 == 0 && i > 0) || i == max - 1 )
+            log_msg ("kvs_watch_int[%d]", i); // show progress
+    }
+    if (count != max)
+        log_msg_exit ("callback called %d not %d times", count, max);
+    log_msg ("callback called %d times", count);
+    flux_close (h);
+}
+
 int main (int argc, char *argv[])
 {
     char *cmd;
@@ -425,6 +460,8 @@ int main (int argc, char *argv[])
         test_unwatch (argc - 2, argv + 2);
     else if (!strcmp (cmd, "unwatchloop"))
         test_unwatchloop (argc - 2, argv + 2);
+    else if (!strcmp (cmd, "simulwatch"))
+        test_simulwatch (argc - 2, argv + 2);
     else
         usage ();
 
