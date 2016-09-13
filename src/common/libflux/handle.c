@@ -491,8 +491,11 @@ uint32_t flux_matchtag_alloc (flux_t h, int flags)
     if ((flags & FLUX_MATCHTAG_GROUP))
         tpflags |= TAGPOOL_FLAG_GROUP;
     tag = tagpool_alloc (h->tagpool, tpflags);
-    if (tag == FLUX_MATCHTAG_NONE)
+    if (tag == FLUX_MATCHTAG_NONE) {
+        flux_log (h, LOG_ERR, "tagpool-%s temporarily out of tags",
+                  (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal");
         errno = EBUSY; /* appropriate error? */
+    }
     return tag;
 }
 
