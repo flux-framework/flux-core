@@ -632,22 +632,63 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
+/* If any ops in f1 have the same key as an op in f2,
+ * and different dirents, the commits cannot be merged.
+ */
+bool commit_merge_conflict (fence_t *f1, fence_t *f2)
+{
+    int l1, l2, i, j;
+    json_object *op1, *op2;
+    json_object *dirent1, *dirent2;
+    const char *key1, *key2;
+
+    if (!Jget_ar_len (f1->ops, &l1) || !Jget_ar_len (f1->ops, &l2))
+        goto nomerge;
+    for (i = 0; i < l1; i++) {
+        if (!(op1 = json_object_array_get_idx (f1->ops, i))
+                        || !Jget_str (op1, "key", &key1))
+            goto nomerge;
+        for (j = 0; j < l2; j++) {
+            if (!(op2 = json_object_array_get_idx (f2->ops, j))
+                            || !Jget_str (op2, "key", &key2))
+                goto nomerge;
+            if (!strcmp (key1, key2)) {
+                if (!Jget_obj (op1, "dirent", &dirent1))
+                    dirent1 = NULL; /* unlink */
+                if (!Jget_obj (op2, "dirent", &dirent2))
+                    dirent2 = NULL; /* unlink */
+                /* N.B. dirent_match() can return false negatives.
+                 * If that happens, we don't merge which is always safe.
+                 */
+                if (!dirent_match (dirent1, dirent2))
+                    goto nomerge;
+            }
+        }
+    }
+    return false;
+nomerge:
+    return true;
+}
+
 /* Merge ready commits, where merging consists of popping the "donor"
  * commit off the ready list, and appending its ops to the top commit.
  * The top commit can be appended to if it hasn't started, or is still
  * building the rootcpy, e.g. stalled walking the namespace.
+ * N.B. avoid merging commits that modify the same key, otherwise
+ * watchers, which are driven by kvs.setroot events, may may miss versions.
  */
 void commit_merge_all (ctx_t *ctx)
 {
     fence_t *f = zlist_first (ctx->ready);
 
     if (f && f->errnum == 0 && !f->rootcpy_stored) {
+        (void)zlist_pop (ctx->ready);
         fence_t *nf;
-        nf = zlist_pop (ctx->ready);
-        assert (nf == f);
-        while ((nf = zlist_pop (ctx->ready))) {
+        while ((nf = zlist_first (ctx->ready))) {
             int i, len;
 
+            if (commit_merge_conflict (f, nf))
+                break;
             if (Jget_ar_len (nf->names, &len)) {
                 for (i = 0; i < len; i++) {
                     const char *name;
@@ -662,6 +703,7 @@ void commit_merge_all (ctx_t *ctx)
                         Jadd_ar_obj (f->ops, Jget (op));
                 }
             }
+            (void)zlist_pop (ctx->ready);
         }
         if (zlist_push (ctx->ready, f) < 0)
             oom ();
