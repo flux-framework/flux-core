@@ -150,8 +150,10 @@ int flux_msg_get_payload_json (const flux_msg_t *msg, const char **json_str);
  * FLUX_NODEID_UPSTREAM is a stand in for this flag + sending rank in
  * higher level functions (not to be used here).
  */
-#define FLUX_NODEID_ANY         (~(uint32_t)0)
-#define FLUX_NODEID_UPSTREAM	(~(uint32_t)1)
+enum {
+    FLUX_NODEID_ANY      = 0xFFFFFFFF, //(~(uint32_t)0),
+    FLUX_NODEID_UPSTREAM = 0xFFFFFFFE  //(~(uint32_t)1)
+};
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags);
 int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags);
 
@@ -172,9 +174,11 @@ int flux_msg_get_status (const flux_msg_t *msg, int *status);
 
 /* Get/set/compare match tag (request/response only)
  */
-#define FLUX_MATCHTAG_NONE (0)
-#define FLUX_MATCHTAG_GROUP_SHIFT (20)
-#define FLUX_MATCHTAG_GROUP_MASK (0xfff00000)
+enum {
+    FLUX_MATCHTAG_NONE = 0,
+    FLUX_MATCHTAG_GROUP_SHIFT = 20,
+    FLUX_MATCHTAG_GROUP_MASK = 0xfff00000
+};
 int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t matchtag);
 int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag);
 bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag);
