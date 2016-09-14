@@ -2,7 +2,6 @@
 import unittest
 import errno
 import flux.core as core
-import flux.json_c
 from pycotap import TAPTestRunner
 
 json_str = '{"a":42}';

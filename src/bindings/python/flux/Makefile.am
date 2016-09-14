@@ -93,7 +93,6 @@ fluxpy_PYTHON=\
 	      __init__.py\
 	      kvs.py\
 	      wrapper.py\
-	      json_c.py\
 	      rpc.py\
 	      message.py\
 	      constants.py\
