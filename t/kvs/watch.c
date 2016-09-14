@@ -184,6 +184,7 @@ void usage (void)
 "              selfmod    key\n"
 "              unwatch    key\n"
 "              unwatchloop key\n"
+"              simulwatch key ntimes\n"
 );
     exit (1);
 
@@ -393,18 +394,93 @@ void test_unwatchloop (int argc, char **argv)
     key = argv[0];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    uint32_t avail = flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
+    uint32_t avail = flux_matchtag_avail (h, 0);
     for (i = 0; i < 1000; i++) {
         if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
             log_err_exit ("kvs_watch_int[%d] %s", i, key);
         if (kvs_unwatch (h, key) < 0)
             log_err_exit ("kvs_unwatch[%d] %s", i, key);
     }
-    uint32_t leaked = avail - flux_matchtag_avail (h, FLUX_MATCHTAG_GROUP);
+    uint32_t leaked = avail - flux_matchtag_avail (h, 0);
     if (leaked > 0)
         log_msg_exit ("leaked %u matchtags", leaked);
 
     flux_close (h);
+}
+
+static int simulwatch_cb (const char *key, int val, void *arg, int errnum)
+{
+    int *count = arg;
+    (*count)++;
+    return 0;
+}
+
+int get_watch_stats (flux_t h, int *count)
+{
+    flux_rpc_t *rpc;
+    const char *json_str;
+    JSON o = NULL;
+    int rc = -1;
+
+    if (!(rpc = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "#watchers", count)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_rpc_destroy (rpc);
+    Jput (o);
+    return rc;
+}
+
+void test_simulwatch (int argc, char **argv)
+{
+    int i, max;
+    const char *key;
+    flux_t h;
+    int start, fin, count = 0;
+    int exit_rc = 0;
+
+    if (argc != 2) {
+        fprintf (stderr, "Usage: simulwatch key count\n");
+        exit (1);
+    }
+    key = argv[0];
+    max = strtoul (argv[1], NULL, 10);
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (get_watch_stats (h, &start) < 0)
+        log_err_exit ("kvs.stats.get");
+    for (i = 0; i < max; i++) {
+        if (kvs_watch_int (h, key, simulwatch_cb, &count) < 0)
+            log_err_exit ("kvs_watch_int[%d] %s", i, key);
+        if ((i % 4096 == 0 && i > 0 && i + 4096 < max))
+            log_msg ("%d of %d watchers registered (continuing)", i, max);
+    }
+    log_msg ("%d of %d watchers registered", i, max);
+    if (count != max)
+        exit_rc = 1;
+    log_msg ("callback called %d of %d times", count, max);
+    if (get_watch_stats (h, &fin) < 0)
+        log_err_exit ("kvs.stats.get");
+    if (fin - start != count)
+        exit_rc = 1;
+    log_msg ("%d of %d watchers running", fin - start, count);
+    if (kvs_unwatch (h, key) < 0)
+        log_err_exit ("kvs.unwatch");
+    if (get_watch_stats (h, &fin) < 0)
+        log_err_exit ("kvs.stats.get");
+    if (fin - start != 0)
+        exit_rc = 1;
+    log_msg ("%d of %d watchers running after unwatch",
+             fin - start, count);
+    flux_close (h);
+    if (exit_rc != 0)
+        exit (exit_rc);
 }
 
 int main (int argc, char *argv[])
@@ -425,6 +501,8 @@ int main (int argc, char *argv[])
         test_unwatch (argc - 2, argv + 2);
     else if (!strcmp (cmd, "unwatchloop"))
         test_unwatchloop (argc - 2, argv + 2);
+    else if (!strcmp (cmd, "simulwatch"))
+        test_simulwatch (argc - 2, argv + 2);
     else
         usage ();
 

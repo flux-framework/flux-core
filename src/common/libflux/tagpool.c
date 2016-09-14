@@ -51,8 +51,9 @@
 #include "src/common/libutil/veb.h"
 #include "src/common/libutil/log.h"
 
-#define TAGPOOL_COUNT_REGULAR (1UL<<16) /* consumes about 9K for 1<<16 */
+#define TAGPOOL_COUNT_REGULAR (1UL<<20)
 #define TAGPOOL_COUNT_GROUP (1UL<<12)
+#define TAGPOOL_START (1UL<<10)
 
 #define TAGPOOL_MAGIC   0x34447ff2
 struct tagpool {
@@ -61,17 +62,30 @@ struct tagpool {
     int             reg_avail;
     Veb             G;
     int             group_avail;
+    tagpool_grow_f  grow_cb;
+    void            *grow_arg;
+    int             grow_depth;
 };
+
+static void pool_set (Veb veb, uint32_t from, uint32_t to, uint8_t value)
+{
+    while (from < to) {
+        if (value)
+            vebput (veb, from);
+        else
+            vebdel (veb, from);
+        from++;
+    }
+}
 
 struct tagpool *tagpool_create (void)
 {
-    struct tagpool *t = malloc (sizeof (*t));
+    struct tagpool *t = calloc (1, sizeof (*t));
     if (!t)
         goto nomem;
-    memset (t, 0, sizeof (*t));
     t->magic = TAGPOOL_MAGIC;
-    t->R = vebnew (TAGPOOL_COUNT_REGULAR, 1);
-    t->G = vebnew (TAGPOOL_COUNT_GROUP, 1);
+    t->R = vebnew (TAGPOOL_START, 1);
+    t->G = vebnew (TAGPOOL_START, 1);
     if (!t->R.D || !t->G.D)
         goto nomem;
     vebdel (t->R, FLUX_MATCHTAG_NONE); /* allocate reserved value */
@@ -98,23 +112,63 @@ void tagpool_destroy (struct tagpool *t)
     }
 }
 
+void tagpool_set_grow_cb (struct tagpool *t, tagpool_grow_f cb, void *arg)
+{
+    t->grow_cb = cb;
+    t->grow_arg = arg;
+}
+
+static uint32_t alloc_with_resize (struct tagpool *t, int flags)
+{
+    Veb *veb = &t->R;
+    uint32_t max = TAGPOOL_COUNT_REGULAR;
+    uint32_t oldsize, newsize, tag;
+
+    if ((flags & TAGPOOL_FLAG_GROUP)) {
+        veb = &t->G;
+        max = TAGPOOL_COUNT_GROUP;
+    }
+    oldsize = veb->M;
+    newsize = oldsize << 1;
+    tag = vebsucc (*veb, 0);
+
+    if (tag == veb->M && newsize <= max) {
+        if (t->grow_cb && t->grow_depth == 0) {
+            t->grow_depth++;
+            t->grow_cb (t->grow_arg, oldsize, newsize, flags);
+            t->grow_depth--;
+        }
+        Veb new = vebnew (newsize, 0);
+        if (new.D) {
+            pool_set (new, oldsize, newsize, 1);
+            free (veb->D);
+            *veb = new;
+            tag = vebsucc (*veb, oldsize);
+            assert (tag == oldsize);
+        }
+    }
+    if (tag < veb->M)
+        vebdel (*veb, tag);
+    return tag;
+}
+
 uint32_t tagpool_alloc (struct tagpool *t, int flags)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     uint32_t tag;
 
     if ((flags & TAGPOOL_FLAG_GROUP)) {
-       if ((tag = vebsucc (t->G, 0)) != t->G.M) {
-            vebdel (t->G, tag);
+        tag = alloc_with_resize (t, TAGPOOL_FLAG_GROUP);
+        if (tag < t->G.M) {
             t->group_avail--;
             return tag<<FLUX_MATCHTAG_GROUP_SHIFT;
-       }
+        }
     } else {
-       if ((tag = vebsucc (t->R, 0)) != t->R.M) {
-            vebdel (t->R, tag);
+        tag = alloc_with_resize (t, 0);
+        if (tag < t->R.M) {
             t->reg_avail--;
             return tag;
-       }
+        }
     }
     return FLUX_MATCHTAG_NONE;
 }
@@ -123,12 +177,17 @@ void tagpool_free (struct tagpool *t, uint32_t tag)
 {
     assert (t->magic == TAGPOOL_MAGIC);
     if (tag != FLUX_MATCHTAG_NONE) {
-        if ((tag>>FLUX_MATCHTAG_GROUP_SHIFT) > 0) {
-            vebput (t->G, tag>>FLUX_MATCHTAG_GROUP_SHIFT);
-            t->group_avail++;
+        uint32_t group = tag>>FLUX_MATCHTAG_GROUP_SHIFT;
+        if (group > 0) {
+            if (group < t->G.M) {
+                vebput (t->G, group);
+                t->group_avail++;
+            }
         } else {
-            vebput (t->R, tag);
-            t->reg_avail++;
+            if (tag < t->R.M) {
+                vebput (t->R, tag);
+                t->reg_avail++;
+            }
         }
     }
 }
@@ -148,9 +207,6 @@ uint32_t tagpool_getattr (struct tagpool *t, int attr)
     }
     return 0;
 }
-
-/* Possible future enhancement:  tagpool_setattr for resizing pool(s).
- */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

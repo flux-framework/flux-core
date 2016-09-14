@@ -1033,8 +1033,9 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
 {
     unwatch_param_t *p = arg;
     char *sender = NULL;
-    JSON o = NULL;
-    const char *topic, *json_str;
+    JSON o = NULL, val;
+    const char *key, *topic, *json_str;
+    int flags;
     bool match = false;
 
     if (flux_request_decode (msg, &topic, &json_str) < 0)
@@ -1047,7 +1048,9 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
         goto done;
     if (!(o = Jfromstr (json_str)))
         goto done;
-    if (!json_object_object_get_ex (o, p->key, NULL))
+    if (kp_twatch_dec (o, &key, &val, &flags) <  0)
+        goto done;
+    if (strcmp (p->key, key) != 0)
         goto done;
     match = true;
 done:

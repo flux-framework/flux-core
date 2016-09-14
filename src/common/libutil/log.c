@@ -40,12 +40,16 @@
 
 #include "log.h"
 
-static char *prog = "flux";
+extern char *__progname;
+static char *prog = NULL;
 
 void
 log_init (char *p)
 {
-    prog = basename (p);
+    if (!p)
+        prog = __progname;
+    else
+        prog = basename (p);
 }
 
 void
@@ -60,6 +64,8 @@ _verr (int errnum, const char *fmt, va_list ap)
     char buf[128];
     const char *s = zmq_strerror (errnum);
 
+    if (!prog)
+        log_init (NULL);
     if (vasprintf (&msg, fmt, ap) < 0) {
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
         msg = buf;
@@ -75,6 +81,8 @@ _vlog (const char *fmt, va_list ap)
     char *msg = NULL;
     char buf[128];
 
+    if (!prog)
+        log_init (NULL);
     if (vasprintf (&msg, fmt, ap) < 0) {
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
         msg = buf;

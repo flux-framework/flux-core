@@ -438,6 +438,12 @@ test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
 	flux kvs unlink $TEST.a
 '
 
+test_expect_success 'kvs: 8192 simultaneous watches works' '
+	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 8192 &&
+	flux kvs unlink $TEST.a
+'
+
+
 # large values/dirs
 
 test_expect_success 'kvs: store value exceeding RFC 10 max blob size of 1m' '

@@ -746,7 +746,7 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
     /* Send the request.
      */
     assert ((flags & KVS_PROTO_ONCE) || matchtag != NULL);
-    match.matchtag = flux_matchtag_alloc (h, FLUX_MATCHTAG_GROUP);
+    match.matchtag = flux_matchtag_alloc (h, 0);
     if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;

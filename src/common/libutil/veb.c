@@ -201,28 +201,6 @@ mkempty(Veb T)
 		mkempty(branch(T,i));
 }
 
-static void
-mkfull(Veb T)
-{
-	int i;
-	if (T.M <= WORD) {
-		encode(T.D,bytes(T.M),ones(T.M));
-		return;
-	}
-	setlow(T,0);
-	sethigh(T,T.M-1);
-	mkfull(aux(T));
-	uint m = highbits(T.M-1,T.k/2)+1;
-	for (i = 0; i < m; ++i) {
-		Veb B = branch(T,i);
-		mkfull(B);
-		if (i == 0)
-			vebdel(B,0);
-		if (i == m-1)
-			vebdel(B,lowbits(T.M-1,T.k/2));
-	}
-}
-
 Veb
 vebnew(uint M, int full)
 {
@@ -231,10 +209,11 @@ vebnew(uint M, int full)
 	T.D = malloc(vebsize(M));
 	if (T.D) {
 		T.M = M;
-		if (full)
-			mkfull(T);
-		else
-			mkempty(T);
+		mkempty(T);
+		if (full) {
+			for (uint m=0; m < T.M; m++)
+				vebput(T,m);
+		}
 	}
 	return T;
 }
