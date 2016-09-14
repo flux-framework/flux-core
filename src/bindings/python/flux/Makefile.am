@@ -102,12 +102,12 @@ fluxpy_PYTHON=\
 
 .PHONY: lib-copy clean-local-check
 
-lib-copy: ${fluxpy_LTLIBRARIES}
+lib-copy: ${fluxpy_PYTHON} ${fluxpy_LTLIBRARIES}
 	-echo Copying libraries to where they can be used by python in-tree
 	for LIB in ${fluxpy_LTLIBRARIES:la=so} ; do \
 	    cp -f .libs/$$LIB ./ ; \
 	done
-	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp  $(top_srcdir)/src/bindings/python/flux/*.py ./ || true
+	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp $(top_srcdir)/src/bindings/python/flux/*.py ./ || true
 
 #TODO: there must be a better way to do this
 check-local: lib-copy
