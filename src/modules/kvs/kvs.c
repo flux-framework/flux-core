@@ -138,7 +138,8 @@ typedef struct {
     href_t newroot;
 } fence_t;
 
-static int setroot_event_send (ctx_t *ctx, json_object *names);
+static int setroot_event_send (ctx_t *ctx, json_object *names,
+                               json_object *ops);
 static int error_event_send (ctx_t *ctx, json_object *names, int errnum);
 void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg);
@@ -604,7 +605,7 @@ done:
                       count, opcount);
         }
         setroot (ctx, f->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, f->names);
+        setroot_event_send (ctx, f->names, f->ops);
     } else {
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (f->errnum));
@@ -1513,6 +1514,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
     const char *rootdir;
     JSON root = NULL;
     JSON names = NULL;
+    JSON keys = NULL;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
@@ -1523,7 +1525,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: json decode", __FUNCTION__);
         goto done;
     }
-    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names) < 0) {
+    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names, &keys) < 0) {
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
@@ -1551,18 +1553,57 @@ done:
     Jput (out);
 }
 
-static int setroot_event_send (ctx_t *ctx, json_object *names)
+static bool key_is_duplicate (json_object *keys, const char *key)
+{
+    int i, len;
+    const char *k;
+    if (Jget_ar_len (keys, &len)) {
+        for (i = 0; i < len; i++) {
+            if (Jget_ar_str (keys, i, &k) && !strcmp (k, key))
+                return true;
+        }
+    }
+    return false;
+}
+
+static json_object *ops_to_keys (json_object *ops)
+{
+    int i, len;
+    JSON keys = Jnew_ar();
+
+    if (!Jget_ar_len (ops, &len))
+        goto error;
+    for (i = 0; i < len; i++) {
+        JSON op;
+        const char *key;
+        if (!Jget_ar_obj (ops, i, &op) || !Jget_str (op, "key", &key))
+            goto error;
+        if (!key_is_duplicate (keys, key))
+            Jadd_ar_str (keys, key);
+    }
+    return keys;
+error:
+    Jput (keys);
+    return NULL;
+}
+
+static int setroot_event_send (ctx_t *ctx, json_object *names, json_object *ops)
 {
     JSON in = NULL;
     JSON root = NULL;
+    JSON keys = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
+    if (!(keys = ops_to_keys (ops))) {
+        errno = EINVAL;
+        goto done;
+    }
     if (event_includes_rootdir) {
         bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
     }
-    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
+    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names, keys)))
         goto done;
     if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
         goto done;
@@ -1571,6 +1612,7 @@ static int setroot_event_send (ctx_t *ctx, json_object *names)
     rc = 0;
 done:
     Jput (in);
+    Jput (keys);
     flux_msg_destroy (msg);
     return rc;
 }

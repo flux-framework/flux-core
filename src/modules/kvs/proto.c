@@ -271,12 +271,13 @@ done:
  */
 
 JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
-                      JSON names)
+                      JSON names, JSON keys)
 {
     JSON o = NULL;
     int n;
 
-    if (!rootdir || !names || !Jget_ar_len (names, &n) || n < 1) {
+    if (!rootdir || !names || !keys
+                 || !Jget_ar_len (names, &n) || n < 1) {
         errno = EINVAL;
         goto done;
     }
@@ -284,6 +285,7 @@ JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
     Jadd_int (o, "rootseq", rootseq);
     Jadd_str (o, "rootdir", rootdir);
     Jadd_obj (o, "names", names);         /* takes a ref */
+    Jadd_obj (o, "keys", keys);           /* takes a ref */
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
 done:
@@ -291,16 +293,16 @@ done:
 }
 
 int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root, JSON *names)
+                     JSON *root, JSON *names, JSON *keys)
 {
     int rc = -1;
 
-    if (!o || !rootseq || !rootdir || !root || !names) {
+    if (!o || !rootseq || !rootdir || !root || !names | !keys) {
         errno = EINVAL;
         goto done;
     }
     if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
-                                          || !Jget_obj (o, "names", names)) {
+         || !Jget_obj (o, "names", names) || !Jget_obj (o, "keys", keys)) {
         errno = EPROTO;
         goto done;
     }

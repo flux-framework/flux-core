@@ -138,20 +138,25 @@ void test_setroot (void)
     JSON o;
     const char *rootdir, *name;
     int rootseq;
-    JSON root, names;
+    const char *key;
+    JSON root, names, keys;
 
     names = Jnew_ar ();
     Jadd_ar_str (names, "foo");
-    ok ((o = kp_tsetroot_enc (42, "abc", NULL, names)) != NULL,
+    keys = Jnew_ar ();
+    Jadd_ar_str (keys, "a.b.c");
+    ok ((o = kp_tsetroot_enc (42, "abc", NULL, names, keys)) != NULL,
         "kp_tsetroot_enc works");
     Jput (names);
+    Jput (keys);
 
     diag ("setroot: %s", Jtostr (o));
 
-    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &names) == 0
+    ok (kp_tsetroot_dec (o, &rootseq, &rootdir, &root, &names, &keys) == 0
         && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "abc")
         && root == NULL && names != NULL && Jget_ar_str (names, 0, &name)
-        && !strcmp (name, "foo"),
+        && keys != NULL && Jget_ar_str (keys, 0, &key)
+        && !strcmp (key, "a.b.c"),
         "kp_tsetroot_dec works");
     Jput (o);
 }
