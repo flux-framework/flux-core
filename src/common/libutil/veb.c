@@ -205,6 +205,7 @@ Veb
 vebnew(uint M, int full)
 {
 	Veb T;
+	T.M = 0;
 	T.k = fls(M-1);
 	T.D = malloc(vebsize(M));
 	if (T.D) {
