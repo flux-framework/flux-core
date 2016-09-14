@@ -5,9 +5,6 @@ import inspect
 import cffi
 from types import MethodType
 
-import traceback
-
-
 
 class MissingFunctionError(Exception):
     def __init__(self, name, c_name, name_list, arguments):
