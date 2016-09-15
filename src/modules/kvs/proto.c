@@ -44,7 +44,7 @@
 /* kvs.get
  */
 
-JSON kp_tget_enc (const char *key, int flags)
+JSON kp_tget_enc (JSON rootdir, const char *key, int flags)
 {
     JSON o = NULL;
 
@@ -53,13 +53,15 @@ JSON kp_tget_enc (const char *key, int flags)
         goto done;
     }
     o = Jnew ();
+    if (rootdir)
+        Jadd_obj (o, "rootdir", rootdir); /* takes a ref on rootdir */
     Jadd_str (o, "key", key);
     Jadd_int (o, "flags", flags);
 done:
     return o;
 }
 
-int kp_tget_dec (JSON o, const char **key, int *flags)
+int kp_tget_dec (JSON o, JSON *rootdir, const char **key, int *flags)
 {
     int rc = -1;
 
@@ -71,6 +73,8 @@ int kp_tget_dec (JSON o, const char **key, int *flags)
         errno = EPROTO;
         goto done;
     }
+    if (rootdir)
+        *rootdir = Jobj_get (o, "rootdir");
     rc = 0;
 done:
     return rc;
