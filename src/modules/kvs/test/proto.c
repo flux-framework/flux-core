@@ -11,19 +11,32 @@ void test_get (void)
 {
     JSON o;
     const char *key = NULL;
+    const char *rootref = NULL;
     JSON val = NULL;
     int i, flags;
 
-    o = kp_tget_enc ("foo", 42);
+    o = kp_tget_enc (NULL, "foo", 42);
     ok (o != NULL,
         "kp_tget_enc works");
     diag ("get request: %s", Jtostr (o));
     flags = 0;
-    ok (kp_tget_dec (o, &key, &flags) == 0 && flags == 42,
+    ok (kp_tget_dec (o, NULL, &key, &flags) == 0 && flags == 42,
         "kp_tget_dec works");
     like (key, "^foo$",
         "kp_tget_dec returned encoded key");
     Jput (o);
+
+    o = kp_tget_enc ("sha1-abcdefabcdef00000", "foo", 42);
+    ok (o != NULL,
+        "kp_tget_enc works");
+    diag ("get request: %s", Jtostr (o));
+    flags = 0;
+    ok (kp_tget_dec (o, &rootref, &key, &flags) == 0 && flags == 42,
+        "kp_tget_dec works");
+    like (rootref, "^sha1-.*$",
+        "kp_tget_dec returned rootref");
+    Jput (o);
+
 
     val = Jnew ();
     Jadd_int (val, "i", 42);

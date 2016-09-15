@@ -946,11 +946,14 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
+    const char *root_dirent = NULL;
     JSON in = NULL;
     JSON out = NULL;
     int flags;
     const char *key;
     JSON val;
+    JSON root = NULL;
+    JSON root_dirent_obj = NULL;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
     int rc = -1;
@@ -961,11 +964,24 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto done;
     }
-    if (kp_tget_dec (in, &key, &flags) < 0)
+    if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
-    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
+    /* If root dirent was specified, lookup will be relative to that.
+     */
+    if (root_dirent) {
+        const char *ref;
+
+        if (!(root_dirent_obj = Jfromstr (root_dirent))
+                || !Jget_str (root_dirent_obj, "DIRREF", &ref)) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (!load (ctx, ref, wait, &root))
+            goto stall;
+    }
+    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum != 0) {
         errno = lookup_errnum;
@@ -986,6 +1002,7 @@ done:
 stall:
     Jput (in);
     Jput (out);
+    Jput (root_dirent_obj);
 }
 
 static bool compare_json (json_object *o1, json_object *o2)

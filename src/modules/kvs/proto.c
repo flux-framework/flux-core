@@ -44,7 +44,7 @@
 /* kvs.get
  */
 
-JSON kp_tget_enc (const char *key, int flags)
+JSON kp_tget_enc (const char *treeobj, const char *key, int flags)
 {
     JSON o = NULL;
 
@@ -53,13 +53,15 @@ JSON kp_tget_enc (const char *key, int flags)
         goto done;
     }
     o = Jnew ();
+    if (treeobj)
+        Jadd_str (o, "root", treeobj);
     Jadd_str (o, "key", key);
     Jadd_int (o, "flags", flags);
 done:
     return o;
 }
 
-int kp_tget_dec (JSON o, const char **key, int *flags)
+int kp_tget_dec (JSON o, const char **treeobj, const char **key, int *flags)
 {
     int rc = -1;
 
@@ -70,6 +72,10 @@ int kp_tget_dec (JSON o, const char **key, int *flags)
     if (!Jget_str (o, "key", key) || !Jget_int (o, "flags", flags)) {
         errno = EPROTO;
         goto done;
+    }
+    if (treeobj) {
+        *treeobj = NULL;
+        (void)Jget_str (o, "root", treeobj);
     }
     rc = 0;
 done:
