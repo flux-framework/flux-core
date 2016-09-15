@@ -48,6 +48,11 @@ int kvs_get_symlink (flux_t h, const char *key, char **valp);
  */
 int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
 
+/* Like kvs_get() but lookup is relative to 'treeobj'.
+ */
+int kvs_getat (flux_t h, const char *treeobj,
+               const char *key, char **json_str);
+
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
  * value and again each time the value changes.
