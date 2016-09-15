@@ -66,6 +66,7 @@ void cmd_dir (flux_t h, int argc, char **argv);
 void cmd_dirsize (flux_t h, int argc, char **argv);
 void cmd_get_treeobj (flux_t h, int argc, char **argv);
 void cmd_put_treeobj (flux_t h, int argc, char **argv);
+void cmd_getat (flux_t h, int argc, char **argv);
 
 
 void usage (void)
@@ -93,6 +94,7 @@ void usage (void)
 "       flux-kvs dropcache-all\n"
 "       flux-kvs get-treeobj     key\n"
 "       flux-kvs put-treeobj     key=treeobj\n"
+"       flux-kvs getat           treeobj key\n"
 );
     exit (1);
 }
@@ -166,6 +168,8 @@ int main (int argc, char *argv[])
         cmd_get_treeobj (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put-treeobj"))
         cmd_put_treeobj (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "getat"))
+        cmd_getat (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -645,6 +649,17 @@ void cmd_get_treeobj (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_get_treeobj %s", argv[0]);
     printf ("%s\n", treeobj);
     free (treeobj);
+}
+
+void cmd_getat (flux_t h, int argc, char **argv)
+{
+    char *val = NULL;
+    if (argc != 2)
+        log_msg_exit ("getat: specify treeobj and key");
+    if (kvs_getat (h, argv[0], argv[1], &val) < 0)
+        log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
+    printf ("%s\n", val);
+    free (val);
 }
 
 void cmd_put_treeobj (flux_t h, int argc, char **argv)
