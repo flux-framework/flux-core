@@ -380,6 +380,29 @@ int kvs_get (flux_t h, const char *key, char **val)
     return 0;
 }
 
+int kvs_getat (flux_t h, const char *treeobj,
+               const char *key, char **val)
+{
+    JSON v = NULL;
+    JSON dirent = NULL;
+
+    if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
+                         || dirent_validate (dirent) < 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (getobj (h, treeobj, key, 0, &v) < 0)
+        goto error;
+    if (val)
+        *val = xstrdup (Jtostr (v));
+    Jput (dirent);
+    return 0;
+error:
+    Jput (v);
+    Jput (dirent);
+    return -1;
+}
+
 /* deprecated */
 int kvs_get_obj (flux_t h, const char *key, JSON *val)
 {
