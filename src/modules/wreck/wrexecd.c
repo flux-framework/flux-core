@@ -182,7 +182,6 @@ static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...);
 
 static int archive_lwj (struct prog_ctx *ctx)
 {
-    char *from = ctx->lwj_link;
     char *to = ctx->kvspath;
     char *link = NULL;
     int rc = -1;
@@ -193,20 +192,14 @@ static int archive_lwj (struct prog_ctx *ctx)
         flux_log_error (ctx->flux, "archive_lwj: asprintf");
         goto out;
     }
-    if ((rc = kvs_move (ctx->flux, from, to)) < 0) {
-        flux_log_error (ctx->flux, "kvs_move (%s, %s)", from, to);
-        goto out;
-    }
-    /* Also create a link in lwj-complete.<epoch>.<id> to be used
-     *  to traverse completed jobs ordered by completion time
+    /*  Link lwj-complete.<hb>.id -> src
      */
     if (kvs_symlink (ctx->flux, link, to) < 0)
         flux_log_error (ctx->flux, "kvs_symlink (%s -> %s)", link, to);
 
-    if (kvs_commit (ctx->flux) < 0)
+    if ((rc = kvs_commit (ctx->flux)) < 0)
         flux_log_error (ctx->flux, "kvs_commit");
 out:
-    free (from);
     free (link);
     return (rc);
 }
