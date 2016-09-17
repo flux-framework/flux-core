@@ -36,20 +36,84 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
+/*
+ *  lwj-active directory tree parameters:
+ *   XXX: should be in module context struct perhaps, but
+ *    this all needs to go away soon anyway, so...
+ *
+ *  directory levels is the number of parent directories
+ *   (e.g. 3 would result in lwj-active.x.y.z.jobid,
+ *    0 is lwj.jobid)
+ *
+ *  bits_per_directory is the number of prefix bits to use
+ *   for each parent directory, results in 2^bits entries
+ *   per subdirectory, except for the top-level which will
+ *   grow without bound (well up to 64bit lwj id values).
+ *
+ *  These values can be set as broker attrs during flux-start,
+ *   e.g. flux start -o,-Swreck.lwj-dir-levels=3
+ *                   -o,-Swreck.lwj-bits-per-dir=8
+ */
+static int kvs_dir_levels = 2;
+static int kvs_bits_per_dir = 7;
+
+/*
+ *  Return as 64bit integer the portion of integer `n`
+ *   masked from bit position `a` to position `b`,
+ *   then subsequently shifted by `a` bits (to keep
+ *   numbers small).
+ */
+static inline uint64_t prefix64 (uint64_t n, int a, int b)
+{
+    uint64_t mask = ((-1ULL >> (64 - b)) & ~((1ULL << a) - 1));
+    return ((n & mask) >> a);
+}
+
+/*
+ *  Convert lwj id to kvs path under `lwj-active` using a kind of
+ *   prefix hiearchy of max levels `levels`, using `bits_per_dir` bits
+ *   for each directory. Returns a kvs key path or NULL on failure.
+ */
+static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
+{
+    char buf [1024] = "lwj-active";
+    int len = 10;
+    int nleft = sizeof (buf) - len;
+    int i, n;
+
+    /* Build up kvs directory from lwj-active. down */
+    for (i = levels; i > 0; i--) {
+        int b = bits_per_dir * i;
+        uint64_t d = prefix64 (id, b, b + bits_per_dir);
+        if ((n = snprintf (buf+len, nleft, ".%ju", d)) < 0 || n > nleft)
+            return NULL;
+        len += n;
+        nleft -= n;
+    }
+    n = snprintf (buf+len, sizeof (buf) - len, ".%ju", id);
+    if (n < 0 || n > nleft)
+        return NULL;
+    return (strdup (buf));
+}
+
 static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
 {
-    int rc;
+    int rc = -1;
     char *key = NULL;
     char *link = NULL;
     char *target = NULL;
 
+    if (!(target = lwj_to_path (jobid, kvs_dir_levels, kvs_bits_per_dir))) {
+        flux_log_error (h, "lwj_to_path");
+        return (-1);
+    }
+
     /*  Create lwj entry in lwj-active dir at first:
      */
-    if ((asprintf (&key, "lwj-active.%lu.state", jobid) < 0)
-        || (asprintf (&link, "lwj.%lu", jobid) < 0)
-        || (asprintf (&target, "lwj-active.%lu", jobid) < 0)) {
+    if ((asprintf (&key, "%s.state", target) < 0)
+        || (asprintf (&link, "lwj.%lu", jobid) < 0)) {
         flux_log_error (h, "kvs_job_set_state: asprintf");
-        return (-1);
+        goto out;
     }
 
     flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
@@ -59,7 +123,7 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
     }
 
     /*
-     *  Create link from lwj.<id> to lwj-active.<id>
+     *  Create link from lwj.<id> to lwj-active.*.<id>
      */
     if ((rc = kvs_symlink (h, link, target)) < 0) {
         flux_log_error (h, "kvs_symlink (%s, %s)", link, key);
@@ -302,6 +366,34 @@ out:
         json_object_put (o);
 }
 
+static int flux_attr_set_int (flux_t *h, const char *attr, int val)
+{
+    char buf [16];
+    int n = snprintf (buf, sizeof (buf), "%d", val);
+    if (n < 0 || n >= sizeof (buf))
+        return (-1);
+    return flux_attr_set (h, attr, buf);
+}
+
+static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
+{
+    long n;
+    const char *tmp;
+    char *p;
+
+    if ((tmp = flux_attr_get (h, attr, 0)) == NULL)
+        return (-1);
+    n = strtoul (tmp, &p, 10);
+    if (n == LONG_MAX)
+        return (-1);
+    if ((p == tmp) || (*p != '\0')) {
+        errno = EINVAL;
+        return (-1);
+    }
+    *valp = (int) n;
+    return (0);
+}
+
 struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
@@ -326,6 +418,21 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         return -1;
     }
+
+    if ((flux_attr_get_int (h, "wreck.lwj-dir-levels", &kvs_dir_levels) < 0)
+       && (flux_attr_set_int (h, "wreck.lwj-dir-levels", kvs_dir_levels) < 0)) {
+        flux_log_error (h, "failed to get or set lwj-dir-levels");
+        return -1;
+    }
+    if ((flux_attr_get_int (h, "wreck.lwj-bits-per-dir",
+                            &kvs_bits_per_dir) < 0)
+       && (flux_attr_set_int (h, "wreck.lwj-bits-per-dir",
+                              kvs_bits_per_dir) < 0)) {
+        flux_log_error (h, "failed to get or set lwj-bits-per-dir");
+        return -1;
+    }
+
+
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         return -1;

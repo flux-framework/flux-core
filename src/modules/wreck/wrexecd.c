@@ -89,6 +89,7 @@ struct prog_ctx {
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
+    char *lwj_link;         /* if lwj.%d is a symlink, this is the target */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -181,15 +182,14 @@ static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...);
 
 static int archive_lwj (struct prog_ctx *ctx)
 {
-    char *from = NULL;
+    char *from = ctx->lwj_link;
     char *to = ctx->kvspath;
     char *link = NULL;
     int rc = -1;
 
     wlog_msg (ctx, "archiving lwj %lu", ctx->id);
 
-    if (asprintf (&link, "lwj-complete.%d.%lu", ctx->epoch, ctx->id) < 0
-        || asprintf (&from, "lwj-active.%lu", ctx->id) < 0) {
+    if (asprintf (&link, "lwj-complete.%d.%lu", ctx->epoch, ctx->id) < 0) {
         flux_log_error (ctx->flux, "archive_lwj: asprintf");
         goto out;
     }
@@ -634,6 +634,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
+    free (ctx->lwj_link);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -1021,10 +1022,14 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
+    if (!ctx->kvspath && (asprintf (&ctx->kvspath, "lwj.%ju", ctx->id) < 0))
+        wlog_fatal (ctx, 1, "asprintf");
+
     if (kvs_get_dir (ctx->flux, &ctx->kvs, ctx->kvspath) < 0) {
         wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
+    kvs_get_symlink (ctx->flux, name, &ctx->lwj_link);
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
     /*
