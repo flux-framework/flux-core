@@ -364,6 +364,10 @@ prog:SubCommand {
                 for id in d:keys() do
                     table.insert (r, id)
                     if self.opt.R then
+                        local t, target = f:kvs_type ("lwj."..id)
+                        if t == "symlink" then
+                            f:kvs_unlink (target)
+                        end
                         f:kvs_unlink ("lwj."..id)
                         f:kvs_unlink ("lwj-complete."..hb.."."..id)
                     end
