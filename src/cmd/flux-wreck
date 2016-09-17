@@ -383,7 +383,7 @@ prog:SubCommand {
         -- gather ids to remove in hostlist for condensed output:
         --
         local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
-        local idstring = tostring (hl):match ("%[(.+)%]")
+        local idstring = tostring (hl):match ("%[?([^]]+)%]?")
 
         if self.opt.R then
             lwj:commit()
