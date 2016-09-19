@@ -26,8 +26,7 @@
 
 /* Usage watch nthreads changes key
  * Spawn 'nthreads' threads each watching the same value.
- * Change it 'changes' times and ensure that at minimum the last
- * value is read.
+ * Change it 'changes' times and ensure each change is seen by all watchers.
  */
 
 #if HAVE_CONFIG_H
@@ -101,9 +100,9 @@ static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
         log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
-    if (val == t->last_val) {
-        log_msg ("%d: %s: called with same value as last time: %d", t->n,
-            __FUNCTION__, val);
+    if (val != t->last_val + 1) {
+        log_msg ("%d: %s: expected %d got %d",
+                 t->n, __FUNCTION__, t->last_val + 1, val);
         return -1;
     }
     t->last_val = val;
@@ -222,7 +221,7 @@ void test_mt (int argc, char **argv)
 
     for (i = 0; i < nthreads; i++) {
         thd[i].n = i;
-        thd[i].last_val = -42;
+        thd[i].last_val = -2;
         if ((rc = pthread_attr_init (&thd[i].attr)))
             log_errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].tid, &thd[i].attr, thread, &thd[i])))
@@ -240,8 +239,6 @@ void test_mt (int argc, char **argv)
     /* Verify that callbacks were called the correct number of times.
      * The nil and stable callbacks will be called exactly once before the
      * reactor is started, then should never be called again.
-     * Due to commit merging on the master, the changing callback may
-     * miss intervening values but it shouldn't be called extra times.
      */
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
@@ -256,8 +253,8 @@ void test_mt (int argc, char **argv)
                  i, thd[i].stable_count);
             errors++;
         }
-        if (thd[i].change_count > changes + 1) {
-            log_msg ("%d: changing callback called %d times (expected <= %d)",
+        if (thd[i].change_count != changes + 1) {
+            log_msg ("%d: changing callback called %d times (expected %d)",
                  i, thd[i].change_count, changes + 1);
             errors++;
         }

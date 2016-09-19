@@ -418,8 +418,13 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 
 # watch tests
 
-test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
+test_expect_success 'kvs: watch-mt: multi-threaded kvs watch works on rank 0' '
 	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
+	flux kvs unlink $TEST.a
+'
+
+test_expect_success 'kvs: watch-mt: multi-threaded kvs watch works on rank 1' '
+	flux exec -r1 ${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
 	flux kvs unlink $TEST.a
 '
 
