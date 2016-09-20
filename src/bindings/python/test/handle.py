@@ -33,6 +33,13 @@ class TestHandle(unittest.TestCase):
         self.assertEqual(r['seq'], 1)
         self.assertEqual(r['pad'], 'stuff')
 
+    def test_rpc_with(self):
+        """Sending a ping"""
+        with self.f.rpc_create('cmb.ping', {'seq': 1, 'pad': 'stuff'}) as r:
+            j = r.get()
+            self.assertEqual(j['seq'], 1)
+            self.assertEqual(j['pad'], 'stuff')
+
     def test_get_rank(self):
       """Get flux rank"""
       rank = self.f.get_rank()

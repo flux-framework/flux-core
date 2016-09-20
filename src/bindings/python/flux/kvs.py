@@ -4,6 +4,7 @@ from flux.wrapper import Wrapper, WrapperPimpl
 import json
 import collections
 import errno
+import sys
 
 class KVSWrapper(Wrapper):
   # This empty class accepts new methods, preventing accidental overloading
@@ -90,26 +91,23 @@ def watch_once(flux_handle, key):
 class KVSDir(WrapperPimpl, collections.MutableMapping):
     class InnerWrapper(Wrapper):
         def __init__(self, flux_handle=None, path='.', handle=None):
-            self.destroyer = _raw.kvsdir_destroy
-            self.handle = None
+            super(self.__class__, self).__init__(ffi, lib,
+                                                 handle=handle,
+                                                 match=ffi.typeof('kvsdir_t *'),
+                                                 prefixes=[
+                                                     'kvsdir_',
+                                                 ],
+                                                 destructor=_raw.kvsdir_destroy)
+
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError(
                     "flux_handle must be a valid Flux object or handle must be a valid kvsdir cdata pointer")
             if handle is None:
                 d = ffi.new("kvsdir_t *[1]")
                 _raw.kvs_get_dir(flux_handle, d, path)
-                handle = d[0]
-
-            super(self.__class__, self).__init__(ffi, lib,
-                                                 handle=handle,
-                                                 match=ffi.typeof('kvsdir_t *'),
-                                                 prefixes=[
-                                                     'kvsdir_',
-                                                 ], )
-
-        def __del__(self):
-            if self.handle is not None:
-                self.destroyer(self.handle)
+                self.handle = d[0]
+                if self.handle is None or self.handle == ffi.NULL:
+                    raise EnvironmentError("No such file or directory")
 
     def __init__(self, flux_handle=None, path='.', handle=None):
         self.fh = flux_handle
