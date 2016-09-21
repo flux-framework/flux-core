@@ -355,6 +355,34 @@ test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
 	test_must_fail flux kvs put-treeobj $TEST.a="{\"DIRREF\":\"sha1-bbb\"}"
 '
 
+test_expect_success 'kvs: getat: fails bad on dirent' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs getat 42 $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRREF\":\"sha2-aaa\"}" $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRREF\":\"sha1-bbb\"}" $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRVAL\":{}}" $TEST.a
+'
+
+test_expect_success 'kvs: getat: works on root from get-treeobj' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	test $(flux kvs getat $(flux kvs get-treeobj .) $TEST.a.b.c) = 42
+'
+
+test_expect_success 'kvs: getat: works on subdir from get-treeobj' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	test $(flux kvs getat $(flux kvs get-treeobj $TEST.a.b) c) = 42
+'
+
+test_expect_success 'kvs: getat: works on outdated root' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs put $TEST.a.b.c=43 &&
+	test $(flux kvs getat $ROOTREF $TEST.a.b.c) = 42
+'
+
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
 	flux kvs put $TEST.dirsize.a=1 &&
@@ -418,8 +446,13 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 
 # watch tests
 
-test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
+test_expect_success 'kvs: watch-mt: multi-threaded kvs watch works on rank 0' '
 	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
+	flux kvs unlink $TEST.a
+'
+
+test_expect_success 'kvs: watch-mt: multi-threaded kvs watch works on rank 1' '
+	flux exec -r1 ${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
 	flux kvs unlink $TEST.a
 '
 

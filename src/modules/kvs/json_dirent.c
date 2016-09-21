@@ -60,6 +60,17 @@ json_object *dirent_create (char *type, void *arg)
     return dirent;
 }
 
+bool dirent_match (json_object *dirent1, json_object *dirent2)
+{
+    if (!dirent1 && !dirent2)
+        return true;
+    if ((dirent1 && !dirent2) || (!dirent1 && dirent2))
+        return false;
+    if (!strcmp (Jtostr (dirent1), Jtostr (dirent2)))
+        return true;
+    return false;
+}
+
 void dirent_append (json_object **array, const char *key, json_object *dirent)
 {
     json_object *op = Jnew ();

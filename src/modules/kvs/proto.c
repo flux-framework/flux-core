@@ -44,7 +44,7 @@
 /* kvs.get
  */
 
-JSON kp_tget_enc (const char *key, int flags)
+JSON kp_tget_enc (const char *treeobj, const char *key, int flags)
 {
     JSON o = NULL;
 
@@ -53,13 +53,15 @@ JSON kp_tget_enc (const char *key, int flags)
         goto done;
     }
     o = Jnew ();
+    if (treeobj)
+        Jadd_str (o, "root", treeobj);
     Jadd_str (o, "key", key);
     Jadd_int (o, "flags", flags);
 done:
     return o;
 }
 
-int kp_tget_dec (JSON o, const char **key, int *flags)
+int kp_tget_dec (JSON o, const char **treeobj, const char **key, int *flags)
 {
     int rc = -1;
 
@@ -70,6 +72,10 @@ int kp_tget_dec (JSON o, const char **key, int *flags)
     if (!Jget_str (o, "key", key) || !Jget_int (o, "flags", flags)) {
         errno = EPROTO;
         goto done;
+    }
+    if (treeobj) {
+        *treeobj = NULL;
+        (void)Jget_str (o, "root", treeobj);
     }
     rc = 0;
 done:
@@ -271,12 +277,13 @@ done:
  */
 
 JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
-                      JSON names)
+                      JSON names, JSON keys)
 {
     JSON o = NULL;
     int n;
 
-    if (!rootdir || !names || !Jget_ar_len (names, &n) || n < 1) {
+    if (!rootdir || !names || !keys
+                 || !Jget_ar_len (names, &n) || n < 1) {
         errno = EINVAL;
         goto done;
     }
@@ -284,6 +291,7 @@ JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
     Jadd_int (o, "rootseq", rootseq);
     Jadd_str (o, "rootdir", rootdir);
     Jadd_obj (o, "names", names);         /* takes a ref */
+    Jadd_obj (o, "keys", keys);           /* takes a ref */
     if (root)
         Jadd_obj (o, "rootdirval", root); /* takes a ref */
 done:
@@ -291,16 +299,16 @@ done:
 }
 
 int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root, JSON *names)
+                     JSON *root, JSON *names, JSON *keys)
 {
     int rc = -1;
 
-    if (!o || !rootseq || !rootdir || !root || !names) {
+    if (!o || !rootseq || !rootdir || !root || !names | !keys) {
         errno = EINVAL;
         goto done;
     }
     if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
-                                          || !Jget_obj (o, "names", names)) {
+         || !Jget_obj (o, "names", names) || !Jget_obj (o, "keys", keys)) {
         errno = EPROTO;
         goto done;
     }

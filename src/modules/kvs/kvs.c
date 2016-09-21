@@ -138,7 +138,8 @@ typedef struct {
     href_t newroot;
 } fence_t;
 
-static int setroot_event_send (ctx_t *ctx, json_object *names);
+static int setroot_event_send (ctx_t *ctx, json_object *names,
+                               json_object *ops);
 static int error_event_send (ctx_t *ctx, json_object *names, int errnum);
 void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg);
@@ -604,7 +605,7 @@ done:
                       count, opcount);
         }
         setroot (ctx, f->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, f->names);
+        setroot_event_send (ctx, f->names, f->ops);
     } else {
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (f->errnum));
@@ -632,22 +633,63 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
+/* If any ops in f1 have the same key as an op in f2,
+ * and different dirents, the commits cannot be merged.
+ */
+bool commit_merge_conflict (fence_t *f1, fence_t *f2)
+{
+    int l1, l2, i, j;
+    json_object *op1, *op2;
+    json_object *dirent1, *dirent2;
+    const char *key1, *key2;
+
+    if (!Jget_ar_len (f1->ops, &l1) || !Jget_ar_len (f1->ops, &l2))
+        goto nomerge;
+    for (i = 0; i < l1; i++) {
+        if (!(op1 = json_object_array_get_idx (f1->ops, i))
+                        || !Jget_str (op1, "key", &key1))
+            goto nomerge;
+        for (j = 0; j < l2; j++) {
+            if (!(op2 = json_object_array_get_idx (f2->ops, j))
+                            || !Jget_str (op2, "key", &key2))
+                goto nomerge;
+            if (!strcmp (key1, key2)) {
+                if (!Jget_obj (op1, "dirent", &dirent1))
+                    dirent1 = NULL; /* unlink */
+                if (!Jget_obj (op2, "dirent", &dirent2))
+                    dirent2 = NULL; /* unlink */
+                /* N.B. dirent_match() can return false negatives.
+                 * If that happens, we don't merge which is always safe.
+                 */
+                if (!dirent_match (dirent1, dirent2))
+                    goto nomerge;
+            }
+        }
+    }
+    return false;
+nomerge:
+    return true;
+}
+
 /* Merge ready commits, where merging consists of popping the "donor"
  * commit off the ready list, and appending its ops to the top commit.
  * The top commit can be appended to if it hasn't started, or is still
  * building the rootcpy, e.g. stalled walking the namespace.
+ * N.B. avoid merging commits that modify the same key, otherwise
+ * watchers, which are driven by kvs.setroot events, may may miss versions.
  */
 void commit_merge_all (ctx_t *ctx)
 {
     fence_t *f = zlist_first (ctx->ready);
 
     if (f && f->errnum == 0 && !f->rootcpy_stored) {
+        (void)zlist_pop (ctx->ready);
         fence_t *nf;
-        nf = zlist_pop (ctx->ready);
-        assert (nf == f);
-        while ((nf = zlist_pop (ctx->ready))) {
+        while ((nf = zlist_first (ctx->ready))) {
             int i, len;
 
+            if (commit_merge_conflict (f, nf))
+                break;
             if (Jget_ar_len (nf->names, &len)) {
                 for (i = 0; i < len; i++) {
                     const char *name;
@@ -662,6 +704,7 @@ void commit_merge_all (ctx_t *ctx)
                         Jadd_ar_obj (f->ops, Jget (op));
                 }
             }
+            (void)zlist_pop (ctx->ready);
         }
         if (zlist_push (ctx->ready, f) < 0)
             oom ();
@@ -903,11 +946,14 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
+    const char *root_dirent = NULL;
     JSON in = NULL;
     JSON out = NULL;
     int flags;
     const char *key;
     JSON val;
+    JSON root = NULL;
+    JSON root_dirent_obj = NULL;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
     int rc = -1;
@@ -918,11 +964,24 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto done;
     }
-    if (kp_tget_dec (in, &key, &flags) < 0)
+    if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
-    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
+    /* If root dirent was specified, lookup will be relative to that.
+     */
+    if (root_dirent) {
+        const char *ref;
+
+        if (!(root_dirent_obj = Jfromstr (root_dirent))
+                || !Jget_str (root_dirent_obj, "DIRREF", &ref)) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (!load (ctx, ref, wait, &root))
+            goto stall;
+    }
+    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum != 0) {
         errno = lookup_errnum;
@@ -943,6 +1002,7 @@ done:
 stall:
     Jput (in);
     Jput (out);
+    Jput (root_dirent_obj);
 }
 
 static bool compare_json (json_object *o1, json_object *o2)
@@ -1471,6 +1531,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
     const char *rootdir;
     JSON root = NULL;
     JSON names = NULL;
+    JSON keys = NULL;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
@@ -1481,7 +1542,7 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: json decode", __FUNCTION__);
         goto done;
     }
-    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names) < 0) {
+    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names, &keys) < 0) {
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
@@ -1509,18 +1570,57 @@ done:
     Jput (out);
 }
 
-static int setroot_event_send (ctx_t *ctx, json_object *names)
+static bool key_is_duplicate (json_object *keys, const char *key)
+{
+    int i, len;
+    const char *k;
+    if (Jget_ar_len (keys, &len)) {
+        for (i = 0; i < len; i++) {
+            if (Jget_ar_str (keys, i, &k) && !strcmp (k, key))
+                return true;
+        }
+    }
+    return false;
+}
+
+static json_object *ops_to_keys (json_object *ops)
+{
+    int i, len;
+    JSON keys = Jnew_ar();
+
+    if (!Jget_ar_len (ops, &len))
+        goto error;
+    for (i = 0; i < len; i++) {
+        JSON op;
+        const char *key;
+        if (!Jget_ar_obj (ops, i, &op) || !Jget_str (op, "key", &key))
+            goto error;
+        if (!key_is_duplicate (keys, key))
+            Jadd_ar_str (keys, key);
+    }
+    return keys;
+error:
+    Jput (keys);
+    return NULL;
+}
+
+static int setroot_event_send (ctx_t *ctx, json_object *names, json_object *ops)
 {
     JSON in = NULL;
     JSON root = NULL;
+    JSON keys = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
+    if (!(keys = ops_to_keys (ops))) {
+        errno = EINVAL;
+        goto done;
+    }
     if (event_includes_rootdir) {
         bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
     }
-    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
+    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names, keys)))
         goto done;
     if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
         goto done;
@@ -1529,6 +1629,7 @@ static int setroot_event_send (ctx_t *ctx, json_object *names)
     rc = 0;
 done:
     Jput (in);
+    Jput (keys);
     flux_msg_destroy (msg);
     return rc;
 }

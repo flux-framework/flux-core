@@ -12,8 +12,10 @@ enum {
 
 /* kvs.get
  */
-json_object *kp_tget_enc (const char *key, int flags);
-int kp_tget_dec (json_object *o, const char **key, int *flags);
+json_object *kp_tget_enc (const char *treeobj,
+                          const char *key, int flags);
+int kp_tget_dec (json_object *o, const char **treeobj,
+                 const char **key, int *flags);
 
 json_object *kp_rget_enc (json_object *val);
 int kp_rget_dec (json_object *o, json_object **val);
@@ -50,9 +52,11 @@ int kp_rgetroot_dec (json_object *o, int *rootseq, const char **rootdir);
 /* kvs.setroot (event)
  */
 json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
-                              json_object *root, json_object *names);
+                              json_object *root, json_object *names,
+                              json_object *keys);
 int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
-                     json_object **root, json_object **names);
+                     json_object **root, json_object **names,
+                     json_object **keys);
 
 /* kvs.error (event)
  */

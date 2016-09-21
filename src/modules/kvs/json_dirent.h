@@ -1,3 +1,4 @@
+#include <stdbool.h>
 
 /* Create a KVS dirent.
  * 'type' is one of { "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", "LINKVAL" }.
@@ -13,6 +14,12 @@ json_object *dirent_create (char *type, void *arg);
  * changes/unlinks a key in KVS namespace.  This function asserts on failure.
  */
 void dirent_append (json_object **array, const char *key, json_object *dirent);
+
+/* Compare two dirents.
+ * N.B. The serialize/strcmp method used here can return false negatives,
+ * but a positive can be relied on.
+ */
+bool dirent_match (json_object *dirent1, json_object *dirent2);
 
 int dirent_validate (json_object *dirent);
 
