@@ -325,3 +325,5 @@ hwm
 recurse
 treeobj
 unlinked
+getat
+lookup

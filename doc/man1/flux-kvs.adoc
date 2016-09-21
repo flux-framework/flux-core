@@ -128,6 +128,11 @@ Associate a new treeobj with 'key', overwriting the previous treeobj,
 if any.  A treeobj should be treated as an opaque string value, which
 may contain spaces.
 
+*getat* 'treeobj' 'key'::
+Retrieve the value stored under 'key', starting the lookup at 'treeobj'.
+If nothing has been stored under 'key', display an error message.
+
+
 AUTHOR
 ------
 This page is maintained by the Flux community.
