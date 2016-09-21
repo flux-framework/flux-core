@@ -131,17 +131,16 @@ static void wait_for_event (flux_t *h, int64_t id, char *topic)
     return;
 }
 
-static void send_create_event (flux_t *h, int64_t id, char *topic)
+static void send_create_event (flux_t *h, int64_t id,
+                               const char *path, char *topic)
 {
     flux_msg_t *msg;
-    char *json = NULL;
+    json_object *o = Jnew ();
 
-    if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
-        errno = ENOMEM;
-        flux_log_error (h, "failed to create state change event");
-        goto out;
-    }
-    if ((msg = flux_event_encode (topic, json)) == NULL) {
+    Jadd_int64 (o, "lwj", id);
+    Jadd_str (o, "kvs_path", path);
+
+    if ((msg = flux_event_encode (topic, Jtostr (o))) == NULL) {
         flux_log_error (h, "failed to create state change event");
         goto out;
     }
@@ -154,10 +153,10 @@ static void send_create_event (flux_t *h, int64_t id, char *topic)
      */
     wait_for_event (h, id, topic);
 out:
-    free (json);
+    Jput (o);
 }
 
-static int add_jobinfo (flux_t *h, int64_t id, json_object *req)
+static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
 {
     int rc = 0;
     char buf [64];
@@ -165,8 +164,8 @@ static int add_jobinfo (flux_t *h, int64_t id, json_object *req)
     json_object *o;
     kvsdir_t *dir;
 
-    if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0) {
-        flux_log_error (h, "kvs_get_dir (id=%lu)", id);
+    if (kvs_get_dir (h, &dir, "%s", kvspath) < 0) {
+        flux_log_error (h, "kvs_get_dir (%s)", kvspath);
         return (-1);
     }
 
@@ -214,14 +213,60 @@ static bool sched_loaded (flux_t *h)
     return (v);
 }
 
-static int do_submit_job (flux_t *h, unsigned long id)
+static int do_submit_job (flux_t *h, unsigned long id, const char *path)
 {
     if (kvs_job_set_state (h, id, "submitted") < 0) {
         flux_log_error (h, "kvs_job_set_state");
         return (-1);
     }
-    send_create_event (h, id, "wreck.state.submitted");
+    send_create_event (h, id, path, "wreck.state.submitted");
     return (0);
+}
+
+static void handle_job_create (flux_t *h, const flux_msg_t *msg,
+                               const char *topic, json_object *o)
+{
+    json_object *jobinfo = NULL;
+    int64_t id;
+    char *state;
+    char *kvs_path;
+
+    if ((id = next_jobid (h)) < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "job_request: flux_respond");
+        return;
+    }
+
+    asprintf (&kvs_path, "lwj.%ju", (uintmax_t) id);
+
+    if ( (kvs_job_new (h, id) < 0)
+      || (add_jobinfo (h, kvs_path, o) < 0)) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "job_request: flux_respond");
+        return;
+    }
+
+    if (kvs_commit (h) < 0) {
+        flux_log_error (h, "job_request: kvs_commit");
+        return;
+    }
+
+    /* Send a wreck.state.reserved event for listeners */
+    state = "reserved";
+    send_create_event (h, id, kvs_path, "wreck.state.reserved");
+    if ((strcmp (topic, "job.submit") == 0)
+            && (do_submit_job (h, id, kvs_path) != -1))
+        state = "submitted";
+
+
+    /* Generate reply with new jobid */
+    jobinfo = Jnew ();
+    Jadd_int64 (jobinfo, "jobid", id);
+    Jadd_str (jobinfo, "state", state);
+    Jadd_str (jobinfo, "kvs_path", kvs_path);
+    flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
+    Jput (jobinfo);
+    free (kvs_path);
 }
 
 static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -242,42 +287,8 @@ static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     else if ((strcmp (topic, "job.create") == 0)
             || ((strcmp (topic, "job.submit") == 0)
-                 && sched_loaded (h))) {
-        json_object *jobinfo = NULL;
-        int64_t id;
-        char *state;
-
-        if ((id = next_jobid (h)) < 0) {
-            if (flux_respond (h, msg, errno, NULL) < 0)
-                flux_log_error (h, "job_request: flux_respond");
-            goto out;
-        }
-
-        if ( (kvs_job_new (h, id) < 0)
-          || (add_jobinfo (h, id, o) < 0)) {
-            flux_respond (h, msg, errno, NULL);
-            goto out;
-        }
-
-        if (kvs_commit (h) < 0) {
-            flux_log_error (h, "job_request: kvs_commit");
-            goto out;
-        }
-
-        /* Send a wreck.state.reserved event for listeners */
-        state = "reserved";
-        send_create_event (h, id, "wreck.state.reserved");
-        if ((strcmp (topic, "job.submit") == 0)
-            && (do_submit_job (h, id) != -1))
-                state = "submitted";
-
-        /* Generate reply with new jobid */
-        jobinfo = Jnew ();
-        Jadd_int64 (jobinfo, "jobid", id);
-        Jadd_str (jobinfo, "state", state);
-        flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
-        json_object_put (jobinfo);
-    }
+                 && sched_loaded (h)))
+        handle_job_create (h, msg, topic, o);
     else {
         /* job.submit not functional due to missing sched. Return ENOSYS
          *  for now
