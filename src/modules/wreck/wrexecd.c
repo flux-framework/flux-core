@@ -85,6 +85,8 @@ struct task_info {
 
 struct prog_ctx {
     flux_t   *flux;
+
+    char *kvspath;          /* basedir path in kvs for this lwj.id */
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
@@ -624,6 +626,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         task_io_flush (ctx->task [i]);
         task_info_destroy (ctx->task [i]);
     }
+
+    free (ctx->kvspath);
 
     if (ctx->topic)
         free (ctx->topic);
@@ -2292,11 +2296,22 @@ static void daemonize ()
 
 int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
 {
+    const char *kvspath;
     const char *id;
     char *end;
 
-    if (!optparse_getopt (p, "lwj-id", &id))
-        wlog_fatal (ctx, 1, "Required argument --lwj-id missing");
+    if (!optparse_getopt (p, "kvs-path", &kvspath))
+        kvspath = NULL; // KVS path will be built later from lwj id.
+    else
+        ctx->kvspath = strdup (kvspath);
+
+    if (!optparse_getopt (p, "lwj-id", &id)) {
+        if (kvspath == NULL)
+            wlog_fatal (ctx, 1, "One of --lwj-id or --kvs-path required.\n");
+        /* Assume lwj id is last component of kvs-path */
+        if ((id = strrchr (kvspath, '.')) == NULL || *(++id) == '\0')
+            wlog_fatal (ctx, 1, "Unable to get lwj id from kvs-path");
+    }
 
     errno = 0;
     ctx->id = strtol (id, &end, 10);
@@ -2304,7 +2319,6 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
        || (ctx->id == 0 && errno == EINVAL)
        || (ctx->id == ULONG_MAX && errno == ERANGE))
            wlog_fatal (ctx, 1, "--lwj-id=%s invalid", id);
-
 
     return (0);
 }
@@ -2321,6 +2335,11 @@ int main (int ac, char **av)
           .has_arg = 1,
           .arginfo = "ID",
           .usage =   "Operate on LWJ id [ID]",
+        },
+       { .name =    "kvs-path",
+          .has_arg = 1,
+          .arginfo = "DIR",
+          .usage =   "Operate on LWJ in DIR instead of lwj.<id>",
         },
         { .name =    "parent-fd",
           .key =     1001,
