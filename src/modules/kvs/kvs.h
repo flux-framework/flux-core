@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <flux/core.h>
 
+enum {
+    FLUX_KVSDIR_SNAPSHOT = 1,
+};
+
 typedef struct kvsdir_struct kvsdir_t;
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
@@ -51,6 +55,10 @@ int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
  */
 int kvs_getat (flux_t h, const char *treeobj,
                const char *key, char **json_str);
+int kvs_get_dirat (flux_t h, const char *treeobj,
+                   const char *key, kvsdir_t **dirp, int flags);
+int kvs_get_symlinkat (flux_t h, const char *treeobj,
+                               const char *key, char **val);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
