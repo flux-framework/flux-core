@@ -16,5 +16,5 @@ ${top_srcdir}/src/cmd/flux /usr/bin/valgrind \
     --num-callers=30 \
     --leak-resolution=med \
     --suppressions=valgrind.supp \
-    ${top_srcdir}/src/broker/.libs/lt-flux-broker --boot-method=single \
+    ${top_srcdir}/src/broker/.libs/lt-flux-broker \
     ./valgrind-workload.sh ${NJOBS}
