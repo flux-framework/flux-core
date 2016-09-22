@@ -296,12 +296,12 @@ static int content_store_request_send (ctx_t *ctx, const href_t ref,
     if (now) {
         if (content_store_get (rpc, ctx) < 0)
             goto error;
+    } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0) {
         flux_rpc_destroy (rpc);
-    } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0)
         goto error;
+    }
     return 0;
 error:
-    flux_rpc_destroy (rpc);
     return -1;
 }
 
