@@ -1,38 +1,17 @@
 """Global constants for the flux interface"""
 
-import cffi
+from flux._core import ffi, lib
+import sys
+import re
 
+this_module = sys.modules[__name__]
+# Inject enum/define names matching ^FLUX_[A-Z_]+$ into module
+all_list = []
+p = re.compile("^FLUX_[A-Z_]+")
+for k in dir(lib):
+    if p.match(k):
+        setattr(this_module, k, getattr(lib, k))
+        all_list.append(k)
 
-__CAST_ONLY_FFI = cffi.FFI()
-#constants from #define values
-FLUX_NODEID_ANY = int(__CAST_ONLY_FFI.cast('uint32_t', ~0))
-FLUX_NODEID_UPSTREAM = int(__CAST_ONLY_FFI.cast('uint32_t', ~1))
+__all__ = all_list
 
-FLUX_MSGTYPE_REQUEST = 0x01
-FLUX_MSGTYPE_RESPONSE = 0x02
-FLUX_MSGTYPE_EVENT = 0x04
-FLUX_MSGTYPE_KEEPALIVE = 0x08
-FLUX_MSGTYPE_ANY = 0x0f
-FLUX_MSGTYPE_MASK = 0x0f
-
-FLUX_MSGFLAG_TOPIC = 0x01
-FLUX_MSGFLAG_PAYLOAD = 0x02
-FLUX_MSGFLAG_JSON = 0x04
-FLUX_MSGFLAG_ROUTE = 0x08
-FLUX_MSGFLAG_UPSTREAM = 0x10
-
-FLUX_O_TRACE = 1
-FLUX_O_COPROC = 2
-FLUX_O_NONBLOCK = 4
-
-FLUX_SEC_TYPE_PLAIN = 1
-FLUX_SEC_TYPE_CURVE = 2
-FLUX_SEC_TYPE_MUNGE = 4
-FLUX_SEC_TYPE_ALL = 7
-
-FLUX_MATCHTAG_NONE = 0
-
-# constants for FDWatchers's 'events' arg
-FLUX_POLLIN = 1
-FLUX_POLLOUT = 2
-FLUX_POLLOUT = 4

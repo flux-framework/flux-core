@@ -4,12 +4,9 @@ import json
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux._core import ffi, lib
 from flux.core.inner import raw
-import flux
 from flux.rpc import RPC
 from flux.message import Message
 from flux._barrier import ffi as b_ffi, lib as b_lib
-from flux.core.watchers import TimerWatcher, MessageWatcher
-
 
 class BarrierWrapper(Wrapper):
     # This empty class accepts new methods, preventing accidental overloading
@@ -59,8 +56,8 @@ class Flux(Wrapper):
         return self.flux_send(message, flags)
 
     def recv(self,
-             type_mask=flux.FLUX_MSGTYPE_ANY,
-             match_tag=flux.FLUX_MATCHTAG_NONE,
+             type_mask=raw.FLUX_MSGTYPE_ANY,
+             match_tag=raw.FLUX_MATCHTAG_NONE,
              topic_glob=None,
              flags=0):
         """ Receive a message, returns a flux.Message containing the result or None """
@@ -77,7 +74,7 @@ class Flux(Wrapper):
 
     def rpc_send(self, topic,
                  payload=ffi.NULL,
-                 nodeid=flux.FLUX_NODEID_ANY,
+                 nodeid=raw.FLUX_NODEID_ANY,
                  flags=0):
         """ Create and send an RPC in one step """
         with RPC(self, topic, payload, nodeid, flags) as r:
@@ -85,7 +82,7 @@ class Flux(Wrapper):
 
     def rpc_create(self, topic,
                    payload=None,
-                   nodeid=flux.FLUX_NODEID_ANY,
+                   nodeid=raw.FLUX_NODEID_ANY,
                    flags=0):
         """ Create a new RPC object """
         return RPC(self, topic, payload, nodeid, flags)
@@ -103,17 +100,19 @@ class Flux(Wrapper):
         return self.send(self.event_create(topic, payload))
 
     def event_recv(self, topic=None, payload=None):
-        return self.recv(type_mask=lib.FLUX_MSGTYPE_EVENT, topic_glob=topic)
+        return self.recv(type_mask=raw.FLUX_MSGTYPE_EVENT, topic_glob=topic)
 
     def msg_watcher_create(self, callback,
-                           type_mask=lib.FLUX_MSGTYPE_ANY,
+                           type_mask=raw.FLUX_MSGTYPE_ANY,
                            topic_glob='*',
                            args=None,
-                           match_tag=flux.FLUX_MATCHTAG_NONE):
+                           match_tag=raw.FLUX_MATCHTAG_NONE):
+        from flux.core.watchers import MessageWatcher
         return MessageWatcher(self, type_mask, callback, topic_glob,
                               match_tag, args)
 
     def timer_watcher_create(self, after, callback, repeat=0.0, args=None):
+        from flux.core.watchers import TimerWatcher
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)
 
     def barrier(self, name, nprocs):
@@ -128,3 +127,5 @@ class Flux(Wrapper):
 def open(url, flags=0):
     """ Open a connection to the specified flux connector """
     return Flux(url, flags=flags)
+
+__all__ = [ 'Flux', 'open']

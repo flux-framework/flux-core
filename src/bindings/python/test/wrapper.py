@@ -3,7 +3,6 @@ import errno
 import os
 import re
 import flux.core as core
-import flux.json_c
 import flux.wrapper
 
 
