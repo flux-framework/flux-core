@@ -51,6 +51,17 @@ local function check_jobid_arg (self, id)
     return id
 end
 
+
+local kvs_paths = {}
+local function kvs_path (id, fmt, ...)
+    if not kvs_paths[id] then
+        kvs_paths[id] = "lwj."..id
+    end
+    if not fmt then return kvs_paths [id] end
+    return kvs_paths [id] .. "." .. string.format (fmt, ...)
+end
+
+
 prog:SubCommand {
  name = "attach",
  description = "Attach to running or completed job output",
@@ -63,7 +74,7 @@ prog:SubCommand {
  },
  handler = function (self, arg)
     local id = check_jobid_arg (self, arg[1])
-    local state = f:kvs_get ("lwj.%d.state")
+    local state = f:kvs_get (kvs_path (id, "state"))
     local taskio, err = wreck.ioattach {
         flux = f,
         jobid = id,
@@ -76,7 +87,7 @@ prog:SubCommand {
         self:die ("Failed to connect to job %d: %s\n", id, err)
     end
     if state ~= "complete" and state ~= "reaped" then
-        local kz, err = f:kz_open ("lwj."..id..".input.files.stdin", "w")
+        local kz, err = f:kz_open (kvs_path (id, "input.files.stdin"), "w")
         if kz then
             local iow, err = f:iowatcher {
                 fd = posix.fileno (io.input()),
@@ -115,7 +126,7 @@ prog:SubCommand {
  },
  handler = function (self, arg)
     local id = check_jobid_arg (self, arg[1])
-    local lwj, err = f:kvsdir ("lwj.%d", id)
+    local lwj, err = f:kvsdir (kvs_path (id))
     if not lwj then self:die ("Job %d: %s\n", id, err) end
     if lwj.state ~= "running" then
         io.stderr:write ("Job "..id..": "..lwj.state.."\n")
@@ -133,7 +144,7 @@ prog:SubCommand {
  usage = "JOBID",
  handler = function (self, arg)
     local jobid = check_jobid_arg (self, arg[1])
-    local lwj, err = f:kvsdir ("lwj.%d", jobid)
+    local lwj, err = f:kvsdir (kvs_path (jobid))
     if not lwj then self:die ("Job %d: %s\n", jobid, err) end
     print ("Job "..jobid.." status: "..lwj.state)
     local code, msglist = wreck.status { flux = f, jobid = jobid }
@@ -152,7 +163,7 @@ function LWJ.open (f, id)
     if not f or not id then
         return nil, "Required arg missing"
     end
-    local lwj, err = f:kvsdir ("lwj.%d", id)
+    local lwj, err = f:kvsdir (kvs_path (id))
     if not lwj then
         return nil, "Failed to get lwj info: "..err
     end

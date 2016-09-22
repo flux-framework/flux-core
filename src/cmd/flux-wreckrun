@@ -175,7 +175,7 @@ wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), jobid)
 --
 --  Get a handle to this lwj kvsdir:
 --
-local lwj, err = f:kvsdir ("lwj.%d", jobid)
+local lwj, err = wreck:kvsdir (jobid)
 if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", jobid, err) end
 
 --
