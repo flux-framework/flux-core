@@ -92,7 +92,7 @@ static int l_kvsdir_kvsdir_new (lua_State *L)
     d = lua_get_kvsdir (L, 1);
     key = luaL_checkstring (L, 2);
 
-    if (kvsdir_get_dir (d, &new, key) < 0)
+    if (kvsdir_get_dir (d, &new, "%s", key) < 0)
         return lua_pusherror (L, "kvsdir_get_dir: %s",
                               (char *)flux_strerror (errno));
 
@@ -268,7 +268,7 @@ static int l_kvsdir_watch_dir (lua_State *L)
     dir = lua_get_kvsdir (L, 1);
     h = kvsdir_handle (dir);
 
-    return l_pushresult (L, kvs_watch_once_dir (h, &dir, kvsdir_key (dir)));
+    return l_pushresult (L, kvs_watch_once_dir (h, &dir, "%s", kvsdir_key (dir)));
 }
 
 static int l_kvsdir_index (lua_State *L)
