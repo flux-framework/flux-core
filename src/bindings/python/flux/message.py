@@ -12,6 +12,7 @@ class Message(WrapperPimpl):
     """ Flux message wrapper class. """
 
     class InnerWrapper(Wrapper):
+
         def __init__(self,
                      type_id=flux.FLUX_MSGTYPE_REQUEST,
                      handle=None,
@@ -28,6 +29,10 @@ class Message(WrapperPimpl):
             if handle is None:
                 self.handle = raw.flux_msg_create(type_id)
 
+        def __del__(self):
+            if ((not self.external or self.destruct) and
+                    self.handle is not None and self.handle != ffi.NULL):
+                raw.flux_msg_destroy(self.handle)
 
     def __init__(self,
                  type_id=flux.FLUX_MSGTYPE_REQUEST,

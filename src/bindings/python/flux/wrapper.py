@@ -1,12 +1,11 @@
 import re
-import errno
 import os
 import inspect
-import cffi
 from types import MethodType
 
 
 class MissingFunctionError(Exception):
+
     def __init__(self, name, c_name, name_list, arguments):
 
         call_stack = inspect.stack()
@@ -36,6 +35,7 @@ Invocation detail: inside function {outer}
 
 
 class ErrorPrinter(object):
+
     def __init__(self, name, prefixes):
         self.name = name
         self.prefixes = prefixes
@@ -100,6 +100,7 @@ Handle type: {htype}
 
 
 class InvalidArguments(ValueError):
+
     def __init__(self, name, signature, arguments, err_msg):
         message = """
 Invalid arguments passed to wrapped C function:
@@ -116,6 +117,7 @@ Arguments: {arguments}
 
 
 class FunctionWrapper(object):
+
     def __init__(self, fun, name, t, ffi, add_handle=False):
         self.arg_trans = []
         self.fun = fun
@@ -134,7 +136,7 @@ class FunctionWrapper(object):
             self.is_error = lambda x: x < 0
 
     def set_error_check(self, fun):
-      self.is_error = fun
+        self.is_error = fun
 
     def build_argument_translation_list(self, t):
         alist = t.args[1:] if self.add_handle else t.args
@@ -153,7 +155,7 @@ class FunctionWrapper(object):
                     result = self.fun(*args_in)
             except TypeError as te:
                 raise InvalidArguments(self.name, self.ffi.getctype(
-                    self.function_type), args, te.message)
+                    self.function_type), args_in, te.message)
         else:
             args = []
             if self.add_handle:
@@ -225,12 +227,13 @@ class Wrapper(WrapperBase):
         if self.match is not None and self._handle is not None:
             if t.kind == 'function' and t.args[
                 0
-            ] == self.match:  #first argument is of handle type
+            ] == self.match:  # first argument is of handle type
                 return True
             else:
                 if self.filter_match:
                     raise AttributeError(
-                        "Flux Wrapper object {} masks function {} type: {} match: {}".format(
+                        "Flux Wrapper object {}" +
+                        "masks function {} type: {} match: {}".format(
                             self, name, t, self.match))
         return False
 
@@ -244,9 +247,9 @@ class Wrapper(WrapperBase):
         fun = None
         llib = self.__getattribute__("lib")
         if re.match('__.*__', name):
-          # This is a python internal name, skip it
-          raise AttributeError
-        #try it bare
+            # This is a python internal name, skip it
+            raise AttributeError
+        # try it bare
         try:
             fun = getattr(llib, name)
         except AttributeError:
@@ -262,8 +265,8 @@ class Wrapper(WrapperBase):
             setattr(self.__class__, name, ErrorPrinter(name, self.prefixes))
             return self.__getattribute__(name)
 
-        if not callable(fun): # pragma: no cover
-          return fun
+        if not callable(fun):  # pragma: no cover
+            return fun
 
         new_fun = self.check_wrap(fun, name)
         new_method = MethodType(new_fun, None, self.__class__)

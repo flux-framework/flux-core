@@ -1,9 +1,10 @@
 import flux
-from flux.core.inner import raw, ffi, lib
+from flux.core.inner import raw, ffi
 import flux.message
 import abc
 
 __all__ = ['MessageWatcher', 'TimerWatcher', 'FDWatcher']
+
 
 class Watcher(object):
     __metaclass__ = abc.ABCMeta
@@ -41,12 +42,13 @@ class Watcher(object):
 def message_handler_wrapper(handle_trash, m_watcher_t, msg_handle,
                             opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
-    ret = watcher.cb(watcher.fh, watcher,
-                     flux.message.Message(handle=msg_handle,
-                                          destruct=False), watcher.args)
+    watcher.cb(watcher.fh, watcher,
+               flux.message.Message(handle=msg_handle,
+                                    destruct=False), watcher.args)
 
 
 class MessageWatcher(Watcher):
+
     def __init__(self, flux_handle, type_mask, callback,
                  topic_glob='*',
                  match_tag=flux.FLUX_MATCHTAG_NONE,
@@ -77,14 +79,16 @@ class MessageWatcher(Watcher):
             raw.flux_handler_destroy(self.handle)
             self.handle = None
 
+
 @ffi.callback('flux_watcher_f')
 def timeout_handler_wrapper(handle_trash, watcher_s, revents,
                             opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
-    ret = watcher.cb(watcher.fh, watcher, revents, watcher.args)
+    watcher.cb(watcher.fh, watcher, revents, watcher.args)
 
 
 class TimerWatcher(Watcher):
+
     def __init__(self, flux_handle, after, callback, repeat=0, args=None, ):
         self.fh = flux_handle
         self.after = after
@@ -97,15 +101,17 @@ class TimerWatcher(Watcher):
             raw.flux_get_reactor(flux_handle),
             float(after), float(repeat), timeout_handler_wrapper, self.wargs)
 
+
 @ffi.callback('flux_watcher_f')
 def fd_handler_wrapper(handle_trash, fd_watcher_s, revents,
                        opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
     fd_int = raw.fd_watcher_get_fd(watcher.handle)
-    ret = watcher.cb(watcher.fh, watcher, fd_int, revents, watcher.args)
+    watcher.cb(watcher.fh, watcher, fd_int, revents, watcher.args)
 
 
 class FDWatcher(Watcher):
+
     def __init__(self, flux_handle, fd_int, events, callback, args=None):
         self.fh = flux_handle
         self.fd_int = fd_int
@@ -117,4 +123,3 @@ class FDWatcher(Watcher):
         self.handle = raw.flux_fd_watcher_create(
             raw.flux_get_reactor(flux_handle),
             self.fd_int, self.events, fd_handler_wrapper, self.wargs)
-

@@ -1,7 +1,4 @@
-import os
-import sys
-import json
-from flux.wrapper import Wrapper, WrapperPimpl
+from flux.wrapper import Wrapper
 from flux._core import ffi, lib
 from flux.core.inner import raw
 from flux.rpc import RPC
@@ -41,11 +38,13 @@ class Flux(Wrapper):
             self.handle = raw.flux_open(url, flags)
 
     def log(self, level, fstring):
-        """Log to the flux logging facility
+        """
+        Log to the flux logging facility
 
-       :param level: A syslog log-level, check the syslog module for possible values
-       :param fstring: A string to log, C-style formatting is *not* supported
-       """
+        :param level: A syslog log-level, check the syslog module for possible
+               values
+        :param fstring: A string to log, C-style formatting is *not* supported
+        """
         # Short-circuited because variadics can't be wrapped cleanly
         lib.flux_log(self.handle, level, fstring)
 
@@ -60,7 +59,9 @@ class Flux(Wrapper):
              match_tag=raw.FLUX_MATCHTAG_NONE,
              topic_glob=None,
              flags=0):
-        """ Receive a message, returns a flux.Message containing the result or None """
+        """
+        Receive a message, returns a flux.Message containing the result or None
+        """
         match = ffi.new('struct flux_match *', {
             'typemask': type_mask,
             'matchtag': match_tag,
@@ -91,7 +92,8 @@ class Flux(Wrapper):
         """ Create a new event message.
 
         :param topic: A string, the event's topic
-        :param payload: If a string, the payload is used unmodified, if it is another type json.dumps() is used to stringify it
+        :param payload: If a string, the payload is used unmodified, if it is
+            another type json.dumps() is used to stringify it
         """
         return Message.from_event_encode(topic, payload)
 
@@ -118,14 +120,7 @@ class Flux(Wrapper):
     def barrier(self, name, nprocs):
         _raw_barrier.barrier(self, name, nprocs)
 
-
     def get_rank(self):
         rank = ffi.new('uint32_t [1]')
         self.flux_get_rank(rank)
         return rank[0]
-
-def open(url, flags=0):
-    """ Open a connection to the specified flux connector """
-    return Flux(url, flags=flags)
-
-__all__ = [ 'Flux', 'open']

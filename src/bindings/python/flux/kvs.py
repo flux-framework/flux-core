@@ -1,15 +1,15 @@
 from _kvs import ffi, lib
-import flux
 from flux.wrapper import Wrapper, WrapperPimpl
 import json
 import collections
 import errno
 import sys
 
+
 class KVSWrapper(Wrapper):
-  # This empty class accepts new methods, preventing accidental overloading
-  # across wrappers
-  pass
+    # This empty class accepts new methods, preventing accidental overloading
+    # across wrappers
+    pass
 
 _raw = KVSWrapper(ffi, lib, prefixes=['kvs', 'kvs_'])
 # override error check behavior for kvsitr_next
@@ -20,9 +20,9 @@ def get_key_direct(flux_handle, key):
     valp = ffi.new('char *[1]')
     _raw.get(flux_handle, key, valp)
     if valp[0] == ffi.NULL:
-      return None
+        return None
     else:
-      return json.loads(ffi.string(valp[0]))
+        return json.loads(ffi.string(valp[0]))
 
 
 def exists(flux_handle, key):
@@ -61,6 +61,7 @@ def get(flux_handle, key):
             raise err
     return get_dir(flux_handle, key)
 
+
 def put(flux_handle, key, value):
     json_str = json.dumps(value)
     _raw.put(flux_handle, key, json_str)
@@ -69,11 +70,16 @@ def put(flux_handle, key, value):
 def commit(flux_handle):
     return _raw.kvs_commit(flux_handle)
 
+
 def dropcache(flux_handle):
-  return _raw.dropcache(flux_handle)
+    return _raw.dropcache(flux_handle)
+
 
 def watch_once(flux_handle, key):
-    """ Watches the selected key until the next change, then returns the updated value of the key """
+    """
+    Watches the selected key until the next change, then returns the
+    updated value of the key
+    """
     if isdir(flux_handle, key):
         d = get_dir(flux_handle)
         # The wrapper automatically unpacks d's handle
@@ -83,17 +89,20 @@ def watch_once(flux_handle, key):
         out_json_str = ffi.new('char *[1]')
         _raw.watch_once(flux_handle, key, out_json_str)
         if out_json_str[0] == ffi.NULL:
-          return None
+            return None
         else:
-          return json.loads(ffi.string(out_json_str[0]))
+            return json.loads(ffi.string(out_json_str[0]))
 
 
 class KVSDir(WrapperPimpl, collections.MutableMapping):
+
     class InnerWrapper(Wrapper):
+
         def __init__(self, flux_handle=None, path='.', handle=None):
             super(self.__class__, self).__init__(ffi, lib,
                                                  handle=handle,
-                                                 match=ffi.typeof('kvsdir_t *'),
+                                                 match=ffi.typeof(
+                                                     'kvsdir_t *'),
                                                  prefixes=[
                                                      'kvsdir_',
                                                  ],
@@ -127,7 +136,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         return p_str
 
     def exists(self, name):
-      return self.pimpl.exists(name)
+        return self.pimpl.exists(name)
 
     def __getitem__(self, key):
         try:
@@ -145,6 +154,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         self.pimpl.unlink(key)
 
     class KVSDirIterator(collections.Iterator):
+
         def __init__(self, kd):
             self.kd = kd
             self.itr = None
@@ -172,28 +182,34 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         return self.pimpl.get_size()
 
     def fill(self, contents):
-        """ Populate this directory with keys specified by contents, which must
-    conform to the Mapping interface
+        """
+        Populate this directory with keys specified by contents, which must
+        conform to the Mapping interface
 
-    :param contents: A dict of keys and values to be created in the directory
-      or None, sub-directories can be created by using `dir.file` syntax,
-      sub-dicts will be stored as json values in a single key """
+        :param contents: A dict of keys and values to be created in the
+        directory or None, sub-directories can be created by using `dir.file`
+        syntax, sub-dicts will be stored as json values in a single key
+        """
 
         if contents is None:
             raise ValueError("contents must be non-None")
 
-        with self as kd:
+        try:
             for k, v in contents.items():
                 self[k] = v
+        finally:
+            self.commit()
 
     def mkdir(self, key, contents=None):
-        """ Create a new sub-directory, optionally pre-populated with the contents
-    of `files` as would be done with `fill(contents)`
+        """
+        Create a new sub-directory, optionally pre-populated with the contents
+        of `files` as would be done with `fill(contents)`
 
-    :param key: Key of the directory to be created
-    :param contents: A dict of keys and values to be created in the directory
-      or None, sub-directories can be created by using `dir.file` syntax,
-      sub-dicts will be stored as json values in a single key """
+        :param key: Key of the directory to be created
+        :param contents: A dict of keys and values to be created in the directory
+          or None, sub-directories can be created by using `dir.file` syntax,
+          sub-dicts will be stored as json values in a single key
+        """
 
         self.pimpl.mkdir(key)
         # TODO : find a way to aggregate past mkdir commands
@@ -232,7 +248,10 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         return False
 
     def watch_once(self, flux_handle, key):
-        """ Watches the selected key until the next change, then returns the updated value of the key """
+        """
+        Watches the selected key until the next change, then returns the
+        updated value of the key
+        """
         full_key = self.key_at(key)
         return watch_once(self.fh, full_key)
 
@@ -263,13 +282,14 @@ def walk(directory, topdown=False, flux_handle=None):
         directory = KVSDir(flux_handle, directory)
     return inner_walk(directory, '', topdown)
 
+
 @ffi.callback('kvs_set_f')
 def KVSWatchWrapper(key, value, arg, errnum):
     (cb, real_arg) = ffi.from_handle(arg)
     if errnum == errno.ENOENT:
-      value = None
+        value = None
     else:
-      value = json.loads(ffi.string(value))
+        value = json.loads(ffi.string(value))
     key = ffi.string(key)
     ret = cb(key, value, real_arg, errnum)
     return ret if ret is not None else 0
