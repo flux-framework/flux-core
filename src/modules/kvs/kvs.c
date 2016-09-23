@@ -215,12 +215,12 @@ static int content_load_request_send (ctx_t *ctx, const href_t ref, bool now)
     flux_rpc_aux_set (rpc, xstrdup (ref), free);
     if (now) {
         content_load_completion (rpc, ctx);
+    } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0) {
         flux_rpc_destroy (rpc);
-    } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0)
         goto error;
+    }
     return 0;
 error:
-    flux_rpc_destroy (rpc);
     return -1;
 }
 
