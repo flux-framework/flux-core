@@ -68,6 +68,7 @@ void cmd_get_treeobj (flux_t h, int argc, char **argv);
 void cmd_put_treeobj (flux_t h, int argc, char **argv);
 void cmd_getat (flux_t h, int argc, char **argv);
 void cmd_dirat (flux_t h, int argc, char **argv);
+void cmd_readlinkat (flux_t h, int argc, char **argv);
 
 
 void usage (void)
@@ -97,6 +98,7 @@ void usage (void)
 "       flux-kvs put-treeobj     key=treeobj\n"
 "       flux-kvs getat           treeobj key\n"
 "       flux-kvs dirat [-r]      treeobj [key]\n"
+"       flux-kvs readlinkat      treeobj key\n"
 );
     exit (1);
 }
@@ -174,6 +176,8 @@ int main (int argc, char *argv[])
         cmd_getat (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirat"))
         cmd_dirat (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "readlinkat"))
+        cmd_readlinkat (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -709,6 +713,22 @@ void cmd_put_treeobj (flux_t h, int argc, char **argv)
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
 
+}
+
+void cmd_readlinkat (flux_t h, int argc, char **argv)
+{
+    int i;
+    char *target;
+
+    if (argc < 2)
+        log_msg_exit ("readlink: specify treeobj and one or more keys");
+    for (i = 1; i < argc; i++) {
+        if (kvs_get_symlinkat (h, argv[0], argv[i], &target) < 0)
+            log_err_exit ("%s", argv[i]);
+        else
+            printf ("%s\n", target);
+        free (target);
+    }
 }
 
 /*
