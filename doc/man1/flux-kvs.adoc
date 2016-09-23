@@ -138,6 +138,10 @@ lookup at 'treeobj'.  If 'key' does not exist or is not a directory,
 display an error message.  If 'key' is not provided, "." (root of
 the namespace) is assumed.
 
+*readlinkat* 'treeobj' 'key'::
+Retrieve the key a link refers to rather than its value, as would be
+returned by *get*, starting lookup at 'treeobj'.
+
 
 AUTHOR
 ------

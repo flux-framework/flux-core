@@ -328,3 +328,4 @@ unlinked
 getat
 lookup
 dirat
+readlinkat
