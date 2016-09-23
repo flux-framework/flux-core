@@ -3,6 +3,7 @@ import errno
 import os
 import re
 import flux.core as core
+from flux.core.inner import ffi, lib
 import flux.wrapper
 
 
@@ -32,7 +33,13 @@ class TestWrapper(unittest.TestCase):
     def test_set_pimpl_handle(self):
       f = core.Flux('loop://')
       r = f.rpc_create('topic')
-      r.handle = f.rpc_create("other topic")
+      r.handle = lib.flux_rpc(f.handle, 'other topic', ffi.NULL, flux.FLUX_NODEID_ANY, 0)
+
+    def test_set_pimpl_handle_invalid(self):
+      f = core.Flux('loop://')
+      r = f.rpc_create('topic')
+      with self.assertRaisesRegexp(TypeError, r'.*expected a.*'):
+          r.handle = f.rpc_create("other topic")
 
     def test_read_basic_value(self):
       self.assertGreater(flux.core.inner.raw.FLUX_NODEID_ANY, 0)

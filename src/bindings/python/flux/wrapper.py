@@ -288,6 +288,12 @@ class Wrapper(WrapperBase):
     @handle.setter
     def handle(self, h):
         """ Override handle setter to clean up old handle if requested """
+        if h is not None and self.match is not None:
+            if self.ffi.typeof(h) != self.match:
+                raise TypeError("Invalid handle {} of type {} assigned to "
+                                "wrapper with handle type {}".format(
+                                    h, self.ffi.typeof(h), self.match
+                                    ))
         if self._handle is not None:
             self.__clear()
         self._handle = h
