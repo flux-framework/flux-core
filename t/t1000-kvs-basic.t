@@ -392,6 +392,22 @@ test_expect_success 'kvs: kvsdir_get_size works' '
 	test "$OUTPUT" = "3"
 '
 
+test_expect_success 'kvs: store 16x3 directory tree' '
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h3 -w16 --prefix $TEST.dtree
+'
+
+test_expect_success 'kvs: walk 16x3 directory tree' '
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 4096
+'
+
+test_expect_success 'kvs: walk after unlink with dirat from root and from test dir' '
+	DTREEREF=$(flux kvs get-treeobj $TEST.dtree) &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs unlink $TEST.dtree &&
+	test $(flux kvs dirat -r $DTREEREF .| wc -l) = 4096 &&
+	test $(flux kvs dirat -r $ROOTREF $TEST.dtree | wc -l) = 4096
+'
+
 test_expect_success 'kvs: put key of . fails' '
 	test_must_fail flux kvs put .=1
 '
@@ -485,6 +501,7 @@ test_expect_success 'kvs: store 10,000 keys in one dir' '
 test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir2 --count 1000000
 '
+
 
 # async fence
 
