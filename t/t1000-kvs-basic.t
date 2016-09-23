@@ -282,6 +282,15 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
+test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
+	flux kvs unlink $TEST &&
+	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs unlink $TEST &&
+	LINKVAL=$(flux kvs readlinkat $ROOTREF $TEST.a.b.link) &&
+	test "$LINKVAL" = "$TEST.a.b.X"
+'
+
 test_expect_success 'kvs: get-treeobj: returns directory reference for root' '
 	flux kvs unlink $TEST &&
 	flux kvs get-treeobj . | grep -q "DIRREF"
