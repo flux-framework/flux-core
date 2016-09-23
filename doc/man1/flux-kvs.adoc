@@ -132,6 +132,12 @@ may contain spaces.
 Retrieve the value stored under 'key', starting the lookup at 'treeobj'.
 If nothing has been stored under 'key', display an error message.
 
+*dirat* 'treeobj' ['key']::
+Display all keys and their values under the directory 'key', starting
+lookup at 'treeobj'.  If 'key' does not exist or is not a directory,
+display an error message.  If 'key' is not provided, "." (root of
+the namespace) is assumed.
+
 
 AUTHOR
 ------
