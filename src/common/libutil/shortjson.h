@@ -123,7 +123,7 @@ static __inline__ bool
 Jget_int (JSON o, const char *name, int *ip)
 {
     JSON n = Jobj_get (o, name);
-    if (n)
+    if (n && ip)
         *ip = json_object_get_int (n);
     return (n != NULL);
 }
@@ -134,7 +134,7 @@ static __inline__ bool
 Jget_double (JSON o, const char *name, double *dp)
 {
     JSON n = Jobj_get (o, name);
-    if (n)
+    if (n && dp)
         *dp = json_object_get_double (n);
     return (n != NULL);
 }
@@ -145,7 +145,7 @@ static __inline__ bool
 Jget_int64 (JSON o, const char *name, int64_t *ip)
 {
     JSON n = Jobj_get (o, name);
-    if (n)
+    if (n && ip)
         *ip = json_object_get_int64 (n);
     return (n != NULL);
 }
@@ -156,7 +156,7 @@ static __inline__ bool
 Jget_str (JSON o, const char *name, const char **sp)
 {
     JSON n = Jobj_get (o, name);
-    if (n)
+    if (n && sp)
         *sp = json_object_get_string (n);
     return (n != NULL);
 }
@@ -167,7 +167,7 @@ static __inline__ bool
 Jget_obj (JSON o, const char *name, JSON *op)
 {
     JSON n = Jobj_get (o, name);
-    if (n)
+    if (n && op)
         *op = n;
     return (n != NULL);
 }
@@ -178,7 +178,7 @@ static __inline__ bool
 Jget_bool (JSON o, const char *name, bool *bp)
 {
     JSON n = Jobj_get (o, name);
-    if (n)
+    if (n && bp)
         *bp = json_object_get_boolean (n);
     return (n != NULL);
 }
@@ -235,7 +235,8 @@ Jget_ar_len (JSON o, int *ip)
 {
     if (json_object_get_type (o) != json_type_array)
         return false;
-    *ip = json_object_array_length (o);
+    if (ip)
+        *ip = json_object_array_length (o);
     return true;
 }
 
@@ -248,7 +249,8 @@ Jget_ar_obj (JSON o, int n, JSON *op)
         return false;
     if (n < 0 || n > json_object_array_length (o))
         return false;
-    *op = json_object_array_get_idx (o, n);
+    if (op)
+        *op = json_object_array_get_idx (o, n);
     return true;
 }
 
@@ -265,7 +267,8 @@ Jget_ar_int (JSON o, int n, int *ip)
         return false;
     if (!(m = json_object_array_get_idx (o, n)))
         return false;
-    *ip = json_object_get_int (m);
+    if (ip)
+        *ip = json_object_get_int (m);
     return true;
 }
 
@@ -282,7 +285,8 @@ Jget_ar_str (JSON o, int n, const char **sp)
         return false;
     if (!(m = json_object_array_get_idx (o, n)))
         return false;
-    *sp = json_object_get_string (m);
+    if (sp)
+        *sp = json_object_get_string (m);
     return true;
 }
 
