@@ -420,11 +420,11 @@ local function exit_status_aggregate (arg)
     local s, max, core = flux.exitstatus (exit_status.max)
     if s == "killed" then max = max + 128 end
 
-    for v in exit_status.values:keys () do
+    for ids,v in pairs (exit_status.entries) do
         local msg, code, core = flux.exitstatus (v)
         s = "exited with "
         s = s .. (msg == "exited" and "exit code " or "signal ") .. code
-        msgs [s] = hostlist.new (exit_status.values [v])
+        msgs [s] = hostlist.new (ids)
     end
 
     return max, msgs
