@@ -64,12 +64,12 @@ _barrier_la_LIBADD = $(top_builddir)/src/modules/barrier/libflux-barrier.la $(co
 _barrier_la_DEPENDENCIES = _barrier_build.py
 
 
-_kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs_deprecated.h $(MAKE_BINDING) _core_build.py
+_kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs.h $(MAKE_BINDING) _core_build.py
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/kvs \
 	  			  --package flux \
 	                          --modname _kvs \
 				  --include_ffi _core_build \
-				  kvs_deprecated.h
+				  kvs.h
 
 _kvs_la_SOURCES = _kvs.c
 _kvs_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/kvs
