@@ -184,6 +184,7 @@ dist_check_DATA = \
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
 	scripts/kvs-watch-until.lua \
+	scripts/kvs-get-ex.lua \
 	scripts/cpus-allowed.lua \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \
