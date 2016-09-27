@@ -66,6 +66,9 @@ void cmd_dir (flux_t h, int argc, char **argv);
 void cmd_dirsize (flux_t h, int argc, char **argv);
 void cmd_get_treeobj (flux_t h, int argc, char **argv);
 void cmd_put_treeobj (flux_t h, int argc, char **argv);
+void cmd_getat (flux_t h, int argc, char **argv);
+void cmd_dirat (flux_t h, int argc, char **argv);
+void cmd_readlinkat (flux_t h, int argc, char **argv);
 
 
 void usage (void)
@@ -93,6 +96,9 @@ void usage (void)
 "       flux-kvs dropcache-all\n"
 "       flux-kvs get-treeobj     key\n"
 "       flux-kvs put-treeobj     key=treeobj\n"
+"       flux-kvs getat           treeobj key\n"
+"       flux-kvs dirat [-r]      treeobj [key]\n"
+"       flux-kvs readlinkat      treeobj key\n"
 );
     exit (1);
 }
@@ -166,6 +172,12 @@ int main (int argc, char *argv[])
         cmd_get_treeobj (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put-treeobj"))
         cmd_put_treeobj (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "getat"))
+        cmd_getat (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "dirat"))
+        cmd_dirat (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "readlinkat"))
+        cmd_readlinkat (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -517,34 +529,34 @@ static void dump_kvs_val (const char *key, const char *json_str)
     Jput (o);
 }
 
-static void dump_kvs_dir (flux_t h, bool ropt, const char *path)
+static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
 {
-    kvsdir_t *dir;
     kvsitr_t *itr;
     const char *name;
     char *key;
-
-    if (kvs_get_dir (h, &dir, "%s", path) < 0)
-        log_err_exit ("%s", path);
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
         if (kvsdir_issymlink (dir, name)) {
             char *link;
-            if (kvs_get_symlink (h, key, &link) < 0)
+            if (kvsdir_get_symlink (dir, name, &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
             free (link);
 
         } else if (kvsdir_isdir (dir, name)) {
-            if (ropt)
-                dump_kvs_dir (h, ropt, key);
-            else
+            if (ropt) {
+                kvsdir_t *ndir;
+                if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
+                    log_err_exit ("%s", key);
+                dump_kvs_dir (ndir, ropt);
+                kvsdir_destroy (ndir);
+            } else
                 printf ("%s.\n", key);
         } else {
             char *json_str;
-            if (kvs_get (h, key, &json_str) < 0)
+            if (kvsdir_get (dir, name, &json_str) < 0)
                 log_err_exit ("%s", key);
             dump_kvs_val (key, json_str);
             free (json_str);
@@ -552,7 +564,6 @@ static void dump_kvs_dir (flux_t h, bool ropt, const char *path)
         free (key);
     }
     kvsitr_destroy (itr);
-    kvsdir_destroy (dir);
 }
 
 void cmd_watch_dir (flux_t h, int argc, char **argv)
@@ -579,7 +590,8 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
                 kvsdir_destroy (dir);
             dir = NULL;
         } else {
-            dump_kvs_dir (h, ropt, key);
+            dump_kvs_dir (dir, ropt);
+            kvsdir_destroy (dir);
             printf ("======================\n");
         }
         rc = kvs_watch_once_dir (h, &dir, "%s", key);
@@ -591,6 +603,8 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
 void cmd_dir (flux_t h, int argc, char **argv)
 {
     bool ropt = false;
+    char *key;
+    kvsdir_t *dir;
 
     if (argc > 0 && !strcmp (argv[0], "-r")) {
         ropt = true;
@@ -598,11 +612,38 @@ void cmd_dir (flux_t h, int argc, char **argv)
         argv++;
     }
     if (argc == 0)
-        dump_kvs_dir (h, ropt, ".");
+        key = ".";
     else if (argc == 1)
-        dump_kvs_dir (h, ropt, argv[0]);
+        key = argv[0];
     else
         log_msg_exit ("dir: specify zero or one directory");
+    if (kvs_get_dir (h, &dir, "%s", key) < 0)
+        log_err_exit ("%s", key);
+    dump_kvs_dir (dir, ropt);
+    kvsdir_destroy (dir);
+}
+
+void cmd_dirat (flux_t h, int argc, char **argv)
+{
+    bool ropt = false;
+    char *key;
+    kvsdir_t *dir;
+
+    if (argc > 0 && !strcmp (argv[0], "-r")) {
+        ropt = true;
+        argc--;
+        argv++;
+    }
+    if (argc == 1)
+        key = ".";
+    else if (argc == 2)
+        key = argv[1];
+    else
+        log_msg_exit ("dir: specify treeobj and zero or one directory");
+    if (kvs_get_dirat (h, argv[0], key, &dir, 0) < 0)
+        log_err_exit ("%s", key);
+    dump_kvs_dir (dir, ropt);
+    kvsdir_destroy (dir);
 }
 
 void cmd_dirsize (flux_t h, int argc, char **argv)
@@ -647,6 +688,17 @@ void cmd_get_treeobj (flux_t h, int argc, char **argv)
     free (treeobj);
 }
 
+void cmd_getat (flux_t h, int argc, char **argv)
+{
+    char *val = NULL;
+    if (argc != 2)
+        log_msg_exit ("getat: specify treeobj and key");
+    if (kvs_getat (h, argv[0], argv[1], &val) < 0)
+        log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
+    printf ("%s\n", val);
+    free (val);
+}
+
 void cmd_put_treeobj (flux_t h, int argc, char **argv)
 {
     if (argc != 1)
@@ -661,6 +713,22 @@ void cmd_put_treeobj (flux_t h, int argc, char **argv)
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
 
+}
+
+void cmd_readlinkat (flux_t h, int argc, char **argv)
+{
+    int i;
+    char *target;
+
+    if (argc < 2)
+        log_msg_exit ("readlink: specify treeobj and one or more keys");
+    for (i = 1; i < argc; i++) {
+        if (kvs_get_symlinkat (h, argv[0], argv[i], &target) < 0)
+            log_err_exit ("%s", argv[i]);
+        else
+            printf ("%s\n", target);
+        free (target);
+    }
 }
 
 /*

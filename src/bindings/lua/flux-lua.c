@@ -262,7 +262,7 @@ static int l_flux_kvsdir_new (lua_State *L)
         path = lua_tostring (L, 2);
     }
 
-    if (kvs_get_dir (f, &dir, path) < 0)
+    if (kvs_get_dir (f, &dir, "%s", path) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     return lua_push_kvsdir (L, dir);
 }
@@ -318,7 +318,7 @@ static int l_flux_kvs_type (lua_State *L)
         free (val);
         return (2);
     }
-    if (kvs_get_dir (f, &d, key) == 0) {
+    if (kvs_get_dir (f, &d, "%s", key) == 0) {
         lua_pushstring (L, "dir");
         lua_push_kvsdir (L, d);
         return (2);
@@ -1097,7 +1097,7 @@ static int l_kvswatcher_add (lua_State *L)
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
     lua_getfield (L, 2, "isdir");
     if (lua_toboolean (L, -1))
-        rc = kvs_watch_dir (f, l_kvsdir_watcher, (void *) kw, key);
+        rc = kvs_watch_dir (f, l_kvsdir_watcher, (void *) kw, "%s", key);
     else
         rc = kvs_watch (f, key, l_kvswatcher, (void *) kw);
     if (rc < 0) {

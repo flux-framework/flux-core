@@ -22,40 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* JSON directory object:
- * list of key-value pairs where key is a name, value is a dirent
- *
- * JSON dirent objects:
- * object containing one key-value pair where key is one of
- * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", "LINKVAL", and value is a SHA1
- * hash key into ctx->store (FILEREF, DIRREF), an actual directory, file
- * (value), or link target JSON object (FILEVAL, DIRVAL, LINKVAL).
- *
- * For example, consider KVS containing:
- * a="foo"
- * b="bar"
- * c.d="baz"
- * X -> c.d
- *
- * Root directory:
- * {"a":{"FILEREF":"f1d2d2f924e986ac86fdf7b36c94bcdf32beec15"},
- *  "b":{"FILEREF","8714e0ef31edb00e33683f575274379955b3526c"},
- *  "c":{"DIRREF","6eadd3a778e410597c85d74c287a57ad66071a45"},
- *  "X":{"LINKVAL","c.d"}}
- *
- * Deep copy of root directory:
- * {"a":{"FILEVAL":"foo"},
- *  "b":{"FILEVAL","bar"},
- *  "c":{"DIRVAL",{"d":{"FILEVAL":"baz"}}},
- *  "X":{"LINKVAL","c.d"}}
- *
- * On LINKVAL's:
- * - target is always fully qualified key name
- * - links are always followed in path traversal of intermediate directories
- * - for kvs_get, terminal links are only followed if 'readlink' flag is set
- * - for kvs_put, terminal links are never followed
- */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -249,12 +215,12 @@ static int content_load_request_send (ctx_t *ctx, const href_t ref, bool now)
     flux_rpc_aux_set (rpc, xstrdup (ref), free);
     if (now) {
         content_load_completion (rpc, ctx);
+    } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0) {
         flux_rpc_destroy (rpc);
-    } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0)
         goto error;
+    }
     return 0;
 error:
-    flux_rpc_destroy (rpc);
     return -1;
 }
 
@@ -330,12 +296,12 @@ static int content_store_request_send (ctx_t *ctx, const href_t ref,
     if (now) {
         if (content_store_get (rpc, ctx) < 0)
             goto error;
+    } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0) {
         flux_rpc_destroy (rpc);
-    } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0)
         goto error;
+    }
     return 0;
 error:
-    flux_rpc_destroy (rpc);
     return -1;
 }
 
@@ -908,6 +874,8 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     int flags;
     const char *key;
     JSON val;
+    JSON root = NULL;
+    JSON root_dirent = NULL;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
     int rc = -1;
@@ -918,11 +886,23 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto done;
     }
-    if (kp_tget_dec (in, &key, &flags) < 0)
+    if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
-    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
+    /* If root dirent was specified, lookup will be relative to that.
+     */
+    if (root_dirent) {
+        const char *ref;
+
+        if (!Jget_str (root_dirent, "DIRREF", &ref)) {
+            errno = EINVAL;
+            goto done;
+        }
+        if (!load (ctx, ref, wait, &root))
+            goto stall;
+    }
+    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum != 0) {
         errno = lookup_errnum;

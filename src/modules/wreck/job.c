@@ -66,9 +66,6 @@ static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
         goto out;
     }
 
-    if ((rc = kvs_commit (h)) < 0)
-        flux_log_error (h, "kvs_job_set_state: kvs_commit");
-
 out:
     free (key);
     free (link);
@@ -110,12 +107,12 @@ out:
     return ret;
 }
 
-static char * realtime_string (char *buf, size_t sz)
+static char * realtime_json_string (char *buf, size_t sz)
 {
     struct timespec tm;
     clock_gettime (CLOCK_REALTIME, &tm);
     memset (buf, 0, sz);
-    snprintf (buf, sz, "%ju.%06ld", (uintmax_t) tm.tv_sec, tm.tv_nsec/1000);
+    snprintf (buf, sz, "\"%ju.%06ld\"", (uintmax_t) tm.tv_sec, tm.tv_nsec/1000);
     return (buf);
 }
 
@@ -159,33 +156,36 @@ out:
 
 static int add_jobinfo (flux_t h, int64_t id, json_object *req)
 {
-    int rc = 0;
+    int rc = -1;
     char buf [64];
     json_object_iter i;
-    json_object *o;
-    kvsdir_t *dir;
-
-    if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0) {
-        flux_log_error (h, "kvs_get_dir (id=%lu)", id);
-        return (-1);
-    }
+    const int maxkey = 256;
+    char key[maxkey];
 
     json_object_object_foreachC (req, i) {
-        rc = kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
-        if (rc < 0) {
-            flux_log_error (h, "addd_jobinfo: kvsdir_put (key=%s)", i.key);
+        if (snprintf (key, maxkey, "lwj.%lu.%s", id, i.key) >= maxkey) {
+            errno = EINVAL;
+            flux_log_error (h, "add_jobinfo: buffer overflow (key=%s)", i.key);
+            goto out;
+        }
+        if (kvs_put (h, key, json_object_to_json_string (i.val)) < 0) {
+            flux_log_error (h, "add_jobinfo: kvs_put (key=%s)", key);
             goto out;
         }
     }
 
-    o = json_object_new_string (realtime_string (buf, sizeof (buf)));
     /* Not a fatal error if create-time addition fails */
-    if (kvsdir_put (dir, "create-time", json_object_to_json_string (o)) < 0)
-        flux_log_error (h, "add_jobinfo: kvsdir_put (create-time)");
-    json_object_put (o);
-
+    if (snprintf (key, maxkey, "lwj.%lu.create-time", id) >= maxkey) {
+        errno = EINVAL;
+        flux_log_error (h, "add_jobinfo: buffer overflow (id=%lu)", id);
+        goto out;
+    }
+    if (kvs_put (h, key, realtime_json_string (buf, sizeof (buf))) < 0) {
+        flux_log_error (h, "add_jobinfo: kvs_put (key=%s)", key);
+        goto out;
+    }
+    rc = 0;
 out:
-    kvsdir_destroy (dir);
     return (rc);
 }
 

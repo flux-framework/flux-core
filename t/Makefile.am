@@ -151,6 +151,7 @@ check_PROGRAMS = \
 	loop/log.t \
 	kz/kzutil \
 	kvs/torture \
+	kvs/dtree \
 	kvs/asyncfence \
 	kvs/hashtest \
 	kvs/watch \
@@ -236,6 +237,12 @@ kz_kzutil_LDADD = \
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
 kvs_torture_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_dtree_SOURCES = kvs/dtree.c
+kvs_dtree_CPPFLAGS = $(test_cppflags)
+kvs_dtree_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 

@@ -282,6 +282,15 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
+test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
+	flux kvs unlink $TEST &&
+	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs unlink $TEST &&
+	LINKVAL=$(flux kvs readlinkat $ROOTREF $TEST.a.b.link) &&
+	test "$LINKVAL" = "$TEST.a.b.X"
+'
+
 test_expect_success 'kvs: get-treeobj: returns directory reference for root' '
 	flux kvs unlink $TEST &&
 	flux kvs get-treeobj . | grep -q "DIRREF"
@@ -355,6 +364,34 @@ test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
 	test_must_fail flux kvs put-treeobj $TEST.a="{\"DIRREF\":\"sha1-bbb\"}"
 '
 
+test_expect_success 'kvs: getat: fails bad on dirent' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs getat 42 $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRREF\":\"sha2-aaa\"}" $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRREF\":\"sha1-bbb\"}" $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRVAL\":{}}" $TEST.a
+'
+
+test_expect_success 'kvs: getat: works on root from get-treeobj' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	test $(flux kvs getat $(flux kvs get-treeobj .) $TEST.a.b.c) = 42
+'
+
+test_expect_success 'kvs: getat: works on subdir from get-treeobj' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	test $(flux kvs getat $(flux kvs get-treeobj $TEST.a.b) c) = 42
+'
+
+test_expect_success 'kvs: getat: works on outdated root' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs put $TEST.a.b.c=43 &&
+	test $(flux kvs getat $ROOTREF $TEST.a.b.c) = 42
+'
+
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
 	flux kvs put $TEST.dirsize.a=1 &&
@@ -362,6 +399,22 @@ test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs put $TEST.dirsize.c=3 &&
 	OUTPUT=$(flux kvs dirsize $TEST.dirsize) &&
 	test "$OUTPUT" = "3"
+'
+
+test_expect_success 'kvs: store 16x3 directory tree' '
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h3 -w16 --prefix $TEST.dtree
+'
+
+test_expect_success 'kvs: walk 16x3 directory tree' '
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 4096
+'
+
+test_expect_success 'kvs: walk after unlink with dirat from root and from test dir' '
+	DTREEREF=$(flux kvs get-treeobj $TEST.dtree) &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs unlink $TEST.dtree &&
+	test $(flux kvs dirat -r $DTREEREF .| wc -l) = 4096 &&
+	test $(flux kvs dirat -r $ROOTREF $TEST.dtree | wc -l) = 4096
 '
 
 test_expect_success 'kvs: put key of . fails' '
@@ -457,6 +510,7 @@ test_expect_success 'kvs: store 10,000 keys in one dir' '
 test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir2 --count 1000000
 '
+
 
 # async fence
 
