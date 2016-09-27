@@ -43,7 +43,10 @@
 
 #include "src/common/libutil/nodeset.h"
 
+#define RPC_MAGIC 0x114422af
+
 struct flux_rpc_struct {
+    int magic;
     struct flux_match m;
     flux_t h;
     flux_then_f then_cb;
@@ -67,7 +70,10 @@ static void flux_rpc_usecount_incr (flux_rpc_t *rpc)
 
 static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
 {
-    if (rpc && --rpc->usecount == 0) {
+    if (!rpc)
+        return;
+    assert (rpc->magic == RPC_MAGIC);
+    if (--rpc->usecount == 0) {
         if (rpc->w) {
             flux_msg_handler_stop (rpc->w);
             flux_msg_handler_destroy (rpc->w);
@@ -84,6 +90,7 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
         flux_msg_destroy (rpc->rx_msg_consumed);
         if (rpc->aux && rpc->aux_destroy)
             rpc->aux_destroy (rpc->aux);
+        rpc->magic =~ RPC_MAGIC;
         free (rpc);
     }
 }
@@ -105,6 +112,7 @@ static flux_rpc_t *rpc_create (flux_t h, int rx_expected)
         return NULL;
     }
     memset (rpc, 0, sizeof (*rpc));
+    rpc->magic = RPC_MAGIC;
     if (rx_expected == 0) {
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
     } else {
@@ -199,6 +207,7 @@ done:
 
 bool flux_rpc_check (flux_rpc_t *rpc)
 {
+    assert (rpc->magic == RPC_MAGIC);
     if (rpc->rx_count >= rpc->rx_expected)
         return false;
     if (rpc->rx_msg || (rpc->rx_msg = flux_recv (rpc->h, rpc->m,
@@ -252,6 +261,7 @@ int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
 {
     int rc = -1;
 
+    assert (rpc->magic == RPC_MAGIC);
     if (rpc_get (rpc, nodeid) < 0)
         goto done;
     if (flux_response_decode (rpc->rx_msg_consumed, NULL, json_str) < 0)
@@ -265,6 +275,7 @@ int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid, void *data, int *len)
 {
     int rc = -1;
 
+    assert (rpc->magic == RPC_MAGIC);
     if (rpc_get (rpc, nodeid) < 0)
         goto done;
     if (flux_response_decode_raw (rpc->rx_msg_consumed, NULL, data, len) < 0)
@@ -310,6 +321,7 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
 {
     int rc = -1;
 
+    assert (rpc->magic == RPC_MAGIC);
     if (rpc->rx_count >= rpc->rx_expected) {
         errno = EINVAL;
         goto done;
@@ -338,6 +350,7 @@ done:
 
 bool flux_rpc_completed (flux_rpc_t *rpc)
 {
+    assert (rpc->magic == RPC_MAGIC);
     if (flux_fatality (rpc->h))
         return true;
     if (rpc->rx_count >= rpc->rx_expected)
@@ -483,16 +496,19 @@ const char *flux_rpc_type_get (flux_rpc_t *rpc)
 
 void flux_rpc_type_set (flux_rpc_t *rpc, const char *type)
 {
+    assert (rpc->magic == RPC_MAGIC);
     rpc->type = type;
 }
 
 void *flux_rpc_aux_get (flux_rpc_t *rpc)
 {
+    assert (rpc->magic == RPC_MAGIC);
     return rpc->aux;
 }
 
 void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy)
 {
+    assert (rpc->magic == RPC_MAGIC);
     if (rpc->aux && rpc->aux_destroy)
         rpc->aux_destroy (rpc->aux);
     rpc->aux = aux;

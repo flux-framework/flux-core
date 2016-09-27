@@ -35,7 +35,8 @@ void kvsdir_incref (kvsdir_t *dir);
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (flux_t h, const char *key, char **json_str);
-int kvs_get_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...);
+int kvs_get_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...)
+        __attribute__ ((format (printf, 3, 4)));
 int kvs_get_string (flux_t h, const char *key, char **valp);
 int kvs_get_int (flux_t h, const char *key, int *valp);
 int kvs_get_int64 (flux_t h, const char *key, int64_t *valp);
@@ -56,7 +57,8 @@ int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
  */
 int kvs_watch (flux_t h, const char *key, kvs_set_f set, void *arg);
 int kvs_watch_dir (flux_t h, kvs_set_dir_f set, void *arg,
-                   const char *fmt, ...);
+                   const char *fmt, ...)
+        __attribute__ ((format (printf, 4, 5)));
 int kvs_watch_string (flux_t h, const char *key, kvs_set_string_f set,
                       void *arg);
 int kvs_watch_int (flux_t h, const char *key, kvs_set_int_f set, void *arg);
@@ -81,7 +83,8 @@ int kvs_unwatch (flux_t h, const char *key);
  * FIXME: add more types.
  */
 int kvs_watch_once (flux_t h, const char *key, char **json_str);
-int kvs_watch_once_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...);
+int kvs_watch_once_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...)
+        __attribute__ ((format (printf, 3, 4)));
 int kvs_watch_once_int (flux_t h, const char *key, int *valp);
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument
@@ -212,7 +215,8 @@ int kvs_dropcache (flux_t h);
  * is resolved relative to the directory.
  */
 int kvsdir_get (kvsdir_t *dir, const char *key, char **json_str);
-int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...);
+int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
+        __attribute__ ((format (printf, 3, 4)));
 int kvsdir_get_string (kvsdir_t *dir, const char *key, char **valp);
 int kvsdir_get_int (kvsdir_t *dir, const char *key, int *valp);
 int kvsdir_get_int64 (kvsdir_t *dir, const char *key, int64_t *valp);
