@@ -775,10 +775,8 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
     json_object *vp, *dirent, *val = NULL;
     int errnum = 0;
 
-    if (root == NULL) {
-        if (!load (ctx, ctx->rootdir, wait, &root))
-            goto stall;
-    }
+    assert (root != NULL);
+
     if (!strcmp (name, ".")) { /* special case root */
         if ((flags & KVS_PROTO_TREEOBJ)) {
             val = dirent_create ("DIRREF", ctx->rootdir);
@@ -874,6 +872,10 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
     int flags;
     const char *key;
     JSON val;
+    JSON root = NULL;
+    JSON root_dirent = NULL;
+    JSON tmp_dirent = NULL;
+    const char *root_ref = ctx->rootdir;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
     int rc = -1;
@@ -884,11 +886,24 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto done;
     }
-    if (kp_tget_dec (in, NULL, &key, &flags) < 0)
+    if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
-    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
+    /* If root dirent was specified, lookup corresponding 'root' directory.
+     * Otherwise, use the current root.
+     */
+    if (root_dirent) {
+        if (!Jget_str (root_dirent, "DIRREF", &root_ref)) {
+            errno = EINVAL;
+            goto done;
+        }
+    } else {
+        root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
+    }
+    if (!load (ctx, root_ref, wait, &root))
+        goto stall;
+    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum != 0) {
         errno = lookup_errnum;
@@ -898,7 +913,7 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = ENOENT;
         goto done;
     }
-    if (!(out = kp_rget_enc (NULL, val)))
+    if (!(out = kp_rget_enc (Jget (root_dirent), val)))
         goto done;
     rc = 0;
 done:
@@ -909,6 +924,7 @@ done:
 stall:
     Jput (in);
     Jput (out);
+    Jput (tmp_dirent);
 }
 
 static bool compare_json (json_object *o1, json_object *o2)
@@ -928,6 +944,7 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
     JSON in2 = NULL;
     JSON out = NULL;
     JSON oval, val = NULL;
+    JSON root = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
@@ -946,7 +963,9 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, arg)))
         goto done;
-    if (!lookup (ctx, NULL, wait, flags, key, &val, &lookup_errnum))
+    if (!load (ctx, ctx->rootdir, wait, &root))
+        goto stall;
+    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
         goto stall;
     if (lookup_errnum) {
         errno = lookup_errnum;
