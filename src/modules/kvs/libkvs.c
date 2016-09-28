@@ -325,7 +325,8 @@ char *kvsdir_key_at (kvsdir_t *dir, const char *name)
  ** GET
  **/
 
-static int getobj (flux_t h, const char *key, int flags, json_object **val)
+static int getobj (flux_t h, json_object *rootdir, const char *key,
+                   int flags, json_object **val)
 {
     flux_rpc_t *rpc = NULL;
     const char *json_str;
@@ -341,7 +342,7 @@ static int getobj (flux_t h, const char *key, int flags, json_object **val)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (NULL, k, flags)))
+    if (!(in = kp_tget_enc (rootdir, k, flags)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -371,7 +372,7 @@ int kvs_get (flux_t h, const char *key, char **val)
 {
     JSON v;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         return -1;
     if (val)
         *val = xstrdup (Jtostr (v));
@@ -382,7 +383,7 @@ int kvs_get (flux_t h, const char *key, char **val)
 /* deprecated */
 int kvs_get_obj (flux_t h, const char *key, JSON *val)
 {
-    return getobj (h, key, 0, val);
+    return getobj (h, NULL, key, 0, val);
 }
 
 int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
@@ -435,7 +436,7 @@ int kvs_get_symlink (flux_t h, const char *key, char **val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, KVS_PROTO_READLINK, &v) < 0)
+    if (getobj (h, NULL, key, KVS_PROTO_READLINK, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_string) {
         errno = EPROTO;
@@ -455,7 +456,7 @@ int kvs_get_treeobj (flux_t h, const char *key, char **val)
     const char *s;
     int rc = -1;
 
-    if (getobj (h, key, KVS_PROTO_TREEOBJ, &v) < 0)
+    if (getobj (h, NULL, key, KVS_PROTO_TREEOBJ, &v) < 0)
         goto done;
     if (val) {
         s = json_object_to_json_string_ext (v, JSON_C_TO_STRING_PLAIN);
@@ -472,7 +473,7 @@ int kvs_get_string (flux_t h, const char *key, char **val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_string) {
         errno = EPROTO;
@@ -491,7 +492,7 @@ int kvs_get_int (flux_t h, const char *key, int *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_int) {
         errno = EPROTO;
@@ -510,7 +511,7 @@ int kvs_get_int64 (flux_t h, const char *key, int64_t *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_int) {
         errno = EPROTO;
@@ -529,7 +530,7 @@ int kvs_get_double (flux_t h, const char *key, double *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_double) {
         errno = EPROTO;
@@ -548,7 +549,7 @@ int kvs_get_boolean (flux_t h, const char *key, bool *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_boolean) {
         errno = EPROTO;
@@ -1651,7 +1652,7 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
 int kvs_copy (flux_t h, const char *from, const char *to)
 {
     JSON dirent;
-    if (getobj (h, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
+    if (getobj (h, NULL, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
         return -1;
     if (kvs_put_dirent (h, to, dirent) < 0) {
         Jput (dirent);
