@@ -352,6 +352,33 @@ done:
     return rc;
 }
 
+int kvs_get_symlinkat (flux_t h, const char *treeobj,
+                       const char *key, char **val)
+{
+    JSON v = NULL;
+    JSON dirent = NULL;
+    int rc = -1;
+
+    if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
+                         || dirent_validate (dirent) < 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (getobj (h, dirent, key, KVS_PROTO_READLINK, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_string) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (val)
+        *val = xstrdup (json_object_get_string (v));
+    rc = 0;
+done:
+    Jput (v);
+    Jput (dirent);
+    return rc;
+}
+
 /* deprecated */
 int kvs_get_obj (flux_t h, const char *key, JSON *val)
 {

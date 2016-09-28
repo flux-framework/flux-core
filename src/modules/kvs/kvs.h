@@ -54,6 +54,8 @@ int kvs_getat (flux_t h, const char *treeobj,
                const char *key, char **json_str);
 int kvs_get_dirat (flux_t h, const char *treeobj,
                    const char *key, kvsdir_t **dirp);
+int kvs_get_symlinkat (flux_t h, const char *treeobj,
+                               const char *key, char **val);
 
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
