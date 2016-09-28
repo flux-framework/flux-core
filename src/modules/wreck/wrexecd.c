@@ -143,6 +143,9 @@ struct prog_ctx {
     int envref;             /* Global reference to Lua env obj    */
 };
 
+int prog_ctx_remove_completion_ref (struct prog_ctx *ctx, const char *fmt, ...);
+int prog_ctx_add_completion_ref (struct prog_ctx *ctx, const char *fmt, ...);
+
 void *lsd_nomem_error (const char *file, int line, char *msg)
 {
     return (NULL);
@@ -335,18 +338,6 @@ const char * ioname (int s)
     return "";
 }
 
-void prog_ctx_signal_eof (struct prog_ctx *ctx)
-{
-    /*
-     *  Signal that a stdio reader has been closed as this event may
-     *   indicate completion if all tasks have exited and other IO
-     *   streams are closed.
-     *  XXX: For now we wake up the signal callback and force the
-     *   check there.
-     */
-    kill (getpid(), SIGCHLD);
-}
-
 /*
  *  Turn a possibly multi-line zio json_string into one kz_put() per
  *   line with a delayed commit until after the line(s) are complete.
@@ -436,7 +427,8 @@ int io_cb (zio_t *z, const char *s, int len, void *arg)
     else if (kz) {
         kz_close (kz);
         t->kz [type] = NULL;
-        prog_ctx_signal_eof (t->ctx);
+        prog_ctx_remove_completion_ref (t->ctx, "task.%d.%s",
+            t->id, ionames [type]);
     }
     return (0);
 }
@@ -523,10 +515,12 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->zio [OUT] = zio_pipe_reader_create ("stdout", (void *) t);
     zio_set_send_cb (t->zio [OUT], io_cb);
     zio_set_raw_output (t->zio [OUT]);
+    prog_ctx_add_completion_ref (ctx, "task.%d.stdout", id);
 
     t->zio [ERR] = zio_pipe_reader_create ("stderr", (void *) t);
     zio_set_send_cb (t->zio [ERR], io_cb);
     zio_set_raw_output (t->zio [ERR]);
+    prog_ctx_add_completion_ref (ctx, "task.%d.stderr", id);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
@@ -537,22 +531,9 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     if (!prog_ctx_getopt (ctx, "no-pmi-server"))
         task_pmi_setup (t);
 
+    prog_ctx_add_completion_ref (ctx, "task.%d.exit", id);
+
     return (t);
-}
-
-int task_completed (struct task_info *t)
-{
-    return (t->exited &&
-            zio_closed (t->zio [OUT]) && zio_closed (t->zio [ERR]));
-}
-
-int all_tasks_completed (struct prog_ctx *ctx)
-{
-    int i;
-    for (i = 0; i < ctx->nprocs; i++)
-        if (!task_completed (ctx->task [i]))
-            return (0);
-    return (1);
 }
 
 void task_io_flush (struct task_info *t)
@@ -1287,8 +1268,10 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
     /* Once count is fully populated, release the watch on the
      *  exit_status dir so reactor loop can exit
      */
-    if (Jget_int (o, "count", &count) && count == ctx->total_ntasks)
+    if (Jget_int (o, "count", &count) && count == ctx->total_ntasks) {
         kvs_unwatch (h, key);
+        prog_ctx_remove_completion_ref (ctx, "exit_status");
+    }
 
     Jput (o);
     return (0);
@@ -1331,6 +1314,14 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
         flux_log_error (h, "wait_for_aggregate: asprintf");
         return (-1);
     }
+
+    /*  Add completion reference *before*  kvs_watch() since
+     *   callback may be called synchronously and thus the cb
+     *   may attempt to unreference this completion ref before
+     *   we return
+     */
+    prog_ctx_add_completion_ref (ctx, "exit_status");
+
     if ((rc = kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
         flux_log_error (h, "kvs_watch_dir");
     free (key);
@@ -1364,7 +1355,6 @@ static int aggregator_push_task_exit (struct task_info *t)
 
     if (t->ctx->noderank == 0 && t->id == 0)
         rc = wait_for_task_exit_aggregate (t->ctx);
-
     return (rc);
 }
 
@@ -1862,8 +1852,12 @@ int task_exit (struct task_info *t, int status)
     ctx->taskid = t->id;
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
 
+
     if (send_exit_message (t) < 0)
         wlog_err (ctx, "Sending exit message failed!");
+
+    prog_ctx_remove_completion_ref (t->ctx, "task.%d.exit", t->id);
+
     return (0);
 }
 
@@ -2058,8 +2052,7 @@ void signal_cb (flux_reactor_t *r, flux_watcher_t *fdw, int revents, void *arg)
     /* SIGCHLD assumed */
     while (reap_child (ctx))
         ++ctx->exited;
-    if (all_tasks_completed (ctx))
-        flux_reactor_stop (r);
+
     return;
 }
 
