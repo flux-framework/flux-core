@@ -52,6 +52,9 @@ int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
  */
 int kvs_getat (flux_t h, const char *treeobj,
                const char *key, char **json_str);
+int kvs_get_dirat (flux_t h, const char *treeobj,
+                   const char *key, kvsdir_t **dirp);
+
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
