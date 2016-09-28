@@ -1539,6 +1539,10 @@ int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put (dir->handle, key, Jtostr (val));
     free (key);
@@ -1551,6 +1555,10 @@ int kvsdir_put (kvsdir_t *dir, const char *name, const char *val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put (dir->handle, key, val);
     free (key);
@@ -1563,6 +1571,10 @@ int kvsdir_put_string (kvsdir_t *dir, const char *name, const char *val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put_string (dir->handle, key, val);
     free (key);
@@ -1575,6 +1587,10 @@ int kvsdir_put_int (kvsdir_t *dir, const char *name, int val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put_int (dir->handle, key, val);
     free (key);
@@ -1587,6 +1603,10 @@ int kvsdir_put_int64 (kvsdir_t *dir, const char *name, int64_t val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put_int64 (dir->handle, key, val);
     free (key);
@@ -1599,6 +1619,10 @@ int kvsdir_put_double (kvsdir_t *dir, const char *name, double val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put_double (dir->handle, key, val);
     free (key);
@@ -1611,6 +1635,10 @@ int kvsdir_put_boolean (kvsdir_t *dir, const char *name, bool val)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_put_boolean (dir->handle, key, val);
     free (key);
@@ -1623,6 +1651,10 @@ int kvsdir_mkdir (kvsdir_t *dir, const char *name)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_mkdir (dir->handle, key);
     free (key);
@@ -1635,6 +1667,10 @@ int kvsdir_symlink (kvsdir_t *dir, const char *name, const char *target)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_symlink (dir->handle, key, target);
     free (key);
@@ -1647,6 +1683,10 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
     int rc;
     char *key;
 
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
     key = kvsdir_key_at (dir, name);
     rc = kvs_unlink (dir->handle, key);
     free (key);
