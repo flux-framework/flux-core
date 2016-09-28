@@ -341,7 +341,7 @@ static int getobj (flux_t h, const char *key, int flags, json_object **val)
         goto done;
     }
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, flags)))
+    if (!(in = kp_tget_enc (NULL, k, flags)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -351,7 +351,7 @@ static int getobj (flux_t h, const char *key, int flags, json_object **val)
         errno = EPROTO;
         goto done;
     }
-    if (kp_rget_dec (out, &v) < 0)
+    if (kp_rget_dec (out, NULL, &v) < 0)
         goto done;
     if (val)
         *val = Jget (v);
@@ -405,7 +405,7 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
     key = xvasprintf (fmt, ap);
     va_end (ap);
     k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, KVS_PROTO_READDIR)))
+    if (!(in = kp_tget_enc (NULL, k, KVS_PROTO_READDIR)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -415,7 +415,7 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
         errno = EPROTO;
         goto done;
     }
-    if (kp_rget_dec (out, &v) < 0)
+    if (kp_rget_dec (out, NULL, &v) < 0)
         goto done;
     *dir = kvsdir_alloc (h, k, v);
     rc = 0;

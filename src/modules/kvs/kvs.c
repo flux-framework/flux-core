@@ -884,7 +884,7 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto done;
     }
-    if (kp_tget_dec (in, &key, &flags) < 0)
+    if (kp_tget_dec (in, NULL, &key, &flags) < 0)
         goto done;
     if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
         goto done;
@@ -898,7 +898,7 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
         errno = ENOENT;
         goto done;
     }
-    if (!(out = kp_rget_enc (val)))
+    if (!(out = kp_rget_enc (NULL, val)))
         goto done;
     rc = 0;
 done:

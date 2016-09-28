@@ -1,43 +1,64 @@
 #include <string.h>
 
 #include "src/common/libutil/shortjson.h"
-#include "src/modules/kvs/proto.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
+
+#include "src/modules/kvs/proto.h"
+#include "src/modules/kvs/json_dirent.h"
 
 void test_get (void)
 {
     JSON o;
     const char *key = NULL;
     JSON val = NULL;
+    JSON dirent = NULL;
+    JSON dirent2 = NULL;
     int i, flags;
 
-    o = kp_tget_enc ("foo", 42);
+    o = kp_tget_enc (NULL, "foo", 42);
     ok (o != NULL,
         "kp_tget_enc works");
     diag ("get request: %s", Jtostr (o));
     flags = 0;
-    ok (kp_tget_dec (o, &key, &flags) == 0 && flags == 42,
+    ok (kp_tget_dec (o, NULL, &key, &flags) == 0 && flags == 42,
         "kp_tget_dec works");
     like (key, "^foo$",
         "kp_tget_dec returned encoded key");
     Jput (o);
 
+    dirent = dirent_create ("DIRREF", "sha1-abcdefabcdef00000");
+    o = kp_tget_enc (dirent, "foo", 42);
+    ok (o != NULL,
+        "kp_tget_enc with optional dirent arg works");
+    diag ("get request: %s", Jtostr (o));
+    flags = 0;
+    ok (kp_tget_dec (o, &dirent2, &key, &flags) == 0 && flags == 42,
+        "kp_tget_dec works");
+    ok (dirent_validate (dirent2) && dirent_match (dirent, dirent2),
+        "kp_tget_dec returned dirent");
+    Jput (dirent);
+    Jput (o);
+
+
     val = Jnew ();
     Jadd_int (val, "i", 42);
-    o = kp_rget_enc (val);
+    dirent = dirent_create ("DIRREF", "sha1-abcdefabcdef00000");
+    o = kp_rget_enc (dirent, val);
     val = NULL; /* val now owned by o */
     ok (o != NULL,
         "kp_rget_enc works");
     diag ("get response: %s", Jtostr (o));
-    ok (kp_rget_dec (o, &val) == 0,
+    ok (kp_rget_dec (o, &dirent2, &val) == 0,
         "kp_rget_dec works");
     // get response: { "val": { "i": 42 } }
     i = 0;
     ok (val && Jget_int (val, "i", &i) && i == 42,
         "kp_rget_dec returned encoded object");
+    ok (dirent_validate (dirent2) && dirent_match (dirent, dirent2),
+        "kp_rget_dec returned rootref");
     Jput (o); /* owns val */
 }
 
