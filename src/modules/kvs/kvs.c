@@ -1089,6 +1089,7 @@ static void fence_destroy (fence_t *f)
             /* FIXME: respond with error here? */
             zlist_destroy (&f->requests);
         }
+        free (f);
     }
 }
 
