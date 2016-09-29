@@ -190,7 +190,8 @@ local function check_job_completed ()
        (state == "complete" or state == "reaped") then
         local rc = lwj_return_code (f, wreck, jobid)
         if rc == 0 then
-            wreck:verbose ("All tasks completed successfully.\n");
+            wreck:verbose ("%.3fs: All tasks completed successfully.\n",
+                           tt:get0 ());
         end
         os.exit (rc)
     end

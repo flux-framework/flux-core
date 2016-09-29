@@ -59,6 +59,7 @@ TESTS = \
 	t2005-hwloc-basic.t \
 	t2006-joblog.t \
 	t2007-caliper.t \
+	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
@@ -123,6 +124,7 @@ check_SCRIPTS = \
 	t2005-hwloc-basic.t \
 	t2006-joblog.t \
 	t2007-caliper.t \
+	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
         issues/t0441-kvs-put-get.sh \
@@ -184,6 +186,7 @@ dist_check_DATA = \
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
 	scripts/kvs-watch-until.lua \
+	scripts/kvs-get-ex.lua \
 	scripts/cpus-allowed.lua \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \

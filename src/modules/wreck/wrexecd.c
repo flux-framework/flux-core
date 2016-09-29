@@ -47,6 +47,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libpmi/simple_server.h"
 
@@ -116,6 +117,8 @@ struct prog_ctx {
      */
     zhash_t *options;
 
+    zhash_t *completion_refs;
+
     int argc;
     char **argv;
     char *envz;
@@ -139,6 +142,9 @@ struct prog_ctx {
     lua_stack_t lua_stack;
     int envref;             /* Global reference to Lua env obj    */
 };
+
+int prog_ctx_remove_completion_ref (struct prog_ctx *ctx, const char *fmt, ...);
+int prog_ctx_add_completion_ref (struct prog_ctx *ctx, const char *fmt, ...);
 
 void *lsd_nomem_error (const char *file, int line, char *msg)
 {
@@ -332,18 +338,6 @@ const char * ioname (int s)
     return "";
 }
 
-void prog_ctx_signal_eof (struct prog_ctx *ctx)
-{
-    /*
-     *  Signal that a stdio reader has been closed as this event may
-     *   indicate completion if all tasks have exited and other IO
-     *   streams are closed.
-     *  XXX: For now we wake up the signal callback and force the
-     *   check there.
-     */
-    kill (getpid(), SIGCHLD);
-}
-
 /*
  *  Turn a possibly multi-line zio json_string into one kz_put() per
  *   line with a delayed commit until after the line(s) are complete.
@@ -433,7 +427,8 @@ int io_cb (zio_t *z, const char *s, int len, void *arg)
     else if (kz) {
         kz_close (kz);
         t->kz [type] = NULL;
-        prog_ctx_signal_eof (t->ctx);
+        prog_ctx_remove_completion_ref (t->ctx, "task.%d.%s",
+            t->id, ionames [type]);
     }
     return (0);
 }
@@ -520,10 +515,12 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->zio [OUT] = zio_pipe_reader_create ("stdout", (void *) t);
     zio_set_send_cb (t->zio [OUT], io_cb);
     zio_set_raw_output (t->zio [OUT]);
+    prog_ctx_add_completion_ref (ctx, "task.%d.stdout", id);
 
     t->zio [ERR] = zio_pipe_reader_create ("stderr", (void *) t);
     zio_set_send_cb (t->zio [ERR], io_cb);
     zio_set_raw_output (t->zio [ERR]);
+    prog_ctx_add_completion_ref (ctx, "task.%d.stderr", id);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
@@ -534,22 +531,9 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     if (!prog_ctx_getopt (ctx, "no-pmi-server"))
         task_pmi_setup (t);
 
+    prog_ctx_add_completion_ref (ctx, "task.%d.exit", id);
+
     return (t);
-}
-
-int task_completed (struct task_info *t)
-{
-    return (t->exited &&
-            zio_closed (t->zio [OUT]) && zio_closed (t->zio [ERR]));
-}
-
-int all_tasks_completed (struct prog_ctx *ctx)
-{
-    int i;
-    for (i = 0; i < ctx->nprocs; i++)
-        if (!task_completed (ctx->task [i]))
-            return (0);
-    return (1);
 }
 
 void task_io_flush (struct task_info *t)
@@ -666,7 +650,70 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     free (ctx->cores_per_node);
 
+    if (ctx->options)
+        zhash_destroy (&ctx->options);
+    if (ctx->completion_refs)
+        zhash_destroy (&ctx->completion_refs);
+
     free (ctx);
+}
+
+int prog_ctx_remove_completion_ref (struct prog_ctx *ctx, const char *fmt, ...)
+{
+    int rc = 0;
+    int *intp;
+    va_list ap;
+    char *ref = NULL;
+
+    va_start (ap, fmt);
+    if ((rc = vasprintf (&ref, fmt, ap)) < 0) {
+        flux_log_error (ctx->flux, "add_completion_ref: vasprintf");
+        goto out;
+    }
+    if (!(intp = zhash_lookup (ctx->completion_refs, ref))) {
+        errno = ENOENT;
+        goto out;
+    }
+    if (--(*intp) == 0) {
+        zhash_delete (ctx->completion_refs, ref);
+        if (zhash_size (ctx->completion_refs) == 0)
+            flux_reactor_stop (flux_get_reactor (ctx->flux));
+    }
+out:
+    free (ref);
+    va_end (ap);
+    return (rc);
+}
+
+int prog_ctx_add_completion_ref (struct prog_ctx *ctx, const char *fmt, ...)
+{
+    int rc = 0;
+    int *intp;
+    va_list ap;
+    char *ref = NULL;
+
+    va_start (ap, fmt);
+    if ((rc = vasprintf (&ref, fmt, ap)) < 0) {
+        flux_log_error (ctx->flux, "add_completion_ref: vasprintf");
+        goto out;
+    }
+    if (!(intp = zhash_lookup (ctx->completion_refs, ref))) {
+        if (!(intp = calloc (1, sizeof (*intp)))) {
+            flux_log_error (ctx->flux, "add_completion_ref: calloc");
+            goto out;
+        }
+        if (zhash_insert (ctx->completion_refs, ref, intp) < 0) {
+            flux_log_error (ctx->flux, "add_completion_ref: zhash_insert");
+            free (intp);
+            goto out;
+        }
+        zhash_freefn (ctx->completion_refs, ref, free);
+    }
+    rc = ++(*intp);
+out:
+    free (ref);
+    va_end (ap);
+    return (rc);
 }
 
 struct prog_ctx * prog_ctx_create (void)
@@ -676,7 +723,9 @@ struct prog_ctx * prog_ctx_create (void)
         wlog_fatal (ctx, 1, "malloc");
 
     memset (ctx, 0, sizeof (*ctx));
-    ctx->options = zhash_new ();
+    if (!(ctx->options = zhash_new ())
+        || !(ctx->completion_refs = zhash_new ()))
+        wlog_fatal (ctx, 1, "zhash_new");
 
     ctx->envz = NULL;
     ctx->envz_len = 0;
@@ -1200,10 +1249,122 @@ int send_startup_message (struct prog_ctx *ctx)
     return (0);
 }
 
+
+static int
+exitstatus_watcher (const char *key, const char *str, void *arg, int err)
+{
+    struct prog_ctx *ctx = arg;
+    flux_t h = ctx->flux;
+    int count;
+    JSON o;
+
+    if (err || !(o = Jfromstr (str))) {
+        if (err != ENOENT)
+            flux_log (h, LOG_ERR, "exitstatus_watcher: %s",
+                    err ? flux_strerror (err) : "Jfromstr failed");
+        return (0);
+    }
+
+    /* Once count is fully populated, release the watch on the
+     *  exit_status dir so reactor loop can exit
+     */
+    if (Jget_int (o, "count", &count) && count == ctx->total_ntasks) {
+        kvs_unwatch (h, key);
+        prog_ctx_remove_completion_ref (ctx, "exit_status");
+    }
+
+    Jput (o);
+    return (0);
+}
+
+static JSON task_exit_tojson (struct task_info *t)
+{
+    char *key = NULL;
+    char *taskid = NULL;
+    struct prog_ctx *ctx = t->ctx;
+    JSON o, e;
+
+    if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) < 0)
+        return (NULL);
+    if (asprintf (&taskid, "%d", t->globalid) < 0) {
+        free (key);
+        return (NULL);
+    }
+
+    e = Jnew ();
+    Jadd_int64 (e, taskid, t->status);
+
+    o = Jnew ();
+    Jadd_str (o, "key", key);
+    Jadd_int (o, "total", ctx->total_ntasks);
+    json_object_object_add (o, "entries", e);
+
+    free (key);
+    free (taskid);
+    return (o);
+}
+
+static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
+{
+    int rc = 0;
+    char *key = NULL;
+    flux_t h = ctx->flux;
+
+    if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) <= 0) {
+        flux_log_error (h, "wait_for_aggregate: asprintf");
+        return (-1);
+    }
+
+    /*  Add completion reference *before*  kvs_watch() since
+     *   callback may be called synchronously and thus the cb
+     *   may attempt to unreference this completion ref before
+     *   we return
+     */
+    prog_ctx_add_completion_ref (ctx, "exit_status");
+
+    if ((rc = kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
+        flux_log_error (h, "kvs_watch_dir");
+    free (key);
+    return (rc);
+}
+
+static int aggregator_push_task_exit (struct task_info *t)
+{
+    int rc = 0;
+    flux_t h = t->ctx->flux;
+    flux_rpc_t *rpc;
+    JSON o = task_exit_tojson (t);
+
+    if (o == NULL) {
+        flux_log_error (h, "task_exit_tojson");
+        return (-1);
+    }
+
+    if (!(rpc = flux_rpc (h, "aggregator.push", Jtostr (o),
+                                FLUX_NODEID_ANY, 0))) {
+        flux_log_error (h, "flux_rpc");
+        rc = -1;
+    }
+
+    if (rpc && flux_rpc_get (rpc, NULL, NULL) < 0) {
+        flux_log_error (h, "flux_rpc_get");
+        rc = -1;
+    }
+
+    Jput (o);
+
+    if (t->ctx->noderank == 0 && t->id == 0)
+        rc = wait_for_task_exit_aggregate (t->ctx);
+    return (rc);
+}
+
 int send_exit_message (struct task_info *t)
 {
     char *key;
     struct prog_ctx *ctx = t->ctx;
+
+    if (!prog_ctx_getopt (ctx, "no-aggregate-task-exit"))
+        return aggregator_push_task_exit (t);
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
@@ -1691,8 +1852,12 @@ int task_exit (struct task_info *t, int status)
     ctx->taskid = t->id;
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
 
+
     if (send_exit_message (t) < 0)
         wlog_err (ctx, "Sending exit message failed!");
+
+    prog_ctx_remove_completion_ref (t->ctx, "task.%d.exit", t->id);
+
     return (0);
 }
 
@@ -1887,8 +2052,7 @@ void signal_cb (flux_reactor_t *r, flux_watcher_t *fdw, int revents, void *arg)
     /* SIGCHLD assumed */
     while (reap_child (ctx))
         ++ctx->exited;
-    if (all_tasks_completed (ctx))
-        flux_reactor_stop (r);
+
     return;
 }
 

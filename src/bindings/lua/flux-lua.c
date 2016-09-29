@@ -393,7 +393,6 @@ int l_flux_kvs_get (lua_State *L)
     return (1);
 }
 
-#if 0
 static int l_flux_barrier (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
@@ -401,7 +400,6 @@ static int l_flux_barrier (lua_State *L)
     int nprocs = luaL_checkinteger (L, 3);
     return (l_pushresult (L, flux_barrier (f, name, nprocs)));
 }
-#endif
 
 static int l_flux_rank (lua_State *L)
 {
@@ -2014,8 +2012,34 @@ static int l_kz_read (lua_State *L)
     return (1);
 }
 
+static int l_exitstatus (lua_State *L)
+{
+    int status = lua_tointeger (L, -1);
+    if (WIFEXITED (status)) {
+        lua_pushliteral (L, "exited");
+        lua_pushinteger (L, WEXITSTATUS (status));
+        return 2;
+    }
+    else if (WIFSIGNALED (status)) {
+        lua_pushliteral (L, "killed");
+        lua_pushinteger (L, WTERMSIG (status));
+        if (WCOREDUMP (status)) {
+            lua_pushstring (L, "core dumped");
+            return 3;
+        }
+        return 2;
+    }
+    else if (WIFSTOPPED (status)) {
+        lua_pushliteral (L, "stopped");
+        lua_pushinteger (L, WSTOPSIG (status));
+        return 2;
+    }
+    return (lua_pusherror (L, "Unable to decode exit status 0x%04x", status));
+}
+
 static const struct luaL_Reg flux_functions [] = {
     { "new",             l_flux_new         },
+    { "exitstatus",      l_exitstatus       },
     { NULL,              NULL              }
 };
 
@@ -2029,7 +2053,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "kvs_put",         l_flux_kvs_put     },
     { "kvs_get",         l_flux_kvs_get     },
     { "kvs_unlink",      l_flux_kvs_unlink  },
-//    { "barrier",         l_flux_barrier     },
+    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
     { "recvmsg",         l_flux_recvmsg     },
