@@ -79,7 +79,7 @@ int pmi_single_get_rank (struct pmi_single *pmi, int *rank)
 
 int pmi_single_get_appnum (struct pmi_single *pmi, int *appnum)
 {
-    *appnum = -1;
+    *appnum = getpid ();
     return PMI_SUCCESS;
 }
 

@@ -34,8 +34,8 @@ int main (int argc, char *argv[])
         "pmi_single_get_rank works, rank == 0");
     appnum = -2;
     rc = pmi_single_get_appnum (pmi, &appnum);
-    ok (rc == PMI_SUCCESS && appnum == -1,
-        "pmi_single_get_appnum works, appnum == -1");
+    ok (rc == PMI_SUCCESS && appnum >= 0,
+        "pmi_single_get_appnum works, appnum positive number");
     size = -1;
     rc = pmi_single_get_universe_size (pmi, &size);
     ok (rc == PMI_SUCCESS && size == 1,
