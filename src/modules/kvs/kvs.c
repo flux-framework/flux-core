@@ -506,7 +506,7 @@ static void commit_apply_fence (fence_t *f)
 
     /* Make a copy of the root directory.
      */
-    if (!f->rootcpy) {
+    if (!f->rootcpy_stored && !f->rootcpy) {
         json_object *rootdir;
         if (!load (ctx, ctx->rootdir, wait, &rootdir))
             goto stall;
@@ -552,6 +552,7 @@ static void commit_apply_fence (fence_t *f)
         else if (store (ctx, f->rootcpy, f->newroot, wait) < 0)
             f->errnum = errno;
         f->rootcpy_stored = true; /* cache takes ownership of rootcpy */
+        f->rootcpy = NULL;
         if (wait_get_usecount (wait) > 0)
             goto stall;
     }
@@ -1082,6 +1083,7 @@ static void fence_destroy (fence_t *f)
     if (f) {
         Jput (f->names);
         Jput (f->ops);
+        Jput (f->rootcpy);
         if (f->requests) {
             flux_msg_t *msg;
             while ((msg = zlist_pop (f->requests)))
