@@ -428,6 +428,12 @@ test_expect_success 'kvs: add other types to 2x4 directory and walk' '
 	test $(flux kvs dir -r $TEST.dtree | wc -l) = 19
 '
 
+test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
+	flux kvs unlink $TEST.dtree &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $TEST.dtree &&
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 81
+'
+
 test_expect_success 'kvs: put key of . fails' '
 	test_must_fail flux kvs put .=1
 '
