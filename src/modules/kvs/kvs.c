@@ -626,7 +626,7 @@ void commit_merge_all (ctx_t *ctx)
                 for (i = 0; i < len; i++) {
                     json_object *op;
                     if (Jget_ar_obj (nf->ops, i, &op))
-                        Jadd_ar_obj (f->ops, Jget (op));
+                        Jadd_ar_obj (f->ops, op);
                 }
             }
         }
