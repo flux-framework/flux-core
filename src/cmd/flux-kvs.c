@@ -83,7 +83,7 @@ void usage (void)
 "       flux-kvs mkdir           key [key...]\n"
 "       flux-kvs exists          key\n"
 "       flux-kvs watch           key\n"
-"       flux-kvs watch-dir [-r]  key\n"
+"       flux-kvs watch-dir [-r]  [count] key\n"
 "       flux-kvs copy-tokvs      key file\n"
 "       flux-kvs copy-fromkvs    key file\n"
 "       flux-kvs copy            srckey dstkey\n"
@@ -572,9 +572,15 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
     char *key;
     kvsdir_t *dir = NULL;
     int rc;
+    int count = -1;
 
     if (argc > 0 && !strcmp (argv[0], "-r")) {
         ropt = true;
+        argc--;
+        argv++;
+    }
+    if (argc == 2) {
+        count = strtoul (argv[0], NULL, 10);
         argc--;
         argv++;
     }
@@ -591,13 +597,16 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
             dir = NULL;
         } else {
             dump_kvs_dir (dir, ropt);
-            kvsdir_destroy (dir);
             printf ("======================\n");
+            fflush (stdout);
         }
+        if (--count == 0)
+            goto done;
         rc = kvs_watch_once_dir (h, &dir, "%s", key);
     }
     log_err_exit ("%s", key);
-
+done:
+    kvsdir_destroy (dir);
 }
 
 void cmd_dir (flux_t h, int argc, char **argv)

@@ -488,6 +488,14 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 
 # watch tests
 
+test_expect_success 'kvs: watch 5 versions of directory'  '
+	flux kvs unlink $TEST.foo &&
+	flux kvs watch-dir -r 5 $TEST.foo >watch_out &
+	while $(grep -s '===============' watch_out | wc -l) -lt 5; do
+	    flux kvs put $TEST.foo.a=$(date +%N); \
+	done
+'
+
 test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
 	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
 	flux kvs unlink $TEST.a
