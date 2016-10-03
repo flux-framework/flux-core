@@ -12,11 +12,13 @@ enum {
 
 /* kvs.get
  */
-json_object *kp_tget_enc (const char *key, int flags);
-int kp_tget_dec (json_object *o, const char **key, int *flags);
+json_object *kp_tget_enc (json_object *rootdir,
+                          const char *key, int flags);
+int kp_tget_dec (json_object *o, json_object **rootdir,
+                 const char **key, int *flags);
 
-json_object *kp_rget_enc (json_object *val);
-int kp_rget_dec (json_object *o, json_object **val);
+json_object *kp_rget_enc (json_object *rootdir, json_object *val);
+int kp_rget_dec (json_object *o, json_object **rootdir, json_object **val);
 
 
 /* kvs.watch

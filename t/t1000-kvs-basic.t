@@ -282,6 +282,15 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
+test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
+	flux kvs unlink $TEST &&
+	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs unlink $TEST &&
+	LINKVAL=$(flux kvs readlinkat $ROOTREF $TEST.a.b.link) &&
+	test "$LINKVAL" = "$TEST.a.b.X"
+'
+
 test_expect_success 'kvs: get-treeobj: returns directory reference for root' '
 	flux kvs unlink $TEST &&
 	flux kvs get-treeobj . | grep -q "DIRREF"
@@ -355,6 +364,34 @@ test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
 	test_must_fail flux kvs put-treeobj $TEST.a="{\"DIRREF\":\"sha1-bbb\"}"
 '
 
+test_expect_success 'kvs: getat: fails bad on dirent' '
+	flux kvs unlink $TEST &&
+	test_must_fail flux kvs getat 42 $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRREF\":\"sha2-aaa\"}" $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRREF\":\"sha1-bbb\"}" $TEST.a &&
+	test_must_fail flux kvs getat "{\"DIRVAL\":{}}" $TEST.a
+'
+
+test_expect_success 'kvs: getat: works on root from get-treeobj' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	test $(flux kvs getat $(flux kvs get-treeobj .) $TEST.a.b.c) = 42
+'
+
+test_expect_success 'kvs: getat: works on subdir from get-treeobj' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	test $(flux kvs getat $(flux kvs get-treeobj $TEST.a.b) c) = 42
+'
+
+test_expect_success 'kvs: getat: works on outdated root' '
+	flux kvs unlink $TEST &&
+	flux kvs put $TEST.a.b.c=42 &&
+	ROOTREF=$(flux kvs get-treeobj .) &&
+	flux kvs put $TEST.a.b.c=43 &&
+	test $(flux kvs getat $ROOTREF $TEST.a.b.c) = 42
+'
+
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
 	flux kvs put $TEST.dirsize.a=1 &&
@@ -370,6 +407,31 @@ test_expect_success 'kvs: store 16x3 directory tree' '
 
 test_expect_success 'kvs: walk 16x3 directory tree' '
 	test $(flux kvs dir -r $TEST.dtree | wc -l) = 4096
+'
+
+test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
+	DIRREF=$(flux kvs get-treeobj $TEST.dtree) &&
+	flux kvs unlink $TEST.dtree &&
+	test $(flux kvs dirat -r $DIRREF | wc -l) = 4096
+'
+
+test_expect_success 'kvs: store 2x4 directory tree and walk' '
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h4 -w2 --prefix $TEST.dtree
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 16
+'
+
+# exercise kvsdir_get_symlink, _double, _boolean, 
+test_expect_success 'kvs: add other types to 2x4 directory and walk' '
+	flux kvs link $TEST.dtree $TEST.dtree.link &&
+	flux kvs put $TEST.dtree.double=3.14 &&
+	flux kvs put $TEST.dtree.booelan=true &&
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 19
+'
+
+test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
+	flux kvs unlink $TEST.dtree &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $TEST.dtree &&
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 81
 '
 
 test_expect_success 'kvs: put key of . fails' '
@@ -425,6 +487,14 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 '
 
 # watch tests
+
+test_expect_success 'kvs: watch 5 versions of directory'  '
+	flux kvs unlink $TEST.foo &&
+	flux kvs watch-dir -r 5 $TEST.foo >watch_out &
+	while $(grep -s '===============' watch_out | wc -l) -lt 5; do
+	    flux kvs put $TEST.foo.a=$(date +%N); \
+	done
+'
 
 test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
 	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&

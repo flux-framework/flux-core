@@ -55,6 +55,7 @@
 
 struct kvsdir_struct {
     flux_t handle;
+    json_object *rootref; /* optional snapshot reference */
     char *key;
     json_object *o;
     int count;
@@ -83,8 +84,6 @@ typedef struct {
 
 typedef struct {
     zhash_t *watchers; /* kvs_watch_t hashed by stringified matchtag */
-    char *cwd;
-    zlist_t *dirstack;
     flux_msg_handler_t *w;
     json_object *ops;   /* JSON array of put, unlink, etc operations */
     zhash_t *fence_ops;
@@ -99,12 +98,9 @@ static void freectx (void *arg)
     kvsctx_t *ctx = arg;
     if (ctx) {
         zhash_destroy (&ctx->watchers);
-        zlist_destroy (&ctx->dirstack);
         zhash_destroy (&ctx->fence_ops);
         if (ctx->w)
             flux_msg_handler_destroy (ctx->w);
-        if (ctx->cwd)
-            free (ctx->cwd);
         Jput (ctx->ops);
         free (ctx);
     }
@@ -119,10 +115,6 @@ static kvsctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         if (!(ctx->watchers = zhash_new ()))
             oom ();
-        if (!(ctx->dirstack = zlist_new ()))
-            oom ();
-        if (!(ctx->cwd = xstrdup (".")))
-            oom ();
         match.topic_glob = "kvs.watch";
         if (!(ctx->w = flux_msg_handler_create (h, match, watch_response_cb,
                                                                 ctx)))
@@ -130,70 +122,6 @@ static kvsctx_t *getctx (flux_t h)
         flux_aux_set (h, "kvscli", ctx, freectx);
     }
     return ctx;
-}
-
-/**
- ** Current working directory implementation is just used internally
- ** for now.  I'm not sure it is all that useful of an abstractions
- ** to expose in the KVS API.
- **/
-
-/* Create new path from current working directory and relative path.
- * Confusing: "." is our path separator, so think of it as POSIX "/",
- * and there is no equiv of POSIX "." and "..".
- */
-static char *pathcat (const char *cwd, const char *relpath)
-{
-    char *path;
-    bool fq = false;
-
-    while (*cwd == '.')
-        cwd++;
-    while (*relpath == '.') {
-        relpath++;
-        fq = true;
-    }
-    if (fq || strlen (cwd) == 0)
-        path = xstrdup (strlen (relpath) > 0 ? relpath : ".");
-    else
-        path = xasprintf ("%s.%s", cwd, relpath);
-    return path;
-}
-
-const char *kvs_getcwd (flux_t h)
-{
-    kvsctx_t *ctx = getctx (h);
-    return ctx->cwd;
-}
-
-#if 0
-static void kvs_chdir (flux_t h, const char *path)
-{
-    kvsctx_t *ctx = getctx (h);
-    char *new;
-
-    new = pathcat (ctx->cwd, xstrdup (path ? path : "."));
-    free (ctx->cwd);
-    ctx->cwd = new;
-}
-#endif
-static void kvs_pushd (flux_t h, const char *path)
-{
-    kvsctx_t *ctx = getctx (h);
-
-    if (zlist_push (ctx->dirstack, ctx->cwd) < 0)
-        oom ();
-    ctx->cwd = pathcat (ctx->cwd, path ? path : ".");
-}
-
-static void kvs_popd (flux_t h)
-{
-    kvsctx_t *ctx = getctx (h);
-
-    if (zlist_size (ctx->dirstack) > 0) {
-        free (ctx->cwd);
-        ctx->cwd = zlist_pop (ctx->dirstack);
-    }
 }
 
 /**
@@ -209,17 +137,20 @@ void kvsdir_incref (kvsdir_t *dir)
 void kvsdir_destroy (kvsdir_t *dir)
 {
     if (--dir->usecount == 0) {
+        Jput (dir->rootref);
         free (dir->key);
         json_object_put (dir->o);
         free (dir);
     }
 }
 
-static kvsdir_t *kvsdir_alloc (flux_t handle, const char *key, json_object *o)
+static kvsdir_t *kvsdir_alloc (flux_t handle, json_object *rootref,
+                               const char *key, json_object *o)
 {
     kvsdir_t *dir = xzmalloc (sizeof (*dir));
 
     dir->handle = handle;
+    dir->rootref = Jget (rootref); /* may be NULL */
     dir->key = xstrdup (key);
     dir->o = o;
     json_object_get (dir->o);
@@ -270,7 +201,7 @@ kvsitr_t *kvsitr_create (kvsdir_t *dir)
 
 void kvsitr_destroy (kvsitr_t *itr)
 {
-    free (itr); 
+    free (itr);
 }
 
 const char *kvsitr_next (kvsitr_t *itr)
@@ -325,14 +256,14 @@ char *kvsdir_key_at (kvsdir_t *dir, const char *name)
  ** GET
  **/
 
-static int getobj (flux_t h, const char *key, int flags, json_object **val)
+static int getobj (flux_t h, json_object *rootdir, const char *key,
+                   int flags, json_object **val)
 {
     flux_rpc_t *rpc = NULL;
     const char *json_str;
-    char *k = NULL;
     JSON in = NULL;
     JSON out = NULL;
-    JSON v;
+    JSON v = NULL;
     int saved_errno;
     int rc = -1;
 
@@ -340,8 +271,7 @@ static int getobj (flux_t h, const char *key, int flags, json_object **val)
         errno = EINVAL;
         goto done;
     }
-    k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, flags)))
+    if (!(in = kp_tget_enc (rootdir, key, flags)))
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
@@ -351,7 +281,7 @@ static int getobj (flux_t h, const char *key, int flags, json_object **val)
         errno = EPROTO;
         goto done;
     }
-    if (kp_rget_dec (out, &v) < 0)
+    if (kp_rget_dec (out, NULL, &v) < 0)
         goto done;
     if (val)
         *val = Jget (v);
@@ -360,8 +290,6 @@ done:
     saved_errno = errno;
     Jput (in);
     Jput (out);
-    if (k)
-        free (k);
     flux_rpc_destroy (rpc);
     errno = saved_errno;
     return rc;
@@ -369,9 +297,9 @@ done:
 
 int kvs_get (flux_t h, const char *key, char **val)
 {
-    JSON v;
+    JSON v = NULL;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         return -1;
     if (val)
         *val = xstrdup (Jtostr (v));
@@ -379,22 +307,89 @@ int kvs_get (flux_t h, const char *key, char **val)
     return 0;
 }
 
+int kvs_getat (flux_t h, const char *treeobj,
+               const char *key, char **val)
+{
+    JSON v = NULL;
+    JSON dirent = NULL;
+
+    if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
+                         || dirent_validate (dirent) < 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (getobj (h, dirent, key, 0, &v) < 0)
+        goto error;
+    if (val)
+        *val = xstrdup (Jtostr (v));
+    Jput (dirent);
+    return 0;
+error:
+    Jput (v);
+    Jput (dirent);
+    return -1;
+}
+
+int kvs_get_dirat (flux_t h, const char *treeobj,
+                   const char *key, kvsdir_t **dir)
+{
+    JSON v = NULL;
+    JSON rootref = NULL;
+    int rc = -1;
+
+    if (!treeobj || !key || !dir || !(rootref = Jfromstr (treeobj))
+                                 || dirent_validate (rootref) < 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (getobj (h, rootref, key, KVS_PROTO_READDIR, &v) < 0)
+        goto done;
+    *dir = kvsdir_alloc (h, rootref, key, v);
+    rc = 0;
+done:
+    Jput (v);
+    Jput (rootref);
+    return rc;
+}
+
+int kvs_get_symlinkat (flux_t h, const char *treeobj,
+                       const char *key, char **val)
+{
+    JSON v = NULL;
+    JSON dirent = NULL;
+    int rc = -1;
+
+    if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
+                         || dirent_validate (dirent) < 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (getobj (h, dirent, key, KVS_PROTO_READLINK, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_string) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (val)
+        *val = xstrdup (json_object_get_string (v));
+    rc = 0;
+done:
+    Jput (v);
+    Jput (dirent);
+    return rc;
+}
+
 /* deprecated */
 int kvs_get_obj (flux_t h, const char *key, JSON *val)
 {
-    return getobj (h, key, 0, val);
+    return getobj (h, NULL, key, 0, val);
 }
 
 int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
 {
     va_list ap;
     char *key = NULL;
-    char *k = NULL;
-    const char *json_str;
-    flux_rpc_t *rpc = NULL;
-    JSON in = NULL;
-    JSON out = NULL;
-    JSON v;
+    JSON v = NULL;
     int rc = -1;
 
     if (!h || !dir || !fmt) {
@@ -404,29 +399,19 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
     va_start (ap, fmt);
     key = xvasprintf (fmt, ap);
     va_end (ap);
-    k = pathcat (kvs_getcwd (h), key);
-    if (!(in = kp_tget_enc (k, KVS_PROTO_READDIR)))
+
+    /* N.B. python kvs tests use empty string key for some reason.
+     * Don't break them for now.
+     */
+    const char *k = strlen (key) > 0 ? key : ".";
+    if (getobj (h, NULL, k, KVS_PROTO_READDIR, &v) < 0)
         goto done;
-    if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
-        goto done;
-    if (!(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_rget_dec (out, &v) < 0)
-        goto done;
-    *dir = kvsdir_alloc (h, k, v);
+    *dir = kvsdir_alloc (h, NULL, k, v);
     rc = 0;
 done:
-    Jput (in);
-    Jput (out);
-    if (k)
-        free (k);
+    Jput (v);
     if (key)
         free (key);
-    flux_rpc_destroy (rpc);
     return rc;
 }
 
@@ -435,7 +420,7 @@ int kvs_get_symlink (flux_t h, const char *key, char **val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, KVS_PROTO_READLINK, &v) < 0)
+    if (getobj (h, NULL, key, KVS_PROTO_READLINK, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_string) {
         errno = EPROTO;
@@ -455,7 +440,7 @@ int kvs_get_treeobj (flux_t h, const char *key, char **val)
     const char *s;
     int rc = -1;
 
-    if (getobj (h, key, KVS_PROTO_TREEOBJ, &v) < 0)
+    if (getobj (h, NULL, key, KVS_PROTO_TREEOBJ, &v) < 0)
         goto done;
     if (val) {
         s = json_object_to_json_string_ext (v, JSON_C_TO_STRING_PLAIN);
@@ -472,7 +457,7 @@ int kvs_get_string (flux_t h, const char *key, char **val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_string) {
         errno = EPROTO;
@@ -491,7 +476,7 @@ int kvs_get_int (flux_t h, const char *key, int *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_int) {
         errno = EPROTO;
@@ -510,7 +495,7 @@ int kvs_get_int64 (flux_t h, const char *key, int64_t *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_int) {
         errno = EPROTO;
@@ -529,7 +514,7 @@ int kvs_get_double (flux_t h, const char *key, double *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_double) {
         errno = EPROTO;
@@ -548,7 +533,7 @@ int kvs_get_boolean (flux_t h, const char *key, bool *val)
     JSON v = NULL;
     int rc = -1;
 
-    if (getobj (h, key, 0, &v) < 0)
+    if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
     if (json_object_get_type (v) != json_type_boolean) {
         errno = EPROTO;
@@ -679,7 +664,7 @@ static int dispatch_watch (flux_t h, kvs_watcher_t *wp, json_object *val)
         }
         case WATCH_DIR: {
             kvs_set_dir_f set = wp->set;
-            kvsdir_t *dir = val ? kvsdir_alloc (h, wp->key, val) : NULL;
+            kvsdir_t *dir = val ? kvsdir_alloc (h, NULL, wp->key, val) : NULL;
             rc = set (wp->key, dir, wp->arg, errnum);
             if (dir)
                 kvsdir_destroy (dir);
@@ -878,7 +863,7 @@ int kvs_watch_once_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...)
     }
     if (*dirp)
         kvsdir_destroy (*dirp);
-    *dirp = kvsdir_alloc (h, key, val);
+    *dirp = kvsdir_alloc (h, NULL, key, val);
     rc = 0;
 done:
     if (val)
@@ -1051,7 +1036,6 @@ done:
 static int kvs_put_dirent (flux_t h, const char *key, json_object *dirent)
 {
     kvsctx_t *ctx = getctx (h);
-    char *k = NULL;
     int rc = -1;
     JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
@@ -1059,11 +1043,9 @@ static int kvs_put_dirent (flux_t h, const char *key, json_object *dirent)
         errno = EINVAL;
         goto done;
     }
-    k = pathcat (kvs_getcwd (h), key);
-    dirent_append (ops, k, dirent);
+    dirent_append (ops, key, dirent);
     rc = 0;
 done:
-    free (k);
     return rc;
 }
 
@@ -1203,7 +1185,6 @@ int kvs_symlink (flux_t h, const char *key, const char *target)
 {
     kvsctx_t *ctx = getctx (h);
     JSON val = NULL;
-    char *k = NULL;
     JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key || !target) {
@@ -1214,9 +1195,7 @@ int kvs_symlink (flux_t h, const char *key, const char *target)
         errno = ENOMEM;
         return -1;
     }
-    k = pathcat (kvs_getcwd (h), key);
-    dirent_append (ops, k, dirent_create ("LINKVAL", val));
-    free (k);
+    dirent_append (ops, key, dirent_create ("LINKVAL", val));
     Jput (val);
     return 0;
 }
@@ -1225,16 +1204,13 @@ int kvs_mkdir (flux_t h, const char *key)
 {
     kvsctx_t *ctx = getctx (h);
     JSON val = Jnew ();
-    char *k = NULL;
     JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
         return -1;
     }
-    k = pathcat (kvs_getcwd (h), key);
-    dirent_append (ops, k, dirent_create ("DIRVAL", val));
-    free (k);
+    dirent_append (ops, key, dirent_create ("DIRVAL", val));
     Jput (val);
     return 0;
 }
@@ -1419,132 +1395,184 @@ done:
  ** kvsdir_t convenience functions
  **/
 
+static int dirgetobj (kvsdir_t *dir, const char *name,
+                      int flags, json_object **val)
+{
+    char *key;
+    int rc;
+
+    key = kvsdir_key_at (dir, name);
+    rc = getobj (dir->handle, dir->rootref, key, flags, val);
+    free (key);
+    return rc;
+}
+
 int kvsdir_get_obj (kvsdir_t *dir, const char *name, json_object **valp)
 {
-    int rc = -1;
-    char *json_str = NULL;
-    JSON out;
-
-    kvs_pushd (dir->handle, dir->key);
-    if (kvs_get (dir->handle, name, &json_str) < 0)
-        goto done;
-    if (!(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    *valp = out;
-    rc = 0;
-done:
-    kvs_popd (dir->handle);
-    if (json_str)
-        free (json_str);
-    return rc;
+    return dirgetobj (dir, name, 0, valp);
 }
 
 int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
 {
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
-    return rc;
+    JSON v = NULL;
+    if (dirgetobj (dir, name, 0, &v) < 0)
+        return -1;
+    if (valp)
+        *valp = xstrdup (Jtostr (v));
+    Jput (v);
+    return 0;
 }
 
 int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
 {
-    int rc;
-    char *name;
+    int rc = -1;
+    char *name, *key;
     va_list ap;
+    JSON v = NULL;
 
     va_start (ap, fmt);
     if (vasprintf (&name, fmt, ap) < 0)
         oom ();
     va_end (ap);
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_dir (dir->handle, dirp, "%s", name);
-    kvs_popd (dir->handle);
-
-    if (name)
-        free (name);
+    key = kvsdir_key_at (dir, name);
+    if (getobj (dir->handle, dir->rootref, key, KVS_PROTO_READDIR, &v) < 0)
+        goto done;
+    *dirp = kvsdir_alloc (dir->handle, dir->rootref, key, v);
+    rc = 0;
+done:
+    Jput (v);
+    free (key);
+    free (name);
     return rc;
 }
 
 int kvsdir_get_symlink (kvsdir_t *dir, const char *name, char **valp)
 {
-    int rc;
+    int rc = -1;
+    JSON v = NULL;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_symlink (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
+    if (dirgetobj (dir, name, KVS_PROTO_READLINK, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_string) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (valp)
+        *valp = xstrdup (json_object_get_string (v));
+    rc = 0;
+done:
+    Jput (v);
     return rc;
 }
 
 int kvsdir_get_string (kvsdir_t *dir, const char *name, char **valp)
 {
-    int rc;
+    JSON v = NULL;
+    int rc = -1;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_string (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
+    if (dirgetobj (dir, name, 0, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_string) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (valp)
+        *valp = xstrdup (json_object_get_string (v));
+    rc = 0;
+done:
+    Jput (v);
     return rc;
 }
 
 int kvsdir_get_int (kvsdir_t *dir, const char *name, int *valp)
 {
-    int rc;
+    JSON v = NULL;
+    int rc = -1;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_int (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
+    if (dirgetobj (dir, name, 0, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_int) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (valp)
+        *valp = json_object_get_int (v);
+    rc = 0;
+done:
+    Jput (v);
     return rc;
 }
 
 int kvsdir_get_int64 (kvsdir_t *dir, const char *name, int64_t *valp)
 {
-    int rc;
+    JSON v = NULL;
+    int rc = -1;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_int64 (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
+    if (dirgetobj (dir, name, 0, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_int) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (valp)
+        *valp = json_object_get_int64 (v);
+    rc = 0;
+done:
+    Jput (v);
     return rc;
 }
 
 int kvsdir_get_double (kvsdir_t *dir, const char *name, double *valp)
 {
-    int rc;
+    JSON v = NULL;
+    int rc = -1;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_double (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
+    if (dirgetobj (dir, name, 0, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_double) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (valp)
+        *valp = json_object_get_double (v);
+    rc = 0;
+done:
+    Jput (v);
     return rc;
 }
 
 int kvsdir_get_boolean (kvsdir_t *dir, const char *name, bool *valp)
 {
-    int rc;
+    JSON v = NULL;
+    int rc = -1;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_boolean (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
+    if (dirgetobj (dir, name, 0, &v) < 0)
+        goto done;
+    if (json_object_get_type (v) != json_type_boolean) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (valp)
+        *valp = json_object_get_boolean (v);
+    rc = 0;
+done:
+    Jput (v);
     return rc;
 }
 
 int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put (dir->handle, name, Jtostr (val));
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put (dir->handle, key, Jtostr (val));
+    free (key);
 
     return (rc);
 }
@@ -1552,10 +1580,15 @@ int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
 int kvsdir_put (kvsdir_t *dir, const char *name, const char *val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put (dir->handle, name, val);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put (dir->handle, key, val);
+    free (key);
 
     return (rc);
 }
@@ -1563,10 +1596,15 @@ int kvsdir_put (kvsdir_t *dir, const char *name, const char *val)
 int kvsdir_put_string (kvsdir_t *dir, const char *name, const char *val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_string (dir->handle, name, val);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put_string (dir->handle, key, val);
+    free (key);
 
     return (rc);
 }
@@ -1574,10 +1612,15 @@ int kvsdir_put_string (kvsdir_t *dir, const char *name, const char *val)
 int kvsdir_put_int (kvsdir_t *dir, const char *name, int val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_int (dir->handle, name, val);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put_int (dir->handle, key, val);
+    free (key);
 
     return (rc);
 }
@@ -1585,10 +1628,15 @@ int kvsdir_put_int (kvsdir_t *dir, const char *name, int val)
 int kvsdir_put_int64 (kvsdir_t *dir, const char *name, int64_t val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_int64 (dir->handle, name, val);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put_int64 (dir->handle, key, val);
+    free (key);
 
     return (rc);
 }
@@ -1596,10 +1644,15 @@ int kvsdir_put_int64 (kvsdir_t *dir, const char *name, int64_t val)
 int kvsdir_put_double (kvsdir_t *dir, const char *name, double val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_double (dir->handle, name, val);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put_double (dir->handle, key, val);
+    free (key);
 
     return (rc);
 }
@@ -1607,10 +1660,15 @@ int kvsdir_put_double (kvsdir_t *dir, const char *name, double val)
 int kvsdir_put_boolean (kvsdir_t *dir, const char *name, bool val)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_boolean (dir->handle, name, val);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_put_boolean (dir->handle, key, val);
+    free (key);
 
     return (rc);
 }
@@ -1618,10 +1676,15 @@ int kvsdir_put_boolean (kvsdir_t *dir, const char *name, bool val)
 int kvsdir_mkdir (kvsdir_t *dir, const char *name)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_mkdir (dir->handle, name);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_mkdir (dir->handle, key);
+    free (key);
 
     return (rc);
 }
@@ -1629,10 +1692,15 @@ int kvsdir_mkdir (kvsdir_t *dir, const char *name)
 int kvsdir_symlink (kvsdir_t *dir, const char *name, const char *target)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_symlink (dir->handle, name, target);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_symlink (dir->handle, key, target);
+    free (key);
 
     return (rc);
 }
@@ -1640,10 +1708,15 @@ int kvsdir_symlink (kvsdir_t *dir, const char *name, const char *target)
 int kvsdir_unlink (kvsdir_t *dir, const char *name)
 {
     int rc;
+    char *key;
 
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_unlink (dir->handle, name);
-    kvs_popd (dir->handle);
+    if (dir->rootref) {
+        errno = EROFS;
+        return -1;
+    }
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_unlink (dir->handle, key);
+    free (key);
 
     return (rc);
 }
@@ -1651,7 +1724,7 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
 int kvs_copy (flux_t h, const char *from, const char *to)
 {
     JSON dirent;
-    if (getobj (h, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
+    if (getobj (h, NULL, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
         return -1;
     if (kvs_put_dirent (h, to, dirent) < 0) {
         Jput (dirent);

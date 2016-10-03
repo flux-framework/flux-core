@@ -34,20 +34,22 @@
 #include "src/common/libutil/log.h"
 
 
-#define OPTIONS "p:w:h:"
+#define OPTIONS "p:w:h:D"
 static const struct option longopts[] = {
     {"prefix",          required_argument,  0, 'p'},
     {"width",           required_argument,  0, 'w'},
     {"height",          required_argument,  0, 'h'},
+    {"mkdir",           no_argument,        0, 'D'},
     { 0, 0, 0, 0 },
 };
 
 void dtree (flux_t h, const char *prefix, int width, int height);
+void dtree_mkdir (flux_t h, kvsdir_t *dir, int width, int height);
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: dtree [--prefix NAME] [--width N] [--height N]\n"
+"Usage: dtree [--mkdir] [--prefix NAME] [--width N] [--height N]\n"
 );
     exit (1);
 }
@@ -58,6 +60,7 @@ int main (int argc, char *argv[])
     int width = 1;
     int height = 1;
     char *prefix = "dtree";
+    int Dopt = 0;
     flux_t h;
 
     log_init ("dtree");
@@ -73,6 +76,9 @@ int main (int argc, char *argv[])
             case 'p': /* --prefix NAME */
                 prefix = optarg;
                 break;
+            case 'D': /* --mkdir */
+                Dopt++;
+                break;
             default:
                 usage ();
                 break;
@@ -84,12 +90,27 @@ int main (int argc, char *argv[])
         usage ();
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    dtree (h, prefix, width, height);
+    if (Dopt) {
+        kvsdir_t *dir;
+        if (kvs_mkdir (h, prefix) < 0)
+            log_err_exit ("kvs_mkdir %s", prefix);
+        if (kvs_commit (h) < 0)
+            log_err_exit ("kvs_commit");
+        if (kvs_get_dir (h, &dir, "%s", prefix) < 0)
+            log_err_exit ("kvs_get_dir %s", prefix);
+        dtree_mkdir (h, dir, width, height);
+        kvsdir_destroy (dir);
+    } else {
+        dtree (h, prefix, width, height);
+    }
     if (kvs_commit (h) < 0)
        log_err_exit ("kvs_commit");
     flux_close (h);
 }
 
+/* This version simply puts keys and values, creating intermediate
+ * directories as a side effect.
+ */
 void dtree (flux_t h, const char *prefix, int width, int height)
 {
     int i;
@@ -103,6 +124,34 @@ void dtree (flux_t h, const char *prefix, int width, int height)
         } else
             dtree (h, key, width, height - 1);
         free (key);
+    }
+}
+
+/* This version creates intermediate directories and references them
+ * using kvsdir_t objects.  This is a less efficient method but provides
+ * alternate code coverage.
+ */
+void dtree_mkdir (flux_t h, kvsdir_t *dir, int width, int height)
+{
+    int i;
+    char key[16];
+    kvsdir_t *ndir;
+
+    for (i = 0; i < width; i++) {
+        snprintf (key, sizeof (key), "%.4x", i);
+        if (height == 1) {
+            if (kvsdir_put_int (dir, key, 1) < 0)
+                log_err_exit ("kvsdir_put_int %s", key);
+        } else {
+            if (kvsdir_mkdir (dir, key) < 0)
+                log_err_exit ("kvsdir_mkdir %s", key);
+            if (kvs_commit (h) < 0)
+                log_err_exit ("kvs_commit");
+            if (kvsdir_get_dir (dir, &ndir, "%s", key) < 0)
+                log_err_exit ("kvsdir_get_dir");
+            dtree_mkdir (h, ndir, width, height - 1);
+            kvsdir_destroy (ndir);
+        }
     }
 }
 

@@ -229,6 +229,7 @@ static void join_request (flux_t h, flux_msg_handler_t *w,
         log_msg_exit ("hello: error decoding join request");
     if (flux_reduce_append (hello->reduce, (void *)(uintptr_t)count, batch) < 0)
         log_err_exit ("hello: flux_reduce_append");
+    Jput (in);
 }
 
 /* Reduction ops
