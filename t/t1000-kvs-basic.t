@@ -415,6 +415,19 @@ test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
 	test $(flux kvs dirat -r $DIRREF | wc -l) = 4096
 '
 
+test_expect_success 'kvs: store 2x4 directory tree and walk' '
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h4 -w2 --prefix $TEST.dtree
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 16
+'
+
+# exercise kvsdir_get_symlink, _double, _boolean, 
+test_expect_success 'kvs: add other types to 2x4 directory and walk' '
+	flux kvs link $TEST.dtree $TEST.dtree.link &&
+	flux kvs put $TEST.dtree.double=3.14 &&
+	flux kvs put $TEST.dtree.booelan=true &&
+	test $(flux kvs dir -r $TEST.dtree | wc -l) = 19
+'
+
 test_expect_success 'kvs: put key of . fails' '
 	test_must_fail flux kvs put .=1
 '
