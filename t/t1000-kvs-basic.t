@@ -409,6 +409,12 @@ test_expect_success 'kvs: walk 16x3 directory tree' '
 	test $(flux kvs dir -r $TEST.dtree | wc -l) = 4096
 '
 
+test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
+	DIRREF=$(flux kvs get-treeobj $TEST.dtree) &&
+	flux kvs unlink $TEST.dtree &&
+	test $(flux kvs dirat -r $DIRREF | wc -l) = 4096
+'
+
 test_expect_success 'kvs: put key of . fails' '
 	test_must_fail flux kvs put .=1
 '
