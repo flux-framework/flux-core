@@ -2006,7 +2006,7 @@ done:
 static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    flux_modlist_t mods = NULL;
+    flux_modlist_t *mods = NULL;
     char *json_str = NULL;
     int rc = -1;
 

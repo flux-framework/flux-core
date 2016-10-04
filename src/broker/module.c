@@ -607,9 +607,9 @@ void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb)
     mh->heartbeat = hb;
 }
 
-flux_modlist_t module_get_modlist (modhash_t *mh)
+flux_modlist_t *module_get_modlist (modhash_t *mh)
 {
-    flux_modlist_t mods;
+    flux_modlist_t *mods;
     zlist_t *uuids;
     char *uuid;
     module_t *p;

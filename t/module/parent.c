@@ -88,9 +88,9 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     return m;
 }
 
-static flux_modlist_t module_list (void)
+static flux_modlist_t *module_list (void)
 {
-    flux_modlist_t mods = flux_modlist_create ();
+    flux_modlist_t *mods = flux_modlist_create ();
     zlist_t *keys = zhash_keys (modules);
     module_t *m;
     char *name;
@@ -177,7 +177,7 @@ done:
 static void lsmod_request_cb (flux_t h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    flux_modlist_t mods = NULL;
+    flux_modlist_t *mods = NULL;
     char *json_str = NULL;
     int rc = -1, saved_errno;
 

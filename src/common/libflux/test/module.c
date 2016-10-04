@@ -57,7 +57,7 @@ void test_helpers (void)
 
 void test_lsmod_codec (void)
 {
-    flux_modlist_t mods;
+    flux_modlist_t *mods;
     int idle, size;
     const char *name, *digest;
     char *json_str;

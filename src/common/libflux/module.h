@@ -82,19 +82,19 @@ char *flux_modfind (const char *searchpath, const char *modname);
  * 'flux_modlist_t' is an intermediate object that can encode/decode
  * to/from a JSON string, and provides accessors for module list entries.
  */
-typedef struct flux_modlist_struct *flux_modlist_t;
+typedef struct flux_modlist_struct flux_modlist_t;
 
-flux_modlist_t flux_modlist_create (void);
-void flux_modlist_destroy (flux_modlist_t mods);
-int flux_modlist_append (flux_modlist_t mods, const char *name, int size,
+flux_modlist_t *flux_modlist_create (void);
+void flux_modlist_destroy (flux_modlist_t *mods);
+int flux_modlist_append (flux_modlist_t *mods, const char *name, int size,
                             const char *digest, int idle, int status);
-int flux_modlist_count (flux_modlist_t mods);
-int flux_modlist_get (flux_modlist_t mods, int idx, const char **name,
+int flux_modlist_count (flux_modlist_t *mods);
+int flux_modlist_get (flux_modlist_t *mods, int idx, const char **name,
                                 int *size, const char **digest, int *idle,
                                 int *status);
 
-char *flux_lsmod_json_encode (flux_modlist_t mods);
-flux_modlist_t flux_lsmod_json_decode (const char *json_str);
+char *flux_lsmod_json_encode (flux_modlist_t *mods);
+flux_modlist_t *flux_lsmod_json_decode (const char *json_str);
 
 
 /* Encode/decode rmmod payload.

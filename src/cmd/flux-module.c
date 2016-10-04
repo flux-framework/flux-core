@@ -390,7 +390,7 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
 
 int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
 {
-    flux_modlist_t modlist;
+    flux_modlist_t *modlist;
     mod_t *m;
     int i, len;
     const char *name, *digest;

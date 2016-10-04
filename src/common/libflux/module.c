@@ -134,7 +134,7 @@ char *flux_rmmod_json_encode (const char *name)
     return json_str;
 }
 
-int flux_modlist_get (flux_modlist_t mods, int n, const char **name, int *size,
+int flux_modlist_get (flux_modlist_t *mods, int n, const char **name, int *size,
                       const char **digest, int *idle, int *status)
 {
     JSON o, a;
@@ -154,7 +154,7 @@ done:
     return rc;
 }
 
-int flux_modlist_count (flux_modlist_t mods)
+int flux_modlist_count (flux_modlist_t *mods)
 {
     JSON a;
     int len;
@@ -166,7 +166,7 @@ int flux_modlist_count (flux_modlist_t mods)
     return len;
 }
 
-int flux_modlist_append (flux_modlist_t mods, const char *name, int size,
+int flux_modlist_append (flux_modlist_t *mods, const char *name, int size,
                             const char *digest, int idle, int status)
 {
     JSON a, o = Jnew ();
@@ -188,7 +188,7 @@ done:
     return rc;
 }
 
-void flux_modlist_destroy (flux_modlist_t mods)
+void flux_modlist_destroy (flux_modlist_t *mods)
 {
     if (mods) {
         Jput (mods->o);
@@ -196,22 +196,22 @@ void flux_modlist_destroy (flux_modlist_t mods)
     }
 }
 
-flux_modlist_t flux_modlist_create (void)
+flux_modlist_t *flux_modlist_create (void)
 {
-    flux_modlist_t mods = xzmalloc (sizeof (*mods));
+    flux_modlist_t *mods = xzmalloc (sizeof (*mods));
     mods->o = Jnew ();
     json_object_object_add (mods->o, "mods", Jnew_ar ());
     return mods;
 }
 
-char *flux_lsmod_json_encode (flux_modlist_t mods)
+char *flux_lsmod_json_encode (flux_modlist_t *mods)
 {
     return xstrdup (Jtostr (mods->o));
 }
 
-flux_modlist_t flux_lsmod_json_decode (const char *json_str)
+flux_modlist_t *flux_lsmod_json_decode (const char *json_str)
 {
-    flux_modlist_t mods = xzmalloc (sizeof (*mods));
+    flux_modlist_t *mods = xzmalloc (sizeof (*mods));
     if (!(mods->o = Jfromstr (json_str))) {
         free (mods);
         errno = EPROTO;
@@ -346,7 +346,7 @@ int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
 {
     flux_rpc_t *r = NULL;
     char *topic = xasprintf ("%s.lsmod", service ? service : "cmb");
-    flux_modlist_t mods = NULL;
+    flux_modlist_t *mods = NULL;
     const char *json_str;
     int rc = -1;
     int i, len;
