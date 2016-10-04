@@ -64,8 +64,8 @@ static char *mod_service (const char *modname)
 int flux_insmod_json_decode (const char *json_str,
                              char **path, char **argz, size_t *argz_len)
 {
-    JSON o = NULL;
-    JSON args = NULL;
+    json_object *o = NULL;
+    json_object *args = NULL;
     const char *s;
     int i, ac;
     int rc = -1;
@@ -94,8 +94,8 @@ done:
 
 char *flux_insmod_json_encode (const char *path, int argc, char **argv)
 {
-    JSON o = Jnew ();
-    JSON args = Jnew_ar ();
+    json_object *o = Jnew ();
+    json_object *args = Jnew_ar ();
     char *json_str;
     int i;
 
@@ -110,7 +110,7 @@ char *flux_insmod_json_encode (const char *path, int argc, char **argv)
 
 int flux_rmmod_json_decode (const char *json_str, char **name)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
     const char *s;
     int rc = -1;
     if (!(o = Jfromstr (json_str)) || !Jget_str (o, "name", &s)) {
@@ -126,7 +126,7 @@ done:
 
 char *flux_rmmod_json_encode (const char *name)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     char *json_str;
     Jadd_str (o, "name", name);
     json_str = xstrdup (Jtostr (o)); 
@@ -137,7 +137,8 @@ char *flux_rmmod_json_encode (const char *name)
 int flux_modlist_get (flux_modlist_t *mods, int n, const char **name, int *size,
                       const char **digest, int *idle, int *status)
 {
-    JSON o, a;
+    json_object *o;
+    json_object *a;
     int rc = -1;
 
     if (!Jget_obj (mods->o, "mods", &a) || !Jget_ar_obj (a, n, &o)
@@ -156,7 +157,7 @@ done:
 
 int flux_modlist_count (flux_modlist_t *mods)
 {
-    JSON a;
+    json_object *a;
     int len;
 
     if (!Jget_obj (mods->o, "mods", &a) || !Jget_ar_len (a, &len)) {
@@ -169,7 +170,8 @@ int flux_modlist_count (flux_modlist_t *mods)
 int flux_modlist_append (flux_modlist_t *mods, const char *name, int size,
                             const char *digest, int idle, int status)
 {
-    JSON a, o = Jnew ();
+    json_object *a;
+    json_object *o = Jnew ();
     int rc = -1;
 
     if (!Jget_obj (mods->o, "mods", &a)) {
@@ -382,7 +384,7 @@ int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
                  int argc, char **argv)
 {
     flux_rpc_t *r = NULL;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     char *name = NULL;
     char *service = NULL;
     char *topic = NULL;

@@ -94,7 +94,7 @@ static void ping_cb (flux_t h, flux_msg_handler_t *w,
 {
     module_t *p = arg;
     const char *json_str;
-    JSON o = NULL;
+    json_object *o = NULL;
     char *route = NULL;
     char *route_plus_uuid = NULL;
     int rc = -1;
@@ -125,7 +125,7 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     flux_msgcounters_t mcs;
-    JSON out = Jnew ();
+    json_object *out = Jnew ();
 
     flux_get_msgcounters (h, &mcs);
     Jadd_int (out, "#request (tx)", mcs.request_tx);
@@ -159,7 +159,7 @@ static void stats_clear_request_cb (flux_t h, flux_msg_handler_t *w,
 static void rusage_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
-    JSON out = NULL;
+    json_object *out = NULL;
     int rc = -1;
 
     if (getrusage_json (RUSAGE_THREAD, &out) < 0)

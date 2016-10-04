@@ -157,7 +157,7 @@ static int op_event_subscribe (void *impl, const char *topic)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
@@ -178,7 +178,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 

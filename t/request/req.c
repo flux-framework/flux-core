@@ -65,7 +65,7 @@ void count_request_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
 
     Jadd_int (o, "count", zlist_size (ctx->clog_requests));
     if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
@@ -111,7 +111,7 @@ void sink_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     const char *json_str;
     int saved_errno;
-    JSON o = NULL;
+    json_object *o = NULL;
     double d;
     int rc = -1;
 
@@ -136,7 +136,7 @@ done:
 void src_request_cb (flux_t h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
 
     Jadd_int (o, "wormz", 42);
     if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
@@ -151,7 +151,7 @@ void nsrc_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     const char *json_str;
     int saved_errno;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     int i, count;
     int rc = -1;
 
@@ -220,8 +220,8 @@ void xping_request_cb (flux_t h, flux_msg_handler_t *w,
     int rank, seq = ctx->ping_seq++;
     const char *service;
     char *hashkey = NULL;
-    JSON in = Jnew ();
-    JSON o = NULL;
+    json_object *in = Jnew ();
+    json_object *o = NULL;
     flux_msg_t *cpy;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
@@ -272,8 +272,8 @@ void ping_response_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON o = NULL;
-    JSON out = Jnew ();;
+    json_object *o = NULL;
+    json_object *out = Jnew ();;
     int seq;
     const char *route;
     flux_msg_t *req = NULL;

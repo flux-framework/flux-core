@@ -1256,7 +1256,7 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
     struct prog_ctx *ctx = arg;
     flux_t h = ctx->flux;
     int count;
-    JSON o;
+    json_object *o;
 
     if (err || !(o = Jfromstr (str))) {
         if (err != ENOENT)
@@ -1277,12 +1277,13 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
     return (0);
 }
 
-static JSON task_exit_tojson (struct task_info *t)
+static json_object *task_exit_tojson (struct task_info *t)
 {
     char *key = NULL;
     char *taskid = NULL;
     struct prog_ctx *ctx = t->ctx;
-    JSON o, e;
+    json_object *o;
+    json_object *e;
 
     if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) < 0)
         return (NULL);
@@ -1333,7 +1334,7 @@ static int aggregator_push_task_exit (struct task_info *t)
     int rc = 0;
     flux_t h = t->ctx->flux;
     flux_rpc_t *rpc;
-    JSON o = task_exit_tojson (t);
+    json_object *o = task_exit_tojson (t);
 
     if (o == NULL) {
         flux_log_error (h, "task_exit_tojson");

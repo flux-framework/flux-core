@@ -80,7 +80,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     int64_t sec, nsec;
     struct timespec t0;
     int seq;
-    JSON out = NULL;
+    json_object *out = NULL;
     tstat_t *tstat = flux_rpc_aux_get (rpc);
 
     if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
@@ -128,7 +128,7 @@ done:
 void send_ping (struct ping_ctx *ctx)
 {
     struct timespec t0;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     flux_rpc_t *rpc;
     tstat_t *tstat = xzmalloc (sizeof (*tstat));
 

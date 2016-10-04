@@ -44,9 +44,9 @@
 /* kvs.get
  */
 
-JSON kp_tget_enc (JSON rootdir, const char *key, int flags)
+json_object *kp_tget_enc (json_object *rootdir, const char *key, int flags)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!key) {
         errno = EINVAL;
@@ -61,7 +61,8 @@ done:
     return o;
 }
 
-int kp_tget_dec (JSON o, JSON *rootdir, const char **key, int *flags)
+int kp_tget_dec (json_object *o, json_object **rootdir, const char **key,
+		 int *flags)
 {
     int rc = -1;
 
@@ -80,9 +81,9 @@ done:
     return rc;
 }
 
-JSON kp_rget_enc (JSON rootdir, JSON val)
+json_object *kp_rget_enc (json_object *rootdir, json_object *val)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
 
     o = Jnew ();
     json_object_object_add (o, "rootdir", rootdir);
@@ -90,10 +91,10 @@ JSON kp_rget_enc (JSON rootdir, JSON val)
     return o;
 }
 
-int kp_rget_dec (JSON o, JSON *rootdir, JSON *val)
+int kp_rget_dec (json_object *o, json_object **rootdir, json_object **val)
 {
     int rc = -1;
-    JSON v;
+    json_object *v;
 
     if (!o || !(v = Jobj_get (o, "val"))) {
         errno = EINVAL;
@@ -111,9 +112,9 @@ done:
 /* kvs.watch
  */
 
-JSON kp_twatch_enc (const char *key, JSON val, int flags)
+json_object *kp_twatch_enc (const char *key, json_object *val, int flags)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!key) {
         errno = EINVAL;
@@ -127,7 +128,8 @@ done:
     return o;
 }
 
-int kp_twatch_dec (JSON o, const char **key, JSON *val, int *flags)
+int kp_twatch_dec (json_object *o, const char **key, json_object **val,
+		   int *flags)
 {
     int rc = -1;
 
@@ -145,16 +147,16 @@ done:
     return rc;
 }
 
-JSON kp_rwatch_enc (JSON val)
+json_object *kp_rwatch_enc (json_object *val)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
 
     o = Jnew ();
     json_object_object_add (o, "val", val);
     return o;
 }
 
-int kp_rwatch_dec (JSON o, JSON *val)
+int kp_rwatch_dec (json_object *o, json_object **val)
 {
     int rc = -1;
 
@@ -171,9 +173,9 @@ done:
 /* kvs.unwatch
  */
 
-JSON kp_tunwatch_enc (const char *key)
+json_object *kp_tunwatch_enc (const char *key)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!key) {
         errno = EINVAL;
@@ -185,7 +187,7 @@ done:
     return o;
 }
 
-int kp_tunwatch_dec (JSON o, const char **key)
+int kp_tunwatch_dec (json_object *o, const char **key)
 {
     int rc = -1;
 
@@ -204,10 +206,10 @@ done:
 
 /* kvs.fence
  */
-JSON kp_tfence_enc (const char *name, int nprocs, JSON ops)
+json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops)
 {
-    JSON o = Jnew ();
-    JSON empty_ops = NULL;
+    json_object *o = Jnew ();
+    json_object *empty_ops = NULL;
 
     Jadd_str (o, "name", name);
     Jadd_int (o, "nprocs", nprocs);
@@ -218,7 +220,8 @@ JSON kp_tfence_enc (const char *name, int nprocs, JSON ops)
     return o;
 }
 
-int kp_tfence_dec (JSON o, const char **name, int *nprocs, JSON *ops)
+int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
+		   json_object **ops)
 {
     int rc = -1;
 
@@ -239,9 +242,9 @@ done:
 /* kvs.getroot
  */
 
-JSON kp_rgetroot_enc (int rootseq, const char *rootdir)
+json_object *kp_rgetroot_enc (int rootseq, const char *rootdir)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!rootdir) {
         errno = EINVAL;
@@ -254,7 +257,7 @@ done:
     return o;
 }
 
-int kp_rgetroot_dec (JSON o, int *rootseq, const char **rootdir)
+int kp_rgetroot_dec (json_object *o, int *rootseq, const char **rootdir)
 {
     int rc = -1;
 
@@ -274,10 +277,10 @@ done:
 /* kvs.setroot (event)
  */
 
-JSON kp_tsetroot_enc (int rootseq, const char *rootdir, JSON root,
-                      JSON names)
+json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
+			      json_object *root, json_object *names)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
     int n;
 
     if (!rootdir || !names || !Jget_ar_len (names, &n) || n < 1) {
@@ -294,8 +297,8 @@ done:
     return o;
 }
 
-int kp_tsetroot_dec (JSON o, int *rootseq, const char **rootdir,
-                     JSON *root, JSON *names)
+int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
+                     json_object **root, json_object **names)
 {
     int rc = -1;
 
@@ -320,7 +323,7 @@ done:
 
 json_object *kp_terror_enc (json_object *names, int errnum)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
     int n;
 
     if (!names || !Jget_ar_len (names, &n) || n < 1 || errnum == 0) {
@@ -334,7 +337,7 @@ done:
     return o;
 }
 
-int kp_terror_dec (JSON o, json_object **names, int *errnum)
+int kp_terror_dec (json_object *o, json_object **names, int *errnum)
 {
     int rc = -1;
     if (!o || !names || !errnum) {

@@ -20,7 +20,8 @@ int main (int argc, char *argv[])
 {
     struct cache *cache;
     struct cache_entry *e1, *e2;
-    JSON o1, o2;
+    json_object *o1;
+    json_object *o2;
     wait_t *w;
     int count, i;
 

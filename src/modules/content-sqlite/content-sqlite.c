@@ -397,7 +397,7 @@ done:
 int register_backing_store (flux_t h, bool value, const char *name)
 {
     flux_rpc_t *rpc;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     int saved_errno = 0;
     int rc = -1;
 

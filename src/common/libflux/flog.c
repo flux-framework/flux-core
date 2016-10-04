@@ -173,7 +173,7 @@ void flux_log_error (flux_t h, const char *fmt, ...)
 static int dmesg_clear (flux_t h, int seq)
 {
     flux_rpc_t *rpc;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     int rc = -1;
 
     Jadd_int (o, "seq", seq);
@@ -192,7 +192,7 @@ done:
 static flux_rpc_t *dmesg_rpc (flux_t h, int seq, bool follow)
 {
     flux_rpc_t *rpc;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     Jadd_int (o, "seq", seq);
     Jadd_bool (o, "follow", follow);
     rpc = flux_rpc (h, "cmb.dmesg", Jtostr (o), FLUX_NODEID_ANY, 0);
@@ -204,7 +204,7 @@ static int dmesg_rpc_get (flux_rpc_t *rpc, int *seq, flux_log_f fun, void *arg)
 {
     const char *json_str;
     const char *buf;
-    JSON o = NULL;
+    json_object *o = NULL;
     int rc = -1;
 
     if (flux_rpc_get (rpc, NULL, &json_str) < 0)

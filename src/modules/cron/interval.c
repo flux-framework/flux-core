@@ -46,7 +46,7 @@ static void interval_handler (flux_reactor_t *r, flux_watcher_t *w,
     cron_entry_schedule_task ((cron_entry_t *)arg);
 }
 
-static void *cron_interval_create (flux_t h, cron_entry_t *e, JSON arg)
+static void *cron_interval_create (flux_t h, cron_entry_t *e, json_object *arg)
 {
     struct cron_interval *iv;
     double i;
@@ -89,10 +89,10 @@ static void cron_interval_stop (void *arg)
     flux_watcher_stop (((struct cron_interval *)arg)->w);
 }
 
-static JSON cron_interval_to_json (void *arg)
+static json_object *cron_interval_to_json (void *arg)
 {
     struct cron_interval *iv = arg;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     Jadd_double (o, "interval", iv->seconds);
     Jadd_double (o, "after",    iv->after);
     Jadd_double (o, "next_wakeup",

@@ -183,12 +183,12 @@ void overlay_set_idle_warning (overlay_t *ov, int heartbeats)
 
 json_object *overlay_lspeer_encode (overlay_t *ov)
 {
-    JSON out = Jnew ();
+    json_object *out = Jnew ();
     const char *uuid;
     child_t *child;
 
     FOREACH_ZHASH (ov->children, uuid, child) {
-        JSON o = Jnew ();
+        json_object *o = Jnew ();
         Jadd_int (o, "idle", ov->epoch - child->lastseen);
         Jadd_obj (out, uuid, o); /* takes ref on 'o' */
         Jput (o);

@@ -148,8 +148,8 @@ void test_null (flux_t h, uint32_t nodeid)
 
 void test_echo (flux_t h, uint32_t nodeid)
 {
-    JSON in = Jnew ();
-    JSON out = NULL;
+    json_object *in = Jnew ();
+    json_object *out = NULL;
     const char *json_str;
     const char *s;
     flux_rpc_t *rpc;
@@ -183,7 +183,7 @@ void test_src (flux_t h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     int i;
 
     if (!(rpc = flux_rpc (h, "req.src", NULL, nodeid, 0))
@@ -198,7 +198,7 @@ void test_src (flux_t h, uint32_t nodeid)
 void test_sink (flux_t h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
-    JSON in = Jnew();
+    json_object *in = Jnew();
 
     Jadd_double (in, "pi", 3.14);
     if (!(rpc = flux_rpc (h, "req.sink", Jtostr (in), nodeid, 0))
@@ -212,9 +212,9 @@ void test_nsrc (flux_t h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const int count = 10000;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     const char *json_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     int i, seq;
 
     Jadd_int (in, "count", count);
@@ -249,8 +249,8 @@ void test_putmsg (flux_t h, uint32_t nodeid)
     const int count = 10000;
     const int defer_start = 5000;
     const int defer_count = 500;
-    JSON in = Jnew ();
-    JSON out = NULL;
+    json_object *in = Jnew ();
+    json_object *out = NULL;
     int seq, myseq = 0;
     zlist_t *defer = zlist_new ();
     bool popped = false;
@@ -311,8 +311,8 @@ static void xping (flux_t h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON in = Jnew ();
-    JSON out = NULL;
+    json_object *in = Jnew ();
+    json_object *out = NULL;
     const char *route;
 
     Jadd_int (in, "rank", xnodeid);
@@ -391,7 +391,7 @@ int req_count (flux_t h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     int rc = -1;
     int count;
 

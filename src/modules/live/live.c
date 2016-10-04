@@ -125,7 +125,7 @@ typedef struct {
     bool hb_subscribed;
     flux_reduce_t *r;
     ns_t *ns;           /* master only */
-    JSON topo;          /* master only */
+    json_object *topo;          /* master only */
     flux_t h;
     optparse_t *opts;
 } ctx_t;
@@ -259,7 +259,7 @@ static parent_t *parent_create (int rank, const char *uri)
     return p;
 }
 
-static parent_t *parent_fromjson (JSON o)
+static parent_t *parent_fromjson (json_object *o)
 {
     int rank;
     const char *uri = NULL;
@@ -269,9 +269,9 @@ static parent_t *parent_fromjson (JSON o)
     return parent_create (rank, uri);
 }
 
-static JSON parent_tojson (parent_t *p)
+static json_object *parent_tojson (parent_t *p)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
 
     Jadd_int (o, "rank", p->rank);
     if (p->uri)
@@ -279,11 +279,11 @@ static JSON parent_tojson (parent_t *p)
     return o;
 }
 
-static JSON parents_tojson (ctx_t *ctx)
+static json_object *parents_tojson (ctx_t *ctx)
 {
     parent_t *p;
-    JSON el;
-    JSON ar = Jnew_ar ();
+    json_object *el;
+    json_object *ar = Jnew_ar ();
 
     p = zlist_first (ctx->parents);
     while (p) {
@@ -301,10 +301,10 @@ static JSON parents_tojson (ctx_t *ctx)
  * zmq_connect(), as opposed to the parent which has a zmq_bind() URI
  * that could be a wildcard.
  */
-static void parents_fromjson (ctx_t *ctx, JSON ar)
+static void parents_fromjson (ctx_t *ctx, json_object *ar)
 {
     int i, len;
-    JSON el;
+    json_object *el;
     parent_t *p;
 
     if (Jget_ar_len (ar, &len)) {
@@ -396,7 +396,7 @@ static void cstate_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON event = NULL;
+    json_object *event = NULL;
     int epoch, parent, rank;
     cstate_t ostate, nstate;
 
@@ -441,7 +441,7 @@ done:
 
 static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 {
-    JSON event = Jnew ();
+    json_object *event = Jnew ();
     flux_msg_t *msg;
 
     flux_log (ctx->h, LOG_CRIT, "transitioning %d from %s to %s", c->rank,
@@ -476,7 +476,7 @@ static void hb_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     char *peers_str = NULL;
-    JSON peers = NULL;
+    json_object *peers = NULL;
     zlist_t *keys = NULL;
     char *key;
 
@@ -492,7 +492,7 @@ static void hb_cb (flux_t h, flux_msg_handler_t *w,
         oom ();
     key = zlist_first (keys);
     while (key) {
-        JSON co;
+        json_object *co;
         int idle = ctx->epoch;
         child_t *c = zhash_lookup (ctx->children, key);
         assert (c != NULL);
@@ -579,7 +579,7 @@ static void goodbye_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
+    json_object *in = NULL;
     int n, rank, prank;
     char rankstr[16];
 
@@ -608,7 +608,7 @@ done:
 
 static void goodbye (ctx_t *ctx, int parent_rank)
 {
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     flux_rpc_t *rpc;
 
     Jadd_int (in, "rank", ctx->rank);
@@ -648,9 +648,9 @@ static ns_t *ns_create (const char *ok, const char *fail,
 }
 
 
-static JSON ns_tojson (ns_t *ns)
+static json_object *ns_tojson (ns_t *ns)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     Jadd_str (o, "ok", nodeset_string (ns->ok));
     Jadd_str (o, "fail", nodeset_string (ns->fail));
     Jadd_str (o, "slow", nodeset_string (ns->slow));
@@ -658,7 +658,7 @@ static JSON ns_tojson (ns_t *ns)
     return o;
 }
 
-static ns_t *ns_fromjson (JSON o)
+static ns_t *ns_fromjson (json_object *o)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
     const char *s;
@@ -675,7 +675,7 @@ static ns_t *ns_fromjson (JSON o)
 
 static int ns_tokvs (ctx_t *ctx)
 {
-    JSON o = ns_tojson (ctx->ns);
+    json_object *o = ns_tojson (ctx->ns);
     int rc = -1;
 
     if (kvs_put (ctx->h, "conf.live.status", Jtostr (o)) < 0)
@@ -691,7 +691,7 @@ done:
 static int ns_fromkvs (ctx_t *ctx)
 {
     char *json_str = NULL;
-    JSON o = NULL;
+    json_object *o = NULL;
     int rc = -1;
 
     if (kvs_get (ctx->h, "conf.live.status", &json_str) < 0
@@ -771,7 +771,7 @@ static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to)
  * FIXME: should we generate a live.cstate event if state is
  * transitioning from CS_SLOW or CS_FAIL e.g. after reparenting?
  */
-static void ns_chg_hello (ctx_t *ctx, JSON a)
+static void ns_chg_hello (ctx_t *ctx, json_object *a)
 {
     json_object_iter iter;
     int i, len, crank;
@@ -792,7 +792,9 @@ static void ns_chg_hello (ctx_t *ctx, JSON a)
 static int topo_fromkvs (ctx_t *ctx)
 {
     char *json_str = NULL;
-    JSON car, ar = NULL, topo = NULL;
+    json_object *car;
+    json_object *ar = NULL;
+    json_object *topo = NULL;
     int rc = -1;
     int n, len, i;
     char prank[16];
@@ -822,7 +824,7 @@ done:
 static int topo_tokvs (ctx_t *ctx)
 {
     json_object_iter iter;
-    JSON ar = Jnew_ar ();
+    json_object *ar = Jnew_ar ();
     int rc = -1;
 
     json_object_object_foreachC (ctx->topo, iter) {
@@ -862,7 +864,7 @@ done:
     return rc;
 }
 
-static bool inarray (JSON ar, int n)
+static bool inarray (json_object *ar, int n)
 {
     int i, len, val;
 
@@ -876,9 +878,9 @@ static bool inarray (JSON ar, int n)
 /* Reduce b into a, where a and b look like:
  *    { "p1":[c1,c2,...], "p2":[c1,c2,...], ... }
  */
-static void hello_merge (JSON a, JSON b)
+static void hello_merge (json_object *a, json_object *b)
 {
-    JSON ar;
+    json_object *ar;
     json_object_iter iter;
     int i, len, crank;
 
@@ -900,7 +902,7 @@ static void hello_merge (JSON a, JSON b)
 
 static void hello_destroy (void *arg)
 {
-    JSON o = arg;
+    json_object *o = arg;
     Jput (o);
 }
 
@@ -908,7 +910,7 @@ static void hello_forward (flux_reduce_t *r, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
     flux_rpc_t *rpc;
-    JSON o;
+    json_object *o;
 
     while ((o = flux_reduce_pop (r))) {
         if (!(rpc = flux_rpc (ctx->h, "live.push", Jtostr (o),
@@ -923,7 +925,7 @@ static void hello_forward (flux_reduce_t *r, int batchnum, void *arg)
 static void hello_sink (flux_reduce_t *r, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON o;
+    json_object *o;
 
     while ((o = flux_reduce_pop (r))) {
         ns_chg_hello (ctx, o);
@@ -938,7 +940,8 @@ static void hello_sink (flux_reduce_t *r, int batchnum, void *arg)
 
 static void hello_reduce (flux_reduce_t *r, int batchnum, void *arg)
 {
-    JSON a, b;
+    json_object *a;
+    json_object *b;
 
     if ((a = flux_reduce_pop (r))) {
         while ((b = flux_reduce_pop (r))) {
@@ -954,8 +957,8 @@ static void hello_reduce (flux_reduce_t *r, int batchnum, void *arg)
  */
 static void hello_source (ctx_t *ctx, const char *prank, int crank)
 {
-    JSON a = Jnew ();
-    JSON c = Jnew_ar ();
+    json_object *a = Jnew ();
+    json_object *c = Jnew_ar ();
 
     Jadd_ar_int (c, crank);
     Jadd_obj (a, prank, c);
@@ -971,7 +974,7 @@ static void push_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
+    json_object *in = NULL;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (ctx->h, "%s: reuqest decode", __FUNCTION__);
@@ -995,8 +998,8 @@ static void hello_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
-    JSON out = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
     int saved_errno;
     int rank, rc = -1;
     child_t *c;
@@ -1045,8 +1048,9 @@ done:
 static int hello (ctx_t *ctx)
 {
     const char *json_str;
-    JSON in = Jnew ();
-    JSON a, out = NULL;
+    json_object *in = Jnew ();
+    json_object *a;
+    json_object *out = NULL;
     flux_rpc_t *rpc;
     int rc = -1;
 

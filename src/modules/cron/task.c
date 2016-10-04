@@ -131,7 +131,7 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
 }
 
 static int io_handler (flux_t h, cron_task_t *t,
-    const char *json_str, JSON resp)
+    const char *json_str, json_object *resp)
 {
     const char *stream = "stdout";
     void *data = NULL;
@@ -161,7 +161,7 @@ static int io_handler (flux_t h, cron_task_t *t,
     return (0);
 }
 
-static int state_handler (flux_t h, cron_task_t *t, JSON resp)
+static int state_handler (flux_t h, cron_task_t *t, json_object *resp)
 {
     const char *state;
 
@@ -231,7 +231,7 @@ static void exec_handler (flux_t h, flux_msg_handler_t *w,
     const char *json_str;
     const char *topic;
     const char *type;
-    JSON resp = NULL;
+    json_object *resp = NULL;
 
     if ((flux_response_decode (msg, &topic, &json_str) < 0)
         || !(resp = Jfromstr (json_str))) {
@@ -257,7 +257,7 @@ static flux_msg_t *kill_request_create (cron_task_t *t, int sig)
 {
     int e = 0;
     flux_msg_t *msg;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     Jadd_int (o, "pid", t->pid);
     Jadd_int (o, "signum", sig);
     if (!(msg = flux_request_encode ("cmb.exec.signal", Jtostr (o)))
@@ -319,13 +319,13 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
         cron_task_timeout_start (t);
 }
 
-static JSON exec_request_create (struct cron_task *t,
+static json_object *exec_request_create (struct cron_task *t,
     const char *command,
     const char *cwd,
     char *const env[])
 {
-    JSON o = Jnew ();
-    JSON cmd = Jnew_ar ();
+    json_object *o = Jnew ();
+    json_object *cmd = Jnew_ar ();
 
     Jadd_ar_str (cmd, "sh");
     Jadd_ar_str (cmd, "-c");
@@ -337,7 +337,7 @@ static JSON exec_request_create (struct cron_task *t,
         Jadd_str (o, "cwd", cwd);
 
     if (env) {
-        JSON enva = Jnew_ar ();
+        json_object *enva = Jnew_ar ();
         const char *e = env[0];
         while (e != NULL)
             Jadd_ar_str (enva, e);
@@ -351,7 +351,7 @@ int cron_task_run (cron_task_t *t,
     char *const env[])
 {
     flux_t h = t->h;
-    JSON req = NULL;
+    json_object *req = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
@@ -431,9 +431,9 @@ static const char * cron_task_state_string (cron_task_t *t)
     return ("Exited");
 }
 
-JSON cron_task_to_json (struct cron_task *t)
+json_object *cron_task_to_json (struct cron_task *t)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
 
     Jadd_int (o, "rank", t->rank);
     Jadd_int (o, "pid", t->pid);

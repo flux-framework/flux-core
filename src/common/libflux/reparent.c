@@ -54,7 +54,7 @@ int flux_reparent (flux_t h, int rank, const char *uri)
 {
     flux_rpc_t *r = NULL;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     int rc = -1;
 
     if (!uri) {

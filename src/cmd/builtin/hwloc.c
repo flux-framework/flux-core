@@ -234,9 +234,9 @@ static void config_hwloc_paths (flux_t h, const char *dirpath)
         log_err_exit ("kvs_commit");
 }
 
-static JSON hwloc_reload_json_create (const char *walk_topology)
+static json_object *hwloc_reload_json_create (const char *walk_topology)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     bool v = true;
 
     if (walk_topology == NULL)
@@ -255,7 +255,7 @@ static void request_hwloc_reload (flux_t h, const char *nodeset,
                                   const char *walk_topology)
 {
     flux_rpc_t *rpc;
-    JSON o = NULL;
+    json_object *o = NULL;
     const char *json_str = NULL;
 
     if ((o = hwloc_reload_json_create (walk_topology)))

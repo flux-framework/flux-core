@@ -36,7 +36,7 @@
 flux_msg_t *flux_heartbeat_encode (int epoch)
 {
     flux_msg_t *msg;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
 
     Jadd_int (o, "epoch", epoch);
     msg = flux_event_encode ("hb", Jtostr (o));
@@ -47,7 +47,7 @@ flux_msg_t *flux_heartbeat_encode (int epoch)
 int flux_heartbeat_decode (const flux_msg_t *msg, int *epoch)
 {
     const char *json_str, *topic_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     int rc = -1;
 
     if (flux_event_decode (msg, &topic_str, &json_str) < 0)

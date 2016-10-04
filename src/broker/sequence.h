@@ -34,7 +34,8 @@ typedef struct seq_struct seqhash_t;
 seqhash_t *sequence_hash_create (void);
 void sequence_hash_destroy (seqhash_t *seq);
 
-int sequence_request_handler (seqhash_t *seq, const flux_msg_t *msg, JSON *op);
+int sequence_request_handler (seqhash_t *seq, const flux_msg_t *msg,
+			      json_object **op);
 
 #endif /* BROKER_SEQUENCE_H */
 

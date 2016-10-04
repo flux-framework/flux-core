@@ -97,7 +97,7 @@ static void event_handler (flux_t h, flux_msg_handler_t *w,
     cron_entry_schedule_task (e);
 }
 
-static void *cron_event_create (flux_t h, cron_entry_t *e, JSON arg)
+static void *cron_event_create (flux_t h, cron_entry_t *e, json_object *arg)
 {
     struct cron_event *ev;
     int nth;
@@ -167,10 +167,10 @@ static void cron_event_stop (void *arg)
     flux_msg_handler_stop (((struct cron_event *)arg)->mh);
 }
 
-static JSON cron_event_to_json (void *arg)
+static json_object *cron_event_to_json (void *arg)
 {
     struct cron_event *ev = arg;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     Jadd_str (o, "topic", ev->event);
     Jadd_int (o, "nth", ev->nth);
     Jadd_int (o, "after", ev->after);

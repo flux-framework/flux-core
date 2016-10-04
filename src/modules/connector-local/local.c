@@ -331,7 +331,7 @@ done:
 int sub_request (client_t *c, const flux_msg_t *msg, bool subscribe)
 {
     const char *json_str, *topic;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)

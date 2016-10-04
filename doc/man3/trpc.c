@@ -5,7 +5,7 @@
 void get_rank (flux_rpc_t *rpc)
 {
     const char *json_str;
-    JSON o;
+    json_object *o;
     const char *rank;
 
     if (flux_rpc_get (rpc, NULL, &json_str) < 0)
@@ -20,7 +20,7 @@ int main (int argc, char **argv)
 {
     flux_t h;
     flux_rpc_t *rpc;
-    JSON o = Jnew();
+    json_object *o = Jnew();
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
