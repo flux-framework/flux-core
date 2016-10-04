@@ -95,7 +95,7 @@ int module_stop_all (modhash_t *mh);
 
 /* Prepare an 'lsmod' response payload.
  */
-flux_modlist_t module_get_modlist (modhash_t *mh);
+flux_modlist_t *module_get_modlist (modhash_t *mh);
 
 #endif /* !_BROKER_MODULE_H */
 
