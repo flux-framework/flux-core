@@ -58,7 +58,7 @@ static void *cs;
 void *thread (void *arg)
 {
     zmsg_t *zmsg;
-    flux_sec_t sec;
+    flux_sec_t *sec;
     int i;
 
     if (!(sec = flux_sec_create ()))
@@ -94,7 +94,7 @@ int main (int argc, char *argv[])
     pthread_t tid;
     pthread_attr_t attr;
     zmsg_t *zmsg;
-    flux_sec_t sec;
+    flux_sec_t *sec;
     int n;
     zctx_t *zctx;
 

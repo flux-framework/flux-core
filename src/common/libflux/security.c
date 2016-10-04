@@ -156,32 +156,32 @@ struct flux_sec_struct {
     pthread_mutex_t lock;
 };
 
-static int checksecdirs (flux_sec_t c, bool create);
-static zcert_t *getcurve (flux_sec_t c, const char *role);
-static int gencurve (flux_sec_t c, const char *role, bool force, bool verbose);
-static char *getpasswd (flux_sec_t c, const char *user);
-static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose);
+static int checksecdirs (flux_sec_t *c, bool create);
+static zcert_t *getcurve (flux_sec_t *c, const char *role);
+static int gencurve (flux_sec_t *c, const char *role, bool force, bool verbose);
+static char *getpasswd (flux_sec_t *c, const char *user);
+static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose);
 
-static void lock_sec (flux_sec_t c)
+static void lock_sec (flux_sec_t *c)
 {
     int e = pthread_mutex_lock (&c->lock);
     if (e)
         log_errn_exit (e, "pthread_mutex_lock");
 }
 
-static void unlock_sec (flux_sec_t c)
+static void unlock_sec (flux_sec_t *c)
 {
     int e = pthread_mutex_unlock (&c->lock);
     if (e)
         log_errn_exit (e, "pthread_mutex_unlock");
 }
 
-const char *flux_sec_errstr (flux_sec_t c)
+const char *flux_sec_errstr (flux_sec_t *c)
 {
     return (c->errstr ? c->errstr : "Success");
 }
 
-const char *flux_sec_confstr (flux_sec_t c)
+const char *flux_sec_confstr (flux_sec_t *c)
 {
     lock_sec (c);
     if (c->confstr)
@@ -195,7 +195,7 @@ const char *flux_sec_confstr (flux_sec_t c)
     return c->confstr;
 }
 
-static void seterrstr (flux_sec_t c, const char *fmt, ...)
+static void seterrstr (flux_sec_t *c, const char *fmt, ...)
 {
     va_list ap;
 
@@ -209,7 +209,7 @@ static void seterrstr (flux_sec_t c, const char *fmt, ...)
     va_end (ap);
 }
 
-void flux_sec_destroy (flux_sec_t c)
+void flux_sec_destroy (flux_sec_t *c)
 {
     if (c->domain)
         free (c->domain);
@@ -235,9 +235,9 @@ void flux_sec_destroy (flux_sec_t c)
     free (c);
 }
 
-flux_sec_t flux_sec_create (void)
+flux_sec_t *flux_sec_create (void)
 {
-    flux_sec_t c = xzmalloc (sizeof (*c));
+    flux_sec_t *c = xzmalloc (sizeof (*c));
     int e;
 
     if ((e = pthread_mutex_init (&c->lock, NULL)))
@@ -260,19 +260,19 @@ einval:
     return -1;
 }
 
-void flux_sec_set_directory (flux_sec_t c, const char *confdir)
+void flux_sec_set_directory (flux_sec_t *c, const char *confdir)
 {
     if (c->conf_dir)
         free (c->conf_dir);
     c->conf_dir = xstrdup (confdir);
 }
 
-const char *flux_sec_get_directory (flux_sec_t c)
+const char *flux_sec_get_directory (flux_sec_t *c)
 {
     return c->conf_dir;
 }
 
-int flux_sec_disable (flux_sec_t c, int tm)
+int flux_sec_disable (flux_sec_t *c, int tm)
 {
     int rc;
     lock_sec (c);
@@ -282,7 +282,7 @@ int flux_sec_disable (flux_sec_t c, int tm)
     return rc;
 }
 
-int flux_sec_enable (flux_sec_t c, int tm)
+int flux_sec_enable (flux_sec_t *c, int tm)
 {
     int rc;
     lock_sec (c);
@@ -296,7 +296,7 @@ int flux_sec_enable (flux_sec_t c, int tm)
     return rc;
 }
 
-bool flux_sec_type_enabled (flux_sec_t c, int tm)
+bool flux_sec_type_enabled (flux_sec_t *c, int tm)
 {
     bool ret;
     lock_sec (c);
@@ -305,7 +305,7 @@ bool flux_sec_type_enabled (flux_sec_t c, int tm)
     return ret;
 }
 
-int flux_sec_keygen (flux_sec_t c, bool force, bool verbose)
+int flux_sec_keygen (flux_sec_t *c, bool force, bool verbose)
 {
     int rc = -1;
     lock_sec (c);
@@ -327,7 +327,7 @@ done_unlock:
     return rc;
 }
 
-int flux_sec_zauth_init (flux_sec_t c, zctx_t *zctx, const char *domain)
+int flux_sec_zauth_init (flux_sec_t *c, zctx_t *zctx, const char *domain)
 {
     int rc = -1;
     lock_sec (c);
@@ -356,7 +356,7 @@ done_unlock:
     return rc;
 }
 
-int flux_sec_munge_init (flux_sec_t c)
+int flux_sec_munge_init (flux_sec_t *c)
 {
     int rc = -1;
     lock_sec (c);
@@ -377,7 +377,7 @@ done_unlock:
     return rc;
 }
 
-int flux_sec_csockinit (flux_sec_t c, void *sock)
+int flux_sec_csockinit (flux_sec_t *c, void *sock)
 {
     int rc = -1;
     lock_sec (c);
@@ -402,7 +402,7 @@ done_unlock:
     return rc;
 }
 
-int flux_sec_ssockinit (flux_sec_t c, void *sock)
+int flux_sec_ssockinit (flux_sec_t *c, void *sock)
 {
     lock_sec (c);
     if ((c->typemask & (FLUX_SEC_TYPE_CURVE))) {
@@ -416,7 +416,7 @@ int flux_sec_ssockinit (flux_sec_t c, void *sock)
     return 0;
 }
 
-static int checksecdir (flux_sec_t c, const char *path, bool create)
+static int checksecdir (flux_sec_t *c, const char *path, bool create)
 {
     struct stat sb;
     int rc = -1;
@@ -457,7 +457,7 @@ done:
     return rc;
 }
 
-static int checksecdirs (flux_sec_t c, bool create)
+static int checksecdirs (flux_sec_t *c, bool create)
 {
     /* XXX c->lock held */
 
@@ -495,7 +495,7 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
-static zcert_t *zcert_curve_new (flux_sec_t c)
+static zcert_t *zcert_curve_new (flux_sec_t *c)
 {
     zcert_t *new;
     char sec[41];
@@ -524,7 +524,7 @@ static zcert_t *zcert_curve_new (flux_sec_t c)
     return new;
 }
 
-static int gencurve (flux_sec_t c, const char *role, bool force, bool verbose)
+static int gencurve (flux_sec_t *c, const char *role, bool force, bool verbose)
 {
     char *path = NULL, *priv = NULL;;
     zcert_t *cert = NULL;
@@ -577,7 +577,7 @@ done:
     return rc;
 }
 
-static zcert_t *getcurve (flux_sec_t c, const char *role)
+static zcert_t *getcurve (flux_sec_t *c, const char *role)
 {
     char *path = NULL;;
     zcert_t *cert = NULL;
@@ -592,7 +592,7 @@ static zcert_t *getcurve (flux_sec_t c, const char *role)
     return cert;
 }
 
-static char *getpasswd (flux_sec_t c, const char *user)
+static char *getpasswd (flux_sec_t *c, const char *user)
 {
     zhash_t *passwds;
     char *passwd = NULL;
@@ -613,7 +613,7 @@ done:
     return passwd;
 }
 
-static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
+static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose)
 {
     struct stat sb;
     zhash_t *passwds = NULL;
@@ -653,7 +653,7 @@ done:
     return rc;
 }
 
-int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
+int flux_sec_munge_zmsg (flux_sec_t *c, zmsg_t **zmsg)
 {
     char *buf = NULL, *cr = NULL;
     munge_err_t e;
@@ -696,7 +696,7 @@ done_unlock:
     return rc;
 }
 
-int flux_sec_unmunge_zmsg (flux_sec_t c, zmsg_t **zmsg)
+int flux_sec_unmunge_zmsg (flux_sec_t *c, zmsg_t **zmsg)
 {
     char *cr = NULL, *buf = NULL;
     int len;

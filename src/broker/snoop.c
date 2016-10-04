@@ -38,7 +38,7 @@
 #include "snoop.h"
 
 struct snoop_struct {
-    flux_sec_t sec;
+    flux_sec_t *sec;
     zctx_t *zctx;
     char *uri;
     void *zs;
@@ -59,7 +59,7 @@ void snoop_destroy (snoop_t *sn)
     }
 }
 
-void snoop_set_sec (snoop_t *sn, flux_sec_t sec)
+void snoop_set_sec (snoop_t *sn, flux_sec_t *sec)
 {
     sn->sec = sec;
 }
