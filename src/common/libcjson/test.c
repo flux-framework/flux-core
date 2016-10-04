@@ -22,33 +22,59 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <errno.h>
+#include <string.h>
+
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libtap/tap.h"
+
 #include "cJSON.h"
 
 /* Parse text to JSON, then render back to text, and print! */
-void doit(char *text)
+int doit(char *text)
 {
 	char *out;cJSON *json;
 
 	json=cJSON_Parse(text);
-	if (!json) {printf("Error before: [%s]\n",cJSON_GetErrorPtr());}
+	if (!json) {
+		diag("Error before: [%s]\n",cJSON_GetErrorPtr());
+		return 0;
+	}
 	else
 	{
 		out=cJSON_Print(json);
 		cJSON_Delete(json);
-		printf("%s\n",out);
+		diag("%s\n",out);
 		free(out);
+		return 1;
 	}
 }
 
 /* Read a file, parse, render back, etc. */
-void dofile(char *filename)
+int dofile(char *filename)
 {
 	FILE *f;long len;char *data;
-
-	f=fopen(filename,"rb");fseek(f,0,SEEK_END);len=ftell(f);fseek(f,0,SEEK_SET);
-	data=(char*)malloc(len+1);fread(data,1,len,f);data[len]='\0';fclose(f);
-	doit(data);
+	int rc;
+	char path[PATH_MAX+1];
+	snprintf (path, sizeof (path), "%s/%s", SRCDIR, filename);
+	f=fopen(path,"rb");
+	if (f == NULL) {
+		diag ("%s: %s", path, strerror (errno));
+		return 0;
+	}
+	fseek(f,0,SEEK_END);len=ftell(f);fseek(f,0,SEEK_SET);
+	data=(char*)xzmalloc(len+1);
+	if (fread(data,1,len,f) != len) {
+		diag ("%s: fread %d failed", path, len);
+		fclose (f);
+		return 0;
+	}
+	data[len]='\0';
+	fclose(f);
+	rc = doit(data);
 	free(data);
+	return rc;
 }
 
 /* Used by some code below as an example datatype. */
@@ -81,13 +107,15 @@ void create_objects()
 	cJSON_AddNumberToObject(fmt,"height",		1080);
 	cJSON_AddFalseToObject (fmt,"interlace");
 	cJSON_AddNumberToObject(fmt,"frame rate",	24);
+	ok (root != NULL, "created Video datatype");
 
-	out=cJSON_Print(root);	cJSON_Delete(root);	printf("%s\n",out);	free(out);	/* Print to text, Delete the cJSON, print it, release the string. */
+	out=cJSON_Print(root);	cJSON_Delete(root);	diag("%s\n",out);	free(out);	/* Print to text, Delete the cJSON, print it, release the string. */
 
 	/* Our "days of the week" array: */
 	root=cJSON_CreateStringArray(strings,7);
+	ok (root != NULL, "created days of the week array");
 
-	out=cJSON_Print(root);	cJSON_Delete(root);	printf("%s\n",out);	free(out);
+	out=cJSON_Print(root);	cJSON_Delete(root);	diag("%s\n",out);	free(out);
 
 	/* Our matrix: */
 	root=cJSON_CreateArray();
@@ -95,7 +123,8 @@ void create_objects()
 
 /*	cJSON_ReplaceItemInArray(root,1,cJSON_CreateString("Replacement")); */
 
-	out=cJSON_Print(root);	cJSON_Delete(root);	printf("%s\n",out);	free(out);
+	ok (root != NULL, "created matrix");
+	out=cJSON_Print(root);	cJSON_Delete(root);	diag("%s\n",out);	free(out);
 
 
 	/* Our "gallery" item: */
@@ -109,8 +138,9 @@ void create_objects()
 	cJSON_AddNumberToObject(thm,"Height",125);
 	cJSON_AddStringToObject(thm,"Width","100");
 	cJSON_AddItemToObject(img,"IDs", cJSON_CreateIntArray(ids,4));
+	ok (root != NULL, "created gallery");
 
-	out=cJSON_Print(root);	cJSON_Delete(root);	printf("%s\n",out);	free(out);
+	out=cJSON_Print(root);	cJSON_Delete(root);	diag("%s\n",out);	free(out);
 
 	/* Our array of "records": */
 
@@ -129,12 +159,14 @@ void create_objects()
 	}
 
 /*	cJSON_ReplaceItemInObject(cJSON_GetArrayItem(root,1),"City",cJSON_CreateIntArray(ids,4)); */
+	ok (root != NULL, "created array of records");
 
-	out=cJSON_Print(root);	cJSON_Delete(root);	printf("%s\n",out);	free(out);
+	out=cJSON_Print(root);	cJSON_Delete(root);	diag("%s\n",out);	free(out);
 
 	root=cJSON_CreateObject();
 	cJSON_AddNumberToObject(root,"number", 1.0/zero);
-	out=cJSON_Print(root);	cJSON_Delete(root);	printf("%s\n",out);	free(out);
+	ok (root != NULL, "created object containing a number");
+	out=cJSON_Print(root);	cJSON_Delete(root);	diag("%s\n",out);	free(out);
 }
 
 int main (int argc, const char * argv[]) {
@@ -162,24 +194,28 @@ int main (int argc, const char * argv[]) {
         "</body>\n"
         "</html>\n";
 
+        plan (NO_PLAN);
+
 	/* Process each json textblock by parsing, then rebuilding: */
-	doit(text1);
-	doit(text2);
-	doit(text3);
-	doit(text4);
-	doit(text5);
-    doit(text6);
+	ok (doit(text1), "parsed text1");
+	ok (doit(text2), "parsed text2");
+	ok (doit(text3), "parsed text3");
+	ok (doit(text4), "parsed text4");
+	ok (doit(text5), "parsed text5");
+	ok (doit(text6) == 0, "failed to parse HTML");
 
 	/* Parse standard testfiles: */
-/*	dofile("../../tests/test1"); */
-/*	dofile("../../tests/test2"); */
-/*	dofile("../../tests/test3"); */
-/*	dofile("../../tests/test4"); */
-/*	dofile("../../tests/test5"); */
-/*	dofile("../../tests/test6"); */
+	ok (dofile("tests/test1"), "parsed tests/test1");
+	ok (dofile("tests/test2"), "parsed tests/test2");
+	ok (dofile("tests/test3"), "parsed tests/test3");
+	ok (dofile("tests/test4"), "parsed tests/test4");
+	ok (dofile("tests/test5"), "parsed tests/test5");
+	ok (dofile("tests/test6") == 0, "failed to parse tests/test6 (HTML)");
 
 	/* Now some samplecode for building objects concisely: */
 	create_objects();
 
-	return 0;
+	done_testing ();
+
+        return 0;
 }
