@@ -84,7 +84,7 @@ void dirent_append (json_object **array, const char *key, json_object *dirent)
 
 int dirent_validate (json_object *dirent)
 {
-    JSON o;
+    json_object *o;
 
     if (!dirent)
         goto error;

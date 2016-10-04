@@ -153,7 +153,7 @@ flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
                               const char *fmt, va_list ap)
 {
     flux_msg_t *msg;
-    JSON out = Jnew ();
+    json_object *out = Jnew ();
     char reason[REASON_MAX];
 
     vsnprintf (reason, sizeof (reason), fmt, ap);
@@ -184,7 +184,7 @@ int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
                      int *rank, char *reason, int reason_len)
 {
     const char *json_str, *s;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0

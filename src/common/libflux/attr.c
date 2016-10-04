@@ -86,8 +86,8 @@ static attr_t *attr_create (const char *val, int flags)
 static int attr_get_rpc (ctx_t *ctx, const char *name, attr_t **attrp)
 {
     flux_rpc_t *r;
-    JSON in = Jnew ();
-    JSON out = NULL;
+    json_object *in = Jnew ();
+    json_object *out = NULL;
     const char *json_str, *val;
     int flags;
     attr_t *attr;
@@ -119,7 +119,7 @@ done:
 static int attr_set_rpc (ctx_t *ctx, const char *name, const char *val)
 {
     flux_rpc_t *r;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     attr_t *attr;
     int rc = -1;
 
@@ -162,7 +162,8 @@ static int attr_list_rpc (ctx_t *ctx)
 {
     flux_rpc_t *r;
     const char *json_str;
-    JSON array, out = NULL;
+    json_object *array;
+    json_object *out = NULL;
     int len, i, rc = -1;
 
     if (!(r = flux_rpc (ctx->h, "cmb.attrlist", NULL, FLUX_NODEID_ANY, 0)))

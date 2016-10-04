@@ -205,7 +205,8 @@ static int jobid_exist (flux_t h, int64_t j)
     return 0;
 }
 
-static bool fetch_rank_pdesc (JSON src, int64_t *p, int64_t *n, const char **c)
+static bool fetch_rank_pdesc (json_object *src, int64_t *p, int64_t *n,
+			      const char **c)
 {
     if (!src) return false;
     if (!Jget_str (src, "command", c)) return false;
@@ -214,7 +215,7 @@ static bool fetch_rank_pdesc (JSON src, int64_t *p, int64_t *n, const char **c)
     return true;
 }
 
-static int build_name_array (zhash_t *ha, const char *k, JSON ns)
+static int build_name_array (zhash_t *ha, const char *k, json_object *ns)
 {
     int i = (intptr_t) zhash_lookup (ha, k);
     if ((void *)((intptr_t)i) == NULL) {
@@ -302,7 +303,7 @@ static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
     return rc;
 }
 
-static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
+static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, json_object **o)
 {
     int rc = 0;
     char *json_str = NULL;
@@ -320,16 +321,17 @@ static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
     return rc;
 }
 
-static JSON build_parray_elem (int64_t pid, int64_t eix, int64_t hix)
+static json_object *build_parray_elem (int64_t pid, int64_t eix, int64_t hix)
 {
-    JSON po = Jnew ();
+    json_object *po = Jnew ();
     Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_PID, pid);
     Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_EINDX, eix);
     Jadd_int64 (po, JSC_PDESC_RANK_PDARRAY_HINDX, hix);
     return po;
 }
 
-static void add_pdescs_to_jcb (JSON *hns, JSON *ens, JSON *pa, JSON jcb)
+static void add_pdescs_to_jcb (json_object **hns, json_object **ens,
+			       json_object **pa, json_object *jcb)
 {
     json_object_object_add (jcb, JSC_PDESC_HOSTNAMES, *hns);
     json_object_object_add (jcb, JSC_PDESC_EXECS, *ens);
@@ -340,7 +342,7 @@ static void add_pdescs_to_jcb (JSON *hns, JSON *ens, JSON *pa, JSON jcb)
     *pa = NULL;
 }
 
-static int extract_raw_pdescs (flux_t h, int64_t j, int64_t n, JSON jcb)
+static int extract_raw_pdescs (flux_t h, int64_t j, int64_t n, json_object *jcb)
 {
     int rc = -1;
     int64_t i = 0;
@@ -348,10 +350,11 @@ static int extract_raw_pdescs (flux_t h, int64_t j, int64_t n, JSON jcb)
     const char *cmd = NULL;
     zhash_t *eh = NULL; /* hash holding a set of unique exec_names */
     zhash_t *hh = NULL; /* hash holding a set of unique host_names */
-    JSON o = NULL, po = NULL;
-    JSON pa = Jnew_ar ();
-    JSON hns = Jnew_ar ();
-    JSON ens = Jnew_ar ();
+    json_object *o = NULL;
+    json_object *po = NULL;
+    json_object *pa = Jnew_ar ();
+    json_object *hns = Jnew_ar ();
+    json_object *ens = Jnew_ar ();
 
     if (!(eh = zhash_new ()) || !(hh = zhash_new ()))
         oom ();
@@ -389,12 +392,12 @@ done:
     return rc;
 }
 
-static int extract_raw_rdl_alloc (flux_t h, int64_t j, JSON jcb)
+static int extract_raw_rdl_alloc (flux_t h, int64_t j, json_object *jcb)
 {
     int i = 0;
     char *key;
     int64_t cores = 0;
-    JSON ra = Jnew_ar ();
+    json_object *ra = Jnew_ar ();
     bool processing = true;
 
     for (i=0; processing; ++i) {
@@ -404,8 +407,8 @@ static int extract_raw_rdl_alloc (flux_t h, int64_t j, JSON jcb)
                 flux_log_error (h, "extract %s", key);
             processing = false;
         } else {
-            JSON elem = Jnew ();
-            JSON o = Jnew ();
+            json_object *elem = Jnew ();
+            json_object *o = Jnew ();
             Jadd_int64 (o, JSC_RDL_ALLOC_CONTAINED_NCORES, cores);
             json_object_object_add (elem, JSC_RDL_ALLOC_CONTAINED, o);
             json_object_array_add (ra, elem);
@@ -416,7 +419,7 @@ static int extract_raw_rdl_alloc (flux_t h, int64_t j, JSON jcb)
     return 0;
 }
 
-static int query_jobid (flux_t h, int64_t j, JSON *jcb)
+static int query_jobid (flux_t h, int64_t j, json_object **jcb)
 {
     int rc = 0;
     if ( ( rc = jobid_exist (h, j)) != 0)
@@ -428,9 +431,9 @@ static int query_jobid (flux_t h, int64_t j, JSON *jcb)
     return rc;
 }
 
-static int query_state_pair (flux_t h, int64_t j, JSON *jcb)
+static int query_state_pair (flux_t h, int64_t j, json_object **jcb)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
     int64_t st = (int64_t)J_FOR_RENT;;
 
     if (extract_raw_state (h, j, &st) < 0) return -1;
@@ -446,9 +449,9 @@ static int query_state_pair (flux_t h, int64_t j, JSON *jcb)
     return 0;
 }
 
-static int query_rdesc (flux_t h, int64_t j, JSON *jcb)
+static int query_rdesc (flux_t h, int64_t j, json_object **jcb)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
     int64_t nnodes = -1;
     int64_t ntasks = -1;
     int64_t walltime = -1;
@@ -466,7 +469,7 @@ static int query_rdesc (flux_t h, int64_t j, JSON *jcb)
     return 0;
 }
 
-static int query_rdl (flux_t h, int64_t j, JSON *jcb)
+static int query_rdl (flux_t h, int64_t j, json_object **jcb)
 {
     char *rdlstr = NULL;
 
@@ -481,13 +484,13 @@ static int query_rdl (flux_t h, int64_t j, JSON *jcb)
     return 0;
 }
 
-static int query_rdl_alloc (flux_t h, int64_t j, JSON *jcb)
+static int query_rdl_alloc (flux_t h, int64_t j, json_object **jcb)
 {
     *jcb = Jnew ();
     return extract_raw_rdl_alloc (h, j, *jcb);
 }
 
-static int query_pdesc (flux_t h, int64_t j, JSON *jcb)
+static int query_pdesc (flux_t h, int64_t j, json_object **jcb)
 {
     int64_t ntasks = 0;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
@@ -524,7 +527,7 @@ done:
     return rc;
 }
 
-static int update_state (flux_t h, int64_t j, JSON o)
+static int update_state (flux_t h, int64_t j, json_object *o)
 {
     int rc = -1;
     int64_t st = 0;
@@ -551,7 +554,7 @@ static int update_state (flux_t h, int64_t j, JSON o)
     return rc;
 }
 
-static int update_rdesc (flux_t h, int64_t j, JSON o)
+static int update_rdesc (flux_t h, int64_t j, json_object *o)
 {
     int rc = -1;
     int64_t nnodes = 0;
@@ -605,14 +608,14 @@ static int update_rdl (flux_t h, int64_t j, const char *rs)
     return rc;
 }
 
-static int update_hash_1ra (flux_t h, int64_t j, JSON o, zhash_t *rtab)
+static int update_hash_1ra (flux_t h, int64_t j, json_object *o, zhash_t *rtab)
 {
     int rc = 0;
     int64_t ncores = 0;
     int64_t rank = 0;
     int64_t *curcnt;
     char *key;
-    JSON c = NULL;
+    json_object *c = NULL;
 
     if (!Jget_obj (o, JSC_RDL_ALLOC_CONTAINED, &c)) return -1;
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINING_RANK, &rank)) return -1;
@@ -630,12 +633,12 @@ static int update_hash_1ra (flux_t h, int64_t j, JSON o, zhash_t *rtab)
     return rc;
 }
 
-static int update_rdl_alloc (flux_t h, int64_t j, JSON o)
+static int update_rdl_alloc (flux_t h, int64_t j, json_object *o)
 {
     int i = 0;
     int rc = -1;
     int size = 0;
-    JSON ra_e = NULL;
+    json_object *ra_e = NULL;
     const char *key = NULL;
     zhash_t *rtab = NULL;
     int64_t *ncores = NULL;
@@ -674,10 +677,11 @@ done:
     return rc;
 }
 
-static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
+static int update_1pdesc (flux_t h, int r, int64_t j, json_object *o,
+			  json_object *ha, json_object *ea)
 {
     int rc = -1;
-    JSON d = NULL;
+    json_object *d = NULL;
     char *key;
     char *json_str = NULL;
     const char *hn = NULL, *en = NULL;
@@ -719,12 +723,15 @@ done:
     return rc;
 }
 
-static int update_pdesc (flux_t h, int64_t j, JSON o)
+static int update_pdesc (flux_t h, int64_t j, json_object *o)
 {
     int i = 0;
     int rc = -1;
     int64_t size = 0;
-    JSON h_arr = NULL, e_arr = NULL, pd_arr = NULL, pde = NULL;
+    json_object *h_arr = NULL;
+    json_object *e_arr = NULL;
+    json_object *pd_arr = NULL;
+    json_object *pde = NULL;
 
     if (!Jget_int64 (o, JSC_PDESC_SIZE, &size)) return -1;
     if (!Jget_obj (o, JSC_PDESC_PDARRAY, &pd_arr)) return -1;
@@ -747,10 +754,10 @@ done:
     return rc;
 }
 
-static JSON get_update_jcb (flux_t h, int64_t j, const char *val)
+static json_object *get_update_jcb (flux_t h, int64_t j, const char *val)
 {
-    JSON o = NULL;
-    JSON ss = NULL;
+    json_object *o = NULL;
+    json_object *ss = NULL;
     jscctx_t *ctx = getctx (h);
     int64_t ostate = (int64_t) J_FOR_RENT;
     int64_t nstate = (int64_t) J_FOR_RENT;
@@ -776,7 +783,7 @@ static JSON get_update_jcb (flux_t h, int64_t j, const char *val)
  *                                                                            *
  ******************************************************************************/
 
-static int invoke_cbs (flux_t h, int64_t j, JSON jcb, int errnum)
+static int invoke_cbs (flux_t h, int64_t j, json_object *jcb, int errnum)
 {
     int rc = 0;
     cb_pair_t *c = NULL;
@@ -792,8 +799,8 @@ static int invoke_cbs (flux_t h, int64_t j, JSON jcb, int errnum)
 
 static void fixup_newjob_event (flux_t h, int64_t nj)
 {
-    JSON ss = NULL;
-    JSON jcb = NULL;
+    json_object *ss = NULL;
+    json_object *jcb = NULL;
     int64_t js = J_NULL;
     char *key = xasprintf ("%"PRId64"", nj);
     jscctx_t *ctx = getctx (h);
@@ -947,7 +954,8 @@ int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
     return rc;
 }
 
-int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON *jcb)
+int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key,
+		       json_object **jcb)
 {
     int rc = -1;
 
@@ -981,7 +989,7 @@ int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON *jcb)
 int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb)
 {
     int rc;
-    JSON o = NULL;
+    json_object *o = NULL;
 
     rc = jsc_query_jcb_obj (h, jobid, key, &o);
     if (rc < 0)
@@ -992,10 +1000,11 @@ done:
     return rc;
 }
 
-int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON jcb)
+int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key,
+			json_object *jcb)
 {
     int rc = -1;
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!jcb) return -1;
     if (jobid_exist (h, jobid) != 0) return -1;
@@ -1028,7 +1037,7 @@ int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON jcb)
 int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb)
 {
     int rc = -1;
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!jcb || !(o = Jfromstr (jcb))) {
         errno = EINVAL;

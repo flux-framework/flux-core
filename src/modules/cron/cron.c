@@ -342,7 +342,8 @@ static int64_t next_cronid (flux_t h)
 {
     int64_t ret = (int64_t) -1;
     const char *json_str;
-    JSON req, resp;
+    json_object *req;
+    json_object *resp;
     flux_rpc_t *rpc;
 
     req = Jnew ();
@@ -420,7 +421,7 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
 {
     flux_t h = ctx->h;
     cron_entry_t *e = NULL;
-    JSON in;
+    json_object *in;
     const char *name;
     const char *command;
     const char *type;
@@ -589,9 +590,9 @@ error:
 
 /**************************************************************************/
 
-static JSON cron_stats_to_json (struct cron_stats *stats)
+static json_object *cron_stats_to_json (struct cron_stats *stats)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     Jadd_double (o, "ctime", stats->ctime);
     Jadd_double (o, "starttime", stats->starttime);
     Jadd_double (o, "lastrun", stats->lastrun);
@@ -604,12 +605,12 @@ static JSON cron_stats_to_json (struct cron_stats *stats)
     return (o);
 }
 
-static JSON cron_entry_to_json (cron_entry_t *e)
+static json_object *cron_entry_to_json (cron_entry_t *e)
 {
     cron_task_t *t;
-    JSON o = Jnew ();
-    JSON to = NULL;
-    JSON tasks = Jnew_ar ();
+    json_object *o = Jnew ();
+    json_object *to = NULL;
+    json_object *tasks = Jnew_ar ();
 
     /*
      *  Common entry contents:
@@ -663,7 +664,7 @@ static void cron_create_handler (flux_t h, flux_msg_handler_t *w,
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
     const char *json_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     int saved_errno;
     int rc = -1;
 
@@ -697,8 +698,8 @@ static void cron_sync_handler (flux_t h, flux_msg_handler_t *w,
 {
     cron_ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
-    JSON out = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
     const char *topic;
     bool disable;
     double epsilon;
@@ -753,11 +754,11 @@ static cron_entry_t *cron_ctx_find_entry (cron_ctx_t *ctx, int64_t id)
  *  [service] is name of service for logging purposes.
  */
 static cron_entry_t *entry_from_request (flux_t h, const flux_msg_t *msg,
-                                         cron_ctx_t *ctx, JSON *r,
+                                         cron_ctx_t *ctx, json_object **r,
                                          const char *service)
 {
     const char *json_str;
-    JSON in = NULL;
+    json_object *in = NULL;
     int64_t id;
 
     if ((flux_request_decode (msg, NULL, &json_str) < 0)
@@ -785,8 +786,8 @@ static void cron_delete_handler (flux_t h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    JSON in = NULL;
-    JSON out = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
     bool kill = false;
     int saved_errno;
     int rc = -1;
@@ -818,7 +819,7 @@ static void cron_stop_handler (flux_t h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    JSON out = NULL;
+    json_object *out = NULL;
     int saved_errno = 0;
     int rc = -1;
 
@@ -842,7 +843,7 @@ static void cron_start_handler (flux_t h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    JSON out = NULL;
+    json_object *out = NULL;
     int saved_errno = 0;
     int rc = -1;
 
@@ -867,12 +868,12 @@ static void cron_ls_handler (flux_t h, flux_msg_handler_t *w,
 {
     cron_ctx_t *ctx = arg;
     cron_entry_t *e = NULL;
-    JSON out = Jnew ();
-    JSON entries = Jnew_ar ();
+    json_object *out = Jnew ();
+    json_object *entries = Jnew_ar ();
 
     e = zlist_first (ctx->entries);
     while (e) {
-        JSON entry = cron_entry_to_json (e);
+        json_object *entry = cron_entry_to_json (e);
         if (entry == NULL)
             flux_log_error (h, "cron_entry_to_json");
         else

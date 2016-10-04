@@ -10,7 +10,7 @@ void rpctest_nodeid_cb (flux_t h, flux_msg_handler_t *w,
 {
     int errnum = 0;
     uint32_t nodeid;
-    JSON o = NULL;
+    json_object *o = NULL;
     int flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0

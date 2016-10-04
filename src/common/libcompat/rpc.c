@@ -35,11 +35,11 @@
 #include "compat.h"
 
 int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
-                   JSON in, JSON *out)
+                   json_object *in, json_object **out)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON o = NULL;
+    json_object *o = NULL;
     int rc = -1;
 
     if (!(rpc = flux_rpc (h, topic, Jtostr (in), nodeid, 0)))

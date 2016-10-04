@@ -132,7 +132,8 @@ static int seq_cmp_and_set (seqhash_t *s, const char *name,
     return (0);
 }
 
-static int handle_seq_destroy (seqhash_t *s, JSON in, JSON *outp)
+static int handle_seq_destroy (seqhash_t *s, json_object *in,
+			       json_object **outp)
 {
     const char *name;
     if (!Jget_str (in, "name", &name)) {
@@ -147,7 +148,7 @@ static int handle_seq_destroy (seqhash_t *s, JSON in, JSON *outp)
     return (0);
 }
 
-static int handle_seq_set (seqhash_t *s, JSON in, JSON *outp)
+static int handle_seq_set (seqhash_t *s, json_object *in, json_object **outp)
 {
     const char *name;
     int64_t old, v;
@@ -168,7 +169,7 @@ static int handle_seq_set (seqhash_t *s, JSON in, JSON *outp)
     return (0);
 }
 
-static int handle_seq_fetch (seqhash_t *s, JSON in, JSON *outp)
+static int handle_seq_fetch (seqhash_t *s, json_object *in, json_object **outp)
 {
     const char *name;
     bool create = false;
@@ -202,11 +203,12 @@ static int handle_seq_fetch (seqhash_t *s, JSON in, JSON *outp)
     return (0);
 }
 
-int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg, JSON *outp)
+int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
+			      json_object **outp)
 {
     const char *json_str, *topic;
     const char *method;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     *outp = NULL;

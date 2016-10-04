@@ -280,7 +280,7 @@ static int send_enter_response (const char *key, void *item, void *arg)
 
 static int exit_event_send (flux_t h, const char *name, int errnum)
 {
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     flux_msg_t *msg = NULL;
     int rc = -1;
 

@@ -6,9 +6,10 @@
 
 int main (int argc, char *argv[])
 {
-    JSON d1, d2;
-    JSON dir;
-    JSON array = NULL;
+    json_object *d1;
+    json_object *d2;
+    json_object *dir;
+    json_object *array = NULL;
 
     plan (NO_PLAN);
 

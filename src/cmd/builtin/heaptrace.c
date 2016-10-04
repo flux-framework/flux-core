@@ -29,7 +29,7 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
 {
     flux_t h;
     flux_rpc_t *rpc;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
 
     if (optparse_optind (p) != ac - 1) {
         optparse_print_usage (p);
@@ -70,7 +70,7 @@ static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
 {
     flux_t h;
     flux_rpc_t *rpc;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
 
     if (optparse_optind (p) != ac - 1) {
         optparse_print_usage (p);

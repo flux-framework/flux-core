@@ -11,11 +11,11 @@
 
 void test_get (void)
 {
-    JSON o;
+    json_object *o;
     const char *key = NULL;
-    JSON val = NULL;
-    JSON dirent = NULL;
-    JSON dirent2 = NULL;
+    json_object *val = NULL;
+    json_object *dirent = NULL;
+    json_object *dirent2 = NULL;
     int i, flags;
 
     o = kp_tget_enc (NULL, "foo", 42);
@@ -64,11 +64,11 @@ void test_get (void)
 
 void test_watch (void)
 {
-    JSON o;
+    json_object *o;
     int flags;
     const char *key = NULL;
     const char *s = NULL;
-    JSON val;
+    json_object *val;
 
     val = Jnew ();
     Jadd_str (val, "s", "blatz");
@@ -103,7 +103,7 @@ void test_watch (void)
 
 void test_unwatch (void)
 {
-    JSON o;
+    json_object *o;
     const char *key;
 
     o = kp_tunwatch_enc ("foo");
@@ -117,8 +117,9 @@ void test_unwatch (void)
 
 void test_fence (void)
 {
-    JSON o, out;
-    JSON ops = Jnew_ar();
+    json_object *o;
+    json_object *out;
+    json_object *ops = Jnew_ar();
     int nprocs;
     const char *name;
 
@@ -140,7 +141,7 @@ void test_fence (void)
 
 void test_getroot (void)
 {
-    JSON o;
+    json_object *o;
     const char *rootdir;
     int rootseq;
 
@@ -156,10 +157,11 @@ void test_getroot (void)
 
 void test_setroot (void)
 {
-    JSON o;
+    json_object *o;
     const char *rootdir, *name;
     int rootseq;
-    JSON root, names;
+    json_object *root;
+    json_object *names;
 
     names = Jnew_ar ();
     Jadd_ar_str (names, "foo");
@@ -179,8 +181,8 @@ void test_setroot (void)
 
 void test_error (void)
 {
-    JSON o;
-    JSON names;
+    json_object *o;
+    json_object *names;
     const char *name[3];
     int errnum;
 

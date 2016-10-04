@@ -17,7 +17,7 @@
  */
 void send_watch_requests (flux_t h, const char *key)
 {
-    JSON in;
+    json_object *in;
     flux_rpc_t *r;
     const char *json_str;
 
@@ -37,7 +37,7 @@ void send_watch_requests (flux_t h, const char *key)
  */
 int count_watchers (flux_t h)
 {
-    JSON out;
+    json_object *out;
     const char *json_str;
     int n, count = 0;
     flux_rpc_t *r;

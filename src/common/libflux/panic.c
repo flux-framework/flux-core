@@ -40,7 +40,7 @@
 int flux_panic (flux_t h, int rank, const char *msg)
 {
     uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     flux_rpc_t *r = NULL;
     int rc = -1;
 

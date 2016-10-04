@@ -87,7 +87,7 @@ typedef struct {
     flux_msg_handler_t *w;
     json_object *ops;   /* JSON array of put, unlink, etc operations */
     zhash_t *fence_ops;
-    JSON fence_context;
+    json_object *fence_context;
 } kvsctx_t;
 
 static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
@@ -261,9 +261,9 @@ static int getobj (flux_t h, json_object *rootdir, const char *key,
 {
     flux_rpc_t *rpc = NULL;
     const char *json_str;
-    JSON in = NULL;
-    JSON out = NULL;
-    JSON v = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
+    json_object *v = NULL;
     int saved_errno;
     int rc = -1;
 
@@ -297,7 +297,7 @@ done:
 
 int kvs_get (flux_t h, const char *key, char **val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
 
     if (getobj (h, NULL, key, 0, &v) < 0)
         return -1;
@@ -310,8 +310,8 @@ int kvs_get (flux_t h, const char *key, char **val)
 int kvs_getat (flux_t h, const char *treeobj,
                const char *key, char **val)
 {
-    JSON v = NULL;
-    JSON dirent = NULL;
+    json_object *v = NULL;
+    json_object *dirent = NULL;
 
     if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
                          || dirent_validate (dirent) < 0) {
@@ -333,8 +333,8 @@ error:
 int kvs_get_dirat (flux_t h, const char *treeobj,
                    const char *key, kvsdir_t **dir)
 {
-    JSON v = NULL;
-    JSON rootref = NULL;
+    json_object *v = NULL;
+    json_object *rootref = NULL;
     int rc = -1;
 
     if (!treeobj || !key || !dir || !(rootref = Jfromstr (treeobj))
@@ -355,8 +355,8 @@ done:
 int kvs_get_symlinkat (flux_t h, const char *treeobj,
                        const char *key, char **val)
 {
-    JSON v = NULL;
-    JSON dirent = NULL;
+    json_object *v = NULL;
+    json_object *dirent = NULL;
     int rc = -1;
 
     if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
@@ -380,7 +380,7 @@ done:
 }
 
 /* deprecated */
-int kvs_get_obj (flux_t h, const char *key, JSON *val)
+int kvs_get_obj (flux_t h, const char *key, json_object **val)
 {
     return getobj (h, NULL, key, 0, val);
 }
@@ -389,7 +389,7 @@ int kvs_get_dir (flux_t h, kvsdir_t **dir, const char *fmt, ...)
 {
     va_list ap;
     char *key = NULL;
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (!h || !dir || !fmt) {
@@ -417,7 +417,7 @@ done:
 
 int kvs_get_symlink (flux_t h, const char *key, char **val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (getobj (h, NULL, key, KVS_PROTO_READLINK, &v) < 0)
@@ -436,7 +436,7 @@ done:
 
 int kvs_get_treeobj (flux_t h, const char *key, char **val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     const char *s;
     int rc = -1;
 
@@ -454,7 +454,7 @@ done:
 
 int kvs_get_string (flux_t h, const char *key, char **val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (getobj (h, NULL, key, 0, &v) < 0)
@@ -473,7 +473,7 @@ done:
 
 int kvs_get_int (flux_t h, const char *key, int *val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (getobj (h, NULL, key, 0, &v) < 0)
@@ -492,7 +492,7 @@ done:
 
 int kvs_get_int64 (flux_t h, const char *key, int64_t *val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (getobj (h, NULL, key, 0, &v) < 0)
@@ -511,7 +511,7 @@ done:
 
 int kvs_get_double (flux_t h, const char *key, double *val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (getobj (h, NULL, key, 0, &v) < 0)
@@ -530,7 +530,7 @@ done:
 
 int kvs_get_boolean (flux_t h, const char *key, bool *val)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (getobj (h, NULL, key, 0, &v) < 0)
@@ -597,7 +597,7 @@ int kvs_unwatch (flux_t h, const char *key)
 {
     kvsctx_t *ctx = getctx (h);
     flux_rpc_t *rpc = NULL;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (!(in = kp_tunwatch_enc (key)))
@@ -688,8 +688,8 @@ static void watch_response_cb (flux_t h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
-    JSON out = NULL;
-    JSON val;
+    json_object *out = NULL;
+    json_object *val;
     uint32_t matchtag;
     kvs_watcher_t *wp;
 
@@ -715,17 +715,17 @@ done:
  * If 'matchtag' is non-NULL return the request's matchtag in it for
  * adding to the watcher state; else retire the matchtag.
  */
-static int watch_rpc (flux_t h, const char *key, JSON *val,
+static int watch_rpc (flux_t h, const char *key, json_object **val,
                       int flags, uint32_t *matchtag)
 {
     struct flux_match match = { .typemask = FLUX_MSGTYPE_RESPONSE,
                                 .topic_glob = NULL };
-    JSON in = NULL;
-    JSON out = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
     const char *json_str;
     flux_msg_t *request_msg = NULL;
     flux_msg_t *response_msg = NULL;
-    JSON v = NULL;
+    json_object *v = NULL;
     int ret = -1;
 
     /* Send the request.
@@ -794,7 +794,7 @@ done:
 
 int kvs_watch_once (flux_t h, const char *key, char **valp)
 {
-    JSON val = NULL;
+    json_object *val = NULL;
     int rc = -1;
 
     if (!h || !key || !valp) {
@@ -1037,7 +1037,7 @@ static int kvs_put_dirent (flux_t h, const char *key, json_object *dirent)
 {
     kvsctx_t *ctx = getctx (h);
     int rc = -1;
-    JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
+    json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
@@ -1051,7 +1051,7 @@ done:
 
 int kvs_put_treeobj (flux_t h, const char *key, const char *treeobj)
 {
-    JSON dirent;
+    json_object *dirent;
 
     if (!treeobj || !(dirent = Jfromstr (treeobj))
                  || dirent_validate (dirent) < 0) {
@@ -1067,7 +1067,7 @@ int kvs_put_treeobj (flux_t h, const char *key, const char *treeobj)
 int kvs_put (flux_t h, const char *key, const char *json_str)
 {
     int rc = -1;
-    JSON val = NULL;
+    json_object *val = NULL;
 
     if (!json_str)
         return kvs_unlink (h, key);
@@ -1184,8 +1184,8 @@ int kvs_unlink (flux_t h, const char *key)
 int kvs_symlink (flux_t h, const char *key, const char *target)
 {
     kvsctx_t *ctx = getctx (h);
-    JSON val = NULL;
-    JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
+    json_object *val = NULL;
+    json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key || !target) {
         errno = EINVAL;
@@ -1203,8 +1203,8 @@ int kvs_symlink (flux_t h, const char *key, const char *target)
 int kvs_mkdir (flux_t h, const char *key)
 {
     kvsctx_t *ctx = getctx (h);
-    JSON val = Jnew ();
-    JSON *ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
+    json_object *val = Jnew ();
+    json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
@@ -1261,10 +1261,10 @@ done:
 flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs)
 {
     kvsctx_t *ctx = getctx (h);
-    JSON in = NULL;
+    json_object *in = NULL;
     flux_rpc_t *rpc = NULL;
     int saved_errno = errno;
-    JSON fence_ops = NULL;
+    json_object *fence_ops = NULL;
 
     if (ctx->fence_ops)
         fence_ops = zhash_lookup (ctx->fence_ops, name);
@@ -1333,7 +1333,7 @@ int kvs_get_version (flux_t h, int *versionp)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     int version;
     int rc = -1;
 
@@ -1358,7 +1358,7 @@ int kvs_wait_version (flux_t h, int version)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     int ret = -1;
 
     Jadd_int (in, "rootseq", version);
@@ -1414,7 +1414,7 @@ int kvsdir_get_obj (kvsdir_t *dir, const char *name, json_object **valp)
 
 int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     if (dirgetobj (dir, name, 0, &v) < 0)
         return -1;
     if (valp)
@@ -1428,7 +1428,7 @@ int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
     int rc = -1;
     char *name, *key;
     va_list ap;
-    JSON v = NULL;
+    json_object *v = NULL;
 
     va_start (ap, fmt);
     if (vasprintf (&name, fmt, ap) < 0)
@@ -1450,7 +1450,7 @@ done:
 int kvsdir_get_symlink (kvsdir_t *dir, const char *name, char **valp)
 {
     int rc = -1;
-    JSON v = NULL;
+    json_object *v = NULL;
 
     if (dirgetobj (dir, name, KVS_PROTO_READLINK, &v) < 0)
         goto done;
@@ -1468,7 +1468,7 @@ done:
 
 int kvsdir_get_string (kvsdir_t *dir, const char *name, char **valp)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (dirgetobj (dir, name, 0, &v) < 0)
@@ -1487,7 +1487,7 @@ done:
 
 int kvsdir_get_int (kvsdir_t *dir, const char *name, int *valp)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (dirgetobj (dir, name, 0, &v) < 0)
@@ -1506,7 +1506,7 @@ done:
 
 int kvsdir_get_int64 (kvsdir_t *dir, const char *name, int64_t *valp)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (dirgetobj (dir, name, 0, &v) < 0)
@@ -1525,7 +1525,7 @@ done:
 
 int kvsdir_get_double (kvsdir_t *dir, const char *name, double *valp)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (dirgetobj (dir, name, 0, &v) < 0)
@@ -1544,7 +1544,7 @@ done:
 
 int kvsdir_get_boolean (kvsdir_t *dir, const char *name, bool *valp)
 {
-    JSON v = NULL;
+    json_object *v = NULL;
     int rc = -1;
 
     if (dirgetobj (dir, name, 0, &v) < 0)
@@ -1723,7 +1723,7 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
 
 int kvs_copy (flux_t h, const char *from, const char *to)
 {
-    JSON dirent;
+    json_object *dirent;
     if (getobj (h, NULL, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
         return -1;
     if (kvs_put_dirent (h, to, dirent) < 0) {

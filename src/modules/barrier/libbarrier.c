@@ -57,7 +57,7 @@ static ctx_t *getctx (flux_t h)
 
 int flux_barrier (flux_t h, const char *name, int nprocs)
 {
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     char *s = NULL;
     flux_rpc_t *rpc = NULL;
     int ret = -1;

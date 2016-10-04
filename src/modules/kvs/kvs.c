@@ -868,14 +868,14 @@ static void get_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
-    JSON out = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
     int flags;
     const char *key;
-    JSON val;
-    JSON root = NULL;
-    JSON root_dirent = NULL;
-    JSON tmp_dirent = NULL;
+    json_object *val;
+    json_object *root = NULL;
+    json_object *root_dirent = NULL;
+    json_object *tmp_dirent = NULL;
     const char *root_ref = ctx->rootdir;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
@@ -941,11 +941,12 @@ static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
-    JSON in2 = NULL;
-    JSON out = NULL;
-    JSON oval, val = NULL;
-    JSON root = NULL;
+    json_object *in = NULL;
+    json_object *in2 = NULL;
+    json_object *out = NULL;
+    json_object *oval;
+    json_object *val = NULL;
+    json_object *root = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
@@ -1019,7 +1020,8 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
 {
     unwatch_param_t *p = arg;
     char *sender = NULL;
-    JSON o = NULL, val;
+    json_object *o = NULL;
+    json_object *val;
     const char *key, *topic, *json_str;
     int flags;
     bool match = false;
@@ -1051,7 +1053,7 @@ static void unwatch_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
+    json_object *in = NULL;
     unwatch_param_t p = { NULL, NULL };
     int rc = -1;
 
@@ -1114,9 +1116,9 @@ error:
     return NULL;
 }
 
-static int fence_append_ops (fence_t *f, JSON ops)
+static int fence_append_ops (fence_t *f, json_object *ops)
 {
-    JSON op;
+    json_object *op;
     int i;
 
     if (ops) {
@@ -1209,8 +1211,8 @@ static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
     ctx_t *ctx = arg;
     const char *json_str, *name;
     int nprocs;
-    JSON in = NULL;
-    JSON ops = NULL;
+    json_object *in = NULL;
+    json_object *ops = NULL;
     fence_t *f;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
@@ -1261,8 +1263,8 @@ static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
     ctx_t *ctx = arg;
     const char *json_str, *name;
     int nprocs;
-    JSON in = NULL;
-    JSON ops = NULL;
+    json_object *in = NULL;
+    json_object *ops = NULL;
     fence_t *f;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
@@ -1320,8 +1322,8 @@ static void sync_request_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON in = NULL;
-    JSON out = Jnew ();
+    json_object *in = NULL;
+    json_object *out = Jnew ();
     int rootseq;
     wait_t *wait = NULL;
     int rc = -1;
@@ -1355,7 +1357,7 @@ static void getroot_request_cb (flux_t h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = NULL;
+    json_object *out = NULL;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -1374,7 +1376,7 @@ static int getroot_rpc (ctx_t *ctx, int *rootseq, href_t rootdir)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON out = NULL;
+    json_object *out = NULL;
     const char *ref;
     int rc = -1;
 
@@ -1406,8 +1408,8 @@ static void error_event_cb (flux_t h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    JSON out = NULL;
-    JSON names = NULL;
+    json_object *out = NULL;
+    json_object *names = NULL;
     int errnum;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
@@ -1430,7 +1432,7 @@ done:
 
 static int error_event_send (ctx_t *ctx, json_object *names, int errnum)
 {
-    JSON in = NULL;
+    json_object *in = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
@@ -1453,12 +1455,12 @@ static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = NULL;
+    json_object *out = NULL;
     int rootseq;
     const char *json_str;
     const char *rootdir;
-    JSON root = NULL;
-    JSON names = NULL;
+    json_object *root = NULL;
+    json_object *names = NULL;
 
     if (flux_event_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
@@ -1499,8 +1501,8 @@ done:
 
 static int setroot_event_send (ctx_t *ctx, json_object *names)
 {
-    JSON in = NULL;
-    JSON root = NULL;
+    json_object *in = NULL;
+    json_object *root = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 

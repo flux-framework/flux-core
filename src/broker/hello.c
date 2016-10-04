@@ -219,7 +219,7 @@ static void join_request (flux_t h, flux_msg_handler_t *w,
     hello_t *hello = arg;
     const char *json_str;
     int count, batch;
-    JSON in = NULL;
+    json_object *in = NULL;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         log_err_exit ("hello: flux_request_decode");
@@ -281,7 +281,7 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
     flux_rpc_t *rpc;
     hello_t *hello = arg;
     int count = (uintptr_t)flux_reduce_pop (r);
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
 
     assert (batch == 0);
     assert (count > 0);

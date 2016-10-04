@@ -127,7 +127,7 @@ static int op_event_subscribe (void *impl, const char *topic)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     int rc = 0;
 
     Jadd_str (in, "topic", topic);
@@ -146,7 +146,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
-    JSON in = Jnew ();
+    json_object *in = Jnew ();
     int rc = 0;
 
     Jadd_str (in, "topic", topic);

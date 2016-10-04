@@ -648,7 +648,7 @@ static void content_backing_request (flux_t h, flux_msg_handler_t *w,
     content_cache_t *cache = arg;
     const char *json_str;
     const char *name;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
     bool backing;
 
@@ -735,7 +735,7 @@ static void content_stats_request (flux_t h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
-    JSON out = Jnew ();
+    json_object *out = Jnew ();
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)

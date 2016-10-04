@@ -1727,14 +1727,14 @@ static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
     return (0);
 }
 
-static JSON subprocess_json_info (struct subprocess *p)
+static json_object *subprocess_json_info (struct subprocess *p)
 {
     int i;
     char buf [MAXPATHLEN];
     const char *cwd;
     char *sender = NULL;
-    JSON o = Jnew ();
-    JSON a = Jnew_ar ();
+    json_object *o = Jnew ();
+    json_object *a = Jnew_ar ();
 
     Jadd_int (o, "pid", subprocess_pid (p));
     for (i = 0; i < subprocess_get_argc (p); i++) {
@@ -1758,15 +1758,15 @@ static int cmb_ps_cb (zmsg_t **zmsg, void *arg)
 {
     struct subprocess *p;
     ctx_t *ctx = arg;
-    JSON out = Jnew ();
-    JSON procs = Jnew_ar ();
+    json_object *out = Jnew ();
+    json_object *procs = Jnew_ar ();
     int rc;
 
     Jadd_int (out, "rank", ctx->rank);
 
     p = subprocess_manager_first (ctx->sm);
     while (p) {
-        JSON o = subprocess_json_info (p);
+        json_object *o = subprocess_json_info (p);
         /* Avoid shortjson here so we don't take an unnecessary
          *  reference to 'o'.
          */
@@ -1814,8 +1814,8 @@ static int cmb_attrget_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     const char *json_str, *name, *val;
     int flags;
-    JSON in = NULL;
-    JSON out = Jnew ();
+    json_object *in = NULL;
+    json_object *out = Jnew ();
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
@@ -1846,7 +1846,7 @@ static int cmb_attrset_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str, *name, *val = NULL;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
@@ -1879,8 +1879,8 @@ static int cmb_attrlist_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *name;
-    JSON out = Jnew ();
-    JSON array = Jnew_ar ();
+    json_object *out = Jnew ();
+    json_object *array = Jnew_ar ();
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, NULL) < 0)
@@ -1904,7 +1904,7 @@ done:
 static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = NULL;
+    json_object *out = NULL;
     int rc = -1;
 
     if (getrusage_json (RUSAGE_THREAD, &out) < 0)
@@ -2029,7 +2029,7 @@ done:
 static int cmb_lspeer_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = overlay_lspeer_encode (ctx->overlay);
+    json_object *out = overlay_lspeer_encode (ctx->overlay);
     int rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
     zmsg_destroy (zmsg);
     Jput (out);
@@ -2039,7 +2039,7 @@ static int cmb_lspeer_cb (zmsg_t **zmsg, void *arg)
 static int cmb_ping_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON inout = NULL;
+    json_object *inout = NULL;
     const char *json_str;
     char *s = NULL;
     char *route = NULL;
@@ -2068,7 +2068,7 @@ done:
 static int cmb_reparent_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON in = NULL;
+    json_object *in = NULL;
     const char *uri;
     const char *json_str;
     bool recycled = false;
@@ -2092,7 +2092,7 @@ done:
 
 static int cmb_panic_cb (zmsg_t **zmsg, void *arg)
 {
-    JSON in = NULL;
+    json_object *in = NULL;
     const char *s = NULL;
     const char *json_str;
     int rc = -1;
@@ -2129,7 +2129,7 @@ static int cmb_dmesg_clear_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     const char *json_str;
     int seq;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
@@ -2154,8 +2154,8 @@ static void cmb_dmesg (const flux_msg_t *msg, void *arg)
     const char *buf;
     int len;
     int seq;
-    JSON in = NULL;
-    JSON out = NULL;
+    json_object *in = NULL;
+    json_object *out = NULL;
     bool follow;
     int rc = -1;
 
@@ -2233,7 +2233,7 @@ static int cmb_sub_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
-    JSON in = NULL;
+    json_object *in = NULL;
     const char *topic;
     int rc = -1;
 
@@ -2266,7 +2266,7 @@ static int cmb_unsub_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
-    JSON in = NULL;
+    json_object *in = NULL;
     const char *topic;
     int rc = -1;
 
@@ -2297,7 +2297,7 @@ done:
 static int cmb_seq (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = NULL;
+    json_object *out = NULL;
     int rc = sequence_request_handler (ctx->seq, (flux_msg_t *) *zmsg, &out);
 
     if (flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
@@ -2311,7 +2311,7 @@ static int cmb_seq (zmsg_t **zmsg, void *arg)
 static int cmb_heaptrace_start_cb (zmsg_t **zmsg, void *arg)
 {
     const char *json_str, *filename;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
@@ -2338,7 +2338,7 @@ done:
 static int cmb_heaptrace_dump_cb (zmsg_t **zmsg, void *arg)
 {
     const char *json_str, *reason;
-    JSON in = NULL;
+    json_object *in = NULL;
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)

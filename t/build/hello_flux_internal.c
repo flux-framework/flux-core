@@ -2,7 +2,7 @@
 
 int main (int argc, char **argv)
 {
-	JSON o = Jnew();
+	json_object *o = Jnew();
 	Jput (o);
 
 	return 0;

@@ -351,7 +351,7 @@ static int decode_reload_request (flux_t h, ctx_t *ctx,
                                   const flux_msg_t *msg)
 {
     const char *json_str;
-    JSON in = NULL;
+    json_object *in = NULL;
     bool walk_topology = ctx->walk_topology;
 
     if ((flux_request_decode (msg, NULL, &json_str) < 0)

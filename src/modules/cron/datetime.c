@@ -61,7 +61,7 @@ struct datetime_entry * datetime_entry_create ()
     return (dt);
 }
 
-static struct datetime_entry * datetime_entry_from_json (JSON o)
+static struct datetime_entry * datetime_entry_from_json (json_object *o)
 {
     int i;
     struct datetime_entry *dt = datetime_entry_create ();
@@ -117,7 +117,7 @@ static double reschedule_cb (flux_watcher_t *w, double now, void *arg)
     return (next);
 }
 
-static void *cron_datetime_create (flux_t h, cron_entry_t *e, JSON arg)
+static void *cron_datetime_create (flux_t h, cron_entry_t *e, json_object *arg)
 {
     struct datetime_entry *dt = datetime_entry_from_json (arg);
     if (dt == NULL)
@@ -135,11 +135,11 @@ static void *cron_datetime_create (flux_t h, cron_entry_t *e, JSON arg)
     return (dt);
 }
 
-static JSON cron_datetime_to_json (void *arg)
+static json_object *cron_datetime_to_json (void *arg)
 {
     int i;
     struct datetime_entry *dt = arg;
-    JSON o = Jnew ();
+    json_object *o = Jnew ();
     if (dt->w)
         Jadd_double (o, "next_wakeup", flux_watcher_next_wakeup (dt->w));
     for (i = 0; i < TM_MAX_ITEM; i++)

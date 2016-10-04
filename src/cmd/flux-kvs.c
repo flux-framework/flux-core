@@ -189,7 +189,7 @@ int main (int argc, char *argv[])
 void cmd_type (flux_t h, int argc, char **argv)
 {
     char *json_str;
-    JSON o;
+    json_object *o;
     int i;
 
     if (argc == 0)
@@ -232,7 +232,7 @@ void cmd_type (flux_t h, int argc, char **argv)
 void cmd_get (flux_t h, int argc, char **argv)
 {
     char *json_str;
-    JSON o;
+    json_object *o;
     int i;
 
     if (argc == 0)
@@ -435,7 +435,7 @@ void cmd_copy_tokvs (flux_t h, int argc, char **argv)
     char *file, *key;
     int fd, len;
     uint8_t *buf;
-    JSON o;
+    json_object *o;
 
     if (argc != 2)
         log_msg_exit ("copy-tokvs: specify key and filename");
@@ -466,7 +466,7 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
     char *file, *key;
     int fd, len;
     uint8_t *buf;
-    JSON o;
+    json_object *o;
     char *json_str;
 
     if (argc != 2)
@@ -498,7 +498,7 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
 
 static void dump_kvs_val (const char *key, const char *json_str)
 {
-    JSON o = Jfromstr (json_str);
+    json_object *o = Jfromstr (json_str);
     if (!o) {
         printf ("%s: invalid JSON", key);
         return;

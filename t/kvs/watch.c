@@ -419,7 +419,7 @@ int get_watch_stats (flux_t h, int *count)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    JSON o = NULL;
+    json_object *o = NULL;
     int rc = -1;
 
     if (!(rpc = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))

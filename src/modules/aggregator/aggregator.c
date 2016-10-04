@@ -142,11 +142,11 @@ static int aggregate_push (struct aggregate *ag, int64_t value, const char *ids)
 
 /*  Push JSON represenation of an aggregate onto existing aggregate `ag`
  */
-static int aggregate_push_json (struct aggregate *ag, JSON o)
+static int aggregate_push_json (struct aggregate *ag, json_object *o)
 {
     json_object_iter i;
     int64_t n64;
-    JSON entries = NULL;
+    json_object *entries = NULL;
 
     if (ag->total == 0 && (Jget_int64 (o, "total", &n64)))
         ag->total = n64;
@@ -167,10 +167,11 @@ static int aggregate_push_json (struct aggregate *ag, JSON o)
     return (0);
 }
 
-static JSON aggregate_tojson (struct aggregate *ag)
+static json_object *aggregate_tojson (struct aggregate *ag)
 {
     struct aggregate_entry *ae;
-    JSON entries, o = Jnew ();
+    json_object *entries;
+    json_object *o = Jnew ();
     Jadd_str (o, "key", ag->key);
     Jadd_int (o, "count", ag->count);
     Jadd_int (o, "total", ag->total);
@@ -197,7 +198,7 @@ static int aggregate_forward (flux_t h, struct aggregate *ag)
     int rc = 0;
     flux_rpc_t *rpc;
     uint32_t nodeid = FLUX_NODEID_UPSTREAM;
-    JSON o = aggregate_tojson (ag);
+    json_object *o = aggregate_tojson (ag);
     flux_log (h, LOG_INFO, "forward: %s: count=%d total=%d\n",
                  ag->key, ag->count, ag->total);
     if (!(rpc = flux_rpc (h, "aggregator.push", Jtostr (o),
@@ -236,7 +237,7 @@ out:
 static int aggregate_sink (flux_t h, struct aggregate *ag)
 {
     int rc = 0;
-    JSON o;
+    json_object *o;
 
     flux_log (h, LOG_INFO, "sink: %s: count=%d total=%d",
                 ag->key, ag->count, ag->total);
@@ -462,7 +463,7 @@ static void push_cb (flux_t h, flux_msg_handler_t *w,
     struct aggregator *ctx = arg;
     struct aggregate *ag = NULL;
     const char *json_str;
-    JSON in = NULL;
+    json_object *in = NULL;
     const char *key;
     double timeout = ctx->default_timeout;
     int64_t fwd_count = 0;

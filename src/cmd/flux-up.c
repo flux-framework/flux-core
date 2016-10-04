@@ -131,7 +131,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static bool Jget_nodeset (JSON o, const char *name, nodeset_t **np)
+static bool Jget_nodeset (json_object *o, const char *name, nodeset_t **np)
 {
     nodeset_t *ns;
     const char *s;
@@ -145,7 +145,7 @@ static bool Jget_nodeset (JSON o, const char *name, nodeset_t **np)
 static ns_t *ns_fromjson (const char *json_str)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
-    JSON o = NULL;
+    json_object *o = NULL;
 
     if (!(o = Jfromstr (json_str))
                 || !Jget_nodeset (o, "ok", &ns->ok)

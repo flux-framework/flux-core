@@ -112,14 +112,14 @@ static FILE *open_test_outfile (const char *fn)
     return fp;
 }
 
-static inline void get_jobid (JSON jcb, int64_t *j)
+static inline void get_jobid (json_object *jcb, int64_t *j)
 {
     Jget_int64 (jcb, JSC_JOBID, j);
 }
 
-static inline void get_states (JSON jcb, int64_t *os, int64_t *ns)
+static inline void get_states (json_object *jcb, int64_t *os, int64_t *ns)
 {
-    JSON o = NULL;
+    json_object *o = NULL;
     Jget_obj (jcb, JSC_STATE_PAIR, &o);
     Jget_int64 (o, JSC_STATE_PAIR_OSTATE, os);
     Jget_int64 (o, JSC_STATE_PAIR_NSTATE, ns);
@@ -139,7 +139,7 @@ static int job_status_cb (const char *jcbstr, void *arg, int errnum)
     int64_t j = 0;
     jstatctx_t *ctx = NULL;
     flux_t h = (flux_t)arg;
-    JSON jcb = NULL;
+    json_object *jcb = NULL;
 
     ctx = getctx (h);
     if (errnum > 0) {
@@ -193,7 +193,7 @@ static int handle_notify_req (flux_t h, const char *ofn)
 
 static int handle_query_req (flux_t h, int64_t j, const char *k, const char *n)
 {
-    JSON jcb = NULL;
+    json_object *jcb = NULL;
     jstatctx_t *ctx = NULL;
     char *jcbstr;
 
