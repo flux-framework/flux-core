@@ -46,13 +46,13 @@ test_expect_success 'kvs: get a nonexistent key' '
 '
 
 
-test_expect_success 'kvs: integer put' '
-	flux kvs put $KEY=42 
+test_expect_success 'kvs: number (integer) put' '
+	flux kvs put $KEY=42
 '
-test_expect_success 'kvs: integer type' '
-	test_kvs_type $KEY int
+test_expect_success 'kvs: number type' '
+	test_kvs_type $KEY number
 '
-test_expect_success 'kvs: integer get' '
+test_expect_success 'kvs: number get' '
 	test_kvs_key $KEY 42
 '
 test_expect_success 'kvs: unlink works' '
@@ -93,13 +93,13 @@ test_expect_success 'kvs: boolean type' '
 test_expect_success 'kvs: boolean get (false)' '
 	test_kvs_key $KEY false
 '
-test_expect_success 'kvs: put double' '
+test_expect_success 'kvs: put number (double)' '
 	flux kvs put $KEY=3.14159
 '
-test_expect_success 'kvs: double type' '
-	test_kvs_type $KEY double
+test_expect_success 'kvs: number type' '
+	test_kvs_type $KEY number 
 '
-test_expect_success 'kvs: get double' '
+test_expect_success 'kvs: number get' '
 	test_kvs_key $KEY 3.141590
 '
 test_expect_success 'kvs: array put' '
@@ -109,7 +109,7 @@ test_expect_success 'kvs: array type' '
 	test_kvs_type $KEY array
 '
 test_expect_success 'kvs: array get' '
-	test_kvs_key $KEY "[ 1, 3, 5, 7 ]"
+	test_kvs_key $KEY "[1, 3, 5, 7]"
 '
 test_expect_success 'kvs: object put' '
 	flux kvs put $KEY="{\"a\":42}"
@@ -118,7 +118,7 @@ test_expect_success 'kvs: object type' '
 	test_kvs_type $KEY object
 '
 test_expect_success 'kvs: object get' '
-	test_kvs_key $KEY "{ \"a\": 42 }"
+	test_kvs_key $KEY "{\"a\":42}"
 '
 test_expect_success 'kvs: try to retrieve key as directory should fail' '
 	test_must_fail flux kvs dir $KEY
