@@ -122,7 +122,7 @@ test_expect_success 'flux proxy works with ssh:// and local sockdir' '
 
 test_expect_success 'flux proxy with ssh:// and bad jobid fails' '
 	! FLUX_SSH=$TEST_SSH FLUX_SSH_RCMD=$TEST_FLUX \
-	  flux proxy ssh://localhost/0 flux getattr size
+	  flux proxy ssh://localhost/noexist flux getattr size
 '
 
 test_expect_success 'flux proxy with ssh:// and bad query option fails' '
