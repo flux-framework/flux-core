@@ -51,7 +51,7 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    flux_sec_t sec;
+    flux_sec_t *sec;
     bool force = false;
     bool plain = false;
     const char *secdir = getenv ("FLUX_SEC_DIRECTORY");

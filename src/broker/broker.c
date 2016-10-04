@@ -104,7 +104,7 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
-    flux_sec_t sec;             /* security context (MT-safe) */
+    flux_sec_t *sec;             /* security context (MT-safe) */
 
     /* Reactor
      */

@@ -26,7 +26,7 @@ typedef struct snoop_struct snoop_t;
 snoop_t *snoop_create (void);
 void snoop_destroy (snoop_t *sn);
 
-void snoop_set_sec (snoop_t *sn, flux_sec_t sec);
+void snoop_set_sec (snoop_t *sn, flux_sec_t *sec);
 void snoop_set_zctx (snoop_t *sn, zctx_t *zctx);
 void snoop_set_uri (snoop_t *sn, const char *fmt, ...);
 

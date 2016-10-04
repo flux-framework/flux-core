@@ -45,7 +45,7 @@ struct endpoint {
 
 struct overlay_struct {
     zctx_t *zctx;
-    flux_sec_t sec;
+    flux_sec_t *sec;
     flux_t h;
     zhash_t *children;          /* child_t - by uuid */
     flux_msg_handler_t *heartbeat;
@@ -150,7 +150,7 @@ void overlay_set_zctx (overlay_t *ov, zctx_t *zctx)
     ov->zctx = zctx;
 }
 
-void overlay_set_sec (overlay_t *ov, flux_sec_t sec)
+void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
 {
     ov->sec = sec;
 }

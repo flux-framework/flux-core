@@ -63,7 +63,7 @@ void usage (void)
     exit (1);
 }
 
-static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri);
+static void *connect_snoop (zctx_t *zctx, flux_sec_t *sec, const char *uri);
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 
@@ -85,7 +85,7 @@ int main (int argc, char *argv[])
     void *s;
     zloop_t *zloop;
     zmq_pollitem_t zp;
-    flux_sec_t sec;
+    flux_sec_t *sec;
     const char *secdir;
 
     log_init ("flux-snoop");
@@ -201,7 +201,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri)
+static void *connect_snoop (zctx_t *zctx, flux_sec_t *sec, const char *uri)
 {
     void *s;
 
