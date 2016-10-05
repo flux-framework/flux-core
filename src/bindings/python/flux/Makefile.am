@@ -3,7 +3,7 @@ AM_CPPFLAGS = \
 	@GCCWARN@ \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
+	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
@@ -16,7 +16,6 @@ SUFFIXES = _build.py
 
 common_libs = $(top_builddir)/src/common/libflux-core.la \
 	      $(top_builddir)/src/common/libflux-internal.la \
-	      $(JSON_LIBS) \
 	      $(ZMQ_LIBS)
 
 _build.py.c:

@@ -26,7 +26,7 @@
 #define _FLUX_CORE_JSTATCTRL_DEPRECATED_H 1
 
 #include "jstatctl.h"
-#include <json.h>
+#include "src/common/libjson-c/json.h"
 
 typedef int (*jsc_handler_obj_f)(json_object *base_jcb, void *arg, int errnum);
 

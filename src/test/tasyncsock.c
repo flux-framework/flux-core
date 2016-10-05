@@ -63,7 +63,6 @@
 #include <czmq.h>
 #include <libgen.h>
 #include <pthread.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"

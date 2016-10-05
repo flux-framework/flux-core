@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 #
 # Comms module
@@ -19,7 +19,7 @@ barrier_la_LDFLAGS = $(fluxmod_ldflags) -module
 barrier_la_LIBADD = $(fluxmod_libadd) \
 		    $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la \
-		    $(JSON_LIBS) $(ZMQ_LIBS)
+		    $(ZMQ_LIBS)
 
 #
 # API for module
@@ -31,4 +31,4 @@ libflux_barrier_la_LDFLAGS = $(fluxlib_ldflags) \
 			     -export-symbols-regex '^flux_.*'
 libflux_barrier_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 			    $(top_builddir)/src/common/libflux-core.la \
-			    $(JSON_LIBS) $(ZMQ_LIBS)
+			    $(ZMQ_LIBS)

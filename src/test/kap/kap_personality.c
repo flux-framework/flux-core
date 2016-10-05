@@ -7,7 +7,6 @@
  *
  */
 
-#include <json.h>
 #include <mpi.h>
 #include <flux/core.h>
 #include <math.h>

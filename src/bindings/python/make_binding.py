@@ -95,9 +95,6 @@ ffi.set_source('{full_mod}',
 #include <{header}>
 {extra_source}
 
-//TODO: REMOVE THIS when the json_obj stuff goes away
-#include <json.h>
-
 void * unpack_long(ptrdiff_t num){{
   return (void*)num;
 }}
@@ -110,11 +107,6 @@ ffi.cdef("""
 void * unpack_long(ptrdiff_t num);
 void free(void *ptr);
 
-struct json_object;
-extern typedef struct json_object json_object;
-struct json_object* json_tokener_parse(const char *str);
-int json_object_put(struct json_object *obj);
-const char *  json_object_to_json_string (struct json_object *obj);
 
         {cdefs}
 

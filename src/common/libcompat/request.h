@@ -1,7 +1,7 @@
 #ifndef _FLUX_JSONC_REQUEST_H
 #define _FLUX_JSONC_REQUEST_H
 
-#include <json.h>
+#include "src/common/libjson-c/json.h"
 #include <czmq.h>
 #include <stdint.h>
 

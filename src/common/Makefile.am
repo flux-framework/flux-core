@@ -18,7 +18,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libjson-c/libjson-c.la \
-	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
+	$(LIBMUNGE) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) $(LIBRT)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 

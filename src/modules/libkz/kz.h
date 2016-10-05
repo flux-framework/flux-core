@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_KZ_H
 #define _FLUX_CORE_KZ_H
 
-#include <json.h>
 #include <flux/core.h>
 
 typedef struct kz_struct kz_t;

@@ -29,7 +29,6 @@
 #include <fcntl.h>
 #include <string.h>
 #include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/liblsd/cbuf.h"

@@ -1,12 +1,12 @@
 #ifndef _FLUX_KVS_DEPRECATED_H
 #define _FLUX_KVS_DEPRECATED_H
 
-#include <json.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <flux/core.h>
 
 #include "kvs.h"
+#include "src/common/libjson-c/json.h"
 
 typedef int (*kvs_set_obj_f)(const char *key, json_object *val, void *arg,
                              int errnum);

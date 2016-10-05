@@ -42,16 +42,16 @@
 #include <stdarg.h>
 #include <flux/core.h>
 #include <czmq.h>
-#include <json.h>
-
-#include "kvs_deprecated.h"
-#include "proto.h"
-#include "json_dirent.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shastring.h"
+
+#include "kvs_deprecated.h"
+#include "proto.h"
+#include "json_dirent.h"
+
 
 struct kvsdir_struct {
     flux_t *handle;

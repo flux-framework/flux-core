@@ -29,10 +29,10 @@
 #include <errno.h>
 #include <stdio.h>
 #include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libjson-c/json.h"
 
 #include "zio.h"
 

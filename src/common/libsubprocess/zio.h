@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_ZIO_H
 #define _FLUX_CORE_ZIO_H 1
 
-#include <json.h>
 #include <flux/core.h>
 
 typedef struct zio_ctx zio_t;

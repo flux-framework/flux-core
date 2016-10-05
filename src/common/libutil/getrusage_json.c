@@ -27,7 +27,6 @@
 #endif
 #include <time.h>
 #include <sys/resource.h>
-#include <json.h>
 
 #include "log.h"
 #include "shortjson.h"

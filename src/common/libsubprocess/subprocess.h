@@ -22,7 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-#include <json.h>
 #include <stdbool.h>
 
 struct subprocess_manager;

@@ -184,12 +184,12 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
         -I$(top_srcdir) -I$(top_srcdir)/src/include \
-        $(JSON_CFLAGS) $(ZMQ_CFLAGS)
+        $(ZMQ_CFLAGS)
 
 LDADD = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
-        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
+        $(ZMQ_LIBS) $(LIBPTHREAD)
 
 check_PROGRAMS = \
 	topen \

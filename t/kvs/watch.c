@@ -33,7 +33,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <json.h>
 #include <flux/core.h>
 #include <pthread.h>
 

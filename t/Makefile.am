@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
         -I$(top_srcdir) -I$(top_srcdir)/src/include \
-        $(JSON_CFLAGS) $(ZMQ_CFLAGS)
+        $(ZMQ_CFLAGS)
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -189,7 +189,7 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
+        $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \

@@ -26,12 +26,10 @@
 #include "config.h"
 #endif
 #include <math.h>
-#include <json.h>
 
-#include "tstat.h"
-
-#include "log.h"
 #include "shortjson.h"
+#include "tstat.h"
+#include "log.h"
 
 
 void tstat_push (tstat_t *ts, double x)

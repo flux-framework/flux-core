@@ -25,7 +25,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <json.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <libgen.h>

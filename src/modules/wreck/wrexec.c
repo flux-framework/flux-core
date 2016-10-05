@@ -28,7 +28,6 @@
 #include <sys/socket.h>
 #include <zmq.h>
 #include <czmq.h>
-#include <arraylist.h>
 #if WITH_TCMALLOC
 #if HAVE_GPERFTOOLS_HEAP_PROFILER_H
   #include <gperftools/heap-profiler.h>

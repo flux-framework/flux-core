@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <json.h>
 #include <flux/core.h>
 #include "src/common/libcompat/compat.h"
 #include "src/modules/kvs/kvs_deprecated.h"

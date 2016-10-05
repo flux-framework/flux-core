@@ -27,12 +27,12 @@
 #endif
 #include <stdio.h>
 #include <libgen.h>
-#include <json.h>
 #include <argz.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libjson-c/json.h"
 
 
 static int event_pub (optparse_t *p, int argc, char **argv);

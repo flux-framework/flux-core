@@ -26,13 +26,13 @@
 #include "config.h"
 #endif
 #include <string.h>
-#include <json.h>
 #include <assert.h>
 #include <errno.h>
 
-#include "json_dirent.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/shastring.h"
+
+#include "json_dirent.h"
 
 json_object *dirent_create (char *type, void *arg)
 {

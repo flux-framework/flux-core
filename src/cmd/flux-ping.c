@@ -29,7 +29,6 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <string.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"

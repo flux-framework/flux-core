@@ -1,8 +1,8 @@
 #ifndef _UTIL_SHORTJSON_H
 #define _UTIL_SHORTJSON_H
 
-#include <json.h>
 #include <stdbool.h>
+#include "src/common/libjson-c/json.h"
 #include "oom.h"
 
 /* Creates JSON object with refcount of 1.
