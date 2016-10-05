@@ -96,6 +96,11 @@ static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
     return (strdup (buf));
 }
 
+static char * id_to_path (uint64_t id)
+{
+    return (lwj_to_path (id, kvs_dir_levels, kvs_bits_per_dir));
+}
+
 static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
 {
     int rc = -1;
@@ -103,7 +108,7 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
     char *link = NULL;
     char *target = NULL;
 
-    if (!(target = lwj_to_path (jobid, kvs_dir_levels, kvs_bits_per_dir))) {
+    if (!(target = id_to_path (jobid))) {
         flux_log_error (h, "lwj_to_path");
         return (-1);
     }
@@ -366,6 +371,64 @@ out:
         json_object_put (o);
 }
 
+static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
+                            const flux_msg_t *msg, void *arg)
+{
+    int errnum = EPROTO;
+    int i, n;
+    const char *json_str;
+    json_object *in = NULL;
+    json_object *out = NULL;
+    json_object *ar = NULL;
+    json_object *id_list = NULL;
+
+    if (flux_msg_get_payload_json (msg, &json_str) < 0)
+        goto out;
+
+    if (!(in = Jfromstr (json_str))) {
+        flux_log (h, LOG_ERR, "kvspath_cb: Failed to parse JSON string");
+        goto out;
+    }
+
+    if (!Jget_obj (in, "ids", &id_list)) {
+        flux_log (h, LOG_ERR, "kvspath_cb: required key ids missing");
+        goto out;
+    }
+
+    if (!(out = json_object_new_object ())
+        || !(ar = json_object_new_array ())) {
+        flux_log (h, LOG_ERR, "kvspath_cb: json_object_new_object failed");
+        goto out;
+    }
+
+    errnum = ENOMEM;
+    n = json_object_array_length (id_list);
+    for (i = 0; i < n; i++) {
+        json_object *r;
+        json_object *v = json_object_array_get_idx (id_list, i);
+        int64_t id = json_object_get_int64 (v);
+        char * path;
+        if (!(path = id_to_path (id))) {
+            flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
+            goto out;
+        }
+        if (!(r = json_object_new_string (path))) {
+            flux_log_error (h, "kvspath_cb: json_object_new_string");
+            goto out;
+        }
+        json_object_array_add (ar, r);
+    }
+    json_object_object_add (out, "paths", ar);
+    ar = NULL; /* allow Jput below */
+    errnum = 0;
+out:
+    if (flux_respond (h, msg, errnum, out ? Jtostr (out) : NULL) < 0)
+        flux_log_error (h, "kvspath_cb: flux_respond");
+    Jput (in);
+    Jput (ar);
+    Jput (out);
+}
+
 static int flux_attr_set_int (flux_t *h, const char *attr, int val)
 {
     char buf [16];
@@ -398,6 +461,7 @@ struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
 
