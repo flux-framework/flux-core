@@ -2,7 +2,7 @@
 #ifndef _json_inttypes_h_
 #define _json_inttypes_h_
 
-#include "json_config.h"
+#include "config.h"
 
 #if defined(_MSC_VER) && _MSC_VER <= 1700
 
@@ -18,7 +18,7 @@ typedef __int64 int64_t;
 
 #else
 
-#ifdef JSON_C_HAVE_INTTYPES_H
+#ifdef HAVE_INTTYPES_H
 #include <inttypes.h>
 #endif
 /* inttypes.h includes stdint.h */
