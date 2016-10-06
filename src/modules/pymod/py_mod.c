@@ -37,7 +37,7 @@
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/optparse.h"
+#include "src/common/liboptparse/optparse.h"
 #include "src/common/libutil/xzmalloc.h"
 
 #ifndef Py_PYTHON_H
@@ -92,9 +92,9 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     optparse_t *p = optparse_create ("pymod");
     if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_add_option_table");
+        log_msg_exit ("optparse_add_option_table");
     if (optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
-        msg_exit ("optparse_set usage");
+        log_msg_exit ("optparse_set usage");
     int option_index = optparse_parse_args (p, argc, argv);
 
     if (option_index <= 0 || optparse_hasopt(p, "help") || option_index >= argc){

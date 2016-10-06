@@ -250,6 +250,7 @@ AC_CONFIG_FILES( \
   src/modules/resource-hwloc/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
+  src/modules/pymod/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
   etc/Makefile \

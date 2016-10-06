@@ -13,5 +13,5 @@ SUBDIRS = \
  aggregator
 
 if HAVE_PYTHON
-# SUBDIRS += pymod
+SUBDIRS += pymod
 endif
