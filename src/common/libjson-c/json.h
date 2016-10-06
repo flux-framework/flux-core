@@ -17,6 +17,7 @@
 extern "C" {
 #endif
 
+#include "namespace.h"
 #include "bits.h"
 #include "debug.h"
 #include "linkhash.h"

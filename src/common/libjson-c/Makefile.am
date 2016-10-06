@@ -6,7 +6,8 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir)
+	-I$(top_srcdir) \
+	-include $(srcdir)/namespace.h
 
 noinst_LTLIBRARIES = libjson-c.la
 
@@ -34,6 +35,7 @@ libjson_c_la_SOURCES = \
 	random_seed.c \
 	random_seed.h \
 	json.h \
-	json_inttypes.h
+	json_inttypes.h \
+	namespace.h
 
 EXTRA_DIST = AUTHORS COPYING
