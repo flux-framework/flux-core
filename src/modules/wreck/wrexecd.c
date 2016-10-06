@@ -1179,7 +1179,8 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
     char *json = NULL;
     char *topic = NULL;
 
-    if ((asprintf (&json, "{\"lwj\":%ld}", ctx->id) < 0)
+    if ((asprintf (&json, "{\"lwj\":%ld, \"kvs_path\": \"%s\"}",
+                   ctx->id, ctx->kvspath) < 0)
         || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
         wlog_err (ctx, "failed to create state change event: %s", state);
         goto out;
