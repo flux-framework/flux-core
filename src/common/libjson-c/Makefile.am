@@ -39,3 +39,15 @@ libjson_c_la_SOURCES = \
 	namespace.h
 
 EXTRA_DIST = AUTHORS COPYING
+
+TESTS = test_json_c.t
+
+check_PROGRAMS = $(TESTS)
+
+TEST_EXTENSIONS = .t
+T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+	$(top_srcdir)/config/tap-driver.sh
+
+test_json_c_t_SOURCES = test/json_c.c
+test_json_c_t_LDADD = $(top_builddir)/src/common/libjson-c/libjson-c.la \
+                      $(top_builddir)/src/common/libtap/libtap.la
