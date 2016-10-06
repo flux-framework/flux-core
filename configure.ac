@@ -256,7 +256,6 @@ AC_CONFIG_FILES( \
   src/test/kap/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
-  etc/Makefile.inc \
   doc/Makefile \
   doc/man1/Makefile \
   doc/man3/Makefile \

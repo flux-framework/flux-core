@@ -35,7 +35,6 @@ TESTS = \
 	t0003-module.t \
 	t0004-event.t \
 	t0005-exec.t \
-	t0006-build-basic.t \
 	t0007-ping.t \
 	t0008-attr.t \
 	t0009-dmesg.t \
@@ -100,7 +99,6 @@ check_SCRIPTS = \
 	t0003-module.t \
 	t0004-event.t \
 	t0005-exec.t \
-	t0006-build-basic.t \
 	t0007-ping.t \
 	t0008-attr.t \
 	t0009-dmesg.t \
@@ -173,11 +171,6 @@ check_PROGRAMS += \
 endif
 
 dist_check_DATA = \
-	build/hello.mk \
-	build/hello_czmq.c \
-	build/hello_flux_core.c \
-	build/hello_flux_internal.c \
-	build/hello_jsonc.c \
 	hwloc-data/1N/shared/02-brokers/0.xml \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
