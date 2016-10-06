@@ -1002,6 +1002,65 @@ static int flux_heartbeat_epoch (flux_t *h)
     return epoch;
 }
 
+json_object * kvspath_request_json (int64_t id)
+{
+    json_object *o = json_object_new_object ();
+    json_object *ar = json_object_new_array ();
+    json_object *v = json_object_new_int64 (id);
+
+    if (!o || !ar || !v) {
+        Jput (o);
+        Jput (ar);
+        Jput (v);
+        return (NULL);
+    }
+    json_object_array_add (ar, v);
+    json_object_object_add (o, "ids", ar);
+    return (o);
+}
+
+const char * kvs_path_json_get (json_object *o)
+{
+    const char *p;
+    json_object *ar;
+    if (!Jget_obj (o, "paths", &ar) || !Jget_ar_str (ar, 0, &p))
+        return (NULL);
+    return (p);
+}
+
+static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
+{
+    int rc = -1;
+    const char *path;
+    const char *json_str;
+    flux_rpc_t *rpc;
+    uint32_t nodeid = FLUX_NODEID_ANY;
+    json_object *o = kvspath_request_json (id);
+
+    if (!(rpc = flux_rpc (h, "job.kvspath", Jtostr (o), nodeid, 0))
+        ||  (flux_rpc_get (rpc, &json_str) < 0)) {
+        flux_log_error (h, "flux_rpc (job.kvspath)");
+        goto out;
+    }
+    Jput (o);
+    if (!(o = Jfromstr (json_str))) {
+        flux_log_error (h, "flux_rpc (job.kvspath): failed to parse json");
+        goto out;
+    }
+    if (!(path = kvs_path_json_get (o))) {
+        flux_log_error (h, "flux_rpc (job.kvspath): failed to get path");
+        goto out;
+    }
+    if (!(*pathp = strdup (path))) {
+        flux_log_error (h, "flux_rpc (job.kvspath): strdup");
+        goto out;
+    }
+    rc = 0;
+out:
+    Jput (o);
+    return (rc);
+}
+
 int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 {
     const char *lua_pattern;
@@ -1015,8 +1074,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
-    if (!ctx->kvspath && (asprintf (&ctx->kvspath, "lwj.%ju", ctx->id) < 0))
-        wlog_fatal (ctx, 1, "asprintf");
+    if (!ctx->kvspath && (lwj_kvs_path (ctx->flux, ctx->id, &ctx->kvspath) < 0))
+        wlog_fatal (ctx, 1, "lwj_kvs_path\n");
 
     if (kvs_get_dir (ctx->flux, &ctx->kvs, ctx->kvspath) < 0) {
         wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
