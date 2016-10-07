@@ -32,6 +32,7 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+#include <jansson.h>
 
 #include "request.h"
 #include "response.h"
@@ -89,6 +90,7 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
         flux_msg_destroy (rpc->rx_msg);
         if (rpc->aux && rpc->aux_destroy)
             rpc->aux_destroy (rpc->aux);
+        json_decref (rpc->rx_json);
         rpc->magic =~ RPC_MAGIC;
         free (rpc);
     }
@@ -505,6 +507,79 @@ void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy)
         rpc->aux_destroy (rpc->aux);
     rpc->aux = aux;
     rpc->aux_destroy = destroy;
+}
+
+static flux_rpc_t *flux_vrpcf (flux_t *h, const char *topic, uint32_t nodeid,
+                               int flags, const char *fmt, va_list ap)
+{
+    json_error_t error;
+    json_t *in = NULL;
+    char *s = NULL;
+    flux_rpc_t *rpc = NULL;
+
+    if (!(in = json_vpack_ex (&error, 0, fmt, ap))) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(s = json_dumps (in, JSON_COMPACT))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (!(rpc = flux_rpc (h, topic, s, nodeid, flags)))
+        goto done;
+done:
+    if (s)
+        free (s);
+    json_decref (in);
+    return rpc;
+}
+
+flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
+                       int flags, const char *fmt, ...)
+{
+    va_list ap;
+    flux_rpc_t *rpc;
+
+    va_start (ap, fmt);
+    rpc = flux_vrpcf (h, topic, nodeid, flags, fmt, ap);
+    va_end (ap);
+
+    return rpc;
+}
+
+static int flux_rpc_vgetf (flux_rpc_t *rpc, const char *fmt, va_list ap)
+{
+    const char *json_str;
+    json_error_t error;
+    int rc = -1;
+
+    if (flux_rpc_get (rpc, &json_str) < 0)
+        goto done;
+    if (rpc->rx_json)
+        json_decref (rpc->rx_json);
+    if (!(rpc->rx_json = json_loads (json_str, 0, &error))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (json_vunpack_ex (rpc->rx_json, &error, 0, fmt, ap) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_rpc_vgetf (rpc, fmt, ap);
+    va_end (ap);
+
+    return rc;
 }
 
 /*
