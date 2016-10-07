@@ -34,24 +34,21 @@
 #include "rpc.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 
 int flux_panic (flux_t *h, int rank, const char *msg)
 {
     uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
-    json_object *in = Jnew ();
     flux_rpc_t *r = NULL;
     int rc = -1;
 
-    Jadd_str (in, "msg", msg ? msg : "");
-    r = flux_rpc (h, "cmb.panic", Jtostr (in), nodeid, FLUX_RPC_NORESPONSE);
+    r = flux_rpcf (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
+                   "{s:s}", "msg", msg ? msg : "");
     if (!r)
         goto done;
     /* No reply */
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (r);
     return rc;
 }
