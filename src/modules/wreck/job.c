@@ -26,15 +26,27 @@
 #include "config.h"
 #endif
 #include <stdio.h>
+#include <unistd.h>
+
 #include <zmq.h>
 #include <czmq.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/fdwalk.h"
 
 /*
  *  lwj-active directory tree parameters:
@@ -56,6 +68,9 @@
  */
 static int kvs_dir_levels = 2;
 static int kvs_bits_per_dir = 7;
+
+uint32_t broker_rank;
+const char *local_uri = NULL;
 
 /*
  *  Return as 64bit integer the portion of integer `n`
@@ -457,11 +472,140 @@ static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
     return (0);
 }
 
+static void exec_close_fd (void *arg, int fd)
+{
+    if (fd >= 3)
+        (void) close (fd);
+}
+
+static void exec_handler (const char *exe, int64_t id)
+{
+    pid_t sid;
+    int argc = 1;
+    char **av = malloc ((sizeof (char *)) * (argc + 2));
+
+    if ((av == NULL)
+     || ((av [0] = strdup (exe)) == NULL)
+     || (asprintf (&av[1], "--lwj-id=%ju", (uintmax_t) id) < 0)) {
+        fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
+        exit (1);
+    }
+    av[argc+1] = NULL;
+
+    if ((sid = setsid ()) < 0)
+        fprintf (stderr, "setsid: %s\n", strerror (errno));
+
+    /*
+     *  NOTE: There used to be a double fork here, presumably to
+     *  "daemonize" wrexecd, however I'm not sure that is warranted
+     *   nor even advisable. With the setsid above, the wrexecd
+     *   process should be reparented to init.
+     */
+
+    fdwalk (exec_close_fd, NULL);
+    if (setenv ("FLUX_URI", local_uri, 1) < 0)
+        fprintf (stderr, "setenv: %s\n", strerror (errno));
+    else if (execvp (av[0], av) < 0)
+        fprintf (stderr, "wrexecd exec: %s\n", strerror (errno));
+    exit (255);
+}
+
+static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
+{
+    pid_t pid;
+    const char *wrexecd_path;
+
+    if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path", NULL))) {
+        flux_log_error (h, "spawn_exec_handler: flux_attr_get");
+        return (-1);
+    }
+
+    if ((pid = fork ()) < 0) {
+        flux_log_error (h, "spawn_exec_handler: fork");
+        return (-1);
+    }
+
+    if (pid == 0) {
+#if WITH_TCMALLOC
+        /* Child: if heap profiling is running, stop it to avoid
+         * triggering a dump when child exits.
+         */
+        if (IsHeapProfilerRunning ())
+            HeapProfilerStop ();
+#endif
+        exec_handler (wrexecd_path, id);
+    }
+
+    // XXX: Add child watcher for pid
+
+    return (0);
+}
+
+static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
+{
+    kvsdir_t *tmp;
+    /*
+     *  If no 'rank' subdir exists for this lwj, then we are running
+     *   without resource assignment so we run everywhere
+     */
+    if (kvs_get_dir (h, &tmp, "%s.rank", kvspath) < 0) {
+        flux_log (h, LOG_INFO, "No dir %s.rank: %s",
+                  kvspath, strerror (errno));
+        return (true);
+    }
+    kvsdir_destroy (tmp);
+    if (kvs_get_dir (h, &tmp, "%s.rank.%d", kvspath, broker_rank) < 0)
+        return (false);
+    kvsdir_destroy (tmp);
+    return (true);
+}
+
+static int64_t id_from_tag (const char *tag)
+{
+    unsigned long l;
+    char *p;
+    errno = 0;
+    l = strtoul (tag, &p, 10);
+    if (*p != '\0')
+        return (-1);
+    if (l == 0 && errno == EINVAL)
+        return (-1);
+    else if (l == ULONG_MAX && errno == ERANGE)
+        return (-1);
+    return l;
+}
+
+static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    const char *topic;
+    char *kvspath = NULL;
+    json_object *in = NULL;
+    int64_t id = -1;
+
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (h, "run: flux_msg_get_topic");
+        return;
+    }
+    if ((id = id_from_tag (topic+11)) < 0) {
+        flux_log_error (h, "wrexec.run: invalid topic: %s\n", topic);
+        return;
+    }
+    kvspath = id_to_path (id);
+    if (lwj_targets_this_node (h, kvspath))
+        spawn_exec_handler (h, id, kvspath);
+
+    free (kvspath);
+    Jput (in);
+}
+
 struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb },
+    { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -478,7 +622,8 @@ int mod_main (flux_t *h, int argc, char **argv)
      * XXX: Remove when publish events are synchronous.
      */
     if ((flux_event_subscribe (h, "wreck.state.reserved") < 0)
-       || (flux_event_subscribe (h, "wreck.state.submitted") < 0)) {
+       || (flux_event_subscribe (h, "wreck.state.submitted") < 0)
+       || (flux_event_subscribe (h, "wrexec.run.") < 0)) {
         flux_log_error (h, "flux_event_subscribe");
         return -1;
     }
@@ -496,6 +641,15 @@ int mod_main (flux_t *h, int argc, char **argv)
         return -1;
     }
 
+    if (flux_get_rank (h, &broker_rank) < 0) {
+        flux_log_error (h, "flux_get_rank");
+        return -1;
+    }
+
+    if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
+        flux_log_error (h, "flux_attr_get (\"local-uri\")");
+        return -1;
+    }
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
