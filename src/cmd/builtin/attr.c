@@ -112,7 +112,7 @@ int subcommand_attr_register (optparse_t *p)
     optparse_err_t e;
     e = optparse_reg_subcommand (p, "setattr", cmd_setattr,
         "name value",
-        "Get broker attribute",
+        "Set broker attribute",
         setattr_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
