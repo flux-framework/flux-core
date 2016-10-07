@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS)
+	$(JANSSON_CFLAGS) $(ZMQ_CFLAGS)
 
 installed_conf_cppflags = \
 	-DINSTALLED_MODULE_PATH=\"$(fluxmoddir)\" \
@@ -115,7 +115,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD)
+	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
