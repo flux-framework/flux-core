@@ -225,7 +225,7 @@ test_expect_success MULTICORE 'wreckrun: supports per-task affinity assignment' 
 	0: Cpus_allowed_list:	$newmask
 	1: Cpus_allowed_list:	$mask
 	EOF
-	test_cmp expected_cpus output_cpus
+	test_cmp expected_cpus2 output_cpus2
 '
 test_expect_success 'wreckrun: top level environment' '
 	flux kvs put lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
