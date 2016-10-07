@@ -478,15 +478,16 @@ static void exec_close_fd (void *arg, int fd)
         (void) close (fd);
 }
 
-static void exec_handler (const char *exe, int64_t id)
+static void exec_handler (const char *exe, int64_t id, const char *kvspath)
 {
     pid_t sid;
-    int argc = 1;
+    int argc = 2;
     char **av = malloc ((sizeof (char *)) * (argc + 2));
 
     if ((av == NULL)
      || ((av [0] = strdup (exe)) == NULL)
-     || (asprintf (&av[1], "--lwj-id=%ju", (uintmax_t) id) < 0)) {
+     || (asprintf (&av[1], "--lwj-id=%ju", (uintmax_t) id) < 0)
+     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)) {
         fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
         exit (1);
     }
@@ -533,7 +534,7 @@ static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
         if (IsHeapProfilerRunning ())
             HeapProfilerStop ();
 #endif
-        exec_handler (wrexecd_path, id);
+        exec_handler (wrexecd_path, id, kvspath);
     }
 
     // XXX: Add child watcher for pid
@@ -595,7 +596,6 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
     kvspath = id_to_path (id);
     if (lwj_targets_this_node (h, kvspath))
         spawn_exec_handler (h, id, kvspath);
-
     free (kvspath);
     Jput (in);
 }
