@@ -83,7 +83,7 @@ test_expect_success 'wreckrun: --input=1 works' '
         cat >expected.1 <<-EOF &&
 	1: hello
 	EOF
-        test_cmp expected.0 output.0
+        test_cmp expected.1 output.1
 '
 test_expect_success 'wreckrun: --input=0-2 works' '
         echo hello | flux wreckrun --input=0-2 -l -n${SIZE} cat |
