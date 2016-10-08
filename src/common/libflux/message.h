@@ -6,7 +6,8 @@
 #include <stdio.h>
 #include "security.h"
 
-typedef struct _zmsg_t flux_msg_t;
+typedef struct flux_msg flux_msg_t;
+//typedef struct _zmsg_t flux_msg_t;
 
 enum {
     FLUX_MSGTYPE_REQUEST    = 0x01,
