@@ -263,7 +263,7 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
     if (!(rpc = flux_rpc_multi (h, "resource-hwloc.reload", json_str,
                                                         nodeset, 0)))
         log_err_exit ("flux_rpc_multi");
-    while (!flux_rpc_completed (rpc)) {
+    do {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (rpc, &nodeid, &json_str) < 0) {
@@ -272,7 +272,7 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
             else
                 log_err ("rpc(%"PRIu32")", nodeid);
         }
-    }
+    } while (flux_rpc_next (rpc) == 0);
     flux_rpc_destroy (rpc);
     Jput (o);
 }

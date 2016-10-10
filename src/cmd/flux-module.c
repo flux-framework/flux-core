@@ -247,7 +247,7 @@ void mod_insmod (flux_t *h, opt_t opt)
     flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
     if (!r)
         log_err_exit ("%s", topic);
-    while (!flux_rpc_completed (r)) {
+    do {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, NULL) < 0) {
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
@@ -259,7 +259,7 @@ void mod_insmod (flux_t *h, opt_t opt)
                 log_err ("%s", topic);
             errors++;
         }
-    }
+    } while (flux_rpc_next (r) == 0);
     flux_rpc_destroy (r);
     free (topic);
     free (service);
@@ -285,13 +285,13 @@ void mod_rmmod (flux_t *h, opt_t opt)
     flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
     if (!r)
         log_err_exit ("%s %s", topic, modname);
-    while (!flux_rpc_completed (r)) {
+    do {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, NULL) < 0)
             log_err ("%s[%d] %s",
                  topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
                  modname);
-    }
+    } while (flux_rpc_next (r) == 0);
     flux_rpc_destroy (r);
     free (topic);
     free (service);
@@ -441,7 +441,7 @@ void mod_lsmod (flux_t *h, opt_t opt)
     flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
     if (!r)
         log_err_exit ("%s", topic);
-    while (!flux_rpc_completed (r)) {
+    do {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (r, &nodeid, &json_str) < 0
@@ -451,7 +451,7 @@ void mod_lsmod (flux_t *h, opt_t opt)
             else
                 log_err ("%s", topic);
         }
-    }
+    } while (flux_rpc_next (r) == 0);
     flux_rpc_destroy (r);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
     zhash_destroy (&mods);

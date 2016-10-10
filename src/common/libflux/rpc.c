@@ -54,7 +54,7 @@ struct flux_rpc_struct {
     flux_msg_handler_t *w;
     uint32_t nodeid;
     flux_msg_t *rx_msg;
-    flux_msg_t *rx_msg_consumed;
+    json_t *rx_json;
     int rx_count;
     int rx_expected;
     void *aux;
@@ -83,11 +83,10 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
              * if the rpc was not completed.  Lacking a proper cancellation
              * protocol, we simply leak them.  See issue #212.
              */
-            if (flux_rpc_completed (rpc))
+            if (rpc->rx_count >= rpc->rx_expected)
                 flux_matchtag_free (rpc->h, rpc->m.matchtag);
         }
         flux_msg_destroy (rpc->rx_msg);
-        flux_msg_destroy (rpc->rx_msg_consumed);
         if (rpc->aux && rpc->aux_destroy)
             rpc->aux_destroy (rpc->aux);
         rpc->magic =~ RPC_MAGIC;
@@ -208,10 +207,9 @@ done:
 bool flux_rpc_check (flux_rpc_t *rpc)
 {
     assert (rpc->magic == RPC_MAGIC);
-    if (rpc->rx_count >= rpc->rx_expected)
-        return false;
-    if (rpc->rx_msg || (rpc->rx_msg = flux_recv (rpc->h, rpc->m,
-                                                 FLUX_O_NONBLOCK)))
+    if (rpc->rx_msg)
+        return true;
+    if ((rpc->rx_msg = flux_recv (rpc->h, rpc->m, FLUX_O_NONBLOCK)))
         return true;
     errno = 0;
     return false;
@@ -234,23 +232,18 @@ static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
 {
     int rc = -1;
 
-    if (rpc->rx_count >= rpc->rx_expected) {
-        errno = EINVAL;
-        goto done;
+    if (!rpc->rx_msg) {
+#if HAVE_CALIPER
+        cali_begin_string_byname("flux.message.rpc", "single");
+#endif
+        if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
+            goto done;
+#if HAVE_CALIPER
+        cali_end_byname("flux.message.rpc");
+#endif
+        rpc->rx_count++;
     }
-#if HAVE_CALIPER
-    cali_begin_string_byname("flux.message.rpc", "single");
-#endif
-    if (!rpc->rx_msg && !(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
-        goto done;
-#if HAVE_CALIPER
-    cali_end_byname("flux.message.rpc");
-#endif
-    flux_msg_destroy (rpc->rx_msg_consumed); /* invalidate last-got payload */
-    rpc->rx_msg_consumed = rpc->rx_msg;
-    rpc->rx_msg = NULL;
-    rpc->rx_count++;
-    if (nodeid && get_rx_nodeid (rpc, rpc->rx_msg_consumed, nodeid) < 0)
+    if (nodeid && get_rx_nodeid (rpc, rpc->rx_msg, nodeid) < 0)
         goto done;
     rc = 0;
 done:
@@ -264,7 +257,7 @@ int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
     assert (rpc->magic == RPC_MAGIC);
     if (rpc_get (rpc, nodeid) < 0)
         goto done;
-    if (flux_response_decode (rpc->rx_msg_consumed, NULL, json_str) < 0)
+    if (flux_response_decode (rpc->rx_msg, NULL, json_str) < 0)
         goto done;
     rc = 0;
 done:
@@ -278,18 +271,16 @@ int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid, void *data, int *len)
     assert (rpc->magic == RPC_MAGIC);
     if (rpc_get (rpc, nodeid) < 0)
         goto done;
-    if (flux_response_decode_raw (rpc->rx_msg_consumed, NULL, data, len) < 0)
+    if (flux_response_decode_raw (rpc->rx_msg, NULL, data, len) < 0)
         goto done;
     rc = 0;
 done:
     return rc;
 }
 
-/* N.B. if a new message arrives with an unconsumed one in the rpc handle,
- * push the new one back to to the receive queue so it will trigger another
- * reactor callback and handle the cached one now.
- * The reactor will repeatedly call the continuation (level-triggered)
- * until all received responses are consumed.
+/* Internal callback for matching response.
+ * For the multi-response case, overwrite previous message if
+ * flux_rpc_next () was not called.
  */
 static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
                     const flux_msg_t *msg, void *arg)
@@ -298,21 +289,14 @@ static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
     assert (rpc->then_cb != NULL);
 
     flux_rpc_usecount_incr (rpc);
-    if (rpc->rx_msg) {
-        if (flux_requeue (rpc->h, msg, FLUX_RQ_HEAD) < 0)
-            goto done;
-    } else {
-        if (!(rpc->rx_msg = flux_msg_copy (msg, true)))
-            goto done;
-    }
+    if (rpc->rx_msg)
+        (void)flux_rpc_next (rpc);
+    if (!(rpc->rx_msg = flux_msg_copy (msg, true)))
+        goto done;
+    rpc->rx_count++;
     rpc->then_cb (rpc, rpc->then_arg);
-    if (rpc->rx_msg) {
-        if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
-            goto done;
-        rpc->rx_msg = NULL;
-    }
-done: /* no good way to report flux_requeue() errors */
-    if (flux_rpc_completed (rpc))
+done:
+    if (rpc->rx_count >= rpc->rx_expected || flux_fatality (rpc->h))
         flux_msg_handler_stop (rpc->w);
     flux_rpc_usecount_decr (rpc);
 }
@@ -336,7 +320,7 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
         if (rpc->rx_msg) {
             if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
                 goto done;
-            rpc->rx_msg = NULL;
+            (void)flux_rpc_next (rpc);
         }
     } else if (!cb && rpc->then_cb) {
         flux_msg_handler_stop (rpc->w);
@@ -348,14 +332,18 @@ done:
     return rc;
 }
 
-bool flux_rpc_completed (flux_rpc_t *rpc)
+int flux_rpc_next (flux_rpc_t *rpc)
 {
     assert (rpc->magic == RPC_MAGIC);
     if (flux_fatality (rpc->h))
-        return true;
+        return -1;
     if (rpc->rx_count >= rpc->rx_expected)
-        return true;
-    return false;
+        return -1;
+    flux_msg_destroy (rpc->rx_msg);
+    rpc->rx_msg = NULL;
+    json_decref (rpc->rx_json);
+    rpc->rx_json = NULL;
+    return 0;
 }
 
 flux_rpc_t *flux_rpc (flux_t *h,
