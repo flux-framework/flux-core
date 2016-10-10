@@ -512,6 +512,16 @@ function wreck.status (arg)
     return max, msgs
 end
 
+function wreck.id_to_path (arg)
+    local flux = require 'flux'
+    local f = arg.flux
+    local id = arg.jobid
+    if not id then return nil, "required arg jobid" end
+    if not f then f, err = require 'flux'.new () end
+    if not f then return nil, err end
+    return kvs_path (f, id)
+end
+
 local function shortprog ()
     local prog = string.match (arg[0], "([^/]+)$")
     return prog:match ("flux%-(.+)$")
