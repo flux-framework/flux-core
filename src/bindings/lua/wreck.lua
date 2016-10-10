@@ -363,6 +363,13 @@ end
 function wreck:createjob ()
     local resp, err = send_job_request (self, "job.create")
     if not resp then return nil, err end
+    --
+    -- If reply contains a kvs path to this LWJ, pre-memoize the id
+    --  to kvs path mapping so we do not have to fetch it again.
+    if resp.kvs_path then
+        self.lwj_paths [resp.jobid] = resp.kvs_path
+        kvs_paths [resp.jobid] = resp.kvs_path
+    end
     return resp.jobid, resp.kvs_path
 end
 
