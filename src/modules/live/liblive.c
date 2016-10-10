@@ -29,7 +29,7 @@
 
 #include "src/common/libutil/shortjson.h"
 
-int flux_failover (flux_t h, uint32_t rank)
+int flux_failover (flux_t *h, uint32_t rank)
 {
     flux_rpc_t *rpc;
     int rc = -1;
@@ -44,7 +44,7 @@ done:
     return rc;
 }
 
-int flux_recover (flux_t h, uint32_t rank)
+int flux_recover (flux_t *h, uint32_t rank)
 {
     flux_rpc_t *rpc;
     int rc = -1;
@@ -59,7 +59,7 @@ done:
     return rc;
 }
 
-int flux_recover_all (flux_t h)
+int flux_recover_all (flux_t *h)
 {
     int rc = -1;
     flux_msg_t *msg;

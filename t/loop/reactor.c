@@ -8,7 +8,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 
-static int send_request (flux_t h, const char *topic)
+static int send_request (flux_t *h, const char *topic)
 {
     int rc = -1;
     flux_msg_t *msg = flux_request_encode (topic, NULL);
@@ -24,7 +24,7 @@ done:
 }
 
 static int multmatch_count = 0;
-static void multmatch1 (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
+static void multmatch1 (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg,
                         void *arg)
 {
     const char *topic;
@@ -34,7 +34,7 @@ static void multmatch1 (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
     multmatch_count++;
 }
 
-static void multmatch2 (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
+static void multmatch2 (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg,
                         void *arg)
 {
     const char *topic;
@@ -44,7 +44,7 @@ static void multmatch2 (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
     multmatch_count++;
 }
 
-static void test_multmatch (flux_t h)
+static void test_multmatch (flux_t *h)
 {
     flux_msg_handler_t *w1, *w2;
     struct flux_match m1 = FLUX_MATCH_ANY;
@@ -73,7 +73,7 @@ static void test_multmatch (flux_t h)
 }
 
 static int msgwatcher_count = 100;
-static void msgreader (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
+static void msgreader (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg,
                        void *arg)
 {
     static int count = 0;
@@ -82,7 +82,7 @@ static void msgreader (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
         flux_msg_handler_stop (w);
 }
 
-static void test_msg (flux_t h)
+static void test_msg (flux_t *h)
 {
     flux_msg_handler_t *w;
     int i;
@@ -103,14 +103,14 @@ static void test_msg (flux_t h)
     flux_msg_handler_destroy (w);
 }
 
-static void dummy (flux_t h, flux_msg_handler_t *w,
+static void dummy (flux_t *h, flux_msg_handler_t *w,
                    const flux_msg_t *msg, void *arg)
 {
 }
 
 static void leak_msg_handler (void)
 {
-    flux_t h;
+    flux_t *h;
     flux_msg_handler_t *w;
 
     if (!(h = flux_open ("loop://", 0)))
@@ -128,7 +128,7 @@ static void fatal_err (const char *message, void *arg)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
 
     plan (NO_PLAN);

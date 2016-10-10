@@ -33,7 +33,7 @@
 
 #include "compat.h"
 
-int flux_sendmsg (flux_t h, zmsg_t **zmsg)
+int flux_sendmsg (flux_t *h, zmsg_t **zmsg)
 {
     if (flux_send (h, *zmsg, 0) < 0)
         return -1;
@@ -41,12 +41,12 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
     return 0;
 }
 
-flux_msg_t *flux_recvmsg (flux_t h, bool nonblock)
+flux_msg_t *flux_recvmsg (flux_t *h, bool nonblock)
 {
     return flux_recv (h, FLUX_MATCH_ANY, nonblock ? FLUX_O_NONBLOCK : 0);
 }
 
-flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,
+flux_msg_t *flux_recvmsg_match (flux_t *h, struct flux_match match,
                                 bool nonblock)
 {
     return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);

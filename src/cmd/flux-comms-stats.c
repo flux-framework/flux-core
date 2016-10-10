@@ -65,7 +65,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     uint32_t nodeid = FLUX_NODEID_ANY;
     char *target;

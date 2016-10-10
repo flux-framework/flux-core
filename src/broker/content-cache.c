@@ -69,8 +69,8 @@ struct cache_entry {
 };
 
 struct content_cache {
-    flux_t h;
-    flux_t enclosing_h;
+    flux_t *h;
+    flux_t *enclosing_h;
     uint32_t rank;
     zhash_t *entries;
     uint8_t backing:1;              /* 'content-backing' service available */
@@ -110,7 +110,7 @@ static void message_list_destroy (zlist_t **l)
  * The list is always run to completion, then destroyed.
  * Returns 0 on succes, -1 on failure with errno set.
  */
-static int respond_requests_raw (zlist_t **l, flux_t h, int errnum,
+static int respond_requests_raw (zlist_t **l, flux_t *h, int errnum,
                                  const void *data, int len)
 {
     flux_msg_t *msg;
@@ -349,7 +349,7 @@ done:
     return rc;
 }
 
-void content_load_request (flux_t h, flux_msg_handler_t *w,
+void content_load_request (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -520,7 +520,7 @@ done:
     return rc;
 }
 
-static void content_store_request (flux_t h, flux_msg_handler_t *w,
+static void content_store_request (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -642,7 +642,7 @@ static int cache_flush (content_cache_t *cache)
     return rc;
 }
 
-static void content_backing_request (flux_t h, flux_msg_handler_t *w,
+static void content_backing_request (flux_t *h, flux_msg_handler_t *w,
                                      const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -688,7 +688,7 @@ done:
  * N.B. this walks the entire cache in one go.
  */
 
-static void content_dropcache_request (flux_t h, flux_msg_handler_t *w,
+static void content_dropcache_request (flux_t *h, flux_msg_handler_t *w,
                                        const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -731,7 +731,7 @@ done:
 /* Return stats about the cache.
  */
 
-static void content_stats_request (flux_t h, flux_msg_handler_t *w,
+static void content_stats_request (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -775,7 +775,7 @@ static void flush_respond (content_cache_t *cache)
                         __FUNCTION__);
 }
 
-static void content_flush_request (flux_t h, flux_msg_handler_t *w,
+static void content_flush_request (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -858,7 +858,7 @@ done:
     return rc;
 }
 
-static void heartbeat_event (flux_t h, flux_msg_handler_t *w,
+static void heartbeat_event (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -882,7 +882,7 @@ static struct flux_msg_handler_spec handlers[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int content_cache_set_flux (content_cache_t *cache, flux_t h)
+int content_cache_set_flux (content_cache_t *cache, flux_t *h)
 {
     cache->h = h;
 
@@ -894,7 +894,7 @@ int content_cache_set_flux (content_cache_t *cache, flux_t h)
     return 0;
 }
 
-void content_cache_set_enclosing_flux (content_cache_t *cache, flux_t h)
+void content_cache_set_enclosing_flux (content_cache_t *cache, flux_t *h)
 {
     cache->enclosing_h = h;
 }

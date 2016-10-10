@@ -39,14 +39,14 @@ flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
  * If errnum is nonzero, payload argument is ignored.
  * All errors in this function are fatal - see flux_fatal_set().
  */
-int flux_respond (flux_t h, const flux_msg_t *request,
+int flux_respond (flux_t *h, const flux_msg_t *request,
                   int errnum, const char *json_str);
 
 /* Create a response to the provided request message with optional raw payload.
  * If errnum is nonzero, payload argument is ignored.
  * All errors in this function are fatal - see flux_fatal_set().
  */
-int flux_respond_raw (flux_t h, const flux_msg_t *request,
+int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       int errnum, const void *data, int len);
 
 #endif /* !_FLUX_CORE_RESPONSE_H */

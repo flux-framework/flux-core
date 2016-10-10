@@ -7,7 +7,7 @@
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
 
     plan (NO_PLAN);
 

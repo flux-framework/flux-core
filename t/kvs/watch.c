@@ -57,7 +57,7 @@ typedef struct {
     pthread_t tid;
     pthread_attr_t attr;
     int n;
-    flux_t h;
+    flux_t *h;
     int change_count;
     int nil_count;
     int stable_count;
@@ -194,7 +194,7 @@ void test_mt (int argc, char **argv)
 {
     thd_t *thd;
     int i, rc;
-    flux_t h;
+    flux_t *h;
     int errors = 0;
 
     if (argc != 3) {
@@ -275,7 +275,7 @@ static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
 {
     log_msg ("%s: value = %d errnum = %d", __FUNCTION__, val, errnum);
 
-    flux_t h = arg;
+    flux_t *h = arg;
     if (kvs_put_int (h, key, val + 1) < 0)
         log_err_exit ("%s: kvs_put_int", __FUNCTION__);
     if (kvs_commit (h) < 0)
@@ -285,7 +285,7 @@ static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
 
 void test_selfmod (int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     char *key;
 
     if (argc != 1) {
@@ -318,7 +318,7 @@ static int unwatch_watch_cb (const char *key, int val, void *arg, int errnum)
 }
 
 struct timer_ctx {
-    flux_t h;
+    flux_t *h;
     char *key;
 };
 
@@ -384,7 +384,7 @@ static int unwatchloop_cb (const char *key, int val, void *arg, int errnum)
 void test_unwatchloop (int argc, char **argv)
 {
     int i;
-    flux_t h;
+    flux_t *h;
     char *key;
 
     if (argc != 1) {
@@ -415,7 +415,7 @@ static int simulwatch_cb (const char *key, int val, void *arg, int errnum)
     return 0;
 }
 
-int get_watch_stats (flux_t h, int *count)
+int get_watch_stats (flux_t *h, int *count)
 {
     flux_rpc_t *rpc;
     const char *json_str;
@@ -441,7 +441,7 @@ void test_simulwatch (int argc, char **argv)
 {
     int i, max;
     const char *key;
-    flux_t h;
+    flux_t *h;
     int start, fin, count = 0;
     int exit_rc = 0;
 

@@ -5,9 +5,9 @@
 
 #include "src/common/libflux/handle.h"
 
-int flux_rank (flux_t h)
+int flux_rank (flux_t *h)
                     __attribute__ ((deprecated));
-int flux_size (flux_t h)
+int flux_size (flux_t *h)
                     __attribute__ ((deprecated));
 
 #endif /* !_FLUX_COMPAT_INFO_H */

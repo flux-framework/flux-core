@@ -18,7 +18,7 @@ void get_rank (flux_rpc_t *rpc)
 
 int main (int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
     json_object *o = Jnew();
 

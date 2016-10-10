@@ -126,7 +126,7 @@ typedef struct {
     flux_reduce_t *r;
     ns_t *ns;           /* master only */
     json_object *topo;          /* master only */
-    flux_t h;
+    flux_t *h;
     optparse_t *opts;
 } ctx_t;
 
@@ -177,7 +177,7 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = flux_aux_get (h, "flux::live");
     int n;
@@ -391,7 +391,7 @@ static int recover (ctx_t *ctx)
     return reparent (ctx, oldrank, newp);
 }
 
-static void cstate_cb (flux_t h, flux_msg_handler_t *w,
+static void cstate_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -471,7 +471,7 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
  * which is indexed by peer socket id.
  * The socket id is the stringified rank for cmbds.
  */
-static void hb_cb (flux_t h, flux_msg_handler_t *w,
+static void hb_cb (flux_t *h, flux_msg_handler_t *w,
                    const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -574,7 +574,7 @@ static int slow_idle_cb (const char *key, int val, void *arg, int errnum)
 
 /* Goodbye request is fire and forget.
  */
-static void goodbye_request_cb (flux_t h, flux_msg_handler_t *w,
+static void goodbye_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -969,7 +969,7 @@ static void hello_source (ctx_t *ctx, const char *prank, int crank)
 
 /* push request is fire and forget.
  */
-static void push_request_cb (flux_t h, flux_msg_handler_t *w,
+static void push_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -993,7 +993,7 @@ done:
 /* hello: parents discover their children, and children discover their
  * grandparents which are potential failover candidates.
  */
-static void hello_request_cb (flux_t h, flux_msg_handler_t *w,
+static void hello_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1079,7 +1079,7 @@ done:
     return rc;
 }
 
-static void failover_request_cb (flux_t h, flux_msg_handler_t *w,
+static void failover_request_cb (flux_t *h, flux_msg_handler_t *w,
                                  const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1097,7 +1097,7 @@ done:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void recover_request_cb (flux_t h, flux_msg_handler_t *w,
+static void recover_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1115,7 +1115,7 @@ done:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void recover_event_cb (flux_t h, flux_msg_handler_t *w,
+static void recover_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1148,7 +1148,7 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     ctx_t *ctx = getctx (h);

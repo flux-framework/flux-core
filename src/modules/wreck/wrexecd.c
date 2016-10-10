@@ -69,7 +69,7 @@ struct task_info {
     int      globalid;
     pid_t    pid;
 
-    flux_t   f;               /* local flux handle for task */
+    flux_t   *f;              /* local flux handle for task */
     kvsdir_t *kvs;            /* kvs handle to this task's dir in kvs */
     int      status;
     int      exited;          /* non-zero if this task exited */
@@ -84,7 +84,7 @@ struct task_info {
 };
 
 struct prog_ctx {
-    flux_t   flux;
+    flux_t   *flux;
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
@@ -158,7 +158,7 @@ struct task_info *prog_ctx_current_task (struct prog_ctx *ctx)
     return (NULL);
 }
 
-static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
+static flux_t *prog_ctx_flux_handle (struct prog_ctx *ctx)
 {
     struct task_info *t;
 
@@ -247,7 +247,7 @@ static void wlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, ..
 
 static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
 {
-    flux_t c = NULL;
+    flux_t *c = NULL;
     va_list ap;
     va_start (ap, format);
     if ((ctx != NULL) && ((c = prog_ctx_flux_handle (ctx)) != NULL))
@@ -273,7 +273,7 @@ static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
 
 static int wlog_err (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    flux_t c = prog_ctx_flux_handle (ctx);
+    flux_t *c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, fmt);
     flux_vlog (c, LOG_ERR, fmt, ap);
@@ -290,7 +290,7 @@ static int fatalerr (struct prog_ctx *ctx, int code)
 
 static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    flux_t c = prog_ctx_flux_handle (ctx);
+    flux_t *c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, fmt);
     flux_vlog (c, LOG_INFO, fmt, ap);
@@ -299,7 +299,7 @@ static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...)
 
 static void wlog_debug (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    flux_t c = prog_ctx_flux_handle (ctx);
+    flux_t *c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, fmt);
     flux_vlog (c, LOG_DEBUG, fmt, ap);
@@ -994,7 +994,7 @@ int prog_ctx_signal_parent (int fd)
     return (rc);
 }
 
-static int flux_heartbeat_epoch (flux_t h)
+static int flux_heartbeat_epoch (flux_t *h)
 {
     long int epoch;
     char *p;
@@ -1254,7 +1254,7 @@ static int
 exitstatus_watcher (const char *key, const char *str, void *arg, int err)
 {
     struct prog_ctx *ctx = arg;
-    flux_t h = ctx->flux;
+    flux_t *h = ctx->flux;
     int count;
     json_object *o;
 
@@ -1309,7 +1309,7 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
 {
     int rc = 0;
     char *key = NULL;
-    flux_t h = ctx->flux;
+    flux_t *h = ctx->flux;
 
     if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) <= 0) {
         flux_log_error (h, "wait_for_aggregate: asprintf");
@@ -1332,7 +1332,7 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
 static int aggregator_push_task_exit (struct task_info *t)
 {
     int rc = 0;
-    flux_t h = t->ctx->flux;
+    flux_t *h = t->ctx->flux;
     flux_rpc_t *rpc;
     json_object *o = task_exit_tojson (t);
 
@@ -2057,7 +2057,7 @@ void signal_cb (flux_reactor_t *r, flux_watcher_t *fdw, int revents, void *arg)
     return;
 }
 
-void ev_cb (flux_t f, flux_msg_handler_t *mw,
+void ev_cb (flux_t *f, flux_msg_handler_t *mw,
            const flux_msg_t *msg, struct prog_ctx *ctx)
 {
     int base;
@@ -2098,7 +2098,7 @@ void ev_cb (flux_t f, flux_msg_handler_t *mw,
 
 int task_info_io_setup (struct task_info *t)
 {
-    flux_t f = t->ctx->flux;
+    flux_t *f = t->ctx->flux;
     int i;
 
     for (i = 0; i < NR_IO; i++) {

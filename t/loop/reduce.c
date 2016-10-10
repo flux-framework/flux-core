@@ -73,7 +73,7 @@ static struct flux_reduce_ops reduce_ops =  {
     .itemweight = itemweight,
 };
 
-void test_hwm (flux_t h)
+void test_hwm (flux_t *h)
 {
     flux_reduce_t *r;
     int i, errors;
@@ -224,7 +224,7 @@ void test_hwm (flux_t h)
     flux_reduce_destroy (r);
 }
 
-void test_nopolicy (flux_t h)
+void test_nopolicy (flux_t *h)
 {
     flux_reduce_t *r;
     int i, errors;
@@ -253,7 +253,7 @@ void test_nopolicy (flux_t h)
     flux_reduce_destroy (r);
 }
 
-void test_timed (flux_t h)
+void test_timed (flux_t *h)
 {
     flux_reduce_t *r;
     int i, errors;
@@ -342,7 +342,7 @@ void test_timed (flux_t h)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
 
     plan (1+6+37+18);
 

@@ -8,7 +8,7 @@ struct context {
     int batchnum;
     flux_reduce_t *r;
     char rankstr[16];
-    flux_t h;
+    flux_t *h;
 };
 
 int itemweight (void *item)
@@ -72,7 +72,7 @@ void reduce (flux_reduce_t *r, int batchnum, void *arg)
     }
 }
 
-void forward_cb (flux_t h, flux_msg_handler_t *w,
+void forward_cb (flux_t *h, flux_msg_handler_t *w,
                  const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;
@@ -92,7 +92,7 @@ void forward_cb (flux_t h, flux_msg_handler_t *w,
     Jput (in);
 }
 
-void heartbeat_cb (flux_t h, flux_msg_handler_t *w,
+void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
                    const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;
@@ -115,7 +115,7 @@ struct flux_reduce_ops reduce_ops = {
     .sink = sink,
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     struct context ctx;
     uint32_t rank;

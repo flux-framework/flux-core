@@ -359,9 +359,9 @@ static void print_environment (struct environment *env)
     fflush(stdout);
 }
 
-flux_t builtin_get_flux_handle (optparse_t *p)
+flux_t *builtin_get_flux_handle (optparse_t *p)
 {
-    flux_t h = NULL;
+    flux_t *h = NULL;
     if ((h = optparse_get_data (p, "flux_t")))
         flux_incref (h);
     else if ((h = flux_open (NULL, 0)) == NULL)

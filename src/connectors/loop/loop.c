@@ -39,7 +39,7 @@
 #define CTX_MAGIC   0xf434aaa0
 typedef struct {
     int magic;
-    flux_t h;
+    flux_t *h;
 
     int pollfd;
     int pollevents;
@@ -118,7 +118,7 @@ static void op_fini (void *impl)
     free (c);
 }
 
-flux_t connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags)
 {
     ctx_t *c = malloc (sizeof (*c));
     if (!c) {

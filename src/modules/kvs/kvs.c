@@ -80,7 +80,7 @@ typedef struct {
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     stats_t stats;
-    flux_t h;
+    flux_t *h;
     uint32_t rank;
     int epoch;              /* tracks current heartbeat epoch */
     struct json_tokener *tok;
@@ -129,7 +129,7 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "kvssrv");
     flux_reactor_t *r;
@@ -651,7 +651,7 @@ void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-static void dropcache_request_cb (flux_t h, flux_msg_handler_t *w,
+static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -669,7 +669,7 @@ done:
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
-static void dropcache_event_cb (flux_t h, flux_msg_handler_t *w,
+static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -682,7 +682,7 @@ static void dropcache_event_cb (flux_t h, flux_msg_handler_t *w,
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
 }
 
-static void heartbeat_cb (flux_t h, flux_msg_handler_t *w,
+static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -863,7 +863,7 @@ stall:
     return false;
 }
 
-static void get_request_cb (flux_t h, flux_msg_handler_t *w,
+static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -936,7 +936,7 @@ static bool compare_json (json_object *o1, json_object *o2)
     return !strcmp (s1, s2);
 }
 
-static void watch_request_cb (flux_t h, flux_msg_handler_t *w,
+static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1048,7 +1048,7 @@ done:
     return match;
 }
 
-static void unwatch_request_cb (flux_t h, flux_msg_handler_t *w,
+static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1205,7 +1205,7 @@ static void fence_finalize_bynames (ctx_t *ctx, json_object *names, int errnum)
 
 /* kvs.relayfence (rank 0 only, no response).
  */
-static void relayfence_request_cb (flux_t h, flux_msg_handler_t *w,
+static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1257,7 +1257,7 @@ done:
 /* kvs.fence
  * Sent from users to local kvs module.
  */
-static void fence_request_cb (flux_t h, flux_msg_handler_t *w,
+static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1317,7 +1317,7 @@ error:
 
 /* For wait_version().
  */
-static void sync_request_cb (flux_t h, flux_msg_handler_t *w,
+static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1353,7 +1353,7 @@ done:
     Jput (out);
 }
 
-static void getroot_request_cb (flux_t h, flux_msg_handler_t *w,
+static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1403,7 +1403,7 @@ done:
     return rc;
 }
 
-static void error_event_cb (flux_t h, flux_msg_handler_t *w,
+static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1451,7 +1451,7 @@ done:
 
 /* Alter the (rootdir, rootseq) in response to a setroot event.
  */
-static void setroot_event_cb (flux_t h, flux_msg_handler_t *w,
+static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1536,7 +1536,7 @@ static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
     return match;
 }
 
-static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
+static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1557,7 +1557,7 @@ static void add_tstat (json_object *o, const char *name, tstat_t *ts,
     json_object_object_add (o, name, tstat_json (ts, scale));
 }
 
-static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
+static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1586,7 +1586,7 @@ done:
     Jput (o);
 }
 
-static void stats_clear_event_cb (flux_t h, flux_msg_handler_t *w,
+static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1594,7 +1594,7 @@ static void stats_clear_event_cb (flux_t h, flux_msg_handler_t *w,
     memset (&ctx->stats, 0, sizeof (ctx->stats));
 }
 
-static void stats_clear_request_cb (flux_t h, flux_msg_handler_t *w,
+static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
                                     const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1637,7 +1637,7 @@ static void process_args (ctx_t *ctx, int ac, char **av)
     }
 }
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
 

@@ -37,7 +37,7 @@
 #include "src/common/libutil/shortjson.h"
 
 
-int flux_panic (flux_t h, int rank, const char *msg)
+int flux_panic (flux_t *h, int rank, const char *msg)
 {
     uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
     json_object *in = Jnew ();
@@ -56,7 +56,7 @@ done:
     return rc;
 }
 
-void flux_assfail (flux_t h, char *ass, char *file, int line)
+void flux_assfail (flux_t *h, char *ass, char *file, int line)
 {
     flux_log (h, LOG_CRIT, "assertion failure: %s:%d: %s", file, line, ass);
     sleep (5);

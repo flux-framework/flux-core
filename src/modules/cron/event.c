@@ -31,7 +31,7 @@
 /* event handler
  */
 struct cron_event {
-    flux_t h;
+    flux_t *h;
     flux_msg_handler_t *mh;
     int paused;
     double min_interval;
@@ -52,7 +52,7 @@ static void ev_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     ev->paused = 0;
 }
 
-static void event_handler (flux_t h, flux_msg_handler_t *w,
+static void event_handler (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     cron_entry_t *e = arg;
@@ -97,7 +97,7 @@ static void event_handler (flux_t h, flux_msg_handler_t *w,
     cron_entry_schedule_task (e);
 }
 
-static void *cron_event_create (flux_t h, cron_entry_t *e, json_object *arg)
+static void *cron_event_create (flux_t *h, cron_entry_t *e, json_object *arg)
 {
     struct cron_event *ev;
     int nth;

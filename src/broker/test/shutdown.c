@@ -19,7 +19,7 @@ void shutdown_cb (shutdown_t *s, bool expired, void *arg)
         "shutowon callback retrieved exitcode");
 }
 
-void log_request_cb (flux_t h, flux_msg_handler_t *w,
+void log_request_cb (flux_t *h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     ok (msg != NULL,
@@ -44,7 +44,7 @@ void check_codec (void)
 
 int main (int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     shutdown_t *sh;
     flux_msg_handler_t *log_w;
     struct flux_match matchlog = FLUX_MATCH_REQUEST;

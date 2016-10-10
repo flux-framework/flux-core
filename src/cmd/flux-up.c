@@ -73,8 +73,8 @@ typedef struct {
     nodeset_t *unknown;
 } ns_t;
 
-static ns_t *ns_guess (flux_t h);
-static ns_t *ns_fromkvs (flux_t h);
+static ns_t *ns_guess (flux_t *h);
+static ns_t *ns_fromkvs (flux_t *h);
 static void ns_destroy (ns_t *ns);
 static void ns_print_down (ns_t *ns, fmt_t fmt);
 static void ns_print_up (ns_t *ns, fmt_t fmt);
@@ -82,7 +82,7 @@ static void ns_print_all (ns_t *ns, fmt_t fmt);
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     bool uopt = false;
     bool dopt = false;
@@ -159,7 +159,7 @@ static ns_t *ns_fromjson (const char *json_str)
     return ns;
 }
 
-static ns_t *ns_fromkvs (flux_t h)
+static ns_t *ns_fromkvs (flux_t *h)
 {
     char *json_str = NULL;
     ns_t *ns = NULL;
@@ -173,7 +173,7 @@ done:
     return ns;
 }
 
-static ns_t *ns_guess (flux_t h)
+static ns_t *ns_guess (flux_t *h)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
     uint32_t size, rank;

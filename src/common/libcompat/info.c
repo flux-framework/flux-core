@@ -37,7 +37,7 @@
 #include "info.h"
 #include "compat.h"
 
-int flux_rank (flux_t h)
+int flux_rank (flux_t *h)
 {
     uint32_t rank;
     if (flux_get_rank (h, &rank) < 0)
@@ -49,7 +49,7 @@ int flux_rank (flux_t h)
     return rank;
 }
 
-int flux_size (flux_t h)
+int flux_size (flux_t *h)
 {
     uint32_t size;
     if (flux_get_size (h, &size) < 0)

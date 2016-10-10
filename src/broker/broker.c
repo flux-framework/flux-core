@@ -108,7 +108,7 @@ typedef struct {
 
     /* Reactor
      */
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
     zlist_t *sigwatchers;
 
@@ -149,7 +149,7 @@ typedef struct {
     bool enable_epgm;
     bool shared_ipc_namespace;
     hello_t *hello;
-    flux_t enclosing_h;
+    flux_t *enclosing_h;
     runlevel_t *runlevel;
 
     /* Subprocess management

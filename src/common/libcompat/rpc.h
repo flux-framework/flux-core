@@ -13,7 +13,7 @@
  * set and there is no JSON payload, or 'out' is not set and there is.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
+int flux_json_rpc (flux_t *h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out)
                    __attribute__ ((deprecated));
 

@@ -31,8 +31,8 @@ enum {
 flux_reactor_t *flux_reactor_create (int flags);
 void flux_reactor_destroy (flux_reactor_t *r);
 
-flux_reactor_t *flux_get_reactor (flux_t h);
-int flux_set_reactor (flux_t h, flux_reactor_t *r);
+flux_reactor_t *flux_get_reactor (flux_t *h);
+int flux_set_reactor (flux_t *h, flux_reactor_t *r);
 
 int flux_reactor_run (flux_reactor_t *r, int flags);
 
@@ -60,9 +60,9 @@ double flux_watcher_next_wakeup (flux_watcher_t *w);
  */
 
 flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
-                                            flux_t h, int events,
+                                            flux_t *h, int events,
                                             flux_watcher_f cb, void *arg);
-flux_t flux_handle_watcher_get_flux (flux_watcher_t *w);
+flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w);
 
 /* file descriptor
  */

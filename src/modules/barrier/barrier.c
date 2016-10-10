@@ -42,7 +42,7 @@ const double barrier_reduction_timeout_sec = 0.001;
 
 typedef struct {
     zhash_t *barriers;
-    flux_t h;
+    flux_t *h;
     bool timer_armed;
     flux_watcher_t *timer;
     uint32_t rank;
@@ -57,7 +57,7 @@ typedef struct _barrier_struct {
     int errnum;
 } barrier_t;
 
-static int exit_event_send (flux_t h, const char *name, int errnum);
+static int exit_event_send (flux_t *h, const char *name, int errnum);
 static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg);
 
@@ -72,7 +72,7 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::barrier");
 
@@ -178,7 +178,7 @@ static int timeout_reduction (const char *key, void *item, void *arg)
  * notification upon barrier termination.
  */
 
-static void enter_request_cb (flux_t h, flux_msg_handler_t *w,
+static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -257,7 +257,7 @@ static int disconnect (const char *key, void *item, void *arg)
     return 0;
 }
 
-static void disconnect_request_cb (flux_t h, flux_msg_handler_t *w,
+static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -278,7 +278,7 @@ static int send_enter_response (const char *key, void *item, void *arg)
     return 0;
 }
 
-static int exit_event_send (flux_t h, const char *name, int errnum)
+static int exit_event_send (flux_t *h, const char *name, int errnum)
 {
     json_object *o = Jnew ();
     flux_msg_t *msg = NULL;
@@ -297,7 +297,7 @@ done:
     return rc;
 }
 
-static void exit_event_cb (flux_t h, flux_msg_handler_t *w,
+static void exit_event_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -345,7 +345,7 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     ctx_t *ctx = getctx (h);

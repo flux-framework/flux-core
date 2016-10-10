@@ -41,16 +41,16 @@
 
 
 typedef struct {
-    flux_t h;
+    flux_t *h;
     void *zs;
     kz_t *kz[3];
     int readers;
     int blocksize;
 } ctx_t;
 
-static void copy (flux_t h, const char *src, const char *dst, int kzoutflags,
+static void copy (flux_t *h, const char *src, const char *dst, int kzoutflags,
                   int blocksize);
-static void attach (flux_t h, const char *key, bool raw, int kzoutflags,
+static void attach (flux_t *h, const char *key, bool raw, int kzoutflags,
                    int blocksize);
 
 #define OPTIONS "ha:crk:tb:d"
@@ -89,7 +89,7 @@ int main (int argc, char *argv[])
     char *key = NULL;
     int blocksize = 4096;
     int kzoutflags = KZ_FLAGS_WRITE;
-    flux_t h;
+    flux_t *h;
     uint32_t rank;
     bool rawtty = false;
 
@@ -269,7 +269,7 @@ static void attach_stdin_ready_cb (flux_reactor_t *r, flux_watcher_t *w,
     free (buf);
 }
 
-static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
+static void attach (flux_t *h, const char *key, bool rawtty, int kzoutflags,
                     int blocksize)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
@@ -352,7 +352,7 @@ static void attach (flux_t h, const char *key, bool rawtty, int kzoutflags,
     free (ctx);
 }
 
-static void copy_k2k (flux_t h, const char *src, const char *dst,
+static void copy_k2k (flux_t *h, const char *src, const char *dst,
                       int kzoutflags)
 {
     kz_t *kzin, *kzout;
@@ -377,7 +377,7 @@ static void copy_k2k (flux_t h, const char *src, const char *dst,
         log_err_exit ("kz_close %s", dst);
 }
 
-static void copy_f2k (flux_t h, const char *src, const char *dst,
+static void copy_f2k (flux_t *h, const char *src, const char *dst,
                       int kzoutflags, int blocksize)
 {
     int srcfd = STDIN_FILENO;
@@ -403,7 +403,7 @@ static void copy_f2k (flux_t h, const char *src, const char *dst,
         log_err_exit ("kz_close %s", dst);
 }
 
-static void copy_k2f (flux_t h, const char *src, const char *dst)
+static void copy_k2f (flux_t *h, const char *src, const char *dst)
 {
     kz_t *kzin;
     int dstfd = STDOUT_FILENO;
@@ -436,7 +436,7 @@ static bool isfile (const char *name)
     return (!strcmp (name, "-") || strchr (name, '/'));
 }
 
-static void copy (flux_t h, const char *src, const char *dst, int kzoutflags,
+static void copy (flux_t *h, const char *src, const char *dst, int kzoutflags,
                   int blocksize)
 {
     if (!isfile (src) && !isfile (dst)) {

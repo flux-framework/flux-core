@@ -44,31 +44,31 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void cmd_get (flux_t h, int argc, char **argv);
-void cmd_type (flux_t h, int argc, char **argv);
-void cmd_put (flux_t h, int argc, char **argv);
-void cmd_unlink (flux_t h, int argc, char **argv);
-void cmd_link (flux_t h, int argc, char **argv);
-void cmd_readlink (flux_t h, int argc, char **argv);
-void cmd_mkdir (flux_t h, int argc, char **argv);
-void cmd_exists (flux_t h, int argc, char **argv);
-void cmd_version (flux_t h, int argc, char **argv);
-void cmd_wait (flux_t h, int argc, char **argv);
-void cmd_watch (flux_t h, int argc, char **argv);
-void cmd_watch_dir (flux_t h, int argc, char **argv);
-void cmd_dropcache (flux_t h, int argc, char **argv);
-void cmd_dropcache_all (flux_t h, int argc, char **argv);
-void cmd_copy_tokvs (flux_t h, int argc, char **argv);
-void cmd_copy_fromkvs (flux_t h, int argc, char **argv);
-void cmd_copy (flux_t h, int argc, char **argv);
-void cmd_move (flux_t h, int argc, char **argv);
-void cmd_dir (flux_t h, int argc, char **argv);
-void cmd_dirsize (flux_t h, int argc, char **argv);
-void cmd_get_treeobj (flux_t h, int argc, char **argv);
-void cmd_put_treeobj (flux_t h, int argc, char **argv);
-void cmd_getat (flux_t h, int argc, char **argv);
-void cmd_dirat (flux_t h, int argc, char **argv);
-void cmd_readlinkat (flux_t h, int argc, char **argv);
+void cmd_get (flux_t *h, int argc, char **argv);
+void cmd_type (flux_t *h, int argc, char **argv);
+void cmd_put (flux_t *h, int argc, char **argv);
+void cmd_unlink (flux_t *h, int argc, char **argv);
+void cmd_link (flux_t *h, int argc, char **argv);
+void cmd_readlink (flux_t *h, int argc, char **argv);
+void cmd_mkdir (flux_t *h, int argc, char **argv);
+void cmd_exists (flux_t *h, int argc, char **argv);
+void cmd_version (flux_t *h, int argc, char **argv);
+void cmd_wait (flux_t *h, int argc, char **argv);
+void cmd_watch (flux_t *h, int argc, char **argv);
+void cmd_watch_dir (flux_t *h, int argc, char **argv);
+void cmd_dropcache (flux_t *h, int argc, char **argv);
+void cmd_dropcache_all (flux_t *h, int argc, char **argv);
+void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
+void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
+void cmd_copy (flux_t *h, int argc, char **argv);
+void cmd_move (flux_t *h, int argc, char **argv);
+void cmd_dir (flux_t *h, int argc, char **argv);
+void cmd_dirsize (flux_t *h, int argc, char **argv);
+void cmd_get_treeobj (flux_t *h, int argc, char **argv);
+void cmd_put_treeobj (flux_t *h, int argc, char **argv);
+void cmd_getat (flux_t *h, int argc, char **argv);
+void cmd_dirat (flux_t *h, int argc, char **argv);
+void cmd_readlinkat (flux_t *h, int argc, char **argv);
 
 
 void usage (void)
@@ -105,7 +105,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     char *cmd;
 
@@ -186,7 +186,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-void cmd_type (flux_t h, int argc, char **argv)
+void cmd_type (flux_t *h, int argc, char **argv)
 {
     char *json_str;
     json_object *o;
@@ -229,7 +229,7 @@ void cmd_type (flux_t h, int argc, char **argv)
     }
 }
 
-void cmd_get (flux_t h, int argc, char **argv)
+void cmd_get (flux_t *h, int argc, char **argv)
 {
     char *json_str;
     json_object *o;
@@ -269,7 +269,7 @@ void cmd_get (flux_t h, int argc, char **argv)
     }
 }
 
-void cmd_put (flux_t h, int argc, char **argv)
+void cmd_put (flux_t *h, int argc, char **argv)
 {
     int i;
 
@@ -291,7 +291,7 @@ void cmd_put (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-void cmd_unlink (flux_t h, int argc, char **argv)
+void cmd_unlink (flux_t *h, int argc, char **argv)
 {
     int i;
 
@@ -307,7 +307,7 @@ void cmd_unlink (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-void cmd_link (flux_t h, int argc, char **argv)
+void cmd_link (flux_t *h, int argc, char **argv)
 {
     if (argc != 2)
         log_msg_exit ("link: specify target and link_name");
@@ -317,7 +317,7 @@ void cmd_link (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-void cmd_readlink (flux_t h, int argc, char **argv)
+void cmd_readlink (flux_t *h, int argc, char **argv)
 {
     int i;
     char *target;
@@ -333,7 +333,7 @@ void cmd_readlink (flux_t h, int argc, char **argv)
     }
 }
 
-void cmd_mkdir (flux_t h, int argc, char **argv)
+void cmd_mkdir (flux_t *h, int argc, char **argv)
 {
     int i;
 
@@ -347,7 +347,7 @@ void cmd_mkdir (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-bool key_exists (flux_t h, const char *key)
+bool key_exists (flux_t *h, const char *key)
 {
     char *json_str = NULL;
     kvsdir_t *dir = NULL;
@@ -363,7 +363,7 @@ bool key_exists (flux_t h, const char *key)
     return false;
 }
 
-void cmd_exists (flux_t h, int argc, char **argv)
+void cmd_exists (flux_t *h, int argc, char **argv)
 {
     int i;
     if (argc == 0)
@@ -374,7 +374,7 @@ void cmd_exists (flux_t h, int argc, char **argv)
     }
 }
 
-void cmd_version (flux_t h, int argc, char **argv)
+void cmd_version (flux_t *h, int argc, char **argv)
 {
     int vers;
     if (argc != 0)
@@ -384,7 +384,7 @@ void cmd_version (flux_t h, int argc, char **argv)
     printf ("%d\n", vers);
 }
 
-void cmd_wait (flux_t h, int argc, char **argv)
+void cmd_wait (flux_t *h, int argc, char **argv)
 {
     int vers;
     if (argc != 1)
@@ -395,7 +395,7 @@ void cmd_wait (flux_t h, int argc, char **argv)
     //printf ("%d\n", vers);
 }
 
-void cmd_watch (flux_t h, int argc, char **argv)
+void cmd_watch (flux_t *h, int argc, char **argv)
 {
     char *json_str = NULL;
     char *key;
@@ -412,7 +412,7 @@ void cmd_watch (flux_t h, int argc, char **argv)
     } while (true);
 }
 
-void cmd_dropcache (flux_t h, int argc, char **argv)
+void cmd_dropcache (flux_t *h, int argc, char **argv)
 {
     if (argc != 0)
         log_msg_exit ("dropcache: takes no arguments");
@@ -420,7 +420,7 @@ void cmd_dropcache (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_dropcache");
 }
 
-void cmd_dropcache_all (flux_t h, int argc, char **argv)
+void cmd_dropcache_all (flux_t *h, int argc, char **argv)
 {
     if (argc != 0)
         log_msg_exit ("dropcache-all: takes no arguments");
@@ -430,7 +430,7 @@ void cmd_dropcache_all (flux_t h, int argc, char **argv)
     flux_msg_destroy (msg);
 }
 
-void cmd_copy_tokvs (flux_t h, int argc, char **argv)
+void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
 {
     char *file, *key;
     int fd, len;
@@ -461,7 +461,7 @@ void cmd_copy_tokvs (flux_t h, int argc, char **argv)
     free (buf);
 }
 
-void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
+void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
 {
     char *file, *key;
     int fd, len;
@@ -566,7 +566,7 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
     kvsitr_destroy (itr);
 }
 
-void cmd_watch_dir (flux_t h, int argc, char **argv)
+void cmd_watch_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
     char *key;
@@ -609,7 +609,7 @@ done:
     kvsdir_destroy (dir);
 }
 
-void cmd_dir (flux_t h, int argc, char **argv)
+void cmd_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
     char *key;
@@ -632,7 +632,7 @@ void cmd_dir (flux_t h, int argc, char **argv)
     kvsdir_destroy (dir);
 }
 
-void cmd_dirat (flux_t h, int argc, char **argv)
+void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
     char *key;
@@ -655,7 +655,7 @@ void cmd_dirat (flux_t h, int argc, char **argv)
     kvsdir_destroy (dir);
 }
 
-void cmd_dirsize (flux_t h, int argc, char **argv)
+void cmd_dirsize (flux_t *h, int argc, char **argv)
 {
     kvsdir_t *dir = NULL;
     if (argc != 1)
@@ -666,7 +666,7 @@ void cmd_dirsize (flux_t h, int argc, char **argv)
     kvsdir_destroy (dir);
 }
 
-void cmd_copy (flux_t h, int argc, char **argv)
+void cmd_copy (flux_t *h, int argc, char **argv)
 {
     if (argc != 2)
         log_msg_exit ("copy: specify srckey dstkey");
@@ -676,7 +676,7 @@ void cmd_copy (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-void cmd_move (flux_t h, int argc, char **argv)
+void cmd_move (flux_t *h, int argc, char **argv)
 {
     if (argc != 2)
         log_msg_exit ("move: specify srckey dstkey");
@@ -686,7 +686,7 @@ void cmd_move (flux_t h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-void cmd_get_treeobj (flux_t h, int argc, char **argv)
+void cmd_get_treeobj (flux_t *h, int argc, char **argv)
 {
     char *treeobj = NULL;
     if (argc != 1)
@@ -697,7 +697,7 @@ void cmd_get_treeobj (flux_t h, int argc, char **argv)
     free (treeobj);
 }
 
-void cmd_getat (flux_t h, int argc, char **argv)
+void cmd_getat (flux_t *h, int argc, char **argv)
 {
     char *val = NULL;
     if (argc != 2)
@@ -708,7 +708,7 @@ void cmd_getat (flux_t h, int argc, char **argv)
     free (val);
 }
 
-void cmd_put_treeobj (flux_t h, int argc, char **argv)
+void cmd_put_treeobj (flux_t *h, int argc, char **argv)
 {
     if (argc != 1)
         log_msg_exit ("put-treeobj: specify key=val");
@@ -724,7 +724,7 @@ void cmd_put_treeobj (flux_t h, int argc, char **argv)
 
 }
 
-void cmd_readlinkat (flux_t h, int argc, char **argv)
+void cmd_readlinkat (flux_t *h, int argc, char **argv)
 {
     int i;
     char *target;

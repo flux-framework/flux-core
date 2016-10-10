@@ -262,7 +262,7 @@ err:
 
 static int l_kvsdir_watch_dir (lua_State *L)
 {
-    flux_t h;
+    flux_t *h;
     kvsdir_t *dir;
 
     dir = lua_get_kvsdir (L, 1);
@@ -274,7 +274,7 @@ static int l_kvsdir_watch_dir (lua_State *L)
 static int l_kvsdir_index (lua_State *L)
 {
     int rc;
-    flux_t f;
+    flux_t *f;
     kvsdir_t *d;
     const char *key = lua_tostring (L, 2);
     char *fullkey = NULL;

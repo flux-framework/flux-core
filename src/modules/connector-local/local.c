@@ -55,7 +55,7 @@ typedef struct {
     int listen_fd;
     flux_watcher_t *listen_w;
     zlist_t *clients;
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
     uid_t session_owner;
     zhash_t *subscriptions;
@@ -105,7 +105,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::local_connector");
 
@@ -143,7 +143,7 @@ static client_t * client_create (ctx_t *ctx, int fd)
 {
     client_t *c;
     socklen_t crlen = sizeof (c->ucred);
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
 
     c = xzmalloc (sizeof (*c));
     c->fd = fd;
@@ -521,7 +521,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     client_t *c = arg;
-    flux_t h = c->ctx->h;
+    flux_t *h = c->ctx->h;
     flux_msg_t *msg = NULL;
     int type;
 
@@ -581,7 +581,7 @@ disconnect:
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
  */
-static void response_cb (flux_t h, flux_msg_handler_t *w,
+static void response_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -626,7 +626,7 @@ done:
 /* Received an event message from broker.
  * Find all subscribers and deliver.
  */
-static void event_cb (flux_t h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -665,7 +665,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     int fd = flux_fd_watcher_get_fd (w);
     ctx_t *ctx = arg;
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
 
     if (revents & FLUX_POLLIN) {
         client_t *c;
@@ -730,7 +730,7 @@ static struct flux_msg_handler_spec htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
     char sockpath[PATH_MAX + 1];

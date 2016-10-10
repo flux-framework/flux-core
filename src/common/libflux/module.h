@@ -35,14 +35,14 @@ typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
  * On success, the 'cb' function is called for each module with 'arg'.
  * Returns 0 on success, -1 with errno set on failure.
  */
-int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
+int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg);
 
 /* Send a request to remove a module 'name'.
  * The request is sent to a service determined by parsing 'name'.
  * Returns 0 on success, -1 with errno set on failure.
  */
-int flux_rmmod (flux_t h, uint32_t nodeid, const char *name);
+int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name);
 
 /* Send a request to insert a module 'path'.
  * The request is sent to a service determined by parsing the module's name,
@@ -50,7 +50,7 @@ int flux_rmmod (flux_t h, uint32_t nodeid, const char *name);
  * described by 'argc' and 'argv' to the module's 'mod_main' function.
  * Returns 0 on success, -1 with errno set on failure.
  */
-int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
+int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
                 int argc, char **argv);
 
 
@@ -60,7 +60,7 @@ int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
 
 #define MOD_NAME(x) const char *mod_name = x
 #define MOD_SERVICE(x) const char *mod_service = x
-typedef int (mod_main_f)(flux_t h, int argc, char *argv[]);
+typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 
 /**

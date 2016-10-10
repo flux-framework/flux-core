@@ -130,7 +130,7 @@ void profiling_context_init (struct profiling_context* prof)
     prof->initialized=1;
 }
 
-static void profiling_msg_snapshot (flux_t h,
+static void profiling_msg_snapshot (flux_t *h,
                           const flux_msg_t *msg,
                           int flags,
                           const char *msg_action)
@@ -298,13 +298,13 @@ static char *strtrim (char *s, const char *trim)
     return *s ? s : NULL;
 }
 
-flux_t flux_open (const char *uri, int flags)
+flux_t *flux_open (const char *uri, int flags)
 {
     char *path = NULL;
     char *scheme = NULL;
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
-    flux_t h = NULL;
+    flux_t *h = NULL;
 
     if (!uri)
         uri = getenv ("FLUX_URI");
@@ -340,16 +340,16 @@ done:
         free (scheme);
     return h;
 }
-void flux_close (flux_t h)
+void flux_close (flux_t *h)
 {
     int saved_errno = errno;
     flux_handle_destroy (&h);
     errno = saved_errno;
 }
 
-flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
+flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
-    flux_t h = malloc (sizeof (*h));
+    flux_t *h = malloc (sizeof (*h));
     if (!h)
         goto nomem;
     memset (h, 0, sizeof (*h));
@@ -372,10 +372,10 @@ nomem:
     return NULL;
 }
 
-void flux_handle_destroy (flux_t *hp)
+void flux_handle_destroy (flux_t **hp)
 {
     if (hp) {
-        flux_t h = *hp;
+        flux_t *h = *hp;
 
         if (h && --h->usecount == 0) {
             zhash_destroy (&h->aux);
@@ -393,27 +393,27 @@ void flux_handle_destroy (flux_t *hp)
     }
 }
 
-void flux_incref (flux_t h)
+void flux_incref (flux_t *h)
 {
     h->usecount++;
 }
 
-void flux_flags_set (flux_t h, int flags)
+void flux_flags_set (flux_t *h, int flags)
 {
     h->flags |= flags;
 }
 
-void flux_flags_unset (flux_t h, int flags)
+void flux_flags_unset (flux_t *h, int flags)
 {
     h->flags &= ~flags;
 }
 
-int flux_flags_get (flux_t h)
+int flux_flags_get (flux_t *h)
 {
     return h->flags;
 }
 
-int flux_opt_get (flux_t h, const char *option, void *val, size_t len)
+int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 {
     if (!h->ops->getopt) {
         errno = EINVAL;
@@ -422,7 +422,7 @@ int flux_opt_get (flux_t h, const char *option, void *val, size_t len)
     return h->ops->getopt (h->impl, option, val, len);
 }
 
-int flux_opt_set (flux_t h, const char *option, const void *val, size_t len)
+int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len)
 {
     if (!h->ops->setopt) {
         errno = EINVAL;
@@ -431,25 +431,25 @@ int flux_opt_set (flux_t h, const char *option, const void *val, size_t len)
     return h->ops->setopt (h->impl, option, val, len);
 }
 
-void *flux_aux_get (flux_t h, const char *name)
+void *flux_aux_get (flux_t *h, const char *name)
 {
     return zhash_lookup (h->aux, name);
 }
 
-void flux_aux_set (flux_t h, const char *name, void *aux, flux_free_f destroy)
+void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy)
 {
     zhash_update (h->aux, name, aux);
     zhash_freefn (h->aux, name, destroy);
 }
 
-void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg)
+void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg)
 {
     h->fatal = fun;
     h->fatal_arg = arg;
     h->fatality = false;
 }
 
-void flux_fatal_error (flux_t h, const char *fun, const char *msg)
+void flux_fatal_error (flux_t *h, const char *fun, const char *msg)
 {
     if (!h->fatality) {
         h->fatality = true;
@@ -461,29 +461,29 @@ void flux_fatal_error (flux_t h, const char *fun, const char *msg)
     }
 }
 
-bool flux_fatality (flux_t h)
+bool flux_fatality (flux_t *h)
 {
     return h->fatality;
 }
 
-void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs)
+void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs)
 {
     *mcs = h->msgcounters;
 }
 
-void flux_clr_msgcounters (flux_t h)
+void flux_clr_msgcounters (flux_t *h)
 {
     memset (&h->msgcounters, 0, sizeof (h->msgcounters));
 }
 
 void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags)
 {
-    flux_t h = arg;
+    flux_t *h = arg;
     flux_log (h, LOG_INFO, "tagpool-%s expanded from %u to %u entries",
               (flags & FLUX_MATCHTAG_GROUP) ? "group" : "normal", old, new);
 }
 
-uint32_t flux_matchtag_alloc (flux_t h, int flags)
+uint32_t flux_matchtag_alloc (flux_t *h, int flags)
 {
     uint32_t tag;
     int tpflags = 0;
@@ -501,7 +501,7 @@ uint32_t flux_matchtag_alloc (flux_t h, int flags)
 
 /* Free matchtag, first deleting any queued matching responses.
  */
-void flux_matchtag_free (flux_t h, uint32_t matchtag)
+void flux_matchtag_free (flux_t *h, uint32_t matchtag)
 {
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
@@ -519,7 +519,7 @@ void flux_matchtag_free (flux_t h, uint32_t matchtag)
     tagpool_free (h->tagpool, matchtag);
 }
 
-uint32_t flux_matchtag_avail (flux_t h, int flags)
+uint32_t flux_matchtag_avail (flux_t *h, int flags)
 {
     if ((flags & FLUX_MATCHTAG_GROUP))
         return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_GROUP_AVAIL);
@@ -527,7 +527,7 @@ uint32_t flux_matchtag_avail (flux_t h, int flags)
         return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_REGULAR_AVAIL);
 }
 
-static void update_tx_stats (flux_t h, const flux_msg_t *msg)
+static void update_tx_stats (flux_t *h, const flux_msg_t *msg)
 {
     int type;
     if (flux_msg_get_type (msg, &type) == 0) {
@@ -549,7 +549,7 @@ static void update_tx_stats (flux_t h, const flux_msg_t *msg)
         errno = 0;
 }
 
-static void update_rx_stats (flux_t h, const flux_msg_t *msg)
+static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
 {
     int type;
     if (flux_msg_get_type (msg, &type) == 0) {
@@ -571,7 +571,7 @@ static void update_rx_stats (flux_t h, const flux_msg_t *msg)
         errno = 0;
 }
 
-int flux_send (flux_t h, const flux_msg_t *msg, int flags)
+int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
     if (!h->ops->send) {
         errno = ENOSYS;
@@ -601,7 +601,7 @@ static int defer_enqueue (zlist_t **l, flux_msg_t *msg)
     return 0;
 }
 
-static int defer_requeue (zlist_t **l, flux_t h)
+static int defer_requeue (zlist_t **l, flux_t *h)
 {
     flux_msg_t *msg;
     if (*l) {
@@ -625,7 +625,7 @@ static void defer_destroy (zlist_t **l)
     }
 }
 
-static flux_msg_t *flux_recv_any (flux_t h, int flags)
+static flux_msg_t *flux_recv_any (flux_t *h, int flags)
 {
     flux_msg_t *msg = NULL;
     if (msglist_count (h->queue) > 0)
@@ -648,7 +648,7 @@ static flux_msg_t *flux_recv_any (flux_t h, int flags)
  * non-matching messages have to be requeued in the handle, hence the
  * defer_*() helper calls.
  */
-flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags)
+flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
 {
     zlist_t *l = NULL;
     flux_msg_t *msg = NULL;
@@ -715,7 +715,7 @@ fatal:
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  * So will message counters.
  */
-int flux_requeue (flux_t h, const flux_msg_t *msg, int flags)
+int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 {
     flux_msg_t *cpy;
     int rc;
@@ -740,7 +740,7 @@ fatal:
     return -1;
 }
 
-int flux_event_subscribe (flux_t h, const char *topic)
+int flux_event_subscribe (flux_t *h, const char *topic)
 {
     if (h->ops->event_subscribe) {
         if (h->ops->event_subscribe (h->impl, topic) < 0)
@@ -752,7 +752,7 @@ fatal:
     return -1;
 }
 
-int flux_event_unsubscribe (flux_t h, const char *topic)
+int flux_event_unsubscribe (flux_t *h, const char *topic)
 {
     if (h->ops->event_unsubscribe) {
         if (h->ops->event_unsubscribe (h->impl, topic) < 0)
@@ -764,7 +764,7 @@ fatal:
     return -1;
 }
 
-int flux_pollfd (flux_t h)
+int flux_pollfd (flux_t *h)
 {
     if (h->pollfd < 0) {
         struct epoll_event ev = {
@@ -797,7 +797,7 @@ fatal:
     return -1;
 }
 
-int flux_pollevents (flux_t h)
+int flux_pollevents (flux_t *h)
 {
     int e, events = 0;
 

@@ -62,7 +62,7 @@ struct module_struct {
 
     zctx_t *zctx;
     uint32_t rank;
-    flux_t broker_h;
+    flux_t *broker_h;
     flux_watcher_t *broker_w;
 
     int lastseen;
@@ -91,7 +91,7 @@ struct module_struct {
     zlist_t *rmmod;
     flux_msg_t *insmod;
 
-    flux_t h;               /* module's handle */
+    flux_t *h;               /* module's handle */
 
     zlist_t *subs;          /* subscription strings */
 };
@@ -100,7 +100,7 @@ struct modhash_struct {
     zhash_t *zh_byuuid;
     zctx_t *zctx;
     uint32_t rank;
-    flux_t broker_h;
+    flux_t *broker_h;
     heartbeat_t *heartbeat;
 };
 
@@ -597,7 +597,7 @@ void modhash_set_rank (modhash_t *mh, uint32_t rank)
     mh->rank = rank;
 }
 
-void modhash_set_flux (modhash_t *mh, flux_t h)
+void modhash_set_flux (modhash_t *mh, flux_t *h)
 {
     mh->broker_h = h;
 }

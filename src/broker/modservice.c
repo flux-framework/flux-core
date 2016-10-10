@@ -52,7 +52,7 @@
 #include "modservice.h"
 
 typedef struct {
-    flux_t h;
+    flux_t *h;
     module_t *p;
     zlist_t *handlers;
     flux_watcher_t *w_prepare;
@@ -71,7 +71,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t h, module_t *p)
+static ctx_t *getctx (flux_t *h, module_t *p)
 {
     ctx_t *ctx = flux_aux_get (h, "flux::modservice");
 
@@ -89,7 +89,7 @@ static ctx_t *getctx (flux_t h, module_t *p)
 
 /* Route string will not include the endpoints.
  */
-static void ping_cb (flux_t h, flux_msg_handler_t *w,
+static void ping_cb (flux_t *h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     module_t *p = arg;
@@ -121,7 +121,7 @@ done:
         free (route);
 }
 
-static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
+static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     flux_msgcounters_t mcs;
@@ -142,13 +142,13 @@ static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
     Jput (out);
 }
 
-static void stats_clear_event_cb (flux_t h, flux_msg_handler_t *w,
+static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
 }
 
-static void stats_clear_request_cb (flux_t h, flux_msg_handler_t *w,
+static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
                                     const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
@@ -156,7 +156,7 @@ static void stats_clear_request_cb (flux_t h, flux_msg_handler_t *w,
         FLUX_LOG_ERROR (h);
 }
 
-static void rusage_cb (flux_t h, flux_msg_handler_t *w,
+static void rusage_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     json_object *out = NULL;
@@ -172,7 +172,7 @@ done:
     Jput (out);
 }
 
-static void shutdown_cb (flux_t h, flux_msg_handler_t *w,
+static void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
@@ -235,7 +235,7 @@ static void register_request (ctx_t *ctx, const char *name,
     free (match.topic_glob);
 }
 
-void modservice_register (flux_t h, module_t *p)
+void modservice_register (flux_t *h, module_t *p)
 {
     ctx_t *ctx = getctx (h, p);
     flux_reactor_t *r = flux_get_reactor (h);

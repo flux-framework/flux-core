@@ -48,7 +48,7 @@ struct ping_ctx {
     int count;          /* number of pings to send */
     int send_count;     /* sending count */
     bool batch;         /* begin receiving only after count sent */
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
 };
 

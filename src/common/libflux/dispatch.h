@@ -6,10 +6,10 @@
 
 typedef struct flux_msg_handler flux_msg_handler_t;
 
-typedef void (*flux_msg_handler_f)(flux_t h, flux_msg_handler_t *w,
+typedef void (*flux_msg_handler_f)(flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg);
 
-flux_msg_handler_t *flux_msg_handler_create (flux_t h,
+flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
                                              const struct flux_match match,
                                              flux_msg_handler_f cb, void *arg);
 
@@ -27,7 +27,7 @@ struct flux_msg_handler_spec {
 };
 #define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL }
 
-int flux_msg_handler_addvec (flux_t h, struct flux_msg_handler_spec tab[],
+int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
                              void *arg);
 void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
 
@@ -38,7 +38,7 @@ void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
  * Currently only message handlers are started as coprocesses, if the
  * handle has FLUX_O_COPROC set.  This is used internally by flux_recv().
  */
-int flux_sleep_on (flux_t h, struct flux_match match);
+int flux_sleep_on (flux_t *h, struct flux_match match);
 
 #endif /* !_FLUX_CORE_DISPATCH_H */
 

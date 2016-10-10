@@ -23,10 +23,10 @@ typedef void (*shutdown_cb_f)(shutdown_t *s, bool expired, void *arg);
 shutdown_t *shutdown_create (void);
 void shutdown_destroy (shutdown_t *s);
 
-/* Set the flux_t handle to be used to configure the event message
+/* Set the flux_t *handle to be used to configure the event message
  * handler, grace timer watcher, and log the shutdown message.
  */
-void shutdown_set_handle (shutdown_t *s, flux_t h);
+void shutdown_set_handle (shutdown_t *s, flux_t *h);
 
 /* Reigster a shutdown callback to be called
  * 1) when the grace timeout is armed, and

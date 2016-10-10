@@ -46,7 +46,7 @@ static void interval_handler (flux_reactor_t *r, flux_watcher_t *w,
     cron_entry_schedule_task ((cron_entry_t *)arg);
 }
 
-static void *cron_interval_create (flux_t h, cron_entry_t *e, json_object *arg)
+static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_object *arg)
 {
     struct cron_interval *iv;
     double i;

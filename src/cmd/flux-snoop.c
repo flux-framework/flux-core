@@ -75,7 +75,7 @@ zlist_t *subscriptions = NULL;
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     const char *uri = NULL;
     bool vopt = false;

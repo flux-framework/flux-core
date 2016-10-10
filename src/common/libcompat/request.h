@@ -17,7 +17,7 @@
  * This function does not wait for a response message.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
+int flux_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, json_object *in)
                        __attribute__ ((deprecated));
 
@@ -26,7 +26,7 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
  * The original payload in the request, if any, is destroyed.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_respond (flux_t h, json_object *out, zmsg_t **zmsg)
+int flux_json_respond (flux_t *h, json_object *out, zmsg_t **zmsg)
                        __attribute__ ((deprecated));
 
 #endif /* !_FLUX_JSONC_REQUEST_H */

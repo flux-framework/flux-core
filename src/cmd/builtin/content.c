@@ -35,7 +35,7 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
     const char *blobref;
     uint8_t *data;
     int size;
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
     const char *topic;
 
@@ -67,7 +67,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     const uint32_t blob_size_limit = 1048576; /* RFC 10 */
     uint8_t *data;
     int size;
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
     const char *topic;
 
@@ -122,7 +122,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
 
 static int internal_content_flush (optparse_t *p, int ac, char *av[])
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc = NULL;
     const char *topic = "content.flush";
 
@@ -143,7 +143,7 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
 
 static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc = NULL;
     const char *topic = "content.dropcache";
 
@@ -185,7 +185,7 @@ static int internal_content_spam (optparse_t *p, int ac, char *av[])
 {
     int i, count;
     flux_rpc_t *rpc;
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *r;
     char data[256];
     int size = 256;

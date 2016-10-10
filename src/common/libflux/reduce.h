@@ -25,7 +25,7 @@ enum {
     FLUX_REDUCE_OPT_WCOUNT = 4,
 };
 
-flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
+flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
                                    double timeout, void *arg, int flags);
 
 void flux_reduce_destroy (flux_reduce_t *r);

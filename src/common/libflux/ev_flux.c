@@ -34,7 +34,7 @@
 
 /* Get flux poll events, converted to libev
  */
-static int get_pollevents (flux_t h)
+static int get_pollevents (flux_t *h)
 {
     int e = flux_pollevents (h);
     int events = 0;
@@ -72,7 +72,7 @@ static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
         fw->cb (loop, fw, events);
 }
 
-int ev_flux_init (struct ev_flux *w, ev_flux_f cb, flux_t h, int events)
+int ev_flux_init (struct ev_flux *w, ev_flux_f cb, flux_t *h, int events)
 {
     w->cb = cb;
     w->h = h;

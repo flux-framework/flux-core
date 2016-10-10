@@ -35,7 +35,7 @@
 #include "src/common/libutil/nodeset.h"
 
 struct aggregator {
-    flux_t h;
+    flux_t *h;
     uint32_t rank;
     double default_timeout;
     double timer_scale;
@@ -193,7 +193,7 @@ static json_object *aggregate_tojson (struct aggregate *ag)
 /*
  *  Forward aggregate `ag` upstream
  */
-static int aggregate_forward (flux_t h, struct aggregate *ag)
+static int aggregate_forward (flux_t *h, struct aggregate *ag)
 {
     int rc = 0;
     flux_rpc_t *rpc;
@@ -212,7 +212,7 @@ static int aggregate_forward (flux_t h, struct aggregate *ag)
     return (rc);
 }
 
-static void aggregate_sink_abort (flux_t h, struct aggregate *ag)
+static void aggregate_sink_abort (flux_t *h, struct aggregate *ag)
 {
     flux_msg_t *msg = NULL;
     char *topic = NULL;
@@ -234,7 +234,7 @@ out:
     flux_msg_destroy (msg);
 }
 
-static int aggregate_sink (flux_t h, struct aggregate *ag)
+static int aggregate_sink (flux_t *h, struct aggregate *ag)
 {
     int rc = 0;
     json_object *o;
@@ -266,7 +266,7 @@ static void aggregate_sink_again (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg)
 {
     struct aggregate *ag = arg;
-    flux_t h = ag->ctx->h;
+    flux_t *h = ag->ctx->h;
     if (aggregate_sink (h, ag) < 0)
         aggregate_sink_abort (h, ag);
     flux_watcher_destroy (w);
@@ -277,7 +277,7 @@ static void aggregate_sink_again (flux_reactor_t *r, flux_watcher_t *w,
 /*
  *   Push aggregate to kvs.
  */
-static void aggregate_try_sink (flux_t h, struct aggregate *ag)
+static void aggregate_try_sink (flux_t *h, struct aggregate *ag)
 {
     if (aggregate_sink (h, ag) < 0) {
         flux_watcher_t *w;
@@ -308,7 +308,7 @@ static void aggregate_try_sink (flux_t h, struct aggregate *ag)
  */
 static int aggregate_flush (struct aggregate *ag)
 {
-    flux_t h = ag->ctx->h;
+    flux_t *h = ag->ctx->h;
     int rc;
     assert (ag->ctx->rank != 0);
     rc = aggregate_forward (h, ag);
@@ -333,7 +333,7 @@ static void timer_cb (flux_reactor_t *r, flux_watcher_t *tw,
                       int revents, void *arg)
 {
     if (aggregate_flush (arg) < 0) {
-        flux_t h = ((struct aggregate *) arg)->ctx->h;
+        flux_t *h = ((struct aggregate *) arg)->ctx->h;
         flux_log_error (h, "aggregate_flush");
     }
 }
@@ -343,7 +343,7 @@ static void aggregate_timer_start (struct aggregator *ctx,
                                    double timeout)
 {
     if (ctx->rank != 0) {
-        flux_t h = ctx->h;
+        flux_t *h = ctx->h;
         flux_reactor_t *r = flux_get_reactor (h);
         ag->tw = flux_timer_watcher_create (r, timeout, 0.,
                                             timer_cb, (void *) ag);
@@ -356,7 +356,7 @@ static void aggregate_timer_start (struct aggregator *ctx,
 static struct aggregate *
     aggregate_create (struct aggregator *ctx, const char *key)
 {
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
 
     struct aggregate *ag = calloc (1, sizeof (*ag));
     if (ag == NULL)
@@ -379,7 +379,7 @@ static void aggregator_destroy (struct aggregator *ctx)
     }
 }
 
-static int attr_get_int (flux_t h, const char *attr)
+static int attr_get_int (flux_t *h, const char *attr)
 {
     unsigned long l;
     char *p;
@@ -395,7 +395,7 @@ static int attr_get_int (flux_t h, const char *attr)
     return (l);
 }
 
-static double timer_scale (flux_t h)
+static double timer_scale (flux_t *h)
 {
     long level, maxlevel;
     if (((level = attr_get_int (h, "tbon.level")) < 0) ||
@@ -405,7 +405,7 @@ static double timer_scale (flux_t h)
     return (maxlevel - level + 1.);
 }
 
-static struct aggregator * aggregator_create (flux_t h)
+static struct aggregator * aggregator_create (flux_t *h)
 {
     struct aggregator * ctx = calloc (1, sizeof (*ctx));
     if (ctx == NULL)
@@ -456,7 +456,7 @@ aggregator_new_aggregate (struct aggregator *ctx, const char *key,
 /*
  *  Callback for "aggregator.push"
  */
-static void push_cb (flux_t h, flux_msg_handler_t *w,
+static void push_cb (flux_t *h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     int rc = -1;
@@ -526,7 +526,7 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     struct aggregator *ctx = aggregator_create (h);

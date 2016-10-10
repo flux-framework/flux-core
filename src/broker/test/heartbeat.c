@@ -11,7 +11,7 @@ void fatal_err (const char *message, void *arg)
     BAIL_OUT ("fatal error: %s", message);
 }
 
-void heartbeat_event_cb (flux_t h, flux_msg_handler_t *w,
+void heartbeat_event_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     heartbeat_t *hb = arg;
@@ -40,7 +40,7 @@ void check_codec (void)
 
 int main (int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     heartbeat_t *hb;
     flux_msg_handler_t *w;
 

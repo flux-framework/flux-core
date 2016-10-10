@@ -318,7 +318,7 @@ char *flux_modfind (const char *searchpath, const char *modname)
     return modpath;
 }
 
-int flux_rmmod (flux_t h, uint32_t nodeid, const char *name)
+int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
 {
     flux_rpc_t *r = NULL;
     char *service = mod_service (name);
@@ -343,7 +343,7 @@ done:
     return rc;
 }
 
-int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
+int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg)
 {
     flux_rpc_t *r = NULL;
@@ -380,7 +380,7 @@ done:
     return rc;
 }
 
-int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
+int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
                  int argc, char **argv)
 {
     flux_rpc_t *r = NULL;

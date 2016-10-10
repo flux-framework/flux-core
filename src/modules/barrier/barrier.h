@@ -7,7 +7,7 @@
  * The 'name' must be unique across the comms session, or
  * if running in a Flux LWJ, may be NULL.
  */
-int flux_barrier (flux_t h, const char *name, int nprocs);
+int flux_barrier (flux_t *h, const char *name, int nprocs);
 
 #endif /* !_FLUX_BARRIER_H */
 

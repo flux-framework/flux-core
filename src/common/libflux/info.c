@@ -35,7 +35,7 @@
 
 #include "src/common/libutil/nodeset.h"
 
-int flux_get_size (flux_t h, uint32_t *size)
+int flux_get_size (flux_t *h, uint32_t *size)
 {
     const char *val;
 
@@ -45,7 +45,7 @@ int flux_get_size (flux_t h, uint32_t *size)
     return 0;
 }
 
-int flux_get_rank (flux_t h, uint32_t *rank)
+int flux_get_rank (flux_t *h, uint32_t *rank)
 {
     const char *val;
 
@@ -96,7 +96,7 @@ static int ns_subtract (nodeset_t *ns1, nodeset_t *ns2)
     return 0;
 }
 
-static nodeset_t *ns_special (flux_t h, const char *arg)
+static nodeset_t *ns_special (flux_t *h, const char *arg)
 {
     nodeset_t *ns = NULL;
     uint32_t rank, size;
@@ -142,7 +142,7 @@ error:
     return NULL;
 }
 
-const char *flux_get_nodeset (flux_t h, const char *nodeset,
+const char *flux_get_nodeset (flux_t *h, const char *nodeset,
                               const char *exclude)
 {
     char *mask = getenv ("FLUX_NODESET_MASK");

@@ -1066,7 +1066,7 @@ subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
             sm->wait_flags = va_arg (ap, int);
             break;
         case SM_FLUX:
-            sm->reactor = flux_get_reactor ((flux_t) va_arg (ap, void *));
+            sm->reactor = flux_get_reactor ((flux_t *) va_arg (ap, void *));
             break;
         case SM_REACTOR:
             sm->reactor = (flux_reactor_t *) va_arg (ap, void *);

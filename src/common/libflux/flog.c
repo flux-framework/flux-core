@@ -59,7 +59,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static logctx_t *getctx (flux_t h)
+static logctx_t *getctx (flux_t *h)
 {
     logctx_t *ctx = (logctx_t *)flux_aux_get (h, "flux::log");
     extern char *__progname;
@@ -74,20 +74,20 @@ static logctx_t *getctx (flux_t h)
     return ctx;
 }
 
-void flux_log_set_appname (flux_t h, const char *s)
+void flux_log_set_appname (flux_t *h, const char *s)
 {
     logctx_t *ctx = getctx (h);
     snprintf (ctx->appname, sizeof (ctx->appname), "%s", s);
 }
 
-void flux_log_set_procid (flux_t h, const char *s)
+void flux_log_set_procid (flux_t *h, const char *s)
 {
     logctx_t *ctx = getctx (h);
     snprintf (ctx->procid, sizeof (ctx->procid), "%s", s);
 }
 
 
-void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg)
+void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg)
 {
     logctx_t *ctx = getctx (h);
     ctx->cb = fun;
@@ -99,7 +99,7 @@ const char *flux_strerror (int errnum)
     return zmq_strerror (errnum);
 }
 
-void flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
+void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
     int saved_errno = errno;
@@ -142,7 +142,7 @@ done:
     errno = saved_errno;
 }
 
-void flux_log (flux_t h, int lev, const char *fmt, ...)
+void flux_log (flux_t *h, int lev, const char *fmt, ...)
 {
     va_list ap;
 
@@ -151,7 +151,7 @@ void flux_log (flux_t h, int lev, const char *fmt, ...)
     va_end (ap);
 }
 
-void flux_log_verror (flux_t h, const char *fmt, va_list ap)
+void flux_log_verror (flux_t *h, const char *fmt, va_list ap)
 {
     int saved_errno = errno;
     char *s = xvasprintf (fmt, ap);
@@ -161,7 +161,7 @@ void flux_log_verror (flux_t h, const char *fmt, va_list ap)
     errno = saved_errno;
 }
 
-void flux_log_error (flux_t h, const char *fmt, ...)
+void flux_log_error (flux_t *h, const char *fmt, ...)
 {
     va_list ap;
 
@@ -170,7 +170,7 @@ void flux_log_error (flux_t h, const char *fmt, ...)
     va_end (ap);
 }
 
-static int dmesg_clear (flux_t h, int seq)
+static int dmesg_clear (flux_t *h, int seq)
 {
     flux_rpc_t *rpc;
     json_object *o = Jnew ();
@@ -189,7 +189,7 @@ done:
     return rc;
 }
 
-static flux_rpc_t *dmesg_rpc (flux_t h, int seq, bool follow)
+static flux_rpc_t *dmesg_rpc (flux_t *h, int seq, bool follow)
 {
     flux_rpc_t *rpc;
     json_object *o = Jnew ();
@@ -221,7 +221,7 @@ done:
     return rc;
 }
 
-int flux_dmesg (flux_t h, int flags, flux_log_f fun, void *arg)
+int flux_dmesg (flux_t *h, int flags, flux_log_f fun, void *arg)
 {
     int rc = -1;
     int seq = -1;

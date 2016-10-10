@@ -45,7 +45,7 @@ typedef struct {
     pthread_t t;
     pthread_attr_t attr;
     int n;
-    flux_t h;
+    flux_t *h;
     zlist_t *perf;
 } thd_t;
 

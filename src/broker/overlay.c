@@ -46,7 +46,7 @@ struct endpoint {
 struct overlay_struct {
     zctx_t *zctx;
     flux_sec_t *sec;
-    flux_t h;
+    flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
     flux_msg_handler_t *heartbeat;
     int epoch;
@@ -79,7 +79,7 @@ typedef struct {
     bool mute;
 } child_t;
 
-static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
+static void heartbeat_handler (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg);
 
 static void endpoint_destroy (struct endpoint *ep)
@@ -161,7 +161,7 @@ void overlay_set_rank (overlay_t *ov, uint32_t rank)
     snprintf (ov->rankstr, sizeof (ov->rankstr), "%u", rank);
 }
 
-void overlay_set_flux (overlay_t *ov, flux_t h)
+void overlay_set_flux (overlay_t *ov, flux_t *h)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
 
@@ -288,7 +288,7 @@ done:
     return rc;
 }
 
-static void heartbeat_handler (flux_t h, flux_msg_handler_t *w,
+static void heartbeat_handler (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     overlay_t *ov = arg;

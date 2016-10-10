@@ -888,7 +888,7 @@ int zio_reactor_attach (zio_t *zio, flux_reactor_t *r)
     return (zio_bootstrap (zio));
 }
 
-int zio_flux_attach (zio_t *zio, flux_t h)
+int zio_flux_attach (zio_t *zio, flux_t *h)
 {
     return zio_reactor_attach (zio, flux_get_reactor (h));
 }

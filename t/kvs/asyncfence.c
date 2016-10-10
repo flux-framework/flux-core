@@ -5,7 +5,7 @@
 
 #include "src/common/libutil/log.h"
 
-void kput (flux_t h, const char *s, int val)
+void kput (flux_t *h, const char *s, int val)
 {
     char key[128];
     snprintf (key, sizeof (key), "test.asyncfence.%s", s);
@@ -14,14 +14,14 @@ void kput (flux_t h, const char *s, int val)
     log_msg ("kvs_put_int %s=%d", key, val);
 }
 
-void kcommit (flux_t h)
+void kcommit (flux_t *h)
 {
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
     log_msg ("kvs_commit");
 }
 
-void kfencectx (flux_t h, const char *s)
+void kfencectx (flux_t *h, const char *s)
 {
     if (s) {
         char name[128];
@@ -34,7 +34,7 @@ void kfencectx (flux_t h, const char *s)
     }
 }
 
-void kfence (flux_t h, const char *s)
+void kfence (flux_t *h, const char *s)
 {
     char name[128];
     snprintf (name, sizeof (name), "test.asyncfence.%s", s);
@@ -43,7 +43,7 @@ void kfence (flux_t h, const char *s)
     log_msg ("kvs_fence %s", name);
 }
 
-void kget_xfail (flux_t h, const char *s)
+void kget_xfail (flux_t *h, const char *s)
 {
     char key[128];
     int val;
@@ -53,7 +53,7 @@ void kget_xfail (flux_t h, const char *s)
     log_msg ("kvs_get_int %s failed (expected)", key);
 }
 
-void kget (flux_t h, const char *s, int expected)
+void kget (flux_t *h, const char *s, int expected)
 {
     char key[128];
     int val;
@@ -65,7 +65,7 @@ void kget (flux_t h, const char *s, int expected)
     log_msg ("kvs_get_int %s=%d", key, val);
 }
 
-void kunlink (flux_t h, const char *s)
+void kunlink (flux_t *h, const char *s)
 {
     char key[128];
     snprintf (key, sizeof (key), "test.asyncfence.%s", s);
@@ -76,7 +76,7 @@ void kunlink (flux_t h, const char *s)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
 
     log_init ("asynfence");

@@ -24,7 +24,7 @@ typedef struct _kap_personality_t {
     int size;
     int iter_count;
     kap_role_e role;
-    flux_t handle; 
+    flux_t *handle; 
 } kap_personality_t;
 
 //!

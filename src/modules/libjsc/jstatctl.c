@@ -61,7 +61,7 @@ typedef struct {
     zhash_t *active_jobs;
     zlist_t *callbacks;
     int first_time;
-    flux_t h;
+    flux_t *h;
 } jscctx_t;
 
 static stab_t job_state_tab[] = {
@@ -120,7 +120,7 @@ static void freectx (void *arg)
     zlist_destroy (&(ctx->callbacks));
 }
 
-static jscctx_t *getctx (flux_t h)
+static jscctx_t *getctx (flux_t *h)
 {
     jscctx_t *ctx = (jscctx_t *)flux_aux_get (h, "jstatctrl");
     if (!ctx) {
@@ -194,7 +194,7 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
  *                                                                            *
  ******************************************************************************/
 
-static int jobid_exist (flux_t h, int64_t j)
+static int jobid_exist (flux_t *h, int64_t j)
 {
     kvsdir_t *d;
     if (kvs_get_dir (h, &d, "lwj.%"PRId64"", j) < 0) {
@@ -229,7 +229,7 @@ static int build_name_array (zhash_t *ha, const char *k, json_object *ns)
     return i;
 }
 
-static int extract_raw_nnodes (flux_t h, int64_t j, int64_t *nnodes)
+static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".nnodes", j);
@@ -243,7 +243,7 @@ static int extract_raw_nnodes (flux_t h, int64_t j, int64_t *nnodes)
     return rc;
 }
 
-static int extract_raw_ntasks (flux_t h, int64_t j, int64_t *ntasks)
+static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
 {
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".ntasks", j);
@@ -257,7 +257,7 @@ static int extract_raw_ntasks (flux_t h, int64_t j, int64_t *ntasks)
     return rc;
 }
 
-static int extract_raw_walltime (flux_t h, int64_t j, int64_t *walltime)
+static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
 {
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".walltime", j);
@@ -270,7 +270,7 @@ static int extract_raw_walltime (flux_t h, int64_t j, int64_t *walltime)
     return rc;
 }
 
-static int extract_raw_rdl (flux_t h, int64_t j, char **rdlstr)
+static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
 {
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".rdl", j);
@@ -284,7 +284,7 @@ static int extract_raw_rdl (flux_t h, int64_t j, char **rdlstr)
     return rc;
 }
 
-static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
+static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
 {
     int rc = 0;
     char *key = xasprintf ("lwj.%"PRId64".state", j);
@@ -303,7 +303,7 @@ static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
     return rc;
 }
 
-static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, json_object **o)
+static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_object **o)
 {
     int rc = 0;
     char *json_str = NULL;
@@ -342,7 +342,7 @@ static void add_pdescs_to_jcb (json_object **hns, json_object **ens,
     *pa = NULL;
 }
 
-static int extract_raw_pdescs (flux_t h, int64_t j, int64_t n, json_object *jcb)
+static int extract_raw_pdescs (flux_t *h, int64_t j, int64_t n, json_object *jcb)
 {
     int rc = -1;
     int64_t i = 0;
@@ -392,7 +392,7 @@ done:
     return rc;
 }
 
-static int extract_raw_rdl_alloc (flux_t h, int64_t j, json_object *jcb)
+static int extract_raw_rdl_alloc (flux_t *h, int64_t j, json_object *jcb)
 {
     int i = 0;
     char *key;
@@ -419,7 +419,7 @@ static int extract_raw_rdl_alloc (flux_t h, int64_t j, json_object *jcb)
     return 0;
 }
 
-static int query_jobid (flux_t h, int64_t j, json_object **jcb)
+static int query_jobid (flux_t *h, int64_t j, json_object **jcb)
 {
     int rc = 0;
     if ( ( rc = jobid_exist (h, j)) != 0)
@@ -431,7 +431,7 @@ static int query_jobid (flux_t h, int64_t j, json_object **jcb)
     return rc;
 }
 
-static int query_state_pair (flux_t h, int64_t j, json_object **jcb)
+static int query_state_pair (flux_t *h, int64_t j, json_object **jcb)
 {
     json_object *o = NULL;
     int64_t st = (int64_t)J_FOR_RENT;;
@@ -449,7 +449,7 @@ static int query_state_pair (flux_t h, int64_t j, json_object **jcb)
     return 0;
 }
 
-static int query_rdesc (flux_t h, int64_t j, json_object **jcb)
+static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
 {
     json_object *o = NULL;
     int64_t nnodes = -1;
@@ -469,7 +469,7 @@ static int query_rdesc (flux_t h, int64_t j, json_object **jcb)
     return 0;
 }
 
-static int query_rdl (flux_t h, int64_t j, json_object **jcb)
+static int query_rdl (flux_t *h, int64_t j, json_object **jcb)
 {
     char *rdlstr = NULL;
 
@@ -484,13 +484,13 @@ static int query_rdl (flux_t h, int64_t j, json_object **jcb)
     return 0;
 }
 
-static int query_rdl_alloc (flux_t h, int64_t j, json_object **jcb)
+static int query_rdl_alloc (flux_t *h, int64_t j, json_object **jcb)
 {
     *jcb = Jnew ();
     return extract_raw_rdl_alloc (h, j, *jcb);
 }
 
-static int query_pdesc (flux_t h, int64_t j, json_object **jcb)
+static int query_pdesc (flux_t *h, int64_t j, json_object **jcb)
 {
     int64_t ntasks = 0;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
@@ -499,7 +499,7 @@ static int query_pdesc (flux_t h, int64_t j, json_object **jcb)
     return extract_raw_pdescs (h, j, ntasks, *jcb);
 }
 
-static int send_state_event (flux_t h, job_state_t st, int64_t j)
+static int send_state_event (flux_t *h, job_state_t st, int64_t j)
 {
     flux_msg_t *msg;
     char *json = NULL;
@@ -527,7 +527,7 @@ done:
     return rc;
 }
 
-static int update_state (flux_t h, int64_t j, json_object *o)
+static int update_state (flux_t *h, int64_t j, json_object *o)
 {
     int rc = -1;
     int64_t st = 0;
@@ -554,7 +554,7 @@ static int update_state (flux_t h, int64_t j, json_object *o)
     return rc;
 }
 
-static int update_rdesc (flux_t h, int64_t j, json_object *o)
+static int update_rdesc (flux_t *h, int64_t j, json_object *o)
 {
     int rc = -1;
     int64_t nnodes = 0;
@@ -591,7 +591,7 @@ static int update_rdesc (flux_t h, int64_t j, json_object *o)
     return rc;
 }
 
-static int update_rdl (flux_t h, int64_t j, const char *rs)
+static int update_rdl (flux_t *h, int64_t j, const char *rs)
 {
     int rc = -1;
     char *key = xasprintf ("lwj.%"PRId64".rdl", j);
@@ -608,7 +608,7 @@ static int update_rdl (flux_t h, int64_t j, const char *rs)
     return rc;
 }
 
-static int update_hash_1ra (flux_t h, int64_t j, json_object *o, zhash_t *rtab)
+static int update_hash_1ra (flux_t *h, int64_t j, json_object *o, zhash_t *rtab)
 {
     int rc = 0;
     int64_t ncores = 0;
@@ -633,7 +633,7 @@ static int update_hash_1ra (flux_t h, int64_t j, json_object *o, zhash_t *rtab)
     return rc;
 }
 
-static int update_rdl_alloc (flux_t h, int64_t j, json_object *o)
+static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
 {
     int i = 0;
     int rc = -1;
@@ -677,7 +677,7 @@ done:
     return rc;
 }
 
-static int update_1pdesc (flux_t h, int r, int64_t j, json_object *o,
+static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
 			  json_object *ha, json_object *ea)
 {
     int rc = -1;
@@ -723,7 +723,7 @@ done:
     return rc;
 }
 
-static int update_pdesc (flux_t h, int64_t j, json_object *o)
+static int update_pdesc (flux_t *h, int64_t j, json_object *o)
 {
     int i = 0;
     int rc = -1;
@@ -754,7 +754,7 @@ done:
     return rc;
 }
 
-static json_object *get_update_jcb (flux_t h, int64_t j, const char *val)
+static json_object *get_update_jcb (flux_t *h, int64_t j, const char *val)
 {
     json_object *o = NULL;
     json_object *ss = NULL;
@@ -783,7 +783,7 @@ static json_object *get_update_jcb (flux_t h, int64_t j, const char *val)
  *                                                                            *
  ******************************************************************************/
 
-static int invoke_cbs (flux_t h, int64_t j, json_object *jcb, int errnum)
+static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
 {
     int rc = 0;
     cb_pair_t *c = NULL;
@@ -797,7 +797,7 @@ static int invoke_cbs (flux_t h, int64_t j, json_object *jcb, int errnum)
     return rc;
 }
 
-static void fixup_newjob_event (flux_t h, int64_t nj)
+static void fixup_newjob_event (flux_t *h, int64_t nj)
 {
     json_object *ss = NULL;
     json_object *jcb = NULL;
@@ -828,7 +828,7 @@ done:
     return;
 }
 
-static inline void delete_jobinfo (flux_t h, int64_t jobid)
+static inline void delete_jobinfo (flux_t *h, int64_t jobid)
 {
     jscctx_t *ctx = getctx (h);
     char *key = xasprintf ("%"PRId64"", jobid);
@@ -844,7 +844,7 @@ static bool job_is_finished (const char *state)
     return false;
 }
 
-static void job_state_cb (flux_t h, flux_msg_handler_t *w,
+static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     int64_t jobid = -1;
@@ -891,7 +891,7 @@ static struct flux_msg_handler_spec htab[] = {
       FLUX_MSGHANDLER_TABLE_END
 };
 
-int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
+int jsc_notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL;
@@ -940,7 +940,7 @@ static int wrap_handler (json_object *base_jcb, void *arg, int errnum)
     return wrap->cb (Jtostr (base_jcb), wrap->arg, errnum);
 }
 
-int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
+int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
 {
     int rc = -1;
     struct callback_wrapper *wrap = xzmalloc (sizeof (*wrap));
@@ -954,7 +954,7 @@ int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
     return rc;
 }
 
-int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key,
+int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
 		       json_object **jcb)
 {
     int rc = -1;
@@ -986,7 +986,7 @@ int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key,
     return rc;
 }
 
-int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb)
+int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb)
 {
     int rc;
     json_object *o = NULL;
@@ -1000,7 +1000,7 @@ done:
     return rc;
 }
 
-int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key,
+int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
 			json_object *jcb)
 {
     int rc = -1;
@@ -1034,7 +1034,7 @@ int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key,
     return rc;
 }
 
-int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb)
+int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb)
 {
     int rc = -1;
     json_object *o = NULL;

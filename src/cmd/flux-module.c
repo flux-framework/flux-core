@@ -56,14 +56,14 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void mod_lsmod (flux_t h, opt_t opt);
-void mod_rmmod (flux_t h, opt_t opt);
-void mod_insmod (flux_t h, opt_t opt);
-void mod_info (flux_t h, opt_t opt);
+void mod_lsmod (flux_t *h, opt_t opt);
+void mod_rmmod (flux_t *h, opt_t opt);
+void mod_insmod (flux_t *h, opt_t opt);
+void mod_info (flux_t *h, opt_t opt);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t h, opt_t opt);
+    void (*fun)(flux_t *h, opt_t opt);
 } func_t;
 
 static func_t funcs[] = {
@@ -98,7 +98,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h = NULL;
+    flux_t *h = NULL;
     int ch;
     char *cmd;
     func_t *f;
@@ -195,7 +195,7 @@ void parse_modarg (const char *arg, char **name, char **path)
     *path = modpath;
 }
 
-void mod_info (flux_t h, opt_t opt)
+void mod_info (flux_t *h, opt_t opt)
 {
     char *modpath = NULL;
     char *modname = NULL;
@@ -229,7 +229,7 @@ char *getservice (const char *modname)
     return service;
 }
 
-void mod_insmod (flux_t h, opt_t opt)
+void mod_insmod (flux_t *h, opt_t opt)
 {
     char *modname;
     char *modpath;
@@ -271,7 +271,7 @@ void mod_insmod (flux_t h, opt_t opt)
         exit (1);
 }
 
-void mod_rmmod (flux_t h, opt_t opt)
+void mod_rmmod (flux_t *h, opt_t opt)
 {
     char *modname = NULL;
 
@@ -425,7 +425,7 @@ done:
     return rc;
 }
 
-void mod_lsmod (flux_t h, opt_t opt)
+void mod_lsmod (flux_t *h, opt_t opt)
 {
     char *service = "cmb";
 

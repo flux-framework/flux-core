@@ -38,7 +38,7 @@
 typedef struct {
     zhash_t *hash;
     zlist_t *names;
-    flux_t h;
+    flux_t *h;
 } ctx_t;
 
 typedef struct {
@@ -54,7 +54,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = flux_aux_get (h, "flux::attr");
 
@@ -195,7 +195,7 @@ done:
     return rc;
 }
 
-const char *flux_attr_get (flux_t h, const char *name, int *flags)
+const char *flux_attr_get (flux_t *h, const char *name, int *flags)
 {
     ctx_t *ctx = getctx (h);
     attr_t *attr;
@@ -209,7 +209,7 @@ const char *flux_attr_get (flux_t h, const char *name, int *flags)
     return attr ? attr->val : NULL;
 }
 
-int flux_attr_set (flux_t h, const char *name, const char *val)
+int flux_attr_set (flux_t *h, const char *name, const char *val)
 {
     ctx_t *ctx = getctx (h);
 
@@ -218,7 +218,7 @@ int flux_attr_set (flux_t h, const char *name, const char *val)
     return 0;
 }
 
-int flux_attr_fake (flux_t h, const char *name, const char *val, int flags)
+int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
 {
     ctx_t *ctx = getctx (h);
     attr_t *attr = attr_create (val, flags);
@@ -227,7 +227,7 @@ int flux_attr_fake (flux_t h, const char *name, const char *val, int flags)
     return 0;
 }
 
-const char *flux_attr_first (flux_t h)
+const char *flux_attr_first (flux_t *h)
 {
     ctx_t *ctx = getctx (h);
 
@@ -236,7 +236,7 @@ const char *flux_attr_first (flux_t h)
     return ctx->names ? zlist_first (ctx->names) : NULL;
 }
 
-const char *flux_attr_next (flux_t h)
+const char *flux_attr_next (flux_t *h)
 {
     ctx_t *ctx = flux_aux_get (h, "flux::attr");
 
