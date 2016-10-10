@@ -5,7 +5,7 @@ flux_rpc_multi(3)
 
 NAME
 ----
-flux_rpc_multi, flux_rpc_completed, - send a remote procedure call to a Flux service on multiple ranks
+flux_rpc_multi, flux_rpc_next, flux_rpc_get_nodeid - send a remote procedure call to a Flux service on multiple ranks
 
 
 SYNOPSIS
@@ -15,7 +15,9 @@ SYNOPSIS
 flux_rpc_t *flux_rpc_multi (flux_t *h, const char *topic, const char *json_str,
                             const char *nodeset, int flags);
 
-bool flux_rpc_completed (flux_rpc_t *rpc);
+int flux_rpc_next (flux_rpc_t *rpc);
+
+int flux_rpc_get_nodeid (flux_t *h, uint32_t *nodeid);
 
 DESCRIPTION
 -----------
@@ -45,23 +47,24 @@ No response is expected.  The request will not be assigned a matchtag,
 and the flux_rpc_t returned by `flux_rpc()` may be immediately destroyed.
 
 `flux_rpc_get()` blocks until a matching response is received, then
-decodes the result.  This function is called once for each response,
-each time invalidating the payload obtained in the previous call.
-For asynchronous response handling, see flux_rpc_then(3).
+decodes the result.  For asynchronous response handling,
+see flux_rpc_then(3).
 
-`flux_rpc_completed()` returns true once all the RPC responses have been
-received and handled via `flux_rpc_get()`.  It can be used to terminate
-synchronous response collection, e.g.
+`flux_rpc_next()` invalidates the last-received message and payload
+returned by `flux_rpc_get()`, and returns 0 if more responses are received.
+Once all responses have been received, `flux_rpc_next()` returns -1;
+thus it may be used as the conditional on a do-while loop, e.g.
 ....
-while (!flux_rpc_completed (rpc))
-    flux_rpc_get (rpc, &nodeid, &payload);
+do {
+    flux_rpc_get (rpc, &payload);
+} while (flux_rpc_next (rpc) == 0);
 ....
 
-`flux_rpc_destroy()` destroys a completed `flux_rpc_t`, invalidating 
-payload as described above, and freeing the RPC matchtag block.  Destroying
-an RPC before completion renders the matchtag block associated with the RPC
-unusable; it is effectively leaked from the matchtag pool.
-
+`flux_rpc_get_nodeid()` blocks until a matching response is received, then
+decodes the nodeid in the response message.  If the remote service returned
+a response containing an error, `flux_rpc_get_nodeid()` will succeed,
+while `flux_rpc_get()` will fail.  This allows the failing nodeid to
+be determined.
 
 RETURN VALUE
 ------------
@@ -69,8 +72,11 @@ RETURN VALUE
 `flux_rpc_multi()` returns a flux_rpc_t object on success.  On error, NULL
 is returned, and errno is set appropriately.
 
-`flux_rpc_completed()` returns true if the RPC has completed, else false.
-It does not report any errors.
+`flux_rpc_next()` returns 0 if additional responses are expected, else -1.
+It does not set errno.
+
+`flux_rpc_get_nodeid()` returns 0 on success;  on failure, it returns -1
+and sets errno appropriately.
 
 
 ERRORS

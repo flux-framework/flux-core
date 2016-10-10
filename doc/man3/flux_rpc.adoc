@@ -5,7 +5,7 @@ flux_rpc(3)
 
 NAME
 ----
-flux_rpc, flux_rpc_get, flux_rpc_destroy - perform a remote procedure call to a Flux service
+flux_rpc, flux_rpcf, flux_rpc_get, flux_rpc_getf, flux_rpc_destroy - perform a remote procedure call to a Flux service
 
 
 SYNOPSIS
@@ -16,10 +16,16 @@ SYNOPSIS
                        const char *json_in,
                        uint32_t nodeid_in, int flags);
 
+ flux_rpc_t *flux_rpcf (flux_t *h, const char *topic,
+                       uint32_t nodeid_in, int flags,
+                       const char *fmt, ...);
+
+
  void flux_rpc_destroy (flux_rpc_t *rpc);
 
- int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid_out,
-                   const char **json_out);
+ int flux_rpc_get (flux_rpc_t *rpc, const char **json_out);
+
+ int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...);
 
 
 DESCRIPTION
@@ -68,13 +74,23 @@ by a NULL _json_out_) arrives.  The storage associated with _json_out_
 belongs to the flux_rpc_t object and is invalidated when that object is
 destroyed.
 
-_nodeid_out_, if non-NULL, is set to the _nodeid_in_ argument given
-to `flux_rpc()`.  This is primarily useful with `flux_rpc_multi(3)`.
-
 `flux_rpc_destroy()` destroys a completed `flux_rpc_t`, invalidating 
 payload as described above, and freeing the RPC matchtag.  Destroying
 an RPC before completion renders the matchtag associated with the RPC
 unusable; it is effectively leaked from the matchtag pool.
+
+`flux_rpcf()` is a variant of `flux_rpc()` that constructs a JSON
+payload based on the provided `fmt` string and variable arguments.
+The `fmt` string and variable arguments are passed internally to
+jansson's `json_pack()` function.  See jansson documentation for
+details.
+
+`flux_rpc_getf()` is a variant of `flux_rpc_get()` that parses a JSON
+payload based on the provided `fmt` string and variable arguments.
+The `fmt` string and variable arguments are passed internally to
+jansson's `json_unpack()` function.  Any strings or objects returned
+are invalidated when `flux_rpc_destroy()` is called.  See jansson
+documentation for details.
 
 
 CANCELLATION
