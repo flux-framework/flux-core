@@ -52,13 +52,12 @@ local function check_jobid_arg (self, id)
 end
 
 
-local kvs_paths = {}
 local function kvs_path (id, fmt, ...)
-    if not kvs_paths[id] then
-        kvs_paths[id] = "lwj."..id
+    local p = assert (wreck.id_to_path { flux = f, jobid = id })
+    if fmt then
+        p = p .. "." .. string.format (fmt, ...)
     end
-    if not fmt then return kvs_paths [id] end
-    return kvs_paths [id] .. "." .. string.format (fmt, ...)
+    return p
 end
 
 
