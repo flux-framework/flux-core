@@ -141,20 +141,29 @@ local function get_filtered_env ()
     return (env)
 end
 
+
+local function job_kvspath (f, id)
+    assert (id, "Required argument id missing!")
+    local r, err = f:rpc ("job.kvspath", {ids = { id }})
+    if not r then error (err) end
+    return r.paths [1]
+end
+
 ---
 -- Return kvs path to job id `id`
 --
 local kvs_paths = {}
-local function kvs_path (id)
+local function kvs_path (f, id)
     if not kvs_paths[id] then
-        kvs_paths [id] = "lwj."..id
+        kvs_paths [id] = job_kvspath (f, id)
     end
     return kvs_paths [id]
 end
 
 function wreck:lwj_path (id)
+    assert (id, "missing required argument `id'")
     if not self.lwj_paths[id] then
-        self.lwj_paths [id] = "lwj."..id
+        self.lwj_paths [id] = job_kvspath (self.flux, id)
     end
     return self.lwj_paths [id]
 end
@@ -360,7 +369,7 @@ end
 local function initialize_args (arg)
     if arg.ntasks and arg.nnodes then return true end
     local f = arg.flux
-    local lwj, err = f:kvsdir (kvs_path (arg.jobid))
+    local lwj, err = f:kvsdir (kvs_path (f, arg.jobid))
     if not lwj then
         return nil, "Error: "..err
     end
@@ -408,7 +417,7 @@ function wreck.logstream (arg)
     if not rc then return nil, err end
     l.watchers = {}
     for i = 0, arg.nnodes - 1 do
-        local key = kvs_path (arg.jobid)..".log."..i
+        local key = kvs_path (f, arg.jobid)..".log."..i
         local iow, err = f:iowatcher {
             key = key,
             handler = function (iow, r)
@@ -473,7 +482,7 @@ function wreck.status (arg)
     if not jobid then return nil, "required arg jobid" end
 
     if not f then f = require 'flux'.new() end
-    local lwj = f:kvsdir (kvs_path (jobid))
+    local lwj = f:kvsdir (kvs_path (f, jobid))
 
     local max = 0
     local msgs = {}
