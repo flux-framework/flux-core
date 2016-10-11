@@ -21,7 +21,7 @@ void stuck_request_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: req.clog request", __FUNCTION__);
         goto done;
     }
-    if (flux_rpc_get (rpc, NULL, NULL) < 0) {
+    if (flux_rpc_get (rpc, NULL) < 0) {
         saved_errno = errno;
         flux_log_error (h, "%s: req.clog response", __FUNCTION__);
         goto done;

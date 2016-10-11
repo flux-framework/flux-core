@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
+	$(ZMQ_CFLAGS) \
 	-Wno-strict-aliasing -Wno-error=strict-aliasing
 
 noinst_LTLIBRARIES = libutil.la
@@ -94,7 +94,8 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT)
+	$(top_builddir)/src/common/libjson-c/libjson-c.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \

@@ -33,7 +33,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <json.h>
 #include <flux/core.h>
 #include <pthread.h>
 
@@ -424,7 +423,7 @@ int get_watch_stats (flux_t *h, int *count)
 
     if (!(rpc = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
     if (!(o = Jfromstr (json_str)) || !Jget_int (o, "#watchers", count)) {
         errno = EPROTO;

@@ -60,7 +60,7 @@ class RPC(WrapperPimpl):
 
   def get_str(self):
     j_str = ffi.new('char *[1]')
-    self.pimpl.get(ffi.NULL, j_str)
+    self.pimpl.get(j_str)
     return ffi.string(j_str[0])
 
   def get(self):

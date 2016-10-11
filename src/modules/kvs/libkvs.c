@@ -42,16 +42,16 @@
 #include <stdarg.h>
 #include <flux/core.h>
 #include <czmq.h>
-#include <json.h>
-
-#include "kvs_deprecated.h"
-#include "proto.h"
-#include "json_dirent.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shastring.h"
+
+#include "kvs_deprecated.h"
+#include "proto.h"
+#include "json_dirent.h"
+
 
 struct kvsdir_struct {
     flux_t *handle;
@@ -275,7 +275,7 @@ static int getobj (flux_t *h, json_object *rootdir, const char *key,
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
     if (!(out = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -604,7 +604,7 @@ int kvs_unwatch (flux_t *h, const char *key)
         goto done;
     if (!(rpc = flux_rpc (h, "kvs.unwatch", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     /* Delete all watchers for the specified key.
      */
@@ -1240,7 +1240,7 @@ done:
 
 int kvs_commit_finish (flux_rpc_t *rpc)
 {
-    return flux_rpc_get (rpc, NULL, NULL);
+    return flux_rpc_get (rpc, NULL);
 }
 
 int kvs_commit (flux_t *h)
@@ -1289,7 +1289,7 @@ done:
 
 int kvs_fence_finish (flux_rpc_t *rpc)
 {
-    return flux_rpc_get (rpc, NULL, NULL);
+    return flux_rpc_get (rpc, NULL);
 }
 
 void kvs_fence_set_context (flux_t *h, const char *name)
@@ -1339,7 +1339,7 @@ int kvs_get_version (flux_t *h, int *versionp)
 
     if (!(rpc = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
     if (!(out = Jfromstr (json_str)) || !Jget_int (out, "rootseq", &version)) {
         errno = EPROTO;
@@ -1364,7 +1364,7 @@ int kvs_wait_version (flux_t *h, int version)
     Jadd_int (in, "rootseq", version);
     if (!(rpc = flux_rpc (h, "kvs.sync", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
     /* N.B. response contains (rootseq, rootdir) but we don't use it.
      */
@@ -1382,7 +1382,7 @@ int kvs_dropcache (flux_t *h)
 
     if (!(rpc = flux_rpc (h, "kvs.dropcache", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:

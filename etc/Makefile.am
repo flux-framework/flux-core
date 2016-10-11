@@ -22,5 +22,4 @@ pkgconfig_DATA = flux-core.pc
 endif
 
 EXTRA_DIST = \
-	Makefile.inc.in \
 	gen-cmdhelp.pl

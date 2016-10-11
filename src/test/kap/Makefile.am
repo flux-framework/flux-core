@@ -7,14 +7,14 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(MPI_CFLAGS)
+	$(ZMQ_CFLAGS) $(MPI_CFLAGS)
 
 LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libflux-internal.la \
-        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) \
+        $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) \
 	$(MPI_CLDFLAGS) $(LIBDL)
 
 check_PROGRAMS = kap

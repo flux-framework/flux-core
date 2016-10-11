@@ -30,10 +30,6 @@
 #include "message.h"
 #include "info.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/nodeset.h"
-
 static int request_decode (const flux_msg_t *msg, const char **topic)
 {
     int type;

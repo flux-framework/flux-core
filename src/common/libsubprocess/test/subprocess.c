@@ -25,7 +25,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
-#include <json.h>
+#include "src/common/libjson-c/json.h"
 
 #include "tap.h"
 #include "subprocess.h"

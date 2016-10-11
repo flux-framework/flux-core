@@ -29,7 +29,6 @@
 #include "reparent.h"
 #include "rpc.h"
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
 
@@ -42,7 +41,7 @@ char *flux_lspeer (flux_t *h, int rank)
 
     if (!(r = flux_rpc (h, "cmb.lspeer", NULL, nodeid, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_get (r, &json_str) < 0)
         goto done;
     ret = xstrdup (json_str);
 done:
@@ -54,21 +53,18 @@ int flux_reparent (flux_t *h, int rank, const char *uri)
 {
     flux_rpc_t *r = NULL;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    json_object *in = Jnew ();
     int rc = -1;
 
     if (!uri) {
         errno = EINVAL;
         goto done;
     }
-    Jadd_str (in, "uri", uri);
-    if (!(r = flux_rpc (h, "cmb.reparent", Jtostr (in), nodeid, 0)))
+    if (!(r = flux_rpcf (h, "cmb.reparent", nodeid, 0, "{s:s}", "uri", uri)))
         goto done;
-    if (flux_rpc_get (r, NULL, NULL) < 0)
+    if (flux_rpc_get (r, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (r);
     return rc;
 }

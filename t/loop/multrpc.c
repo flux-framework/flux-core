@@ -75,7 +75,8 @@ static void then_cb (flux_rpc_t *r, void *arg)
     flux_t *h = arg;
     uint32_t nodeid;
 
-    if (flux_rpc_get (r, &nodeid, NULL) < 0
+    if (flux_rpc_get_nodeid (r, &nodeid) < 0
+            || flux_rpc_get (r, NULL) < 0
             || !nodeset_add_rank (then_ns, nodeid)
             || ++then_count == 128) {
         flux_reactor_stop (flux_get_reactor (h));
@@ -95,7 +96,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
-    int i, errors;
+    int count;
     int old_count;
     flux_rpc_t *r;
     const char *json_str;
@@ -118,7 +119,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         BAIL_OUT ("can't continue without successful rpc call");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
-    ok (flux_rpc_get (r, NULL, NULL) == 0,
+    ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works");
     ok (hello_count == old_count + 1,
         "rpc was called once");
@@ -130,7 +131,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     errno = 0;
-    ok (flux_rpc_get (r, NULL, NULL) < 0
+    ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
         "flux_rpc_get fails with EPROTO");
     flux_rpc_destroy (r);
@@ -152,19 +153,17 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         fake_size - 1);
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
-    ok (flux_rpc_completed (r) == false,
-        "flux_rpc_completed is false");
-    errors = 0;
-    for (i = 0; i < fake_size; i++)
-        if (flux_rpc_get (r, NULL, NULL) < 0)
-            errors++;
-    ok (errors == 0,
+    count = 0;
+    do {
+        if (flux_rpc_get (r, NULL) < 0)
+            break;
+        count++;
+    } while (flux_rpc_next (r) == 0);
+    ok (count == fake_size,
         "flux_rpc_get succeded %d times", fake_size);
 
     cmp_ok (hello_count - old_count, "==", fake_size,
         "rpc was called %d times", fake_size);
-    ok (flux_rpc_completed (r) == true,
-        "flux_rpc_completed is true");
     flux_rpc_destroy (r);
 
     /* same with a subset */
@@ -174,17 +173,18 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         64 - 1);
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
-    errors = 0;
-    for (i = 0; i < 64; i++)
-        if (flux_rpc_get (r, &nodeid, NULL) < 0 || nodeid != i)
-            errors++;
-    ok (errors == 0,
+    count = 0;
+    do {
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0
+                || flux_rpc_get (r, NULL) < 0 || nodeid != count)
+            break;
+        count++;
+    } while (flux_rpc_next (r) == 0);
+    ok (count == 64,
         "flux_rpc_get succeded %d times, with correct nodeid map", 64);
 
     cmp_ok (hello_count - old_count, "==", 64,
         "rpc was called %d times", 64);
-    ok (flux_rpc_completed (r) == true,
-        "flux_rpc_completed is true");
     flux_rpc_destroy (r);
 
     /* same with echo payload */
@@ -193,16 +193,15 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         64 - 1);
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
-    errors = 0;
-    for (i = 0; i < 64; i++) {
-        if (flux_rpc_get (r, NULL, &json_str) < 0
+    count = 0;
+    do {
+        if (flux_rpc_get (r, &json_str) < 0
                 || !json_str || strcmp (json_str, "{}") != 0)
-            errors++;
-    }
-    ok (errors == 0,
+            break;
+        count++;
+    } while (flux_rpc_next (r) == 0);
+    ok (count == 64,
         "flux_rpc_get succeded %d times, with correct return payload", 64);
-    ok (flux_rpc_completed (r) == true,
-        "flux_rpc_completed is true");
     flux_rpc_destroy (r);
 
     /* detect partial failure without response */
@@ -215,31 +214,30 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     int fail_count = 0;
     uint32_t fail_nodeid_last = FLUX_NODEID_ANY;
     int fail_errno_last = 0;
-    for (i = 0; i < 64; i++) {
-        if (flux_rpc_get (r, &nodeid, &json_str) < 0) {
+    do {
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0
+                || flux_rpc_get (r, &json_str) < 0) {
             fail_errno_last = errno;
             fail_nodeid_last = nodeid;
             fail_count++;
         }
-    }
+    } while (flux_rpc_next (r) == 0);
     ok (fail_count == 1 && fail_nodeid_last == 20 && fail_errno_last == EPERM,
         "flux_rpc_get correctly reports single error");
-    ok (flux_rpc_completed (r) == true,
-        "flux_rpc_completed is true, even when there was an error (issue 517)");
     flux_rpc_destroy (r);
 
-    /* test that a fatal handle error causes flux_rpc_completed() to be true */
+    /* test that a fatal handle error causes flux_rpc_next () to fail */
     flux_fatal_set (h, NULL, NULL); /* reset handler and flag */
     ok (flux_fatality (h) == false,
         "flux_fatality says all is well");
-    ok ((r = flux_rpc_multi (h, "rpctest.nodeid", NULL, "[0]", 0)) != NULL,
+    ok ((r = flux_rpc_multi (h, "rpctest.nodeid", NULL, "[0-1]", 0)) != NULL,
         "flux_rpc_multi [0] ok",
         64 - 1);
     flux_fatal_error (h, __FUNCTION__, "Foo");
     ok (flux_fatality (h) == true,
         "flux_fatality shows simulated failure");
-    ok (flux_rpc_completed (r) == true,
-        "flux_rpc_completed is true with fatal error");
+    ok (flux_rpc_next (r) == -1,
+        "flux_rpc_next fails");
     flux_fatal_set (h, fatal_err, NULL); /* reset handler and flag  */
     flux_rpc_destroy (r);
 

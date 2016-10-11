@@ -33,8 +33,7 @@
 #include "info.h"
 #include "attr.h"
 
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 
 

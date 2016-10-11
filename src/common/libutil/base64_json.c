@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include <string.h>
-#include <json.h>
 
 #include "log.h"
 #include "xzmalloc.h"

@@ -165,7 +165,7 @@ static int op_event_subscribe (void *impl, const char *topic)
         goto done;
     Jadd_str (in, "topic", topic);
     if (!(rpc = flux_rpc (ctx->h, "cmb.sub", Jtostr (in), FLUX_NODEID_ANY, 0))
-                || flux_rpc_get (rpc, NULL, NULL) < 0)
+                || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -186,7 +186,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
         goto done;
     Jadd_str (in, "topic", topic);
     if (!(rpc = flux_rpc (ctx->h, "cmb.unsub", Jtostr (in), FLUX_NODEID_ANY, 0))
-                || flux_rpc_get (rpc, NULL, NULL) < 0)
+                || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:

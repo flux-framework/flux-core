@@ -38,7 +38,6 @@
 #include <sys/time.h>
 #include <stdarg.h>
 #include <dlfcn.h>
-#include <json.h>
 #include <argz.h>
 #include <czmq.h>
 #include <flux/core.h>

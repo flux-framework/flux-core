@@ -27,39 +27,49 @@
 #endif
 #include <string.h>
 #include <errno.h>
+#include <jansson.h>
 
 #include "event.h"
 #include "message.h"
 
-#include "src/common/libutil/shortjson.h"
 
 flux_msg_t *flux_heartbeat_encode (int epoch)
 {
-    flux_msg_t *msg;
-    json_object *o = Jnew ();
+    flux_msg_t *msg = NULL;
+    char *json_str = NULL;
+    json_t *o = json_pack ("{s:i}", "epoch", epoch);
 
-    Jadd_int (o, "epoch", epoch);
-    msg = flux_event_encode ("hb", Jtostr (o));
-    Jput (o);
+    if (!o || !(json_str = json_dumps (o, JSON_COMPACT))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (!(msg = flux_event_encode ("hb", json_str)))
+        goto done;
+done:
+    if (json_str)
+        free (json_str);
+    json_decref (o);
     return msg;
 }
 
 int flux_heartbeat_decode (const flux_msg_t *msg, int *epoch)
 {
+    json_error_t error;
+    json_t *out = NULL;
     const char *json_str, *topic_str;
-    json_object *out = NULL;
     int rc = -1;
 
     if (flux_event_decode (msg, &topic_str, &json_str) < 0)
         goto done;
-    if (strcmp (topic_str, "hb") != 0 || !(out = Jfromstr (json_str))
-                                      || !Jget_int (out, "epoch", epoch)) {
+    if (strcmp (topic_str, "hb") != 0
+            || !(out = json_loads (json_str, 0, &error))
+            || json_unpack (out, "{s:i}", "epoch", epoch) < 0) {
         errno = EPROTO;
         goto done;
     }
     rc = 0;
 done:
-    Jput (out);
+    json_decref (out);
     return rc;
 }
 

@@ -123,7 +123,6 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <munge.h>
-#include <json.h>
 #include <czmq.h>
 
 #include "security.h"

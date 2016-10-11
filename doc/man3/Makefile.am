@@ -53,7 +53,10 @@ MAN3_FILES_SECONDARY = \
 	flux_rpc_destroy.3 \
 	flux_rpc_check.3 \
 	flux_rpc_get.3 \
-	flux_rpc_completed.3 \
+	flux_rpc_next.3 \
+	flux_rpc_get_nodeid.3 \
+	flux_rpcf.3 \
+	flux_rpc_getf.3 \
 	flux_reduce_destroy.3 \
 	flux_reduce_append.3 \
 	flux_reduce_pop.3 \
@@ -123,8 +126,11 @@ flux_msg_decode.3: flux_msg_encode.3
 flux_msg_recvfd.3: flux_msg_sendfd.3
 flux_rpc_destroy.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
+flux_rpc_getf.3: flux_rpc.3
+flux_rpcf.3: flux_rpc.3
 flux_rpc_check.3: flux_rpc_then.3
-flux_rpc_completed.3: flux_rpc_multi.3
+flux_rpc_next.3: flux_rpc_multi.3
+flux_rpc_get_nodeid.3: flux_rpc_multi.3
 flux_reduce_destroy.3: flux_reduce_create.3
 flux_reduce_append.3: flux_reduce_create.3
 flux_reduce_pop.3: flux_reduce_create.3
@@ -184,12 +190,12 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
         -I$(top_srcdir) -I$(top_srcdir)/src/include \
-        $(JSON_CFLAGS) $(ZMQ_CFLAGS)
+        $(ZMQ_CFLAGS)
 
 LDADD = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
-        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
+        $(ZMQ_LIBS) $(LIBPTHREAD)
 
 check_PROGRAMS = \
 	topen \

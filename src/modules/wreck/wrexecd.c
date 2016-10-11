@@ -1347,7 +1347,7 @@ static int aggregator_push_task_exit (struct task_info *t)
         rc = -1;
     }
 
-    if (rpc && flux_rpc_get (rpc, NULL, NULL) < 0) {
+    if (rpc && flux_rpc_get (rpc, NULL) < 0) {
         flux_log_error (h, "flux_rpc_get");
         rc = -1;
     }

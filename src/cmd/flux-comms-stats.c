@@ -29,11 +29,11 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <stdbool.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libjson-c/json.h"
 
 
 #define OPTIONS "hcCp:s:t:r:R"
@@ -133,7 +133,7 @@ int main (int argc, char *argv[])
         flux_rpc_t *rpc;
         char *topic = xasprintf ("%s.stats.clear", target);
         if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
-                                || flux_rpc_get (rpc, NULL, NULL) < 0)
+                                || flux_rpc_get (rpc, NULL) < 0)
             log_err_exit ("%s", topic);
         free (topic);
         flux_rpc_destroy (rpc);
@@ -149,7 +149,7 @@ int main (int argc, char *argv[])
         const char *json_str;
         char *topic = xasprintf ("%s.rusage", target);
         if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
-                                || flux_rpc_get (rpc, NULL, &json_str) < 0)
+                                || flux_rpc_get (rpc, &json_str) < 0)
             log_err_exit ("%s", topic);
         parse_json (objname, json_str, scale, type);
         free (topic);
@@ -159,7 +159,7 @@ int main (int argc, char *argv[])
         const char *json_str;
         char *topic = xasprintf ("%s.stats.get", target);
         if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
-                                || flux_rpc_get (rpc, NULL, &json_str) < 0)
+                                || flux_rpc_get (rpc, &json_str) < 0)
             log_err_exit ("%s", topic);
         parse_json (objname, json_str, scale, type);
         free (topic);

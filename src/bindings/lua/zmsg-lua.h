@@ -3,7 +3,7 @@
 
 #include <lua.h>
 #include <zmq.h>
-#include <json.h>
+#include "src/common/libjson-c/json.h"
 
 #include "flux/core.h"
 

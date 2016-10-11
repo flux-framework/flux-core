@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include <getopt.h>
-#include <json.h>
 #include <flux/core.h>
 #include <unistd.h>
 #include <fcntl.h>

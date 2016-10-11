@@ -28,11 +28,12 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <czmq.h>
+#include <jansson.h>
 
 #include "attr.h"
 #include "rpc.h"
 
-#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 
 typedef struct {
@@ -86,32 +87,22 @@ static attr_t *attr_create (const char *val, int flags)
 static int attr_get_rpc (ctx_t *ctx, const char *name, attr_t **attrp)
 {
     flux_rpc_t *r;
-    json_object *in = Jnew ();
-    json_object *out = NULL;
-    const char *json_str, *val;
+    const char *val;
     int flags;
     attr_t *attr;
     int rc = -1;
 
-    Jadd_str (in, "name", name);
-    if (!(r = flux_rpc (ctx->h, "cmb.attrget", Jtostr (in),
-                        FLUX_NODEID_ANY, 0)))
+    if (!(r = flux_rpcf (ctx->h, "cmb.attrget", FLUX_NODEID_ANY, 0,
+                         "{s:s}", "name", name)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_getf (r, "{s:s, s:i}", "value", &val, "flags", &flags) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str)) || !Jget_str (out, "value", &val)
-                                     || !Jget_int (out, "flags", &flags)) {
-        errno = EPROTO;
-        goto done;
-    }
     attr = attr_create (val, flags);
     zhash_update (ctx->hash, name, attr);
     zhash_freefn (ctx->hash, name, attr_destroy);
     *attrp = attr;
     rc = 0;
 done:
-    Jput (in);
-    Jput (out);
     flux_rpc_destroy (r);
     return rc;
 }
@@ -119,19 +110,21 @@ done:
 static int attr_set_rpc (ctx_t *ctx, const char *name, const char *val)
 {
     flux_rpc_t *r;
-    json_object *in = Jnew ();
     attr_t *attr;
     int rc = -1;
 
-    Jadd_str (in, "name", name);
-    if (val)
-        Jadd_str (in, "value", val);
-    else
-        Jadd_obj (in, "value", NULL);
-    if (!(r = flux_rpc (ctx->h, "cmb.attrset", Jtostr (in),
-                        FLUX_NODEID_ANY, 0)))
+#if JANSSON_VERSION_HEX >= 0x020800
+    /* $? format specifier was introduced in jansson 2.8 */
+    r = flux_rpcf (ctx->h, "cmb.attrset", FLUX_NODEID_ANY, 0,
+                   "{s:s, s:s?}", "name", name, "value", val);
+#else
+    r = flux_rpcf (ctx->h, "cmb.attrset", FLUX_NODEID_ANY, 0,
+                   val ? "{s:s, s:s}" : "{s:s, s:n}",
+                   "name", name, "value", val);
+#endif
+    if (!r)
         goto done;
-    if (flux_rpc_get (r, NULL, NULL) < 0)
+    if (flux_rpc_get (r, NULL) < 0)
         goto done;
     if (val) {
         attr = attr_create (val, 0);
@@ -141,7 +134,6 @@ static int attr_set_rpc (ctx_t *ctx, const char *name, const char *val)
         zhash_delete (ctx->hash, name);
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (r);
     return rc;
 }
@@ -161,26 +153,25 @@ static int attr_strcmp (const char *s1, const char *s2)
 static int attr_list_rpc (ctx_t *ctx)
 {
     flux_rpc_t *r;
-    const char *json_str;
-    json_object *array;
-    json_object *out = NULL;
-    int len, i, rc = -1;
+    json_t *array, *value;
+    size_t index;
+    int rc = -1;
 
     if (!(r = flux_rpc (ctx->h, "cmb.attrlist", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_getf (r, "{s:o}", "names", &array) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str)) || !Jget_obj (out, "names", &array)
-                                     || !Jget_ar_len (array, &len)) {
-        errno = EPROTO;
-        goto done;
-    }
     zlist_destroy (&ctx->names);
     if (!(ctx->names = zlist_new ()))
         oom ();
-    for (i = 0; i < len; i++) {
-        const char *name;
-        if (!Jget_ar_str (array, i, &name)) {
+#if JANSSON_VERSION_HEX >= 0x020500
+    json_array_foreach (array, index, value) {
+#else
+    for (index = 0; index < json_array_size (array); index++) {
+        value = json_array_get (array, index);
+#endif
+        const char *name = json_string_value (value);
+        if (!name) {
             errno = EPROTO;
             goto done;
         }
@@ -190,7 +181,6 @@ static int attr_list_rpc (ctx_t *ctx)
     zlist_sort (ctx->names, (zlist_compare_fn *)attr_strcmp);
     rc = 0;
 done:
-    Jput (out);
     flux_rpc_destroy (r);
     return rc;
 }

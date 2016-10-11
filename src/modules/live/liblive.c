@@ -36,7 +36,7 @@ int flux_failover (flux_t *h, uint32_t rank)
 
     if (!(rpc = flux_rpc (h, "live.failover", NULL, rank, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -51,7 +51,7 @@ int flux_recover (flux_t *h, uint32_t rank)
 
     if (!(rpc = flux_rpc (h, "live.recover", NULL, rank, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:

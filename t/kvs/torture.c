@@ -33,13 +33,13 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
+#include "src/common/libjson-c/json.h"
 
 
 #define OPTIONS "hc:s:p:qv"

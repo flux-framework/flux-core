@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev libminilzo libpmi \
+SUBDIRS = libtap libev libminilzo libjson-c libpmi \
 	  liblsd libutil libflux libsubprocess libcompat liboptparse
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
@@ -17,7 +17,8 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libpmi/libpmi.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
-	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
+	$(builddir)/libjson-c/libjson-c.la \
+	$(LIBMUNGE) $(JANSSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) $(LIBRT)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 

@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 #
 # Comms module
@@ -18,4 +18,4 @@ connector_local_la_SOURCES = local.c
 connector_local_la_LDFLAGS = $(fluxmod_ldflags) -module
 connector_local_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 			    $(top_builddir)/src/common/libflux-core.la \
-			    $(JSON_LIBS) $(ZMQ_LIBS)
+			    $(ZMQ_LIBS)

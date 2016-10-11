@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(JANSSON_CFLAGS) $(ZMQ_CFLAGS)
 
 installed_conf_cppflags = \
 	-DINSTALLED_MODULE_PATH=\"$(fluxmoddir)\" \
@@ -111,10 +111,11 @@ TESTS = test_module.t \
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libjson-c/libjson-c.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
+	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \

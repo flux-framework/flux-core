@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 noinst_LTLIBRARIES = libpmi.la
 
@@ -44,10 +44,11 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libpmi/libpmi.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libjson-c/libjson-c.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL)
+	$(ZMQ_LIBS) $(JANSSON_LIBS) $(LIBPTHREAD) $(LIBRT) $(LIBDL)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \

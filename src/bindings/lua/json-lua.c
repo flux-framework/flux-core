@@ -28,7 +28,7 @@
 #include <math.h>
 #include <lua.h>
 #include <lauxlib.h>
-#include <json.h>
+#include "src/common/libjson-c/json.h"
 
 static void * json_null;
 

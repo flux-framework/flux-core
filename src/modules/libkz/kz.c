@@ -58,7 +58,6 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "kz.h"

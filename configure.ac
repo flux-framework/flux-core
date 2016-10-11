@@ -51,6 +51,18 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS( \
   pthread.h \
   getopt.h \
+  fcntl.h \
+  limits.h \
+  strings.h \
+  syslog.h \
+  unistd.h \
+  [sys/cdefs.h] \
+  [sys/param.h] \
+  stdarg.h \
+  locale.h \
+  xlocale.h \
+  endian.h \
+  inttypes.h \
 )
 
 ##
@@ -58,6 +70,11 @@ AC_CHECK_HEADERS( \
 ## 
 AC_C_BIGENDIAN
 AC_C_CONST
+AC_TYPE_SIZE_T
+AX_COMPILE_CHECK_SIZEOF(int)
+AX_COMPILE_CHECK_SIZEOF(long)
+AX_COMPILE_CHECK_SIZEOF(size_t, [#include <stdint.h>])
+
 
 ##
 # Checks for library functions
@@ -66,6 +83,18 @@ AC_CHECK_FUNCS( \
   getopt_long \
   vsnprintf \
   vsscanf \
+  realloc \
+  strcasecmp \
+  strdup \
+  strerror \
+  snprintf \
+  vsnprintf \
+  vasprintf \
+  open \
+  vsyslog \
+  strncasecmp \
+  setlocale \
+  uselocale \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(util, forkpty)
@@ -109,8 +138,7 @@ AX_LUA_HEADERS
 AX_LUA_LIBS
 X_AC_ZEROMQ
 X_AC_MUNGE
-PKG_CHECK_MODULES([JSON], [json], [],
-  [PKG_CHECK_MODULES([JSON], [json-c])])
+PKG_CHECK_MODULES([JANSSON], [jansson], [], [])
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 LX_FIND_MPI
@@ -191,6 +219,7 @@ AC_CONFIG_FILES( \
   src/common/libtap/Makefile \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
+  src/common/libjson-c/Makefile \
   src/common/libev/Makefile \
   src/common/libminilzo/Makefile \
   src/common/libpmi/Makefile \
@@ -222,11 +251,11 @@ AC_CONFIG_FILES( \
   src/modules/resource-hwloc/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
+  src/modules/pymod/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
-  etc/Makefile.inc \
   doc/Makefile \
   doc/man1/Makefile \
   doc/man3/Makefile \

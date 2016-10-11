@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 check_PROGRAMS = \
 	tasyncsock \
@@ -28,6 +28,6 @@ LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
+	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 EXTRA_DIST = valgrind.supp $(noinst_SCRIPTS)

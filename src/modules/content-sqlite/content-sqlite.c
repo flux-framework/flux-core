@@ -406,7 +406,7 @@ int register_backing_store (flux_t *h, bool value, const char *name)
     if (!(rpc = flux_rpc (h, "content.backing", Jtostr (in),
                             FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -489,7 +489,7 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
             flux_log_error (h, "shutdown: store");
             continue;
         }
-        if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
+        if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0) {
             flux_log_error (h, "shutdown: store");
             flux_rpc_destroy (rpc);
             continue;

@@ -203,7 +203,8 @@ static int aggregate_forward (flux_t *h, struct aggregate *ag)
                  ag->key, ag->count, ag->total);
     if (!(rpc = flux_rpc (h, "aggregator.push", Jtostr (o),
                              FLUX_NODEID_UPSTREAM, 0)) ||
-        (flux_rpc_get (rpc, &nodeid, NULL) < 0)) {
+        (flux_rpc_get_nodeid (rpc, &nodeid) < 0) ||
+        (flux_rpc_get (rpc, NULL) < 0)) {
         flux_log_error (h, "flux_rpc (from=%d): aggregator.push", nodeid);
         rc = -1;
     }

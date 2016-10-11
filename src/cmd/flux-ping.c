@@ -29,7 +29,6 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <string.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
@@ -83,7 +82,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     json_object *out = NULL;
     tstat_t *tstat = flux_rpc_aux_get (rpc);
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
+    if (flux_rpc_get (rpc, &json_str) < 0) {
         log_err ("flux_rpc_get");
         goto done;
     }
@@ -101,7 +100,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     t0.tv_nsec = nsec;
     tstat_push (tstat, monotime_since (t0));
 
-    if (flux_rpc_completed (rpc)) {
+    if (flux_rpc_next (rpc) < 0) {
         if (ctx->rank != NULL) {
             printf ("%s!%s pad=%lu seq=%d time=(%0.3f:%0.3f:%0.3f) ms stddev %0.3f\n",
                     ctx->rank,
@@ -118,11 +117,10 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
                     tstat_mean (tstat),
                     route);
         }
+        flux_rpc_destroy (rpc);
     }
 done:
     Jput (out);
-    if (flux_rpc_completed (rpc))
-        flux_rpc_destroy (rpc);
 }
 
 void send_ping (struct ping_ctx *ctx)

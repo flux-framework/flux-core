@@ -8,7 +8,6 @@
 #ifndef KAP_PERSONALITY_H
 #define KAP_PERSONALITY_H 1
 
-#include <json.h>
 #include <flux/core.h>
 #include "kap_opts.h"
 

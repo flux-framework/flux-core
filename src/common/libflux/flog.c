@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <zmq.h>
 
 #include "flog.h"
@@ -40,7 +41,6 @@
 #include "message.h"
 #include "rpc.h"
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
@@ -173,51 +173,35 @@ void flux_log_error (flux_t *h, const char *fmt, ...)
 static int dmesg_clear (flux_t *h, int seq)
 {
     flux_rpc_t *rpc;
-    json_object *o = Jnew ();
     int rc = -1;
 
-    Jadd_int (o, "seq", seq);
-    if (!(rpc = flux_rpc (h, "cmb.dmesg.clear", Jtostr (o),
-                          FLUX_NODEID_ANY, 0)))
+    if (!(rpc = flux_rpcf (h, "cmb.dmesg.clear", FLUX_NODEID_ANY, 0,
+                           "{s:i}", "seq", seq)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
-    Jput (o);
     return rc;
 }
 
 static flux_rpc_t *dmesg_rpc (flux_t *h, int seq, bool follow)
 {
-    flux_rpc_t *rpc;
-    json_object *o = Jnew ();
-    Jadd_int (o, "seq", seq);
-    Jadd_bool (o, "follow", follow);
-    rpc = flux_rpc (h, "cmb.dmesg", Jtostr (o), FLUX_NODEID_ANY, 0);
-    Jput (o);
-    return rpc;
+    return flux_rpcf (h, "cmb.dmesg", FLUX_NODEID_ANY, 0,
+                      "{s:i s:b}", "seq", seq, "follow", follow);
 }
 
 static int dmesg_rpc_get (flux_rpc_t *rpc, int *seq, flux_log_f fun, void *arg)
 {
-    const char *json_str;
     const char *buf;
-    json_object *o = NULL;
     int rc = -1;
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_getf (rpc, "{s:i s:s}", "seq", seq, "buf", &buf) < 0)
         goto done;
-    if (!(o = Jfromstr (json_str)) || !Jget_str (o, "buf", &buf)
-                                   || !Jget_int (o, "seq", seq)) {
-        errno = EPROTO;
-        goto done;
-    }
     fun (buf, strlen (buf), arg);
     rc = 0;
 done:
-    Jput (o);
     return rc;
 }
 

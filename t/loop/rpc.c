@@ -87,7 +87,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc with no payload when none is expected works");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
-    ok (flux_rpc_get (r, NULL, NULL) == 0,
+    ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works");
     flux_rpc_destroy (r);
 
@@ -97,7 +97,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     errno = 0;
-    ok (flux_rpc_get (r, NULL, NULL) < 0
+    ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
         "flux_rpc_get fails with EPROTO");
     flux_rpc_destroy (r);
@@ -109,7 +109,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     errno = 0;
-    ok (flux_rpc_get (r, NULL, NULL) < 0
+    ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
         "flux_rpc_get fails with EPROTO");
     flux_rpc_destroy (r);
@@ -120,7 +120,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     json_str = NULL;
-    ok (flux_rpc_get (r, NULL, &json_str) == 0
+    ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload");
     flux_rpc_destroy (r);
@@ -134,7 +134,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     json_str = NULL;
-    ok (flux_rpc_get_raw (r, NULL, &d, &l) == 0
+    ok (flux_rpc_get_raw (r, &d, &l) == 0
         && d != NULL && l == len && memcmp (data, d, len) == 0,
         "flux_rpc_get_raw works and returned expected payload");
     flux_rpc_destroy (r);
@@ -150,7 +150,7 @@ static void then_cb (flux_rpc_t *r, void *arg)
     ok (flux_rpc_check (r) == true,
         "flux_rpc_check says get won't block in then callback");
     json_str = NULL;
-    ok (flux_rpc_get (r, NULL, &json_str) == 0
+    ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload in then callback");
     flux_reactor_stop (flux_get_reactor (h));

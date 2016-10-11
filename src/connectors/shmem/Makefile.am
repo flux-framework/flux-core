@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 fluxconnector_LTLIBRARIES = shmem.la
 
@@ -19,4 +19,4 @@ shmem_la_LDFLAGS = -module $(san_ld_zdef_flag) \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 
-shmem_la_LIBADD = $(JSON_LIBS) $(ZMQ_LIBS)
+shmem_la_LIBADD = $(ZMQ_LIBS)

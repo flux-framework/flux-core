@@ -26,10 +26,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/signalfd.h>
-#include <json.h>
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "src/common/libjson-c/json.h"
 #include "tap.h"
 #include "subprocess.h"
 

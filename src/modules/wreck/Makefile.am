@@ -14,7 +14,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/broker \
 	$(LUA_INCLUDE) \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 wreckscriptsdir = $(sysconfdir)/wreck/lua.d
 
@@ -57,7 +57,7 @@ wrexecd_libs = \
 
 wrexecd_LDADD = \
 	$(wrexecd_libs) \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
+	$(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua \

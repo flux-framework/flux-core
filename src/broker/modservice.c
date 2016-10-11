@@ -38,14 +38,13 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <stdarg.h>
-#include <json.h>
 #include <argz.h>
 #include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/xzmalloc.h"
 
 #include "module.h"

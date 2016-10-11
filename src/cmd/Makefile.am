@@ -7,7 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
@@ -15,7 +15,7 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/modules/live/libflux-live.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
+	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 LDADD = $(fluxcmd_ldadd)
 

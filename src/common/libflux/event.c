@@ -31,9 +31,6 @@
 #include "event.h"
 #include "message.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/xzmalloc.h"
-
 int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **json_str)
 {
     int type;
