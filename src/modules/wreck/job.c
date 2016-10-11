@@ -36,7 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
-static int kvs_job_set_state (flux_t h, unsigned long jobid, const char *state)
+static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
 {
     int rc;
     char *key = NULL;
@@ -76,12 +76,12 @@ out:
     return rc;
 }
 
-static int kvs_job_new (flux_t h, unsigned long jobid)
+static int kvs_job_new (flux_t *h, unsigned long jobid)
 {
     return kvs_job_set_state (h, jobid, "reserved");
 }
 
-static int64_t next_jobid (flux_t h)
+static int64_t next_jobid (flux_t *h)
 {
     int64_t ret = (int64_t) -1;
     const char *json_str;
@@ -119,7 +119,7 @@ static char * realtime_string (char *buf, size_t sz)
     return (buf);
 }
 
-static void wait_for_event (flux_t h, int64_t id, char *topic)
+static void wait_for_event (flux_t *h, int64_t id, char *topic)
 {
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_EVENT,
@@ -131,7 +131,7 @@ static void wait_for_event (flux_t h, int64_t id, char *topic)
     return;
 }
 
-static void send_create_event (flux_t h, int64_t id, char *topic)
+static void send_create_event (flux_t *h, int64_t id, char *topic)
 {
     flux_msg_t *msg;
     char *json = NULL;
@@ -157,7 +157,7 @@ out:
     free (json);
 }
 
-static int add_jobinfo (flux_t h, int64_t id, json_object *req)
+static int add_jobinfo (flux_t *h, int64_t id, json_object *req)
 {
     int rc = 0;
     char buf [64];
@@ -189,7 +189,7 @@ out:
     return (rc);
 }
 
-static bool ping_sched (flux_t h)
+static bool ping_sched (flux_t *h)
 {
     bool retval = false;
     const char *s;
@@ -206,7 +206,7 @@ static bool ping_sched (flux_t h)
     return (retval);
 }
 
-static bool sched_loaded (flux_t h)
+static bool sched_loaded (flux_t *h)
 {
     static bool v = false;
     if (!v && ping_sched (h))
@@ -214,7 +214,7 @@ static bool sched_loaded (flux_t h)
     return (v);
 }
 
-static int do_submit_job (flux_t h, unsigned long id)
+static int do_submit_job (flux_t *h, unsigned long id)
 {
     if (kvs_job_set_state (h, id, "submitted") < 0) {
         flux_log_error (h, "kvs_job_set_state");
@@ -224,7 +224,7 @@ static int do_submit_job (flux_t h, unsigned long id)
     return (0);
 }
 
-static void job_request_cb (flux_t h, flux_msg_handler_t *w,
+static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -298,7 +298,7 @@ struct flux_msg_handler_spec mtab[] = {
     FLUX_MSGHANDLER_TABLE_END
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     if (flux_msg_handler_addvec (h, mtab, NULL) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");

@@ -39,23 +39,23 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 
-void test_null (flux_t h, uint32_t nodeid);
-void test_echo (flux_t h, uint32_t nodeid);
-void test_err (flux_t h, uint32_t nodeid);
-void test_src (flux_t h, uint32_t nodeid);
-void test_sink (flux_t h, uint32_t nodeid);
-void test_nsrc (flux_t h, uint32_t nodeid);
-void test_putmsg (flux_t h, uint32_t nodeid);
-void test_pingzero (flux_t h, uint32_t nodeid);
-void test_pingself (flux_t h, uint32_t nodeid);
-void test_pingupstream (flux_t h, uint32_t nodeid);
-void test_flush (flux_t h, uint32_t nodeid);
-void test_clog (flux_t h, uint32_t nodeid);
-void test_coproc (flux_t h, uint32_t nodeid);
+void test_null (flux_t *h, uint32_t nodeid);
+void test_echo (flux_t *h, uint32_t nodeid);
+void test_err (flux_t *h, uint32_t nodeid);
+void test_src (flux_t *h, uint32_t nodeid);
+void test_sink (flux_t *h, uint32_t nodeid);
+void test_nsrc (flux_t *h, uint32_t nodeid);
+void test_putmsg (flux_t *h, uint32_t nodeid);
+void test_pingzero (flux_t *h, uint32_t nodeid);
+void test_pingself (flux_t *h, uint32_t nodeid);
+void test_pingupstream (flux_t *h, uint32_t nodeid);
+void test_flush (flux_t *h, uint32_t nodeid);
+void test_clog (flux_t *h, uint32_t nodeid);
+void test_coproc (flux_t *h, uint32_t nodeid);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t h, uint32_t nodeid);
+    void (*fun)(flux_t *h, uint32_t nodeid);
 } test_t;
 
 static test_t tests[] = {
@@ -100,7 +100,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     uint32_t nodeid = FLUX_NODEID_ANY;
     test_t *t;
@@ -136,7 +136,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-void test_null (flux_t h, uint32_t nodeid)
+void test_null (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
 
@@ -146,7 +146,7 @@ void test_null (flux_t h, uint32_t nodeid)
     flux_rpc_destroy (rpc);
 }
 
-void test_echo (flux_t h, uint32_t nodeid)
+void test_echo (flux_t *h, uint32_t nodeid)
 {
     json_object *in = Jnew ();
     json_object *out = NULL;
@@ -166,7 +166,7 @@ void test_echo (flux_t h, uint32_t nodeid)
     flux_rpc_destroy (rpc);
 }
 
-void test_err (flux_t h, uint32_t nodeid)
+void test_err (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
 
@@ -179,7 +179,7 @@ void test_err (flux_t h, uint32_t nodeid)
     flux_rpc_destroy (rpc);
 }
 
-void test_src (flux_t h, uint32_t nodeid)
+void test_src (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const char *json_str;
@@ -195,7 +195,7 @@ void test_src (flux_t h, uint32_t nodeid)
     flux_rpc_destroy (rpc);
 }
 
-void test_sink (flux_t h, uint32_t nodeid)
+void test_sink (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     json_object *in = Jnew();
@@ -208,7 +208,7 @@ void test_sink (flux_t h, uint32_t nodeid)
     flux_rpc_destroy (rpc);
 }
 
-void test_nsrc (flux_t h, uint32_t nodeid)
+void test_nsrc (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const int count = 10000;
@@ -242,7 +242,7 @@ void test_nsrc (flux_t h, uint32_t nodeid)
  * are "put back" on the handle using flux_putmsg().  We ensure that
  * the 10K messages are nonetheless received in order.
  */
-void test_putmsg (flux_t h, uint32_t nodeid)
+void test_putmsg (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const char *json_str;
@@ -307,7 +307,7 @@ static int count_hops (const char *s)
     return count;
 }
 
-static void xping (flux_t h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
+static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
 {
     flux_rpc_t *rpc;
     const char *json_str;
@@ -328,22 +328,22 @@ static void xping (flux_t h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
     flux_rpc_destroy (rpc);
 }
 
-void test_pingzero (flux_t h, uint32_t nodeid)
+void test_pingzero (flux_t *h, uint32_t nodeid)
 {
     xping (h, nodeid, 0, "req.ping");
 }
 
-void test_pingupstream (flux_t h, uint32_t nodeid)
+void test_pingupstream (flux_t *h, uint32_t nodeid)
 {
     xping (h, nodeid, FLUX_NODEID_UPSTREAM, "req.ping");
 }
 
-void test_pingself (flux_t h, uint32_t nodeid)
+void test_pingself (flux_t *h, uint32_t nodeid)
 {
     xping (h, nodeid, nodeid, "req.ping");
 }
 
-void test_flush (flux_t h, uint32_t nodeid)
+void test_flush (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     if (!(rpc = flux_rpc (h, "req.flush", NULL, nodeid, 0))
@@ -352,7 +352,7 @@ void test_flush (flux_t h, uint32_t nodeid)
     flux_rpc_destroy (rpc);
 }
 
-void test_clog (flux_t h, uint32_t nodeid)
+void test_clog (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     if (!(rpc = flux_rpc (h, "req.clog", NULL, nodeid, 0))
@@ -373,7 +373,7 @@ void *thd (void *arg)
 {
     flux_rpc_t *rpc;
     uint32_t *nodeid = arg;
-    flux_t h;
+    flux_t *h;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -387,7 +387,7 @@ void *thd (void *arg)
     return NULL;
 }
 
-int req_count (flux_t h, uint32_t nodeid)
+int req_count (flux_t *h, uint32_t nodeid)
 {
     flux_rpc_t *rpc;
     const char *json_str;
@@ -409,7 +409,7 @@ done:
     return rc;
 }
 
-void test_coproc (flux_t h, uint32_t nodeid)
+void test_coproc (flux_t *h, uint32_t nodeid)
 {
     pthread_t t;
     int rc;

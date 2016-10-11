@@ -45,12 +45,12 @@
  *                                                                            * 
  ******************************************************************************/
 typedef struct {
-    flux_t h;
+    flux_t *h;
     FILE *op;
 } jstatctx_t;
 
 /* Note: Should only be used for signal handling */
-static flux_t sig_flux_h;
+static flux_t *sig_flux_h;
 
 #define OPTIONS "o:h"
 static const struct option longopts[] = {
@@ -82,7 +82,7 @@ static void freectx (void *arg)
         fclose (ctx->op);
 }
 
-static jstatctx_t *getctx (flux_t h)
+static jstatctx_t *getctx (flux_t *h)
 {
     jstatctx_t *ctx = (jstatctx_t *)flux_aux_get (h, "jstat");
     if (!ctx) {
@@ -138,7 +138,7 @@ static int job_status_cb (const char *jcbstr, void *arg, int errnum)
     int64_t ns = 0;
     int64_t j = 0;
     jstatctx_t *ctx = NULL;
-    flux_t h = (flux_t)arg;
+    flux_t *h = (flux_t *)arg;
     json_object *jcb = NULL;
 
     ctx = getctx (h);
@@ -170,7 +170,7 @@ static int job_status_cb (const char *jcbstr, void *arg, int errnum)
  *                                                                            *
  ******************************************************************************/
 
-static int handle_notify_req (flux_t h, const char *ofn)
+static int handle_notify_req (flux_t *h, const char *ofn)
 {
     jstatctx_t *ctx = NULL;
 
@@ -191,7 +191,7 @@ static int handle_notify_req (flux_t h, const char *ofn)
     return 0;
 }
 
-static int handle_query_req (flux_t h, int64_t j, const char *k, const char *n)
+static int handle_query_req (flux_t *h, int64_t j, const char *k, const char *n)
 {
     json_object *jcb = NULL;
     jstatctx_t *ctx = NULL;
@@ -212,7 +212,7 @@ static int handle_query_req (flux_t h, int64_t j, const char *k, const char *n)
     return 0;
 }
 
-static int handle_update_req (flux_t h, int64_t j, const char *k, 
+static int handle_update_req (flux_t *h, int64_t j, const char *k, 
                               const char *jcbstr, const char *n)
 {
     jstatctx_t *ctx = NULL;
@@ -231,7 +231,7 @@ static int handle_update_req (flux_t h, int64_t j, const char *k,
 
 int main (int argc, char *argv[])
 {
-    flux_t h; 
+    flux_t *h; 
     int ch = 0;
     int rc = 0;
     char *cmd = NULL;

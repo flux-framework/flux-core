@@ -71,7 +71,7 @@ struct kz_struct {
     int flags;
     char *name;
     char *stream;
-    flux_t h;
+    flux_t *h;
     int seq;
     kvsdir_t *dir;
     kz_ready_f ready_cb;
@@ -94,7 +94,7 @@ static void kz_destroy (kz_t *kz)
     free (kz);
 }
 
-static bool key_exists (flux_t h, const char *key)
+static bool key_exists (flux_t *h, const char *key)
 {
     char *json_str = NULL;
     bool ret = false;
@@ -106,7 +106,7 @@ static bool key_exists (flux_t h, const char *key)
     return ret;
 }
 
-kz_t *kz_open (flux_t h, const char *name, int flags)
+kz_t *kz_open (flux_t *h, const char *name, int flags)
 {
     kz_t *kz = xzmalloc (sizeof (*kz));
 
@@ -155,7 +155,7 @@ static int kz_fence (kz_t *kz)
     return rc;
 }
 
-kz_t *kz_gopen (flux_t h, const char *grpname, int nprocs,
+kz_t *kz_gopen (flux_t *h, const char *grpname, int nprocs,
                const char *name, int flags)
 {
     kz_t *kz;

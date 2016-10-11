@@ -48,7 +48,7 @@
 struct flux_rpc_struct {
     int magic;
     struct flux_match m;
-    flux_t h;
+    flux_t *h;
     flux_then_f then_cb;
     void *then_arg;
     flux_msg_handler_t *w;
@@ -102,7 +102,7 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
     errno = saved_errno;
 }
 
-static flux_rpc_t *rpc_create (flux_t h, int rx_expected)
+static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
 {
     flux_rpc_t *rpc;
     int flags = 0;
@@ -291,7 +291,7 @@ done:
  * The reactor will repeatedly call the continuation (level-triggered)
  * until all received responses are consumed.
  */
-static void rpc_cb (flux_t h, flux_msg_handler_t *w,
+static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
                     const flux_msg_t *msg, void *arg)
 {
     flux_rpc_t *rpc = arg;
@@ -358,7 +358,7 @@ bool flux_rpc_completed (flux_rpc_t *rpc)
     return false;
 }
 
-flux_rpc_t *flux_rpc (flux_t h,
+flux_rpc_t *flux_rpc (flux_t *h,
                       const char *topic,
                       const char *json_str,
                       uint32_t nodeid,
@@ -390,7 +390,7 @@ error:
     return NULL;
 }
 
-flux_rpc_t *flux_rpc_raw (flux_t h,
+flux_rpc_t *flux_rpc_raw (flux_t *h,
                           const char *topic,
                           const void *data,
                           int len,
@@ -421,7 +421,7 @@ error:
     return NULL;
 }
 
-flux_rpc_t *flux_rpc_multi (flux_t h,
+flux_rpc_t *flux_rpc_multi (flux_t *h,
                             const char *topic,
                             const char *json_str,
                             const char *nodeset,

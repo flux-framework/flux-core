@@ -34,7 +34,7 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
 {
     int n;
     const char *name = NULL, *val = NULL;
-    flux_t h;
+    flux_t *h;
 
     log_init ("flux-setattr");
 
@@ -66,7 +66,7 @@ static struct optparse_option lsattr_opts[] = {
 static int cmd_lsattr (optparse_t *p, int ac, char *av[])
 {
     const char *name, *val;
-    flux_t h;
+    flux_t *h;
 
     log_init ("flux-lsatrr");
 
@@ -89,7 +89,7 @@ static int cmd_lsattr (optparse_t *p, int ac, char *av[])
 
 static int cmd_getattr (optparse_t *p, int ac, char *av[])
 {
-    flux_t h = NULL;
+    flux_t *h = NULL;
     const char *val;
     int n, flags;
 

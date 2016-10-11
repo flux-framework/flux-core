@@ -16,7 +16,7 @@ void hello_destroy (hello_t *hello);
 
 /* Register handle
  */
-void hello_set_flux (hello_t *hello, flux_t h);
+void hello_set_flux (hello_t *hello, flux_t *h);
 
 /* Set up broker attributes
  */

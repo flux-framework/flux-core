@@ -41,7 +41,7 @@
 static double default_reduction_timeout = 10.;
 
 struct hello_struct {
-    flux_t h;
+    flux_t *h;
     attr_t *attrs;
     uint32_t rank;
     uint32_t size;
@@ -55,7 +55,7 @@ struct hello_struct {
     flux_reduce_t *reduce;
 };
 
-static void join_request (flux_t h, flux_msg_handler_t *w,
+static void join_request (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg);
 
 static void r_reduce (flux_reduce_t *r, int batch, void *arg);
@@ -129,7 +129,7 @@ static struct flux_msg_handler_spec handlers[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-void hello_set_flux (hello_t *hello, flux_t h)
+void hello_set_flux (hello_t *hello, flux_t *h)
 {
     hello->h = h;
 }
@@ -213,7 +213,7 @@ done:
 
 /* handle a message sent from downstream via downstream's r_forward op.
  */
-static void join_request (flux_t h, flux_msg_handler_t *w,
+static void join_request (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     hello_t *hello = arg;

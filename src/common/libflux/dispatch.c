@@ -57,7 +57,7 @@ struct fastpath {
 
 
 struct dispatch {
-    flux_t h;
+    flux_t *h;
     zlist_t *handlers;
     zlist_t *handlers_new;
     struct fastpath norm;
@@ -135,7 +135,7 @@ static void dispatch_destroy (void *arg)
     dispatch_usecount_decr (d);
 }
 
-static struct dispatch *dispatch_get (flux_t h)
+static struct dispatch *dispatch_get (flux_t *h)
 {
     struct dispatch *d = flux_aux_get (h, "flux::dispatch");
     if (!d) {
@@ -328,7 +328,7 @@ static int backlog_flush (flux_msg_handler_t *w)
     return rc;
 }
 
-int flux_sleep_on (flux_t h, struct flux_match match)
+int flux_sleep_on (flux_t *h, struct flux_match match)
 {
     struct dispatch *d = dispatch_get (h);
     int rc = -1;
@@ -718,7 +718,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
     }
 }
 
-flux_msg_handler_t *flux_msg_handler_create (flux_t h,
+flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
                                              const struct flux_match match,
                                              flux_msg_handler_f cb, void *arg)
 {
@@ -758,7 +758,7 @@ error:
     return NULL;
 }
 
-int flux_msg_handler_addvec (flux_t h, struct flux_msg_handler_spec tab[],
+int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
                              void *arg)
 {
     int i;

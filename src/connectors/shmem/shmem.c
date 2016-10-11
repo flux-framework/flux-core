@@ -42,7 +42,7 @@ typedef struct {
     void *sock;
     char *uuid;
     char *uri;
-    flux_t h;
+    flux_t *h;
     zctx_t *zctx;
 } ctx_t;
 
@@ -278,7 +278,7 @@ static int connect_socket (ctx_t *ctx)
     return 0;
 }
 
-flux_t connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags)
 {
 #if HAVE_CALIPER
     cali_id_t uuid   = cali_create_attribute ("flux.uuid",

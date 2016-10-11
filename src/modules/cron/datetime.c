@@ -39,7 +39,7 @@
 #include "entry.h"
 
 struct datetime_entry {
-    flux_t h;
+    flux_t *h;
     flux_watcher_t *w;
     cronodate_t *d;
 };
@@ -117,7 +117,7 @@ static double reschedule_cb (flux_watcher_t *w, double now, void *arg)
     return (next);
 }
 
-static void *cron_datetime_create (flux_t h, cron_entry_t *e, json_object *arg)
+static void *cron_datetime_create (flux_t *h, cron_entry_t *e, json_object *arg)
 {
     struct datetime_entry *dt = datetime_entry_from_json (arg);
     if (dt == NULL)

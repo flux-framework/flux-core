@@ -99,7 +99,7 @@ static int lua_flux_obj_ref_create (lua_State *L, int index)
  *   store an extra reference.
  *
  */
-static int l_get_flux_reftable (lua_State *L, flux_t f)
+static int l_get_flux_reftable (lua_State *L, flux_t *f)
 {
     /*
      *  Use flux handle as lightuserdata index into registry.
@@ -138,9 +138,9 @@ static int l_get_flux_reftable (lua_State *L, flux_t f)
  *   a reference to the existing object. Otherwise, create the reftable
  *   and return the new object.
  */
-static int lua_push_flux_handle (lua_State *L, flux_t f)
+static int lua_push_flux_handle (lua_State *L, flux_t *f)
 {
-    flux_t *fp;
+    flux_t **fp;
     int top = lua_gettop (L);
 
     /*
@@ -204,7 +204,7 @@ static int lua_push_flux_handle (lua_State *L, flux_t f)
     return (1);
 }
 
-int lua_push_flux_handle_external (lua_State *L, flux_t f)
+int lua_push_flux_handle_external (lua_State *L, flux_t *f)
 {
     /*
      *  Increase reference count on this flux handle since we are
@@ -215,7 +215,7 @@ int lua_push_flux_handle_external (lua_State *L, flux_t f)
     return (lua_push_flux_handle (L, f));
 }
 
-static void l_flux_reftable_unref (lua_State *L, flux_t f)
+static void l_flux_reftable_unref (lua_State *L, flux_t *f)
 {
     l_get_flux_reftable (L, f);
     if (lua_istable (L, -1)) {
@@ -225,15 +225,15 @@ static void l_flux_reftable_unref (lua_State *L, flux_t f)
     }
 }
 
-static flux_t lua_get_flux (lua_State *L, int index)
+static flux_t *lua_get_flux (lua_State *L, int index)
 {
-    flux_t *fluxp = luaL_checkudata (L, index, "FLUX.handle");
+    flux_t **fluxp = luaL_checkudata (L, index, "FLUX.handle");
     return (*fluxp);
 }
 
 static int l_flux_destroy (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     l_flux_reftable_unref (L, f);
     flux_close (f);
     return (0);
@@ -241,7 +241,7 @@ static int l_flux_destroy (lua_State *L)
 
 static int l_flux_new (lua_State *L)
 {
-    flux_t f = flux_open (NULL, 0);
+    flux_t *f = flux_open (NULL, 0);
     if (f == NULL)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     return (lua_push_flux_handle (L, f));
@@ -251,7 +251,7 @@ static int l_flux_kvsdir_new (lua_State *L)
 {
     const char *path = ".";
     kvsdir_t *dir;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (lua_isstring (L, 2)) {
         /*
@@ -269,7 +269,7 @@ static int l_flux_kvsdir_new (lua_State *L)
 
 static int l_flux_kvs_symlink (lua_State *L)
 {
-    flux_t f;
+    flux_t *f;
     const char *key;
     const char *target;
 
@@ -288,7 +288,7 @@ static int l_flux_kvs_symlink (lua_State *L)
 
 static int l_flux_kvs_unlink (lua_State *L)
 {
-    flux_t f;
+    flux_t *f;
     const char *key;
     if (!(f = lua_get_flux (L, 1)))
         return lua_pusherror (L, "flux handle expected");
@@ -303,7 +303,7 @@ static int l_flux_kvs_unlink (lua_State *L)
 
 static int l_flux_kvs_type (lua_State *L)
 {
-    flux_t f;
+    flux_t *f;
     const char *key;
     char *val;
     kvsdir_t *d;
@@ -339,7 +339,7 @@ static int l_flux_kvs_type (lua_State *L)
 
 int l_flux_kvs_commit (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     if (kvs_commit (f) < 0)
          return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
@@ -349,7 +349,7 @@ int l_flux_kvs_commit (lua_State *L)
 int l_flux_kvs_put (lua_State *L)
 {
     int rc;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
     if (key == NULL)
         return lua_pusherror (L, "key required");
@@ -375,7 +375,7 @@ int l_flux_kvs_get (lua_State *L)
 {
     char *json_str;
     json_object *o;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
 
     if (key == NULL)
@@ -395,7 +395,7 @@ int l_flux_kvs_get (lua_State *L)
 
 static int l_flux_barrier (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *name = luaL_checkstring (L, 2);
     int nprocs = luaL_checkinteger (L, 3);
     return (l_pushresult (L, flux_barrier (f, name, nprocs)));
@@ -403,7 +403,7 @@ static int l_flux_barrier (lua_State *L)
 
 static int l_flux_rank (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     uint32_t rank;
     if (flux_get_rank (f, &rank) < 0)
         return lua_pusherror (L, "flux_get_rank error");
@@ -412,7 +412,7 @@ static int l_flux_rank (lua_State *L)
 
 static int l_flux_size (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     uint32_t size;
     if (flux_get_size (f, &size) < 0)
         return lua_pusherror (L, "flux_get_size error");
@@ -421,7 +421,7 @@ static int l_flux_size (lua_State *L)
 
 static int l_flux_arity (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *s;
     int arity;
 
@@ -454,7 +454,7 @@ static int l_flux_send (lua_State *L)
 {
     int rc;
     int nargs = lua_gettop (L) - 1;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
     json_object *o;
     uint32_t nodeid = FLUX_NODEID_ANY;
@@ -483,7 +483,7 @@ static int l_flux_send (lua_State *L)
 
 static int l_flux_recv (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *topic = NULL;
     const char *json_str = NULL;
     json_object *o = NULL;
@@ -543,7 +543,7 @@ error:
 
 static int l_flux_rpc (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
     json_object *o = NULL;
     json_object *resp = NULL;
@@ -593,7 +593,7 @@ static void push_attr_flags (lua_State *L, int flags)
 
 static int l_flux_getattr (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     int flags;
     const char *name = luaL_checkstring (L, 2);
     const char *val = flux_attr_get (f, name, &flags);
@@ -606,7 +606,7 @@ static int l_flux_getattr (lua_State *L)
 
 static int l_flux_subscribe (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (l_format_args (L, 2) < 0)
         return lua_pusherror (L, "Invalid args");
@@ -616,7 +616,7 @@ static int l_flux_subscribe (lua_State *L)
 
 static int l_flux_unsubscribe (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (l_format_args (L, 2) < 0)
         return lua_pusherror (L, "Invalid args");
@@ -626,7 +626,7 @@ static int l_flux_unsubscribe (lua_State *L)
 
 static int l_flux_send_event (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *event;
     json_object *o = NULL;
     const char *json_str = NULL;
@@ -661,7 +661,7 @@ static int l_flux_send_event (lua_State *L)
 
 static int l_flux_recv_event (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     json_object *o = NULL;
     const char *json_str = NULL;
     const char *topic;
@@ -705,7 +705,7 @@ static int l_flux_recv_event (lua_State *L)
  */
 struct l_flux_ref {
     lua_State *L;    /* Copy of this lua state */
-    flux_t flux;     /* Copy of flux handle for flux reftable lookup */
+    flux_t *flux;     /* Copy of flux handle for flux reftable lookup */
     void   *arg;     /* optional argument */
     int    ref;      /* reference into flux reftable                 */
 };
@@ -739,7 +739,7 @@ void l_flux_ref_destroy (struct l_flux_ref *r, const char *type)
     lua_settop (L, top);
 }
 
-struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t f,
+struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t *f,
         int index, const char *type)
 {
     int ref;
@@ -818,12 +818,12 @@ static int l_flux_ref_gettable (struct l_flux_ref *r, const char *name)
 static int l_f_zi_resp_cb (lua_State *L,
     struct zmsg_info *zi, json_object *resp, void *arg)
 {
-    flux_t f = arg;
+    flux_t *f = arg;
     return l_pushresult (L, flux_json_respond (f, resp, zmsg_info_zmsg (zi)));
 }
 
 static int create_and_push_zmsg_info (lua_State *L,
-        flux_t f, int typemask, zmsg_t **zmsg)
+        flux_t *f, int typemask, zmsg_t **zmsg)
 {
     struct zmsg_info * zi = zmsg_info_create (zmsg, typemask);
     zmsg_info_register_resp_cb (zi, (zi_resp_f) l_f_zi_resp_cb, (void *) f);
@@ -832,7 +832,7 @@ static int create_and_push_zmsg_info (lua_State *L,
 
 static int l_flux_recvmsg (lua_State *L)
 {
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     zmsg_t *zmsg;
     int type;
     struct flux_match match = {
@@ -855,7 +855,7 @@ static int l_flux_recvmsg (lua_State *L)
     return (1);
 }
 
-static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
+static int msghandler (flux_t *f, int typemask, zmsg_t **zmsg, void *arg)
 {
     int rc;
     int t;
@@ -921,7 +921,7 @@ static int l_msghandler_add (lua_State *L)
     const char *pattern;
     int typemask;
     struct l_flux_ref *mh = NULL;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
@@ -1073,7 +1073,7 @@ static int l_kvswatcher_add (lua_State *L)
 {
     int rc = 0;
     struct l_flux_ref *kw = NULL;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *key;
 
     if (!lua_istable (L, 2))
@@ -1245,7 +1245,7 @@ static int lua_push_kz (lua_State *L, kz_t *kz);
 static int l_iowatcher_add (lua_State *L)
 {
     struct l_flux_ref *iow = NULL;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L,
@@ -1366,7 +1366,7 @@ static int l_fdwatcher_add (lua_State *L)
     int events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR;
     flux_watcher_t *w;
     struct l_flux_ref *fw = NULL;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
@@ -1459,7 +1459,7 @@ static int l_stat_watcher_add (lua_State *L)
     struct l_flux_ref *sw = NULL;
     const char *path;
     double interval = 0.0;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
@@ -1550,7 +1550,7 @@ static int l_watcher_newindex (lua_State *L)
 }
 
 
-static int timeout_handler (flux_t f, void *arg)
+static int timeout_handler (flux_t *f, void *arg)
 {
     int rc;
     int t;
@@ -1589,7 +1589,7 @@ static int l_timeout_handler_add (lua_State *L)
     unsigned long ms;
     bool oneshot = true;
     struct l_flux_ref *to = NULL;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
@@ -1723,7 +1723,7 @@ static int get_signal_from_signalfd (int fd)
     return (si.ssi_signo);
 }
 
-static int signal_handler (flux_t f, int fd, short revents, void *arg)
+static int signal_handler (flux_t *f, int fd, short revents, void *arg)
 {
     int t, rc;
     int sig;
@@ -1766,7 +1766,7 @@ static int l_signal_handler_add (lua_State *L)
     int fd;
     sigset_t mask;
     struct l_flux_ref *sigh = NULL;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
@@ -1878,7 +1878,7 @@ static int l_flux_reactor_start (lua_State *L)
     int rc;
     const char *arg;
     const char *reason;
-    flux_t h;
+    flux_t *h;
     int mode = 0;
     if ((lua_gettop (L) > 1) && (arg = lua_tostring (L, 2))) {
         if (strcmp (arg, "once") == 0)
@@ -1907,7 +1907,7 @@ static int l_flux_reactor_stop (lua_State *L)
 static int l_flux_reactor_stop_error (lua_State *L)
 {
     const char *reason;
-    flux_t h = lua_get_flux (L, 1);
+    flux_t *h = lua_get_flux (L, 1);
     if ((lua_gettop (L) > 1) && (reason = lua_tostring (L, 2))) {
         flux_aux_set (h, "lua::reason", strdup (reason), free);
     }
@@ -1928,7 +1928,7 @@ static int lua_push_kz (lua_State *L, kz_t *kz)
 static int l_flux_kz_open (lua_State *L)
 {
     kz_t *kz;
-    flux_t f = lua_get_flux (L, 1);
+    flux_t *f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
     const char *mode = lua_tostring (L, 3);
     int flags;

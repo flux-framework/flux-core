@@ -5,7 +5,7 @@
 #include "src/common/libtap/tap.h"
 
 /* request nodeid and flags returned in response */
-void rpctest_nodeid_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -27,7 +27,7 @@ done:
 }
 
 /* request payload echoed in response */
-void rpctest_echo_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -42,7 +42,7 @@ done:
 }
 
 /* raw request payload echoed in response */
-void rpctest_rawecho_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -58,7 +58,7 @@ done:
 }
 
 /* no-payload response */
-void rpctest_hello_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -71,7 +71,7 @@ done:
     (void)flux_respond (h, msg, errnum, NULL);
 }
 
-void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -144,7 +144,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
 
 static void then_cb (flux_rpc_t *r, void *arg)
 {
-    flux_t h = arg;
+    flux_t *h = arg;
     const char *json_str;
 
     ok (flux_rpc_check (r) == true,
@@ -157,7 +157,7 @@ static void then_cb (flux_rpc_t *r, void *arg)
 }
 
 static flux_rpc_t *thenbug_r = NULL;
-void rpctest_thenbug_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_thenbug_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     (void)flux_rpc_check (thenbug_r);
@@ -182,7 +182,7 @@ static struct flux_msg_handler_spec htab[] = {
 int main (int argc, char *argv[])
 {
     flux_msg_t *msg;
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
 
     plan (37);

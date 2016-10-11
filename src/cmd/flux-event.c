@@ -45,7 +45,7 @@ int main (int argc, char *argv[])
 {
     int n;
     optparse_t *p;
-    flux_t h;
+    flux_t *h;
 
     log_init ("flux-event");
     if (!(p = optparse_create ("flux-event")))
@@ -84,7 +84,7 @@ static void event_pub_register (optparse_t *parent)
 
 static int event_pub (optparse_t *p, int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     char *topic = argv[1];  /* "pub" should be argv0 */
     flux_msg_t *msg = NULL;
     char *json_str = NULL;
@@ -118,7 +118,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static void subscribe_all (flux_t h, int tc, char **tv)
+static void subscribe_all (flux_t *h, int tc, char **tv)
 {
     int i;
     for (i = 0; i < tc; i++) {
@@ -127,7 +127,7 @@ static void subscribe_all (flux_t h, int tc, char **tv)
     }
 }
 
-static void unsubscribe_all (flux_t h, int tc, char **tv)
+static void unsubscribe_all (flux_t *h, int tc, char **tv)
 {
     int i;
     for (i = 0; i < tc; i++) {
@@ -165,7 +165,7 @@ void event_sub_register (optparse_t *op)
 
 static int event_sub (optparse_t *p, int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     flux_msg_t *msg;
     int n, count;
     bool raw = false;

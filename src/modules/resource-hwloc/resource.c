@@ -47,7 +47,7 @@ typedef struct
     bool walk_topology;
 } ctx_t;
 
-static int ctx_hwloc_init (flux_t h, ctx_t *ctx)
+static int ctx_hwloc_init (flux_t *h, ctx_t *ctx)
 {
     int ret = -1;
     char *key, *path = NULL;
@@ -130,7 +130,7 @@ static void resource_hwloc_ctx_destroy (ctx_t *ctx)
     }
 }
 
-static ctx_t *resource_hwloc_ctx_create (flux_t h)
+static ctx_t *resource_hwloc_ctx_create (flux_t *h)
 {
     ctx_t *ctx = xzmalloc (sizeof(ctx_t));
     if (flux_get_rank (h, &ctx->rank) < 0) {
@@ -147,7 +147,7 @@ error:
     return NULL;
 }
 
-static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
+static int load_xml_to_kvs (flux_t *h, ctx_t *ctx)
 {
     char *xml_path = NULL;
     char *buffer = NULL;
@@ -208,7 +208,7 @@ static char *escape_and_join_kvs_path (const char *base,
     return ret_str;
 }
 
-static int walk_topology (flux_t h,
+static int walk_topology (flux_t *h,
                           hwloc_topology_t topology,
                           hwloc_obj_t obj,
                           const char *path)
@@ -266,7 +266,7 @@ done:
     return ret;
 }
 
-static int load_info_to_kvs (flux_t h, ctx_t *ctx)
+static int load_info_to_kvs (flux_t *h, ctx_t *ctx)
 {
     char *base_path = NULL;
     int ret = -1, i;
@@ -315,7 +315,7 @@ done:
     return ret;
 }
 
-static int load_hwloc (flux_t h, ctx_t *ctx)
+static int load_hwloc (flux_t *h, ctx_t *ctx)
 {
     uint32_t size;
     char *completion_path = NULL;
@@ -347,7 +347,7 @@ done:
     return rc;
 }
 
-static int decode_reload_request (flux_t h, ctx_t *ctx,
+static int decode_reload_request (flux_t *h, ctx_t *ctx,
                                   const flux_msg_t *msg)
 {
     const char *json_str;
@@ -370,7 +370,7 @@ static int decode_reload_request (flux_t h, ctx_t *ctx,
     return (0);
 }
 
-static void reload_request_cb (flux_t h,
+static void reload_request_cb (flux_t *h,
                                flux_msg_handler_t *watcher,
                                const flux_msg_t *msg,
                                void *arg)
@@ -386,7 +386,7 @@ static void reload_request_cb (flux_t h,
         flux_log_error (h, "flux_respond");
 }
 
-static void topo_request_cb (flux_t h,
+static void topo_request_cb (flux_t *h,
                              flux_msg_handler_t *watcher,
                              const flux_msg_t *msg,
                              void *arg)
@@ -477,7 +477,7 @@ done:
     Jput (out);
 }
 
-static void process_args (flux_t h, ctx_t *ctx, int argc, char **argv)
+static void process_args (flux_t *h, ctx_t *ctx, int argc, char **argv)
 {
     int i;
     for (i = 0; i < argc; i++) {
@@ -493,7 +493,7 @@ static struct flux_msg_handler_spec htab[] = {
     {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb, NULL},
     FLUX_MSGHANDLER_TABLE_END};
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     ctx_t *ctx;

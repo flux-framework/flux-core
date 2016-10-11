@@ -54,7 +54,7 @@
 #include "types.h"
 
 struct cron_ctx {
-    flux_t                 h;
+    flux_t *               h;
     char *                 sync_event;      /* If set, sync entries to event */
     flux_msg_handler_t *   mh;              /* sync event message handler    */
     zlist_t    *           entries;
@@ -72,9 +72,9 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx,
     const char *json);
 static void cron_entry_destroy (cron_entry_t *e);
 static int cron_entry_stop (cron_entry_t *e);
-static void cron_entry_completion_handler (flux_t h, cron_task_t *t,
+static void cron_entry_completion_handler (flux_t *h, cron_task_t *t,
     void *arg);
-static void cron_entry_io_cb (flux_t h, cron_task_t *t, void *arg,
+static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
     bool is_stderr, void *data, int datalen, bool eof);
 static int cron_entry_run_task (cron_entry_t *e);
 static int cron_entry_defer (cron_entry_t *e);
@@ -101,7 +101,7 @@ double get_timestamp (void)
     return timespec_to_double (&tm);
 }
 
-static void timeout_cb (flux_t h, cron_task_t *t, void *arg)
+static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)
 {
     cron_entry_t *e = arg;
     flux_log (h, LOG_INFO, "cron-%ju: task timeout at %.2fs. Killing",
@@ -111,7 +111,7 @@ static void timeout_cb (flux_t h, cron_task_t *t, void *arg)
 
 static int cron_entry_run_task (cron_entry_t *e)
 {
-    flux_t h = e->ctx->h;
+    flux_t *h = e->ctx->h;
     if (cron_task_run (e->task, e->rank, e->command, NULL, NULL) < 0) {
         flux_log_error (h, "cron-%ju: cron_task_run", e->id);
         /* Run "completion" handler since this task is done */
@@ -130,7 +130,7 @@ static int cron_entry_increment (cron_entry_t *e)
 
 int cron_entry_schedule_task (cron_entry_t *e)
 {
-    flux_t h = e->ctx->h;
+    flux_t *h = e->ctx->h;
 
     /* Refuse to run more than one task at once
      */
@@ -160,7 +160,7 @@ int cron_entry_schedule_task (cron_entry_t *e)
 
 /**************************************************************************/
 
-static void cron_entry_loglines (flux_t h, cron_entry_t *e, int level, char *s)
+static void cron_entry_loglines (flux_t *h, cron_entry_t *e, int level, char *s)
 {
     char *p, *saveptr = NULL;
     while ((p = strtok_r (s, "\n", &saveptr))) {
@@ -170,7 +170,7 @@ static void cron_entry_loglines (flux_t h, cron_entry_t *e, int level, char *s)
     }
 }
 
-static void cron_entry_io_cb (flux_t h, cron_task_t *t, void *arg,
+static void cron_entry_io_cb (flux_t *h, cron_task_t *t, void *arg,
     bool is_stderr, void *data, int datalen, bool eof)
 {
     if (data)
@@ -207,7 +207,7 @@ static void cron_entry_failure (cron_entry_t *e)
     }
 }
 
-static void cron_entry_completion_handler (flux_t h, cron_task_t *t, void *arg)
+static void cron_entry_completion_handler (flux_t *h, cron_task_t *t, void *arg)
 {
     cron_entry_t *e = arg;
 
@@ -338,7 +338,7 @@ static void cron_entry_destroy (cron_entry_t *e)
  *  Get the next ID from global "cron" sequence number.
  *  This may be overkill, but is simplest so we go ahead an do it.
  */
-static int64_t next_cronid (flux_t h)
+static int64_t next_cronid (flux_t *h)
 {
     int64_t ret = (int64_t) -1;
     const char *json_str;
@@ -371,7 +371,7 @@ out:
     return ret;
 }
 
-static void deferred_cb (flux_t h, flux_msg_handler_t *mh,
+static void deferred_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     cron_ctx_t *ctx = arg;
@@ -419,7 +419,7 @@ static void cron_stats_init (struct cron_stats *s)
  */
 static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
 {
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
     cron_entry_t *e = NULL;
     json_object *in;
     const char *name;
@@ -565,7 +565,7 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
     return (0);
 }
 
-static cron_ctx_t * cron_ctx_create (flux_t h)
+static cron_ctx_t * cron_ctx_create (flux_t *h)
 {
     cron_ctx_t *ctx = xzmalloc (sizeof (*ctx));
 
@@ -658,7 +658,7 @@ static json_object *cron_entry_to_json (cron_entry_t *e)
 /*
  *  Handle cron.create: create a new cron entry
  */
-static void cron_create_handler (flux_t h, flux_msg_handler_t *w,
+static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     cron_entry_t *e;
@@ -693,7 +693,7 @@ done:
     Jput (out);
 }
 
-static void cron_sync_handler (flux_t h, flux_msg_handler_t *w,
+static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     cron_ctx_t *ctx = arg;
@@ -753,7 +753,7 @@ static cron_entry_t *cron_ctx_find_entry (cron_ctx_t *ctx, int64_t id)
  *  Return a cron entry referenced by request in flux message msg.
  *  [service] is name of service for logging purposes.
  */
-static cron_entry_t *entry_from_request (flux_t h, const flux_msg_t *msg,
+static cron_entry_t *entry_from_request (flux_t *h, const flux_msg_t *msg,
                                          cron_ctx_t *ctx, json_object **r,
                                          const char *service)
 {
@@ -781,7 +781,7 @@ static cron_entry_t *entry_from_request (flux_t h, const flux_msg_t *msg,
 /*
  *  "cron.delete" handler
  */
-static void cron_delete_handler (flux_t h, flux_msg_handler_t *w,
+static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
                                  const flux_msg_t *msg, void *arg)
 {
     cron_entry_t *e;
@@ -814,7 +814,7 @@ done:
 /*
  *  "cron.stop" handler: stop a cron entry until restarted
  */
-static void cron_stop_handler (flux_t h, flux_msg_handler_t *w,
+static void cron_stop_handler (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     cron_entry_t *e;
@@ -838,7 +838,7 @@ done:
 /*
  *  "cron.start" handler: start a stopped cron entry
  */
-static void cron_start_handler (flux_t h, flux_msg_handler_t *w,
+static void cron_start_handler (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     cron_entry_t *e;
@@ -863,7 +863,7 @@ done:
 /*
  *  Handle "cron.list" -- dump a list of current cron entries via JSON
  */
-static void cron_ls_handler (flux_t h, flux_msg_handler_t *w,
+static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     cron_ctx_t *ctx = arg;
@@ -920,7 +920,7 @@ static void process_args (cron_ctx_t *ctx, int ac, char **av)
 }
 
 
-int mod_main (flux_t h, int ac, char **av)
+int mod_main (flux_t *h, int ac, char **av)
 {
     int rc = -1;
     cron_ctx_t *ctx = cron_ctx_create (h);

@@ -27,7 +27,7 @@
 
 static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
     json_object *in = Jnew ();
 
@@ -49,7 +49,7 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
 
 static int internal_heaptrace_stop (optparse_t *p, int ac, char *av[])
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
 
     if (optparse_optind (p) != ac) {
@@ -68,7 +68,7 @@ static int internal_heaptrace_stop (optparse_t *p, int ac, char *av[])
 
 static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
 {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
     json_object *in = Jnew ();
 

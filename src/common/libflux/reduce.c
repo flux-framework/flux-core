@@ -47,7 +47,7 @@ struct flux_reduce_struct {
     bool old_flag;
 
     uint32_t rank;
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
     int flags;
 
@@ -74,7 +74,7 @@ static void timer_cb (flux_reactor_t *reactor, flux_watcher_t *w,
     flush_current (r);
 }
 
-flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
+flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
                                    double timeout, void *arg, int flags)
 {
     if (!h || ((flags & FLUX_REDUCE_HWMFLUSH) && !ops.itemweight)

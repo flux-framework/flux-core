@@ -60,7 +60,7 @@ typedef struct {
     sqlite3_stmt *load_stmt;
     sqlite3_stmt *store_stmt;
     sqlite3_stmt *dump_stmt;
-    flux_t h;
+    flux_t *h;
     bool broker_shutdown;
     const char *hashfun;
     uint32_t blob_size_limit;
@@ -137,7 +137,7 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::content-sqlite");
     const char *dir;
@@ -250,7 +250,7 @@ int grow_lzo_buf (ctx_t *ctx, size_t size)
     return 0;
 }
 
-void load_cb (flux_t h, flux_msg_handler_t *w,
+void load_cb (flux_t *h, flux_msg_handler_t *w,
               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -325,7 +325,7 @@ done:
     (void )sqlite3_reset (ctx->load_stmt);
 }
 
-void store_cb (flux_t h, flux_msg_handler_t *w,
+void store_cb (flux_t *h, flux_msg_handler_t *w,
                const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -394,7 +394,7 @@ done:
     (void) sqlite3_reset (ctx->store_stmt);
 }
 
-int register_backing_store (flux_t h, bool value, const char *name)
+int register_backing_store (flux_t *h, bool value, const char *name)
 {
     flux_rpc_t *rpc;
     json_object *in = Jnew ();
@@ -420,7 +420,7 @@ done:
 /* Intercept broker shutdown event.  If broker is shutting down,
  * avoid transferring data back to the content cache at unload time.
  */
-void broker_shutdown_cb (flux_t h, flux_msg_handler_t *w,
+void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -432,7 +432,7 @@ void broker_shutdown_cb (flux_t h, flux_msg_handler_t *w,
  * Tell content cache to disable backing store,
  * then write everything back to it before exiting.
  */
-void shutdown_cb (flux_t h, flux_msg_handler_t *w,
+void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
                   const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -516,7 +516,7 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int lzo_rc = lzo_init ();
     ctx_t *ctx = getctx (h);

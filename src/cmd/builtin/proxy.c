@@ -54,7 +54,7 @@ typedef struct {
     int listen_fd;
     flux_watcher_t *listen_w;
     zlist_t *clients;
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
     uid_t session_owner;
     zhash_t *subscriptions;
@@ -113,7 +113,7 @@ static void ctx_destroy (ctx_t *ctx)
     }
 }
 
-static ctx_t *ctx_create (flux_t h)
+static ctx_t *ctx_create (flux_t *h)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     ctx->h = h;
@@ -152,7 +152,7 @@ static int set_nonblock (int fd, bool nonblock)
 static client_t * client_create (ctx_t *ctx, int rfd, int wfd)
 {
     client_t *c;
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
 
     c = xzmalloc (sizeof (*c));
     c->rfd = rfd;
@@ -529,7 +529,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     client_t *c = arg;
     ctx_t *ctx = c->ctx;
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
     flux_msg_t *msg = NULL;
     int type;
 
@@ -591,7 +591,7 @@ disconnect:
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
  */
-static void response_cb (flux_t h, flux_msg_handler_t *w,
+static void response_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -636,7 +636,7 @@ done:
 /* Received an event message from broker.
  * Find all subscribers and deliver.
  */
-static void event_cb (flux_t h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -696,7 +696,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     int fd = flux_fd_watcher_get_fd (w);
     ctx_t *ctx = arg;
-    flux_t h = ctx->h;
+    flux_t *h = ctx->h;
 
     if (revents & FLUX_POLLIN) {
         client_t *c;
@@ -887,7 +887,7 @@ static struct optparse_option proxy_opts[] = {
 
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
-    flux_t h = NULL;
+    flux_t *h = NULL;
     int n;
     ctx_t *ctx;
     const char *tmpdir = getenv ("TMPDIR");

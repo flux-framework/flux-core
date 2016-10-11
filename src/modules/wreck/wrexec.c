@@ -48,7 +48,7 @@
 
 struct rexec_ctx {
     uint32_t nodeid;
-    flux_t h;
+    flux_t *h;
     const char *wrexecd_path;
     const char *local_uri;
 };
@@ -68,7 +68,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static struct rexec_ctx *getctx (flux_t h)
+static struct rexec_ctx *getctx (flux_t *h)
 {
     struct rexec_ctx *ctx = (struct rexec_ctx *)flux_aux_get (h, "wrexec");
 
@@ -270,7 +270,7 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
     return (1);
 }
 
-static void event_cb (flux_t h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg,
                       void *arg)
 {
@@ -289,7 +289,7 @@ static void event_cb (flux_t h, flux_msg_handler_t *w,
     }
 }
 
-static void request_cb (flux_t h,
+static void request_cb (flux_t *h,
 			flux_msg_handler_t *w,
 			const flux_msg_t *msg,
 			void *arg)
@@ -309,7 +309,7 @@ struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     struct rexec_ctx *ctx = getctx (h);
     if (ctx == NULL)

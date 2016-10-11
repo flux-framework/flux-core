@@ -10,7 +10,7 @@
  ** Only handle implementation stuff below.
  ** Flux_t handle users should not use these interfaces.
  */
-typedef flux_t (connector_init_f)(const char *uri, int flags);
+typedef flux_t *(connector_init_f)(const char *uri, int flags);
 
 struct flux_handle_ops {
     int         (*setopt)(void *impl, const char *option,
@@ -28,8 +28,8 @@ struct flux_handle_ops {
     void        (*impl_destroy)(void *impl);
 };
 
-flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
-void flux_handle_destroy (flux_t *hp);
+flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
+void flux_handle_destroy (flux_t **hp);
 
 #endif /* !_FLUX_CORE_CONNECTOR_H */
 

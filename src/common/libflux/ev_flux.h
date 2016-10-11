@@ -12,14 +12,14 @@ struct ev_flux {
     ev_prepare  prepare_w;
     ev_idle     idle_w;
     ev_check    check_w;
-    flux_t      h;
+    flux_t      *h;
     int         pollfd;
     int         events;
     ev_flux_f   cb;
     void        *data;
 };
 
-int ev_flux_init (struct ev_flux *w, ev_flux_f cb, flux_t h, int events);
+int ev_flux_init (struct ev_flux *w, ev_flux_f cb, flux_t *h, int events);
 void ev_flux_start (struct ev_loop *loop, struct ev_flux *w);
 void ev_flux_stop (struct ev_loop *loop, struct ev_flux *w);
 

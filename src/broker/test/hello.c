@@ -6,7 +6,7 @@
 
 #include "src/common/libtap/tap.h"
 
-static flux_t h;
+static flux_t *h;
 
 void fatal_err (const char *message, void *arg)
 {

@@ -39,7 +39,7 @@ typedef struct _VAC_t {
  *********************************************************/
 static int _tester_rank = -1;
 static int _tester_size = -1;
-static flux_t _hndl = NULL;
+static flux_t *_hndl = NULL;
 
 
 /*********************************************************

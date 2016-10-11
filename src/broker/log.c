@@ -45,7 +45,7 @@ static const int default_level = LOG_DEBUG;
 #define LOGBUF_MAGIC 0xe1e2e3e4
 struct logbuf_struct {
     int magic;
-    flux_t h;
+    flux_t *h;
     uint32_t rank;
     char *filename;
     FILE *f;
@@ -243,7 +243,7 @@ void logbuf_destroy (logbuf_t *logbuf)
     }
 }
 
-void logbuf_set_flux (logbuf_t *logbuf, flux_t h)
+void logbuf_set_flux (logbuf_t *logbuf, flux_t *h)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
     logbuf->h = h;

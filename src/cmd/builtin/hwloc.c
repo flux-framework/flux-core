@@ -36,7 +36,7 @@
 #include "src/common/libutil/sds.h"
 
 struct hwloc_topo {
-    flux_t h;
+    flux_t *h;
     flux_rpc_t *rpc;
     json_object *o;
     const char *topo;
@@ -204,7 +204,7 @@ static int cmd_topology (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
-static void config_hwloc_paths (flux_t h, const char *dirpath)
+static void config_hwloc_paths (flux_t *h, const char *dirpath)
 {
     uint32_t size, rank;
     const char *key_prefix = "config.resource.hwloc.xml";
@@ -251,7 +251,7 @@ static json_object *hwloc_reload_json_create (const char *walk_topology)
 }
 
 
-static void request_hwloc_reload (flux_t h, const char *nodeset,
+static void request_hwloc_reload (flux_t *h, const char *nodeset,
                                   const char *walk_topology)
 {
     flux_rpc_t *rpc;
@@ -284,7 +284,7 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
     const char *nodeset = optparse_get_str (p, "rank", default_nodeset);
     const char *walk_topology = optparse_get_str (p, "walk-topology", NULL);
     char *dirpath = NULL;
-    flux_t h;
+    flux_t *h;
 
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");

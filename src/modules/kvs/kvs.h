@@ -34,27 +34,27 @@ void kvsdir_incref (kvsdir_t *dir);
  * kvsdir_destroy(), and free() respectively.
  * These functions return -1 on error (errno set), 0 on success.
  */
-int kvs_get (flux_t h, const char *key, char **json_str);
-int kvs_get_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...)
+int kvs_get (flux_t *h, const char *key, char **json_str);
+int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
-int kvs_get_string (flux_t h, const char *key, char **valp);
-int kvs_get_int (flux_t h, const char *key, int *valp);
-int kvs_get_int64 (flux_t h, const char *key, int64_t *valp);
-int kvs_get_double (flux_t h, const char *key, double *valp);
-int kvs_get_boolean (flux_t h, const char *key, bool *valp);
-int kvs_get_symlink (flux_t h, const char *key, char **valp);
+int kvs_get_string (flux_t *h, const char *key, char **valp);
+int kvs_get_int (flux_t *h, const char *key, int *valp);
+int kvs_get_int64 (flux_t *h, const char *key, int64_t *valp);
+int kvs_get_double (flux_t *h, const char *key, double *valp);
+int kvs_get_boolean (flux_t *h, const char *key, bool *valp);
+int kvs_get_symlink (flux_t *h, const char *key, char **valp);
 
 /* Get treeobj associated with a key.  Caller must free.
  */
-int kvs_get_treeobj (flux_t h, const char *key, char **treeobj);
+int kvs_get_treeobj (flux_t *h, const char *key, char **treeobj);
 
 /* Like kvs_get() but lookup is relative to 'treeobj'.
  */
-int kvs_getat (flux_t h, const char *treeobj,
+int kvs_getat (flux_t *h, const char *treeobj,
                const char *key, char **json_str);
-int kvs_get_dirat (flux_t h, const char *treeobj,
+int kvs_get_dirat (flux_t *h, const char *treeobj,
                    const char *key, kvsdir_t **dirp);
-int kvs_get_symlinkat (flux_t h, const char *treeobj,
+int kvs_get_symlinkat (flux_t *h, const char *treeobj,
                                const char *key, char **val);
 
 
@@ -65,23 +65,23 @@ int kvs_get_symlinkat (flux_t h, const char *treeobj,
  * callback is freed when the callback returns.  If a value is unset, the
  * callback gets errnum = ENOENT.
  */
-int kvs_watch (flux_t h, const char *key, kvs_set_f set, void *arg);
-int kvs_watch_dir (flux_t h, kvs_set_dir_f set, void *arg,
+int kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg);
+int kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
                    const char *fmt, ...)
         __attribute__ ((format (printf, 4, 5)));
-int kvs_watch_string (flux_t h, const char *key, kvs_set_string_f set,
+int kvs_watch_string (flux_t *h, const char *key, kvs_set_string_f set,
                       void *arg);
-int kvs_watch_int (flux_t h, const char *key, kvs_set_int_f set, void *arg);
-int kvs_watch_int64 (flux_t h, const char *key, kvs_set_int64_f set, void *arg);
-int kvs_watch_double (flux_t h, const char *key, kvs_set_double_f set,
+int kvs_watch_int (flux_t *h, const char *key, kvs_set_int_f set, void *arg);
+int kvs_watch_int64 (flux_t *h, const char *key, kvs_set_int64_f set, void *arg);
+int kvs_watch_double (flux_t *h, const char *key, kvs_set_double_f set,
                       void *arg);
-int kvs_watch_boolean (flux_t h, const char *key, kvs_set_boolean_f set,
+int kvs_watch_boolean (flux_t *h, const char *key, kvs_set_boolean_f set,
                        void *arg);
 
 /* Cancel a kvs_watch, freeing server-side state, and unregistering any
  * callback.  Returns 0 on success, or -1 with errno set on error.
  */
-int kvs_unwatch (flux_t h, const char *key);
+int kvs_unwatch (flux_t *h, const char *key);
 
 /* While the above callback interface makes sense in plugin context,
  * the following is better for API context.  'valp' is an IN/OUT parameter.
@@ -92,25 +92,25 @@ int kvs_unwatch (flux_t h, const char *key);
  * If the key is not set, ENOENT is returned without affecting *valp.
  * FIXME: add more types.
  */
-int kvs_watch_once (flux_t h, const char *key, char **json_str);
-int kvs_watch_once_dir (flux_t h, kvsdir_t **dirp, const char *fmt, ...)
+int kvs_watch_once (flux_t *h, const char *key, char **json_str);
+int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
-int kvs_watch_once_int (flux_t h, const char *key, int *valp);
+int kvs_watch_once_int (flux_t *h, const char *key, int *valp);
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument
  * The caller retains ownership of the original.
  * These functions return -1 on error (errno set), 0 on success.
  */
-int kvs_put (flux_t h, const char *key, const char *json_str);
-int kvs_put_string (flux_t h, const char *key, const char *val);
-int kvs_put_int (flux_t h, const char *key, int val);
-int kvs_put_int64 (flux_t h, const char *key, int64_t val);
-int kvs_put_double (flux_t h, const char *key, double val);
-int kvs_put_boolean (flux_t h, const char *key, bool val);
+int kvs_put (flux_t *h, const char *key, const char *json_str);
+int kvs_put_string (flux_t *h, const char *key, const char *val);
+int kvs_put_int (flux_t *h, const char *key, int val);
+int kvs_put_int64 (flux_t *h, const char *key, int64_t val);
+int kvs_put_double (flux_t *h, const char *key, double val);
+int kvs_put_boolean (flux_t *h, const char *key, bool val);
 
 /* As above but associate a preconstructed treeobj with key.
  */
-int kvs_put_treeobj (flux_t h, const char *key, const char *treeobj);
+int kvs_put_treeobj (flux_t *h, const char *key, const char *treeobj);
 
 /* An iterator interface for walking the list of names in a kvsdir_t
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.
@@ -148,12 +148,12 @@ int kvsdir_get_size (kvsdir_t *dir);
  * the idiom: "unlink a; put a.a; put a.b; commit" should be avoided.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_unlink (flux_t h, const char *key);
+int kvs_unlink (flux_t *h, const char *key);
 
 /* Create symlink.  kvsdir_symlink creates it relatived to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_symlink (flux_t h, const char *key, const char *target);
+int kvs_symlink (flux_t *h, const char *key, const char *target);
 
 /* Create an empty directory.  kvsdir_mkdir creates it relative to 'dir'.
  * Usually this is not necessary, as kvs_put() will create directories
@@ -164,20 +164,20 @@ int kvs_symlink (flux_t h, const char *key, const char *target);
  * the idiom: "mkdir a; put a.a; put a.b; commit" should be avoided.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_mkdir (flux_t h, const char *key);
+int kvs_mkdir (flux_t *h, const char *key);
 
 /* kvs_commit() must be called after kvs_put*, kvs_unlink, and kvs_mkdir
  * to finalize the update.  The new data is immediately available on
  * the calling node when the commit returns.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_commit (flux_t h);
+int kvs_commit (flux_t *h);
 
 /* kvs_commit_begin() sends the commit request and returns immediately.
  * kvs_commit_finish() blocks until the response is received, then returns.
  * Use flux_rpc_then() to arrange for the commit to complete asynchronously.
  */
-flux_rpc_t *kvs_commit_begin (flux_t h);
+flux_rpc_t *kvs_commit_begin (flux_t *h);
 int kvs_commit_finish (flux_rpc_t *rpc);
 
 /* kvs_fence() is a collective commit operation.  nprocs tasks make the
@@ -190,35 +190,35 @@ int kvs_commit_finish (flux_rpc_t *rpc);
  * queued in the handle become part of the fence.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_fence (flux_t h, const char *name, int nprocs);
+int kvs_fence (flux_t *h, const char *name, int nprocs);
 
 /* kvs_fence_begin() sends the fence request and returns immediately.
  * kvs_fence_finish() blocks until the response is received, then returns.
  * Use flux_rpc_then() to arrange for the fence to complete asynchronously.
  */
-flux_rpc_t *kvs_fence_begin (flux_t h, const char *name, int nprocs);
+flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs);
 int kvs_fence_finish (flux_rpc_t *rpc);
 
 /* Operations (put, unlink, symlink, mkdir) may be associated with a named
  * fence by setting the fence context to that name before issuing them.
  * When the fence context is clear (the default), operations are anonymous.
  */
-void kvs_fence_set_context (flux_t h, const char *name);
-void kvs_fence_clear_context (flux_t h);
+void kvs_fence_set_context (flux_t *h, const char *name);
+void kvs_fence_clear_context (flux_t *h);
 
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.
  */
-int kvs_get_version (flux_t h, int *versionp);
-int kvs_wait_version (flux_t h, int version);
+int kvs_get_version (flux_t *h, int *versionp);
+int kvs_wait_version (flux_t *h, int version);
 
 /* Garbage collect the cache.  On the root node, drop all data that
  * doesn't have a reference in the namespace.  On other nodes, the entire
  * cache is dropped and will be reloaded on demand.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_dropcache (flux_t h);
+int kvs_dropcache (flux_t *h);
 
 /* kvsdir_ convenience functions
  * They behave exactly like their kvs_ counterparts, except the 'key' path
@@ -247,8 +247,8 @@ int kvsdir_mkdir (kvsdir_t *dir, const char *key);
 
 /* Copy/move a key to a new name.  If 'from' is a directory, copy recursively.
  */
-int kvs_copy (flux_t h, const char *from, const char *to);
-int kvs_move (flux_t h, const char *from, const char *to);
+int kvs_copy (flux_t *h, const char *from, const char *to);
+int kvs_move (flux_t *h, const char *from, const char *to);
 
 #endif /* !_FLUX_CORE_KVS_H */
 

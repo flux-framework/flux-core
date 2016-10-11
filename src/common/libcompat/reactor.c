@@ -56,14 +56,14 @@ struct msg_compat {
 };
 
 struct fd_compat {
-    flux_t h;
+    flux_t *h;
     flux_watcher_t *w;
     FluxFdHandler fn;
     void *arg;
 };
 
 struct timer_compat {
-    flux_t h;
+    flux_t *h;
     flux_watcher_t *w;
     FluxTmoutHandler fn;
     void *arg;
@@ -80,7 +80,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static struct ctx *getctx (flux_t h)
+static struct ctx *getctx (flux_t *h)
 {
     struct ctx *ctx = flux_aux_get (h, "reactor_compat");
 
@@ -120,7 +120,7 @@ static int libzmq_to_events (int events)
 
 /* message
  */
-void msg_compat_cb (flux_t h, flux_msg_handler_t *w,
+void msg_compat_cb (flux_t *h, flux_msg_handler_t *w,
                     const flux_msg_t *msg, void *arg)
 {
     struct msg_compat *compat = arg;
@@ -145,7 +145,7 @@ static void msg_compat_free (struct msg_compat *c)
     }
 }
 
-static int msghandler_add (flux_t h, int typemask, const char *pattern,
+static int msghandler_add (flux_t *h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
     struct ctx *ctx = getctx (h);
@@ -170,13 +170,13 @@ static int msghandler_add (flux_t h, int typemask, const char *pattern,
     return 0;
 }
 
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+int flux_msghandler_add (flux_t *h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
     return msghandler_add (h, typemask, pattern, cb, arg);
 }
 
-int flux_msghandler_addvec (flux_t h, msghandler_t *hv, int len, void *arg)
+int flux_msghandler_addvec (flux_t *h, msghandler_t *hv, int len, void *arg)
 {
     int i;
 
@@ -187,7 +187,7 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *hv, int len, void *arg)
     return 0;
 }
 
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
+void flux_msghandler_remove (flux_t *h, int typemask, const char *pattern)
 {
     struct ctx *ctx = getctx (h);
     struct msg_compat *c;
@@ -221,7 +221,7 @@ static void fd_compat_cb (flux_reactor_t *r, flux_watcher_t *w, int revents,
 }
 
 
-int flux_fdhandler_add (flux_t h, int fd, short events,
+int flux_fdhandler_add (flux_t *h, int fd, short events,
                         FluxFdHandler cb, void *arg)
 {
     struct ctx *ctx = getctx (h);
@@ -244,7 +244,7 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
     return 0;
 }
 
-void flux_fdhandler_remove (flux_t h, int fd, short events)
+void flux_fdhandler_remove (flux_t *h, int fd, short events)
 {
     struct ctx *ctx = getctx (h);
     struct fd_compat *c;
@@ -276,7 +276,7 @@ static void timer_compat_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_reactor_stop_error (r);
 }
 
-int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
+int flux_tmouthandler_add (flux_t *h, unsigned long msec, bool oneshot,
                            FluxTmoutHandler cb, void *arg)
 {
     struct ctx *ctx = getctx (h);
@@ -303,7 +303,7 @@ int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
     return c->id;
 }
 
-void flux_tmouthandler_remove (flux_t h, int timer_id)
+void flux_tmouthandler_remove (flux_t *h, int timer_id)
 {
     struct ctx *ctx = getctx (h);
     struct timer_compat *c;
@@ -319,7 +319,7 @@ void flux_tmouthandler_remove (flux_t h, int timer_id)
 /* Newly deprecated message stuff
  */
 
-int flux_reactor_start (flux_t h)
+int flux_reactor_start (flux_t *h)
 {
     return flux_reactor_run (flux_get_reactor (h), 0);
 }

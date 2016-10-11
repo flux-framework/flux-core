@@ -48,7 +48,7 @@ typedef struct {
     int fd_nonblock;
     struct flux_msg_iobuf outbuf;
     struct flux_msg_iobuf inbuf;
-    flux_t h;
+    flux_t *h;
 } ctx_t;
 
 static const struct flux_handle_ops handle_ops;
@@ -199,7 +199,7 @@ static int env_getint (char *name, int dflt)
 /* Path is interpreted as the directory containing the unix domain socket
  * and broker pid.
  */
-flux_t connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags)
 {
     ctx_t *c = NULL;
     struct sockaddr_un addr;

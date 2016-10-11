@@ -33,7 +33,7 @@
 #include "src/common/libutil/xzmalloc.h"
 
 
-char *flux_lspeer (flux_t h, int rank)
+char *flux_lspeer (flux_t *h, int rank)
 {
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     flux_rpc_t *r = NULL;
@@ -50,7 +50,7 @@ done:
     return ret;
 }
 
-int flux_reparent (flux_t h, int rank, const char *uri)
+int flux_reparent (flux_t *h, int rank, const char *uri)
 {
     flux_rpc_t *r = NULL;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);

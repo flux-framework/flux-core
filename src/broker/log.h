@@ -11,7 +11,7 @@ typedef struct logbuf_struct logbuf_t;
 logbuf_t *logbuf_create (void);
 void logbuf_destroy (logbuf_t *logbuf);
 
-void logbuf_set_flux (logbuf_t *logbuf, flux_t h);
+void logbuf_set_flux (logbuf_t *logbuf, flux_t *h);
 void logbuf_set_rank (logbuf_t *logbuf, uint32_t rank);
 
 int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs);

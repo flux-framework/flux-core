@@ -38,7 +38,7 @@ static void fatal_err (const char *message, void *arg)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     char *s;
     flux_msg_t *msg;
     const char *topic;

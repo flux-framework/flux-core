@@ -15,7 +15,7 @@
  * changes then we are screwed here because we will have recycled the
  * matchtags but more responses will be coming.
  */
-void send_watch_requests (flux_t h, const char *key)
+void send_watch_requests (flux_t *h, const char *key)
 {
     json_object *in;
     flux_rpc_t *r;
@@ -35,7 +35,7 @@ void send_watch_requests (flux_t h, const char *key)
 
 /* Sum #watchers over all ranks.
  */
-int count_watchers (flux_t h)
+int count_watchers (flux_t *h)
 {
     json_object *out;
     const char *json_str;
@@ -58,7 +58,7 @@ int count_watchers (flux_t h)
 
 int main (int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     int w0, w1, w2;
 
     /* Install watchers on every rank, then disconnect.

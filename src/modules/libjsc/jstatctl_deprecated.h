@@ -30,12 +30,12 @@
 
 typedef int (*jsc_handler_obj_f)(json_object *base_jcb, void *arg, int errnum);
 
-int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f callback, void *d)
+int jsc_notify_status_obj (flux_t *h, jsc_handler_obj_f callback, void *d)
                            __attribute__ ((deprecated));
-int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key,
+int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
                        json_object **jcb)
                        __attribute__ ((deprecated));
-int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key,
+int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
                         json_object *jcb)
                        __attribute__ ((deprecated));
 

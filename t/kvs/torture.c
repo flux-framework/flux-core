@@ -65,7 +65,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     int i, count = 20;
     int size = 20;

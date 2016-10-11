@@ -37,7 +37,7 @@ static struct optparse_option dmesg_opts[] = {
 static int cmd_dmesg (optparse_t *p, int ac, char *av[])
 {
     int n;
-    flux_t h;
+    flux_t *h;
     int flags = 0;
     flux_log_f print_cb = flux_log_fprint;
 

@@ -16,14 +16,14 @@ typedef void (*flux_then_f)(flux_rpc_t *rpc, void *arg);
  * and return a flux_rpc_t object to allow the response to be handled.
  * On failure return NULL with errno set.
  */
-flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
+flux_rpc_t *flux_rpc (flux_t *h, const char *topic, const char *json_str,
                       uint32_t nodeid, int flags);
 
 /* Send an RPC request to 'nodeid' with optional raw paylaod,
  * and return a flux_rpc_t object to allow the response to be handled.
  * On failure return NULL with errno set.
  */
-flux_rpc_t *flux_rpc_raw (flux_t h, const char *topic,
+flux_rpc_t *flux_rpc_raw (flux_t *h, const char *topic,
                           const void *data, int len,
                           uint32_t nodeid, int flags);
 
@@ -61,7 +61,7 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg);
  * to allow responses to be handled.  "all" is a valid shorthand for
  * all ranks in the comms session.  On failure return NULL with errno set.
  */
-flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
+flux_rpc_t *flux_rpc_multi (flux_t *h, const char *topic, const char *json_str,
                             const char *nodeset, int flags);
 
 /* Returns true when all responses to an RPC have been received and consumed.

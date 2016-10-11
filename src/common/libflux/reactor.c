@@ -101,7 +101,7 @@ flux_reactor_t *flux_reactor_create (int flags)
     return r;
 }
 
-int flux_set_reactor (flux_t h, flux_reactor_t *r)
+int flux_set_reactor (flux_t *h, flux_reactor_t *r)
 {
     if (flux_aux_get (h, "flux::reactor")) {
         errno = EEXIST;
@@ -111,7 +111,7 @@ int flux_set_reactor (flux_t h, flux_reactor_t *r)
     return 0;
 }
 
-flux_reactor_t *flux_get_reactor (flux_t h)
+flux_reactor_t *flux_get_reactor (flux_t *h)
 {
     flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
     if (!r) {
@@ -296,7 +296,7 @@ static void handle_cb (struct ev_loop *loop, ev_flux *fw, int revents)
 }
 
 flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
-                                            flux_t h, int events,
+                                            flux_t *h, int events,
                                             flux_watcher_f cb, void *arg)
 {
     struct watcher_ops ops = {
@@ -314,7 +314,7 @@ flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
     return w;
 }
 
-flux_t flux_handle_watcher_get_flux (flux_watcher_t *w)
+flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
 {
     assert (w->signature == HANDLE_SIG);
     ev_flux *fw = w->impl;

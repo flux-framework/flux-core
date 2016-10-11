@@ -34,7 +34,7 @@
 
 #include "compat.h"
 
-int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
+int flux_json_rpc (flux_t *h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out)
 {
     flux_rpc_t *rpc;

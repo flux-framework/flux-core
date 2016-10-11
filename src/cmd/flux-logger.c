@@ -52,7 +52,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t *h;
     int ch;
     char *message = NULL;
     size_t len = 0;

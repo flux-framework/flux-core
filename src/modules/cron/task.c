@@ -39,7 +39,7 @@
 #include "task.h"
 
 struct cron_task {
-    flux_t                h;      /* flux handle used to create this task   */
+    flux_t *              h;      /* flux handle used to create this task   */
     struct flux_match     match;  /* match object for message handler       */
     flux_msg_handler_t *  mh;     /* msg handler specific to this task      */
 
@@ -86,7 +86,7 @@ void cron_task_destroy (cron_task_t *t)
     free (t);
 }
 
-cron_task_t *cron_task_new (flux_t h, cron_task_complete_f cb, void *arg)
+cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg)
 {
     cron_task_t *t = xzmalloc (sizeof (*t));
     memset (t, 0, sizeof (*t));
@@ -130,7 +130,7 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
     va_end (ap);
 }
 
-static int io_handler (flux_t h, cron_task_t *t,
+static int io_handler (flux_t *h, cron_task_t *t,
     const char *json_str, json_object *resp)
 {
     const char *stream = "stdout";
@@ -161,7 +161,7 @@ static int io_handler (flux_t h, cron_task_t *t,
     return (0);
 }
 
-static int state_handler (flux_t h, cron_task_t *t, json_object *resp)
+static int state_handler (flux_t *h, cron_task_t *t, json_object *resp)
 {
     const char *state;
 
@@ -224,7 +224,7 @@ static void cron_task_handle_completion (cron_task_t *t)
         (*t->completion_cb) (t->h, t, t->arg);
 }
 
-static void exec_handler (flux_t h, flux_msg_handler_t *w,
+static void exec_handler (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     struct cron_task *t = arg;
@@ -271,7 +271,7 @@ static flux_msg_t *kill_request_create (cron_task_t *t, int sig)
 
 int cron_task_kill (cron_task_t *t, int sig)
 {
-    flux_t h = t->h;
+    flux_t *h = t->h;
     flux_msg_t *msg;
 
     if (!t->started || t->exited) {
@@ -350,7 +350,7 @@ int cron_task_run (cron_task_t *t,
     int rank, const char *cmd, const char *cwd,
     char *const env[])
 {
-    flux_t h = t->h;
+    flux_t *h = t->h;
     json_object *req = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;

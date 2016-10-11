@@ -9,7 +9,7 @@
 #include "src/common/libutil/shortjson.h"
 
 typedef struct {
-    flux_t h;
+    flux_t *h;
     zhash_t *ping_requests;
     int ping_seq;
     zlist_t *clog_requests;
@@ -32,7 +32,7 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     int saved_errno;
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "req");
@@ -61,7 +61,7 @@ error:
 
 /* Return number of queued clog requests
  */
-void count_request_cb (flux_t h, flux_msg_handler_t *w,
+void count_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
@@ -75,7 +75,7 @@ void count_request_cb (flux_t h, flux_msg_handler_t *w,
 
 /* Don't reply to request - just queue it for later.
  */
-void clog_request_cb (flux_t h, flux_msg_handler_t *w,
+void clog_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
@@ -87,7 +87,7 @@ void clog_request_cb (flux_t h, flux_msg_handler_t *w,
 
 /* Reply to all queued requests.
  */
-void flush_request_cb (flux_t h, flux_msg_handler_t *w,
+void flush_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = getctx (h);
@@ -106,7 +106,7 @@ void flush_request_cb (flux_t h, flux_msg_handler_t *w,
 /* Accept a json payload, verify it and return error if it doesn't
  * match expected.
  */
-void sink_request_cb (flux_t h, flux_msg_handler_t *w,
+void sink_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -133,7 +133,7 @@ done:
 
 /* Return a fixed json payload
  */
-void src_request_cb (flux_t h, flux_msg_handler_t *w,
+void src_request_cb (flux_t *h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     json_object *o = Jnew ();
@@ -146,7 +146,7 @@ void src_request_cb (flux_t h, flux_msg_handler_t *w,
 
 /* Return 'n' sequenced responses.
  */
-void nsrc_request_cb (flux_t h, flux_msg_handler_t *w,
+void nsrc_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -182,7 +182,7 @@ done:
 
 /* Always return an error 42
  */
-void err_request_cb (flux_t h, flux_msg_handler_t *w,
+void err_request_cb (flux_t *h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     if (flux_respond (h, msg, 42, NULL) < 0)
@@ -191,7 +191,7 @@ void err_request_cb (flux_t h, flux_msg_handler_t *w,
 
 /* Echo a json payload back to requestor.
  */
-void echo_request_cb (flux_t h, flux_msg_handler_t *w,
+void echo_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -211,7 +211,7 @@ done:
 
 /* Proxy ping.
  */
-void xping_request_cb (flux_t h, flux_msg_handler_t *w,
+void xping_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -267,7 +267,7 @@ error:
 /* Handle ping response for proxy ping.
  * Match it with a request and respond to that request.
  */
-void ping_response_cb (flux_t h, flux_msg_handler_t *w,
+void ping_response_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -310,7 +310,7 @@ done:
 /* Handle the simplest possible request.
  * Verify that everything is as expected; log it and stop the reactor if not.
  */
-void null_request_cb (flux_t h, flux_msg_handler_t *w,
+void null_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -385,7 +385,7 @@ struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno;
     ctx_t *ctx = getctx (h);

@@ -3,7 +3,7 @@
 
 int main (int argc, char **argv)
 {
-    flux_t h;
+    flux_t *h;
     flux_msg_t *msg;
 
     if (!(h = flux_open (NULL, 0)))

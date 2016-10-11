@@ -104,9 +104,9 @@ int zio_write_json (zio_t *z, const char *json_str);
 int zio_reactor_attach (zio_t *z, flux_reactor_t *reactor);
 
 /*
- *   Same as above but use reactor associated with flux_t handle.
+ *   Same as above but use reactor associated with flux_t *handle.
  */
-int zio_flux_attach (zio_t *z, flux_t h);
+int zio_flux_attach (zio_t *z, flux_t *h);
 
 /*
  *  ZIO buffering options:

@@ -9,7 +9,7 @@ static uint32_t fake_size = 1;
 
 /* request nodeid and flags returned in response */
 static int nodeid_fake_error = -1;
-void rpctest_nodeid_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -36,7 +36,7 @@ done:
 }
 
 /* request payload echoed in response */
-void rpctest_echo_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -52,7 +52,7 @@ done:
 
 /* no-payload response */
 static int hello_count = 0;
-void rpctest_hello_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -72,7 +72,7 @@ static int then_count = 0;
 static flux_rpc_t *then_r;
 static void then_cb (flux_rpc_t *r, void *arg)
 {
-    flux_t h = arg;
+    flux_t *h = arg;
     uint32_t nodeid;
 
     if (flux_rpc_get (r, &nodeid, NULL) < 0
@@ -91,7 +91,7 @@ static void fatal_err (const char *message, void *arg)
         fatal_tested = true;
 }
 
-void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
+void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
@@ -263,7 +263,7 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 int main (int argc, char *argv[])
 {
     flux_msg_t *msg;
-    flux_t h;
+    flux_t *h;
     flux_reactor_t *reactor;
 
     plan (NO_PLAN);

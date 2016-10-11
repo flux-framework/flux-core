@@ -177,7 +177,7 @@ error:
     return NULL;
 }
 
-static flux_msg_t *derive_response (flux_t h, const flux_msg_t *request,
+static flux_msg_t *derive_response (flux_t *h, const flux_msg_t *request,
                                     int errnum)
 {
     flux_msg_t *msg = NULL;
@@ -199,7 +199,7 @@ fatal:
     return NULL;
 }
 
-int flux_respond (flux_t h, const flux_msg_t *request,
+int flux_respond (flux_t *h, const flux_msg_t *request,
                   int errnum, const char *json_str)
 {
     flux_msg_t *msg = derive_response (h, request, errnum);
@@ -217,7 +217,7 @@ fatal:
     return -1;
 }
 
-int flux_respond_raw (flux_t h, const flux_msg_t *request,
+int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       int errnum, const void *data, int len)
 {
     flux_msg_t *msg = derive_response (h, request, errnum);

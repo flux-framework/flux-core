@@ -36,7 +36,7 @@
 #include "heartbeat.h"
 
 struct heartbeat_struct {
-    flux_t h;
+    flux_t *h;
     double rate;
     flux_watcher_t *timer;
     flux_msg_handler_t *handler;
@@ -63,7 +63,7 @@ heartbeat_t *heartbeat_create (void)
     return hb;
 }
 
-void heartbeat_set_flux (heartbeat_t *hb, flux_t h)
+void heartbeat_set_flux (heartbeat_t *hb, flux_t *h)
 {
     hb->h = h;
 }
@@ -115,7 +115,7 @@ int heartbeat_get_epoch (heartbeat_t *hb)
     return hb->epoch;
 }
 
-static void event_cb (flux_t h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     heartbeat_t *hb = arg;

@@ -43,8 +43,8 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void dtree (flux_t h, const char *prefix, int width, int height);
-void dtree_mkdir (flux_t h, kvsdir_t *dir, int width, int height);
+void dtree (flux_t *h, const char *prefix, int width, int height);
+void dtree_mkdir (flux_t *h, kvsdir_t *dir, int width, int height);
 
 void usage (void)
 {
@@ -61,7 +61,7 @@ int main (int argc, char *argv[])
     int height = 1;
     char *prefix = "dtree";
     int Dopt = 0;
-    flux_t h;
+    flux_t *h;
 
     log_init ("dtree");
 
@@ -111,7 +111,7 @@ int main (int argc, char *argv[])
 /* This version simply puts keys and values, creating intermediate
  * directories as a side effect.
  */
-void dtree (flux_t h, const char *prefix, int width, int height)
+void dtree (flux_t *h, const char *prefix, int width, int height)
 {
     int i;
     char *key;
@@ -131,7 +131,7 @@ void dtree (flux_t h, const char *prefix, int width, int height)
  * using kvsdir_t objects.  This is a less efficient method but provides
  * alternate code coverage.
  */
-void dtree_mkdir (flux_t h, kvsdir_t *dir, int width, int height)
+void dtree_mkdir (flux_t *h, kvsdir_t *dir, int width, int height)
 {
     int i;
     char key[16];

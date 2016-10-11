@@ -10,7 +10,7 @@
 
 /* The req.clog request will not be answered until req.flush is called.
  */
-void stuck_request_cb (flux_t h, flux_msg_handler_t *w,
+void stuck_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     flux_rpc_t *rpc;
@@ -33,7 +33,7 @@ done:
     flux_rpc_destroy (rpc);
 }
 
-void hi_request_cb (flux_t h, flux_msg_handler_t *w,
+void hi_request_cb (flux_t *h, flux_msg_handler_t *w,
                     const flux_msg_t *msg, void *arg)
 {
     if (flux_respond (h, msg, 0, NULL) < 0)
@@ -48,7 +48,7 @@ struct flux_msg_handler_spec htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno;
     flux_flags_set (h, FLUX_O_COPROC);

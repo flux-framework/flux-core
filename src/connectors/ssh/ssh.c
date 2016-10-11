@@ -58,7 +58,7 @@ typedef struct {
     char **ssh_argv;
     int ssh_argc;
     struct popen2_child *p;
-    flux_t h;
+    flux_t *h;
 } ctx_t;
 
 static const struct flux_handle_ops handle_ops;
@@ -371,7 +371,7 @@ done:
 /* Path is interpreted as
  *   [user@]hostname[:port][/unix-path][?key=val[&key=val]...]
  */
-flux_t connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags)
 {
     ctx_t *c = NULL;
 

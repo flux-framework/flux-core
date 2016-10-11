@@ -3,9 +3,9 @@
 
 #include <flux/core.h>
 
-int flux_failover (flux_t h, uint32_t rank);
-int flux_recover (flux_t h, uint32_t rank);
-int flux_recover_all (flux_t h);
+int flux_failover (flux_t *h, uint32_t rank);
+int flux_recover (flux_t *h, uint32_t rank);
+int flux_recover_all (flux_t *h);
 
 #endif /* !_FLUX_CORE_LIVE_H */
 

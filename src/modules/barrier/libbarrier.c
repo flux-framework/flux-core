@@ -41,7 +41,7 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t h)
+static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = flux_aux_get (h, "barriercli");
     if (!ctx) {
@@ -55,7 +55,7 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
-int flux_barrier (flux_t h, const char *name, int nprocs)
+int flux_barrier (flux_t *h, const char *name, int nprocs)
 {
     json_object *in = Jnew ();
     char *s = NULL;

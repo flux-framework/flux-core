@@ -35,7 +35,7 @@
 
 #include "compat.h"
 
-int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
+int flux_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, json_object *in)
 {
     zmsg_t *zmsg;
@@ -69,7 +69,7 @@ done:
     return rc;
 }
 
-int flux_json_respond (flux_t h, json_object *out, zmsg_t **zmsg)
+int flux_json_respond (flux_t *h, json_object *out, zmsg_t **zmsg)
 {
     int rc = -1;
 

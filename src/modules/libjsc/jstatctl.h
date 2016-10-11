@@ -94,7 +94,7 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
  * multiple times. The callbacks will be invoked in the order
  * they are registered. Returns 0 on success; otherwise -1.
  */
-int jsc_notify_status (flux_t h, jsc_handler_f callback, void *d);
+int jsc_notify_status (flux_t *h, jsc_handler_f callback, void *d);
 
 /**
  * Query the "key" attribute of JCB of "jobid." The JCB info on this attribute
@@ -103,7 +103,7 @@ int jsc_notify_status (flux_t h, jsc_handler_f callback, void *d);
  * are trasferred to "jcb," so that json_object_put (*jcb) will free this hierarchy
  * in its entirety.  Returns 0 on success; otherwise -1.
  */
-int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb);
+int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb);
 
 
 /**
@@ -112,7 +112,7 @@ int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb);
  * This will not release "jcb," so it is the caller's responsibility to
  * free "jcb."
  */
-int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb);
+int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb);
 
 
 /**

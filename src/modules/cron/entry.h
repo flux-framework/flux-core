@@ -37,7 +37,7 @@ typedef struct cron_entry cron_entry_t;
  */
 struct cron_entry_ops {
     // type creator from JSON request "arguments". Returns ptr to type object
-    void *(*create) (flux_t h, cron_entry_t *e, json_object *arg);
+    void *(*create) (flux_t *h, cron_entry_t *e, json_object *arg);
 
     // destroy type object contained in data
     void (*destroy) (void *data);

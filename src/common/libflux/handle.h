@@ -7,7 +7,7 @@
 
 #include "message.h"
 
-typedef struct flux_handle_struct *flux_t;
+typedef struct flux_handle_struct flux_t;
 
 typedef struct {
     int request_tx;
@@ -62,36 +62,36 @@ enum {
  * A NULL uri selects the "local" connector with path derived from
  * FLUX_TMPDIR.
  */
-flux_t flux_open (const char *uri, int flags);
-void flux_close (flux_t h);
+flux_t *flux_open (const char *uri, int flags);
+void flux_close (flux_t *h);
 
 /* Increment internal reference count on 'h'.
  */
-void flux_incref (flux_t h);
+void flux_incref (flux_t *h);
 
 /* Get/set handle options.  Options are interpreted by connectors.
  * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).
  */
-int flux_opt_set (flux_t h, const char *option, const void *val, size_t len);
-int flux_opt_get (flux_t h, const char *option, void *val, size_t len);
+int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len);
+int flux_opt_get (flux_t *h, const char *option, void *val, size_t len);
 
 /* Register a handler for fatal handle errors.
  * A fatal error is ENOMEM or a handle send/recv error after which
  * it is inadvisable to continue using the handle.
  */
-void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg);
+void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg);
 
 /* Set the fatality bit and call the user's fatal error handler, if any.
  * The fatal error handler will only be called once.
  */
-void flux_fatal_error (flux_t h, const char *fun, const char *msg);
+void flux_fatal_error (flux_t *h, const char *fun, const char *msg);
 #define FLUX_FATAL(h) do { \
     flux_fatal_error((h),__FUNCTION__,(strerror (errno))); \
 } while (0)
 
 /* Return true if the handle 'h' has encountered a fatal error.
  */
-bool flux_fatality (flux_t h);
+bool flux_fatality (flux_t *h);
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
  * handle by name.  The flux_free_f, if non-NULL, will be called
@@ -99,27 +99,27 @@ bool flux_fatality (flux_t h);
  * Key names used internally by flux-core are prefixed with "flux::".
  */
 typedef void (*flux_free_f)(void *arg);
-void *flux_aux_get (flux_t h, const char *name);
-void flux_aux_set (flux_t h, const char *name, void *aux, flux_free_f destroy);
+void *flux_aux_get (flux_t *h, const char *name);
+void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy);
 
 /* Set/clear FLUX_O_* on a flux_t handle.
  */
-void flux_flags_set (flux_t h, int flags);
-void flux_flags_unset (flux_t h, int flags);
-int flux_flags_get (flux_t h);
+void flux_flags_set (flux_t *h, int flags);
+void flux_flags_unset (flux_t *h, int flags);
+int flux_flags_get (flux_t *h);
 
 /* Alloc/free matchtag for matched request/response.
  * This is mainly used internally by the rpc code.
  */
-uint32_t flux_matchtag_alloc (flux_t h, int flags);
-void flux_matchtag_free (flux_t h, uint32_t matchtag);
-uint32_t flux_matchtag_avail (flux_t h, int flags);
+uint32_t flux_matchtag_alloc (flux_t *h, int flags);
+void flux_matchtag_free (flux_t *h, uint32_t matchtag);
+uint32_t flux_matchtag_avail (flux_t *h, int flags);
 
 /* Send a message
  * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)
  * Returns 0 on success, -1 on failure with errno set.
  */
-int flux_send (flux_t h, const flux_msg_t *msg, int flags);
+int flux_send (flux_t *h, const flux_msg_t *msg, int flags);
 
 /* Receive a message
  * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)
@@ -128,20 +128,20 @@ int flux_send (flux_t h, const flux_msg_t *msg, int flags);
  * Returns message on success, NULL on failure.
  * The message must be destroyed with flux_msg_destroy().
  */
-flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags);
+flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags);
 
 /* Requeue a message
  * flags must be either FLUX_RQ_HEAD or FLUX_RQ_TAIL.
  * A message that is requeued will be seen again by flux_recv() and will
  * cause FLUX_POLLIN to be raised in flux_pollevents().
  */
-int flux_requeue (flux_t h, const flux_msg_t *msg, int flags);
+int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
 
 /* Obtain a bitmask of FLUX_POLL* bits for the flux handle.
  * Returns bitmask on success, -1 on error with errno set.
  * See flux_pollfd() comment below.
  */
-int flux_pollevents (flux_t h);
+int flux_pollevents (flux_t *h);
 
 /* Obtain a file descriptor that can be used to integrate a flux_t handle
  * into an external event loop.  When one of FLUX_POLLIN, FLUX_POLLOUT, or
@@ -152,17 +152,17 @@ int flux_pollevents (flux_t h);
  * that is used internally by the flux reactor.
  * Returns fd on sucess, -1 on failure with errno set.
  */
-int flux_pollfd (flux_t h);
+int flux_pollfd (flux_t *h);
 
 /* Event subscribe/unsubscribe.
  */
-int flux_event_subscribe (flux_t h, const char *topic);
-int flux_event_unsubscribe (flux_t h, const char *topic);
+int flux_event_subscribe (flux_t *h, const char *topic);
+int flux_event_unsubscribe (flux_t *h, const char *topic);
 
 /* Get/clear handle message counters.
  */
-void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs);
-void flux_clr_msgcounters (flux_t h);
+void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs);
+void flux_clr_msgcounters (flux_t *h);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 
