@@ -249,7 +249,8 @@ void mod_insmod (flux_t *h, opt_t opt)
         log_err_exit ("%s", topic);
     do {
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get (r, &nodeid, NULL) < 0) {
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0
+                                    || flux_rpc_get (r, NULL) < 0) {
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
                 log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
                      topic, nodeid, modname);
@@ -287,7 +288,7 @@ void mod_rmmod (flux_t *h, opt_t opt)
         log_err_exit ("%s %s", topic, modname);
     do {
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get (r, &nodeid, NULL) < 0)
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0 || flux_rpc_get (r, NULL) < 0)
             log_err ("%s[%d] %s",
                  topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
                  modname);
@@ -444,7 +445,8 @@ void mod_lsmod (flux_t *h, opt_t opt)
     do {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get (r, &nodeid, &json_str) < 0
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0
+                || flux_rpc_get (r, &json_str) < 0
                 || lsmod_merge_result (nodeid, json_str, mods) < 0) {
             if (nodeid != FLUX_NODEID_ANY)
                 log_err ("%s[%" PRIu32 "]", topic, nodeid);

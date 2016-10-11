@@ -180,7 +180,7 @@ static int dmesg_clear (flux_t *h, int seq)
     if (!(rpc = flux_rpc (h, "cmb.dmesg.clear", Jtostr (o),
                           FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -207,7 +207,7 @@ static int dmesg_rpc_get (flux_rpc_t *rpc, int *seq, flux_log_f fun, void *arg)
     json_object *o = NULL;
     int rc = -1;
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
     if (!(o = Jfromstr (json_str)) || !Jget_str (o, "buf", &buf)
                                    || !Jget_int (o, "seq", seq)) {

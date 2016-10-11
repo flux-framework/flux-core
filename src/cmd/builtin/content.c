@@ -53,7 +53,7 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
         topic = "content.load";
     if (!(rpc = flux_rpc_raw (h, topic, blobref, strlen (blobref) + 1, 0, 0)))
         log_err_exit ("%s", topic);
-    if (flux_rpc_get_raw (rpc, NULL, &data, &size) < 0)
+    if (flux_rpc_get_raw (rpc, &data, &size) < 0)
         log_err_exit ("%s", topic);
     if (write_all (STDOUT_FILENO, data, size) < 0)
         log_err_exit ("write");
@@ -108,7 +108,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
             topic = "content.store";
         if (!(rpc = flux_rpc_raw (h, topic, data, size, 0, 0)))
             log_err_exit ("%s", topic);
-        if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0)
+        if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0)
             log_err_exit ("%s", topic);
         if (!blobref || blobref[blobref_size - 1] != '\0')
             log_msg_exit ("%s: protocol error", topic);
@@ -134,7 +134,7 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (!(rpc = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("%s", topic);
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         log_err_exit ("%s", topic);
     flux_rpc_destroy (rpc);
     flux_close (h);
@@ -155,7 +155,7 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (!(rpc = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("%s", topic);
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         log_err_exit ("%s", topic);
     flux_rpc_destroy (rpc);
     flux_close (h);
@@ -171,7 +171,7 @@ static void store_completion (flux_rpc_t *rpc, void *arg)
     const char *blobref;
     int blobref_size;
 
-    if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0)
+    if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0)
         log_err_exit ("store");
     if (!blobref || blobref[blobref_size - 1] != '\0')
         log_msg_exit ("store: protocol error");

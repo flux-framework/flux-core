@@ -37,17 +37,22 @@ bool flux_rpc_check (flux_rpc_t *rpc);
 
 /* Wait for a response if necessary, then decode it.
  * Any returned 'json_str' payload is valid until the rpc is destroyed.
- * If 'nodeid' is non-NULL, the nodeid that the request was sent to is returned.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str);
+int flux_rpc_get (flux_rpc_t *rpc, const char **json_str);
+
+/* Wait for response if necessary, then decode nodeid request was sent to.
+ * This function succedes even if the RPC service is returning an error.
+ * It fails if something goes wrong reading or decoding the response message.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_rpc_get_nodeid (flux_rpc_t *rpc, uint32_t *nodeid);
 
 /* Wait for a response if necessary, then decode it.
  * Any returned 'data' payload is valid until the rpc is destroyed.
- * If 'nodeid' is non-NULL, the nodeid that the request was sent to is returned.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid, void *data, int *len);
+int flux_rpc_get_raw (flux_rpc_t *rpc, void *data, int *len);
 
 /* Arrange for reactor to handle response and call 'cb' continuation function
  * when a response is received.  The function should call flux_rpc_get().

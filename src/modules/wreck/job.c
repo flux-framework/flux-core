@@ -97,7 +97,7 @@ static int64_t next_jobid (flux_t *h)
                     json_object_to_json_string (req), 0, 0);
     json_object_put (req);
 
-    if ((flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if ((flux_rpc_get (rpc, &json_str) < 0)
         || !(resp = json_tokener_parse (json_str))) {
         flux_log_error (h, "rpc_get");
         goto out;
@@ -200,7 +200,7 @@ static bool ping_sched (flux_t *h)
                     json_object_to_json_string (o),
                     FLUX_NODEID_ANY, 0);
     json_object_put (o);
-    if (flux_rpc_get (rpc, NULL, &s) >= 0)
+    if (flux_rpc_get (rpc, &s) >= 0)
         retval = true;
     flux_rpc_destroy (rpc);
     return (retval);

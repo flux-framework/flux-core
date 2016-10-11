@@ -139,7 +139,7 @@ static int rpc_request_prepare (flux_rpc_t *rpc, flux_msg_t *msg,
     uint32_t matchtag = rpc->m.matchtag & ~FLUX_MATCHTAG_GROUP_MASK;
     uint32_t matchgrp = rpc->m.matchtag & FLUX_MATCHTAG_GROUP_MASK;
 
-    /* We need a way to get the nodeid out of a response for flux_rpc_get().
+    /* So that flux_rpc_get_nodeid() can get nodeid from a response:
      * For group rpc, use the lower matchtag bits to stash the nodeid
      * in the request, and it will come back in the response.
      * For singleton rpc, stash destination nodeid in rpc->nodeid.
@@ -215,20 +215,7 @@ bool flux_rpc_check (flux_rpc_t *rpc)
     return false;
 }
 
-static int get_rx_nodeid (flux_rpc_t *rpc, const flux_msg_t *msg,
-                          uint32_t *nodeid)
-{
-    uint32_t tag;
-    if (flux_msg_get_matchtag (msg, &tag) < 0)
-        return -1;
-    if ((tag & FLUX_MATCHTAG_GROUP_MASK) > 0)
-        *nodeid = tag & ~FLUX_MATCHTAG_GROUP_MASK;
-    else
-        *nodeid = rpc->nodeid;
-    return 0;
-}
-
-static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
+static int rpc_get (flux_rpc_t *rpc)
 {
     int rc = -1;
 
@@ -243,19 +230,17 @@ static int rpc_get (flux_rpc_t *rpc, uint32_t *nodeid)
 #endif
         rpc->rx_count++;
     }
-    if (nodeid && get_rx_nodeid (rpc, rpc->rx_msg, nodeid) < 0)
-        goto done;
     rc = 0;
 done:
     return rc;
 }
 
-int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
+int flux_rpc_get (flux_rpc_t *rpc, const char **json_str)
 {
     int rc = -1;
 
     assert (rpc->magic == RPC_MAGIC);
-    if (rpc_get (rpc, nodeid) < 0)
+    if (rpc_get (rpc) < 0)
         goto done;
     if (flux_response_decode (rpc->rx_msg, NULL, json_str) < 0)
         goto done;
@@ -264,15 +249,34 @@ done:
     return rc;
 }
 
-int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid, void *data, int *len)
+int flux_rpc_get_raw (flux_rpc_t *rpc, void *data, int *len)
 {
     int rc = -1;
 
     assert (rpc->magic == RPC_MAGIC);
-    if (rpc_get (rpc, nodeid) < 0)
+    if (rpc_get (rpc) < 0)
         goto done;
     if (flux_response_decode_raw (rpc->rx_msg, NULL, data, len) < 0)
         goto done;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_rpc_get_nodeid (flux_rpc_t *rpc, uint32_t *nodeid)
+{
+    int rc = -1;
+    uint32_t tag;
+
+    assert (rpc->magic == RPC_MAGIC);
+    if (rpc_get (rpc) < 0)
+        goto done;
+    if (flux_msg_get_matchtag (rpc->rx_msg, &tag) < 0)
+        goto done;
+    if ((tag & FLUX_MATCHTAG_GROUP_MASK) > 0)
+        *nodeid = tag & ~FLUX_MATCHTAG_GROUP_MASK;
+    else
+        *nodeid = rpc->nodeid;
     rc = 0;
 done:
     return rc;

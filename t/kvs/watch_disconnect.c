@@ -25,7 +25,7 @@ void send_watch_requests (flux_t *h, const char *key)
     if (!(r = flux_rpc_multi (h, "kvs.watch", Jtostr (in), "all", 0)))
         log_err_exit ("flux_rpc_multi kvs.watch");
     do {
-        if (flux_rpc_get (r, NULL, &json_str) < 0)
+        if (flux_rpc_get (r, &json_str) < 0)
             log_err_exit ("kvs.watch");
     } while (flux_rpc_next (r) == 0);
     flux_rpc_destroy (r);
@@ -44,7 +44,7 @@ int count_watchers (flux_t *h)
     if (!(r = flux_rpc_multi (h, "kvs.stats.get", NULL, "all", 0)))
         log_err_exit ("flux_rpc_multi kvs.stats.get");
     do {
-        if (flux_rpc_get (r, NULL, &json_str) < 0)
+        if (flux_rpc_get (r, &json_str) < 0)
             log_err_exit ("kvs.stats.get");
         if (!(out = Jfromstr (json_str)) || !Jget_int (out, "#watchers", &n))
             log_msg_exit ("error decoding stats payload");

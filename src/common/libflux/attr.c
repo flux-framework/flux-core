@@ -97,7 +97,7 @@ static int attr_get_rpc (ctx_t *ctx, const char *name, attr_t **attrp)
     if (!(r = flux_rpc (ctx->h, "cmb.attrget", Jtostr (in),
                         FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_get (r, &json_str) < 0)
         goto done;
     if (!(out = Jfromstr (json_str)) || !Jget_str (out, "value", &val)
                                      || !Jget_int (out, "flags", &flags)) {
@@ -131,7 +131,7 @@ static int attr_set_rpc (ctx_t *ctx, const char *name, const char *val)
     if (!(r = flux_rpc (ctx->h, "cmb.attrset", Jtostr (in),
                         FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL, NULL) < 0)
+    if (flux_rpc_get (r, NULL) < 0)
         goto done;
     if (val) {
         attr = attr_create (val, 0);
@@ -168,7 +168,7 @@ static int attr_list_rpc (ctx_t *ctx)
 
     if (!(r = flux_rpc (ctx->h, "cmb.attrlist", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_get (r, &json_str) < 0)
         goto done;
     if (!(out = Jfromstr (json_str)) || !Jget_obj (out, "names", &array)
                                      || !Jget_ar_len (array, &len)) {

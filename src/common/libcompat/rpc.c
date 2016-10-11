@@ -44,7 +44,7 @@ int flux_json_rpc (flux_t *h, uint32_t nodeid, const char *topic,
 
     if (!(rpc = flux_rpc (h, topic, Jtostr (in), nodeid, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, out ? &json_str : NULL) < 0)
+    if (flux_rpc_get (rpc, out ? &json_str : NULL) < 0)
         goto done;
     if (out) {
         if (!(o = Jfromstr (json_str))) {

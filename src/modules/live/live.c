@@ -1060,7 +1060,7 @@ static int hello (ctx_t *ctx)
         flux_log_error (ctx->h, "%s: flux_rpc", __FUNCTION__);
         goto done;
     }
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
+    if (flux_rpc_get (rpc, &json_str) < 0) {
         flux_log_error (ctx->h, "live.hello");
         goto done;
     }

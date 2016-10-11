@@ -279,7 +279,7 @@ static void cache_load_continuation (flux_rpc_t *rpc, void *arg)
     int rc = -1;
 
     e->load_pending = 0;
-    if (flux_rpc_get_raw (rpc, NULL, &data, &len) < 0) {
+    if (flux_rpc_get_raw (rpc, &data, &len) < 0) {
         if (errno == ENOSYS && cache->rank == 0)
             errno = ENOENT;
         saved_errno = errno;
@@ -435,7 +435,7 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     e->store_pending = 0;
     assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
-    if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
+    if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0) {
         saved_errno = errno;
         if (cache->rank == 0 && errno == ENOSYS)
             flux_log (cache->h, LOG_DEBUG, "content store: %s",

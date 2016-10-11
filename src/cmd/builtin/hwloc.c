@@ -55,7 +55,7 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
         log_err_exit ("flux_open");
 
     t->rpc = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0);
-    if (!t->rpc || (flux_rpc_get (t->rpc, NULL, &json_str) < 0))
+    if (!t->rpc || (flux_rpc_get (t->rpc, &json_str) < 0))
         log_err_exit ("flux_rpc");
 
     if (!(t->o = Jfromstr (json_str)) || !Jget_str (t->o, "topology", &t->topo))
@@ -266,7 +266,8 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
     do {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get (rpc, &nodeid, &json_str) < 0) {
+        if (flux_rpc_get (rpc, &json_str) < 0
+                        || flux_rpc_get_nodeid (rpc, &nodeid)) {
             if (nodeid == FLUX_NODEID_ANY)
                 log_err ("flux_rpc_get");
             else

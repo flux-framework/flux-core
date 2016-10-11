@@ -76,7 +76,7 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
 
     if (!(rpc = flux_rpc (h, "barrier.enter", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     ret = 0;
 done:

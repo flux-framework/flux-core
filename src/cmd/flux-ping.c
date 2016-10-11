@@ -82,7 +82,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     json_object *out = NULL;
     tstat_t *tstat = flux_rpc_aux_get (rpc);
 
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0) {
+    if (flux_rpc_get (rpc, &json_str) < 0) {
         log_err ("flux_rpc_get");
         goto done;
     }

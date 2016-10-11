@@ -75,7 +75,8 @@ static void then_cb (flux_rpc_t *r, void *arg)
     flux_t *h = arg;
     uint32_t nodeid;
 
-    if (flux_rpc_get (r, &nodeid, NULL) < 0
+    if (flux_rpc_get_nodeid (r, &nodeid) < 0
+            || flux_rpc_get (r, NULL) < 0
             || !nodeset_add_rank (then_ns, nodeid)
             || ++then_count == 128) {
         flux_reactor_stop (flux_get_reactor (h));
@@ -118,7 +119,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         BAIL_OUT ("can't continue without successful rpc call");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
-    ok (flux_rpc_get (r, NULL, NULL) == 0,
+    ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works");
     ok (hello_count == old_count + 1,
         "rpc was called once");
@@ -130,7 +131,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     errno = 0;
-    ok (flux_rpc_get (r, NULL, NULL) < 0
+    ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
         "flux_rpc_get fails with EPROTO");
     flux_rpc_destroy (r);
@@ -154,7 +155,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_check says get would block");
     count = 0;
     do {
-        if (flux_rpc_get (r, NULL, NULL) < 0)
+        if (flux_rpc_get (r, NULL) < 0)
             break;
         count++;
     } while (flux_rpc_next (r) == 0);
@@ -174,7 +175,8 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_check says get would block");
     count = 0;
     do {
-        if (flux_rpc_get (r, &nodeid, NULL) < 0 || nodeid != count)
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0
+                || flux_rpc_get (r, NULL) < 0 || nodeid != count)
             break;
         count++;
     } while (flux_rpc_next (r) == 0);
@@ -193,7 +195,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_check says get would block");
     count = 0;
     do {
-        if (flux_rpc_get (r, NULL, &json_str) < 0
+        if (flux_rpc_get (r, &json_str) < 0
                 || !json_str || strcmp (json_str, "{}") != 0)
             break;
         count++;
@@ -213,7 +215,8 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     uint32_t fail_nodeid_last = FLUX_NODEID_ANY;
     int fail_errno_last = 0;
     do {
-        if (flux_rpc_get (r, &nodeid, &json_str) < 0) {
+        if (flux_rpc_get_nodeid (r, &nodeid) < 0
+                || flux_rpc_get (r, &json_str) < 0) {
             fail_errno_last = errno;
             fail_nodeid_last = nodeid;
             fail_count++;

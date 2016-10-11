@@ -358,7 +358,7 @@ static int64_t next_cronid (flux_t *h)
     }
     Jput (req);
 
-    if ((flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if ((flux_rpc_get (rpc, &json_str) < 0)
         || !(resp = Jfromstr (json_str))) {
         flux_log_error (h, "next_cronid: rpc_get");
         goto out;

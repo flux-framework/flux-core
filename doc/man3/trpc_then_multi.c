@@ -9,7 +9,9 @@ void get_rank (flux_rpc_t *rpc, void *arg)
     const char *rank;
     uint32_t nodeid;
 
-    if (flux_rpc_get (rpc, &nodeid, &json_str) < 0)
+    if (flux_rpc_get_nodeid (rpc, &nodeid) < 0)
+        log_err_exit ("flux_rpc_get_nodeid");
+    if (flux_rpc_get (rpc, &json_str) < 0)
         log_err_exit ("flux_rpc_get");
     if (!(o = Jfromstr (json_str)) || !Jget_str (o, "value", &rank))
         log_msg_exit ("response protocol error");

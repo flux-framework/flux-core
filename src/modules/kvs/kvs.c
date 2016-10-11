@@ -180,7 +180,7 @@ static void content_load_completion (flux_rpc_t *rpc, void *arg)
     const char *blobref;
     struct cache_entry *hp;
 
-    if (flux_rpc_get_raw (rpc, NULL, &data, &size) < 0) {
+    if (flux_rpc_get_raw (rpc, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
@@ -259,7 +259,7 @@ static int content_store_get (flux_rpc_t *rpc, void *arg)
     int blobref_size;
     int rc = -1;
 
-    if (flux_rpc_get_raw (rpc, NULL, &blobref, &blobref_size) < 0) {
+    if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
@@ -1383,7 +1383,7 @@ static int getroot_rpc (ctx_t *ctx, int *rootseq, href_t rootdir)
     if (!(rpc = flux_rpc (ctx->h, "kvs.getroot", NULL,
                                              FLUX_NODEID_UPSTREAM, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+    if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
     if (!(out = Jfromstr (json_str))) {
         errno = EPROTO;
