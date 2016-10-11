@@ -158,11 +158,14 @@ prog:SubCommand {
 
 
 local LWJ = {}
-function LWJ.open (f, id)
+function LWJ.open (f, id, kvspath)
     if not f or not id then
         return nil, "Required arg missing"
     end
-    local lwj, err = f:kvsdir (kvs_path (id))
+    if not kvspath then
+        kvspath = kvs_path (id)
+    end
+    local lwj, err = f:kvsdir (kvspath)
     if not lwj then
         return nil, "Failed to get lwj info: "..err
     end
@@ -242,15 +245,13 @@ prog:SubCommand {
  usage = "",
  description = "List jobs in kvs",
  handler = function (self, arg)
-    local lwj, err = f:kvsdir ("lwj")
-    if not lwj then
-        self:die ("Failed to get lwj info: %s\n", err)
-    end
+    local dirs = wreck.joblist{ flux = f }
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
     printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
-    for id in lwj:keys() do
+    for _,dir in pairs (dirs) do
+        local id = dir:match ("(%d+)$")
         if tonumber (id) then
-            local j, err = LWJ.open (f, id)
+            local j, err = LWJ.open (f, id, dir)
             if not j then self:die ("job%d: %s", id, err) end
             printf (fmt, id, j.ntasks, j.state, j.start,
                     seconds_to_string (j.runtime),
@@ -266,15 +267,13 @@ prog:SubCommand {
  usage = "",
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
-    local lwj, err = f:kvsdir ("lwj")
-    if not lwj then
-        self:die ("Failed to get lwj info: %s\n", err)
-    end
+    local dirs = wreck.joblist{ flux = f }
     local fmt = "%6s %12s %12s %12s %12s %12s\n"
     printf (fmt, "ID", "NTASKS", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
-    for id in lwj:keys() do
+    for _,dir in pairs (dirs) do
+        local id = dir:match ("(%d+)$")
         if tonumber (id) then
-            local j, err = LWJ.open (f, id)
+            local j, err = LWJ.open (f, id, dir)
             if not j then self:die ("job%d: %s", id, err) end
             printf (fmt, id,
                     j.ntasks,
@@ -326,23 +325,16 @@ prog:SubCommand {
  handler = function (self, arg)
     local tt = require 'flux.timer'. new()
     local verbose = self.opt.v
-    local lwj, err = f:kvsdir ("lwj")
-    if not lwj then
-        self:die ("kvsdir (%s): %s\n", d, err)
-    end
 
     ---
-    -- Gather LWJ ids from kvs directory into a Lua array
+    -- Gather LWJ path list
     --
-    local ids = {}
-    for x in lwj:keys () do
-        if tonumber (x) then table.insert (ids, x) end
-    end
+    local dirs = wreck.joblist{ flux = f }
     if verbose then
-        self:log ("%4.03fs: got lwj list (%d entries)\n", tt:get0(), #ids)
+        self:log ("%4.03fs: got lwj list (%d entries)\n", tt:get0(), #dirs)
     end
 
-    local total = #ids
+    local total = #dirs
     local target = tonumber (self.opt.t)
     local max = tonumber (self.opt.m) or math.huge
     local keep = function (id) return false end
@@ -375,22 +367,26 @@ prog:SubCommand {
                 local hb_unlink = true
                 local d = completed [hb]
                 for id in d:keys() do
+                    -- Save name of this kvs path:
+                    local complink = tostring (d).."."..id
                     if keep (id) then
                         hb_unlink = false
                     else
                         table.insert (r, id)
                         if self.opt.R then
-                            local t, target = f:kvs_type ("lwj."..id)
+                            local t, target = f:kvs_type (complink)
                             if t == "symlink" then
                                 f:kvs_unlink (target)
                             end
-                            f:kvs_unlink ("lwj."..id)
-                            f:kvs_unlink ("lwj-complete."..hb.."."..id)
+                            f:kvs_unlink (complink)
                         end
                         n = n - 1
                         if n == 0 then return end
                     end
                 end
+                --
+                -- Finished iterating all entries in this hb subdir,
+                --  should be ok to remove the hb dir now:
                 if self.opt.R and hb_unlink then
                     f:kvs_unlink ("lwj-complete."..hb)
                 end
@@ -401,7 +397,7 @@ prog:SubCommand {
         --
         local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
         if self.opt.R then
-            lwj:commit()
+            f:commit()
             if verbose then
                 self:log ("%4.03fs: unlinked %d entries\n", tt:get0(), #hl)
             end
