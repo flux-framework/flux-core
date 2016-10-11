@@ -203,7 +203,7 @@ end
 --  (So that no state events are missed)
 --
 local kw, err = f:kvswatcher  {
-    key = string.format ("lwj.%d.state", jobid),
+    key = string.format ("%s.state", wreck:lwj_path (jobid)),
     handler = function (kw, result)
         if result then
             state = result
