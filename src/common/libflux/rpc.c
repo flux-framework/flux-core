@@ -55,6 +55,7 @@ struct flux_rpc_struct {
     flux_msg_handler_t *w;
     uint32_t nodeid;
     flux_msg_t *rx_msg;
+    int rx_errnum;
     json_t *rx_json;
     int rx_count;
     int rx_expected;
@@ -108,11 +109,10 @@ static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
     flux_rpc_t *rpc;
     int flags = 0;
 
-    if (!(rpc = malloc (sizeof (*rpc)))) {
+    if (!(rpc = calloc (1, sizeof (*rpc)))) {
         errno = ENOMEM;
         return NULL;
     }
-    memset (rpc, 0, sizeof (*rpc));
     rpc->magic = RPC_MAGIC;
     if (rx_expected == 0) {
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
@@ -209,24 +209,34 @@ done:
 bool flux_rpc_check (flux_rpc_t *rpc)
 {
     assert (rpc->magic == RPC_MAGIC);
-    if (rpc->rx_msg)
+    if (rpc->rx_msg || rpc->rx_errnum)
         return true;
-    if ((rpc->rx_msg = flux_recv (rpc->h, rpc->m, FLUX_O_NONBLOCK)))
-        return true;
-    errno = 0;
-    return false;
+    if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, FLUX_O_NONBLOCK))) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            errno = 0;
+            return false;
+        } else
+            rpc->rx_errnum = errno;
+    }
+    return (rpc->rx_msg || rpc->rx_errnum);
 }
 
 static int rpc_get (flux_rpc_t *rpc)
 {
     int rc = -1;
 
-    if (!rpc->rx_msg) {
+    if (rpc->rx_errnum) {
+        errno = rpc->rx_errnum;
+        goto done;
+    }
+    if (!rpc->rx_msg && !rpc->rx_errnum) {
 #if HAVE_CALIPER
         cali_begin_string_byname("flux.message.rpc", "single");
 #endif
-        if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
+        if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0))) {
+            rpc->rx_errnum = errno;
             goto done;
+        }
 #if HAVE_CALIPER
         cali_end_byname("flux.message.rpc");
 #endif
@@ -295,7 +305,7 @@ static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
     assert (rpc->then_cb != NULL);
 
     flux_rpc_usecount_incr (rpc);
-    if (rpc->rx_msg)
+    if (rpc->rx_msg || rpc->rx_errnum)
         (void)flux_rpc_next (rpc);
     if (!(rpc->rx_msg = flux_msg_copy (msg, true)))
         goto done;
@@ -323,9 +333,10 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
                 goto done;
         }
         flux_msg_handler_start (rpc->w);
-        if (rpc->rx_msg) {
-            if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
-                goto done;
+        if (rpc->rx_msg || rpc->rx_errnum) {
+            if (rpc->rx_msg)
+                if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
+                    goto done;
             (void)flux_rpc_next (rpc);
         }
     } else if (!cb && rpc->then_cb) {
@@ -349,6 +360,7 @@ int flux_rpc_next (flux_rpc_t *rpc)
     rpc->rx_msg = NULL;
     json_decref (rpc->rx_json);
     rpc->rx_json = NULL;
+    rpc->rx_errnum = 0;
     return 0;
 }
 
