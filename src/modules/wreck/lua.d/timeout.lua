@@ -12,7 +12,7 @@ local function signal_to_number (s)
 end
 
 local function timeout_signal (f, wreck)
-    --  If 'lwj.<id>.walltime-signal' set then return this signal number,
+    --  If 'lwj.walltime-signal' set then return this signal number,
     --   otherwise if 'lwj.walltime-signal' set use this number,
     --   otherwise return default signal 'SIGALRM'
     --
@@ -48,7 +48,7 @@ function rexecd_init ()
     local f = wreck.flux
     -- start timer when state is running
     local k, err = f:kvswatcher {
-        key = "lwj."..id..".state",
+        key = tostring (wreck.kvsdir) .. ".state",
         handler = function (k, result)
             if result == "running" then
                  wreck:log_msg ("detected job state = running, starting timer for %ds", walltime)
