@@ -49,7 +49,7 @@
 #include "src/common/libutil/fdwalk.h"
 
 /*
- *  lwj-active directory tree parameters:
+ *  lwj directory hierarchy parameters:
  *   XXX: should be in module context struct perhaps, but
  *    this all needs to go away soon anyway, so...
  *
@@ -91,12 +91,12 @@ static inline uint64_t prefix64 (uint64_t n, int a, int b)
  */
 static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
 {
-    char buf [1024] = "lwj-active";
-    int len = 10;
+    char buf [1024] = "lwj";
+    int len = 3;
     int nleft = sizeof (buf) - len;
     int i, n;
 
-    /* Build up kvs directory from lwj-active. down */
+    /* Build up kvs directory from lwj. down */
     for (i = levels; i > 0; i--) {
         int b = bits_per_dir * i;
         uint64_t d = prefix64 (id, b, b + bits_per_dir);
@@ -120,7 +120,6 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
 {
     int rc = -1;
     char *key = NULL;
-    char *link = NULL;
     char *target = NULL;
 
     if (!(target = id_to_path (jobid))) {
@@ -128,10 +127,7 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
         return (-1);
     }
 
-    /*  Create lwj entry in lwj-active dir at first:
-     */
-    if ((asprintf (&key, "%s.state", target) < 0)
-        || (asprintf (&link, "lwj.%lu", jobid) < 0)) {
+    if ((asprintf (&key, "%s.state", target) < 0)) {
         flux_log_error (h, "kvs_job_set_state: asprintf");
         goto out;
     }
@@ -142,20 +138,11 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
         goto out;
     }
 
-    /*
-     *  Create link from lwj.<id> to lwj-active.*.<id>
-     */
-    if ((rc = kvs_symlink (h, link, target)) < 0) {
-        flux_log_error (h, "kvs_symlink (%s, %s)", link, key);
-        goto out;
-    }
-
     if ((rc = kvs_commit (h)) < 0)
         flux_log_error (h, "kvs_job_set_state: kvs_commit");
 
 out:
     free (key);
-    free (link);
     free (target);
     return rc;
 }
@@ -321,7 +308,7 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
         return;
     }
 
-    asprintf (&kvs_path, "lwj.%ju", (uintmax_t) id);
+    kvs_path = id_to_path (id);
 
     if ( (kvs_job_new (h, id) < 0)
       || (add_jobinfo (h, kvs_path, o) < 0)) {
