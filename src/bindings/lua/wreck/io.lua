@@ -97,11 +97,17 @@ function ioplex.create (arg)
         flux          = arg.flux,
         id            = arg.jobid,
         labelio       = arg.labelio,
+        kvspath       = arg.kvspath,
         on_completion = arg.on_completion,
         removed = {},
         output = {},
         files = {}
     }
+    if not io.kvspath then
+        local r, err = io.flux:rpc ("job.kvspath", { ids = { io.id }})
+        if not r then error (err) end
+        io.kvspath = r.paths [1]
+    end
     setmetatable (io, ioplex)
     return io
 end
@@ -143,7 +149,7 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
     if not of then return nil, "No stream "..stream.." for task " .. taskid  end
 
     local f = flux
-    local key = string.format ("lwj.%d.%d.%s", self.id, taskid, stream)
+    local key = string.format ("%s.%d.%s", self.kvspath, taskid, stream)
     local iow, err = f:iowatcher {
         key = key,
         handler =  function (iow, data)
