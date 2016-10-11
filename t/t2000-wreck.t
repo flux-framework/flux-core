@@ -14,6 +14,10 @@ test_under_flux ${SIZE} wreck
 last_job_id() {
 	flux wreck last-jobid
 }
+#  Return previous job path in kvs
+last_job_path() {
+	flux wreck last-jobid -p
+}
 
 test_expect_success 'wreckrun: works' '
 	hostname=$(hostname) &&
@@ -177,26 +181,26 @@ test_expect_success 'wreckrun: -N without -n works' '
 '
 test_expect_success 'wreckrun: -N without -n sets ntasks in kvs' '
 	flux wreckrun -l -N${SIZE} /bin/true &&
-	LWJ=$(last_job_id) &&
-	n=$(flux kvs get lwj.${LWJ}.ntasks) &&
+	LWJ=$(last_job_path) &&
+	n=$(flux kvs get ${LWJ}.ntasks) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -n without -N sets nnnodes in kvs' '
 	flux wreckrun -l -n${SIZE} /bin/true &&
-	LWJ=$(last_job_id) &&
-	n=$(flux kvs get lwj.${LWJ}.nnodes) &&
+	LWJ=$(last_job_path) &&
+	n=$(flux kvs get ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -t1 -N${SIZE} sets ntasks in kvs' '
 	flux wreckrun -l -t1 -N${SIZE} /bin/true &&
-	LWJ=$(last_job_id) &&
-	n=$(flux kvs get lwj.${LWJ}.ntasks) &&
+	LWJ=$(last_job_path) &&
+	n=$(flux kvs get ${LWJ}.ntasks) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	flux wreckrun -l -t1 -n${SIZE} /bin/true &&
-	LWJ=$(last_job_id) &&
-	n=$(flux kvs get lwj.${LWJ}.nnodes) &&
+	LWJ=$(last_job_path) &&
+	n=$(flux kvs get ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
 
@@ -341,9 +345,10 @@ test_expect_success 'flux-wreck: status with non-zero exit' '
 test_expect_success 'flux-wreck: kill' '
 	run_timeout 1 flux wreckrun --detach sleep 100 &&
 	id=$(last_job_id) &&
-	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 lwj.$id.state "v == \"running\"" &&
+	LWJ=$(last_job_path) &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 $LWJ.state "v == \"running\"" &&
 	flux wreck kill -s SIGINT $id &&
-	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 lwj.$id.state "v == \"complete\"" &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 $LWJ.state "v == \"complete\"" &&
 	test_expect_code 130 flux wreck status $id >output.kill &&
 	cat >expected.kill <<-EOF &&
 	Job $id status: complete
