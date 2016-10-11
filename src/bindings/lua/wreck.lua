@@ -522,6 +522,37 @@ function wreck.id_to_path (arg)
     return kvs_path (f, id)
 end
 
+function wreck.joblist (arg)
+    local flux = require 'flux'
+    local f = arg.flux
+    if not f then f, err = flux.new () end
+    if not f then return nil, err end
+
+    local function visit (d, r)
+        local results = r or {}
+        if not d then return end
+        for k in d:keys () do
+            local path = tostring (d) .. "." .. k
+            local dir = f:kvsdir (path)
+            if dir then
+                if dir.state then
+                    -- This is a lwj dir, add to results table:
+                    table.insert (results, path)
+                else
+                    -- recurse to find lwj dirs lower in the directory tree
+                    visit (dir, results)
+                end
+            end
+        end
+        return results
+    end
+
+    local dir, err = f:kvsdir ("lwj")
+    if not dir then return nil, err end
+
+    return visit (dir)
+end
+
 local function shortprog ()
     local prog = string.match (arg[0], "([^/]+)$")
     return prog:match ("flux%-(.+)$")
