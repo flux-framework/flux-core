@@ -13,13 +13,13 @@ SYNOPSIS
 --------
  #include <flux/core.h>
 
- typedef void (*flux_msg_handler_f)(flux_t h,
+ typedef void (*flux_msg_handler_f)(flux_t *h,
                                     flux_msg_handler_t *w,
                                     const flux_msg_t *msg,
                                     void *arg);
 
  flux_msg_handler_t *
- flux_msg_handler_create (flux_t h,
+ flux_msg_handler_create (flux_t *h,
                           const struct flux_match match,
                           flux_msg_handler_f callback,
                           void *arg);

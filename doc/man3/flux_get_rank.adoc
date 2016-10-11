@@ -12,9 +12,9 @@ SYNOPSIS
 --------
 #include <flux/core.h>
 
-int flux_get_rank (flux_t h, uint32_t *rank);
+int flux_get_rank (flux_t *h, uint32_t *rank);
 
-int flux_get_size (flux_t h, uint32_t *size);
+int flux_get_size (flux_t *h, uint32_t *size);
 
 
 DESCRIPTION

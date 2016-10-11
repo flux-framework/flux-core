@@ -12,9 +12,9 @@ SYNOPSIS
 --------
 #include <flux/core.h>
 
-int flux_pollevents (flux_t h);
+int flux_pollevents (flux_t *h);
 
-int flux_pollfd (flux_t h);
+int flux_pollfd (flux_t *h);
 
 
 DESCRIPTION
@@ -103,7 +103,7 @@ struct ev_flux {
     ev_prepare  prepare_w;
     ev_idle     idle_w;
     ev_check    check_w;
-    flux_t      h;
+    flux_t      *h;
     int         pollfd;
     int         events;
     ev_flux_f   cb;
@@ -114,7 +114,7 @@ struct ev_flux {
 
 ....
 // ev_flux.c
-static int get_pollevents (flux_t h)
+static int get_pollevents (flux_t *h)
 {
     int e = flux_pollevents (h);
     int events = 0;
@@ -155,7 +155,7 @@ static void check_cb (struct ev_loop *loop, ev_check *w,
 }
 
 int ev_flux_init (struct ev_flux *w, ev_flux_f cb,
-                  flux_t h, int events)
+                  flux_t *h, int events)
 {
     w->cb = cb;
     w->h = h;
