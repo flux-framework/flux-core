@@ -12,7 +12,7 @@ SYNOPSIS
 --------
  #include <flux/core.h>
 
- flux_rpc_t *flux_rpc (flux_t h, const char *topic,
+ flux_rpc_t *flux_rpc (flux_t *h, const char *topic,
                        const char *json_in,
                        uint32_t nodeid_in, int flags);
 

@@ -19,7 +19,7 @@ SYNOPSIS
      flux_msg_handler_t *w;
  };
 
- int flux_msg_handler_addvec (flux_t h,
+ int flux_msg_handler_addvec (flux_t *h,
                               struct flux_msg_handler_spec tab[],
                               void *arg);
 

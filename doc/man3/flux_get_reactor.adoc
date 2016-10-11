@@ -12,9 +12,9 @@ SYNOPSIS
 --------
 #include <flux/core.h>
 
-flux_reactor_t *flux_get_reactor (flux_t h);
+flux_reactor_t *flux_get_reactor (flux_t *h);
 
-int flux_set_reactor (flux_t h, flux_reactor_t *r);
+int flux_set_reactor (flux_t *h, flux_reactor_t *r);
 
 
 DESCRIPTION

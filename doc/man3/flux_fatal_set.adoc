@@ -15,11 +15,11 @@ SYNOPSIS
 
 typedef void (*flux_fatal_f)(const char *msg, void *arg);
 
-void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg);
+void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg);
 
-void flux_fatal_error (flux_t h, const char *fun, const char *msg);
+void flux_fatal_error (flux_t *h, const char *fun, const char *msg);
 
-FLUX_FATAL (flux_t h);
+FLUX_FATAL (flux_t *h);
 
 
 DESCRIPTION

@@ -12,10 +12,10 @@ SYNOPSIS
 --------
  #include <flux/core.h>
 
- int flux_respond (flux_t h, const flux_msg_t *request,
+ int flux_respond (flux_t *h, const flux_msg_t *request,
                    int errnum, const char *json_str);
 
- int flux_respond_raw (flux_t h, const flux_msg_t *request,
+ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                        int errnum, const void *data, int length);
 
 DESCRIPTION
