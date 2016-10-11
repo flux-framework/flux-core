@@ -289,7 +289,12 @@ prog:SubCommand {
 prog:SubCommand {
  name = "last-jobid",
  description = "Display the last jobid in lwj id sequence",
- usage = "",
+ usage = "[OPTIONS]",
+ options = {
+  { name = "kvs-path", char = 'p',
+    usage = "Return path to job in kvs instead of jobid",
+  }
+ },
  handler = function (self, arg)
     local req = {
        name = "lwj",
@@ -299,9 +304,13 @@ prog:SubCommand {
     }
     local resp, err = f:rpc ("cmb.seq.fetch", req)
     if not resp then
-        slef:die ("No last jobid found: %s", err)
+        self:die ("No last jobid found: %s", err)
     end
-    print (resp.value)
+    local result = resp.value
+    if self.opt.p then
+        result = kvs_path (result)
+    end
+    print (result)
  end
 }
 
