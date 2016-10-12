@@ -507,7 +507,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     int rc;
 
     dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND))) {
         log_msg ("%s", dlerror ());
         errno = ENOENT;
         return NULL;
