@@ -1078,7 +1078,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     if (!ctx->kvspath && (lwj_kvs_path (ctx->flux, ctx->id, &ctx->kvspath) < 0))
         wlog_fatal (ctx, 1, "lwj_kvs_path\n");
 
-    if (kvs_get_dir (ctx->flux, &ctx->kvs, ctx->kvspath) < 0) {
+    if (kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
         wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
