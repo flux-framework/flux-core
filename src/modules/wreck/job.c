@@ -314,12 +314,12 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
       || (add_jobinfo (h, kvs_path, o) < 0)) {
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "job_request: flux_respond");
-        return;
+        goto out;
     }
 
     if (kvs_commit (h) < 0) {
         flux_log_error (h, "job_request: kvs_commit");
-        return;
+        goto out;
     }
 
     /* Send a wreck.state.reserved event for listeners */
@@ -336,6 +336,7 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
     Jadd_str (jobinfo, "state", state);
     Jadd_str (jobinfo, "kvs_path", kvs_path);
     flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
+out:
     Jput (jobinfo);
     free (kvs_path);
 }
@@ -414,11 +415,12 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
             flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
             goto out;
         }
-        if (!(r = json_object_new_string (path))) {
+        r = json_object_new_string (path);
+        free (path);
+        if (r == NULL) {
             flux_log_error (h, "kvspath_cb: json_object_new_string");
             goto out;
         }
-        free (path);
         json_object_array_add (ar, r);
     }
     json_object_object_add (out, "paths", ar);
