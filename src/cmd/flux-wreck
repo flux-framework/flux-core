@@ -246,6 +246,7 @@ prog:SubCommand {
  description = "List jobs in kvs",
  handler = function (self, arg)
     local dirs = wreck.joblist{ flux = f }
+    if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
     printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
     for _,dir in pairs (dirs) do
@@ -268,6 +269,7 @@ prog:SubCommand {
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
     local dirs = wreck.joblist{ flux = f }
+    if #dirs == 0 then return end
     local fmt = "%6s %12s %12s %12s %12s %12s\n"
     printf (fmt, "ID", "NTASKS", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
     for _,dir in pairs (dirs) do
