@@ -418,6 +418,7 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
             flux_log_error (h, "kvspath_cb: json_object_new_string");
             goto out;
         }
+        free (path);
         json_object_array_add (ar, r);
     }
     json_object_object_add (out, "paths", ar);
