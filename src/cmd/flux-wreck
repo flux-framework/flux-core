@@ -287,6 +287,16 @@ prog:SubCommand {
 }
 
 prog:SubCommand {
+ name = "kvs-path",
+ usage = "ID",
+ description = "Display path in KVS to job ID",
+ handler = function (self, arg)
+    if not arg[1] then self:die ("Job ID argument required\n") end
+    print (kvs_path (arg[1]))
+ end
+}
+
+prog:SubCommand {
  name = "last-jobid",
  description = "Display the last jobid in lwj id sequence",
  usage = "[OPTIONS]",
