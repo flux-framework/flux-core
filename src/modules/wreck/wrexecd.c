@@ -1057,6 +1057,7 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     }
     rc = 0;
 out:
+    flux_rpc_destroy (rpc);
     Jput (o);
     return (rc);
 }
