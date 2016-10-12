@@ -59,6 +59,7 @@ typedef struct {
 
 typedef struct {
     zhash_t *active_jobs;
+    zhash_t *job_kvs_paths;
     zlist_t *callbacks;
     int first_time;
     flux_t *h;
@@ -117,6 +118,7 @@ static void freectx (void *arg)
 {
     jscctx_t *ctx = arg;
     zhash_destroy (&(ctx->active_jobs));
+    zhash_destroy (&(ctx->job_kvs_paths));
     zlist_destroy (&(ctx->callbacks));
 }
 
@@ -127,6 +129,8 @@ static jscctx_t *getctx (flux_t *h)
         ctx = xzmalloc (sizeof (*ctx));
         if (!(ctx->active_jobs = zhash_new ()))
             oom ();
+        if (!(ctx->job_kvs_paths = zhash_new ()))
+            oom ();
         if (!(ctx->callbacks = zlist_new ()))
             oom ();
         ctx->first_time = 1;
@@ -134,6 +138,111 @@ static jscctx_t *getctx (flux_t *h)
         flux_aux_set (h, "jstatctrl", ctx, freectx);
     }
     return ctx;
+}
+
+json_object * kvspath_request_json (int64_t id)
+{
+    json_object *o = json_object_new_object ();
+    json_object *ar = json_object_new_array ();
+    json_object *v = json_object_new_int64 (id);
+
+    if (!o || !ar || !v) {
+        Jput (o);
+        Jput (ar);
+        Jput (v);
+        return (NULL);
+    }
+    json_object_array_add (ar, v);
+    json_object_object_add (o, "ids", ar);
+    return (o);
+}
+
+const char * kvs_path_json_get (json_object *o)
+{
+    const char *p;
+    json_object *ar;
+    if (!Jget_obj (o, "paths", &ar) || !Jget_ar_str (ar, 0, &p))
+        return (NULL);
+    return (p);
+}
+
+static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
+{
+    int rc = -1;
+    const char *path;
+    const char *json_str;
+    flux_rpc_t *rpc;
+    uint32_t nodeid = FLUX_NODEID_ANY;
+    json_object *o = kvspath_request_json (id);
+
+    if (!(rpc = flux_rpc (h, "job.kvspath", Jtostr (o), nodeid, 0))
+        ||  (flux_rpc_get (rpc, &json_str) < 0)) {
+        flux_log_error (h, "flux_rpc (job.kvspath)");
+        goto out;
+    }
+    Jput (o);
+    o = NULL;
+    if (!(o = Jfromstr (json_str))) {
+        flux_log_error (h, "flux_rpc (job.kvspath): failed to parse json");
+        goto out;
+    }
+    if (!(path = kvs_path_json_get (o))) {
+        flux_log_error (h, "flux_rpc (job.kvspath): failed to get path");
+        goto out;
+    }
+    if (!(*pathp = strdup (path))) {
+        flux_log_error (h, "flux_rpc (job.kvspath): strdup");
+        goto out;
+    }
+    rc = 0;
+out:
+    flux_rpc_destroy (rpc);
+    Jput (o);
+    return (rc);
+}
+
+static int jscctx_add_job_path (jscctx_t *ctx, const char *key, char *path)
+{
+    /* XXX: path should already be a malloc'd string */
+    if (zhash_insert (ctx->job_kvs_paths, key, path) < 0)
+        return (-1);
+    zhash_freefn (ctx->job_kvs_paths, key, free);
+    return (0);
+}
+
+static int jscctx_add_jobid_path (jscctx_t *ctx, int64_t id, const char *path)
+{
+    char *s;
+    char key [21];
+    memset (key, 0, sizeof (key));
+    if (sprintf (key, "%ju", (uintmax_t) id) < 0)
+        return (-1);
+    if (!(s = strdup (path)))
+        return (-1);
+    if (jscctx_add_job_path (ctx, key, s) < 0) {
+        /* Failure indicates key already exists, free memory, but
+         *   no need to return an error
+         */
+        free (s);
+    }
+    return (0);
+}
+
+static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
+{
+    char *path;
+    char key [21];
+
+    memset (key, 0, sizeof (key));
+    if (sprintf (key, "%ju", (uintmax_t) id) < 0)
+        return (NULL);
+    if ((path = zhash_lookup (ctx->job_kvs_paths, key)))
+        return path;
+    if (lwj_kvs_path (ctx->h, id, &path) < 0)
+        return (NULL);
+    if (jscctx_add_job_path (ctx, key, path) < 0)
+        return (NULL);
+    return (path);
 }
 
 static inline bool is_jobid (const char *k)
@@ -197,8 +306,12 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
 static int jobid_exist (flux_t *h, int64_t j)
 {
     kvsdir_t *d;
-    if (kvs_get_dir (h, &d, "lwj.%"PRId64"", j) < 0) {
-        flux_log (h, LOG_DEBUG, "lwj.%"PRId64" doesn't exist", j);
+    jscctx_t *ctx = getctx (h);
+    const char *path = jscctx_jobid_path (ctx, j);
+    if (path == NULL)
+        return -1;
+    if (kvs_get_dir (h, &d, "%s", path) < 0) {
+        flux_log (h, LOG_DEBUG, "%s doesn't exist", path);
         return -1;
     }
     kvsdir_destroy (d);
@@ -229,10 +342,33 @@ static int build_name_array (zhash_t *ha, const char *k, json_object *ns)
     return i;
 }
 
+static char * lwj_key (flux_t *h, int64_t id, const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+    jscctx_t *ctx = getctx (h);
+    const char *base;
+    char *p = NULL;
+    char *key;
+    if (!(base = jscctx_jobid_path (ctx, id)))
+        return (NULL);
+    if (fmt != NULL) {
+        va_start (ap, fmt);
+        rc = vasprintf (&p, fmt, ap);
+        va_end (ap);
+        if (rc < 0)
+            return (NULL);
+    }
+    if (asprintf (&key, "%s%s", base, p) < 0)
+        return (NULL);
+    free (p);
+    return (key);
+}
+
 static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
-    char *key = xasprintf ("lwj.%"PRId64".nnodes", j);
+    char *key = lwj_key (h, j, ".nnodes");
     if (kvs_get_int64 (h, key, nnodes) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
@@ -246,7 +382,7 @@ static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
 {
     int rc = 0;
-    char *key = xasprintf ("lwj.%"PRId64".ntasks", j);
+    char *key = lwj_key (h, j, ".ntasks");
     if (kvs_get_int64 (h, key, ntasks) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
@@ -260,7 +396,7 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
 static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
 {
     int rc = 0;
-    char *key = xasprintf ("lwj.%"PRId64".walltime", j);
+    char *key = lwj_key (h, j, ".walltime");
     if (kvs_get_int64 (h, key, walltime) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
@@ -273,7 +409,7 @@ static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
 static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
 {
     int rc = 0;
-    char *key = xasprintf ("lwj.%"PRId64".rdl", j);
+    char *key = lwj_key (h, j, ".rdl");
     if (kvs_get_string (h, key, rdlstr) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
@@ -287,7 +423,7 @@ static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
 static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
 {
     int rc = 0;
-    char *key = xasprintf ("lwj.%"PRId64".state", j);
+    char *key = lwj_key (h, j, ".state");
     char *state = NULL;
     if (kvs_get_string (h, key, &state) < 0) {
         flux_log_error (h, "extract %s", key);
@@ -307,7 +443,7 @@ static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_object **o)
 {
     int rc = 0;
     char *json_str = NULL;
-    char *key = xasprintf ("lwj.%"PRId64".%"PRId64".procdesc", j, i);
+    char *key = lwj_key (h, j, ".%ju.procdesc", i);
     if (kvs_get (h, key, &json_str) < 0
             || !(*o = Jfromstr (json_str))) {
         flux_log_error (h, "extract %s", key);
@@ -401,7 +537,7 @@ static int extract_raw_rdl_alloc (flux_t *h, int64_t j, json_object *jcb)
     bool processing = true;
 
     for (i=0; processing; ++i) {
-        key = xasprintf ("lwj.%"PRId64".rank.%"PRId32".cores", j, i);
+        key = lwj_key (h, j, ".rank.%d.cores", i);
         if (kvs_get_int64 (h, key, &cores) < 0) {
             if (errno != EINVAL)
                 flux_log_error (h, "extract %s", key);
@@ -536,7 +672,7 @@ static int update_state (flux_t *h, int64_t j, json_object *o)
     if (!Jget_int64 (o, JSC_STATE_PAIR_NSTATE, &st)) return -1;
     if ((st >= J_FOR_RENT) || (st < J_NULL)) return -1;
 
-    key = xasprintf ("lwj.%"PRId64".state", j);
+    key = lwj_key (h, j, ".state");
     if (kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0)
         flux_log_error (h, "update %s", key);
     else if (kvs_commit (h) < 0)
@@ -570,9 +706,9 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
 
     if ((nnodes < 0) || (ntasks < 0) || (walltime < 0)) return -1;
 
-    key1 = xasprintf ("lwj.%"PRId64".nnodes", j);
-    key2 = xasprintf ("lwj.%"PRId64".ntasks", j);
-    key3 = xasprintf ("lwj.%"PRId64".walltime", j);
+    key1 = lwj_key (h, j, ".nnodes");
+    key2 = lwj_key (h, j, ".ntasks");
+    key3 = lwj_key (h, j, ".walltime");
     if (kvs_put_int64 (h, key1, nnodes) < 0)
         flux_log_error (h, "update %s", key1);
     else if (kvs_put_int64 (h, key2, ntasks) < 0)
@@ -594,7 +730,7 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
 static int update_rdl (flux_t *h, int64_t j, const char *rs)
 {
     int rc = -1;
-    char *key = xasprintf ("lwj.%"PRId64".rdl", j);
+    char *key = lwj_key (h, j, ".rdl");
     if (kvs_put_string (h, key, rs) < 0)
         flux_log_error (h, "update %s", key);
     else if (kvs_commit (h) < 0)
@@ -621,7 +757,7 @@ static int update_hash_1ra (flux_t *h, int64_t j, json_object *o, zhash_t *rtab)
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINING_RANK, &rank)) return -1;
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NCORES, &ncores)) return -1;
 
-    key = xasprintf ("lwj.%"PRId64".rank.%"PRId64".cores", j, rank);
+    key = lwj_key (h, j, ".rank.%ju.cores", rank);
     if (!(curcnt = zhash_lookup (rtab, key))) {
         curcnt = xzmalloc (sizeof (*curcnt));
         *curcnt = ncores;
@@ -693,7 +829,7 @@ static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
     if (!Jget_ar_str (ha, (int)hindx, &hn)) return -1;
     if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
 
-    key = xasprintf ("lwj.%"PRId64".%"PRId32".procdesc", j, r);
+    key = lwj_key (h, j, ".%d.procdesc", r);
     if (kvs_get (h, key, &json_str) < 0
             || !(d = Jfromstr (json_str))) {
         flux_log_error (h, "extract %s", key);
@@ -852,6 +988,7 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
     const char *topic = NULL;
     const char *json_str = NULL;
     const char *state = NULL;
+    const char *kvs_path = NULL;
     int len = 12;
 
     if (flux_msg_get_topic (msg, &topic) < 0)
@@ -862,6 +999,11 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
             || !Jget_int64 (o, "lwj", &jobid)) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
+    }
+
+    if (Jget_str (o, "kvs_path", &kvs_path)) {
+        if (jscctx_add_jobid_path (getctx (h), jobid, kvs_path) < 0)
+            flux_log_error (h, "jscctx_add_jobid_path");
     }
 
     if (strncmp (topic, "jsc", 3) == 0)
