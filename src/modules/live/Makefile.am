@@ -18,7 +18,6 @@ live_la_SOURCES = live.c
 live_la_LDFLAGS = $(fluxmod_ldflags) -module
 live_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		 $(top_builddir)/src/common/libflux-core.la \
-                 $(top_builddir)/src/common/libflux-optparse.la \
 		 $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 		 $(top_builddir)/src/modules/barrier/libflux-barrier.la \
 		 $(ZMQ_LIBS)

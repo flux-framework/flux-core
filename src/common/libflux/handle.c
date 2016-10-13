@@ -271,7 +271,7 @@ static connector_init_f *find_connector (const char *scheme, void **dsop)
     }
     if (!(path = find_file (name, searchpath)))
         goto done;
-    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
+    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND))) {
         errno = EINVAL;
         goto done;
     }

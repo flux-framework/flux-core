@@ -13,7 +13,7 @@ test_under_flux ${SIZE} kvs
 
 test_expect_success 'up: load live module' '
 	flux module load -r all barrier &&
-	flux module load -r all live --barrier-count=${SIZE}
+	flux module load -r all live barrier-count=${SIZE}
 '
 #
 # Wait for all ranks to leave unknown state in live module:
