@@ -153,9 +153,22 @@ TESTS = \
 EXTRA_DIST = \
 	README \
 	$(TESTS) \
-	Test \
-	lua-affinity \
-	lua-hostlist
+	Test/COPYRIGHT \
+	Test/README.md \
+	Test/dist.info \
+	lua-affinity/COPYING \
+	lua-affinity/DISCLAIMER.LLNS \
+	lua-affinity/README.md \
+	lua-hostlist/COPYING \
+	lua-hostlist/DISCLAIMER \
+	lua-hostlist/META \
+	lua-hostlist/NEWS \
+	lua-hostlist/README.md \
+	lua-hostlist/test.lua \
+	lua-hostlist/tests/lunit \
+	lua-hostlist/tests/lunit-console.lua \
+	lua-hostlist/tests/lunit.lua \
+	lua-hostlist/tests/tests.lua
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \

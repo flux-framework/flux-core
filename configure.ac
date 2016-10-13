@@ -113,6 +113,11 @@ AC_MSG_RESULT($enable_python)
 if test "$enable_python" = "yes"; then
   AM_PATH_PYTHON([2.7])
   if test "X$PYTHON" != "X"; then
+    # Flag for PYTHON_LDFLAGS workaround below.
+    if test -n "$PYTHON_LDFLAGS"; then
+      ac_python_ldflags_set_by_user=true
+    fi
+
     AX_PYTHON_DEVEL
     #TODO: write this manually to add a version check
     AM_CHECK_PYMOD(cffi,
@@ -120,6 +125,21 @@ if test "$enable_python" = "yes"; then
                    ,
                    [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
                    )
+
+    # Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
+    # (e.g. /usr/lib64).  Placing a standard path earlier in the linker
+    # search can lead to linking problems.
+    # 
+    # Logic below assumes only newer Python versions, protected by
+    # above check for atleast Python 2.7.
+    if test "$ac_python_ldflags_set_by_user" != "true"; then
+      AC_CHECK_LIB([$ac_python_library], [PyArg_ParseTuple],
+                   [ac_python_in_ld_path=true])
+      if test "$ac_python_in_ld_path" = "true"; then
+        AC_MSG_NOTICE([Removing -L$ac_python_libdir from PYTHON_LDFLAGS])
+        PYTHON_LDFLAGS="-l$ac_python_library"
+      fi
+    fi
     python_ok=yes
   fi
   AS_VAR_SET(fluxpydir, $pyexecdir/flux)
