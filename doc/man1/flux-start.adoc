@@ -60,7 +60,7 @@ EXAMPLES
 Launch an 8-way Flux instance with an interactive shell
 as the initial program and all logs output to stderr:
 
-  flux start -s8 -o,log-stderr-level=7
+  flux start -s8 -o,--setattr=log-stderr-level=7
 
 Launch an 8-way Flux instance within a slurm job, with an interactive
 shell as the initial program:
