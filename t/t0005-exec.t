@@ -77,7 +77,7 @@ EOF
 '
 
 test_expect_success 'flux exec exits with code 127 for file not found' '
-	test_expect_code 127 run_timeout 2 flux exec nosuchprocess
+	test_expect_code 127 run_timeout 2 flux exec ./nosuchprocess
 '
 
 test_expect_success 'flux exec exits with code 126 for non executable' '
@@ -85,7 +85,7 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 '
 
 test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '
-	test_expect_code 68 run_timeout 2 flux exec -r 1000 nosuchprocess
+	test_expect_code 68 run_timeout 2 flux exec -r 1000 ./nosuchprocess
 '
 test_expect_success 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec sh -c "exit 2" &&
