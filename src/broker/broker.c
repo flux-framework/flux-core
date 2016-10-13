@@ -2670,7 +2670,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
             if (status == FLUX_MODSTATE_EXITED)
                 errnum = module_get_errnum (p);
             if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
-                flux_log_error (ctx->h, "flux_repond to insmod %s", name);
+                flux_log_error (ctx->h, "flux_respond to insmod %s", name);
             flux_msg_destroy (msg);
         }
     }
@@ -2684,7 +2684,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         svc_remove (ctx->services, module_get_name (p));
         while ((msg = module_pop_rmmod (p))) {
             if (flux_respond (ctx->h, msg, 0, NULL) < 0)
-                flux_log_error (ctx->h, "flux_repond to rmmod %s", name);
+                flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
             flux_msg_destroy (msg);
         }
         module_remove (ctx->modhash, p);
