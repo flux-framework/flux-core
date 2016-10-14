@@ -396,6 +396,17 @@ test_expect_success 'wreck: no KVS watchers leaked after 10 jobs' '
 	test_cmp w.before w.after
 '
 
+test_expect_success 'wreck: can adjust lwj kvs hiearchy with broker attrs' '
+    result=$(flux start -o,-Swreck.lwj-dir-levels=0 flux wreck kvs-path 256) &&
+    test_debug "echo result is $result" &&
+    test "$result" = "lwj.256" &&
+    result=$(flux start -o,-Swreck.lwj-dir-levels=3,-Swreck.lwj-bits-per-dir=6 flux wreck kvs-path 256) &&
+    test_debug "echo result is $result" &&
+    test "$result" = "lwj.0.0.4.256" &&
+    result=$(flux start -o,-Swreck.lwj-dir-levels=0 flux wreckrun echo hello) &&
+    test "$result" = "hello"
+'
+
 test_debug "flux wreck ls"
 
 test_done
