@@ -1319,6 +1319,70 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
     return zmsg_recv (sock);
 }
 
+int flux_msg_sendzsock_munge (void *sock, const flux_msg_t *msg,
+                              flux_sec_t *sec)
+{
+    int rc = -1;
+    size_t size, credsize;
+    char *buf = NULL;
+    char *cred = NULL;
+    void *handle;
+
+    if (!sock || !msg || !sec) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!flux_sec_type_enabled (sec, FLUX_SEC_TYPE_MUNGE))
+        return flux_msg_sendzsock (sock, msg);
+
+    size = flux_msg_encode_size (msg);
+    if (!(buf = calloc (1, size))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (flux_msg_encode (msg, buf, size) < 0)
+        goto done;
+    if (flux_sec_munge (sec, buf, size, &cred, &credsize) < 0)
+        goto done;
+    handle = zsock_resolve (sock);
+    if (zmq_send (handle, cred, credsize, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (buf)
+        free (buf);
+    if (cred)
+        free (cred);
+    return rc;
+}
+
+flux_msg_t *flux_msg_recvzsock_munge (void *sock, flux_sec_t *sec)
+{
+    flux_msg_t *msg = NULL;
+    zframe_t *zf = NULL;
+    size_t size;
+    char *buf = NULL;
+
+    if (!sock || !sec) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!flux_sec_type_enabled (sec, FLUX_SEC_TYPE_MUNGE))
+        return flux_msg_recvzsock (sock);
+
+    if (!(zf = zframe_recv (sock)))
+        goto done;
+    if (flux_sec_unmunge (sec, (char *)zframe_data (zf), zframe_size (zf),
+                          &buf, &size) < 0)
+        goto done;
+    msg = flux_msg_decode (buf, size);
+done:
+    if (buf)
+        free (buf);
+    zframe_destroy (&zf);
+    return msg;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

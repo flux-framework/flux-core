@@ -2,7 +2,6 @@
 #define _FLUX_CORE_SECURITY_H
 
 #include <stdbool.h>
-#include "message.h"
 
 #define DEFAULT_ZAP_DOMAIN      "flux"
 
@@ -28,6 +27,7 @@ void flux_sec_destroy (flux_sec_t *c);
  */
 int flux_sec_enable (flux_sec_t *c, int type);
 int flux_sec_disable (flux_sec_t *c, int type);
+bool flux_sec_type_enabled (flux_sec_t *c, int tm);
 
 /* Get/set config directory used by security context.
  */
@@ -50,15 +50,6 @@ int flux_sec_munge_init (flux_sec_t *c);
 int flux_sec_csockinit (flux_sec_t *c, void *sock);
 int flux_sec_ssockinit (flux_sec_t *c, void *sock);
 
-/* Munge/unmunge a msg.  The munged message is a single part
- * containing a munge credential, with the original message encoded
- * inside.  MUNGE_OPT_UID_RESTRICTION is used to obtain privacy.
- * Be aware that SUB subscriptions will no longer match the message's
- * encoded topic string (you should subscribe to all).
- */
-int flux_sec_munge_zmsg (flux_sec_t *c, flux_msg_t **msg);
-int flux_sec_unmunge_zmsg (flux_sec_t *c, flux_msg_t **msg);
-
 /* Retrieve a string describing the last error.
  * This value is valid after one of the above calls returns -1.
  * The caller should not free this string.
@@ -69,6 +60,15 @@ const char *flux_sec_errstr (flux_sec_t *c);
  * The caller should not free this string.
  */
 const char *flux_sec_confstr (flux_sec_t *c);
+
+/* Convert a buffer to/from a Munge credential.
+ * Privacy is ensured through the use of MUNGE_OPT_UID_RESTRICTION
+ * Caller must free resulting string.
+ */
+int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
+                    char **outbuf, size_t *outsize);
+int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
+                      char **outbuf, size_t *outsize);
 
 #endif /* _FLUX_CORE_SECURITY_H */
 

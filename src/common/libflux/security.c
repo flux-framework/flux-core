@@ -652,89 +652,52 @@ done:
     return rc;
 }
 
-int flux_sec_munge_zmsg (flux_sec_t *c, zmsg_t **zmsg)
+int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
+                    char **outbuf, size_t *outsize)
 {
-    char *buf = NULL, *cr = NULL;
     munge_err_t e;
-    zframe_t *zf;
-    size_t len;
     int rc = -1;
 
-    lock_sec (c);
-    if (!(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
-        unlock_sec (c);
-        return 0;
-    }
-    if (!*zmsg) {
+    if (!inbuf || !outbuf || !outsize || !c
+                          || !(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
         errno = EINVAL;
-        goto done_unlock;
+        return -1;
     }
-    if ((len  = zmsg_encode (*zmsg, (byte **)&buf)) == 0) {
-        if (errno == 0)
-            errno = EINVAL;
-        seterrstr (c, "zmsg_encode: Unexpectedly got length == 0!");
-        goto done_unlock;
-    }
-    if ((e = munge_encode (&cr, c->mctx, buf, len)) != EMUNGE_SUCCESS) {
+    lock_sec (c);
+    if ((e = munge_encode (outbuf, c->mctx, inbuf, insize)) != EMUNGE_SUCCESS) {
         seterrstr (c, "munge_encode: %s", munge_strerror (e));
-        if (errno == 0)
-            errno = EINVAL;
+        errno = EKEYREJECTED;
         goto done_unlock;
     }
-    while ((zf = zmsg_pop (*zmsg)))     /* pop original parts and free */
-        zframe_destroy (&zf);
-    if (zmsg_pushstr (*zmsg, cr) < 0)   /* push munge cred */
-        oom ();
+    *outsize = strlen (*outbuf) + 1;
     rc = 0;
 done_unlock:
     unlock_sec (c);
-    if (buf)
-        free (buf);
-    if (cr)
-        free (cr);
     return rc;
 }
 
-int flux_sec_unmunge_zmsg (flux_sec_t *c, zmsg_t **zmsg)
+int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
+                      char **outbuf, size_t *outsize)
 {
-    char *cr = NULL, *buf = NULL;
-    int len;
     munge_err_t e;
     int rc = -1;
 
-    lock_sec (c);
-    if (!(c->typemask & FLUX_SEC_TYPE_MUNGE) || !*zmsg
-                                             || !zmsg_content_size (*zmsg)) {
-        unlock_sec (c);
-        return 0;
-    }
-    cr = zmsg_popstr (*zmsg);           /* pop munge cred */
-    if (!cr) {
-        seterrstr (c, "message has no MUNGE cred");
+    if (!c || !inbuf || !outbuf || !outsize || inbuf[insize - 1] != '\0'
+                     || !(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
         errno = EINVAL;
-        goto done_unlock;
+        return -1;
     }
-    e = munge_decode (cr, c->mctx, (void *)&buf, &len, NULL, NULL);
+    lock_sec (c);
+    e = munge_decode (inbuf, c->mctx, (void **)outbuf, (int *)outsize,
+                      NULL, NULL);
     if (e != EMUNGE_SUCCESS) {
         seterrstr (c, "munge_decode: %s", munge_strerror (e));
-        if (errno == 0)
-            errno = EINVAL;
-        goto done_unlock;
-    }
-    zmsg_destroy (zmsg);
-    if (!(*zmsg = zmsg_decode ((byte *)buf, len))) {
-        seterrstr (c, "zmsg_decode: %s", flux_strerror (errno));
-        if (errno == 0)
-            errno = EINVAL;
+        errno = EKEYREJECTED;
         goto done_unlock;
     }
     rc = 0;
 done_unlock:
     unlock_sec (c);
-    if (buf)
-        free (buf);
-    if (cr)
-        free (cr);
     return rc;
 }
 
