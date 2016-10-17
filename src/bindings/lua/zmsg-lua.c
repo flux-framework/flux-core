@@ -41,7 +41,7 @@
 
 struct zmsg_info {
     int     typemask;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     char *tag;
     json_object *o;
 
@@ -51,7 +51,7 @@ struct zmsg_info {
 
 static const char * zmsg_type_string (int typemask);
 
-struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
+struct zmsg_info * zmsg_info_create (flux_msg_t **msg, int typemask)
 {
     const char *topic;
     const char *json_str;
@@ -59,19 +59,19 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
     if (zi == NULL)
         return (NULL);
 
-    if (flux_msg_get_topic (*zmsg, &topic) < 0 || !(zi->tag = strdup (topic))) {
+    if (flux_msg_get_topic (*msg, &topic) < 0 || !(zi->tag = strdup (topic))) {
         free (zi);
         return (NULL);
     }
     zi->o = NULL;
-    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0
+    if (flux_msg_get_payload_json (*msg, &json_str) < 0
                 || (json_str && !(zi->o = json_tokener_parse (json_str)))) {
         free (zi->tag);
         free (zi);
         return (NULL);
     }
 
-    zi->zmsg = zmsg_dup (*zmsg);
+    zi->msg = flux_msg_copy (*msg, true);
     zi->typemask = typemask;
 
     zi->resp = NULL;
@@ -82,8 +82,7 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
 
 static void zmsg_info_destroy (struct zmsg_info *zi)
 {
-    if (zi->zmsg)
-        zmsg_destroy (&zi->zmsg);
+    flux_msg_destroy (zi->msg);
     if (zi->o)
         json_object_put (zi->o);
     if (zi->tag)
@@ -96,9 +95,9 @@ const json_object *zmsg_info_json (struct zmsg_info *zi)
     return (zi->o);
 }
 
-zmsg_t **zmsg_info_zmsg (struct zmsg_info *zi)
+flux_msg_t **zmsg_info_zmsg (struct zmsg_info *zi)
 {
-    return (&zi->zmsg);
+    return (&zi->msg);
 }
 
 int zmsg_info_register_resp_cb (struct zmsg_info *zi, zi_resp_f f, void *arg)
@@ -161,13 +160,13 @@ static int l_zmsg_info_index (lua_State *L)
         if (!(zi->typemask & FLUX_MSGTYPE_RESPONSE))
             return lua_pusherror (L,
                 "zmsg: errnum requested for non-respose msg");
-        flux_msg_get_errnum (zi->zmsg, &errnum);
+        flux_msg_get_errnum (zi->msg, &errnum);
         lua_pushnumber (L, errnum);
         return (1);
     }
     if (strcmp (key, "matchtag") == 0) {
         uint32_t matchtag;
-        if (flux_msg_get_matchtag (zi->zmsg, &matchtag) < 0)
+        if (flux_msg_get_matchtag (zi->msg, &matchtag) < 0)
             return lua_pusherror (L, "zmsg: matchtag: %s",
                                   (char *)flux_strerror (errno));
         lua_pushnumber (L, matchtag);
