@@ -38,7 +38,7 @@
 int flux_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, json_object *in)
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg = NULL;
     int rc = -1;
     int flags = 0;
 
@@ -46,40 +46,41 @@ int flux_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
         errno = EINVAL;
         goto done;
     }
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
         if (flux_get_rank (h, &nodeid) < 0)
             goto done;
     }
-    if (flux_msg_set_nodeid (zmsg, nodeid, flags) < 0)
+    if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
         goto done;
-    if (flux_msg_set_matchtag (zmsg, matchtag) < 0)
+    if (flux_msg_set_matchtag (msg, matchtag) < 0)
         goto done;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
+    if (flux_msg_set_topic (msg, topic) < 0)
         goto done;
-    if (flux_msg_set_payload_json (zmsg, in ? Jtostr (in) : NULL) < 0)
+    if (flux_msg_set_payload_json (msg, in ? Jtostr (in) : NULL) < 0)
         goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
+    if (flux_msg_enable_route (msg) < 0)
         goto done;
-    rc = flux_send (h, zmsg, 0);
+    rc = flux_send (h, msg, 0);
 done:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
-int flux_json_respond (flux_t *h, json_object *out, zmsg_t **zmsg)
+int flux_json_respond (flux_t *h, json_object *out, flux_msg_t **msg)
 {
     int rc = -1;
 
-    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+    if (flux_msg_set_type (*msg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto done;
-    if (flux_msg_set_payload_json (*zmsg, out ? Jtostr (out) : NULL) < 0)
+    if (flux_msg_set_payload_json (*msg, out ? Jtostr (out) : NULL) < 0)
         goto done;
-    if (flux_send (h, *zmsg, 0) < 0)
+    if (flux_send (h, *msg, 0) < 0)
         goto done;
-    zmsg_destroy (zmsg);
+    flux_msg_destroy (*msg);
+    *msg = NULL;
     rc = 0;
 done:
     return rc;
