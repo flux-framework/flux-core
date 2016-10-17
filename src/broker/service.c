@@ -113,16 +113,16 @@ svc_t *svc_add (svchash_t *sh, const char *name, const char *alias,
     return svc;
 }
 
-int svc_sendmsg (svchash_t *sh, zmsg_t **zmsg)
+int svc_sendmsg (svchash_t *sh, flux_msg_t **msg)
 {
     const char *topic;
     int type;
     svc_t *svc;
     int rc = -1;
 
-    if (flux_msg_get_type (*zmsg, &type) < 0)
+    if (flux_msg_get_type (*msg, &type) < 0)
         goto done;
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
+    if (flux_msg_get_topic (*msg, &topic) < 0)
         goto done;
     if (!(svc = zhash_lookup (sh->services, topic)))
         svc = zhash_lookup (sh->aliases, topic);
@@ -138,7 +138,7 @@ int svc_sendmsg (svchash_t *sh, zmsg_t **zmsg)
         errno = ENOSYS;
         goto done;
     }
-    rc = svc->cb (zmsg, svc->cb_arg);
+    rc = svc->cb (msg, svc->cb_arg);
 done:
     return rc;
 }
