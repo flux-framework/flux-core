@@ -117,13 +117,9 @@ test_expect_success 'event: can subscribe' '
 # for now we just ensure snoop basically works
 test_expect_success 'snoop: produces output (XXX needs fixing)' '
 	flux snoop -c 1 --verbose >output_snoop 2>&1 &
-        flux snoop -c 1 --verbose --long >output_snoop_long 2>&1 &
-	test_expect_code 0 wait &&
 	test_expect_code 0 wait &&
 	test -s output_snoop &&
-	test -s output_snoop_long &&
-	head output_snoop | grep "^flux-snoop: connecting to" &&
-	head output_snoop_long | grep "^flux-snoop: connecting to"
+	head output_snoop | grep "^flux-snoop: connecting to"
 '
 
 test_expect_success 'version: reports an expected string' '

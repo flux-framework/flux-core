@@ -33,14 +33,13 @@
 #include "src/common/libutil/oom.h"
 
 
-#define OPTIONS "hanN:vlc:"
+#define OPTIONS "hanN:vc:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"all",        no_argument,        0, 'a'},
     {"count",      required_argument,  0, 'c'},
     {"no-security",no_argument,        0, 'n'},
     {"verbose",    no_argument,        0, 'v'},
-    {"long",       no_argument,        0, 'l'},
     {"session-name",required_argument, 0, 'N'},
     { 0, 0, 0, 0 },
 };
@@ -52,7 +51,6 @@ void usage (void)
     fprintf (stderr,
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
 "  -a,--all               Do not suppress cmb.log, cmb.pub\n"
-"  -l,--long              Display long message format\n"
 "  -c,--count=N           Display N messages and exit\n"
 #if 0 /* These options are for debugging, not generally useful */
 "  -n,--no-security       Try to connect without CURVE security\n"
@@ -70,7 +68,6 @@ static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 static int maxcount = 0;
 static int count = 0;
 static bool aopt = false;
-static bool lopt = false;
 zlist_t *subscriptions = NULL;
 
 int main (int argc, char *argv[])
@@ -104,9 +101,6 @@ int main (int argc, char *argv[])
                 maxcount = atoi (optarg);
                 if (maxcount < 0 || maxcount > INT_MAX)
                     log_msg_exit ("--count: invalid arg: '%s'", optarg);
-                break;
-            case 'l': /* --long */
-                lopt = true;
                 break;
             case 'n': /* --no-security */
                 nopt = true;
@@ -243,18 +237,15 @@ static bool subscribed (const char *topic)
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
 {
     void *zs = item->socket;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
 
-    if ((zmsg = zmsg_recv (zs))) {
+    if ((msg = flux_msg_recvzsock (zs))) {
         const char *topic;
-        if (flux_msg_get_topic (zmsg, &topic) < 0
+        if (flux_msg_get_topic (msg, &topic) < 0
                  || (subscribed (topic) && (aopt || !suppress (topic)))) {
-            if (lopt)
-                zmsg_dump (zmsg);
-            else
-                flux_msg_fprint (stdout, zmsg);
+            flux_msg_fprint (stdout, msg);
         }
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
     }
     if (++count == maxcount)
         return (-1);
