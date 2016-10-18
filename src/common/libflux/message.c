@@ -1383,6 +1383,12 @@ done:
     return msg;
 }
 
+int flux_msg_frames (const flux_msg_t *msg)
+{
+    return zmsg_size (msg);
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

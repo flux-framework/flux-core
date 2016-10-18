@@ -76,6 +76,10 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
 size_t flux_msg_encode_size (const flux_msg_t *msg);
 int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size);
 
+/* Get the number of message frames in 'msg'.
+ */
+int flux_msg_frames (const flux_msg_t *msg);
+
 /* Decode a flux_msg_t from buffer.
  * Returns message on success, NULL on failure with errno set.
  * Caller must destroy message with flux_msg_destroy().
