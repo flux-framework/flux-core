@@ -211,10 +211,12 @@ static void nodeset_print (nodeset_t *ns, const char *label, fmt_t fmt)
             break;
         case FMT_COMMA:
             nodeset_config_ranges (ns, false);
+            nodeset_config_brackets (ns, false);
             nodeset_config_separator (ns, ',');
             break;
         case FMT_NEWLINE:
             nodeset_config_ranges (ns, false);
+            nodeset_config_brackets (ns, false);
             nodeset_config_separator (ns, '\n');
             break;
     }
