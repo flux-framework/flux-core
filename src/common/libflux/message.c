@@ -32,6 +32,7 @@
 #include <assert.h>
 #include <fnmatch.h>
 #include <czmq.h>
+#include <jansson.h>
 
 #include "message.h"
 
@@ -49,6 +50,7 @@
 
 struct flux_msg {
     zmsg_t *zmsg;
+    json_t *json;
 };
 
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
@@ -206,6 +208,7 @@ void flux_msg_destroy (flux_msg_t *msg)
 {
     if (msg) {
         int saved_errno = errno;
+        json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
         free (msg);
         errno = saved_errno;
@@ -820,6 +823,8 @@ int flux_msg_set_payload (flux_msg_t *msg, int flags, const void *buf, int size)
     uint8_t msgflags;
     int rc = -1;
 
+    json_decref (msg->json);            /* invalidate cached json object */
+    msg->json = NULL;
     if (flags != 0 && flags != FLUX_MSGFLAG_JSON) {
         errno = EINVAL;
         goto done;
@@ -879,6 +884,42 @@ int flux_msg_set_payload (flux_msg_t *msg, int flags, const void *buf, int size)
         goto done;
     rc = 0;
 done:
+    return rc;
+}
+
+int flux_msg_vset_jsonf (flux_msg_t *msg, const char *fmt, va_list ap)
+{
+    json_error_t error;
+    char *json_str = NULL;
+    json_t *json;
+    int rc = -1;
+
+    if (!(json = json_vpack_ex (&error, 0, fmt, ap))) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(json_str = json_dumps (json, JSON_COMPACT))) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_set_json (msg, json_str) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (json_str)
+        free (json_str);
+    json_decref (json);
+    return rc;
+}
+
+int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_msg_vset_jsonf (msg, fmt, ap);
+    va_end (ap);
     return rc;
 }
 
@@ -968,6 +1009,49 @@ int flux_msg_get_json (const flux_msg_t *msg, const char **s)
     }
     rc = 0;
 done:
+    return rc;
+}
+
+/* N.B. const attribute of msg argument is defeated internally to
+ * allow msg to be "annotated" with parsed json object for convenience.
+ * The message content is otherwise unchanged.
+ */
+int flux_msg_vget_jsonf (const flux_msg_t *cmsg, const char *fmt, va_list ap)
+{
+    int rc = -1;
+    const char *json_str;
+    json_error_t error;
+    flux_msg_t *msg = (flux_msg_t *)cmsg;
+
+    if (!msg || !fmt || *fmt == '\0') {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!msg->json) {
+        if (flux_msg_get_json (msg, &json_str) < 0)
+            goto done;
+        if (!json_str || !(msg->json = json_loads (json_str, 0, &error))) {
+            errno = EPROTO;
+            goto done;
+        }
+    }
+    if (json_vunpack_ex (msg->json, &error, 0, fmt, ap) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_msg_get_jsonf (const flux_msg_t *msg, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_msg_vget_jsonf (msg, fmt, ap);
+    va_end (ap);
     return rc;
 }
 
@@ -1406,7 +1490,6 @@ int flux_msg_frames (const flux_msg_t *msg)
 {
     return zmsg_size (msg->zmsg);
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

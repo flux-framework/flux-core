@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include "security.h"
 
@@ -139,20 +140,28 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * Set function adds/deletes/replaces payload frame as needed.
  * The new payload will be copied (caller retains ownership).
  * Any old payload is deleted.
- * Get_payload returns pointer to msg-owned buf.
+ * flux_msg_get_payload returns pointer to msg-owned buf.
  * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
+                          void *buf, int *size);
 int flux_msg_set_payload (flux_msg_t *msg, int flags,
                           const void *buf, int size);
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void *buf, int *size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
-/* Get/set json string payload.
- * set allows json_str to be NULL
- * get will set *json_str to NULL and return success if there is no payload.
+/* Get/set JSON payload.
+ * flux_msg_set_json() accepts a NULL json_str (no payload).
+ * flux_msg_get_json() will set json_str to NULL if there is no payload
+ * jsonf functions use jansson pack/unpack style arguments for
+ * encoding/decoding the JSON object payload directly from/to its members.
  */
 int flux_msg_set_json (flux_msg_t *msg, const char *json_str);
+int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_vset_jsonf (flux_msg_t *msg, const char *fmt, va_list ap);
+
 int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
+int flux_msg_get_jsonf (const flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_vget_jsonf (const flux_msg_t *msg, const char *fmt, va_list ap);
 
 /* Get/set nodeid (request only)
  * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.
