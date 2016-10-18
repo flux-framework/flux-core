@@ -311,7 +311,8 @@ static int jobid_exist (flux_t *h, int64_t j)
     if (path == NULL)
         return -1;
     if (kvs_get_dir (h, &d, "%s", path) < 0) {
-        flux_log (h, LOG_DEBUG, "%s doesn't exist", path);
+        flux_log (h, LOG_DEBUG, "kvs_get_dir(%s): %s",
+                     path, flux_strerror (errno));
         return -1;
     }
     kvsdir_destroy (d);
