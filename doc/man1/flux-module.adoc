@@ -49,6 +49,9 @@ OPTIONS
 *-r, --rank*=['all'|'nodeset']::
 Specify which ranks to apply the command to.
 
+*-x, --exclude*=['nodeset']::
+Specify ranks to exclude the command from.
+
 
 LIST OUTPUT
 -----------
