@@ -7,11 +7,6 @@
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
 
-int msg_size (flux_msg_t *msg)
-{
-    return zmsg_size (msg);
-}
-
 /* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
  *   on message with variable number of routing frames
  */
@@ -21,7 +16,7 @@ void check_routes (void)
     char *s;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
-        && msg_size (msg) == 1,
+        && flux_msg_frames (msg) == 1,
         "flux_msg_create works and creates msg with 1 frame");
     errno = 0;
     ok (flux_msg_get_route_count (msg) < 0 && errno == EPROTO,
@@ -35,9 +30,9 @@ void check_routes (void)
     ok ((flux_msg_pop_route (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_pop_route returns -1 errno EPROTO on msg w/o delim");
 
-    ok (flux_msg_clear_route (msg) == 0 && msg_size (msg) == 1,
+    ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
         "flux_msg_clear_route works, is no-op on msg w/o delim");
-    ok (flux_msg_enable_route (msg) == 0 && msg_size (msg) == 2,
+    ok (flux_msg_enable_route (msg) == 0 && flux_msg_frames (msg) == 2,
         "flux_msg_enable_route works, adds one frame on msg w/o delim");
     ok ((flux_msg_get_route_count (msg) == 0),
         "flux_msg_get_route_count returns 0 on msg w/delim");
@@ -48,7 +43,7 @@ void check_routes (void)
         "flux_msg_get_route_first returns 0, id=NULL on msg w/delim");
     ok (flux_msg_get_route_last (msg, &s) == 0 && s == NULL,
         "flux_msg_get_route_last returns 0, id=NULL on msg w/delim");
-    ok (flux_msg_push_route (msg, "sender") == 0 && msg_size (msg) == 3,
+    ok (flux_msg_push_route (msg, "sender") == 0 && flux_msg_frames (msg) == 3,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 1),
         "flux_msg_get_route_count returns 1 on msg w/delim+id");
@@ -65,7 +60,7 @@ void check_routes (void)
         "flux_msg_get_route_last returns id on msg w/delim+id");
     free (s);
 
-    ok (flux_msg_push_route (msg, "router") == 0 && msg_size (msg) == 4,
+    ok (flux_msg_push_route (msg, "router") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 2),
         "flux_msg_get_route_count returns 2 on msg w/delim+id1+id2");
@@ -89,7 +84,7 @@ void check_routes (void)
         "flux_msg_pop_routet returns id2 on message with delim+id1+id2");
     free (s);
 
-    ok (flux_msg_clear_route (msg) == 0 && msg_size (msg) == 1,
+    ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
         "flux_msg_clear_route strips routing frames and delim");
     flux_msg_destroy (msg);
 }
@@ -193,7 +188,7 @@ void check_payload (void)
     errno = 0;
     memset (pay, 42, plen);
     ok (flux_msg_set_payload (msg, 0, pay, plen) == 0
-        && msg_size (msg) == 2,
+        && flux_msg_frames (msg) == 2,
        "flux_msg_set_payload works");
 
     len = 0; buf = NULL; flags =0; errno = 0;
@@ -203,7 +198,7 @@ void check_payload (void)
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
-    ok (flux_msg_set_topic (msg, "blorg") == 0 && msg_size (msg) == 3,
+    ok (flux_msg_set_topic (msg, "blorg") == 0 && flux_msg_frames (msg) == 3,
        "flux_msg_set_topic works");
     len = 0; buf = NULL; flags = 0; errno = 0;
     ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
@@ -211,12 +206,12 @@ void check_payload (void)
        "flux_msg_get_payload works with topic");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
-    ok (flux_msg_set_topic (msg, NULL) == 0 && msg_size (msg) == 2,
+    ok (flux_msg_set_topic (msg, NULL) == 0 && flux_msg_frames (msg) == 2,
        "flux_msg_set_topic NULL works");
 
-    ok (flux_msg_enable_route (msg) == 0 && msg_size (msg) == 3,
+    ok (flux_msg_enable_route (msg) == 0 && flux_msg_frames (msg) == 3,
         "flux_msg_enable_route works");
-    ok (flux_msg_push_route (msg, "id1") == 0 && msg_size (msg) == 4,
+    ok (flux_msg_push_route (msg, "id1") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works");
 
     len = 0; buf = NULL; flags =0; errno = 0;
@@ -226,7 +221,7 @@ void check_payload (void)
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
-    ok (flux_msg_set_topic (msg, "blorg") == 0 && msg_size (msg) == 5,
+    ok (flux_msg_set_topic (msg, "blorg") == 0 && flux_msg_frames (msg) == 5,
        "flux_msg_set_topic works");
     len = 0; buf = NULL; flags = 0; errno = 0;
     ok (flux_msg_get_payload (msg, &flags, &buf, &len) == 0
