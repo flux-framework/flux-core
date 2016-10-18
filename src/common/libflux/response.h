@@ -31,7 +31,8 @@ int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
 
 flux_msg_t *flux_response_encode (const char *topic, int errnum,
                                   const char *json_str);
-
+/* Encode a response message with optional raw payload.
+ */
 flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
                                       const void *data, int len);
 
@@ -41,6 +42,15 @@ flux_msg_t *flux_response_encode_raw (const char *topic, int errnum,
  */
 int flux_respond (flux_t *h, const flux_msg_t *request,
                   int errnum, const char *json_str);
+
+/* Create a response to the provided request message with json payload, using
+ * jansson pack style variable arguments for encoding the JSON object
+ * payload directly.
+ * All errors in this function are fatal - see flux_fatal_set().
+ */
+int flux_respondf (flux_t *h, const flux_msg_t *request,
+                   const char *fmt, ...);
+
 
 /* Create a response to the provided request message with optional raw payload.
  * If errnum is nonzero, payload argument is ignored.

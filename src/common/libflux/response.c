@@ -217,6 +217,36 @@ fatal:
     return -1;
 }
 
+static int flux_vrespondf (flux_t *h, const flux_msg_t *request,
+                    const char *fmt, va_list ap)
+{
+    flux_msg_t *msg = derive_response (h, request, 0);
+    if (!msg)
+        goto fatal;
+    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+        goto fatal;
+    if (flux_send (h, msg, 0) < 0)
+        goto fatal;
+    flux_msg_destroy (msg);
+    return 0;
+fatal:
+    flux_msg_destroy (msg);
+    FLUX_FATAL (h);
+    return -1;
+}
+
+int flux_respondf (flux_t *h, const flux_msg_t *request,
+                   const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, fmt);
+    rc = flux_vrespondf (h, request, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       int errnum, const void *data, int len)
 {
