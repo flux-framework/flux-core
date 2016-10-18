@@ -38,7 +38,7 @@
 #include "lutil.h"
 
 
-zmsg_t *l_cmb_zmsg_encode (lua_State *L)
+flux_msg_t *l_cmb_zmsg_encode (lua_State *L)
 {
 	const char *tag = lua_tostring (L, 1);
 	json_object *o;
@@ -47,44 +47,44 @@ zmsg_t *l_cmb_zmsg_encode (lua_State *L)
 	if ((o == NULL) || (tag == NULL))
 		return NULL;
 
-    zmsg_t *zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    flux_msg_t *msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
     const char *json_str = json_object_to_json_string (o);
-    if (!zmsg || flux_msg_set_topic (zmsg, tag) < 0
-              || flux_msg_set_payload_json (zmsg, json_str) < 0) {
-        zmsg_destroy (&zmsg);
+    if (!msg || flux_msg_set_topic (msg, tag) < 0
+              || flux_msg_set_payload_json (msg, json_str) < 0) {
+        flux_msg_destroy (msg);
         return NULL;
     }
-    return (zmsg);
+    return (msg);
 }
 
 static int l_zi_resp_cb (lua_State *L,
     struct zmsg_info *zi, json_object *resp, void *arg)
 {
-    zmsg_t **old = zmsg_info_zmsg (zi);
-    zmsg_t **zmsg = malloc (sizeof (*zmsg));
-    *zmsg = zmsg_dup (*old);
+    flux_msg_t **old = zmsg_info_zmsg (zi);
+    flux_msg_t **msg = malloc (sizeof (*msg));
+    *msg = flux_msg_copy (*old, true);
 
     const char *json_str = NULL;
     if (resp)
         json_str = json_object_to_json_string (resp);
-    if (flux_msg_set_payload_json (*zmsg, json_str) < 0) {
-        zmsg_destroy (zmsg);
-        free (zmsg);
+    if (flux_msg_set_payload_json (*msg, json_str) < 0) {
+        flux_msg_destroy (*msg);
+        free (msg);
         return lua_pusherror (L, "flux_msg_set_payload_json: %s", strerror (errno));
     }
 
-    return lua_push_zmsg_info (L, zmsg_info_create (zmsg, FLUX_MSGTYPE_RESPONSE));
+    return lua_push_zmsg_info (L, zmsg_info_create (msg, FLUX_MSGTYPE_RESPONSE));
 }
 
 static int l_cmb_zmsg_create_type (lua_State *L, int type)
 {
     struct zmsg_info *zi;
-	zmsg_t **zmsg = malloc (sizeof (*zmsg));
-	if ((*zmsg = l_cmb_zmsg_encode (L)) == NULL) {
-        free (zmsg);
+	flux_msg_t **msg = malloc (sizeof (*msg));
+	if ((*msg = l_cmb_zmsg_encode (L)) == NULL) {
+        free (msg);
         return luaL_error (L, "Failed to encode zmsg");
     }
-    zi = zmsg_info_create (zmsg, type);
+    zi = zmsg_info_create (msg, type);
     zmsg_info_register_resp_cb (zi, l_zi_resp_cb, NULL);
 
 	return lua_push_zmsg_info (L, zi);
@@ -103,22 +103,22 @@ static int l_cmb_zmsg_create_response_with_error (lua_State *L)
     struct zmsg_info *zi;
     int errnum;
     const char *tag;
-    zmsg_t *zmsg = flux_msg_create (FLUX_MSGTYPE_RESPONSE);
-    if (!zmsg)
+    flux_msg_t *msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE);
+    if (!msg)
         return lua_pusherror (L, "flux_msg_create: %s", strerror (errno));
 
     tag = lua_tostring (L, 1);
     errnum = lua_tointeger (L, 2);
 
-    if (flux_msg_set_topic (zmsg, tag) < 0)
+    if (flux_msg_set_topic (msg, tag) < 0)
         return lua_pusherror (L, "flux_msg_set_topic: %s", strerror (errno));
-    if (flux_msg_set_errnum (zmsg, errnum) < 0)
+    if (flux_msg_set_errnum (msg, errnum) < 0)
         return lua_pusherror (L, "flux_msg_set_errnum: %s", strerror (errno));
-    if (flux_msg_set_payload (zmsg, 0, NULL, 0))
+    if (flux_msg_set_payload (msg, 0, NULL, 0))
         return lua_pusherror (L, "flux_msg_set_payload: %s", strerror (errno));
 
-    zi = zmsg_info_create (&zmsg, FLUX_MSGTYPE_RESPONSE);
-    zmsg_destroy (&zmsg);
+    zi = zmsg_info_create (&msg, FLUX_MSGTYPE_RESPONSE);
+    flux_msg_destroy (msg);
 
     return lua_push_zmsg_info (L, zi);
 }
