@@ -11,6 +11,10 @@ Test exec functionality
 SIZE=4
 test_under_flux ${SIZE} minimal
 
+invalid_rank() {
+       echo $((${SIZE} + 1))
+}
+
 test_expect_success 'basic exec functionality' '
 	flux exec /bin/true
 '
@@ -23,7 +27,15 @@ test_expect_success 'exec to "all" ranks' '
 	flux exec -r all /bin/true
 '
 test_expect_success 'exec to non-existent rank is an error' '
-	test_must_fail flux exec -r 9999 /bin/true
+	test_must_fail flux exec -r $(invalid_rank) /bin/true
+'
+
+test_expect_success 'exec to valid and invalid ranks works' '
+	flux exec -r 0,$(invalid_rank) echo working 1>stdout 2>stderr </dev/null
+	count1=$(grep -c working stdout) &&
+	count2=$(grep -c "No route to host" stderr) &&
+	test "$count1" = "1" &&
+	test "$count2" = "1"
 '
 
 test_expect_success 'test_on_rank works' '
@@ -175,6 +187,25 @@ test_expect_success 'process listing works - all ranks' '
 	test "$count" = "4" &&
 	test_expect_code 130 wait $q &&
 	test "$(flux ps -r all | grep -c sleep)" = "0"
+'
+
+test_expect_success 'process listing fails on invalid rank' '
+	flux ps -r $(invalid_rank) 2> stderr
+	grep "No route to host" stderr
+'
+
+test_expect_success 'process listing with valid and invalid ranks' '
+	flux exec -r 0,$(invalid_rank) sleep 100 </dev/null &
+	q=$! &&
+	sleep 1 &&
+	flux ps -r 0,$(invalid_rank) 1> stdout 2> stderr &&
+	count1=$(grep -c sleep stdout) &&
+	count2=$(grep -c "No route to host" stderr) &&
+	kill -INT $q &&
+	test "$count1" = "1" &&
+	test "$count2" = "1" &&
+	test_expect_code 130 wait $q &&
+	test "$(flux ps -r 0,$(invalid_rank) | grep -c sleep)" = "0"
 '
 
 test_expect_success 'flux-exec disconnect terminates all running processes' '
