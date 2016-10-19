@@ -19,6 +19,9 @@ test_expect_success 'exec to specific rank' '
 	flux exec -r 0 /bin/true
 '
 
+test_expect_success 'exec to "all" ranks' '
+	flux exec -r all /bin/true
+'
 test_expect_success 'exec to non-existent rank is an error' '
 	test_must_fail flux exec -r 9999 /bin/true
 '
@@ -161,6 +164,17 @@ test_expect_success 'process listing works - multiple processes' '
 	test_expect_code 130 wait $q &&
 	test "$(flux ps | grep -c sleep)" = "0"
 
+'
+
+test_expect_success 'process listing works - all ranks' '
+	flux exec -r all sleep 100 </dev/null &
+	q=$! &&
+	sleep 1 &&
+	count=$(flux ps -r all | grep -c sleep) &&
+	kill -INT $q &&
+	test "$count" = "4" &&
+	test_expect_code 130 wait $q &&
+	test "$(flux ps -r all | grep -c sleep)" = "0"
 '
 
 test_expect_success 'flux-exec disconnect terminates all running processes' '
