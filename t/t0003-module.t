@@ -124,4 +124,12 @@ test_expect_success 'module: remove fails on invalid module' '
 	grep "nosuchmodule: No such file or directory" stderr
 '
 
+test_expect_success 'module: info works' '
+	flux module info ${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+'
+
+test_expect_success 'module: info fails on invalid module' '
+	! flux module info nosuchmodule
+'
+
 test_done
