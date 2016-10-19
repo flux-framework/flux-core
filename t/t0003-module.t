@@ -114,5 +114,14 @@ test_expect_success 'module: remove works on valid and invalid rank' '
 	grep "No route to host" stderr
 '
 
+test_expect_success 'module: load fails on invalid module' '
+	flux module load nosuchmodule 2> stderr
+	grep "nosuchmodule: not found in module search path" stderr
+'
+
+test_expect_success 'module: remove fails on invalid module' '
+	flux module remove nosuchmodule 2> stderr
+	grep "nosuchmodule: No such file or directory" stderr
+'
 
 test_done
