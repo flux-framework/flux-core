@@ -80,7 +80,7 @@ local function display_usage ()
 end
 
 local function get_ranklist (f, r)
-    if not r then r = '0-'..f.size-1 end
+    if r == "all" or not r then r = '0-'..f.size-1 end
     return hostlist.new ('['..r..']')
 end
 
