@@ -24,10 +24,16 @@ OPTIONS
 -------
 
 *-r, --rank*'=NODESET'::
-Target specific ranks in 'NODESET'. Default is to target all ranks.
+Target specific ranks in 'NODESET'. Default is to target "all" ranks.
+See NODESET FORMAT below for more information.
 
 *-v, --verbose*::
 Run with more verbosity.
+
+
+NODESET FORMAT
+--------------
+include::NODESET.adoc[]
 
 
 AUTHOR
