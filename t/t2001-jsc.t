@@ -30,6 +30,14 @@ run_flux_jstat () {
     $SHARNESS_TEST_SRCDIR/scripts/waitfile.lua --timeout 2 ${ofile} >&2
 }
 
+wait_until_pattern () {
+    local ofile="output.${1}"
+    local pat="${2}"
+    local cnt="${3:-1}"
+    $SHARNESS_TEST_SRCDIR/scripts/waitfile.lua --timeout 2 --pattern=${pat} \
+        --count=${cnt} ${ofile} >&2
+}
+
 overlap_flux_wreckruns () {
     insts=$(($1-1))
     for i in `seq 0 $insts`; do
@@ -50,6 +58,7 @@ test_expect_success 'jstat 1: notification works for 1 wreckrun' '
     cat >expected1 <<-EOF &&
 $trans
 EOF
+    wait_until_pattern 1 complete 1 &&
     cp output.1 output.1.cp &&
     kill -INT $p &&
     test_cmp expected1 output.1.cp 
@@ -61,6 +70,7 @@ test_expect_success 'jstat 2: jstat back-to-back works' '
     cat >expected2 <<-EOF &&
 $trans
 EOF
+    wait_until_pattern 2 complete 1 &&
     cp output.2 output.2.cp &&
     kill -INT $p &&
     test_cmp expected2 output.2.cp 
@@ -76,6 +86,7 @@ $trans
 $trans
 $trans
 EOF
+    wait_until_pattern 3 complete 3 &&
     cp output.3 output.3.cp &&
     kill -INT $p &&
     test_cmp expected3 output.3.cp 
@@ -108,6 +119,7 @@ $trans
 $trans
 $trans
 EOF
+    wait_until_pattern 4 complete 20 &&
     cp output.4 output.4.cp &&
     kill -INT $p &&
     test_cmp expected4 output.4.cp 
@@ -122,6 +134,7 @@ $trans
 $trans
 EOF
     sort expected5 > expected5.sort &&
+    wait_until_pattern 5 complete 3 &&
     cp output.5 output.5.cp &&
     sort output.5.cp > output.5.sort &&
     kill -INT $p &&
@@ -154,6 +167,7 @@ $trans
 $trans
 EOF
     sort expected6 > expected6.sort &&
+    wait_until_pattern 6 complete 20 &&
     cp output.6 output.6.cp &&
     sort output.6.cp > output.6.sort &&
     kill -INT $p &&
@@ -247,6 +261,7 @@ test_expect_success 'jstat 15: jstat detects failed state' '
 	reserved->starting
 	starting->failed
 	EOF
+    wait_until_pattern 15 failed 1 &&
     cp output.15 output.15.cp &&
     kill -INT $p &&
     test_cmp expected15 output.15.cp
