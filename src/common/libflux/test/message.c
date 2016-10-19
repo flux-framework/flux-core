@@ -143,7 +143,7 @@ void check_payload_json (void)
        "flux_msg_set_json scalar fails with EINVAL");
 
     /* Using the lower level flux_msg_set_payload with FLUX_MSGFLAG_JSON
-     * we can sneak in a malformed JSON paylaod and test decoding.
+     * we can sneak in a malformed JSON payload and test decoding.
      */
     errno = 0;
     ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, "[1,2,3]", 8) == 0
@@ -159,6 +159,65 @@ void check_payload_json (void)
     ok (flux_msg_get_json (msg, &s) == 0 && s != NULL
         && !strcmp (s, json_str),
        "flux_msg_get_json returns payload intact");
+
+    flux_msg_destroy (msg);
+}
+
+void check_payload_json_formatted (void)
+{
+    flux_msg_t *msg;
+    int i;
+    const char *s;
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+       "flux_msg_create works");
+    errno = 0;
+    ok (flux_msg_get_jsonf (msg, "{}") < 0 && errno == EPROTO,
+        "flux_msg_get_jsonf fails with EPROTO with no payload");
+
+    errno = 0;
+    ok (flux_msg_set_jsonf (msg, "[i,i,i]", 1,2,3) < 0 && errno == EINVAL,
+        "flux_msg_set_jsonf array fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_jsonf (msg, "i", 3.14) < 0 && errno == EINVAL,
+       "flux_msg_set_jsonf scalar fails with EINVAL");
+    ok (flux_msg_set_jsonf (msg, "{s:i, s:s}", "foo", 42, "bar", "baz") == 0,
+       "flux_msg_set_jsonf object works");
+    i = 0;
+    s = NULL;
+    ok (flux_msg_get_jsonf (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
+       "flux_msg_get_jsonf object works");
+    ok (i == 42 && s != NULL && !strcmp (s, "baz"),
+        "decoded content matches encoded content");
+
+    /* reset payload */
+    ok (flux_msg_set_jsonf (msg, "{s:i, s:s}", "foo", 43, "bar", "smurf") == 0,
+       "flux_msg_set_jsonf can replace JSON object payload");
+    i = 0;
+    s = NULL;
+    ok (flux_msg_get_jsonf (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
+       "flux_msg_get_jsonf object works");
+    ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
+        "decoded content matches new encoded content");
+
+    i = 0;
+    s = NULL;
+    ok (flux_msg_get_jsonf (msg, "{s:s, s:i}", "bar", &s, "foo", &i) == 0,
+       "flux_msg_get_jsonf object works out of order");
+    ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
+        "decoded content matches new encoded content");
+
+    errno = 0;
+    ok (flux_msg_get_jsonf (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_jsonf fails with EINVAL with NULL format");
+
+    errno = 0;
+    ok (flux_msg_get_jsonf (msg, "") < 0 && errno == EINVAL,
+        "flux_msg_get_jsonf fails with EINVAL with \"\" format");
+
+    errno = 0;
+    ok (flux_msg_get_jsonf (msg, "{s:s}", "nope", &s) < 0 && errno == EPROTO,
+        "flux_msg_get_jsonf fails with EPROTO with nonexistent key");
 
     flux_msg_destroy (msg);
 }
@@ -500,18 +559,19 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    check_proto ();                 // 17
-    check_routes ();                // 26
-    check_topic ();                 // 9
-    check_payload ();               // 21
-    check_payload_json ();          // 4
-    check_matchtag ();              // 6
+    check_proto ();
+    check_routes ();
+    check_topic ();
+    check_payload ();
+    check_payload_json ();
+    check_payload_json_formatted ();
+    check_matchtag ();
 
-    check_cmp ();                   // 8
+    check_cmp ();
 
-    check_encode ();                // 7
-    check_sendfd ();                // 7
-    check_sendzsock ();             // 8
+    check_encode ();
+    check_sendfd ();
+    check_sendzsock ();
 
     done_testing();
     return (0);
