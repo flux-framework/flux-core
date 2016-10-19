@@ -11,7 +11,7 @@ flux-ps - List managed subprocess of one or more flux brokers
 
 SYNOPSIS
 --------
-*flux* *ps* ['--rank=RANKS'] ['--verbose'] COMMANDS...
+*flux* *ps* ['--rank=NODESET'] ['--verbose'] COMMANDS...
 
 
 DESCRIPTION
@@ -23,8 +23,8 @@ the command being run.
 OPTIONS
 -------
 
-*-r, --rank*'=RANKS'::
-Target specific ranks in 'RANKS'. Default is to target all ranks.
+*-r, --rank*'=NODESET'::
+Target specific ranks in 'NODESET'. Default is to target all ranks.
 
 *-v, --verbose*::
 Run with more verbosity.

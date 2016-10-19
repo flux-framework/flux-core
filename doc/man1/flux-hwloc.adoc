@@ -46,9 +46,9 @@ Reload hwloc topology information, optionally loading hwloc XML files
 from `DIR/<rank>.xml` files.
 Options:
 
- --rank=['RANKS']:::
- -r 'RANKS':::
- Only reload XML on provided nodeset 'RANKS'.
+ --rank='NODESET':::
+ -r 'NODESET':::
+ Only reload XML on provided 'NODESET'.
 
  --walk-topology=['yes|no']:::
  -t ['yes|no']:::

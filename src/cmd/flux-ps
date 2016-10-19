@@ -44,7 +44,7 @@ List subprocesses managed by flux-broker.
 
  -h, --help           Display this message
  -v, --verbose        Be verbose.
- -r, --rank=RANKS     Target only ranks in list RANKS
+ -r, --rank=NODESET   Target only ranks in NODESET
 
 ]]
 

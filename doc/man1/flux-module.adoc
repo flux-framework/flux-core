@@ -46,10 +46,10 @@ List modules loaded by 'service', or by flux-broker(1) if 'service' is unspecifi
 
 OPTIONS
 -------
-*-r, --rank*=['all'|'nodeset']::
+*-r, --rank*'=NODESET'::
 Specify which ranks to apply the command to.
 
-*-x, --exclude*=['nodeset']::
+*-x, --exclude*'=NODESET'::
 Specify ranks to exclude the command from.
 
 

@@ -11,7 +11,7 @@ flux-exec - Execute processes across flux ranks
 
 SYNOPSIS
 --------
-*flux* *exec* [--noinput] ['--labelio] ['--dir=DIR'] ['--rank=RANKS'] ['--verbose'] COMMANDS...
+*flux* *exec* [--noinput] ['--labelio] ['--dir=DIR'] ['--rank=NODESET'] ['--verbose'] COMMANDS...
 
 
 DESCRIPTION
@@ -52,8 +52,8 @@ Redirect `stdin` from `/dev/null`.
 Set the working directory of remote 'COMMANDS' to 'DIR'. The default is to
 propagate the current working directory of flux-exec(1).
 
-*-r, --rank*'=RANKS'::
-Target specific ranks in 'RANKS'. Default is to target all ranks.
+*-r, --rank*'=NODESET'::
+Target specific ranks in 'NODESET'. Default is to target all ranks.
 
 *-v, --verbose*::
 Run with more verbosity.
