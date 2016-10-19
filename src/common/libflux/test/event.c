@@ -8,8 +8,9 @@ int main (int argc, char *argv[])
     flux_msg_t *msg;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
+    int i;
 
-    plan (8);
+    plan (NO_PLAN);
 
     /* no topic is an error */
     errno = 0;
@@ -42,6 +43,16 @@ int main (int argc, char *argv[])
     errno = 0;
     ok (flux_event_decode (msg, NULL, NULL) < 0 && errno == EPROTO,
         "flux_event_decode returns EPROTO when payload is unexpected");
+    flux_msg_destroy (msg);
+
+    /* formatted payload */
+    ok ((msg = flux_event_encodef ("foo.bar", "{s:i}", "foo", 42)) != NULL,
+        "flux_event_encodef packed payload object");
+    i = 0;
+    ok (flux_event_decodef (msg, &topic, "{s:i}", "foo", &i) == 0,
+        "flux_event_decodef unpacked payload object");
+    ok (i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
+        "unpacked payload matched packed");
     flux_msg_destroy (msg);
 
     done_testing();
