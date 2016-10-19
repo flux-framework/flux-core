@@ -76,4 +76,9 @@ test_expect_success 'ping works on valid and invalid rank' '
 	grep -q "0,$(invalid_rank)!cmb.ping" stdout
 '
 
+test_expect_success 'ping fails on invalid target' '
+	run_timeout 5 flux ping --count 1 --rank 0 nosuchtarget 2>stderr
+	grep -q "Function not implemented" stderr
+'
+
 test_done
