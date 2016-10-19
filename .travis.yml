@@ -39,6 +39,7 @@ addons:
       - gcc-4.9
       - g++-4.9
       - libjansson-dev
+      - libmunge-dev
       - lua5.1
       - liblua5.1-0-dev
       - luarocks
