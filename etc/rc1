@@ -11,7 +11,6 @@ flux module load -r all aggregator
 #flux module load -r all live --barrier-count=$(flux getattr size)
 flux module load -r all resource-hwloc & pids="$pids $!"
 flux module load -r all job
-flux module load -r all wrexec
 flux module load -r 0 cron sync=hb
 
 wait $pids

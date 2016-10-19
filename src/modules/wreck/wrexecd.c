@@ -85,8 +85,11 @@ struct task_info {
 
 struct prog_ctx {
     flux_t   *flux;
+
+    char *kvspath;          /* basedir path in kvs for this lwj.id */
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
+    char *lwj_link;         /* if lwj.%d is a symlink, this is the target */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -179,34 +182,24 @@ static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...);
 
 static int archive_lwj (struct prog_ctx *ctx)
 {
-    char *from = NULL;
-    char *to = NULL;
+    char *to = ctx->kvspath;
     char *link = NULL;
     int rc = -1;
 
     wlog_msg (ctx, "archiving lwj %lu", ctx->id);
 
-    if (asprintf (&to, "lwj.%lu", ctx->id) < 0
-        || asprintf (&link, "lwj-complete.%d.%lu", ctx->epoch, ctx->id) < 0
-        || asprintf (&from, "lwj-active.%lu", ctx->id) < 0) {
+    if (asprintf (&link, "lwj-complete.%d.%lu", ctx->epoch, ctx->id) < 0) {
         flux_log_error (ctx->flux, "archive_lwj: asprintf");
         goto out;
     }
-    if ((rc = kvs_move (ctx->flux, from, to)) < 0) {
-        flux_log_error (ctx->flux, "kvs_move (%s, %s)", from, to);
-        goto out;
-    }
-    /* Also create a link in lwj-complete.<epoch>.<id> to be used
-     *  to traverse completed jobs ordered by completion time
+    /*  Link lwj-complete.<hb>.id -> src
      */
     if (kvs_symlink (ctx->flux, link, to) < 0)
         flux_log_error (ctx->flux, "kvs_symlink (%s -> %s)", link, to);
 
-    if (kvs_commit (ctx->flux) < 0)
+    if ((rc = kvs_commit (ctx->flux)) < 0)
         flux_log_error (ctx->flux, "kvs_commit");
 out:
-    free (to);
-    free (from);
     free (link);
     return (rc);
 }
@@ -468,8 +461,8 @@ kz_t *task_kz_open (struct task_info *t, int type)
     else
         flags |= KZ_FLAGS_WRITE;
 
-    if (asprintf (&key, "lwj.%ld.%d.%s",
-        ctx->id, t->globalid, ioname (type)) < 0)
+    if (asprintf (&key, "%s.%d.%s",
+        ctx->kvspath, t->globalid, ioname (type)) < 0)
         wlog_fatal (ctx, 1, "task_kz_open: asprintf: %s", flux_strerror (errno));
     if ((kz = kz_open (ctx->flux, key, flags)) == NULL)
         wlog_fatal (ctx, 1, "kz_open (%s): %s", key, flux_strerror (errno));
@@ -625,6 +618,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         task_info_destroy (ctx->task [i]);
     }
 
+    free (ctx->kvspath);
+
     if (ctx->topic)
         free (ctx->topic);
 
@@ -632,6 +627,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
+    free (ctx->lwj_link);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -792,7 +788,7 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
     int ncores;
     char *key;
 
-    if (asprintf (&key, "lwj.%ld.rank.%d.cores", ctx->id, nodeid) < 0)
+    if (asprintf (&key, "%s.rank.%d.cores", ctx->kvspath, nodeid) < 0)
         wlog_fatal (ctx, 1, "cores_on_node: out of memory");
     rc = kvs_get_int (ctx->flux, key, &ncores);
     free (key);
@@ -860,8 +856,8 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
         ctx->globalbasis += ctx->cores_per_node [i];
     }
     free (nodeids);
-    wlog_debug (ctx, "lwj.%ld: node%d: basis=%d",
-        ctx->id, ctx->nodeid, ctx->globalbasis);
+    wlog_debug (ctx, "%s: node%d: basis=%d",
+        ctx->kvspath, ctx->nodeid, ctx->globalbasis);
     return (0);
 }
 
@@ -920,21 +916,20 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
 static void prog_ctx_kz_err_open (struct prog_ctx *ctx)
 {
     int n;
-    char key [64];
+    char key [256];
     int kz_flags =
         KZ_FLAGS_NOCOMMIT_OPEN |
         KZ_FLAGS_NOCOMMIT_CLOSE |
         KZ_FLAGS_WRITE;
 
-    n = snprintf (key, sizeof (key), "lwj.%ju.log.%d",
-                  (uintmax_t) ctx->id, ctx->nodeid);
+    n = snprintf (key, sizeof (key), "%s.log.%d", ctx->kvspath, ctx->nodeid);
     if ((n < 0) || (n > sizeof (key)))
         wlog_fatal (ctx, 1, "snprintf: %s", flux_strerror (errno));
     if (!(ctx->kz_err = kz_open (ctx->flux, key, kz_flags)))
         wlog_fatal (ctx, 1, "kz_open (%s): %s", key, flux_strerror (errno));
 }
 
-int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
+int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 {
     int i;
     char *json_str;
@@ -1020,11 +1015,11 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
-    if (kvs_get_dir (ctx->flux, &ctx->kvs,
-                     "lwj.%lu", ctx->id) < 0) {
-        wlog_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s",
-                   ctx->id, flux_strerror (errno));
+    if (kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
+        wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
+                   ctx->kvspath, flux_strerror (errno));
     }
+    kvs_get_symlink (ctx->flux, name, &ctx->lwj_link);
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
     /*
@@ -1044,8 +1039,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         if (rc < 0) {
             if (errno == ENOENT)
                 return (-1);
-            wlog_fatal (ctx, 1, "kvs_get_dir (lwj.%lu.rank.%d): %s",
-                        ctx->id, ctx->noderank, flux_strerror (errno));
+            wlog_fatal (ctx, 1, "kvs_get_dir (%s.rank.%d): %s",
+                        ctx->kvspath, ctx->noderank, flux_strerror (errno));
         }
     }
 
@@ -1053,7 +1048,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         ctx->lua_pattern = lua_pattern;
 
     wlog_debug (ctx, "initializing from CMB: rank=%d", ctx->noderank);
-    if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
+    if (prog_ctx_load_lwj_info (ctx) < 0)
         wlog_fatal (ctx, 1, "Failed to load lwj info");
 
     /*
@@ -1122,7 +1117,8 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
     char *json = NULL;
     char *topic = NULL;
 
-    if ((asprintf (&json, "{\"lwj\":%ld}", ctx->id) < 0)
+    if ((asprintf (&json, "{\"lwj\":%ld, \"kvs_path\": \"%s\"}",
+                   ctx->id, ctx->kvspath) < 0)
         || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
         wlog_err (ctx, "failed to create state change event: %s", state);
         goto out;
@@ -1285,7 +1281,7 @@ static json_object *task_exit_tojson (struct task_info *t)
     json_object *o;
     json_object *e;
 
-    if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) < 0)
+    if (asprintf (&key, "%s.exit_status", ctx->kvspath) < 0)
         return (NULL);
     if (asprintf (&taskid, "%d", t->globalid) < 0) {
         free (key);
@@ -1311,7 +1307,7 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
     char *key = NULL;
     flux_t *h = ctx->flux;
 
-    if (asprintf (&key, "lwj.%ju.exit_status", ctx->id) <= 0) {
+    if (asprintf (&key, "%s.exit_status", ctx->kvspath) <= 0) {
         flux_log_error (h, "wait_for_aggregate: asprintf");
         return (-1);
     }
@@ -1367,21 +1363,21 @@ int send_exit_message (struct task_info *t)
     if (!prog_ctx_getopt (ctx, "no-aggregate-task-exit"))
         return aggregator_push_task_exit (t);
 
-    if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
+    if (asprintf (&key, "%s.%d.exit_status", ctx->kvspath, t->globalid) < 0)
         return (-1);
     if (kvs_put_int (ctx->flux, key, t->status) < 0)
         return (-1);
     free (key);
 
     if (WIFSIGNALED (t->status)) {
-        if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, t->globalid) < 0)
+        if (asprintf (&key, "%s.%d.exit_sig", ctx->kvspath, t->globalid) < 0)
             return (-1);
         if (kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
             return (-1);
         free (key);
     }
     else {
-        if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, t->globalid) < 0)
+        if (asprintf (&key, "%s.%d.exit_code", ctx->kvspath, t->globalid) < 0)
             return (-1);
         if (kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
             return (-1);
@@ -1624,10 +1620,10 @@ static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
     t = prog_ctx_current_task (ctx);
     if (!t->kvs) {
         if ( (kvs_get_dir (prog_ctx_flux_handle (ctx), &t->kvs,
-                           "lwj.%ld.%d", ctx->id, t->globalid) < 0)
+                           "%s.%d", ctx->kvspath, t->globalid) < 0)
           && (errno != ENOENT))
-            wlog_err (ctx, "kvs_get_dir (lwj.%ld.%d): %s",
-                     ctx->id, t->globalid, flux_strerror (errno));
+            wlog_err (ctx, "kvs_get_dir (%s.%d): %s",
+                      ctx->kvspath, t->globalid, flux_strerror (errno));
     }
     return (t->kvs);
 }
@@ -2250,7 +2246,7 @@ static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
         .debug_trace = wreck_pmi_debug_trace,
     };
     int flags = 0;
-    if (asprintf (&kvsname, "lwj.%lu.pmi", ctx->id) < 0) {
+    if (asprintf (&kvsname, "%s.pmi", ctx->kvspath) < 0) {
         flux_log_error (ctx->flux, "initialize_pmi: asprintf");
         return (-1);
     }
@@ -2292,11 +2288,19 @@ static void daemonize ()
 
 int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
 {
+    const char *kvspath;
     const char *id;
     char *end;
 
-    if (!optparse_getopt (p, "lwj-id", &id))
-        wlog_fatal (ctx, 1, "Required argument --lwj-id missing");
+    if (!optparse_getopt (p, "kvs-path", &kvspath))
+        wlog_fatal (ctx, 1, "Required arg --kvs-path missing\n");
+    ctx->kvspath = strdup (kvspath);
+
+    if (!optparse_getopt (p, "lwj-id", &id)) {
+        /* Assume lwj id is last component of kvs-path */
+        if ((id = strrchr (kvspath, '.')) == NULL || *(++id) == '\0')
+            wlog_fatal (ctx, 1, "Unable to get lwj id from kvs-path");
+    }
 
     errno = 0;
     ctx->id = strtol (id, &end, 10);
@@ -2304,7 +2308,6 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
        || (ctx->id == 0 && errno == EINVAL)
        || (ctx->id == ULONG_MAX && errno == ERANGE))
            wlog_fatal (ctx, 1, "--lwj-id=%s invalid", id);
-
 
     return (0);
 }
@@ -2321,6 +2324,11 @@ int main (int ac, char **av)
           .has_arg = 1,
           .arginfo = "ID",
           .usage =   "Operate on LWJ id [ID]",
+        },
+       { .name =    "kvs-path",
+          .has_arg = 1,
+          .arginfo = "DIR",
+          .usage =   "Operate on LWJ in DIR instead of lwj.<id>",
         },
         { .name =    "parent-fd",
           .key =     1001,

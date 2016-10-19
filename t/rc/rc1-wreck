@@ -9,4 +9,3 @@ flux module load -r all -x 0 kvs
 flux module load -r all barrier
 flux module load -r all aggregator
 flux module load -r all job
-flux module load -r all wrexec

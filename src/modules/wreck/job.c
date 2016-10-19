@@ -26,30 +26,110 @@
 #include "config.h"
 #endif
 #include <stdio.h>
+#include <unistd.h>
+
 #include <zmq.h>
 #include <czmq.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#if WITH_TCMALLOC
+#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
+  #include <gperftools/heap-profiler.h>
+#elif HAVE_GOOGLE_HEAP_PROFILER_H
+  #include <google/heap-profiler.h>
+#else
+  #error gperftools headers not configured
+#endif
+#endif /* WITH_TCMALLOC */
 
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/fdwalk.h"
+
+/*
+ *  lwj directory hierarchy parameters:
+ *   XXX: should be in module context struct perhaps, but
+ *    this all needs to go away soon anyway, so...
+ *
+ *  directory levels is the number of parent directories
+ *   (e.g. 3 would result in lwj-active.x.y.z.jobid,
+ *    0 is lwj.jobid)
+ *
+ *  bits_per_directory is the number of prefix bits to use
+ *   for each parent directory, results in 2^bits entries
+ *   per subdirectory, except for the top-level which will
+ *   grow without bound (well up to 64bit lwj id values).
+ *
+ *  These values can be set as broker attrs during flux-start,
+ *   e.g. flux start -o,-Swreck.lwj-dir-levels=3
+ *                   -o,-Swreck.lwj-bits-per-dir=8
+ */
+static int kvs_dir_levels = 2;
+static int kvs_bits_per_dir = 7;
+
+uint32_t broker_rank;
+const char *local_uri = NULL;
+
+/*
+ *  Return as 64bit integer the portion of integer `n`
+ *   masked from bit position `a` to position `b`,
+ *   then subsequently shifted by `a` bits (to keep
+ *   numbers small).
+ */
+static inline uint64_t prefix64 (uint64_t n, int a, int b)
+{
+    uint64_t mask = ((-1ULL >> (64 - b)) & ~((1ULL << a) - 1));
+    return ((n & mask) >> a);
+}
+
+/*
+ *  Convert lwj id to kvs path under `lwj-active` using a kind of
+ *   prefix hiearchy of max levels `levels`, using `bits_per_dir` bits
+ *   for each directory. Returns a kvs key path or NULL on failure.
+ */
+static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
+{
+    char buf [1024] = "lwj";
+    int len = 3;
+    int nleft = sizeof (buf) - len;
+    int i, n;
+
+    /* Build up kvs directory from lwj. down */
+    for (i = levels; i > 0; i--) {
+        int b = bits_per_dir * i;
+        uint64_t d = prefix64 (id, b, b + bits_per_dir);
+        if ((n = snprintf (buf+len, nleft, ".%ju", d)) < 0 || n > nleft)
+            return NULL;
+        len += n;
+        nleft -= n;
+    }
+    n = snprintf (buf+len, sizeof (buf) - len, ".%ju", id);
+    if (n < 0 || n > nleft)
+        return NULL;
+    return (strdup (buf));
+}
+
+static char * id_to_path (uint64_t id)
+{
+    return (lwj_to_path (id, kvs_dir_levels, kvs_bits_per_dir));
+}
 
 static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
 {
-    int rc;
+    int rc = -1;
     char *key = NULL;
-    char *link = NULL;
     char *target = NULL;
 
-    /*  Create lwj entry in lwj-active dir at first:
-     */
-    if ((asprintf (&key, "lwj-active.%lu.state", jobid) < 0)
-        || (asprintf (&link, "lwj.%lu", jobid) < 0)
-        || (asprintf (&target, "lwj-active.%lu", jobid) < 0)) {
-        flux_log_error (h, "kvs_job_set_state: asprintf");
+    if (!(target = id_to_path (jobid))) {
+        flux_log_error (h, "lwj_to_path");
         return (-1);
+    }
+
+    if ((asprintf (&key, "%s.state", target) < 0)) {
+        flux_log_error (h, "kvs_job_set_state: asprintf");
+        goto out;
     }
 
     flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
@@ -58,20 +138,11 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
         goto out;
     }
 
-    /*
-     *  Create link from lwj.<id> to lwj-active.<id>
-     */
-    if ((rc = kvs_symlink (h, link, target)) < 0) {
-        flux_log_error (h, "kvs_symlink (%s, %s)", link, key);
-        goto out;
-    }
-
     if ((rc = kvs_commit (h)) < 0)
         flux_log_error (h, "kvs_job_set_state: kvs_commit");
 
 out:
     free (key);
-    free (link);
     free (target);
     return rc;
 }
@@ -131,17 +202,16 @@ static void wait_for_event (flux_t *h, int64_t id, char *topic)
     return;
 }
 
-static void send_create_event (flux_t *h, int64_t id, char *topic)
+static void send_create_event (flux_t *h, int64_t id,
+                               const char *path, char *topic)
 {
     flux_msg_t *msg;
-    char *json = NULL;
+    json_object *o = Jnew ();
 
-    if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
-        errno = ENOMEM;
-        flux_log_error (h, "failed to create state change event");
-        goto out;
-    }
-    if ((msg = flux_event_encode (topic, json)) == NULL) {
+    Jadd_int64 (o, "lwj", id);
+    Jadd_str (o, "kvs_path", path);
+
+    if ((msg = flux_event_encode (topic, Jtostr (o))) == NULL) {
         flux_log_error (h, "failed to create state change event");
         goto out;
     }
@@ -154,10 +224,10 @@ static void send_create_event (flux_t *h, int64_t id, char *topic)
      */
     wait_for_event (h, id, topic);
 out:
-    free (json);
+    Jput (o);
 }
 
-static int add_jobinfo (flux_t *h, int64_t id, json_object *req)
+static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
 {
     int rc = 0;
     char buf [64];
@@ -165,8 +235,8 @@ static int add_jobinfo (flux_t *h, int64_t id, json_object *req)
     json_object *o;
     kvsdir_t *dir;
 
-    if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0) {
-        flux_log_error (h, "kvs_get_dir (id=%lu)", id);
+    if (kvs_get_dir (h, &dir, "%s", kvspath) < 0) {
+        flux_log_error (h, "kvs_get_dir (%s)", kvspath);
         return (-1);
     }
 
@@ -214,14 +284,61 @@ static bool sched_loaded (flux_t *h)
     return (v);
 }
 
-static int do_submit_job (flux_t *h, unsigned long id)
+static int do_submit_job (flux_t *h, unsigned long id, const char *path)
 {
     if (kvs_job_set_state (h, id, "submitted") < 0) {
         flux_log_error (h, "kvs_job_set_state");
         return (-1);
     }
-    send_create_event (h, id, "wreck.state.submitted");
+    send_create_event (h, id, path, "wreck.state.submitted");
     return (0);
+}
+
+static void handle_job_create (flux_t *h, const flux_msg_t *msg,
+                               const char *topic, json_object *o)
+{
+    json_object *jobinfo = NULL;
+    int64_t id;
+    char *state;
+    char *kvs_path;
+
+    if ((id = next_jobid (h)) < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "job_request: flux_respond");
+        return;
+    }
+
+    kvs_path = id_to_path (id);
+
+    if ( (kvs_job_new (h, id) < 0)
+      || (add_jobinfo (h, kvs_path, o) < 0)) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "job_request: flux_respond");
+        goto out;
+    }
+
+    if (kvs_commit (h) < 0) {
+        flux_log_error (h, "job_request: kvs_commit");
+        goto out;
+    }
+
+    /* Send a wreck.state.reserved event for listeners */
+    state = "reserved";
+    send_create_event (h, id, kvs_path, "wreck.state.reserved");
+    if ((strcmp (topic, "job.submit") == 0)
+            && (do_submit_job (h, id, kvs_path) != -1))
+        state = "submitted";
+
+
+    /* Generate reply with new jobid */
+    jobinfo = Jnew ();
+    Jadd_int64 (jobinfo, "jobid", id);
+    Jadd_str (jobinfo, "state", state);
+    Jadd_str (jobinfo, "kvs_path", kvs_path);
+    flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
+out:
+    Jput (jobinfo);
+    free (kvs_path);
 }
 
 static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -242,42 +359,8 @@ static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     else if ((strcmp (topic, "job.create") == 0)
             || ((strcmp (topic, "job.submit") == 0)
-                 && sched_loaded (h))) {
-        json_object *jobinfo = NULL;
-        int64_t id;
-        char *state;
-
-        if ((id = next_jobid (h)) < 0) {
-            if (flux_respond (h, msg, errno, NULL) < 0)
-                flux_log_error (h, "job_request: flux_respond");
-            goto out;
-        }
-
-        if ( (kvs_job_new (h, id) < 0)
-          || (add_jobinfo (h, id, o) < 0)) {
-            flux_respond (h, msg, errno, NULL);
-            goto out;
-        }
-
-        if (kvs_commit (h) < 0) {
-            flux_log_error (h, "job_request: kvs_commit");
-            goto out;
-        }
-
-        /* Send a wreck.state.reserved event for listeners */
-        state = "reserved";
-        send_create_event (h, id, "wreck.state.reserved");
-        if ((strcmp (topic, "job.submit") == 0)
-            && (do_submit_job (h, id) != -1))
-                state = "submitted";
-
-        /* Generate reply with new jobid */
-        jobinfo = Jnew ();
-        Jadd_int64 (jobinfo, "jobid", id);
-        Jadd_str (jobinfo, "state", state);
-        flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
-        json_object_put (jobinfo);
-    }
+                 && sched_loaded (h)))
+        handle_job_create (h, msg, topic, o);
     else {
         /* job.submit not functional due to missing sched. Return ENOSYS
          *  for now
@@ -291,10 +374,228 @@ out:
         json_object_put (o);
 }
 
+static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
+                            const flux_msg_t *msg, void *arg)
+{
+    int errnum = EPROTO;
+    int i, n;
+    const char *json_str;
+    json_object *in = NULL;
+    json_object *out = NULL;
+    json_object *ar = NULL;
+    json_object *id_list = NULL;
+
+    if (flux_msg_get_payload_json (msg, &json_str) < 0)
+        goto out;
+
+    if (!(in = Jfromstr (json_str))) {
+        flux_log (h, LOG_ERR, "kvspath_cb: Failed to parse JSON string");
+        goto out;
+    }
+
+    if (!Jget_obj (in, "ids", &id_list)) {
+        flux_log (h, LOG_ERR, "kvspath_cb: required key ids missing");
+        goto out;
+    }
+
+    if (!(out = json_object_new_object ())
+        || !(ar = json_object_new_array ())) {
+        flux_log (h, LOG_ERR, "kvspath_cb: json_object_new_object failed");
+        goto out;
+    }
+
+    errnum = ENOMEM;
+    n = json_object_array_length (id_list);
+    for (i = 0; i < n; i++) {
+        json_object *r;
+        json_object *v = json_object_array_get_idx (id_list, i);
+        int64_t id = json_object_get_int64 (v);
+        char * path;
+        if (!(path = id_to_path (id))) {
+            flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
+            goto out;
+        }
+        r = json_object_new_string (path);
+        free (path);
+        if (r == NULL) {
+            flux_log_error (h, "kvspath_cb: json_object_new_string");
+            goto out;
+        }
+        json_object_array_add (ar, r);
+    }
+    json_object_object_add (out, "paths", ar);
+    ar = NULL; /* allow Jput below */
+    errnum = 0;
+out:
+    if (flux_respond (h, msg, errnum, out ? Jtostr (out) : NULL) < 0)
+        flux_log_error (h, "kvspath_cb: flux_respond");
+    Jput (in);
+    Jput (ar);
+    Jput (out);
+}
+
+static int flux_attr_set_int (flux_t *h, const char *attr, int val)
+{
+    char buf [16];
+    int n = snprintf (buf, sizeof (buf), "%d", val);
+    if (n < 0 || n >= sizeof (buf))
+        return (-1);
+    return flux_attr_set (h, attr, buf);
+}
+
+static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
+{
+    long n;
+    const char *tmp;
+    char *p;
+
+    if ((tmp = flux_attr_get (h, attr, 0)) == NULL)
+        return (-1);
+    n = strtoul (tmp, &p, 10);
+    if (n == LONG_MAX)
+        return (-1);
+    if ((p == tmp) || (*p != '\0')) {
+        errno = EINVAL;
+        return (-1);
+    }
+    *valp = (int) n;
+    return (0);
+}
+
+static void exec_close_fd (void *arg, int fd)
+{
+    if (fd >= 3)
+        (void) close (fd);
+}
+
+static void exec_handler (const char *exe, int64_t id, const char *kvspath)
+{
+    pid_t sid;
+    int argc = 2;
+    char **av = malloc ((sizeof (char *)) * (argc + 2));
+
+    if ((av == NULL)
+     || ((av [0] = strdup (exe)) == NULL)
+     || (asprintf (&av[1], "--lwj-id=%ju", (uintmax_t) id) < 0)
+     || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)) {
+        fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
+        exit (1);
+    }
+    av[argc+1] = NULL;
+
+    if ((sid = setsid ()) < 0)
+        fprintf (stderr, "setsid: %s\n", strerror (errno));
+
+    /*
+     *  NOTE: There used to be a double fork here, presumably to
+     *  "daemonize" wrexecd, however I'm not sure that is warranted
+     *   nor even advisable. With the setsid above, the wrexecd
+     *   process should be reparented to init.
+     */
+
+    fdwalk (exec_close_fd, NULL);
+    if (setenv ("FLUX_URI", local_uri, 1) < 0)
+        fprintf (stderr, "setenv: %s\n", strerror (errno));
+    else if (execvp (av[0], av) < 0)
+        fprintf (stderr, "wrexecd exec: %s\n", strerror (errno));
+    exit (255);
+}
+
+static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
+{
+    pid_t pid;
+    const char *wrexecd_path;
+
+    if (!(wrexecd_path = flux_attr_get (h, "wrexec.wrexecd_path", NULL))) {
+        flux_log_error (h, "spawn_exec_handler: flux_attr_get");
+        return (-1);
+    }
+
+    if ((pid = fork ()) < 0) {
+        flux_log_error (h, "spawn_exec_handler: fork");
+        return (-1);
+    }
+
+    if (pid == 0) {
+#if WITH_TCMALLOC
+        /* Child: if heap profiling is running, stop it to avoid
+         * triggering a dump when child exits.
+         */
+        if (IsHeapProfilerRunning ())
+            HeapProfilerStop ();
+#endif
+        exec_handler (wrexecd_path, id, kvspath);
+    }
+
+    // XXX: Add child watcher for pid
+
+    return (0);
+}
+
+static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
+{
+    kvsdir_t *tmp;
+    /*
+     *  If no 'rank' subdir exists for this lwj, then we are running
+     *   without resource assignment so we run everywhere
+     */
+    if (kvs_get_dir (h, &tmp, "%s.rank", kvspath) < 0) {
+        flux_log (h, LOG_INFO, "No dir %s.rank: %s",
+                  kvspath, strerror (errno));
+        return (true);
+    }
+    kvsdir_destroy (tmp);
+    if (kvs_get_dir (h, &tmp, "%s.rank.%d", kvspath, broker_rank) < 0)
+        return (false);
+    kvsdir_destroy (tmp);
+    return (true);
+}
+
+static int64_t id_from_tag (const char *tag)
+{
+    unsigned long l;
+    char *p;
+    errno = 0;
+    l = strtoul (tag, &p, 10);
+    if (*p != '\0')
+        return (-1);
+    if (l == 0 && errno == EINVAL)
+        return (-1);
+    else if (l == ULONG_MAX && errno == ERANGE)
+        return (-1);
+    return l;
+}
+
+static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    const char *topic;
+    char *kvspath = NULL;
+    json_object *in = NULL;
+    int64_t id = -1;
+
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (h, "run: flux_msg_get_topic");
+        return;
+    }
+    if ((id = id_from_tag (topic+11)) < 0) {
+        flux_log_error (h, "wrexec.run: invalid topic: %s\n", topic);
+        return;
+    }
+    kvspath = id_to_path (id);
+    if (lwj_targets_this_node (h, kvspath))
+        spawn_exec_handler (h, id, kvspath);
+    free (kvspath);
+    Jput (in);
+}
+
 struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
     { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb },
+    { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -311,10 +612,35 @@ int mod_main (flux_t *h, int argc, char **argv)
      * XXX: Remove when publish events are synchronous.
      */
     if ((flux_event_subscribe (h, "wreck.state.reserved") < 0)
-       || (flux_event_subscribe (h, "wreck.state.submitted") < 0)) {
+       || (flux_event_subscribe (h, "wreck.state.submitted") < 0)
+       || (flux_event_subscribe (h, "wrexec.run.") < 0)) {
         flux_log_error (h, "flux_event_subscribe");
         return -1;
     }
+
+    if ((flux_attr_get_int (h, "wreck.lwj-dir-levels", &kvs_dir_levels) < 0)
+       && (flux_attr_set_int (h, "wreck.lwj-dir-levels", kvs_dir_levels) < 0)) {
+        flux_log_error (h, "failed to get or set lwj-dir-levels");
+        return -1;
+    }
+    if ((flux_attr_get_int (h, "wreck.lwj-bits-per-dir",
+                            &kvs_bits_per_dir) < 0)
+       && (flux_attr_set_int (h, "wreck.lwj-bits-per-dir",
+                              kvs_bits_per_dir) < 0)) {
+        flux_log_error (h, "failed to get or set lwj-bits-per-dir");
+        return -1;
+    }
+
+    if (flux_get_rank (h, &broker_rank) < 0) {
+        flux_log_error (h, "flux_get_rank");
+        return -1;
+    }
+
+    if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
+        flux_log_error (h, "flux_attr_get (\"local-uri\")");
+        return -1;
+    }
+
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         return -1;

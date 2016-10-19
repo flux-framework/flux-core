@@ -141,6 +141,43 @@ local function get_filtered_env ()
     return (env)
 end
 
+
+local function job_kvspath (f, id)
+    assert (id, "Required argument id missing!")
+    local r, err = f:rpc ("job.kvspath", {ids = { id }})
+    if not r then error (err) end
+    return r.paths [1]
+end
+
+---
+-- Return kvs path to job id `id`
+--
+local kvs_paths = {}
+local function kvs_path (f, id)
+    if not kvs_paths[id] then
+        kvs_paths [id] = job_kvspath (f, id)
+    end
+    return kvs_paths [id]
+end
+
+function wreck:lwj_path (id)
+    assert (id, "missing required argument `id'")
+    if not self.lwj_paths[id] then
+        self.lwj_paths [id] = job_kvspath (self.flux, id)
+    end
+    return self.lwj_paths [id]
+end
+
+function wreck:kvsdir (id)
+    if not self.kvsdirs[id] then
+        local f = self.flux
+        local d, err = f:kvsdir (self:lwj_path (id))
+        if not d then return nil, err end
+        self.kvsdirs[id] = d
+    end
+    return self.kvsdirs[id]
+end
+
 function wreck:add_options (opts)
     for k,v in pairs (opts) do
         if not type (v) == "table" then return nil, "Invalid parameter" end
@@ -320,19 +357,26 @@ function wreck:submit ()
     if resp.state ~= "submitted" then
         return nil, "job submission failure, job left in state="..resp.state
     end
-    return resp.jobid
+    return resp.jobid, resp.kvs_path
 end
 
 function wreck:createjob ()
     local resp, err = send_job_request (self, "job.create")
     if not resp then return nil, err end
-    return resp.jobid
+    --
+    -- If reply contains a kvs path to this LWJ, pre-memoize the id
+    --  to kvs path mapping so we do not have to fetch it again.
+    if resp.kvs_path then
+        self.lwj_paths [resp.jobid] = resp.kvs_path
+        kvs_paths [resp.jobid] = resp.kvs_path
+    end
+    return resp.jobid, resp.kvs_path
 end
 
 local function initialize_args (arg)
     if arg.ntasks and arg.nnodes then return true end
     local f = arg.flux
-    local lwj, err = f:kvsdir ("lwj."..arg.jobid)
+    local lwj, err = f:kvsdir (kvs_path (f, arg.jobid))
     if not lwj then
         return nil, "Error: "..err
     end
@@ -380,7 +424,7 @@ function wreck.logstream (arg)
     if not rc then return nil, err end
     l.watchers = {}
     for i = 0, arg.nnodes - 1 do
-        local key ="lwj."..arg.jobid..".log."..i
+        local key = kvs_path (f, arg.jobid)..".log."..i
         local iow, err = f:iowatcher {
             key = key,
             handler = function (iow, r)
@@ -443,8 +487,10 @@ function wreck.status (arg)
     local f = arg.flux
     local jobid = arg.jobid
     if not jobid then return nil, "required arg jobid" end
-    if not f then f = flux.new() end
-    local lwj = f:kvsdir ("lwj."..jobid)
+
+    if not f then f = require 'flux'.new() end
+    local lwj = f:kvsdir (kvs_path (f, jobid))
+
     local max = 0
     local msgs = {}
 
@@ -466,6 +512,47 @@ function wreck.status (arg)
     return max, msgs
 end
 
+function wreck.id_to_path (arg)
+    local flux = require 'flux'
+    local f = arg.flux
+    local id = arg.jobid
+    if not id then return nil, "required arg jobid" end
+    if not f then f, err = require 'flux'.new () end
+    if not f then return nil, err end
+    return kvs_path (f, id)
+end
+
+function wreck.joblist (arg)
+    local flux = require 'flux'
+    local f = arg.flux
+    if not f then f, err = flux.new () end
+    if not f then return nil, err end
+
+    local function visit (d, r)
+        local results = r or {}
+        if not d then return end
+        for k in d:keys () do
+            local path = tostring (d) .. "." .. k
+            local dir = f:kvsdir (path)
+            if dir then
+                if dir.state then
+                    -- This is a lwj dir, add to results table:
+                    table.insert (results, path)
+                else
+                    -- recurse to find lwj dirs lower in the directory tree
+                    visit (dir, results)
+                end
+            end
+        end
+        return results
+    end
+
+    local dir, err = f:kvsdir ("lwj")
+    if not dir then return nil, err end
+
+    return visit (dir)
+end
+
 local function shortprog ()
     local prog = string.match (arg[0], "([^/]+)$")
     return prog:match ("flux%-(.+)$")
@@ -473,7 +560,9 @@ end
 
 function wreck.new (arg)
     if not arg then arg = {} end
-    local w = setmetatable ({extra_options = {}}, wreck) 
+    local w = setmetatable ({ extra_options = {},
+                              kvsdirs = {},
+                              lwj_paths = {}}, wreck)
     w.prog = arg.prog or shortprog ()
     w.flux = arg.flux
     return w

@@ -22,8 +22,7 @@ wreckscriptsdir = $(sysconfdir)/wreck/lua.d
 # Comms module
 #
 fluxmod_LTLIBRARIES = \
-	job.la \
-	wrexec.la
+	job.la
 
 fluxlibexec_PROGRAMS = \
 	wrexecd
@@ -35,11 +34,6 @@ fluxmod_libadd = $(top_builddir)/src/common/libflux-core.la \
 job_la_SOURCES = job.c
 job_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
 job_la_LIBADD = $(fluxmod_libadd)
-
-wrexec_la_SOURCES = wrexec.c
-wrexec_la_LDFLAGS = $(AM_LDFLAGS) $(fluxmod_ldflags) -module
-wrexec_la_LIBADD = $(fluxmod_libadd)
-wrexec_la_CPPFLAGS = $(AM_CPPFLAGS)
 
 wrexecd_SOURCES = \
 	wrexecd.c \
