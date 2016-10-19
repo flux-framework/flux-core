@@ -151,8 +151,8 @@ bool flux_msg_has_payload (const flux_msg_t *msg);
  * set allows json_str to be NULL
  * get will set *json_str to NULL and return success if there is no payload.
  */
-int flux_msg_set_payload_json (flux_msg_t *msg, const char *json_str);
-int flux_msg_get_payload_json (const flux_msg_t *msg, const char **json_str);
+int flux_msg_set_json (flux_msg_t *msg, const char *json_str);
+int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
 
 /* Get/set nodeid (request only)
  * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.

@@ -927,7 +927,7 @@ bool flux_msg_has_payload (const flux_msg_t *msg)
     return ((flags & FLUX_MSGFLAG_PAYLOAD));
 }
 
-int flux_msg_set_payload_json (flux_msg_t *msg, const char *s)
+int flux_msg_set_json (flux_msg_t *msg, const char *s)
 {
     int rc = -1;
     if (s) {
@@ -943,7 +943,7 @@ done:
     return rc;
 }
 
-int flux_msg_get_payload_json (const flux_msg_t *msg, const char **s)
+int flux_msg_get_json (const flux_msg_t *msg, const char **s)
 {
     char *buf;
     int size;
@@ -1157,7 +1157,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         const char *json_str;
         void *buf;
         int size, flags;
-        if (flux_msg_get_payload_json (msg, &json_str) == 0)
+        if (flux_msg_get_json (msg, &json_str) == 0)
             fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (json_str), json_str);
         else if (flux_msg_get_payload (msg, &flags, &buf, &size) == 0)
             fprintf (f, "%s[%3.3d] ...\n", prefix, size);

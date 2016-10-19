@@ -988,7 +988,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
             goto done;
         if (!(in2 = kp_twatch_enc (key, Jget (val), flags & ~KVS_PROTO_FIRST)))
             goto done;
-        if (flux_msg_set_payload_json (cpy, Jtostr (in2)) < 0)
+        if (flux_msg_set_json (cpy, Jtostr (in2)) < 0)
             goto done;
         if (!(watcher = wait_create_msg_handler (h, w, cpy,
                                                  watch_request_cb, arg)))

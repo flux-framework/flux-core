@@ -73,7 +73,7 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
 
     if (response_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (msg, &js) < 0)
+    if (flux_msg_get_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -150,7 +150,7 @@ flux_msg_t *flux_response_encode (const char *topic, int errnum,
         errno = EINVAL;
         goto error;
     }
-    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    if (json_str && flux_msg_set_json (msg, json_str) < 0)
         goto error;
     return msg;
 error:
@@ -205,7 +205,7 @@ int flux_respond (flux_t *h, const flux_msg_t *request,
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
         goto fatal;
-    if (!errnum && json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    if (!errnum && json_str && flux_msg_set_json (msg, json_str) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
         goto fatal;

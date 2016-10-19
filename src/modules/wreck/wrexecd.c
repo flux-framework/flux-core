@@ -2070,8 +2070,8 @@ void ev_cb (flux_t *f, flux_msg_handler_t *mw,
         flux_heartbeat_decode (msg, &ctx->epoch);
         return;
     }
-    if (flux_msg_get_payload_json (msg, &json_str) < 0) {
-        wlog_err (ctx, "flux_msg_get_payload_json");
+    if (flux_msg_get_json (msg, &json_str) < 0) {
+        wlog_err (ctx, "flux_msg_get_json");
         return;
     }
     if (json_str && !(o = json_tokener_parse (json_str))) {

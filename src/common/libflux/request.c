@@ -63,7 +63,7 @@ int flux_request_decode (const flux_msg_t *msg, const char **topic,
 
     if (request_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (msg, &js) < 0)
+    if (flux_msg_get_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -132,7 +132,7 @@ flux_msg_t *flux_request_encode (const char *topic, const char *json_str)
 
     if (!msg)
         goto error;
-    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    if (json_str && flux_msg_set_json (msg, json_str) < 0)
         goto error;
     return msg;
 error:

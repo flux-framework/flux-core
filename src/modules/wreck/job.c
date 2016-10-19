@@ -350,7 +350,7 @@ static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto out;
     flux_log (h, LOG_DEBUG, "got request %s", topic);
-    if (flux_msg_get_payload_json (msg, &json_str) < 0)
+    if (flux_msg_get_json (msg, &json_str) < 0)
         goto out;
     if (json_str && !(o = json_tokener_parse (json_str)))
         goto out;
@@ -385,7 +385,7 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *ar = NULL;
     json_object *id_list = NULL;
 
-    if (flux_msg_get_payload_json (msg, &json_str) < 0)
+    if (flux_msg_get_json (msg, &json_str) < 0)
         goto out;
 
     if (!(in = Jfromstr (json_str))) {

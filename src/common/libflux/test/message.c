@@ -129,36 +129,36 @@ void check_payload_json (void)
        "flux_msg_create works");
 
     s = (char *)msg;
-    ok (flux_msg_get_payload_json (msg, &s) == 0 && s == NULL,
-       "flux_msg_get_payload_json returns success with no payload");
+    ok (flux_msg_get_json (msg, &s) == 0 && s == NULL,
+       "flux_msg_get_json returns success with no payload");
 
     /* RFC 3 - json payload must be an object
      * Encoding should return EINVAL.
      */
     errno = 0;
-    ok (flux_msg_set_payload_json (msg, "[1,2,3]") < 0 && errno == EINVAL,
-       "flux_msg_set_payload_json array fails with EINVAL");
+    ok (flux_msg_set_json (msg, "[1,2,3]") < 0 && errno == EINVAL,
+       "flux_msg_set_json array fails with EINVAL");
     errno = 0;
-    ok (flux_msg_set_payload_json (msg, "3.14") < 0 && errno == EINVAL,
-       "flux_msg_set_payload_json scalar fails with EINVAL");
+    ok (flux_msg_set_json (msg, "3.14") < 0 && errno == EINVAL,
+       "flux_msg_set_json scalar fails with EINVAL");
 
     /* Using the lower level flux_msg_set_payload with FLUX_MSGFLAG_JSON
      * we can sneak in a malformed JSON paylaod and test decoding.
      */
     errno = 0;
     ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, "[1,2,3]", 8) == 0
-            && flux_msg_get_payload_json (msg, &s) < 0 && errno == EPROTO,
-        "flux_msg_get_payload_json array fails with EPROTO");
+            && flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
+        "flux_msg_get_json array fails with EPROTO");
     errno = 0;
     ok (flux_msg_set_payload (msg, FLUX_MSGFLAG_JSON, "3.14", 5) == 0
-            && flux_msg_get_payload_json (msg, &s) < 0 && errno == EPROTO,
-        "flux_msg_get_payload_json scalar fails with EPROTO");
+            && flux_msg_get_json (msg, &s) < 0 && errno == EPROTO,
+        "flux_msg_get_json scalar fails with EPROTO");
 
-    ok (flux_msg_set_payload_json (msg, json_str) == 0,
-       "flux_msg_set_payload_json works");
-    ok (flux_msg_get_payload_json (msg, &s) == 0 && s != NULL
+    ok (flux_msg_set_json (msg, json_str) == 0,
+       "flux_msg_set_json works");
+    ok (flux_msg_get_json (msg, &s) == 0 && s != NULL
         && !strcmp (s, json_str),
-       "flux_msg_get_payload_json returns payload intact");
+       "flux_msg_get_json returns payload intact");
 
     flux_msg_destroy (msg);
 }

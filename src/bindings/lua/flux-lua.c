@@ -505,7 +505,7 @@ static int l_flux_recv (lua_State *L)
         goto error;
 
     if (errnum == 0 && (flux_msg_get_topic (msg, &topic) < 0
-                     || flux_msg_get_payload_json (msg, &json_str) < 0))
+                     || flux_msg_get_json (msg, &json_str) < 0))
         goto error;
 
     if (json_str && !(o = json_tokener_parse (json_str)))
@@ -676,7 +676,7 @@ static int l_flux_recv_event (lua_State *L)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_topic (msg, &topic) < 0
-            || flux_msg_get_payload_json (msg, &json_str) < 0
+            || flux_msg_get_json (msg, &json_str) < 0
             || (json_str && !(o = json_tokener_parse (json_str)))) {
         flux_msg_destroy (msg);
         return lua_pusherror (L, (char *)flux_strerror (errno));

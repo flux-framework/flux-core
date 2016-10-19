@@ -384,7 +384,7 @@ enforce_c_consistency (kap_params_t *param)
         goto error;
     }
     const char *json_str;
-    flux_msg_get_payload_json (msg, &json_str);
+    flux_msg_get_json (msg, &json_str);
     o = json_tokener_parse (json_str);
     if ( !Jget_int (o, KAP_KVSVER_NAME, &v)) {
         fprintf (stderr,

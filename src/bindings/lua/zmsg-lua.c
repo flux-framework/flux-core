@@ -64,7 +64,7 @@ struct zmsg_info * zmsg_info_create (flux_msg_t **msg, int typemask)
         return (NULL);
     }
     zi->o = NULL;
-    if (flux_msg_get_payload_json (*msg, &json_str) < 0
+    if (flux_msg_get_json (*msg, &json_str) < 0
                 || (json_str && !(zi->o = json_tokener_parse (json_str)))) {
         free (zi->tag);
         free (zi);

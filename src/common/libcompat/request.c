@@ -59,7 +59,7 @@ int flux_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
         goto done;
     if (flux_msg_set_topic (msg, topic) < 0)
         goto done;
-    if (flux_msg_set_payload_json (msg, in ? Jtostr (in) : NULL) < 0)
+    if (flux_msg_set_json (msg, in ? Jtostr (in) : NULL) < 0)
         goto done;
     if (flux_msg_enable_route (msg) < 0)
         goto done;
@@ -75,7 +75,7 @@ int flux_json_respond (flux_t *h, json_object *out, flux_msg_t **msg)
 
     if (flux_msg_set_type (*msg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto done;
-    if (flux_msg_set_payload_json (*msg, out ? Jtostr (out) : NULL) < 0)
+    if (flux_msg_set_json (*msg, out ? Jtostr (out) : NULL) < 0)
         goto done;
     if (flux_send (h, *msg, 0) < 0)
         goto done;
