@@ -243,13 +243,9 @@ bool kvsdir_issymlink (kvsdir_t *dir, const char *name)
 
 char *kvsdir_key_at (kvsdir_t *dir, const char *name)
 {
-    char *key;
-
-    if (!strcmp (dir->key, ".") != 0)
-        key = xstrdup (name);
-    else if (asprintf (&key, "%s.%s", dir->key, name) < 0)
-        oom ();
-    return key;
+    if (!strcmp (dir->key, "."))
+        return xstrdup (name);
+    return xasprintf ("%s.%s", dir->key, name);
 }
 
 /**
