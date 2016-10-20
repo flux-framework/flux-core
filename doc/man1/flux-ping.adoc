@@ -37,8 +37,8 @@ module, is to be pinged.  "flux ping 0-15" is equivalent to
 OPTIONS
 -------
 *-r, --rank*'=NODESET'::
-Find target on a specific broker rank(s).
-Default: send to FLUX_NODEID_ANY.
+Find target on a specific broker rank(s).  See NODESET FORMAT below
+for more information.  Default: send to FLUX_NODEID_ANY.
 
 *-p, --pad*'=N'::
 Include in the payload a string of length 'N' bytes.  The payload will be
@@ -85,6 +85,12 @@ One can direct a ping request to a nodeset, e.g.
 This tells you that the message brokers on ranks 0-7 are responsive.
 The time shows the statistical breakdown of RTT values for the set of
 responses in (min:mean:max) format.
+
+
+NODESET FORMAT
+--------------
+include::NODESET.adoc[]
+
 
 AUTHOR
 ------

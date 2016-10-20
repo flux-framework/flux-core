@@ -44,7 +44,7 @@ List subprocesses managed by flux-broker.
 
  -h, --help           Display this message
  -v, --verbose        Be verbose.
- -r, --rank=RANKS     Target only ranks in list RANKS
+ -r, --rank=NODESET   Target only ranks in NODESET
 
 ]]
 
@@ -80,7 +80,7 @@ local function display_usage ()
 end
 
 local function get_ranklist (f, r)
-    if not r then r = '0-'..f.size-1 end
+    if r == "all" or not r then r = '0-'..f.size-1 end
     return hostlist.new ('['..r..']')
 end
 
@@ -123,10 +123,8 @@ local mh, err = f:msghandler {
     handler = function (f, msg, mh)
         if msg.errnum ~= 0 then
             warn ("Error: %s\n", posix.errno (msg.errnum))
-            size = size - 1
         elseif not msg.data then 
             warn ("Error: empty message!\n")
-            size = size - 1
         else
             local resp = msg.data
             local rank = resp.rank

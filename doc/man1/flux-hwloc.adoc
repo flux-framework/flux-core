@@ -46,9 +46,10 @@ Reload hwloc topology information, optionally loading hwloc XML files
 from `DIR/<rank>.xml` files.
 Options:
 
- --rank=['RANKS']:::
- -r 'RANKS':::
- Only reload XML on provided nodeset 'RANKS'.
+ --rank='NODESET':::
+ -r 'NODESET':::
+ Only reload XML on provided 'NODESET'.  See NODESET FORMAT below for
+ more information.
 
  --walk-topology=['yes|no']:::
  -t ['yes|no']:::
@@ -58,6 +59,11 @@ Options:
 
 *topology*::
 Dump current aggregate topology XML for the current session to stdout.
+
+
+NODESET FORMAT
+--------------
+include::NODESET.adoc[]
 
 
 AUTHOR

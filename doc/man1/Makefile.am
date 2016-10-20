@@ -39,7 +39,7 @@ XML_FILES   = $(MAN1_FILES_PRIMARY:%.1=%.xml)
 
 if HAVE_A2X
 dist_man_MANS = $(MAN1_FILES)
-$(MAN1_FILES): COPYRIGHT.adoc
+$(MAN1_FILES): COPYRIGHT.adoc NODESET.adoc
 endif
 
 SUFFIXES = .adoc .1
@@ -58,6 +58,6 @@ stderr_devnull_0 = 2>/dev/null
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
-EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
+EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc NODESET.adoc
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)

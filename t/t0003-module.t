@@ -7,7 +7,12 @@ Verify module load/unload/list
 '
 
 . `dirname $0`/sharness.sh
-test_under_flux 4 minimal
+SIZE=4
+test_under_flux ${SIZE} minimal
+
+invalid_rank() {
+	echo $((${SIZE} + 1))
+}
 
 test_expect_success 'module: load test module' '
 	flux module load \
@@ -67,6 +72,64 @@ test_expect_success 'module: unload test module (all ranks)' '
 test_expect_success 'module: insmod returns initialization error' '
 	test_must_fail flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
+'
+
+test_expect_success 'module: list fails on invalid rank' '
+	flux module list -r $(invalid_rank) 2> stderr
+	grep "No route to host" stderr
+'
+
+test_expect_success 'module: load fails on invalid rank' '
+	flux module load -r $(invalid_rank) \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so 2> stderr
+	grep "No route to host" stderr
+'
+
+test_expect_success 'module: remove fails on invalid rank' '
+	flux module load \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+	flux module remove -r $(invalid_rank) parent 2> stderr
+	flux module remove parent
+	grep "No route to host" stderr
+'
+
+test_expect_success 'module: load works on valid and invalid rank' '
+	flux module load -r 0,$(invalid_rank) \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so 1> stdout 2> stderr
+	flux module list -r 0 | grep parent &&
+	grep "No route to host" stderr
+'
+
+test_expect_success 'module: list works on valid and invalid rank' '
+	flux module list -r 0,$(invalid_rank) 1> stdout 2> stderr
+	grep "parent" stdout &&
+	grep "No route to host" stderr
+'
+
+test_expect_success 'module: remove works on valid and invalid rank' '
+	flux module load -r 0,$(invalid_rank) \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+	flux module remove -r 0,$(invalid_rank) parent 2> stderr
+	! flux module list -r 0 | grep parent &&
+	grep "No route to host" stderr
+'
+
+test_expect_success 'module: load fails on invalid module' '
+	flux module load nosuchmodule 2> stderr
+	grep "nosuchmodule: not found in module search path" stderr
+'
+
+test_expect_success 'module: remove fails on invalid module' '
+	flux module remove nosuchmodule 2> stderr
+	grep "nosuchmodule: No such file or directory" stderr
+'
+
+test_expect_success 'module: info works' '
+	flux module info ${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+'
+
+test_expect_success 'module: info fails on invalid module' '
+	! flux module info nosuchmodule
 '
 
 test_done

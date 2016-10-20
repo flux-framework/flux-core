@@ -8,7 +8,8 @@ Ensure flux-hwloc reload subcommand works
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 2 kvs
+SIZE=2
+test_under_flux ${SIZE} kvs
 
 shared2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/shared/02-brokers`
 exclu2=`readlink -e ${SHARNESS_TEST_SRCDIR}/hwloc-data/1N/nonoverlapping/02-brokers`
@@ -39,6 +40,10 @@ done
 #
 lstopo=$(which lstopo 2>/dev/null || which lstopo-no-graphics 2>/dev/null)
 test -n "$lstopo" && test_set_prereq HAVE_LSTOPO
+
+invalid_rank() {
+	echo $((${SIZE} + 1))
+}
 
 test_expect_success 'hwloc: ensure we have system lstopo output' '
     test -f system.xml &&
@@ -104,6 +109,11 @@ test_expect_success 'hwloc: reload --walk-topology=yes works' '
 test_expect_success 'hwloc: reload --walk-topology=no removes broken down topo' '
     flux hwloc reload --walk-topology=no &&
     test_must_fail flux kvs get resource.hwloc.by_rank.0.Machine_0.OSName
+'
+
+test_expect_success 'hwloc: reload fails on invalid rank' '
+    flux hwloc reload -r $(invalid_rank) 2> stderr
+    grep "No route to host" stderr
 '
 
 test_done

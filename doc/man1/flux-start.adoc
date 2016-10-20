@@ -65,7 +65,7 @@ as the initial program and all logs output to stderr:
 Launch an 8-way Flux instance within a slurm job, with an interactive
 shell as the initial program:
 
-  srun -pty -N8 flux start
+  srun --pty -N8 flux start
 
 Launch an 8-way Flux instance under Flux, with /bin/true as
 the initial program:

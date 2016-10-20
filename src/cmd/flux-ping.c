@@ -51,6 +51,13 @@ struct ping_ctx {
     flux_reactor_t *reactor;
 };
 
+struct ping_data {
+    tstat_t *tstat;
+    int seq;
+    char *route;
+    unsigned int rpc_count;
+};
+
 #define OPTIONS "hp:d:r:c:b"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
@@ -61,6 +68,18 @@ static const struct option longopts[] = {
     {"batch",      no_argument,        0, 'b'},
     { 0, 0, 0, 0 },
 };
+
+void ping_data_free (void *ctx)
+{
+    struct ping_data *pdata = ctx;
+    if (pdata) {
+        if (pdata->tstat)
+            free (pdata->tstat);
+        if (pdata->route)
+            free (pdata->route);
+        free (pdata);
+    }
+}
 
 void usage (void)
 {
@@ -80,7 +99,8 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     struct timespec t0;
     int seq;
     json_object *out = NULL;
-    tstat_t *tstat = flux_rpc_aux_get (rpc);
+    struct ping_data *pdata = flux_rpc_aux_get (rpc);
+    tstat_t *tstat = pdata->tstat;
 
     if (flux_rpc_get (rpc, &json_str) < 0) {
         log_err ("flux_rpc_get");
@@ -100,11 +120,18 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     t0.tv_nsec = nsec;
     tstat_push (tstat, monotime_since (t0));
 
-    if (flux_rpc_next (rpc) < 0) {
+    pdata->seq = seq;
+    if (pdata->route)
+        free (pdata->route);
+    pdata->route = xstrdup (route);
+    pdata->rpc_count++;
+
+done:
+    if (flux_rpc_next (rpc) < 0 && pdata->rpc_count) {
         if (ctx->rank != NULL) {
             printf ("%s!%s pad=%lu seq=%d time=(%0.3f:%0.3f:%0.3f) ms stddev %0.3f\n",
                     ctx->rank,
-                    ctx->topic, strlen (ctx->pad), seq,
+                    ctx->topic, strlen (ctx->pad), pdata->seq,
                     tstat_min (tstat), tstat_mean (tstat), tstat_max (tstat),
                     tstat_stddev (tstat));
         } else {
@@ -113,13 +140,12 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
             printf ("%s%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
                     ctx->nodeid == FLUX_NODEID_ANY ? "" : s,
                     ctx->nodeid == FLUX_NODEID_ANY ? "" : "!",
-                    ctx->topic, strlen (ctx->pad), seq,
+                    ctx->topic, strlen (ctx->pad), pdata->seq,
                     tstat_mean (tstat),
-                    route);
+                    pdata->route);
         }
         flux_rpc_destroy (rpc);
     }
-done:
     Jput (out);
 }
 
@@ -128,7 +154,12 @@ void send_ping (struct ping_ctx *ctx)
     struct timespec t0;
     json_object *in = Jnew ();
     flux_rpc_t *rpc;
-    tstat_t *tstat = xzmalloc (sizeof (*tstat));
+    struct ping_data *pdata = xzmalloc (sizeof (*pdata));
+
+    pdata->tstat = xzmalloc (sizeof (*(pdata->tstat)));
+    pdata->seq = 0;
+    pdata->route = NULL;
+    pdata->rpc_count = 0;
 
     Jadd_int (in, "seq", ctx->send_count);
     monotime (&t0);
@@ -142,7 +173,7 @@ void send_ping (struct ping_ctx *ctx)
         rpc = flux_rpc (ctx->h, ctx->topic, Jtostr (in), ctx->nodeid, 0);
     if (!rpc)
         log_err_exit ("flux_rpc");
-    flux_rpc_aux_set (rpc, tstat, free);
+    flux_rpc_aux_set (rpc, pdata, ping_data_free);
     if (flux_rpc_then (rpc, ping_continuation, ctx) < 0)
         log_err_exit ("flux_rpc_then");
 

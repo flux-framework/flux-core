@@ -71,7 +71,7 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'r': /* --rank N */
+            case 'r': /* --rank NODESET */
                 rank = strtoul (optarg, NULL, 10);
                 break;
             default:
