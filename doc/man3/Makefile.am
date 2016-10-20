@@ -35,7 +35,8 @@ MAN3_FILES_PRIMARY = \
 	flux_stat_watcher_create.3 \
 	flux_rpc_raw.3 \
 	flux_respond.3 \
-	flux_reactor_now.3
+	flux_reactor_now.3 \
+	flux_request_decode.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -91,7 +92,9 @@ MAN3_FILES_SECONDARY = \
 	flux_stat_watcher_get_rstat.3 \
 	flux_rpc_get_raw.3 \
 	flux_respond_raw.3 \
-	flux_reactor_now_update.3
+	flux_reactor_now_update.3 \
+	flux_request_decodef.3 \
+	flux_request_decode_raw.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -166,6 +169,8 @@ flux_stat_watcher_get_rstat.3: flux_stat_watcher_create.3
 flux_rpc_get_raw.3: flux_rpc_raw.3
 flux_respond_raw.3: flux_respond.3
 flux_reactor_now_update.3: flux_reactor_now.3
+flux_request_decodef.3: flux_request_decode.3
+flux_request_decode_raw.3: flux_request_decode.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
