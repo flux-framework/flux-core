@@ -148,7 +148,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
             goto done;
         }
     }
-    msg = zmsg_recv (ctx->sock);
+    msg = flux_msg_recvzsock (ctx->sock);
 done:
     return msg;
 }

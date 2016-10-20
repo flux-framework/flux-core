@@ -63,7 +63,7 @@ int flux_request_decode (const flux_msg_t *msg, const char **topic,
 
     if (request_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (msg, &js) < 0)
+    if (flux_msg_get_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -106,6 +106,39 @@ done:
     return rc;
 }
 
+static int flux_request_vdecodef (const flux_msg_t *msg, const char **topic,
+                                  const char *fmt, va_list ap)
+{
+    const char *ts;
+    int rc = -1;
+
+    if (!fmt) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (request_decode (msg, &ts) < 0)
+        goto done;
+    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
+        goto done;
+    if (topic)
+        *topic = ts;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_request_decodef (const flux_msg_t *msg, const char **topic,
+                          const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_request_vdecodef (msg, topic, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 static flux_msg_t *request_encode (const char *topic)
 {
     flux_msg_t *msg = NULL;
@@ -132,7 +165,7 @@ flux_msg_t *flux_request_encode (const char *topic, const char *json_str)
 
     if (!msg)
         goto error;
-    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    if (json_str && flux_msg_set_json (msg, json_str) < 0)
         goto error;
     return msg;
 error:

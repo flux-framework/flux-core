@@ -15,6 +15,13 @@
 int flux_request_decode (const flux_msg_t *msg, const char **topic,
                          const char **json_str);
 
+/* Decode a request message with json payload.  These functions use
+ * jansson unpack style variable arguments for decoding the JSON object
+ * payload directly.  Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_request_decodef (const flux_msg_t *msg, const char **topic,
+                          const char *fmt, ...);
+
 /* Decode a request message with optional raw payload.
  * If topic is non-NULL, assign the request topic string.
  * Data and len must be non-NULL, and will be assigned the payload.

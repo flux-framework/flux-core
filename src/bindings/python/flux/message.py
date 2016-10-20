@@ -63,14 +63,14 @@ class Message(WrapperPimpl):
     def payload_str(self):
         s = ffi.new('char *[1]')
         if self.pimpl.has_payload():
-            self.pimpl.get_payload_json(ffi.cast('char**', s))
+            self.pimpl.get_json(ffi.cast('char**', s))
             return ffi.string(s[0])
         else:
             return None
 
     @payload_str.setter
     def payload_str(self, value):
-        self.pimpl.set_payload_json(value)
+        self.pimpl.set_json(value)
 
     @property
     def payload(self):

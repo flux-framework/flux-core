@@ -12,7 +12,7 @@ int main (int argc, char *argv[])
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
     char *d, data[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    int l, len = strlen (data);
+    int i, l, len = strlen (data);
 
     plan (NO_PLAN);
 
@@ -47,6 +47,12 @@ int main (int argc, char *argv[])
     ok (flux_request_decode (msg, NULL, &s) == 0
         && s != NULL && !strcmp (s, json_str),
         "flux_request_decode returns encoded payload");
+    topic = NULL;
+    i = 0;
+    ok (flux_request_decodef (msg, &topic, "{s:i}", "a", &i) == 0
+        && i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
+        "flux_request_decodef returns encoded payload");
+
     errno = 0;
     ok (flux_request_decode (msg, NULL, NULL) < 0 && errno == EPROTO,
         "flux_request_decode returns EPROTO when payload is unexpected");

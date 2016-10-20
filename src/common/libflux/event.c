@@ -31,10 +31,10 @@
 #include "event.h"
 #include "message.h"
 
-int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **json_str)
+static int event_decode (const flux_msg_t *msg, const char **topic)
 {
     int type;
-    const char *ts, *js;
+    const char *ts;
     int rc = -1;
 
     if (msg == NULL) {
@@ -49,7 +49,22 @@ int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **j
     }
     if (flux_msg_get_topic (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (msg, &js) < 0)
+    if (topic)
+        *topic = ts;
+    rc = 0;
+done:
+    return rc;
+}
+
+
+int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **json_str)
+{
+    const char *ts, *js;
+    int rc = -1;
+
+    if (event_decode (msg, &ts) < 0)
+        goto done;
+    if (flux_msg_get_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -64,7 +79,36 @@ done:
     return rc;
 }
 
-flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
+static int flux_event_vdecodef (const flux_msg_t *msg, const char **topic,
+                                const char *fmt, va_list ap)
+{
+    const char *ts;
+    int rc = -1;
+
+    if (event_decode (msg, &ts) < 0)
+        goto done;
+    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
+        goto done;
+    if (topic)
+        *topic = ts;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_event_decodef (const flux_msg_t *msg, const char **topic,
+                        const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_event_vdecodef (msg, topic, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
+static flux_msg_t *flux_event_create (const char *topic)
 {
     flux_msg_t *msg = NULL;
 
@@ -78,12 +122,48 @@ flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
         goto error;
     if (flux_msg_enable_route (msg) < 0)
         goto error;
-    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    return msg;
+error:
+    flux_msg_destroy (msg);
+    return NULL;
+}
+
+flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
+{
+    flux_msg_t *msg = flux_event_create (topic);
+    if (!msg)
+        goto error;
+    if (json_str && flux_msg_set_json (msg, json_str) < 0)
         goto error;
     return msg;
 error:
     flux_msg_destroy (msg);
     return NULL;
+}
+
+static flux_msg_t *flux_event_vencodef (const char *topic,
+                                        const char *fmt, va_list ap)
+{
+    flux_msg_t *msg = flux_event_create (topic);
+    if (!msg)
+        goto error;
+    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+        goto error;
+    return msg;
+error:
+    flux_msg_destroy (msg);
+    return NULL;
+}
+
+flux_msg_t *flux_event_encodef (const char *topic, const char *fmt, ...)
+{
+    flux_msg_t *msg;
+    va_list ap;
+
+    va_start (ap, fmt);
+    msg = flux_event_vencodef (topic, fmt, ap);
+    va_end (ap);
+    return msg;
 }
 
 /*

@@ -1,0 +1,87 @@
+flux_request_decode(3)
+======================
+:doctype: manpage
+
+
+NAME
+----
+flux_request_decode, flux_request_decodef, flux_request_decode_raw - decode a Flux request message
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ int flux_request_decode (const flux_msg_t *msg,
+                          const char **topic,
+                          const char **json_str);
+
+ int flux_request_decodef (const flux_msg_t *msg,
+                           const char **topic,
+                           const char *fmt, ...);
+
+ int flux_request_decode_raw (const flux_msg_t *msg,
+                              const char **topic,
+                              void *data, int *len);
+
+DESCRIPTION
+-----------
+
+`flux_request_decode()` decodes a request message _msg_.
+
+_topic_, if non-NULL, will be set the message's topic string. The storage
+for this string belongs to _msg_ and should not be freed.
+
+_json_str_, if non-NULL, will be set to the message's JSON payload. The
+storage for this string belongs to _msg_ and should not be freed.
+If non-NULL, decoding fails if the message doesn't have a JSON payload.
+If NULL, decoding fails if the message does have a JSON payload.
+
+`flux_request_decodef()` decodes a request message with a JSON payload as
+above, parsing the payload using variable arguments with a format string
+in the style of jansson's `json_unpack()` (used internally). Decoding fails
+if the message doesn't have a JSON payload.
+
+`flux_request_decode_raw()` decodes a request message with a raw payload,
+setting _data_ and _len_ to the payload data and length. The storage for
+the raw payload belongs to _msg_ and should not be freed.
+
+
+RETURN VALUE
+------------
+
+These functions return 0 on success.  On error, -1 is returned, and
+errno is set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+The _msg_ argument was NULL.
+
+EPROTO::
+Message decoding failed, such as due to missing or unexpected payload,
+incorrect message type, missing topic string, etc..
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_respond(3), flux_rpc(3)
+
+http://jansson.readthedocs.io/en/2.7/apiref.html#parsing-and-validating-values[Jansson API: Parsing and Validating Values]

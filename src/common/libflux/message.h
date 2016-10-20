@@ -3,9 +3,12 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include "security.h"
 
-typedef struct _zmsg_t flux_msg_t;
+typedef struct flux_msg flux_msg_t;
+//typedef struct _zmsg_t flux_msg_t;
 
 enum {
     FLUX_MSGTYPE_REQUEST    = 0x01,
@@ -75,6 +78,10 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
 size_t flux_msg_encode_size (const flux_msg_t *msg);
 int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size);
 
+/* Get the number of message frames in 'msg'.
+ */
+int flux_msg_frames (const flux_msg_t *msg);
+
 /* Decode a flux_msg_t from buffer.
  * Returns message on success, NULL on failure with errno set.
  * Caller must destroy message with flux_msg_destroy().
@@ -98,11 +105,14 @@ flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf);
  * Returns 0 on success, -1 on failure with errno set.
  */
 int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
+int flux_msg_sendzsock_munge (void *sock, const flux_msg_t *msg,
+                              flux_sec_t *sec);
 
 /* Receive a message from zeromq socket.
  * Returns message on success, NULL on failure with errno set.
  */
 flux_msg_t *flux_msg_recvzsock (void *dest);
+flux_msg_t *flux_msg_recvzsock_munge (void *sock, flux_sec_t *sec);
 
 /* Initialize iobuf members.
  */
@@ -130,20 +140,28 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * Set function adds/deletes/replaces payload frame as needed.
  * The new payload will be copied (caller retains ownership).
  * Any old payload is deleted.
- * Get_payload returns pointer to msg-owned buf.
+ * flux_msg_get_payload returns pointer to msg-owned buf.
  * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
+                          void *buf, int *size);
 int flux_msg_set_payload (flux_msg_t *msg, int flags,
                           const void *buf, int size);
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void *buf, int *size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
-/* Get/set json string payload.
- * set allows json_str to be NULL
- * get will set *json_str to NULL and return success if there is no payload.
+/* Get/set JSON payload.
+ * flux_msg_set_json() accepts a NULL json_str (no payload).
+ * flux_msg_get_json() will set json_str to NULL if there is no payload
+ * jsonf functions use jansson pack/unpack style arguments for
+ * encoding/decoding the JSON object payload directly from/to its members.
  */
-int flux_msg_set_payload_json (flux_msg_t *msg, const char *json_str);
-int flux_msg_get_payload_json (const flux_msg_t *msg, const char **json_str);
+int flux_msg_set_json (flux_msg_t *msg, const char *json_str);
+int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_vset_jsonf (flux_msg_t *msg, const char *fmt, va_list ap);
+
+int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
+int flux_msg_get_jsonf (const flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_vget_jsonf (const flux_msg_t *msg, const char *fmt, va_list ap);
 
 /* Get/set nodeid (request only)
  * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.
@@ -257,6 +275,7 @@ char *flux_msg_get_route_string (const flux_msg_t *msg);
 /* Return true if route stack contains a frame matching 's'
  */
 bool flux_msg_has_route (const flux_msg_t *msg, const char *s);
+
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

@@ -4,6 +4,18 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libtap/tap.h"
 
+/* increment integer and send it back */
+void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
+                     const flux_msg_t *msg, void *arg)
+{
+    int i;
+
+    if (flux_request_decodef (msg, NULL, "{s:i}", "n", &i) < 0)
+        flux_respond (h, msg, errno, NULL);
+    else
+        flux_respondf (h, msg, "{s:i}", "n", i + 1);
+}
+
 /* request nodeid and flags returned in response */
 void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
@@ -139,6 +151,17 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_get_raw works and returned expected payload");
     flux_rpc_destroy (r);
 
+    /* use newish pack/unpack payload interfaces */
+    int i = 0;
+    ok ((r = flux_rpcf (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
+                        "{s:i}", "n", 107)) != NULL,
+        "flux_rpcf works");
+    ok (flux_rpc_getf (r, "{s:i}", "n", &i) == 0,
+        "flux_rpc_getf works");
+    ok (i == 108,
+        "and service returned incremented value");
+    flux_rpc_destroy (r);
+
     flux_reactor_stop (flux_get_reactor (h));
 }
 
@@ -170,6 +193,7 @@ static void fatal_err (const char *message, void *arg)
 }
 
 static struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",           rpctest_incr_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
@@ -185,7 +209,7 @@ int main (int argc, char *argv[])
     flux_t *h;
     flux_reactor_t *reactor;
 
-    plan (37);
+    plan (NO_PLAN);
 
     (void)setenv ("FLUX_CONNECTOR_PATH",
                   flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);

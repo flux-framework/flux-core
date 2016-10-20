@@ -33,11 +33,12 @@
 
 #include "compat.h"
 
-int flux_sendmsg (flux_t *h, zmsg_t **zmsg)
+int flux_sendmsg (flux_t *h, flux_msg_t **msg)
 {
-    if (flux_send (h, *zmsg, 0) < 0)
+    if (flux_send (h, *msg, 0) < 0)
         return -1;
-    zmsg_destroy (zmsg);
+    flux_msg_destroy (*msg);
+    *msg = NULL;
     return 0;
 }
 

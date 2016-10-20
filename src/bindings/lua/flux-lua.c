@@ -488,7 +488,7 @@ static int l_flux_recv (lua_State *L)
     const char *json_str = NULL;
     json_object *o = NULL;
     int errnum;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .matchtag = FLUX_MATCHTAG_NONE,
@@ -498,14 +498,14 @@ static int l_flux_recv (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(zmsg = flux_recvmsg_match (f, match, false)))
+    if (!(msg = flux_recvmsg_match (f, match, false)))
         goto error;
 
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+    if (flux_msg_get_errnum (msg, &errnum) < 0)
         goto error;
 
-    if (errnum == 0 && (flux_msg_get_topic (zmsg, &topic) < 0
-                     || flux_msg_get_payload_json (zmsg, &json_str) < 0))
+    if (errnum == 0 && (flux_msg_get_topic (msg, &topic) < 0
+                     || flux_msg_get_json (msg, &json_str) < 0))
         goto error;
 
     if (json_str && !(o = json_tokener_parse (json_str)))
@@ -533,9 +533,9 @@ static int l_flux_recv (lua_State *L)
         lua_pushnil (L);
     return (2);
 error:
-    if (zmsg) {
+    if (msg) {
         int saved_errno = errno;
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
         errno = saved_errno;
     }
     return lua_pusherror (L, (char *)flux_strerror (errno));
@@ -631,7 +631,7 @@ static int l_flux_send_event (lua_State *L)
     json_object *o = NULL;
     const char *json_str = NULL;
     int eventidx = 2;
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     int rc = 0;
 
     /*
@@ -649,12 +649,12 @@ static int l_flux_send_event (lua_State *L)
 
     event = luaL_checkstring (L, -1);
 
-    zmsg = flux_event_encode (event, json_str);
-    if (!zmsg || flux_sendmsg (f, &zmsg) < 0)
+    msg = flux_event_encode (event, json_str);
+    if (!msg || flux_sendmsg (f, &msg) < 0)
         rc = -1;
     if (o)
         json_object_put (o);
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
 
     return l_pushresult (L, rc);
 }
@@ -670,15 +670,15 @@ static int l_flux_recv_event (lua_State *L)
         .matchtag = FLUX_MATCHTAG_NONE,
         .topic_glob = NULL,
     };
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
-    if (!(zmsg = flux_recvmsg_match (f, match, 0)))
+    if (!(msg = flux_recvmsg_match (f, match, 0)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
-    if (flux_msg_get_topic (zmsg, &topic) < 0
-            || flux_msg_get_payload_json (zmsg, &json_str) < 0
+    if (flux_msg_get_topic (msg, &topic) < 0
+            || flux_msg_get_json (msg, &json_str) < 0
             || (json_str && !(o = json_tokener_parse (json_str)))) {
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
         return lua_pusherror (L, (char *)flux_strerror (errno));
     }
 
@@ -823,9 +823,9 @@ static int l_f_zi_resp_cb (lua_State *L,
 }
 
 static int create_and_push_zmsg_info (lua_State *L,
-        flux_t *f, int typemask, zmsg_t **zmsg)
+        flux_t *f, int typemask, flux_msg_t **msg)
 {
-    struct zmsg_info * zi = zmsg_info_create (zmsg, typemask);
+    struct zmsg_info * zi = zmsg_info_create (msg, typemask);
     zmsg_info_register_resp_cb (zi, (zi_resp_f) l_f_zi_resp_cb, (void *) f);
     return lua_push_zmsg_info (L, zi);
 }
@@ -833,7 +833,7 @@ static int create_and_push_zmsg_info (lua_State *L,
 static int l_flux_recvmsg (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     int type;
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
@@ -844,18 +844,18 @@ static int l_flux_recvmsg (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(zmsg = flux_recvmsg_match (f, match, false)))
+    if (!(msg = flux_recvmsg_match (f, match, false)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         type = FLUX_MSGTYPE_ANY;
 
-    create_and_push_zmsg_info (L, f, type, &zmsg);
-    zmsg_destroy (&zmsg);
+    create_and_push_zmsg_info (L, f, type, &msg);
+    flux_msg_destroy (msg);
     return (1);
 }
 
-static int msghandler (flux_t *f, int typemask, zmsg_t **zmsg, void *arg)
+static int msghandler (flux_t *f, int typemask, flux_msg_t **msg, void *arg)
 {
     int rc;
     int t;
@@ -873,7 +873,7 @@ static int msghandler (flux_t *f, int typemask, zmsg_t **zmsg, void *arg)
     lua_push_flux_handle (L, f);
     assert (lua_isuserdata (L, -1));
 
-    create_and_push_zmsg_info (L, f, typemask, zmsg);
+    create_and_push_zmsg_info (L, f, typemask, msg);
     assert (lua_isuserdata (L, -1));
 
     lua_getfield (L, t, "userdata");

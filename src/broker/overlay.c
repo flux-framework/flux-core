@@ -398,18 +398,11 @@ void overlay_set_event_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
 int overlay_sendmsg_event (overlay_t *ov, const flux_msg_t *msg)
 {
     int rc = -1;
-    flux_msg_t *cpy = NULL;
 
     if (!ov->event || !ov->event->zs)
         return 0;
     if (ov->event_munge) {
-        if (!(cpy = flux_msg_copy (msg, true)))
-            oom ();
-        if (flux_sec_munge_zmsg (ov->sec, &cpy) < 0) {
-            errno = EIO;
-            goto done;
-        }
-        if (flux_msg_sendzsock (ov->event->zs, cpy) < 0)
+        if (flux_msg_sendzsock_munge (ov->event->zs, msg, ov->sec) < 0)
             goto done;
     } else {
         if (flux_msg_sendzsock (ov->event->zs, msg) < 0)
@@ -417,7 +410,6 @@ int overlay_sendmsg_event (overlay_t *ov, const flux_msg_t *msg)
     }
     rc = 0;
 done:
-    flux_msg_destroy (cpy);
     return rc;
 }
 
@@ -428,16 +420,12 @@ flux_msg_t *overlay_recvmsg_event (overlay_t *ov)
         errno = EINVAL;
         goto done;
     }
-    if (!(msg = flux_msg_recvzsock (ov->event->zs)))
-        goto done;
     if (ov->event_munge) {
-        if (flux_sec_unmunge_zmsg (ov->sec, &msg) < 0) {
-            flux_msg_destroy (msg);
-            errno = EPROTO;
-            flux_log_error (ov->h, "dropping malformed event");
-            msg = NULL;
+        if (!(msg = flux_msg_recvzsock_munge (ov->event->zs, ov->sec)))
             goto done;
-        }
+    } else {
+        if (!(msg = flux_msg_recvzsock (ov->event->zs)))
+            goto done;
     }
 done:
     return msg;

@@ -334,3 +334,7 @@ getf
 jansson
 jansson's
 rpcf
+decodef
+len
+respondf
+encodef

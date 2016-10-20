@@ -73,7 +73,7 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
 
     if (response_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (msg, &js) < 0)
+    if (flux_msg_get_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -150,7 +150,7 @@ flux_msg_t *flux_response_encode (const char *topic, int errnum,
         errno = EINVAL;
         goto error;
     }
-    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    if (json_str && flux_msg_set_json (msg, json_str) < 0)
         goto error;
     return msg;
 error:
@@ -205,7 +205,7 @@ int flux_respond (flux_t *h, const flux_msg_t *request,
     flux_msg_t *msg = derive_response (h, request, errnum);
     if (!msg)
         goto fatal;
-    if (!errnum && json_str && flux_msg_set_payload_json (msg, json_str) < 0)
+    if (!errnum && json_str && flux_msg_set_json (msg, json_str) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
         goto fatal;
@@ -215,6 +215,36 @@ fatal:
     flux_msg_destroy (msg);
     FLUX_FATAL (h);
     return -1;
+}
+
+static int flux_vrespondf (flux_t *h, const flux_msg_t *request,
+                    const char *fmt, va_list ap)
+{
+    flux_msg_t *msg = derive_response (h, request, 0);
+    if (!msg)
+        goto fatal;
+    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+        goto fatal;
+    if (flux_send (h, msg, 0) < 0)
+        goto fatal;
+    flux_msg_destroy (msg);
+    return 0;
+fatal:
+    flux_msg_destroy (msg);
+    FLUX_FATAL (h);
+    return -1;
+}
+
+int flux_respondf (flux_t *h, const flux_msg_t *request,
+                   const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, fmt);
+    rc = flux_vrespondf (h, request, fmt, ap);
+    va_end (ap);
+    return rc;
 }
 
 int flux_respond_raw (flux_t *h, const flux_msg_t *request,
