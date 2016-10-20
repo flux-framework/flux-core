@@ -92,6 +92,7 @@ MAN3_FILES_SECONDARY = \
 	flux_stat_watcher_get_rstat.3 \
 	flux_rpc_get_raw.3 \
 	flux_respond_raw.3 \
+	flux_respondf.3 \
 	flux_reactor_now_update.3 \
 	flux_request_decodef.3 \
 	flux_request_decode_raw.3
@@ -168,6 +169,7 @@ flux_child_watcher_get_rstatus.3: flux_child_watcher_create.3
 flux_stat_watcher_get_rstat.3: flux_stat_watcher_create.3
 flux_rpc_get_raw.3: flux_rpc_raw.3
 flux_respond_raw.3: flux_respond.3
+flux_respondf.3: flux_respond.3
 flux_reactor_now_update.3: flux_reactor_now.3
 flux_request_decodef.3: flux_request_decode.3
 flux_request_decode_raw.3: flux_request_decode.3

@@ -5,7 +5,7 @@ flux_respond(3)
 
 NAME
 ----
-flux_respond, flux_respond_raw - respond to a request
+flux_respond, flux_respondf, flux_respond_raw - respond to a request
 
 
 SYNOPSIS
@@ -15,15 +15,19 @@ SYNOPSIS
  int flux_respond (flux_t *h, const flux_msg_t *request,
                    int errnum, const char *json_str);
 
+ int flux_respondf (flux_t *h, const flux_msg_t *request,
+                    const char *fmt, ...);
+
  int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                        int errnum, const void *data, int length);
+
 
 DESCRIPTION
 -----------
 
-`flux_respond()` and `flux_respond_raw()` encode and send a response
-message on handle _h_, deriving topic string, matchtag, and route stack
-from the provided _request_.
+`flux_respond()`, `flux_respondf()`, and `flux_respond_raw()` encode
+and send a response message on handle _h_, deriving topic string,
+matchtag, and route stack from the provided _request_.
 
 If _errnum_ is non-zero, an error is returned to the sender such that
 `flux_rpc_get(3)` or `flux_rpc_get_raw(3)` will fail, with the system
@@ -32,6 +36,10 @@ errno set to _errnum_.  Any payload arguments are ignored in this case.
 If _json_str_ is non-NULL, `flux_respond()` will send it as the response
 payload, otherwise there will be no payload.  Similarly, if _data_ is
 non-NULL, `flux_respond_raw()` will send it as the response payload.
+
+`flux_respondf()` encodes a response message with a JSON payload,
+building the payload using variable arguments with a format string in
+the style of jansson's `json_pack()` (used internally).
 
 
 RETURN VALUE
@@ -77,3 +85,5 @@ https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]
 
 https://github.com/flux-framework/rfc/blob/master/spec_3.adoc[RFC 3: CMB1 - Flux Comms Message Broker Protocol]
+
+http://jansson.readthedocs.io/en/2.7/apiref.html#building-values[Jansson API: Building Values]
