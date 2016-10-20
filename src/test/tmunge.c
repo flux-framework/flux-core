@@ -57,6 +57,7 @@ void *thread (void *arg)
 {
     flux_msg_t *msg;
     flux_sec_t *sec;
+    int n;
 
     if (!(sec = flux_sec_create ()))
         log_err_exit ("C: flux_sec_create");
@@ -66,9 +67,10 @@ void *thread (void *arg)
         log_err_exit ("C: flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
-
-    if (!(msg = flux_event_encode ("foo.topic", "{\"foo\":42)")))
+    if (!(msg = flux_event_encode ("foo.topic", "{\"foo\":42}")))
         oom ();
+    if ((n = flux_msg_frames (msg)) != 4)
+        log_err_exit ("C: expected 4 frames, got %d", n);
     if (flux_msg_sendzsock_munge (cs, msg, sec) < 0)
         log_err_exit ("C: flux_msg_sendzsock_munge");
 
@@ -128,8 +130,8 @@ int main (int argc, char *argv[])
     if (!(msg = flux_msg_recvzsock_munge (zs, sec)))
         log_err_exit ("S: flux_msg_recvzsock_munge");
     //zmsg_dump (zmsg);
-    if ((n = flux_msg_frames (msg) != 2))
-        log_msg_exit ("S: expected 2 frames, got %d", n);
+    if ((n = flux_msg_frames (msg)) != 4)
+        log_err_exit ("S: expected 4 frames, got %d", n);
     flux_msg_destroy (msg);
 
     /* Wait for thread to terminate, then clean up.
