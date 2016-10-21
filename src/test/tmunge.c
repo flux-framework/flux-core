@@ -52,6 +52,7 @@
 
 static const char *uri = "inproc://tmunge";
 static void *cs;
+int secflags = FLUX_SEC_TYPE_MUNGE;
 
 void *thread (void *arg)
 {
@@ -63,7 +64,7 @@ void *thread (void *arg)
         log_err_exit ("C: flux_sec_create");
     if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
         log_err_exit ("C: flux_sec_disable ALL");
-    if (flux_sec_enable (sec, FLUX_SEC_TYPE_MUNGE) < 0)
+    if (flux_sec_enable (sec, secflags) < 0)
         log_err_exit ("C: flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
@@ -93,16 +94,21 @@ int main (int argc, char *argv[])
 
     log_init (basename (argv[0]));
 
-    if (argc != 1) {
-        fprintf (stderr, "Usage: tmunge\n");
+    if (argc != 1 && argc != 2) {
+        fprintf (stderr, "Usage: tmunge [--fake]\n");
         exit (1);
     }
-
+    if (argc == 2) {
+        if (!strcmp (argv[1], "--fake"))
+            secflags |= FLUX_SEC_TYPE_FAKEMUNGE;
+        else
+            log_msg_exit ("unknown option %s", argv[1]);
+    }
     if (!(sec = flux_sec_create ()))
         log_err_exit ("flux_sec_create");
     if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
         log_err_exit ("flux_sec_disable ALL");
-    if (flux_sec_enable (sec, FLUX_SEC_TYPE_MUNGE) < 0)
+    if (flux_sec_enable (sec, secflags) < 0)
         log_err_exit ("flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
@@ -128,7 +134,7 @@ int main (int argc, char *argv[])
     /* Handle one client message.
      */
     if (!(msg = flux_msg_recvzsock_munge (zs, sec)))
-        log_err_exit ("S: flux_msg_recvzsock_munge");
+        log_err_exit ("S: flux_msg_recvzsock_munge: %s", flux_sec_errstr (sec));
     //zmsg_dump (zmsg);
     if ((n = flux_msg_frames (msg)) != 4)
         log_err_exit ("S: expected 4 frames, got %d", n);
