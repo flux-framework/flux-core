@@ -1034,7 +1034,7 @@ static struct flux_msg_handler_spec htab[] = {
       FLUX_MSGHANDLER_TABLE_END
 };
 
-int jsc_notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
+static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL;
@@ -1072,6 +1072,12 @@ done:
     return rc;
 }
 
+/* deprecated */
+int jsc_notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
+{
+    return notify_status_obj (h, func, d);
+}
+
 struct callback_wrapper {
     jsc_handler_f cb;
     void *arg;
@@ -1091,13 +1097,13 @@ int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
     wrap->cb = func;
     wrap->arg = d;
 
-    rc = jsc_notify_status_obj (h, wrap_handler, wrap);
+    rc = notify_status_obj (h, wrap_handler, wrap);
     if (rc < 0)
         free (wrap);
     return rc;
 }
 
-int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
+static int query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
 		       json_object **jcb)
 {
     int rc = -1;
@@ -1129,12 +1135,19 @@ int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
     return rc;
 }
 
+/* deprecated */
+int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
+		       json_object **jcb)
+{
+    return query_jcb_obj (h, jobid, key, jcb);
+}
+
 int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb)
 {
     int rc;
     json_object *o = NULL;
 
-    rc = jsc_query_jcb_obj (h, jobid, key, &o);
+    rc = query_jcb_obj (h, jobid, key, &o);
     if (rc < 0)
         goto done;
     *jcb = o ? xstrdup (Jtostr (o)) : NULL;
@@ -1143,7 +1156,7 @@ done:
     return rc;
 }
 
-int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
+static int update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
 			json_object *jcb)
 {
     int rc = -1;
@@ -1177,6 +1190,13 @@ int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
     return rc;
 }
 
+/* deprecated */
+int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
+			json_object *jcb)
+{
+    return update_jcb_obj (h, jobid, key, jcb);
+}
+
 int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb)
 {
     int rc = -1;
@@ -1186,7 +1206,7 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb)
         errno = EINVAL;
         goto done;
     }
-    rc = jsc_update_jcb_obj (h, jobid, key, o);
+    rc = update_jcb_obj (h, jobid, key, o);
 done:
     Jput (o);
     return rc;

@@ -243,13 +243,9 @@ bool kvsdir_issymlink (kvsdir_t *dir, const char *name)
 
 char *kvsdir_key_at (kvsdir_t *dir, const char *name)
 {
-    char *key;
-
-    if (!strcmp (dir->key, ".") != 0)
-        key = xstrdup (name);
-    else if (asprintf (&key, "%s.%s", dir->key, name) < 0)
-        oom ();
-    return key;
+    if (!strcmp (dir->key, "."))
+        return xstrdup (name);
+    return xasprintf ("%s.%s", dir->key, name);
 }
 
 /**
@@ -777,7 +773,7 @@ done:
 /* *valp is IN/OUT parameter.
  * IN *valp is freed internally.  Caller must free OUT *val.
  */
-int kvs_watch_once_obj (flux_t *h, const char *key, json_object **valp)
+static int watch_once_obj (flux_t *h, const char *key, json_object **valp)
 {
     int rc = -1;
 
@@ -790,6 +786,12 @@ int kvs_watch_once_obj (flux_t *h, const char *key, json_object **valp)
     rc = 0;
 done:
     return rc;
+}
+
+/* deprecated */
+int kvs_watch_once_obj (flux_t *h, const char *key, json_object **valp)
+{
+    return watch_once_obj (h, key, valp);
 }
 
 int kvs_watch_once (flux_t *h, const char *key, char **valp)
@@ -807,7 +809,7 @@ int kvs_watch_once (flux_t *h, const char *key, char **valp)
             goto done;
         }
     }
-    if (kvs_watch_once_obj (h, key, &val) < 0)
+    if (watch_once_obj (h, key, &val) < 0)
         goto done;
     if (*valp)
         free (*valp);

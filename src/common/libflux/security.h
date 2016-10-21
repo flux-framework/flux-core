@@ -15,6 +15,7 @@ enum {
     FLUX_SEC_TYPE_MUNGE = 4,
     FLUX_SEC_TYPE_ALL   = (FLUX_SEC_TYPE_PLAIN | FLUX_SEC_TYPE_CURVE
                                                | FLUX_SEC_TYPE_MUNGE),
+    FLUX_SEC_TYPE_FAKEMUNGE = 8, // testing only
 };
 
 /* Create a security context.

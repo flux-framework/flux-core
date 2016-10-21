@@ -543,4 +543,13 @@ test_expect_success 'kvs: async kvs_fence allows puts with fence in progress' '
 	${FLUX_BUILD_DIR}/t/kvs/asyncfence
 '
 
+# base64 data
+test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
+	flux kvs unlink $TEST &&
+	dd if=/dev/urandom bs=4096 count=1 >random.data &&
+	flux kvs copy-tokvs $TEST.data random.data &&
+	flux kvs copy-fromkvs $TEST.data reread.data &&
+	test_cmp random.data reread.data
+'
+
 test_done
