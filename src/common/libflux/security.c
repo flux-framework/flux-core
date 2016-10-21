@@ -131,6 +131,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/base64.h"
 
 
 #if ZMQ_VERSION_MAJOR < 4
@@ -359,7 +360,8 @@ int flux_sec_munge_init (flux_sec_t *c)
 {
     int rc = -1;
     lock_sec (c);
-    if ((c->typemask & FLUX_SEC_TYPE_MUNGE)) {
+    if ((c->typemask & FLUX_SEC_TYPE_MUNGE)
+                            && !(c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
         munge_err_t e;
         if (!(c->mctx = munge_ctx_create ()))
             oom ();
@@ -664,12 +666,21 @@ int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
         return -1;
     }
     lock_sec (c);
-    if ((e = munge_encode (outbuf, c->mctx, inbuf, insize)) != EMUNGE_SUCCESS) {
-        seterrstr (c, "munge_encode: %s", munge_strerror (e));
-        errno = EKEYREJECTED;
-        goto done_unlock;
+    if ((c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
+        int dlen = base64_encode_length (insize);
+        void *dst = xzmalloc (dlen);
+        base64_encode_block (dst, &dlen, inbuf, insize);
+        *outbuf = dst;
+        *outsize = dlen;
+    } else {
+        if ((e = munge_encode (outbuf, c->mctx, inbuf,
+                                                insize)) != EMUNGE_SUCCESS) {
+            seterrstr (c, "munge_encode: %s", munge_strerror (e));
+            errno = EKEYREJECTED;
+            goto done_unlock;
+        }
+        *outsize = strlen (*outbuf) + 1; /* munge_decode needs null term */
     }
-    *outsize = strlen (*outbuf) + 1;
     rc = 0;
 done_unlock:
     unlock_sec (c);
@@ -682,18 +693,36 @@ int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
     munge_err_t e;
     int rc = -1;
 
-    if (!c || !inbuf || !outbuf || !outsize || inbuf[insize - 1] != '\0'
+    if (!c || !inbuf || !outbuf || !outsize
                      || !(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
         errno = EINVAL;
         return -1;
     }
     lock_sec (c);
-    e = munge_decode (inbuf, c->mctx, (void **)outbuf, (int *)outsize,
-                      NULL, NULL);
-    if (e != EMUNGE_SUCCESS) {
-        seterrstr (c, "munge_decode: %s", munge_strerror (e));
-        errno = EKEYREJECTED;
-        goto done_unlock;
+    if ((c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
+        int dlen = base64_decode_length (insize);
+        void *dst = xzmalloc (dlen);
+        if (base64_decode_block (dst, &dlen, inbuf, insize) < 0) {
+            seterrstr (c, "munge_decode (fake) failed");
+            free (dst);
+            errno = EKEYREJECTED;
+            goto done_unlock;
+        }
+        *outbuf = dst;
+        *outsize = dlen;
+    } else {
+        if (inbuf[insize - 1] != '\0') {
+            seterrstr (c, "munge cred is not null terminated");
+            errno = EKEYREJECTED;
+            goto done_unlock;
+        }
+        e = munge_decode (inbuf, c->mctx, (void **)outbuf, (int *)outsize,
+                          NULL, NULL);
+        if (e != EMUNGE_SUCCESS) {
+            seterrstr (c, "munge_decode: %s", munge_strerror (e));
+            errno = EKEYREJECTED;
+            goto done_unlock;
+        }
     }
     rc = 0;
 done_unlock:
