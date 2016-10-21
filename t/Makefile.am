@@ -44,6 +44,7 @@ TESTS = \
 	t0014-runlevel.t \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
+	t0017-security.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1005-cmddriver.t \
@@ -108,6 +109,7 @@ check_SCRIPTS = \
 	t0014-runlevel.t \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
+	t0017-security.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1005-cmddriver.t \
