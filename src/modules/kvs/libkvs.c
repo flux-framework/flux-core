@@ -1205,17 +1205,20 @@ int kvs_symlink (flux_t *h, const char *key, const char *target)
 
 int kvs_mkdir (flux_t *h, const char *key)
 {
+    int rc = -1;
     kvsctx_t *ctx = getctx (h);
     json_object *val = Jnew ();
     json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
-        return -1;
+        goto out;
     }
+    rc = 0;
     dirent_append (ops, key, dirent_create ("DIRVAL", val));
+out:
     Jput (val);
-    return 0;
+    return rc;
 }
 
 /**
