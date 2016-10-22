@@ -446,6 +446,7 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
      */
     if ((e->id = next_cronid (h)) < 0) {
         cron_entry_destroy (e);
+        e = NULL;
         saved_errno = errno;
         goto done;
     }
