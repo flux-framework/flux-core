@@ -141,6 +141,7 @@ static int io_handler (flux_t *h, cron_task_t *t,
 
     if ((len = zio_json_decode (json_str, &data, &eof)) < 0) {
         flux_log_error (h, "io decode");
+        free (data);
         return (-1);
     }
     (void) Jget_str (resp, "name", &stream);
