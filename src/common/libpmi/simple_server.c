@@ -177,6 +177,7 @@ static int mcmd_begin (struct pmi_simple_server *pmi, void *client,
         return -1;
     }
     if (!(c->mcmd = zlist_new ())) {
+        free (c);
         errno = ENOMEM;
         return -1;
     }
