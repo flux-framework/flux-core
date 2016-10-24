@@ -18,7 +18,7 @@ http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz \
 http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz"
 
 declare -A extra_configure_opts=(\
-["zeromq-4.0.4"]="--with-libsodium --with-libsodium-include-dir=\$prefix/include" \
+["zeromq-4.1.4"]="--with-libsodium" \
 ["mpich-3.1.4"]="--disable-fortran --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
 )
 
