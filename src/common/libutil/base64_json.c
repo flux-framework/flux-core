@@ -63,6 +63,7 @@ int base64_json_decode (json_object *o, uint8_t **datp, int *lenp)
     dst = xzmalloc (base64_decode_length (len));
     if (base64_decode_block (dst, &dlen, s, len) < 0) {
         free (dst);
+        dst = NULL;
         errno = EINVAL;
         return -1;
     }
