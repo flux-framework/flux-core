@@ -113,7 +113,7 @@ the session exits.
 To start a Flux comms session (size = 64) on a cluster using SLURM,
 first ensure that MUNGE is set up on your cluster, then:
 ```
-srun --pty --mpi=none -N64 src/cmd/flux-broker
+srun --pty --mpi=none -N64 src/cmd/flux start
 ```
 The srun --pty option is used to connect to the rank 0 shell.
 When you exit this shell, the session terminates.
