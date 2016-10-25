@@ -512,7 +512,8 @@ int kvs_get_double (flux_t *h, const char *key, double *val)
 
     if (getobj (h, NULL, key, 0, &v) < 0)
         goto done;
-    if (json_object_get_type (v) != json_type_double) {
+    if (json_object_get_type (v) != json_type_double
+        && json_object_get_type (v) != json_type_int) {
         errno = EPROTO;
         goto done;
     }
@@ -1532,7 +1533,8 @@ int kvsdir_get_double (kvsdir_t *dir, const char *name, double *valp)
 
     if (dirgetobj (dir, name, 0, &v) < 0)
         goto done;
-    if (json_object_get_type (v) != json_type_double) {
+    if (json_object_get_type (v) != json_type_double
+        && json_object_get_type (v) != json_type_int) {
         errno = EPROTO;
         goto done;
     }
