@@ -37,10 +37,15 @@ fi
 X_AC_ENABLE_SANITIZER
 LT_INIT
 AC_PROG_AWK
-AC_CHECK_PROG(A2X,[a2x],[a2x])
-if test "$A2X" != "a2x"; then
-  AC_MSG_WARN([No a2x utility found. Manual pages will not be generated.])
-fi
+
+AC_ARG_ENABLE([docs],
+	      AS_HELP_STRING([--disable-docs], [disable buliding docs]))
+AS_IF([test "x$enable_docs" != "xno"], [
+  AC_CHECK_PROG(A2X,[a2x],[a2x])
+  if test "$A2X" != "a2x"; then
+    AC_MSG_WARN([No a2x utility found. Manual pages will not be generated.])
+  fi
+])
 AM_CONDITIONAL([HAVE_A2X], [test "$A2X" = "a2x" ])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])
 
