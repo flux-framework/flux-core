@@ -126,7 +126,7 @@ int main (int argc, char *argv[])
     bool vopt = false;
     struct environment *env;
     optparse_t *p;
-    const char *searchpath;
+    const char *searchpath, *s;
     const char *argv0 = argv[0];
     int flags = 0;
 
@@ -174,8 +174,15 @@ int main (int argc, char *argv[])
     environment_push (env, "PYTHONPATH", flux_conf_get ("python_path", flags));
     environment_push (env, "PYTHONPATH", getenv ("FLUX_PYTHONPATH_PREPEND"));
 
-    environment_from_env (env, "MANPATH", "", ':');
-    environment_push (env, "MANPATH", flux_conf_get ("man_path", flags));
+    if ((s = getenv ("MANPATH")) && strlen (s) > 0) {
+        environment_from_env (env, "MANPATH", ":", ':');
+        environment_push (env, "MANPATH", flux_conf_get ("man_path", flags));
+    } else { /* issue 745 */
+        char *s = xasprintf ("%s:", flux_conf_get ("man_path", flags));
+        environment_set (env, "MANPATH", s, 0);
+        free (s);
+        environment_set_separator (env, "MANPATH", ':');
+    }
 
     environment_from_env (env, "FLUX_EXEC_PATH", "", ':');
     environment_push (env, "FLUX_EXEC_PATH",
