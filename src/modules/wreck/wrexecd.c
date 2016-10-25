@@ -1152,8 +1152,11 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     if (kvsdir_put_string (ctx->kvs, "state", state) < 0)
         return (-1);
 
-    if (asprintf (&key, "%s-time", state) < 0)
+    if (asprintf (&key, "%s-time", state) < 0) {
+        wlog_err (ctx, "update_job_state: asprintf: %s", strerror (errno));
+        json_object_put (to);
         return (-1);
+    }
     if (kvsdir_put (ctx->kvs, key, json_object_to_json_string (to)) < 0)
         return (-1);
     free (key);
