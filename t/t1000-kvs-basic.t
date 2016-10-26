@@ -19,6 +19,8 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
+GETAS=${FLUX_BUILD_DIR}/t/kvs/getas
+
 TEST=$TEST_NAME
 KEY=test.a.b.c
 
@@ -101,6 +103,18 @@ test_expect_success 'kvs: double type' '
 '
 test_expect_success 'kvs: get double' '
 	test_kvs_key $KEY 3.141590
+'
+
+# issue 875
+test_expect_success 'kvs: integer can be read as int, int64, or double' '
+	flux kvs put $TEST.a=2 &&
+	test_kvs_type $TEST.a int &&
+	test $($GETAS -t int $TEST.a) = "2" &&
+	test $($GETAS -t int -d $TEST a) = "2" &&
+	test $($GETAS -t int64 $TEST.a) = "2" &&
+	test $($GETAS -t int64 -d $TEST a) = "2" &&
+	test $($GETAS -t double $TEST.a | cut -d. -f1) = "2" &&
+	test $($GETAS -t double -d $TEST a | cut -d. -f1) = "2"
 '
 test_expect_success 'kvs: array put' '
 	flux kvs put $KEY="[1,3,5,7]"
