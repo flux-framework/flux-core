@@ -961,6 +961,7 @@ static void fixup_newjob_event (flux_t *h, int64_t nj)
         goto done;
     }
 done:
+    Jput (jcb);
     free (key);
     return;
 }

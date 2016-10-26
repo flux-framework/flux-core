@@ -198,7 +198,7 @@ static char *escape_and_join_kvs_path (const char *base,
         suffix = escape_kvs_key (suffix);
 
         if (!ret_str || !strlen (ret_str))
-            ret_str = suffix;
+            ret_str = xstrdup (suffix);
         else
             ret_str = xasprintf ("%s.%s", ret_str, suffix);
         free (suffix);

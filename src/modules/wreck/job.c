@@ -155,27 +155,21 @@ static int kvs_job_new (flux_t *h, unsigned long jobid)
 static int64_t next_jobid (flux_t *h)
 {
     int64_t ret = (int64_t) -1;
-    const char *json_str;
-    json_object *req, *resp;
     flux_rpc_t *rpc;
 
-    req = Jnew ();
-    Jadd_str (req, "name", "lwj");
-    Jadd_int64 (req, "preincrement", 1);
-    Jadd_int64 (req, "postincrement", 0);
-    Jadd_bool (req, "create", true);
-    rpc = flux_rpc (h, "cmb.seq.fetch",
-                    json_object_to_json_string (req), 0, 0);
-    json_object_put (req);
-
-    if ((flux_rpc_get (rpc, &json_str) < 0)
-        || !(resp = json_tokener_parse (json_str))) {
-        flux_log_error (h, "rpc_get");
+    rpc = flux_rpcf (h, "cmb.seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
+                        "name", "lwj",
+                        "preincrement", 1,
+                        "postincrement", 0,
+                        "create", true);
+    if (rpc == NULL) {
+        flux_log_error (h, "next_jobid: flux_rpc");
         goto out;
     }
-
-    Jget_int64 (resp, "value", &ret);
-    json_object_put (resp);
+    if ((flux_rpc_getf (rpc, "{s:I}", "value", &ret)) < 0) {
+        flux_log_error (h, "rpc_getf");
+        goto out;
+    }
 out:
     flux_rpc_destroy (rpc);
     return ret;
@@ -206,25 +200,20 @@ static void send_create_event (flux_t *h, int64_t id,
                                const char *path, char *topic)
 {
     flux_msg_t *msg;
-    json_object *o = Jnew ();
-
-    Jadd_int64 (o, "lwj", id);
-    Jadd_str (o, "kvs_path", path);
-
-    if ((msg = flux_event_encode (topic, Jtostr (o))) == NULL) {
+    msg = flux_event_encodef (topic, "{s:I,s:s}",
+                              "lwj", id, "kvs_path", path);
+    if (msg == NULL) {
         flux_log_error (h, "failed to create state change event");
-        goto out;
+        return;
     }
     if (flux_send (h, msg, 0) < 0)
-        flux_log_error (h, "reserved event failed");
+        flux_log_error (h, "create_event: flux_send");
     flux_msg_destroy (msg);
 
     /* Workaround -- wait for our own event to be published with a
      *  blocking recv. XXX: Remove when publish is synchronous.
      */
     wait_for_event (h, id, topic);
-out:
-    Jput (o);
 }
 
 static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
@@ -264,14 +253,13 @@ static bool ping_sched (flux_t *h)
     bool retval = false;
     const char *s;
     flux_rpc_t *rpc;
-    json_object *o = Jnew ();
-    Jadd_int (o, "seq", 0);
-    rpc = flux_rpc (h, "sched.ping",
-                    json_object_to_json_string (o),
-                    FLUX_NODEID_ANY, 0);
-    json_object_put (o);
+    if (!(rpc = flux_rpcf (h, "sched.ping", 0, 0, "{s:i}", "seq", 0))) {
+        flux_log_error (h, "ping_sched");
+        goto out;
+    }
     if (flux_rpc_get (rpc, &s) >= 0)
         retval = true;
+out:
     flux_rpc_destroy (rpc);
     return (retval);
 }
@@ -297,7 +285,6 @@ static int do_submit_job (flux_t *h, unsigned long id, const char *path)
 static void handle_job_create (flux_t *h, const flux_msg_t *msg,
                                const char *topic, json_object *o)
 {
-    json_object *jobinfo = NULL;
     int64_t id;
     char *state;
     char *kvs_path;
@@ -331,13 +318,10 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
 
 
     /* Generate reply with new jobid */
-    jobinfo = Jnew ();
-    Jadd_int64 (jobinfo, "jobid", id);
-    Jadd_str (jobinfo, "state", state);
-    Jadd_str (jobinfo, "kvs_path", kvs_path);
-    flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
+    if (flux_respondf (h, msg, "{s:I,s:s,s:s}",
+                "jobid", id, "state", state, "kvs_path", kvs_path) < 0)
+        flux_log_error (h, "flux_respondf");
 out:
-    Jput (jobinfo);
     free (kvs_path);
 }
 

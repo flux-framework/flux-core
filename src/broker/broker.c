@@ -1503,7 +1503,6 @@ static int cmb_write_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *request = NULL;
-    json_object *response = NULL;
     json_object *o = NULL;
     const char *json_str;
     int pid;
@@ -1538,13 +1537,10 @@ static int cmb_write_cb (flux_msg_t **msg, void *arg)
         free (data);
     }
 out:
-    response = Jnew ();
-    Jadd_int (response, "code", errnum);
-    flux_respond (ctx->h, *msg, 0, Jtostr (response));
+    if (flux_respondf (ctx->h, *msg, "{si}", "code", errnum) < 0)
+        flux_log_error (ctx->h, "write_cb: flux_respondf");
     flux_msg_destroy (*msg);
     *msg = NULL;
-    if (response)
-        json_object_put (response);
     if (request)
         json_object_put (request);
     return (0);
@@ -1554,7 +1550,6 @@ static int cmb_signal_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *request = NULL;
-    json_object *response = NULL;
     const char *json_str;
     int pid;
     int errnum = EPROTO;
@@ -1578,13 +1573,10 @@ static int cmb_signal_cb (flux_msg_t **msg, void *arg)
         }
     }
 out:
-    response = Jnew ();
-    Jadd_int (response, "code", errnum);
-    flux_respond (ctx->h, *msg, 0, Jtostr (response));
+    if (flux_respondf (ctx->h, *msg, "{si}", "code", errnum) < 0)
+        flux_log_error (ctx->h, "signal_cb: flux_respondf");
     flux_msg_destroy (*msg);
     *msg = NULL;
-    if (response)
-        json_object_put (response);
     if (request)
         json_object_put (request);
     return (0);
