@@ -155,6 +155,10 @@ test_expect_success 'flux-help returns nonzero exit code from man(1)' '
         code=$?
         test_expect_code $code flux help notacommand
 '
+test_expect_success 'flux appends colon to missing or unset MANPATH' '
+      (unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
+      MANPATH= flux /usr/bin/printenv | grep "MANPATH=.*:$"
+'
 test_expect_success 'builtin test_size_large () works' '
     size=$(test_size_large)  &&
     test -n "$size" &&
