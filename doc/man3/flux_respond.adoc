@@ -42,6 +42,9 @@ building the payload using variable arguments with a format string in
 the style of jansson's `json_pack()` (used internally).
 
 
+include::JSON_PACK.adoc[]
+
+
 RETURN VALUE
 ------------
 
@@ -85,5 +88,3 @@ https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]
 
 https://github.com/flux-framework/rfc/blob/master/spec_3.adoc[RFC 3: CMB1 - Flux Comms Message Broker Protocol]
-
-http://jansson.readthedocs.io/en/2.7/apiref.html#building-values[Jansson API: Building Values]

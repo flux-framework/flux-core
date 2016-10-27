@@ -50,13 +50,18 @@ if the message doesn't have a JSON payload.
 and optional JSON payload _json_str_.  The newly constructed message that
 is returned must be destroyed with `flux_msg_destroy()`.
 
-`flux_event_decodef()` decodes a Flux event message with a JSON payload as
-above, parsing the payload using variable arguments with a format string
+`flux_event_encodef()` encodes a Flux event message with a JSON payload as
+above, encoding the payload using variable arguments with a format string
 in the style of jansson's `json_unpack()` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
 Events propagated to all subscribers.  Events will not be received
 without a matching subscription established using `flux_event_subscribe()`.
+
+include::JSON_PACK.adoc[]
+
+
+include::JSON_UNPACK.adoc[]
 
 
 RETURN VALUE
@@ -101,8 +106,3 @@ include::COPYRIGHT.adoc[]
 SEE ALSO
 ---------
 flux_event_subscribe(3)
-
-http://jansson.readthedocs.io/en/2.7/apiref.html#parsing-and-validating-values[Jansson API: Parsing and Validating Values]
-
-http://jansson.readthedocs.io/en/2.7/apiref.html#building-values[Jansson API: Building Values]
-

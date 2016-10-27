@@ -338,3 +338,5 @@ decodef
 len
 respondf
 encodef
+UTF
+whitespace

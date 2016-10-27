@@ -164,12 +164,7 @@ static int attr_list_rpc (ctx_t *ctx)
     zlist_destroy (&ctx->names);
     if (!(ctx->names = zlist_new ()))
         oom ();
-#if JANSSON_VERSION_HEX >= 0x020500
     json_array_foreach (array, index, value) {
-#else
-    for (index = 0; index < json_array_size (array); index++) {
-        value = json_array_get (array, index);
-#endif
         const char *name = json_string_value (value);
         if (!name) {
             errno = EPROTO;
