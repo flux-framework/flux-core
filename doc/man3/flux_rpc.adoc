@@ -82,15 +82,20 @@ unusable; it is effectively leaked from the matchtag pool.
 `flux_rpcf()` is a variant of `flux_rpc()` that constructs a JSON
 payload based on the provided _fmt_ string and variable arguments.
 The _fmt_ string and variable arguments are passed internally to
-jansson's `json_pack()` function.  See jansson documentation for
-details.
+jansson's `json_pack()` function.  See below for details.
 
 `flux_rpc_getf()` is a variant of `flux_rpc_get()` that parses a JSON
 payload based on the provided _fmt_ string and variable arguments.
 The _fmt_ string and variable arguments are passed internally to
 jansson's `json_unpack()` function.  Any strings or objects returned
-are invalidated when `flux_rpc_destroy()` is called.  See jansson
-documentation for details.
+are invalidated when `flux_rpc_destroy()` is called.  See below
+for details.
+
+
+include::JSON_PACK.adoc[]
+
+
+include::JSON_UNPACK.adoc[]
 
 
 CANCELLATION
@@ -162,7 +167,3 @@ flux_rpc_then(3), flux_rpc_multi(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]
-
-http://jansson.readthedocs.io/en/2.7/apiref.html#parsing-and-validating-values[Jansson API: Parsing and Validating Values]
-
-http://jansson.readthedocs.io/en/2.7/apiref.html#building-values[Jansson API: Building Values]

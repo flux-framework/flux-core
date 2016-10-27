@@ -106,7 +106,7 @@ XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
 
 if HAVE_A2X
 dist_man_MANS = $(MAN3_FILES)
-$(MAN3_FILES): COPYRIGHT.adoc
+$(MAN3_FILES): COPYRIGHT.adoc JSON_PACK.adoc JSON_UNPACK.adoc
 endif
 
 SUFFIXES = .adoc .3
@@ -121,6 +121,7 @@ stderr_devnull_0 = 2>/dev/null
 	    --attribute manmanual="Flux Programming Reference" \
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
+
 
 flux_close.3: flux_open.3
 flux_aux_get.3: flux_aux_set.3
@@ -191,7 +192,9 @@ flux_rpc_multi.3: trpc_then_multi.c
 flux_reduce_create.3: treduce.c
 flux_get_rank.3: tinfo.c
 
-EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
+
+
+EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc JSON_PACK.adoc JSON_UNPACK.adoc
 
 CLEANFILES = $(MAN3_FILES) $(XML_FILES)
 
