@@ -145,14 +145,16 @@ Briefly, the method of operation for remote execution via WRECK
 consists of the following steps:
 
 . The front-end command ('wreckrun') allocates a new job directory
-  entry in the kvs under the 'lwj' key. This operation is performed
-  as a 'job.create' request, which results in a new directory in
-  the kvs as 'lwj.<jobid>'. Initially, a job state is stored in
-  'lwj.<jobid>.state' as 'reserved'.
+  entry in the kvs under the 'lwj' key. This operation is performed as
+  a 'job.create' request, which results in a new directory in the kvs,
+  such as 'lwj.<jobid>'.  The full directory path is dependent on
+  settings but can be determined via "flux wreck last-jobid -p".
+  Initially, a job state is 'reserved' and stored in the 'state'
+  directory, such as 'lwj.<jobid>.state'.
 . The front-end command now fills in requisite and optional job
-  information under the 'lwj.<jobid>' hierarchy such as the
-  command-line to run, how many tasks to run on each rank, the
-  job environment, etc. 
+  information under the 'lwj' jobid directory such as the command-line
+  to run, how many tasks to run on each rank, the job environment,
+  etc.
 . The front-end command then issues a 'wrexec.run' event, which
   is handled by the 'wrexec' module. The 'wrexec' module spawns
   a daemon to handle the request for the jobid in question. The
