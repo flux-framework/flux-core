@@ -59,11 +59,16 @@ four specific intervals in the wreck job lifecycle:
  'TOTAL'::: This is the total time from job creation to the "completed" state.
 
 
-*last-jobid*::
-Return the current value of the 'lwj' sequence number, that is the last
-jobid allocated to a submitted wreck job. Other jobs may be started
-between the time the id is obtained and when it is displayed in this
-command, so 'last-jobid' should not be relied upon during real workloads.
+*kvs-path* 'jobid'::
+Display the path in the Flux KVS to the specified 'jobid'.
+
+*last-jobid* [--kvs-path]::
+Return the current value of the 'lwj' sequence number, that is the
+last jobid allocated to a submitted wreck job.  With '--kvs-path',
+report the path to job in kvs instead of jobid.  Other jobs may be
+started between the time the id is obtained and when it is displayed
+in this command, so 'last-jobid' should not be relied upon during real
+workloads.
 
 *purge* [OPTIONS...]::
 Purge old job entries from Flux KVS. Without any options, the 'purge'
