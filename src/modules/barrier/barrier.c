@@ -55,6 +55,7 @@ typedef struct _barrier_struct {
     zhash_t *clients;
     ctx_t *ctx;
     int errnum;
+    flux_watcher_t *debug_timer;
 } barrier_t;
 
 static int exit_event_send (flux_t *h, const char *name, int errnum);
@@ -100,10 +101,22 @@ error:
     return NULL;
 }
 
+static void debug_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                            int revents, void *arg)
+{
+    barrier_t *b = arg;
+    flux_log (b->ctx->h, LOG_DEBUG, "debug %s %d", b->name, b->nprocs);
+}
+
 static void barrier_destroy (void *arg)
 {
     barrier_t *b = arg;
 
+    if (b->debug_timer) {
+        flux_log (b->ctx->h, LOG_DEBUG, "destroy %s %d", b->name, b->nprocs);
+        flux_watcher_stop (b->debug_timer);
+        flux_watcher_destroy (b->debug_timer);
+    }
     zhash_destroy (&b->clients);
     free (b->name);
     free (b);
@@ -123,6 +136,21 @@ static barrier_t *barrier_create (ctx_t *ctx, const char *name, int nprocs)
     zhash_insert (ctx->barriers, b->name, b);
     zhash_freefn (ctx->barriers, b->name, barrier_destroy);
 
+    /* Start a timer for some debug
+     */
+    if (ctx->rank == 0) {
+        flux_log (ctx->h, LOG_DEBUG, "create %s %d", name, nprocs);
+        b->debug_timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
+                                                    1.0, 1.0,
+                                                    debug_timer_cb, b);
+        if (!b->debug_timer) {
+            flux_log_error (ctx->h, "flux_timer_watcher_create");
+            goto done;
+        }
+        flux_watcher_start (b->debug_timer);
+
+    }
+done:
     return b;
 }
 
