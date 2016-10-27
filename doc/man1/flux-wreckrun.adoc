@@ -177,6 +177,34 @@ with the Flux PMI library, even MPI applications may be launched
 at scale via 'flux wreckrun'. See xref:wreckrun-examples[] for
 examples.
 
+OUTPUT ENVIRONMENT VARIABLES
+----------------------------
+[[wreckrun-output-environment-variables]]
+
+The following environment variables will be set in the environment of
+tasks executed via 'flux wreckrun'.
+
+*FLUX_JOB_ID*::
+The job ID of the current job
+
+*FLUX_JOB_NNODES*::
+Number of nodes used in the current job
+
+*FLUX_NODE_ID*::
+The relative node ID of the current node
+
+*FLUX_JOB_SIZE*::
+The total number of tasks to be run in the current job  
+
+*FLUX_LOCAL_RANKS*::
+Comma separated list of task ranks run on the current node
+
+*FLUX_TASK_RANK*::
+The relative task rank of the current task
+
+*FLUX_TASK_LOCAL_ID*::
+The relative task rank of the current task on the current node
+
 
 EXAMPLES
 --------
