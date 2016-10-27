@@ -190,14 +190,14 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *json_str;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0
-     		|| flux_msg_get_route_first (msg, &sender) < 0) {
+                || flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         goto done;
     }
     if (!(o = Jfromstr (json_str))
-     	        || !Jget_str (o, "name", &name)
-     	        || !Jget_int (o, "count", &count)
-     	        || !Jget_int (o, "nprocs", &nprocs)) {
+                || !Jget_str (o, "name", &name)
+                || !Jget_int (o, "count", &count)
+                || !Jget_int (o, "nprocs", &nprocs)) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         goto done;
