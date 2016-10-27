@@ -77,12 +77,7 @@ int flux_insmod_json_decode (const char *json_str,
         errno = EPROTO;
         goto done;
     }
-#if JANSSON_VERSION_HEX >= 0x020500
     json_array_foreach (args, index, value) {
-#else
-    for (index = 0; index < json_array_size (args); index++) {
-        value = json_array_get (args, index);
-#endif
         if (!(arg = json_string_value (value))) {
             errno = EPROTO;
             goto done;
