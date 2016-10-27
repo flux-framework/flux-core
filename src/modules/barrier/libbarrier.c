@@ -28,7 +28,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 
 typedef struct {
     const char *id;
@@ -43,7 +42,7 @@ static void freectx (void *arg)
 
 static ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = flux_aux_get (h, "barriercli");
+    ctx_t *ctx = flux_aux_get (h, "flux::barrier_client");
     if (!ctx) {
         const char *id = getenv ("FLUX_JOB_ID");
         if (!id && !(id = getenv ("SLURM_STEPID")))
@@ -57,7 +56,6 @@ static ctx_t *getctx (flux_t *h)
 
 int flux_barrier (flux_t *h, const char *name, int nprocs)
 {
-    json_object *in = Jnew ();
     char *s = NULL;
     flux_rpc_t *rpc = NULL;
     int ret = -1;
@@ -70,11 +68,11 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
         }
         name = s = xasprintf ("%s%d", ctx->id, ctx->seq++);
     }
-    Jadd_str (in, "name", name);
-    Jadd_int (in, "count", 1);
-    Jadd_int (in, "nprocs", nprocs);
-
-    if (!(rpc = flux_rpc (h, "barrier.enter", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (!(rpc = flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
+                           "{s:s s:i s:i}",
+                           "name", name,
+                           "count", 1,
+                           "nprocs", nprocs)))
         goto done;
     if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
@@ -82,7 +80,6 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
 done:
     if (s)
         free (s);
-    Jput (in);
     flux_rpc_destroy (rpc);
     return ret;
 }
