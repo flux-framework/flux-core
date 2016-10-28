@@ -145,14 +145,16 @@ Briefly, the method of operation for remote execution via WRECK
 consists of the following steps:
 
 . The front-end command ('wreckrun') allocates a new job directory
-  entry in the kvs under the 'lwj' key. This operation is performed
-  as a 'job.create' request, which results in a new directory in
-  the kvs as 'lwj.<jobid>'. Initially, a job state is stored in
-  'lwj.<jobid>.state' as 'reserved'.
+  entry in the kvs under the 'lwj' key. This operation is performed as
+  a 'job.create' request, which results in a new directory in the kvs,
+  such as 'lwj.<jobid>'.  The full directory path is dependent on
+  settings but can be determined via "flux wreck last-jobid -p".
+  Initially, a job state is 'reserved' and stored in the 'state'
+  directory, such as 'lwj.<jobid>.state'.
 . The front-end command now fills in requisite and optional job
-  information under the 'lwj.<jobid>' hierarchy such as the
-  command-line to run, how many tasks to run on each rank, the
-  job environment, etc. 
+  information under the 'lwj' jobid directory such as the command-line
+  to run, how many tasks to run on each rank, the job environment,
+  etc.
 . The front-end command then issues a 'wrexec.run' event, which
   is handled by the 'wrexec' module. The 'wrexec' module spawns
   a daemon to handle the request for the jobid in question. The
@@ -174,6 +176,34 @@ for launching tasks within a Flux comms session. In conjunction
 with the Flux PMI library, even MPI applications may be launched
 at scale via 'flux wreckrun'. See xref:wreckrun-examples[] for
 examples.
+
+OUTPUT ENVIRONMENT VARIABLES
+----------------------------
+[[wreckrun-output-environment-variables]]
+
+The following environment variables will be set in the environment of
+tasks executed via 'flux wreckrun'.
+
+*FLUX_JOB_ID*::
+The job ID of the current job
+
+*FLUX_JOB_NNODES*::
+Number of nodes used in the current job
+
+*FLUX_NODE_ID*::
+The relative node ID of the current node
+
+*FLUX_JOB_SIZE*::
+The total number of tasks to be run in the current job  
+
+*FLUX_LOCAL_RANKS*::
+Comma separated list of task ranks run on the current node
+
+*FLUX_TASK_RANK*::
+The relative task rank of the current task
+
+*FLUX_TASK_LOCAL_ID*::
+The relative task rank of the current task on the current node
 
 
 EXAMPLES
@@ -296,3 +326,8 @@ Github: <http://github.com/flux-framework>
 COPYRIGHT
 ---------
 include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-wreck(1)

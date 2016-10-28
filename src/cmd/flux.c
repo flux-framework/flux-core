@@ -77,7 +77,7 @@ void usage (optparse_t *p)
                   def ? def : "",
                   val ? ":" : "",
                   val ? val : "") < 0)
-        log_err_exit ("faled to get command help list!");
+        log_err_exit ("failed to get command help list!");
 
     optparse_print_usage (p);
     fprintf (stderr, "\n");
