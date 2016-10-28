@@ -18,7 +18,8 @@ noinst_SCRIPTS = \
 	soak.sh \
 	soak-workload.sh \
 	valgrind.sh \
-	valgrind-workload.sh
+	valgrind-workload.sh \
+	relnotes.sh
 
 if HAVE_MPI
 SUBDIRS = kap
