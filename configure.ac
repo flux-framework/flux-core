@@ -39,7 +39,7 @@ LT_INIT
 AC_PROG_AWK
 
 AC_ARG_ENABLE([docs],
-	      AS_HELP_STRING([--disable-docs], [disable buliding docs]))
+	      AS_HELP_STRING([--disable-docs], [disable building docs]))
 AS_IF([test "x$enable_docs" != "xno"], [
   AC_CHECK_PROG(A2X,[a2x],[a2x])
 ])
