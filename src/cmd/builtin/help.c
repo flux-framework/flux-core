@@ -26,6 +26,15 @@
 #include "src/common/libutil/setenvf.h"
 #include "builtin.h"
 
+static int no_docs_set (optparse_t *p)
+{
+    int *flags = optparse_get_data (p, "conf_flags");
+    const char *no_docs_path = flux_conf_get ("no_docs_path", *flags);
+    struct stat sb;
+
+    return (!stat (no_docs_path, &sb));
+}
+
 static int cmd_help (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_optind (p);
@@ -34,6 +43,9 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
     if (n < ac) {
         const char *topic = av [n];
         int rc;
+
+        if (no_docs_set (p))
+            log_msg_exit ("flux manual pages not built");
 
         /* N.B. Flux doc dir already prepended to MANPATH if needed.
          */

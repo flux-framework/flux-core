@@ -23,7 +23,8 @@ installed_conf_cppflags = \
 	-DINSTALLED_RC3_PATH=\"$(fluxrcdir)/rc3\" \
 	-DINSTALLED_WRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\" \
 	-DINSTALLED_WREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\" \
-	-DINSTALLED_CMDHELP_PATTERN=\"${datadir}/flux/help.d/*.json\"
+	-DINSTALLED_CMDHELP_PATTERN=\"${datadir}/flux/help.d/*.json\" \
+	-DINSTALLED_NO_DOCS_PATH=\"${datadir}/flux/.nodocs\"
 
 intree_conf_cppflags = \
 	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules\" \
@@ -40,7 +41,8 @@ intree_conf_cppflags = \
 	-DINTREE_WRECK_LUA_PATTERN=\"$(abs_top_srcdir)/src/modules/wreck/lua.d/*.lua\" \
 	-DINTREE_WREXECD_PATH=\"$(abs_top_builddir)/src/modules/wreck/wrexecd\" \
 	-DINTREE_CMDHELP_PATTERN=\"${abs_top_builddir}/etc/flux/help.d/*.json\" \
-	-DINTREE_KEYDIR=\"${abs_top_builddir}/etc/flux\"
+	-DINTREE_KEYDIR=\"${abs_top_builddir}/etc/flux\" \
+	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\"
 
 
 fluxcoreinclude_HEADERS = \
