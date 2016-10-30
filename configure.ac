@@ -43,7 +43,7 @@ AC_ARG_ENABLE([docs],
 AS_IF([test "x$enable_docs" != "xno"], [
   AC_CHECK_PROG(A2X,[a2x],[a2x])
 ])
-AM_CONDITIONAL([HAVE_A2X], [test "$A2X" = "a2x" ])
+AM_CONDITIONAL([ENABLE_DOCS], [test "$A2X" = "a2x" ])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])
 
 ##

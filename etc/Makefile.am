@@ -14,7 +14,7 @@ flux/help.d/core.json: $(top_srcdir)/doc/man1
 	$(AM_V_GEN)umask 077 && $(MKDIR_P) flux/help.d && \
 	$(srcdir)/gen-cmdhelp.pl --category=core $^/*.adoc >$@
 
-if !HAVE_A2X
+if !ENABLE_DOCS
 fluxnodocsdir = $(datadir)/flux/.nodocs
 fluxnodocs_DATA = flux/.nodocs
 flux/.nodocs:
