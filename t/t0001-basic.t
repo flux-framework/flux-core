@@ -138,7 +138,7 @@ test_expect_success 'flux-help command can display manpages for subcommands' '
 	.SH NAME
 	foo \- foo bar baz
 	EOF
-	MANPATH=${PWD}/man flux help foo | grep "^FOO(1)"
+	MANPATH=${PWD}/man FLUX_IGNORE_NO_DOCS=y flux help foo | grep "^FOO(1)"
 '
 test_expect_success 'flux-help command can display manpages for api calls' '
 	PWD=$(pwd) &&
@@ -148,12 +148,12 @@ test_expect_success 'flux-help command can display manpages for api calls' '
 	.SH NAME
 	flux_foo \- Call the flux_foo interface
 	EOF
-	MANPATH=${PWD}/man flux help flux_foo | grep "^FOO(3)"
+	MANPATH=${PWD}/man FLUX_IGNORE_NO_DOCS=y flux help flux_foo | grep "^FOO(3)"
 '
 test_expect_success 'flux-help returns nonzero exit code from man(1)' '
         man notacommand >/dev/null 2>&1
         code=$?
-        test_expect_code $code flux help notacommand
+        test_expect_code $code eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '
 test_expect_success 'flux appends colon to missing or unset MANPATH' '
       (unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
