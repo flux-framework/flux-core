@@ -69,10 +69,11 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
         name = s = xasprintf ("%s%d", ctx->id, ctx->seq++);
     }
     if (!(rpc = flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
-                           "{s:s s:i s:i}",
+                           "{s:s s:i s:i s:i}",
                            "name", name,
                            "count", 1,
-                           "nprocs", nprocs)))
+                           "nprocs", nprocs,
+                           "hopcount", 0)))
         goto done;
     if (flux_rpc_get (rpc, NULL) < 0)
         goto done;

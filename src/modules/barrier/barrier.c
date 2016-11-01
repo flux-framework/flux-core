@@ -211,7 +211,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *name;
     int count, nprocs, hopcount = 0;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:i s:i s?:i !}",
+    if (flux_request_decodef (msg, NULL, "{s:s s:i s:i s:i !}",
                               "name", &name,
                               "count", &count,
                               "nprocs", &nprocs,
