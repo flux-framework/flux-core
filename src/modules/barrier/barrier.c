@@ -168,11 +168,11 @@ static void send_enter_request (ctx_t *ctx, barrier_t *b)
     flux_rpc_t *rpc;
 
     if (!(rpc = flux_rpcf (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
-                           FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:i}",
+                           FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
                            "name", b->name,
                            "count", b->count,
                            "nprocs", b->nprocs,
-                           "hopcount", 1))) {
+                           "internal", true))) {
         flux_log_error (ctx->h, "sending barrier.enter request");
         goto done;
     }
@@ -209,13 +209,13 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
     barrier_t *b;
     char *sender = NULL;
     const char *name;
-    int count, nprocs, hopcount = 0;
+    int count, nprocs, internal;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:i s:i s?:i !}",
+    if (flux_request_decodef (msg, NULL, "{s:s s:i s:i s:b !}",
                               "name", &name,
                               "count", &count,
                               "nprocs", &nprocs,
-                              "hopcount", &hopcount) < 0
+                              "internal", &internal) < 0
                 || flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         goto done;
@@ -225,9 +225,9 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
         b = barrier_create (ctx, name, nprocs);
 
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
-     * A client, distinguished by hopcount > 0, can only enter barrier once.
+     * A client, distinguished by internal == false, can only enter barrier once.
      */
-    if (hopcount == 0) {
+    if (internal == false) {
         if (barrier_add_client (b, sender, msg) < 0) {
             flux_respond (ctx->h, msg, EEXIST, NULL);
             flux_log (ctx->h, LOG_ERR,
