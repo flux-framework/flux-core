@@ -225,7 +225,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
         b = barrier_create (ctx, name, nprocs);
 
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
-     * A client, distinguished by hopcount > 0, can only enter barrier once.
+     * A client, distinguished by hopcount == 0, can only enter barrier once.
      */
     if (hopcount == 0) {
         if (barrier_add_client (b, sender, msg) < 0) {
