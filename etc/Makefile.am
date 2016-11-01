@@ -14,6 +14,14 @@ flux/help.d/core.json: $(top_srcdir)/doc/man1
 	$(AM_V_GEN)umask 077 && $(MKDIR_P) flux/help.d && \
 	$(srcdir)/gen-cmdhelp.pl --category=core $^/*.adoc >$@
 
+if !ENABLE_DOCS
+fluxnodocsdir = $(datadir)/flux/.nodocs
+fluxnodocs_DATA = flux/.nodocs
+flux/.nodocs:
+	$(AM_V_GEN)umask 077 && $(MKDIR_P) flux && \
+	touch flux/.nodocs
+endif
+
 clean-local:
 	-rm -rf flux
 

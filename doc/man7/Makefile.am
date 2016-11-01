@@ -4,7 +4,7 @@ MAN7_FILES = \
 ADOC_FILES  = $(MAN7_FILES:%.7=%.adoc)
 XML_FILES   = $(MAN7_FILES:%.7=%.xml)
 
-if HAVE_A2X
+if ENABLE_DOCS
 dist_man_MANS = $(MAN7_FILES)
 $(MAN7_FILES): COPYRIGHT.adoc
 endif
