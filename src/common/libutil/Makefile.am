@@ -71,7 +71,9 @@ libutil_la_SOURCES = \
 	wallclock.c \
 	stdlog.h \
 	stdlog.c \
-	oom.h
+	oom.h \
+	lru_cache.h \
+	lru_cache.c
 
 EXTRA_DIST = veb_mach.c
 
