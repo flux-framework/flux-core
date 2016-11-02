@@ -71,7 +71,9 @@ libutil_la_SOURCES = \
 	wallclock.c \
 	stdlog.h \
 	stdlog.c \
-	oom.h
+	oom.h \
+	lru_cache.h \
+	lru_cache.c
 
 EXTRA_DIST = veb_mach.c
 
@@ -87,7 +89,8 @@ TESTS = test_nodeset.t \
 	test_cronodate.t \
 	test_wallclock.t \
 	test_stdlog.t \
-	test_veb.t
+	test_veb.t \
+	test_lru_cache.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -159,3 +162,7 @@ test_stdlog_t_LDADD = $(test_ldadd)
 test_veb_t_SOURCES = test/veb.c
 test_veb_t_CPPFLAGS = $(test_cppflags)
 test_veb_t_LDADD = $(test_ldadd)
+
+test_lru_cache_t_SOURCES = test/lru_cache.c
+test_lru_cache_t_CPPFLAGS = $(test_cppflags)
+test_lru_cache_t_LDADD = $(test_ldadd)

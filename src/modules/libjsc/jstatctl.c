@@ -39,6 +39,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/lru_cache.h"
 
 
 /*******************************************************************************
@@ -59,7 +60,7 @@ typedef struct {
 
 typedef struct {
     zhash_t *active_jobs;
-    zhash_t *job_kvs_paths;
+    lru_cache_t *kvs_paths;
     zlist_t *callbacks;
     int first_time;
     flux_t *h;
@@ -118,7 +119,7 @@ static void freectx (void *arg)
 {
     jscctx_t *ctx = arg;
     zhash_destroy (&(ctx->active_jobs));
-    zhash_destroy (&(ctx->job_kvs_paths));
+    lru_cache_destroy (ctx->kvs_paths);
     zlist_destroy (&(ctx->callbacks));
 }
 
@@ -129,8 +130,9 @@ static jscctx_t *getctx (flux_t *h)
         ctx = xzmalloc (sizeof (*ctx));
         if (!(ctx->active_jobs = zhash_new ()))
             oom ();
-        if (!(ctx->job_kvs_paths = zhash_new ()))
+        if (!(ctx->kvs_paths = lru_cache_create (256)))
             oom ();
+        lru_cache_set_free_f (ctx->kvs_paths, free);
         if (!(ctx->callbacks = zlist_new ()))
             oom ();
         ctx->first_time = 1;
@@ -201,15 +203,6 @@ out:
     return (rc);
 }
 
-static int jscctx_add_job_path (jscctx_t *ctx, const char *key, char *path)
-{
-    /* XXX: path should already be a malloc'd string */
-    if (zhash_insert (ctx->job_kvs_paths, key, path) < 0)
-        return (-1);
-    zhash_freefn (ctx->job_kvs_paths, key, free);
-    return (0);
-}
-
 static int jscctx_add_jobid_path (jscctx_t *ctx, int64_t id, const char *path)
 {
     char *s;
@@ -219,10 +212,9 @@ static int jscctx_add_jobid_path (jscctx_t *ctx, int64_t id, const char *path)
         return (-1);
     if (!(s = strdup (path)))
         return (-1);
-    if (jscctx_add_job_path (ctx, key, s) < 0) {
-        /* Failure indicates key already exists, free memory, but
-         *   no need to return an error
-         */
+    if (lru_cache_put (ctx->kvs_paths, key, s) < 0) {
+        if (errno != EEXIST)
+            flux_log_error (ctx->h, "jscctx_add_job_path");
         free (s);
     }
     return (0);
@@ -236,11 +228,11 @@ static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
     memset (key, 0, sizeof (key));
     if (sprintf (key, "%ju", (uintmax_t) id) < 0)
         return (NULL);
-    if ((path = zhash_lookup (ctx->job_kvs_paths, key)))
+    if ((path = lru_cache_get (ctx->kvs_paths, key)))
         return path;
     if (lwj_kvs_path (ctx->h, id, &path) < 0)
         return (NULL);
-    if (jscctx_add_job_path (ctx, key, path) < 0)
+    if (lru_cache_put (ctx->kvs_paths, key, path) < 0)
         return (NULL);
     return (path);
 }
