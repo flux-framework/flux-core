@@ -82,9 +82,10 @@ returned by *get*.
 Create an empty directory and commit the change.  If 'key' exists,
 it is overwritten.
 
-*watch* 'key'::
-Watch 'key', displaying each change on a line of output.
-If the key is not set, display "NULL".  This command runs forever.
+*watch* [count] 'key'::
+Watch 'key', displaying each change on a line of output.  If the key
+is not set, display "NULL".  If 'count' is specified, display at most
+'count' versions.  Otherwise, command runs forever.
 
 *watch-dir* [-r] [count] 'key'::
 Watch directory specified at 'key', displaying changes within it and
