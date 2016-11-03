@@ -81,7 +81,7 @@ void usage (void)
 "       flux-kvs readlink        key\n"
 "       flux-kvs mkdir           key [key...]\n"
 "       flux-kvs exists          key\n"
-"       flux-kvs watch           key\n"
+"       flux-kvs watch           [count] key\n"
 "       flux-kvs watch-dir [-r]  [count] key\n"
 "       flux-kvs copy-tokvs      key file\n"
 "       flux-kvs copy-fromkvs    key file\n"
@@ -398,7 +398,13 @@ void cmd_watch (flux_t *h, int argc, char **argv)
 {
     char *json_str = NULL;
     char *key;
+    int count = -1;
 
+    if (argc == 2) {
+        count = strtoul (argv[0], NULL, 10);
+        argc--;
+        argv++;
+    }
     if (argc != 1)
         log_msg_exit ("watch: specify one key");
     key = argv[0];
@@ -406,6 +412,8 @@ void cmd_watch (flux_t *h, int argc, char **argv)
         log_err_exit ("%s", key);
     do {
         printf ("%s\n", json_str ? json_str : "NULL");
+        if (--count == 0)
+            break;
         if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
             log_err_exit ("%s", argv[0]);
     } while (true);
