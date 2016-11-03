@@ -502,10 +502,19 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 
 # watch tests
 
+test_expect_success 'kvs: watch 5 versions of key'  '
+	flux kvs unlink $TEST.foo &&
+        flux kvs put $TEST.a.b.c=1 &&
+	flux kvs watch 5 $TEST.foo.a >watch_out &
+        for i in $(seq 2 5); do
+            flux kvs put $TEST.foo.a=${i}
+        done
+'
+
 test_expect_success 'kvs: watch 5 versions of directory'  '
 	flux kvs unlink $TEST.foo &&
-	flux kvs watch-dir -r 5 $TEST.foo >watch_out &
-	while $(grep -s '===============' watch_out | wc -l) -lt 5; do
+	flux kvs watch-dir -r 5 $TEST.foo >watch_dir_out &
+	while $(grep -s '===============' watch_dir_out | wc -l) -lt 5; do
 	    flux kvs put $TEST.foo.a=$(date +%N); \
 	done
 '
