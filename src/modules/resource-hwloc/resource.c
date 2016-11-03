@@ -266,6 +266,17 @@ done:
     return ret;
 }
 
+static int put_hostname (flux_t *h, const char *base, const char *hostname)
+{
+    int rc;
+    char *key;
+    if (asprintf (&key, "%s.HostName", base) < 0)
+        return (-1);
+    rc = kvs_put_string (h, key, hostname);
+    free (key);
+    return (rc);
+}
+
 static int load_info_to_kvs (flux_t *h, ctx_t *ctx)
 {
     char *base_path = NULL;
@@ -296,6 +307,10 @@ static int load_info_to_kvs (flux_t *h, ctx_t *ctx)
         const char *hostname = hwloc_obj_get_info_by_name (machine, "HostName");
         char *kvs_hostname = escape_kvs_key (hostname);
         char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
+
+        if (put_hostname (h, base_path, hostname) < 0)
+            flux_log_error (h, "failed to record hostname for this rank");
+
         free (kvs_hostname);
         (void) kvs_unlink (h, host_path);
         if (ctx->walk_topology &&

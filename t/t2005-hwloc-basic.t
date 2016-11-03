@@ -116,4 +116,10 @@ test_expect_success 'hwloc: reload fails on invalid rank' '
     grep "No route to host" stderr
 '
 
+test_expect_success 'hwloc: HostName is populated in by_rank' '
+    HW_HOST=$(flux kvs get resource.hwloc.by_rank.0.HostName) &&
+    REAL_HOST=$(hostname) &&
+    test x"$HW_HOST" = x"$REAL_HOST"
+'
+
 test_done
