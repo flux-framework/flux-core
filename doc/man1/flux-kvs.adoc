@@ -86,6 +86,12 @@ it is overwritten.
 Watch 'key', displaying each change on a line of output.
 If the key is not set, display "NULL".  This command runs forever.
 
+*watch-dir* [-r] [count] 'key'::
+Watch directory specified at 'key', displaying changes within it and
+in subdirectories.  If '-r' is specified, recursively display keys
+under subdirectories.  If 'count' is specified, display at most
+'count' versions.  Otherwise, this command runs forever.
+
 *copy-tokvs* 'key' 'file'::
 Copy data from 'file' to 'key', encoding to Z85 format and committing
 the change.  'file' may be a UNIX file name or "-" indicating standard
