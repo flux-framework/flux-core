@@ -55,11 +55,12 @@ Display the JSON type of the value under key: 'null', 'boolean', 'double',
 Store 'value' under 'key' and commit it.  If it already has a value,
 overwrite it.
 
-*dir* [-r] ['key']::
+*dir* [-r] [-d] ['key']::
 Display all keys and their values under the directory 'key'.
 If 'key' does not exist or is not a directory, display an error message.
 If 'key' is not provided, "." (root of the namespace) is assumed.  If '-r'
-is specified, recursively display keys under subdirectories.
+is specified, recursively display keys under subdirectories.  If '-d' is
+specified, do not output key values.
 
 *dirsize* 'key'::
 Get the number of keys in a directory.
@@ -87,11 +88,12 @@ Watch 'key', displaying each change on a line of output.  If the key
 is not set, display "NULL".  If 'count' is specified, display at most
 'count' versions.  Otherwise, command runs forever.
 
-*watch-dir* [-r] [count] 'key'::
+*watch-dir* [-r] [-d] [count] 'key'::
 Watch directory specified at 'key', displaying changes within it and
 in subdirectories.  If '-r' is specified, recursively display keys
-under subdirectories.  If 'count' is specified, display at most
-'count' versions.  Otherwise, this command runs forever.
+under subdirectories.  If '-d' is specified, do not output key values.
+If 'count' is specified, display at most 'count' versions.  Otherwise,
+this command runs forever.
 
 *copy-tokvs* 'key' 'file'::
 Copy data from 'file' to 'key', encoding to Z85 format and committing
@@ -143,12 +145,12 @@ may contain spaces.
 Retrieve the value stored under 'key', starting the lookup at 'treeobj'.
 If nothing has been stored under 'key', display an error message.
 
-*dirat* [-r] 'treeobj' ['key']::
+*dirat* [-r] [-d] 'treeobj' ['key']::
 Display all keys and their values under the directory 'key', starting
 lookup at 'treeobj'.  If 'key' does not exist or is not a directory,
-display an error message.  If 'key' is not provided, "." (root of
-the namespace) is assumed.  If '-r' is specified, recursively display
-keys under subdirectories.
+display an error message.  If 'key' is not provided, "." (root of the
+namespace) is assumed.  If '-r' is specified, recursively display keys
+under subdirectories.  If '-d' is specified, do not output key values.
 
 *readlinkat* 'treeobj' 'key'::
 Retrieve the key a link refers to rather than its value, as would be
