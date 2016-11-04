@@ -182,6 +182,20 @@ EOF
 	test_cmp expected output
 '
 
+test_expect_success 'kvs: create a dir with keys and subdir, do not output values' '
+	flux kvs unlink $TEST &&
+	flux kvs put $DIR.a=69 $DIR.b=70 $DIR.c.d.e.f.g=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+	flux kvs dir -r -d $DIR | sort >output &&
+	cat >expected <<EOF
+$DIR.a
+$DIR.b
+$DIR.c.d.e.f.g
+$DIR.d
+$DIR.e
+EOF
+	test_cmp expected output
+'
+
 test_expect_success 'kvs: directory with multiple subdirs' '
 	flux kvs unlink $TEST &&
 	flux kvs put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
@@ -192,6 +206,50 @@ $DIR.b.c.d.e.f.g = 70
 $DIR.c.a.b = 3.140000
 $DIR.d = snerg
 $DIR.e = true
+EOF
+	test_cmp expected output
+'
+
+test_expect_success 'kvs: directory with multiple subdirs, do not output values' '
+	flux kvs unlink $TEST &&
+	flux kvs put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+	flux kvs dir -r -d $DIR | sort >output &&
+	cat >expected <<EOF
+$DIR.a
+$DIR.b.c.d.e.f.g
+$DIR.c.a.b
+$DIR.d
+$DIR.e
+EOF
+	test_cmp expected output
+'
+
+test_expect_success 'kvs: directory with multiple subdirs using dirat' '
+	flux kvs unlink $TEST &&
+	flux kvs put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+        DIRREF=$(flux kvs get-treeobj $DIR) &&
+	flux kvs dirat -r $DIRREF | sort >output &&
+	cat >expected <<EOF
+a = 69
+b.c.d.e.f.g = 70
+c.a.b = 3.140000
+d = snerg
+e = true
+EOF
+	test_cmp expected output
+'
+
+test_expect_success 'kvs: directory with multiple subdirs using dirat, do not output values' '
+	flux kvs unlink $TEST &&
+	flux kvs put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+        DIRREF=$(flux kvs get-treeobj $DIR) &&
+	flux kvs dirat -r -d $DIRREF | sort >output &&
+	cat >expected <<EOF
+a
+b.c.d.e.f.g
+c.a.b
+d
+e
 EOF
 	test_cmp expected output
 '
@@ -514,6 +572,14 @@ test_expect_success 'kvs: watch 5 versions of key'  '
 test_expect_success 'kvs: watch 5 versions of directory'  '
 	flux kvs unlink $TEST.foo &&
 	flux kvs watch-dir -r 5 $TEST.foo >watch_dir_out &
+	while $(grep -s '===============' watch_dir_out | wc -l) -lt 5; do
+	    flux kvs put $TEST.foo.a=$(date +%N); \
+	done
+'
+
+test_expect_success 'kvs: watch 5 versions of directory, do not output values'  '
+	flux kvs unlink $TEST.foo &&
+	flux kvs watch-dir -r -d 5 $TEST.foo >watch_dir_out &
 	while $(grep -s '===============' watch_dir_out | wc -l) -lt 5; do
 	    flux kvs put $TEST.foo.a=$(date +%N); \
 	done
