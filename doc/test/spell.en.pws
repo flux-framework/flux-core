@@ -340,3 +340,5 @@ respondf
 encodef
 UTF
 whitespace
+dirsize
+subdirectories
