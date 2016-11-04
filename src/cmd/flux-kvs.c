@@ -536,7 +536,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
     Jput (o);
 }
 
-static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
+static void dump_kvs_dir (kvsdir_t *dir, bool ropt, bool dopt)
 {
     kvsitr_t *itr;
     const char *name;
@@ -557,16 +557,20 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
                 kvsdir_t *ndir;
                 if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                     log_err_exit ("%s", key);
-                dump_kvs_dir (ndir, ropt);
+                dump_kvs_dir (ndir, ropt, dopt);
                 kvsdir_destroy (ndir);
             } else
                 printf ("%s.\n", key);
         } else {
-            char *json_str;
-            if (kvsdir_get (dir, name, &json_str) < 0)
-                log_err_exit ("%s", key);
-            dump_kvs_val (key, json_str);
-            free (json_str);
+            if (!dopt) {
+                char *json_str;
+                if (kvsdir_get (dir, name, &json_str) < 0)
+                    log_err_exit ("%s", key);
+                dump_kvs_val (key, json_str);
+                free (json_str);
+            }
+            else
+                printf ("%s\n", key);
         }
         free (key);
     }
@@ -576,15 +580,27 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
 void cmd_watch_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
+    bool dopt = false;
     char *key;
     kvsdir_t *dir = NULL;
     int rc;
     int count = -1;
 
-    if (argc > 0 && !strcmp (argv[0], "-r")) {
-        ropt = true;
-        argc--;
-        argv++;
+    if (argc > 0) {
+        while (argc) {
+            if (!strcmp (argv[0], "-r")) {
+                ropt = true;
+                argc--;
+                argv++;
+            }
+            else if (!strcmp (argv[0], "-d")) {
+                dopt = true;
+                argc--;
+                argv++;
+            }
+            else
+                break;
+        }
     }
     if (argc == 2) {
         count = strtoul (argv[0], NULL, 10);
@@ -603,7 +619,7 @@ void cmd_watch_dir (flux_t *h, int argc, char **argv)
                 kvsdir_destroy (dir);
             dir = NULL;
         } else {
-            dump_kvs_dir (dir, ropt);
+            dump_kvs_dir (dir, ropt, dopt);
             printf ("======================\n");
             fflush (stdout);
         }
@@ -619,13 +635,25 @@ done:
 void cmd_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
+    bool dopt = false;
     char *key;
     kvsdir_t *dir;
 
-    if (argc > 0 && !strcmp (argv[0], "-r")) {
-        ropt = true;
-        argc--;
-        argv++;
+    if (argc > 0) {
+        while (argc) {
+            if (!strcmp (argv[0], "-r")) {
+                ropt = true;
+                argc--;
+                argv++;
+            }
+            else if (!strcmp (argv[0], "-d")) {
+                dopt = true;
+                argc--;
+                argv++;
+            }
+            else
+                break;
+        }
     }
     if (argc == 0)
         key = ".";
@@ -635,20 +663,32 @@ void cmd_dir (flux_t *h, int argc, char **argv)
         log_msg_exit ("dir: specify zero or one directory");
     if (kvs_get_dir (h, &dir, "%s", key) < 0)
         log_err_exit ("%s", key);
-    dump_kvs_dir (dir, ropt);
+    dump_kvs_dir (dir, ropt, dopt);
     kvsdir_destroy (dir);
 }
 
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
+    bool dopt = false;
     char *key;
     kvsdir_t *dir;
 
-    if (argc > 0 && !strcmp (argv[0], "-r")) {
-        ropt = true;
-        argc--;
-        argv++;
+    if (argc > 0) {
+        while (argc) {
+            if (!strcmp (argv[0], "-r")) {
+                ropt = true;
+                argc--;
+                argv++;
+            }
+            else if (!strcmp (argv[0], "-d")) {
+                dopt = true;
+                argc--;
+                argv++;
+            }
+            else
+                break;
+        }
     }
     if (argc == 1)
         key = ".";
@@ -658,7 +698,7 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
         log_msg_exit ("dir: specify treeobj and zero or one directory");
     if (kvs_get_dirat (h, argv[0], key, &dir) < 0)
         log_err_exit ("%s", key);
-    dump_kvs_dir (dir, ropt);
+    dump_kvs_dir (dir, ropt, dopt);
     kvsdir_destroy (dir);
 }
 
