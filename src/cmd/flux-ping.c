@@ -39,7 +39,7 @@
 #include "src/common/libutil/log.h"
 
 struct ping_ctx {
-    double delay;      /* interval between sends, in seconds */
+    double interval;    /* interval between sends, in seconds */
     char *rank;         /* target rank(s) if multiple or NULL */
     uint32_t nodeid;    /* target nodeid if single */
     char *topic;        /* target topic string */
@@ -58,12 +58,12 @@ struct ping_data {
     unsigned int rpc_count;
 };
 
-#define OPTIONS "hp:d:r:c:b"
+#define OPTIONS "hp:i:r:c:b"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
     {"pad",        required_argument,  0, 'p'},
-    {"delay",      required_argument,  0, 'd'},
+    {"interval",   required_argument,  0, 'i'},
     {"count",      required_argument,  0, 'c'},
     {"batch",      no_argument,        0, 'b'},
     { 0, 0, 0, 0 },
@@ -84,7 +84,7 @@ void ping_data_free (void *ctx)
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-ping [--rank NODESET] [--pad bytes] [--delay sec] [--count N] [--batch] target\n"
+"Usage: flux-ping [--rank NODESET] [--pad bytes] [--interval sec] [--count N] [--batch] target\n"
 );
     exit (1);
 }
@@ -192,8 +192,8 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     send_ping (ctx);
     if (ctx->send_count == ctx->count)
         flux_watcher_stop (w);
-    else if (ctx->delay == 0.) { /* needs rearm if repeat is 0. */
-        flux_timer_watcher_reset (w, ctx->delay, ctx->delay);
+    else if (ctx->interval == 0.) { /* needs rearm if repeat is 0. */
+        flux_timer_watcher_reset (w, ctx->interval, ctx->interval);
         flux_watcher_start (w);
     }
 }
@@ -205,7 +205,7 @@ int main (int argc, char *argv[])
     char *target;
     flux_watcher_t *tw = NULL;
     struct ping_ctx ctx = {
-        .delay = 1.0,
+        .interval = 1.0,
         .rank = NULL,
         .nodeid = FLUX_NODEID_ANY,
         .topic = NULL,
@@ -225,9 +225,9 @@ int main (int argc, char *argv[])
             case 'p': /* --pad bytes */
                 pad_bytes = strtoul (optarg, NULL, 10);
                 break;
-            case 'd': /* --delay seconds */
-                ctx.delay = strtod (optarg, NULL);
-                if (ctx.delay < 0)
+            case 'i': /* --interval seconds */
+                ctx.interval = strtod (optarg, NULL);
+                if (ctx.interval < 0)
                     usage ();
                 break;
             case 'r': /* --rank NODESET  */
@@ -302,10 +302,10 @@ int main (int argc, char *argv[])
     if (ctx.batch) {
         while (ctx.send_count < ctx.count) {
             send_ping (&ctx);
-            usleep ((useconds_t)(ctx.delay * 1E6));
+            usleep ((useconds_t)(ctx.interval * 1E6));
         }
     } else {
-        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.delay,
+        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.interval,
                                         timer_cb, &ctx);
         if (!tw)
             log_err_exit ("error creating watchers");
