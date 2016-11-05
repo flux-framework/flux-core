@@ -39,7 +39,7 @@
 #include "src/common/libutil/log.h"
 
 struct ping_ctx {
-    double period;      /* interval between sends, in seconds */
+    double delay;      /* interval between sends, in seconds */
     char *rank;         /* target rank(s) if multiple or NULL */
     uint32_t nodeid;    /* target nodeid if single */
     char *topic;        /* target topic string */
@@ -192,8 +192,8 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     send_ping (ctx);
     if (ctx->send_count == ctx->count)
         flux_watcher_stop (w);
-    else if (ctx->period == 0.) { /* needs rearm if repeat is 0. */
-        flux_timer_watcher_reset (w, ctx->period, ctx->period);
+    else if (ctx->delay == 0.) { /* needs rearm if repeat is 0. */
+        flux_timer_watcher_reset (w, ctx->delay, ctx->delay);
         flux_watcher_start (w);
     }
 }
@@ -205,7 +205,7 @@ int main (int argc, char *argv[])
     char *target;
     flux_watcher_t *tw = NULL;
     struct ping_ctx ctx = {
-        .period = 1.0,
+        .delay = 1.0,
         .rank = NULL,
         .nodeid = FLUX_NODEID_ANY,
         .topic = NULL,
@@ -226,8 +226,8 @@ int main (int argc, char *argv[])
                 pad_bytes = strtoul (optarg, NULL, 10);
                 break;
             case 'd': /* --delay seconds */
-                ctx.period = strtod (optarg, NULL);
-                if (ctx.period < 0)
+                ctx.delay = strtod (optarg, NULL);
+                if (ctx.delay < 0)
                     usage ();
                 break;
             case 'r': /* --rank NODESET  */
@@ -302,10 +302,10 @@ int main (int argc, char *argv[])
     if (ctx.batch) {
         while (ctx.send_count < ctx.count) {
             send_ping (&ctx);
-            usleep ((useconds_t)(ctx.period * 1E6));
+            usleep ((useconds_t)(ctx.delay * 1E6));
         }
     } else {
-        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.period,
+        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.delay,
                                         timer_cb, &ctx);
         if (!tw)
             log_err_exit ("error creating watchers");
