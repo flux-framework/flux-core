@@ -305,7 +305,7 @@ int main (int argc, char *argv[])
             usleep ((useconds_t)(ctx.period * 1E6));
         }
     } else {
-        tw = flux_timer_watcher_create (ctx.reactor, ctx.period, ctx.period,
+        tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.period,
                                         timer_cb, &ctx);
         if (!tw)
             log_err_exit ("error creating watchers");
