@@ -582,6 +582,7 @@ error:
         nodeset_destroy (ns);
     return NULL;
 }
+
 const char *flux_rpc_type_get (flux_rpc_t *rpc)
 {
     return rpc->type;
