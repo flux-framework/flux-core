@@ -512,11 +512,10 @@ flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
     return rpc;
 }
 
-flux_rpc_t *flux_rpc_multi (flux_t *h,
-                            const char *topic,
-                            const char *json_str,
-                            const char *nodeset,
-                            int flags)
+static flux_rpc_t *rpc_multi (flux_t *h,
+                              const char *nodeset,
+                              int flags,
+                              flux_msg_t *msg)
 {
     nodeset_t *ns = NULL;
     nodeset_iterator_t *itr = NULL;
@@ -525,7 +524,7 @@ flux_rpc_t *flux_rpc_multi (flux_t *h,
     uint32_t count;
     int rx_expected;
 
-    if (!topic || !nodeset) {
+    if (!nodeset) {
         errno = EINVAL;
         goto error;
     }
@@ -559,7 +558,7 @@ flux_rpc_t *flux_rpc_multi (flux_t *h,
 #if HAVE_CALIPER
         cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
 #endif
-        if (rpc_request_send (rpc, topic, nodeid, json_str) < 0)
+        if (rpc_request_prepare_send (rpc, msg, nodeid) < 0)
             goto error;
 #if HAVE_CALIPER
         cali_end_byname ("flux.message.rpc.nodeid");
@@ -579,6 +578,23 @@ error:
     if (ns)
         nodeset_destroy (ns);
     return NULL;
+}
+
+flux_rpc_t *flux_rpc_multi (flux_t *h,
+                            const char *topic,
+                            const char *json_str,
+                            const char *nodeset,
+                            int flags)
+{
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
+
+    if (!(msg = flux_request_encode (topic, json_str)))
+        goto done;
+    rc = rpc_multi (h, nodeset, flags, msg);
+done:
+    flux_msg_destroy (msg);
+    return rc;
 }
 
 const char *flux_rpc_type_get (flux_rpc_t *rpc)
