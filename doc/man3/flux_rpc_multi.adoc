@@ -5,7 +5,7 @@ flux_rpc_multi(3)
 
 NAME
 ----
-flux_rpc_multi, flux_rpc_next, flux_rpc_get_nodeid - send a remote procedure call to a Flux service on multiple ranks
+flux_rpc_multi, flux_rpcf_multi, flux_rpc_next, flux_rpc_get_nodeid - send a remote procedure call to a Flux service on multiple ranks
 
 
 SYNOPSIS
@@ -14,6 +14,9 @@ SYNOPSIS
 
 flux_rpc_t *flux_rpc_multi (flux_t *h, const char *topic, const char *json_str,
                             const char *nodeset, int flags);
+
+flux_rpc_t *flux_rpcf_multi (flux_t *h, const char *topic, const char *nodeset,
+                             int flags, const char *fmt, ...);
 
 int flux_rpc_next (flux_rpc_t *rpc);
 
@@ -68,11 +71,21 @@ a response containing an error, `flux_rpc_get_nodeid()` will succeed,
 while `flux_rpc_get()` will fail.  This allows the failing nodeid to
 be determined.
 
+`flux_rpcf_multi()` is a variant of `flux_rpc_multi()` that constructs a
+JSON payload based on the provided _fmt_ string and variable arguments.
+The _fmt_ string and variable arguments are passed internally to
+jansson's `json_pack()` function.  See below for details.
+
+
+include::JSON_PACK.adoc[]
+
+
 RETURN VALUE
 ------------
 
-`flux_rpc_multi()` returns a flux_rpc_t object on success.  On error, NULL
-is returned, and errno is set appropriately.
+`flux_rpc_multi()` and `flux_rpcf_multi()` returns a flux_rpc_t object
+on success.  On error, NULL is returned, and errno is set
+appropriately.
 
 `flux_rpc_next()` returns 0 if additional responses are expected, else -1.
 It does not set errno.
