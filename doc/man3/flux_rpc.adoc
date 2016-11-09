@@ -115,11 +115,11 @@ on that handle.
 RETURN VALUE
 ------------
 
-`flux_rpc()` returns a flux_rpc_t object on success.  On error, NULL
-is returned, and errno is set appropriately.
+`flux_rpc()` and `flux_rpcf()` returns a flux_rpc_t object on success.
+On error, NULL is returned, and errno is set appropriately.
 
-`flux_rpc_get()` returns zero on success.  On error, -1 is returned,
-and errno is set appropriately.
+`flux_rpc_get()` and `flux_rpc_getf()` returns zero on success.  On
+error, -1 is returned, and errno is set appropriately.
 
 
 ERRORS
