@@ -55,8 +55,8 @@ libutil_la_SOURCES = \
 	macros.h \
 	sha1.h \
 	sha1.c \
-	shastring.h \
-	shastring.c \
+	blobref.h \
+	blobref.c \
 	sha256.h \
 	sha256.c \
 	fdwalk.h \

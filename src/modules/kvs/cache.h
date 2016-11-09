@@ -46,7 +46,7 @@ void cache_destroy (struct cache *cache);
 struct cache_entry *cache_lookup (struct cache *cache,
                                   const char *ref, int current_epoch);
 
-/* Insert an entry in the cache by 'ref' (stringified SHA1 hash).
+/* Insert an entry in the cache by blobref 'ref'.
  * Ownership of the cache entry is transferred to the cache.
  */
 void cache_insert (struct cache *cache, const char *ref,

@@ -30,8 +30,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/sha1.h"
-#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/iterators.h"
 
@@ -527,9 +526,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *w,
     void *data;
     int len;
     struct cache_entry *e = NULL;
-    SHA1_CTX sha1_ctx;
-    uint8_t hash[SHA1_DIGEST_SIZE];
-    char blobref[SHA1_STRING_SIZE];
+    char blobref[BLOBREF_MAX_STRING_SIZE];
     int rc = -1;
 
     if (flux_request_decode_raw (msg, NULL, &data, &len) < 0)
@@ -538,10 +535,9 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *w,
         errno = EFBIG;
         goto done;
     }
-    SHA1_Init (&sha1_ctx);
-    SHA1_Update (&sha1_ctx, (uint8_t *)data, len);
-    SHA1_Final (&sha1_ctx, hash);
-    sha1_hashtostr (hash, blobref);
+    if (blobref_hash (cache->hash_name, (uint8_t *)data, len,
+                      blobref, sizeof (blobref)) < 0)
+        goto done;
 
     if (!(e = lookup_entry (cache, blobref))) {
         if (!(e = cache_entry_create (blobref)))
@@ -591,7 +587,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *w,
 done:
     assert (rc == 0 || errno != 0);
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
-                                            blobref, SHA1_STRING_SIZE) < 0)
+                                            blobref, strlen (blobref) + 1) < 0)
         flux_log_error (h, "content store");
 }
 

@@ -30,7 +30,7 @@
 #include <errno.h>
 
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/blobref.h"
 
 #include "json_dirent.h"
 
@@ -107,8 +107,8 @@ int dirent_validate (json_object *dirent)
         if (json_object_get_type (o) != json_type_string)
             goto error;
         const char *s = json_object_get_string (o);
-        uint8_t hash[SHA1_DIGEST_SIZE];
-        if (sha1_strtohash (s, hash) < 0)
+        uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
+        if (blobref_strtohash (s, hash, sizeof (hash)) < 0)
             goto error;
     }
     else

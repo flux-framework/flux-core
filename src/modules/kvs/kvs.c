@@ -37,8 +37,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/sha1.h"
-#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
@@ -50,7 +49,7 @@
 #include "cache.h"
 #include "json_dirent.h"
 
-typedef char href_t[SHA1_STRING_SIZE];
+typedef char href_t[BLOBREF_MAX_STRING_SIZE];
 
 /* Break cycles in symlink references.
  */
@@ -72,8 +71,8 @@ typedef struct {
 } stats_t;
 
 typedef struct {
-    struct cache *cache;    /* SHA1 => cache_entry */
-    href_t rootdir;         /* current root SHA1 */
+    struct cache *cache;    /* blobref => cache_entry */
+    href_t rootdir;         /* current root blobref */
     int rootseq;            /* current root version (for ordering) */
     zhash_t *fences;
     zlist_t *ready;
@@ -88,6 +87,7 @@ typedef struct {
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
     int commit_merge;
+    char *hash_name;
 } ctx_t;
 
 typedef struct {
@@ -163,6 +163,7 @@ static ctx_t *getctx (flux_t *h)
             flux_watcher_start (ctx->check_w);
         }
         ctx->commit_merge = 1;
+        ctx->hash_name = "sha1";
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
@@ -210,7 +211,7 @@ static int content_load_request_send (ctx_t *ctx, const href_t ref, bool now)
 
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     if (!(rpc = flux_rpc_raw (ctx->h, "content.load",
-                    ref, SHA1_STRING_SIZE, FLUX_NODEID_ANY, 0)))
+                    ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
         goto error;
     flux_rpc_aux_set (rpc, xstrdup (ref), free);
     if (now) {
@@ -313,16 +314,14 @@ error:
 static int store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
 {
     struct cache_entry *hp;
-    SHA1_CTX sha1_ctx;
     const char *s = json_object_to_json_string (o);
-    uint8_t hash[SHA1_DIGEST_SIZE];
     int rc = -1;
 
-    SHA1_Init (&sha1_ctx);
-    SHA1_Update (&sha1_ctx, (uint8_t *)s, strlen (s) + 1);
-    SHA1_Final (&sha1_ctx, hash);
-    sha1_hashtostr (hash, ref);
-
+    if (blobref_hash (ctx->hash_name, (uint8_t *)s, strlen (s) + 1,
+                      ref, sizeof (href_t)) < 0) {
+        flux_log_error (ctx->h, "blobref_hash");
+        goto done;
+    }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         hp = cache_entry_create (NULL);
         cache_insert (ctx->cache, ref, hp);
@@ -399,8 +398,8 @@ static int commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
                                     dirent_create ("DIRREF", ref));
         }
         else if (json_object_object_get_ex (iter.val, "FILEVAL", &value)
-                                            && (s = Jtostr (value))
-                                            && strlen (s) > SHA1_STRING_SIZE) {
+                                && (s = Jtostr (value))
+                                && strlen (s) > BLOBREF_MAX_STRING_SIZE) {
             json_object_get (value);
             if (store (ctx, value, ref, wait) < 0)
                 goto done;

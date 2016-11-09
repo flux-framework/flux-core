@@ -25,8 +25,7 @@
 
 #include <unistd.h>
 
-#include "src/common/libutil/sha1.h"
-#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libutil/readall.h"
 
 static int internal_content_load (optparse_t *p, int ac, char *av[])
@@ -70,6 +69,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     flux_t *h;
     flux_rpc_t *rpc;
     const char *topic;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
 
     if (optparse_optind (p)  != ac) {
         optparse_print_usage (p);
@@ -87,18 +87,9 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
             log_errn_exit (EFBIG, "content-store");
         if (!(hashfun = flux_attr_get (h, "content-hash", &flags)))
             log_err_exit ("flux_attr_get content-hash");
-        if (!strcmp (hashfun, "sha1")) {
-            uint8_t hash[SHA1_DIGEST_SIZE];
-            char hashstr[SHA1_STRING_SIZE];
-            SHA1_CTX sha1_ctx;
-
-            SHA1_Init (&sha1_ctx);
-            SHA1_Update (&sha1_ctx, (uint8_t *)data, size);
-            SHA1_Final (&sha1_ctx, hash);
-            sha1_hashtostr (hash, hashstr);
-            printf ("%s\n", hashstr);
-        } else
-            log_msg_exit ("content-store: unsupported hash function: %s", hashfun);
+        if (blobref_hash (hashfun, data, size, blobref, sizeof (blobref)) < 0)
+            log_err_exit ("blobref_hash failed");
+        printf ("%s\n", hashstr);
     } else {
         const char *blobref;
         int blobref_size;
@@ -242,7 +233,7 @@ static struct optparse_option store_opts[] = {
     { .name = "bypass-cache",  .key = 'b',  .has_arg = 0,
       .usage = "Store directly to rank 0 content service", },
     { .name = "dry-run",  .key = 'd',  .has_arg = 0,
-      .usage = "Compute SHA1 but don't actually store value" },
+      .usage = "Compute blobref but don't actually store value" },
       OPTPARSE_TABLE_END,
 };
 
