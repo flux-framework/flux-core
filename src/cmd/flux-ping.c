@@ -32,7 +32,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/tstat.h"
@@ -94,28 +93,28 @@ void usage (void)
 void ping_continuation (flux_rpc_t *rpc, void *arg)
 {
     struct ping_ctx *ctx = arg;
-    const char *json_str, *route, *pad;
+    const char *route, *pad;
     int64_t sec, nsec;
     struct timespec t0;
     int seq;
-    json_object *out = NULL;
     struct ping_data *pdata = flux_rpc_aux_get (rpc);
     tstat_t *tstat = pdata->tstat;
 
-    if (flux_rpc_get (rpc, &json_str) < 0) {
-        log_err ("flux_rpc_get");
+    if (flux_rpc_getf (rpc, "{ s:i s:I s:I s:s s:s !}",
+                       "seq", &seq,
+                       "time.tv_sec", &sec,
+                       "time.tv_nsec", &nsec,
+                       "pad", &pad,
+                       "route", &route) < 0) {
+        log_err ("flux_rpc_getf");
         goto done;
     }
-    if (!(out = Jfromstr (json_str))
-            || !Jget_int (out, "seq", &seq)
-            || !Jget_int64 (out, "time.tv_sec", &sec)
-            || !Jget_int64 (out, "time.tv_nsec", &nsec)
-            || !Jget_str (out, "pad", &pad)
-            || !Jget_str (out, "route", &route)
-            || strcmp (ctx->pad, pad) != 0) {
-        log_err ("error decoding ping response");
+
+    if (strcmp (ctx->pad, pad) != 0) {
+        log_err ("error in ping pad");
         goto done;
     }
+
     t0.tv_sec = sec;
     t0.tv_nsec = nsec;
     tstat_push (tstat, monotime_since (t0));
@@ -147,13 +146,11 @@ done:
         }
         flux_rpc_destroy (rpc);
     }
-    Jput (out);
 }
 
 void send_ping (struct ping_ctx *ctx)
 {
     struct timespec t0;
-    json_object *in = Jnew ();
     flux_rpc_t *rpc;
     struct ping_data *pdata = xzmalloc (sizeof (*pdata));
 
@@ -162,23 +159,27 @@ void send_ping (struct ping_ctx *ctx)
     pdata->route = NULL;
     pdata->rpc_count = 0;
 
-    Jadd_int (in, "seq", ctx->send_count);
     monotime (&t0);
-    Jadd_int64 (in, "time.tv_sec", t0.tv_sec);
-    Jadd_int64 (in, "time.tv_nsec", t0.tv_nsec);
-    Jadd_str (in, "pad", ctx->pad);
 
     if (ctx->rank)
-        rpc = flux_rpc_multi (ctx->h, ctx->topic, Jtostr (in), ctx->rank, 0);
+        rpc = flux_rpcf_multi (ctx->h, ctx->topic, ctx->rank, 0,
+                               "{s:i s:I s:I s:s}",
+                               "seq", ctx->send_count,
+                               "time.tv_sec", t0.tv_sec,
+                               "time.tv_nsec", t0.tv_nsec,
+                               "pad", ctx->pad);
     else
-        rpc = flux_rpc (ctx->h, ctx->topic, Jtostr (in), ctx->nodeid, 0);
+        rpc = flux_rpcf (ctx->h, ctx->topic, ctx->nodeid, 0,
+                         "{s:i s:I s:I s:s}",
+                         "seq", ctx->send_count,
+                         "time.tv_sec", t0.tv_sec,
+                         "time.tv_nsec", t0.tv_nsec,
+                         "pad", ctx->pad);
     if (!rpc)
-        log_err_exit ("flux_rpc");
+        log_err_exit ("flux_rpcf");
     flux_rpc_aux_set (rpc, pdata, ping_data_free);
     if (flux_rpc_then (rpc, ping_continuation, ctx) < 0)
         log_err_exit ("flux_rpc_then");
-
-    Jput (in);
 
     ctx->send_count++;
 }
