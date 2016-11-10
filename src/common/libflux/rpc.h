@@ -87,12 +87,14 @@ void flux_rpc_type_set (flux_rpc_t *rpc, const char *type);
 void *flux_rpc_aux_get (flux_rpc_t *rpc);
 void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy);
 
-/* Variants of flux_rpc and flux_rpc_get that encode/decode json payloads
- * using jansson pack/unpack format strings.  Returned strings are invalidated
- * by flux_rpc_destroy().
+/* Variants of flux_rpc, flux_rpc_multi, and flux_rpc_get that
+ * encode/decode json payloads using jansson pack/unpack format
+ * strings.  Returned strings are invalidated by flux_rpc_destroy().
  */
 flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
                        int flags, const char *fmt, ...);
+flux_rpc_t *flux_rpcf_multi (flux_t *h, const char *topic, const char *nodeset,
+                             int flags, const char *fmt, ...);
 int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...);
 
 #endif /* !_FLUX_CORE_RPC_H */

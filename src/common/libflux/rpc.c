@@ -553,6 +553,29 @@ done:
     return rc;
 }
 
+flux_rpc_t *flux_rpcf_multi (flux_t *h,
+                             const char *topic,
+                             const char *nodeset,
+                             int flags,
+                             const char *fmt,
+                             ...)
+{
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (!(msg = flux_request_encode (topic, NULL)))
+        goto done;
+    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+        goto done;
+    rc = rpc_multi (h, nodeset, flags, msg);
+done:
+    va_end (ap);
+    flux_msg_destroy (msg);
+    return rc;
+}
+
 const char *flux_rpc_type_get (flux_rpc_t *rpc)
 {
     return rpc->type;
