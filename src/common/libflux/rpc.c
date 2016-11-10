@@ -168,6 +168,16 @@ done:
     return rc;
 }
 
+static int rpc_request_prepare_send (flux_rpc_t *rpc, flux_msg_t *msg,
+                                     uint32_t nodeid)
+{
+    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
+        return -1;
+    if (flux_send (rpc->h, msg, 0) < 0)
+        return -1;
+    return 0;
+}
+
 static int rpc_request_send (flux_rpc_t *rpc, const char *topic,
                              uint32_t nodeid, const char *json_str)
 {
@@ -176,11 +186,7 @@ static int rpc_request_send (flux_rpc_t *rpc, const char *topic,
 
     if (!(msg = flux_request_encode (topic, json_str)))
         goto done;
-    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        goto done;
-    if (flux_send (rpc->h, msg, 0) < 0)
-        goto done;
-    rc = 0;
+    rc = rpc_request_prepare_send (rpc, msg, nodeid);
 done:
     flux_msg_destroy (msg);
     return rc;
@@ -196,11 +202,7 @@ static int rpc_request_vsendf (flux_rpc_t *rpc, const char *topic,
         goto done;
     if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
         goto done;
-    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        goto done;
-    if (flux_send (rpc->h, msg, 0) < 0)
-        goto done;
-    rc = 0;
+    rc = rpc_request_prepare_send (rpc, msg, nodeid);
 done:
     flux_msg_destroy (msg);
     return rc;
@@ -214,11 +216,7 @@ static int rpc_request_send_raw (flux_rpc_t *rpc, const char *topic,
 
     if (!(msg = flux_request_encode_raw (topic, data, len)))
         goto done;
-    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        goto done;
-    if (flux_send (rpc->h, msg, 0) < 0)
-        goto done;
-    rc = 0;
+    rc = rpc_request_prepare_send (rpc, msg, nodeid);
 done:
     flux_msg_destroy (msg);
     return rc;
