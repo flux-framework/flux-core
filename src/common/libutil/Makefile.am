@@ -57,6 +57,8 @@ libutil_la_SOURCES = \
 	sha1.c \
 	shastring.h \
 	shastring.c \
+	sha256.h \
+	sha256.c \
 	fdwalk.h \
 	fdwalk.c \
 	popen2.h \
