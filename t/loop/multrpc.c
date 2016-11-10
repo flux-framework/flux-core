@@ -92,6 +92,18 @@ static void fatal_err (const char *message, void *arg)
         fatal_tested = true;
 }
 
+static void rpctest_set_size (flux_t *h, uint32_t newsize)
+{
+    fake_size = newsize;
+    char s[16];
+    uint32_t size = 0;
+    snprintf (s, sizeof (s), "%u", fake_size);
+    flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE);
+    flux_get_size (h, &size);
+    cmp_ok (size, "==", fake_size,
+        "successfully faked flux_get_size() of %d", fake_size);
+}
+
 void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
@@ -100,6 +112,8 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     int old_count;
     flux_rpc_t *r;
     const char *json_str;
+
+    rpctest_set_size (h, 1);
 
     errno = 0;
     ok (!(r = flux_rpc_multi (h, NULL, "{}", "all", 0)) && errno == EINVAL,
@@ -165,14 +179,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     flux_rpc_destroy (r);
 
     /* fake that we have a larger session */
-    fake_size = 128;
-    char s[16];
-    uint32_t size = 0;
-    snprintf (s, sizeof (s), "%u", fake_size);
-    flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE);
-    flux_get_size (h, &size);
-    cmp_ok (size, "==", fake_size,
-        "successfully faked flux_get_size() of %d", fake_size);
+    rpctest_set_size (h, 128);
 
     /* repeat working no-payload RPC test (now with 128 nodes) */
     old_count = hello_count;
@@ -269,11 +276,13 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     flux_rpc_destroy (r);
 
     /* test _then (still at fake session size of 128) */
+    then_count = 0;
     ok ((then_r = flux_rpc_multi (h, "rpctest.hello", NULL, "[0-127]", 0)) != NULL,
         "flux_rpc_multi [0-127] ok");
     ok (flux_rpc_then (then_r, then_cb, h) == 0,
         "flux_rpc_then works");
-    /* then_cb stops reactor; results reported, then_r destroyed in main() */
+    /* then_cb stops reactor; results reported, then_r destroyed in
+     * run_multi_test() */
 }
 
 static struct flux_msg_handler_spec htab[] = {
@@ -285,9 +294,34 @@ static struct flux_msg_handler_spec htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int main (int argc, char *argv[])
+static void run_multi_test (flux_t *h, flux_reactor_t *reactor,
+                            const char *topic)
 {
     flux_msg_t *msg;
+
+    /* create nodeset for last _then test */
+    ok ((then_ns = nodeset_create ()) != NULL,
+        "nodeset created ok");
+
+    /* test continues in topic callback function so that rpc calls
+     * can sleep while we answer them
+     */
+    ok ((msg = flux_request_encode (topic, NULL)) != NULL
+        && flux_send (h, msg, 0) == 0,
+        "sent message to initiate test");
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "reactor completed normally");
+    flux_msg_destroy (msg);
+
+    /* Check result of last _then test */
+    ok (nodeset_count (then_ns) == 128,
+        "then callback worked with correct nodemap");
+    nodeset_destroy (then_ns);
+    flux_rpc_destroy (then_r);
+}
+
+int main (int argc, char *argv[])
+{
     flux_t *h;
     flux_reactor_t *reactor;
 
@@ -310,27 +344,10 @@ int main (int argc, char *argv[])
         "flux_fatal function is called on fatal error");
     flux_fatal_set (h, fatal_err, NULL); /* reset */
 
-    /* create nodeset for last _then test */
-    ok ((then_ns = nodeset_create ()) != NULL,
-        "nodeset created ok");
-
     ok (flux_msg_handler_addvec (h, htab, NULL) == 0,
         "registered message handlers");
-    /* test continues in rpctest_begin_cb() so that rpc calls
-     * can sleep while we answer them
-     */
-    ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL
-        && flux_send (h, msg, 0) == 0,
-        "sent message to initiate test");
-    ok (flux_reactor_run (reactor, 0) == 0,
-        "reactor completed normally");
-    flux_msg_destroy (msg);
 
-    /* Check result of last _then test */
-    ok (nodeset_count (then_ns) == 128,
-        "then callback worked with correct nodemap");
-    nodeset_destroy (then_ns);
-    flux_rpc_destroy (then_r);
+    run_multi_test (h, reactor, "rpctest.begin");
 
     flux_msg_handler_delvec (htab);
     flux_close (h);
