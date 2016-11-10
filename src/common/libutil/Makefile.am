@@ -86,6 +86,7 @@ TESTS = test_nodeset.t \
 	test_encode.t \
 	test_msglist.t \
 	test_sha1.t \
+	test_sha256.t \
 	test_popen2.t \
 	test_kary.t \
 	test_cronodate.t \
@@ -140,6 +141,10 @@ test_msglist_t_LDADD = $(test_ldadd)
 test_sha1_t_SOURCES = test/sha1.c
 test_sha1_t_CPPFLAGS = $(test_cppflags)
 test_sha1_t_LDADD = $(test_ldadd)
+
+test_sha256_t_SOURCES = test/sha256.c
+test_sha256_t_CPPFLAGS = $(test_cppflags)
+test_sha256_t_LDADD = $(test_ldadd)
 
 test_popen2_t_SOURCES = test/popen2.c
 test_popen2_t_CPPFLAGS = $(test_cppflags)
