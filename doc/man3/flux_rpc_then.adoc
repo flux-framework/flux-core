@@ -27,13 +27,13 @@ complete the second half of a remote procedure call (RPC) that was
 started with `flux_rpc(3)` or `flux_rpc_multi(3)`.
 
 `flux_rpc_check()` returns true if the RPC response has been received
-and a call to `flux_rpc_get(3)` would not block.  It returns false if
-the response has not yet been received.
+and a call to `flux_rpc_get(3)` or `flux_rpc_getf(3)` would not block.
+It returns false if the response has not yet been received.
 
 `flux_rpc_then()` may be used to register a continuation callback with
 the broker handle's reactor.  The continuation will be called when the
-RPC response is received.  It should call `flux_rpc_get(3)` to obtain the
-RPC result.
+RPC response is received.  It should call `flux_rpc_get(3)` or
+`flux_rpc_getf(3)` to obtain the RPC result.
 
 When the RPC is complete, the continuation stops its message handler
 for responses.  The flux_rpc_t should be destroyed.  It is safe to
