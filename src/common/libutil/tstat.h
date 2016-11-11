@@ -15,8 +15,6 @@ double tstat_variance (tstat_t *ts);
 double tstat_stddev (tstat_t *ts);
 int tstat_count (tstat_t *ts);
 
-json_object *tstat_json (tstat_t *ts, double scale);
-
 #endif /* !_UTIL_TSTAT_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
