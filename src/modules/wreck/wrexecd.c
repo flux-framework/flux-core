@@ -964,6 +964,11 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
 
+    if (ctx->nprocs <= 0) {
+        wlog_fatal (ctx, 0,
+            "Invalid spec on node%d: ncores = %d", ctx->nodeid, ctx->nprocs);
+    }
+
     ctx->task = xzmalloc (ctx->nprocs * sizeof (struct task_info *));
     for (i = 0; i < ctx->nprocs; i++)
         ctx->task[i] = task_info_create (ctx, i);
