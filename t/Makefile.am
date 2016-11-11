@@ -130,6 +130,7 @@ check_SCRIPTS = \
         issues/t0441-kvs-put-get.sh \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
+        issues/t0900-wreck-invalid-cores.sh \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
