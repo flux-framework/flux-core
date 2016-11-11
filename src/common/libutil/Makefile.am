@@ -93,7 +93,8 @@ TESTS = test_nodeset.t \
 	test_wallclock.t \
 	test_stdlog.t \
 	test_veb.t \
-	test_lru_cache.t
+	test_lru_cache.t \
+	test_blobref.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -173,3 +174,7 @@ test_veb_t_LDADD = $(test_ldadd)
 test_lru_cache_t_SOURCES = test/lru_cache.c
 test_lru_cache_t_CPPFLAGS = $(test_cppflags)
 test_lru_cache_t_LDADD = $(test_ldadd)
+
+test_blobref_t_SOURCES = test/blobref.c
+test_blobref_t_CPPFLAGS = $(test_cppflags) $(JANSSON_CFLAGS)
+test_blobref_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
