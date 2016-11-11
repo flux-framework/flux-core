@@ -254,7 +254,7 @@ static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
      */
     if (c == ctx->flux && ctx->kz_err) {
         va_start (ap, format);
-        vlog_error_kvs (ctx, code, format, ap);
+        vlog_error_kvs (ctx, 1, format, ap);
         va_end (ap);
 
         if (archive_lwj (ctx) < 0)
