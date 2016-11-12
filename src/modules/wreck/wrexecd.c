@@ -254,7 +254,7 @@ static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
      */
     if (c == ctx->flux && ctx->kz_err) {
         va_start (ap, format);
-        vlog_error_kvs (ctx, code, format, ap);
+        vlog_error_kvs (ctx, 1, format, ap);
         va_end (ap);
 
         if (archive_lwj (ctx) < 0)
@@ -963,6 +963,11 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     }
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
+
+    if (ctx->nprocs <= 0) {
+        wlog_fatal (ctx, 0,
+            "Invalid spec on node%d: ncores = %d", ctx->nodeid, ctx->nprocs);
+    }
 
     ctx->task = xzmalloc (ctx->nprocs * sizeof (struct task_info *));
     for (i = 0; i < ctx->nprocs; i++)
