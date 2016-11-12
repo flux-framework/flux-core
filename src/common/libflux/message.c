@@ -34,18 +34,6 @@
 #include <czmq.h>
 #include <jansson.h>
 
-/* Ensure %I format for jansson pack/unpack works with int64_t
- */
-#if JSON_INTEGER_IS_LONG_LONG
-# if SIZEOF_LONG_LONG != 8
-# error json_int_t is not 64 bits
-# endif
-#else
-# if SIZEOF_LONG != 8
-# error json_int_t is not 64 bits
-# endif
-#endif
-
 #include "message.h"
 
 /* Begin manual codec
