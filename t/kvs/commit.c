@@ -180,8 +180,15 @@ int main (int argc, char *argv[])
 
     if (sopt) {
         json_object *o = Jnew ();
-        json_object_object_add (o, "put+commit times (sec)",
-                tstat_json (&ts, 1E-3));
+        json_object *t = Jnew ();
+
+        Jadd_int (t, "count", tstat_count (&ts));
+        Jadd_double (t, "min", tstat_min (&ts)*1E-3);
+        Jadd_double (t, "mean", tstat_mean (&ts)*1E-3);
+        Jadd_double (t, "stddev", tstat_stddev (&ts)*1E-3);
+        Jadd_double (t, "max", tstat_max (&ts)*1E-3);
+
+        json_object_object_add (o, "put+commit times (sec)", t);
         Jadd_double (o, "put+commmit throughput (#/sec)",
                           (double)(count*nthreads)/(monotime_since (t0)*1E-3));
         printf ("%s\n",

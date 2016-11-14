@@ -136,7 +136,7 @@ end
 local function ioplex_create_stream (self, path)
     local files = self.files
     if not files[path] then
-	self:log ("creating path %s", path)
+        self:log ("creating path %s", path)
         local f, err = ostream.create (path)
         if not f then return nil, err end
         files[path] = f
@@ -155,7 +155,7 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
         handler =  function (iow, data)
             if not data then
                 -- protect against multiple close callback calls
-	        if self.removed [key] then return end
+                if self.removed [key] then return end
                 of:close()
                 if not of.fp then
                     self:log ("closed path %s", of.filename)
@@ -234,3 +234,5 @@ function ioplex:complete ()
 end
 
 return ioplex
+
+-- vi: ts=4 sw=4 expandtab

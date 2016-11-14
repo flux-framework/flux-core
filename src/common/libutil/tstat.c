@@ -78,19 +78,6 @@ int tstat_count (tstat_t *ts)
     return ts->n;
 }
 
-json_object *tstat_json (tstat_t *ts, double scale)
-{
-    json_object *o = Jnew ();
-
-    Jadd_int (o, "count", tstat_count (ts));
-    Jadd_double (o, "min", tstat_min (ts)*scale);
-    Jadd_double (o, "mean", tstat_mean (ts)*scale);
-    Jadd_double (o, "stddev", tstat_stddev (ts)*scale);
-    Jadd_double (o, "max", tstat_max (ts)*scale);
-
-    return o;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

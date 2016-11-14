@@ -1554,7 +1554,15 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
 static void add_tstat (json_object *o, const char *name, tstat_t *ts,
                        double scale)
 {
-    json_object_object_add (o, name, tstat_json (ts, scale));
+    json_object *t = Jnew ();
+
+    Jadd_int (t, "count", tstat_count (ts));
+    Jadd_double (t, "min", tstat_min (ts)*scale);
+    Jadd_double (t, "mean", tstat_mean (ts)*scale);
+    Jadd_double (t, "stddev", tstat_stddev (ts)*scale);
+    Jadd_double (t, "max", tstat_max (ts)*scale);
+
+    json_object_object_add (o, name, t);
 }
 
 static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,

@@ -231,8 +231,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_fatality (h) == false,
         "flux_fatality says all is well");
     ok ((r = flux_rpc_multi (h, "rpctest.nodeid", NULL, "[0-1]", 0)) != NULL,
-        "flux_rpc_multi [0] ok",
-        64 - 1);
+        "flux_rpc_multi [0-1] ok");
     flux_fatal_error (h, __FUNCTION__, "Foo");
     ok (flux_fatality (h) == true,
         "flux_fatality shows simulated failure");
