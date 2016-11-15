@@ -45,7 +45,7 @@ Include in the payload a string of length 'N' bytes.  The payload will be
 echoed back in the response.  This option can be used to explore the
 effect of message size on latency.  Default: no padding.
 
-*-d, --delay*'=N'::
+*-i, --interval*'=N'::
 Specify the delay, in seconds, between successive requests.
 A value of zero is valid and indicates that there should be no delay.
 Requests are sent without waiting for responses.  Default: 1.0 seconds.
