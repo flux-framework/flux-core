@@ -81,4 +81,64 @@ test_expect_success 'ping fails on invalid target' '
 	grep -q "Function not implemented" stderr
 '
 
+test_expect_success 'ping output format for "any" single rank is correct' '
+	run_timeout 5 flux ping --count 1 cmb 1>stdout
+        grep -q "^cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific single rank is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank 0 cmb 1>stdout
+        grep -q "^0!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific single rank is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 0!cmb 1>stdout
+        grep -q "^0!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific single rank is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 0 1>stdout
+        grep -q "^0!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific multiple ranks is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank 0-1 cmb 1>stdout
+        grep -q "^0-1!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for specific multiple ranks is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 0-1!cmb 1>stdout
+        grep -q "^0-1!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for specific multiple ranks is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 0-1 1>stdout
+        grep -q "^0-1!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for all ranks is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank all cmb 1>stdout
+        grep -q "^all!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for all ranks is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 all!cmb 1>stdout
+        grep -q "^all!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for all ranks is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 all 1>stdout
+        grep -q "^all!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
 test_done
