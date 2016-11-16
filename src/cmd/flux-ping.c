@@ -127,22 +127,23 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     pdata->rpc_count++;
 
 done:
-    if (flux_rpc_next (rpc) < 0 && pdata->rpc_count) {
-        if (ctx->rank != NULL) {
-            printf ("%s!%s pad=%lu seq=%d time=(%0.3f:%0.3f:%0.3f) ms stddev %0.3f\n",
-                    ctx->rank,
-                    ctx->topic, strlen (ctx->pad), pdata->seq,
-                    tstat_min (tstat), tstat_mean (tstat), tstat_max (tstat),
-                    tstat_stddev (tstat));
-        } else {
-            char s[16];
-            snprintf (s, sizeof (s), "%u", ctx->nodeid);
-            printf ("%s%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
-                    ctx->nodeid == FLUX_NODEID_ANY ? "" : s,
-                    ctx->nodeid == FLUX_NODEID_ANY ? "" : "!",
-                    ctx->topic, strlen (ctx->pad), pdata->seq,
-                    tstat_mean (tstat),
-                    pdata->route);
+    if (flux_rpc_next (rpc) < 0) {
+        if (pdata->rpc_count) {
+            if (ctx->rank != NULL) {
+                printf ("%s!%s pad=%lu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
+                        "stddev %0.3f\n",
+                        ctx->rank, ctx->topic, strlen (ctx->pad), pdata->seq,
+                        tstat_min (tstat), tstat_mean (tstat),
+                        tstat_max (tstat), tstat_stddev (tstat));
+            } else {
+                char s[16];
+                snprintf (s, sizeof (s), "%u", ctx->nodeid);
+                printf ("%s%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
+                        ctx->nodeid == FLUX_NODEID_ANY ? "" : s,
+                        ctx->nodeid == FLUX_NODEID_ANY ? "" : "!",
+                        ctx->topic, strlen (ctx->pad), pdata->seq,
+                        tstat_mean (tstat), pdata->route);
+            }
         }
         flux_rpc_destroy (rpc);
     }
