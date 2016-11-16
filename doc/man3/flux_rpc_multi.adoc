@@ -36,9 +36,11 @@ _json_in_, if non-NULL, must be a string containing valid serialized
 JSON to be attached as payload to the request.  If NULL, the request
 will be sent without a payload.
 
-_nodeset_ is a string containing a bracketed set of ranks or "all" as a
-shorthand for all ranks in the session.  Examples of valid nodeset
-strings are "[0-255]", "[1,2.3]", and "[0,3,5-10]".
+_nodeset_ is a string containing a bracketed set of ranks, "all" as a
+shorthand for all ranks in the session, or "any" as a shorthand for a
+single RPC to FLUX_NODEID_ANY, or "upstream" as a shorthand for a
+single RPC to FLUX_NODEID_UPSTREAM.  Examples of valid nodeset strings
+are "[0-255]", "[1,2.3]", and "[0,3,5-10]".
 
 _flags_ may be zero or:
 
