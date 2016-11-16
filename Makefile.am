@@ -1,8 +1,9 @@
 .NOTPARALLEL:
 
-SUBDIRS = src doc etc t
+SUBDIRS = po src doc etc t
 
-EXTRA_DIST = \
+EXTRA_DIST = config/config.rpath  \
+	src/include/gettext.h \
 	config/tap-driver.sh \
 	DISCLAIMER.LLNS \
 	README.md
