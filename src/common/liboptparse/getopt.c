@@ -39,6 +39,7 @@
    program understand `configure --with-gnu-libc' and omit the object files,
    it is simpler to just do this in the source for each such file.  */
 
+#if 0 /* XXX: Force code *not* to be elided here */
 #define GETOPT_INTERFACE_VERSION 2
 #if !defined _LIBC && defined __GLIBC__ && __GLIBC__ >= 2
 # include <gnu-versions.h>
@@ -46,6 +47,7 @@
 #  define ELIDE_CODE
 # endif
 #endif
+#endif /* #if 0 */
 
 #ifndef ELIDE_CODE
 
