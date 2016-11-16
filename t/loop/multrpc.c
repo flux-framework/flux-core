@@ -125,6 +125,34 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "rpc was called once");
     flux_rpc_destroy (r);
 
+    /* working no-payload RPC for "any" */
+    old_count = hello_count;
+    ok ((r = flux_rpc_multi (h, "rpctest.hello", NULL, "any", 0)) != NULL,
+        "flux_rpc_multi [0] with no payload when none is expected works");
+    if (!r)
+        BAIL_OUT ("can't continue without successful rpc call");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    ok (flux_rpc_get (r, NULL) == 0,
+        "flux_rpc_get works");
+    ok (hello_count == old_count + 1,
+        "rpc was called once");
+    flux_rpc_destroy (r);
+
+    /* working no-payload RPC for "upstream" */
+    old_count = hello_count;
+    ok ((r = flux_rpc_multi (h, "rpctest.hello", NULL, "upstream", 0)) != NULL,
+        "flux_rpc_multi [0] with no payload when none is expected works");
+    if (!r)
+        BAIL_OUT ("can't continue without successful rpc call");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    ok (flux_rpc_get (r, NULL) == 0,
+        "flux_rpc_get works");
+    ok (hello_count == old_count + 1,
+        "rpc was called once");
+    flux_rpc_destroy (r);
+
     /* cause remote EPROTO (unexpected payload) - picked up in _get() */
     ok ((r = flux_rpc_multi (h, "rpctest.hello", "{}", "all", 0)) != NULL,
         "flux_rpc_multi [0] with unexpected payload works, at first");
