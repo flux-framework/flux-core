@@ -11,7 +11,7 @@ AM_CPPFLAGS = \
 
 noinst_LTLIBRARIES = liboptparse.la
 fluxinclude_HEADERS = optparse.h
-liboptparse_la_SOURCES = optparse.c
+liboptparse_la_SOURCES = optparse.c getopt.c getopt_int.h getopt.h
 
 liboptparse_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
