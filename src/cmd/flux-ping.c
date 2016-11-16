@@ -41,7 +41,6 @@ struct ping_ctx {
     double interval;    /* interval between sends, in seconds */
     char *rank;         /* target rank(s) if multiple or NULL */
     uint32_t rank_count;/* number of ranks in rank */
-    uint32_t nodeid;    /* target nodeid if single */
     char *topic;        /* target topic string */
     char *pad;          /* pad string */
     int count;          /* number of pings to send */
@@ -136,12 +135,11 @@ done:
                         tstat_min (tstat), tstat_mean (tstat),
                         tstat_max (tstat), tstat_stddev (tstat));
             } else {
-                char s[16];
-                snprintf (s, sizeof (s), "%u", ctx->nodeid);
-                printf ("%s%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
-                        ctx->nodeid == FLUX_NODEID_ANY ? "" : s,
-                        ctx->nodeid == FLUX_NODEID_ANY ? "" : "!",
-                        ctx->topic, strlen (ctx->pad), pdata->seq,
+                char s[16] = {0};
+                if (strcmp (ctx->rank, "any"))
+                    snprintf (s, sizeof (s), "%s!", ctx->rank);
+                printf ("%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
+                        s, ctx->topic, strlen (ctx->pad), pdata->seq,
                         tstat_mean (tstat), pdata->route);
             }
         }
@@ -162,22 +160,14 @@ void send_ping (struct ping_ctx *ctx)
 
     monotime (&t0);
 
-    if (ctx->rank_count > 1)
-        rpc = flux_rpcf_multi (ctx->h, ctx->topic, ctx->rank, 0,
-                               "{s:i s:I s:I s:s}",
-                               "seq", ctx->send_count,
-                               "time.tv_sec", t0.tv_sec,
-                               "time.tv_nsec", t0.tv_nsec,
-                               "pad", ctx->pad);
-    else
-        rpc = flux_rpcf (ctx->h, ctx->topic, ctx->nodeid, 0,
-                         "{s:i s:I s:I s:s}",
-                         "seq", ctx->send_count,
-                         "time.tv_sec", t0.tv_sec,
-                         "time.tv_nsec", t0.tv_nsec,
-                         "pad", ctx->pad);
+    rpc = flux_rpcf_multi (ctx->h, ctx->topic, ctx->rank, 0,
+                           "{s:i s:I s:I s:s}",
+                           "seq", ctx->send_count,
+                           "time.tv_sec", t0.tv_sec,
+                           "time.tv_nsec", t0.tv_nsec,
+                           "pad", ctx->pad);
     if (!rpc)
-        log_err_exit ("flux_rpcf");
+        log_err_exit ("flux_rpcf_multi");
     flux_rpc_aux_set (rpc, pdata, ping_data_free);
     if (flux_rpc_then (rpc, ping_continuation, ctx) < 0)
         log_err_exit ("flux_rpc_then");
@@ -207,11 +197,11 @@ int main (int argc, char *argv[])
     int pad_bytes = 0;
     char *target;
     flux_watcher_t *tw = NULL;
+    nodeset_t *ns = NULL;
     struct ping_ctx ctx = {
         .interval = 1.0,
         .rank = NULL,
         .rank_count = 1,
-        .nodeid = FLUX_NODEID_ANY,
         .topic = NULL,
         .pad = NULL,
         .count = -1,
@@ -266,7 +256,6 @@ int main (int argc, char *argv[])
      */
     if (ctx.rank == NULL) {
         char *p;
-        nodeset_t *ns = NULL;
         if ((p = strchr (target, '!'))) {
             *p++ = '\0';
             ctx.rank = target;
@@ -275,10 +264,14 @@ int main (int argc, char *argv[])
             ctx.rank = target;
             target = "cmb";
             nodeset_destroy (ns);
-        } else if (!strcmp (target, "all")) {
+        } else if (!strcmp (target, "all")
+                   || !strcmp (target, "any")
+                   || !strcmp (target, "upstream")) {
             ctx.rank = target;
             target = "cmb";
         }
+        else
+            ctx.rank = "any";
     }
 
     ctx.topic = xasprintf ("%s.ping", target);
@@ -290,27 +283,18 @@ int main (int argc, char *argv[])
 
     /* Determine number of ranks for output logic
      */
-    if (ctx.rank != NULL) {
-        nodeset_t *ns = nodeset_create_string (ctx.rank);
-        if (ns) {
-            ctx.rank_count = nodeset_count (ns);
-            if (ctx.rank_count == 1) {
-                ctx.nodeid = nodeset_min (ns);
-                ctx.rank = NULL;
-            }
-            nodeset_destroy (ns);
-        }
-        else {
-            if (!strcmp (ctx.rank, "all")) {
-                if (flux_get_size (ctx.h, &ctx.rank_count) < 0)
-                    log_err_exit ("flux_get_size");
-            }
-            else
-                ctx.rank_count = 1;
-        }
+    if ((ns = nodeset_create_string (ctx.rank))) {
+        ctx.rank_count = nodeset_count (ns);
+        nodeset_destroy (ns);
     }
-    else
-        ctx.rank_count = 1;
+    else {
+        if (!strcmp (ctx.rank, "all")) {
+            if (flux_get_size (ctx.h, &ctx.rank_count) < 0)
+                log_err_exit ("flux_get_size");
+        }
+        else
+            ctx.rank_count = 1;
+    }
 
     /* In batch mode, requests are sent before reactor is started
      * to process responses.  o/w requests are set in a timer watcher.
