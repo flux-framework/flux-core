@@ -455,6 +455,7 @@ flux_rpc_t *flux_rpc_raw (flux_t *h,
         goto error;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
+    cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
     cali_begin_int_byname ("flux.message.response_expected",
                            !(flags & FLUX_RPC_NORESPONSE));
 #endif
@@ -462,6 +463,7 @@ flux_rpc_t *flux_rpc_raw (flux_t *h,
         goto error;
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
+    cali_end_byname ("flux.message.rpc.nodeid");
     cali_end_byname ("flux.message.rpc");
 #endif
     return rpc;
