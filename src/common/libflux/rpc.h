@@ -61,9 +61,12 @@ int flux_rpc_get_raw (flux_rpc_t *rpc, void *data, int *len);
  */
 int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg);
 
-/* Send an RPC request to 'nodeset' and return a flux_rpc_t object
- * to allow responses to be handled.  "all" is a valid shorthand for
- * all ranks in the comms session.  On failure return NULL with errno set.
+/* Send an RPC request to 'nodeset' and return a flux_rpc_t object to
+ * allow responses to be handled.  "all" is a valid shorthand for all
+ * ranks in the comms session.  "any" is a valid shorthand for a
+ * single rpc sent to FLUX_NODEID_ANY.  "upstream" is a valid
+ * shorthand for a single rpc sent to FLUX_NODEID_UPSTREAM.  On
+ * failure return NULL with errno set.
  */
 flux_rpc_t *flux_rpc_multi (flux_t *h, const char *topic, const char *json_str,
                             const char *nodeset, int flags);

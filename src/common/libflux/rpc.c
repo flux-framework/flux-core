@@ -474,6 +474,16 @@ static flux_rpc_t *rpc_multi (flux_t *h,
         errno = EINVAL;
         goto error;
     }
+    if (!strcmp (nodeset, "any"))
+        return rpc_request (h,
+                            FLUX_NODEID_ANY,
+                            flags,
+                            msg);
+    if (!strcmp (nodeset, "upstream"))
+        return rpc_request (h,
+                            FLUX_NODEID_UPSTREAM,
+                            flags,
+                            msg);
     if (!strcmp (nodeset, "all")) {
         if (flux_get_size (h, &count) < 0)
             goto error;
