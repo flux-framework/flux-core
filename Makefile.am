@@ -24,7 +24,8 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"common/liblsd/*" \
 	"common/libutil/sds.*" \
 	"common/libminilzo/*" \
-	"common/libjson-c/*"
+	"common/libjson-c/*" \
+	"common/liboptparse/getopt*"
 
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
