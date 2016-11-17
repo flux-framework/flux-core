@@ -830,6 +830,36 @@ badarg:
     return -1;
 }
 
+double optparse_get_double (optparse_t *p, const char *name,
+                            double default_value)
+{
+    int n;
+    double d;
+    const char *s;
+    char *endptr;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return -1;
+    }
+    if (n == 0)
+        return default_value;
+    if (s == NULL || strlen (s) == 0)
+        goto badarg;
+    errno = 0;
+    d = strtod (s, &endptr);
+    if (errno || *endptr != '\0')
+        goto badarg;
+    return d;
+badarg:
+    optparse_fatalmsg (p, 1,
+                       "%s: Option '%s' requires a floating point argument\n",
+                       p->program_name, name);
+    return -1;
+}
+
 const char *optparse_get_str (optparse_t *p, const char *name,
                               const char *default_value)
 {
