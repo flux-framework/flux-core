@@ -10,6 +10,7 @@ coverage:
  - ".*/common/libjsonc/.*"
  - ".*/common/liblsd/.*"
  - ".*/common/libev/.*"
+ - ".*/common/liboptparse/getopt*"
  - ".*/bindings/python/.*"
  - ".*/common/libutil/sds.*"
  - ".*/common/libminilzo/.*"

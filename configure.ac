@@ -26,6 +26,11 @@ AC_DEFINE([_GNU_SOURCE], 1,
 PKG_PROG_PKG_CONFIG
 
 ##
+# Initialize gettext
+AM_GNU_GETTEXT([external])
+AM_GNU_GETTEXT_VERSION(0.17)
+
+##
 # Checks for programs
 ##
 AC_PROG_CC_C99
@@ -235,7 +240,7 @@ AC_SUBST(fluxlib_ldflags)
 ##
 # Epilogue
 ##
-AC_CONFIG_FILES( \
+AC_CONFIG_FILES(
   Makefile \
   src/Makefile \
   src/common/Makefile \
@@ -287,6 +292,7 @@ AC_CONFIG_FILES( \
   t/Makefile \
   t/fluxometer/conf.lua \
   t/fluxometer/conf.lua.installed \
+  po/Makefile.in \
 )
 
 AC_CONFIG_FILES(
