@@ -81,7 +81,7 @@ void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (struct context *ctx);
 
-const char *default_killer_timeout = "1.0";
+double default_killer_timeout = 1.0;
 
 const int default_size = 1;
 
@@ -138,8 +138,8 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_set usage");
     if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
-    ctx->killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
-                                                    default_killer_timeout), NULL);
+    ctx->killer_timeout = optparse_get_double (ctx->opts, "killer-timeout",
+                                               default_killer_timeout);
     if (ctx->killer_timeout < 0.)
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optind < argc) {
