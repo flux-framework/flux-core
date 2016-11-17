@@ -67,12 +67,16 @@
 # include <unixlib.h>
 #endif
 
+/*  XXX: Work around no gettext integration in this project
+ *   Uncomment this block once flux-core has NLS support.
 #ifdef _LIBC
 # include <libintl.h>
 #else
 # include "gettext.h"
 # define _(msgid) gettext (msgid)
 #endif
+*/
+#define _(msgid) msgid
 
 #if defined _LIBC
 # include <wchar.h>
