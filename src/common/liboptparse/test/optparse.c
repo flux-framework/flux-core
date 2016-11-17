@@ -218,10 +218,13 @@ void test_convenience_accessors (void)
 { .name = "mnf", .key = 4, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "oop", .key = 5, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "neg", .key = 6, .has_arg = 1, .arginfo = "", .usage = "" },
+{ .name = "dub", .key = 7, .has_arg = 1, .arginfo = "", .usage = "" },
+{ .name = "ndb", .key = 8, .has_arg = 1, .arginfo = "", .usage = "" },
         OPTPARSE_TABLE_END,
     };
 
-    char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4", NULL };
+    char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4",
+                   "--dub=5.7", "--ndb=-3.2", NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
     int rc, optind;
 
@@ -254,7 +257,9 @@ void test_convenience_accessors (void)
     dies_ok ({optparse_get_int (p, "foo", 0); },
             "get_int exits on option with no argument");
     dies_ok ({optparse_get_int (p, "baz", 0); },
-            "get_int exits on option with wrong type argument");
+            "get_int exits on option with wrong type argument (string)");
+    dies_ok ({optparse_get_int (p, "dub", 0); },
+            "get_int exits on option with wrong type argument (float)");
     lives_ok ({optparse_get_int (p, "bar", 0); },
             "get_int lives on known arg");
     ok (optparse_get_int (p, "bar", 42) == 42,
@@ -263,6 +268,27 @@ void test_convenience_accessors (void)
             "get_int returns arg when present");
     ok (optparse_get_int (p, "neg", 42) == -4,
             "get_int returns negative arg when present");
+
+    /* get_double
+     */
+    dies_ok ({optparse_get_double (p, "no-exist", 0); },
+            "get_double exits on unknown arg");
+    dies_ok ({optparse_get_double (p, "foo", 0); },
+            "get_double exits on option with no argument");
+    dies_ok ({optparse_get_double (p, "baz", 0); },
+            "get_int exits on option with wrong type argument (string)");
+    lives_ok ({optparse_get_double (p, "bar", 0); },
+            "get_double lives on known arg");
+    ok (optparse_get_double (p, "bar", 42.0) == 42.0,
+            "get_double returns default argument when arg not present");
+    ok (optparse_get_double (p, "mnf", 42) == 7.0,
+            "get_double returns arg when present");
+    ok (optparse_get_double (p, "neg", 42) == -4.0,
+            "get_double returns negative arg when present");
+    ok (optparse_get_double (p, "dub", 42) == 5.7,
+            "get_double returns arg when present");
+    ok (optparse_get_double (p, "ndb", 42) == -3.2,
+            "get_double returns negative arg when present");
 
     /* get_str
      */
@@ -729,9 +755,9 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (168);
+    plan (178);
 
-    test_convenience_accessors (); /* 25 tests */
+    test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 36 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
