@@ -623,6 +623,12 @@ int subcmd_three (optparse_t *p, int ac, char **av)
     return (0);
 }
 
+int subcmd_hidden (optparse_t *p, int ac, char **av)
+{
+    ok (p != NULL, "subcmd_hidden: valid optparse structure");
+    return (0);
+}
+
 
 int do_nothing (void *h, int code)
 {
@@ -750,6 +756,40 @@ Usage: test one [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "missing subcommand error message is expected");
 
+    // Add a hidden subcommand
+    e = optparse_reg_subcommand (a, "hidden",
+            subcmd_hidden,
+            NULL,
+            "This is a hidden subcmd",
+            OPTPARSE_SUBCMD_HIDDEN,
+            NULL);
+    ok (e == OPTPARSE_SUCCESS, "optparse_reg_subcommand()");
+    usage_ok (a, "\
+Usage: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "Hidden subcommand doesn't appear in usage output");
+
+    // Unhide subcommand
+    e = optparse_set (optparse_get_subcommand (a, "hidden"),
+                      OPTPARSE_SUBCMD_HIDE, 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 0)");
+    usage_ok (a, "\
+Usage: test hidden [OPTIONS]\n\
+   or: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "Unhidden subcommand now displayed in usage output");
+
+    // Hide again with optparse_set
+    e = optparse_set (optparse_get_subcommand (a, "hidden"),
+                      OPTPARSE_SUBCMD_HIDE, 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 1)");
+    usage_ok (a, "\
+Usage: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "Unhidden subcommand now displayed in usage output");
 
     // Test Subcommand without option processing:
     optparse_t *d = optparse_add_subcommand (a, "three", subcmd_three);
@@ -774,14 +814,14 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (181);
+    plan (190);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 39 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 47 tests */
+    test_subcommand (); /* 56 tests */
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
 
