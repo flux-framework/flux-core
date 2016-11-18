@@ -113,6 +113,18 @@ struct optparse_subcommand {
 #define OPTPARSE_OPT_HIDDEN       0x2
 
 /******************************************************************************
+ *  Subcommand FLAGS:
+ *****************************************************************************/
+
+/*
+ *  Do not parse options for this subcommand. Same as
+ *
+ *   optparse_set (subcmd, OPTPARSE_SUBCMD_NOOPTS, 1);
+ *
+ */
+#define OPTPARSE_SUBCMD_SKIP_OPTS 0x1
+
+/******************************************************************************
  *  Prototypes:
  *****************************************************************************/
 

@@ -753,6 +753,8 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
         optparse_destroy (new);
         return (e);
     }
+    if (flags & OPTPARSE_SUBCMD_SKIP_OPTS)
+        new->no_options = 1;
     return OPTPARSE_SUCCESS;
 }
 
