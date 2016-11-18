@@ -329,7 +329,7 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       "[lstopo-OPTIONS]",
       "Show hwloc topology of the system",
       cmd_lstopo,
-      0,
+      OPTPARSE_SUBCMD_SKIP_OPTS,
       NULL,
     },
     { "topology",
@@ -356,9 +356,6 @@ int subcommand_hwloc_register (optparse_t *p)
     c = optparse_get_subcommand (p, "hwloc");
     if ((e = optparse_reg_subcommands (c, hwloc_subcmds)) != OPTPARSE_SUCCESS)
         return (-1);
-
-    e = optparse_set (optparse_get_subcommand (c, "lstopo"),
-                      OPTPARSE_SUBCMD_NOOPTS, 1);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 
