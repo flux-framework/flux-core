@@ -55,6 +55,7 @@ MAN3_FILES_SECONDARY = \
 	flux_rpc_destroy.3 \
 	flux_rpc_check.3 \
 	flux_rpc_get.3 \
+	flux_rpcf_multi.3 \
 	flux_rpc_next.3 \
 	flux_rpc_get_nodeid.3 \
 	flux_rpcf.3 \
@@ -138,6 +139,7 @@ flux_rpc_get.3: flux_rpc.3
 flux_rpc_getf.3: flux_rpc.3
 flux_rpcf.3: flux_rpc.3
 flux_rpc_check.3: flux_rpc_then.3
+flux_rpcf_multi.3: flux_rpc_multi.3
 flux_rpc_next.3: flux_rpc_multi.3
 flux_rpc_get_nodeid.3: flux_rpc_multi.3
 flux_reduce_destroy.3: flux_reduce_create.3

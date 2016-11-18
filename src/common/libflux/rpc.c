@@ -168,60 +168,14 @@ done:
     return rc;
 }
 
-static int rpc_request_send (flux_rpc_t *rpc, const char *topic,
-                             uint32_t nodeid, const char *json_str)
+static int rpc_request_prepare_send (flux_rpc_t *rpc, flux_msg_t *msg,
+                                     uint32_t nodeid)
 {
-    flux_msg_t *msg;
-    int rc = -1;
-
-    if (!(msg = flux_request_encode (topic, json_str)))
-        goto done;
     if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        goto done;
+        return -1;
     if (flux_send (rpc->h, msg, 0) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
-}
-
-static int rpc_request_vsendf (flux_rpc_t *rpc, const char *topic,
-                               uint32_t nodeid, const char *fmt, va_list ap)
-{
-    flux_msg_t *msg;
-    int rc = -1;
-
-    if (!(msg = flux_request_encode (topic, NULL)))
-        goto done;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
-        goto done;
-    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        goto done;
-    if (flux_send (rpc->h, msg, 0) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
-}
-
-static int rpc_request_send_raw (flux_rpc_t *rpc, const char *topic,
-                                 uint32_t nodeid, const void *data, int len)
-{
-    flux_msg_t *msg;
-    int rc = -1;
-
-    if (!(msg = flux_request_encode_raw (topic, data, len)))
-        goto done;
-    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        goto done;
-    if (flux_send (rpc->h, msg, 0) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
+        return -1;
+    return 0;
 }
 
 bool flux_rpc_check (flux_rpc_t *rpc)
@@ -409,11 +363,10 @@ int flux_rpc_next (flux_rpc_t *rpc)
     return 0;
 }
 
-flux_rpc_t *flux_rpc (flux_t *h,
-                      const char *topic,
-                      const char *json_str,
-                      uint32_t nodeid,
-                      int flags)
+static flux_rpc_t *rpc_request (flux_t *h,
+                                uint32_t nodeid,
+                                int flags,
+                                flux_msg_t *msg)
 {
     flux_rpc_t *rpc;
     int rx_expected = 1;
@@ -428,7 +381,7 @@ flux_rpc_t *flux_rpc (flux_t *h,
     cali_begin_int_byname ("flux.message.response_expected",
                            !(flags & FLUX_RPC_NORESPONSE));
 #endif
-    if (rpc_request_send (rpc, topic, nodeid, json_str) < 0)
+    if (rpc_request_prepare_send (rpc, msg, nodeid) < 0)
         goto error;
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
@@ -439,6 +392,23 @@ flux_rpc_t *flux_rpc (flux_t *h,
 error:
     flux_rpc_destroy (rpc);
     return NULL;
+}
+
+flux_rpc_t *flux_rpc (flux_t *h,
+                      const char *topic,
+                      const char *json_str,
+                      uint32_t nodeid,
+                      int flags)
+{
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
+
+    if (!(msg = flux_request_encode (topic, json_str)))
+        goto done;
+    rc = rpc_request (h, nodeid, flags, msg);
+done:
+    flux_msg_destroy (msg);
+    return rc;
 }
 
 flux_rpc_t *flux_rpc_raw (flux_t *h,
@@ -448,57 +418,31 @@ flux_rpc_t *flux_rpc_raw (flux_t *h,
                           uint32_t nodeid,
                           int flags)
 {
-    flux_rpc_t *rpc;
-    int rx_expected = 1;
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
 
-    if ((flags & FLUX_RPC_NORESPONSE))
-        rx_expected = 0;
-    if (!(rpc = rpc_create (h, rx_expected)))
-        goto error;
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.message.rpc", "single");
-    cali_begin_int_byname ("flux.message.response_expected",
-                           !(flags & FLUX_RPC_NORESPONSE));
-#endif
-    if (rpc_request_send_raw (rpc, topic, nodeid, data, len) < 0)
-        goto error;
-#if HAVE_CALIPER
-    cali_end_byname ("flux.message.response_expected");
-    cali_end_byname ("flux.message.rpc");
-#endif
-    return rpc;
-error:
-    flux_rpc_destroy (rpc);
-    return NULL;
+    if (!(msg = flux_request_encode_raw (topic, data, len)))
+        goto done;
+    rc = rpc_request (h, nodeid, flags, msg);
+done:
+    flux_msg_destroy (msg);
+    return rc;
 }
 
 static flux_rpc_t *flux_vrpcf (flux_t *h, const char *topic, uint32_t nodeid,
                                int flags, const char *fmt, va_list ap)
 {
-    flux_rpc_t *rpc;
-    int rx_expected = 1;
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
 
-    if ((flags & FLUX_RPC_NORESPONSE))
-        rx_expected = 0;
-    if (!(rpc = rpc_create (h, rx_expected)))
-        goto error;
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.message.rpc", "single");
-    cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
-    cali_begin_int_byname ("flux.message.response_expected",
-                           !(flags & FLUX_RPC_NORESPONSE));
-#endif
-    if (rpc_request_vsendf (rpc, topic, nodeid, fmt, ap) < 0)
-        goto error;
-#if HAVE_CALIPER
-    cali_end_byname ("flux.message.response_expected");
-    cali_end_byname ("flux.message.rpc.nodeid");
-    cali_end_byname ("flux.message.rpc");
-#endif
-    return rpc;
-error:
-    flux_rpc_destroy (rpc);
-    return NULL;
+    if (!(msg = flux_request_encode (topic, NULL)))
+        goto done;
+    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+        goto done;
+    rc = rpc_request (h, nodeid, flags, msg);
+done:
+    flux_msg_destroy (msg);
+    return rc;
 }
 
 flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
@@ -514,11 +458,10 @@ flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
     return rpc;
 }
 
-flux_rpc_t *flux_rpc_multi (flux_t *h,
-                            const char *topic,
-                            const char *json_str,
-                            const char *nodeset,
-                            int flags)
+static flux_rpc_t *rpc_multi (flux_t *h,
+                              const char *nodeset,
+                              int flags,
+                              flux_msg_t *msg)
 {
     nodeset_t *ns = NULL;
     nodeset_iterator_t *itr = NULL;
@@ -527,10 +470,20 @@ flux_rpc_t *flux_rpc_multi (flux_t *h,
     uint32_t count;
     int rx_expected;
 
-    if (!topic || !nodeset) {
+    if (!nodeset) {
         errno = EINVAL;
         goto error;
     }
+    if (!strcmp (nodeset, "any"))
+        return rpc_request (h,
+                            FLUX_NODEID_ANY,
+                            flags,
+                            msg);
+    if (!strcmp (nodeset, "upstream"))
+        return rpc_request (h,
+                            FLUX_NODEID_UPSTREAM,
+                            flags,
+                            msg);
     if (!strcmp (nodeset, "all")) {
         if (flux_get_size (h, &count) < 0)
             goto error;
@@ -561,7 +514,7 @@ flux_rpc_t *flux_rpc_multi (flux_t *h,
 #if HAVE_CALIPER
         cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
 #endif
-        if (rpc_request_send (rpc, topic, nodeid, json_str) < 0)
+        if (rpc_request_prepare_send (rpc, msg, nodeid) < 0)
             goto error;
 #if HAVE_CALIPER
         cali_end_byname ("flux.message.rpc.nodeid");
@@ -581,6 +534,46 @@ error:
     if (ns)
         nodeset_destroy (ns);
     return NULL;
+}
+
+flux_rpc_t *flux_rpc_multi (flux_t *h,
+                            const char *topic,
+                            const char *json_str,
+                            const char *nodeset,
+                            int flags)
+{
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
+
+    if (!(msg = flux_request_encode (topic, json_str)))
+        goto done;
+    rc = rpc_multi (h, nodeset, flags, msg);
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
+flux_rpc_t *flux_rpcf_multi (flux_t *h,
+                             const char *topic,
+                             const char *nodeset,
+                             int flags,
+                             const char *fmt,
+                             ...)
+{
+    flux_msg_t *msg;
+    flux_rpc_t *rc = NULL;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (!(msg = flux_request_encode (topic, NULL)))
+        goto done;
+    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+        goto done;
+    rc = rpc_multi (h, nodeset, flags, msg);
+done:
+    va_end (ap);
+    flux_msg_destroy (msg);
+    return rc;
 }
 
 const char *flux_rpc_type_get (flux_rpc_t *rpc)
