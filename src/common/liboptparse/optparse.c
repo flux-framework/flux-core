@@ -67,6 +67,7 @@ struct opt_parser {
 
     unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
+    unsigned int   hidden:1;        /* If subcmd, skip in --help output     */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -582,10 +583,12 @@ static int print_usage_with_subcommands (optparse_t *parent)
     cmd = zlist_first (keys);
     while (cmd) {
         optparse_t *p = zhash_lookup (parent->subcommands, cmd);;
-        (*fp) ("%5s: %s %s\n",
-               ++lines > 1 ? "or" : "Usage",
-               optparse_fullname (p),
-               p->usage ? p->usage : "[OPTIONS]");
+        if (!p->hidden) {
+            (*fp) ("%5s: %s %s\n",
+                    ++lines > 1 ? "or" : "Usage",
+                    optparse_fullname (p),
+                    p->usage ? p->usage : "[OPTIONS]");
+        }
         cmd = zlist_next (keys);
     }
     zlist_destroy (&keys);
@@ -755,6 +758,8 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
     }
     if (flags & OPTPARSE_SUBCMD_SKIP_OPTS)
         new->no_options = 1;
+    if (flags & OPTPARSE_SUBCMD_HIDDEN)
+        new->hidden = 1;
     return OPTPARSE_SUCCESS;
 }
 
@@ -1018,6 +1023,10 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
     case OPTPARSE_SUBCMD_NOOPTS:
         n = va_arg (vargs, int);
         p->no_options = n;
+        break;
+    case OPTPARSE_SUBCMD_HIDE:
+        n = va_arg (vargs, int);
+        p->hidden = n;
         break;
     default:
         e = OPTPARSE_BAD_ARG;

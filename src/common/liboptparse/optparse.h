@@ -54,6 +54,7 @@ typedef enum {
     OPTPARSE_LEFT_MARGIN,  /* Left pad for option output (default = 2)      */
     OPTPARSE_PRINT_SUBCMDS,/* Print all subcommands in --help (default = T  */
     OPTPARSE_SUBCMD_NOOPTS,/* Don't parse options for this subcommand       */
+    OPTPARSE_SUBCMD_HIDE,  /* Don't output this subcmd in --help output     */
 } optparse_item_t;
 
 /*
@@ -123,6 +124,12 @@ struct optparse_subcommand {
  *
  */
 #define OPTPARSE_SUBCMD_SKIP_OPTS 0x1
+
+/*
+ *  This subcommand is hidden from default parent command's --help
+ *   output.
+ */
+#define OPTPARSE_SUBCMD_HIDDEN    0x2
 
 /******************************************************************************
  *  Prototypes:
