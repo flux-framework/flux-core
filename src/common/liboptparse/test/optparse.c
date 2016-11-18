@@ -217,10 +217,11 @@ void test_convenience_accessors (void)
 { .name = "baz", .key = 3, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "mnf", .key = 4, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "oop", .key = 5, .has_arg = 1, .arginfo = "", .usage = "" },
+{ .name = "neg", .key = 6, .has_arg = 1, .arginfo = "", .usage = "" },
         OPTPARSE_TABLE_END,
     };
 
-    char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", NULL };
+    char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4", NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
     int rc, optind;
 
@@ -260,6 +261,8 @@ void test_convenience_accessors (void)
             "get_int returns default argument when arg not present");
     ok (optparse_get_int (p, "mnf", 42) == 7,
             "get_int returns arg when present");
+    ok (optparse_get_int (p, "neg", 42) == -4,
+            "get_int returns negative arg when present");
 
     /* get_str
      */
@@ -726,9 +729,9 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (167);
+    plan (168);
 
-    test_convenience_accessors (); /* 24 tests */
+    test_convenience_accessors (); /* 25 tests */
     test_usage_output (); /* 36 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
