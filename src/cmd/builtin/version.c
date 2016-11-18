@@ -40,6 +40,7 @@ int subcommand_version_register (optparse_t *p)
         cmd_version,
         NULL,
         "Display flux version information",
+        0,
         NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }

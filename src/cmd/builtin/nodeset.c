@@ -161,7 +161,7 @@ int subcommand_nodeset_register (optparse_t *p)
         cmd_nodeset,
         "[OPTION] [NODESET]...",
         "Manipulate nodesets",
-        nodeset_opts);
+        0, nodeset_opts);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 

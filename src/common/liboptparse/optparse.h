@@ -84,10 +84,11 @@ struct optparse_subcommand {
     const char *            usage;  /* Usage string                         */
     const char *            doc;    /* Short documentation string           */
     optparse_subcmd_f       fn;     /* Subcommand function                  */
+    int                     flags;  /* Subcommand flags. See FLAGS below    */
     struct optparse_option *opts;   /* Table of optparse_options            */
 };
 
-#define OPTPARSE_SUBCMD_END { NULL, NULL, NULL, NULL, NULL }
+#define OPTPARSE_SUBCMD_END { NULL, NULL, NULL, NULL, 0, NULL }
 
 /******************************************************************************
  *  Option FLAGS:
@@ -145,8 +146,8 @@ optparse_t *optparse_get_parent (optparse_t *p);
 
 /*
  *   Convenience function like optparse_add_subcommand, additionally
- *    registering with usage string [usage], documentation blurb [doc] and
- *    any options from optparse_option table [opts]. Use
+ *    registering with usage string [usage], documentation blurb [doc],
+ *    flags, and any options from optparse_option table [opts]. Use
  *    optparse_get_subcommand() to get subcommand optparse handle.
  *
  *   Returns OPTPARSE_SUCCESS on successful registration, or an optparse_err_t
@@ -157,6 +158,7 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
                                      optparse_subcmd_f cb,
                                      const char *usage,
                                      const char *doc,
+                                     int flags,
                                      struct optparse_option const opts[]);
 
 

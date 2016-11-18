@@ -733,6 +733,7 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
                                         optparse_subcmd_f cb,
                                         const char *usage,
                                         const char *doc,
+                                        int flags,
                                         struct optparse_option const opts[])
 {
     optparse_err_t e;
@@ -762,7 +763,7 @@ optparse_err_t optparse_reg_subcommands (optparse_t *p,
     struct optparse_subcommand *cmd = &cmds[0];
     while (cmd->name) {
         e = optparse_reg_subcommand (p, cmd->name, cmd->fn, cmd->usage,
-                                        cmd->doc, cmd->opts);
+                                        cmd->doc, cmd->flags, cmd->opts);
         if (e != OPTPARSE_SUCCESS)
             return (e);
         cmd++;
