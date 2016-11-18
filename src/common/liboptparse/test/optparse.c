@@ -75,6 +75,24 @@ Usage: prog-foo [OPTIONS]\n\
   -t, --test             Enable a test option.\n",
         "Usage output as expected");
 
+    // Add a hidden (undocumented) option
+    opt = ((struct optparse_option) {
+            .name = "hidden", .key = 'H', .has_arg = 1,
+            .flags = OPTPARSE_OPT_HIDDEN,
+            .arginfo = "ARGINFO",
+            .usage = "This option should not be displayed"
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n\
+  -t, --test             Enable a test option.\n",
+        "Usage output as expected");
+
+
+    // Adjust left margin
     e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 0);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (LEFT_MARGIN)");
 
@@ -756,10 +774,10 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (178);
+    plan (181);
 
     test_convenience_accessors (); /* 35 tests */
-    test_usage_output (); /* 36 tests */
+    test_usage_output (); /* 39 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
