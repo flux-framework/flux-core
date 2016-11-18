@@ -120,6 +120,7 @@ optparse_option_dup (const struct optparse_option *src)
         o->key =     src->key;
         o->group =   src->group;
         o->has_arg = src->has_arg;
+        o->flags =   src->flags;
         o->cb  =     src->cb;
     }
     return (o);

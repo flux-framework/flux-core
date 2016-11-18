@@ -69,12 +69,13 @@ struct optparse_option {
     int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg
                                3: list-arg (split on comma separate values) */
     int           group;   /*  Grouping in --help output                    */
+    int           flags;   /*  Extra flags. See FLAGS below                 */
     const char *  arginfo; /*  arg info displayed after = in help output    */
     const char *  usage;   /*  String for usage/help output                 */
     optparse_cb_f cb;      /*  Callback function                            */
 };
 
-#define OPTPARSE_TABLE_END { NULL, 0, 0, 0, NULL, NULL, NULL }
+#define OPTPARSE_TABLE_END { NULL, 0, 0, 0, 0, NULL, NULL, NULL }
 
 /*
  *  Description of a subcommand:
