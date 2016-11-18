@@ -5,8 +5,8 @@
  *
  * JSON dirent objects:
  * object containing one key-value pair where key is one of
- * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", "LINKVAL", and value is a SHA1
- * hash key into ctx->store (FILEREF, DIRREF), an actual directory, file
+ * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", "LINKVAL", and value is a
+ * blobref key into ctx->store (FILEREF, DIRREF), an actual directory, file
  * (value), or link target JSON object (FILEVAL, DIRVAL, LINKVAL).
  *
  * For example, consider KVS containing:

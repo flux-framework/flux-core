@@ -1,0 +1,137 @@
+flux_content_load(3)
+====================
+:doctype: manpage
+
+
+NAME
+----
+flux_content_load, flux_content_load_get, flux_content_store, flux_content_store_get - load/store content
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_rpc_t *flux_content_load (flux_t *h,
+                                const char *blobref,
+                                int flags);
+
+ int flux_content_load_get (flux_rpc_t *rpc,
+                            void *buf,
+                            size_t *len);
+
+
+ flux_rpc_t *flux_content_store (flux_t *h,
+                                 const void *buf,
+                                 size_t len,
+                                 int flags);
+
+ int flux_content_store_get (flux_rpc_t *rpc,
+                             const char **ref);
+
+
+DESCRIPTION
+-----------
+
+The Flux content service is an append-only, immutable, content addressed
+data storage service unique to each Flux instance, described in RFC 10.
+All functions described below are idempotent.
+
+`flux_content_load()` sends a request to the content service
+to load a data blob by _blobref_, a hash digest whose format
+is described in RFC 10.  A `flux_rpc_t` object which encapsulates the
+remote procedure call state is returned.  _flags_ is a mask that may
+include the values described below.
+
+`flux_request_load_get()` completes a load operation, blocking on
+response(s) if needed, parsing the result, and returning the requested
+blob in _buf_ and its length in _len_.  _buf_ is valid until
+`flux_rpc_destroy()` is called.
+
+`flux_content_store()` sends a request to the content service
+to store a data blob _buf_ of length _len_.   A `flux_rpc_t`
+object which encapsulates the remote procedure call state is returned.
+_flags_ is a mask that may include the values described below.
+
+`flux_content_store_get()` completes a store operation, blocking on
+response(s) if needed, and returning a blobref that can be used to
+retrieve the stored blob.  The blobref string is valid until
+`flux_rpc_destroy()` is called.
+
+These functions may be used asynchronously.
+See `flux_rpc_then(3)` for details.
+
+
+FLAGS
+-----
+
+The following are valid bits in a _flags_ mask passed as an argument
+to `flux_content_load()` or `flux_content_store()`.
+
+CONTENT_FLAG_CACHE_BYPASS::
+Send the request directly to the backing store (default sqlite),
+bypassing the cache.
+
+CONTENT_FLAG_UPSTREAM::
+Direct the request to the next broker upstream on the TBON rather
+than to the local broker.
+
+
+RETURN VALUE
+------------
+
+`flux_content_load()` and `flux_content_store()` return a
+`flux_rpc_t` on success, or NULL on failure with errno set appropriately.
+
+`flux_content_load_get()` and `flux_content_store_get()`
+return 0 on success, or -1 on failure wtih errno set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+One of the arguments was invalid.
+
+ENOMEM::
+Out of memory.
+
+ENOENT::
+An unknown blob was requested.
+
+EPROTO::
+A request was malformed.
+
+EFBIG::
+A blob larger than the configured maximum blob size
+could not be stored.  See flux-broker-attributes(7).
+
+ENOSYS::
+The CONTENT_FLAG_CACHE_BYPASS flag was set in a request, but no
+backing store module is loaded.
+
+EHOSTUNREACH::
+The CONTENT_FLAG_UPSTREAM flag was set in a request received by
+the rank 0 broker.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_rpc(3), flux_rpc_then(3)
+
+https://github.com/flux-framework/rfc/blob/master/spec_10.adoc[RFC 10: Content Storage Service]

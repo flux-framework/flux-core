@@ -13,7 +13,10 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
+BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
+
 MAXBLOB=`flux getattr content-blob-size-limit`
+HASHFUN=`flux getattr content-hash`
 
 test_expect_success 'store 100 blobs on rank 0' '
         for i in `seq 0 99`; do echo test$i | \
@@ -45,7 +48,7 @@ test_expect_success LONGTEST "cannot store blob that exceeds max size of $MAXBLO
 test_expect_success 'load and verify 0b blob on all ranks' '
 	HASHSTR=`cat 0.0.hash` &&
 	flux exec echo ${HASHSTR} >0.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>0.0.all.output &&
 	test_cmp 0.0.all.expect 0.0.all.output
 '
@@ -53,7 +56,7 @@ test_expect_success 'load and verify 0b blob on all ranks' '
 test_expect_success 'load and verify 64b blob on all ranks' '
 	HASHSTR=`cat 64.0.hash` &&
 	flux exec echo ${HASHSTR} >64.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>64.0.all.output &&
 	test_cmp 64.0.all.expect 64.0.all.output
 '
@@ -61,7 +64,7 @@ test_expect_success 'load and verify 64b blob on all ranks' '
 test_expect_success 'load and verify 4k blob on all ranks' '
 	HASHSTR=`cat 4k.0.hash` &&
 	flux exec echo ${HASHSTR} >4k.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>4k.0.all.output &&
 	test_cmp 4k.0.all.expect 4k.0.all.output
 '
@@ -69,7 +72,7 @@ test_expect_success 'load and verify 4k blob on all ranks' '
 test_expect_success 'load and verify 1m blob on all ranks' '
 	HASHSTR=`cat 1m.0.hash` &&
 	flux exec echo ${HASHSTR} >1m.0.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>1m.0.all.output &&
 	test_cmp 1m.0.all.expect 1m.0.all.output
 '
@@ -89,7 +92,7 @@ test_expect_success 'store blobs on rank 3' '
 test_expect_success 'load and verify 64b blob on all ranks' '
 	HASHSTR=`cat 64.3.hash` &&
 	flux exec echo ${HASHSTR} >64.3.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>64.3.all.output &&
 	test_cmp 64.3.all.expect 64.3.all.output
 '
@@ -97,7 +100,7 @@ test_expect_success 'load and verify 64b blob on all ranks' '
 test_expect_success 'load and verify 4k blob on all ranks' '
 	HASHSTR=`cat 4k.3.hash` &&
 	flux exec echo ${HASHSTR} >4k.3.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>4k.3.all.output &&
 	test_cmp 4k.3.all.expect 4k.3.all.output
 '
@@ -105,7 +108,7 @@ test_expect_success 'load and verify 4k blob on all ranks' '
 test_expect_success 'load and verify 1m blob on all ranks' '
 	HASHSTR=`cat 1m.3.hash` &&
 	flux exec echo ${HASHSTR} >1m.3.all.expect &&
-	flux exec sh -c "flux content load ${HASHSTR} | flux content store --dry-run" \
+	flux exec sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
 						>1m.3.all.output &&
 	test_cmp 1m.3.all.expect 1m.3.all.output
 '
@@ -116,7 +119,7 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 
 test_expect_success 'negative entries are not cached' '
 	VALUESTR=sdflskdjflsdkjfsdjf &&
-	HASHSTR=`echo $VALUESTR | flux content store --dry-run` &&
+	HASHSTR=`echo $VALUESTR | $BLOBREF $HASHFUN` &&
 	test_must_fail flux exec flux content load ${HASHSTR} 2>/dev/null &&
 	echo $VALUESTR | flux content store >/dev/null &&
 	flux exec flux content load ${HASHSTR} >/dev/null
@@ -128,7 +131,7 @@ test_expect_success 'negative entries are not cached' '
 
 test_expect_success 'store on all ranks can be retrieved from rank 0' '
 	flux exec sh -c "echo foof | flux content store" >/dev/null &&
-	flux content load `echo foof | flux content store --dry-run` >/dev/null
+	flux content load `echo foof | $BLOBREF $HASHFUN` >/dev/null
 '
 
 # Backing store is not loaded so all entries on rank 0 should be dirty

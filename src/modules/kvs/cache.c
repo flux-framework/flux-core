@@ -39,7 +39,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/tstat.h"

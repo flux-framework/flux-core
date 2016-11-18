@@ -14,7 +14,7 @@ SYNOPSIS
 --------
 *flux* *content* *load* ['--bypass-cache'] 'blobref'
 
-*flux* *content* *store* ['--bypass-cache'] ['--dry-run']
+*flux* *content* *store* ['--bypass-cache']
 
 *flux* *content* *flush*
 
@@ -49,11 +49,6 @@ OPTIONS
 *-b, --bypass-cache*::
 Bypass the in-memory cache, and directly access the backing store,
 if available (see below).
-
-*-d, --dry-run*::
-When used with *flux content store*, the blobref is computed
-locally and displayed on standard output, but the blob is not stored.
-
 
 BACKING STORE
 -------------

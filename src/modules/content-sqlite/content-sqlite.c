@@ -31,8 +31,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/sha1.h"
-#include "src/common/libutil/shastring.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -141,7 +140,6 @@ static ctx_t *getctx (flux_t *h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::content-sqlite");
     const char *dir;
-    const char *hashfun;
     const char *tmp;
     bool cleanup = false;
     int saved_errno;
@@ -152,14 +150,9 @@ static ctx_t *getctx (flux_t *h)
         ctx->lzo_buf = xzmalloc (lzo_buf_chunksize);
         ctx->lzo_bufsize = lzo_buf_chunksize;
         ctx->h = h;
-        if (!(hashfun = flux_attr_get (h, "content-hash", &flags))) {
+        if (!(ctx->hashfun = flux_attr_get (h, "content-hash", &flags))) {
             saved_errno = errno;
             flux_log_error (h, "content-hash");
-            goto error;
-        }
-        if (strcmp (hashfun, "sha1") != 0) {
-            saved_errno = errno = EINVAL;
-            flux_log_error (h, "content-hash: %s", hashfun);
             goto error;
         }
         if (!(tmp = flux_attr_get (h, "content-blob-size-limit", NULL))) {
@@ -256,7 +249,8 @@ void load_cb (flux_t *h, flux_msg_handler_t *w,
     ctx_t *ctx = arg;
     char *blobref = "-";
     int blobref_size;
-    uint8_t hash[SHA1_DIGEST_SIZE];
+    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
+    int hash_len;
     const void *data = NULL;
     int size = 0;
     int uncompressed_size;
@@ -271,12 +265,12 @@ void load_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "load: malformed blobref");
         goto done;
     }
-    if (sha1_strtohash (blobref, hash) < 0) {
+    if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0) {
         errno = ENOENT;
         flux_log_error (h, "load: unexpected foreign blobref");
         goto done;
     }
-    if (sqlite3_bind_text (ctx->load_stmt, 1, (char *)hash, SHA1_DIGEST_SIZE,
+    if (sqlite3_bind_text (ctx->load_stmt, 1, (char *)hash, hash_len,
                                               SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "load: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -330,10 +324,9 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
 {
     ctx_t *ctx = arg;
     void *data;
-    int size;
-    SHA1_CTX sha1_ctx;
-    uint8_t hash[SHA1_DIGEST_SIZE];
-    char blobref[SHA1_STRING_SIZE] = "-";
+    int size, hash_len;
+    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
+    char blobref[BLOBREF_MAX_STRING_SIZE] = "-";
     int uncompressed_size = -1;
     int rc = -1;
 
@@ -345,10 +338,11 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EFBIG;
         goto done;
     }
-    SHA1_Init (&sha1_ctx);
-    SHA1_Update (&sha1_ctx, (uint8_t *)data, size);
-    SHA1_Final (&sha1_ctx, hash);
-    sha1_hashtostr (hash, blobref);
+    if (blobref_hash (ctx->hashfun, (uint8_t *)data, size,
+                      blobref,sizeof (blobref)) < 0)
+        goto done;
+    if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
+        goto done;
     if (size >= compression_threshold) {
         int r;
         lzo_uint out_len = size + size / 16 + 64 + 3;
@@ -363,7 +357,7 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
         size = out_len;
         data = ctx->lzo_buf;
     }
-    if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, SHA1_DIGEST_SIZE,
+    if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, hash_len,
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -389,7 +383,7 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
     rc = 0;
 done:
     if (flux_respond_raw (h, msg, rc < 0 ? errno : 0,
-                                        blobref, SHA1_STRING_SIZE) < 0)
+                                        blobref, strlen (blobref) + 1) < 0)
         flux_log_error (h, "store: flux_respond");
     (void) sqlite3_reset (ctx->store_stmt);
 }

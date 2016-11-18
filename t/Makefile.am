@@ -156,6 +156,7 @@ check_PROGRAMS = \
 	kvs/torture \
 	kvs/dtree \
 	kvs/getas \
+	kvs/blobref \
 	kvs/asyncfence \
 	kvs/hashtest \
 	kvs/watch \
@@ -250,6 +251,11 @@ kvs_getas_SOURCES = kvs/getas.c
 kvs_getas_CPPFLAGS = $(test_cppflags)
 kvs_getas_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_blobref_SOURCES = kvs/blobref.c
+kvs_blobref_CPPFLAGS = $(test_cppflags)
+kvs_blobref_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_asyncfence_SOURCES = kvs/asyncfence.c
