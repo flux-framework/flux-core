@@ -367,7 +367,8 @@ void test_multiret (void)
       .arginfo = "", .usage = "" },
     { .name = "optional-arg", .key = 'o', .has_arg = 2,
       .arginfo = "", .usage = "" },
-    { .name = "multi-ret",    .key = 'm', .has_arg = 3,
+    { .name = "multi-ret",    .key = 'm', .has_arg = 1,
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
       .arginfo = "", .usage = "" },
       OPTPARSE_TABLE_END,
     };

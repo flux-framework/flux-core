@@ -59,7 +59,6 @@ typedef enum {
 /*
  *  Description of an option:
  */
-#define list_argument 3
 struct optparse_option {
     const char *  name;    /*  Option name (e.g. "help" for --help)         */
     int           key;     /*  Option key  (e.g. 'h', or other number).
@@ -69,7 +68,7 @@ struct optparse_option {
     int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg
                                3: list-arg (split on comma separate values) */
     int           group;   /*  Grouping in --help output                    */
-    int           flags;   /*  Extra flags. See FLAGS below                 */
+    int           flags;   /*  Extra flags. See Option FLAGS below          */
     const char *  arginfo; /*  arg info displayed after = in help output    */
     const char *  usage;   /*  String for usage/help output                 */
     optparse_cb_f cb;      /*  Callback function                            */
@@ -89,6 +88,23 @@ struct optparse_subcommand {
 };
 
 #define OPTPARSE_SUBCMD_END { NULL, NULL, NULL, NULL, NULL }
+
+/******************************************************************************
+ *  Option FLAGS:
+ *****************************************************************************/
+
+/*
+ *  The option argument supports a list of comma separated values, which
+ *   will be autosplit by optparse. The result will be as if the option
+ *   was provided multiple times, e.g.
+ *
+ *     --foo=a,b.c  --> --foo=a --foo=b --foo=c
+ *
+ *  All provided arguments can be iterated with optparse_getopt_next().
+ *  By default, optparse_getopt() will return the last value in the list.
+ *
+ */
+#define OPTPARSE_OPT_AUTOSPLIT    0x1
 
 /******************************************************************************
  *  Prototypes:

@@ -138,7 +138,7 @@ static struct option_info *option_info_create (const struct optparse_option *o)
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
             c->isdoc = 1;
-        if (o->has_arg == 3)
+        if (o->flags & OPTPARSE_OPT_AUTOSPLIT)
             c->autosplit = 1;
     }
     return (c);
@@ -1103,7 +1103,7 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
 
     optstring = realloc (optstring, (n + 1)); /* extra character for NUL */
 
-    if (o->has_arg == 1 || o->has_arg == 3)
+    if (o->has_arg == 1)
         colons = ":";
     else if (o->has_arg == 2)
         colons = "::";
