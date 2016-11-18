@@ -31,7 +31,6 @@
 #include <errno.h>
 #include <sys/param.h>
 #include <ctype.h>
-#include <getopt.h>
 #include <stdarg.h>
 #include <argz.h>
 
@@ -39,6 +38,8 @@
 
 #include "src/common/liblsd/list.h"
 #include "optparse.h"
+#include "getopt.h"
+#include "getopt_int.h"
 
 /******************************************************************************
  *  Datatypes:
@@ -1163,33 +1164,41 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
     opt->optarg = s;
 }
 
+/*
+ *  Call reentrant internal version of getopt_long() directly copied from
+ *   glibc. See getopt.c and getopt_int.h in this directory.
+ */
+static int getopt_long_r (int argc, char *const *argv, const char *options,
+                const struct option *long_options, int *opt_index,
+                struct _getopt_data *d)
+{
+  return _getopt_internal_r (argc, argv, options, long_options, opt_index,
+                             0, d, 0);
+}
+
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
     int li = -1;
+    struct _getopt_data d;
     const char *fullname = NULL;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
 
     fullname = optparse_fullname (p);
 
-    /* Always set optind = 0 here to force internal initialization of
-     *  GNU options parser. See getopt_long(3) NOTES section.
+    /* Initialize getopt internal state data:
      */
-    optind = 0;
-    /*
-     * Disable getopt_long(3) printing errors to stderr.
-     */
-    opterr = 0;
+    memset (&d, 0, sizeof (d));
 
-    while ((c = getopt_long (argc, argv, optstring, optz, &li)) >= 0) {
+    while ((c = getopt_long_r (argc, argv, optstring, optz, &li, &d)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == '?') {
             (*p->log_fn) ("%s: unrecognized option '%s'\n",
-                          fullname, argv[optind-1]);
+                          fullname, argv[d.optind-1]);
             (*p->log_fn) ("Try `%s --help' for more information.\n", fullname);
-            optind = -1;
+            d.optind = -1;
             break;
         }
 
@@ -1211,21 +1220,21 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
         }
 
         opt->found++;
-        if (optarg)
-            opt_append_optarg (p, opt, optarg);
+        if (d.optarg)
+            opt_append_optarg (p, opt, d.optarg);
 
         o = opt->p_opt;
-        if (o->cb && ((o->cb) (p, o, optarg) < 0)) {
+        if (o->cb && ((o->cb) (p, o, d.optarg) < 0)) {
             (*p->log_fn) ("Option \"%s\" failed\n", o->name);
-            optind = -1;
+            d.optind = -1;
             break;
         }
     }
 
     free (optz);
     free (optstring);
-    p->optind = optind;
-    return (optind);
+    p->optind = d.optind;
+    return (p->optind);
 }
 
 int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
