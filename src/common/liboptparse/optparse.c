@@ -89,6 +89,7 @@ struct option_info {
     unsigned int            isdoc:1;  /* 1 if this is a 'doc-only' option   */
     unsigned int            autosplit:1;  /* 1 if we auto-split values into */
                                           /* optargs */
+    unsigned int            hidden:1; /* Skip option in --help output       */
 };
 
 /******************************************************************************
@@ -140,6 +141,8 @@ static struct option_info *option_info_create (const struct optparse_option *o)
             c->isdoc = 1;
         if (o->flags & OPTPARSE_OPT_AUTOSPLIT)
             c->autosplit = 1;
+        if (o->flags & OPTPARSE_OPT_HIDDEN)
+            c->hidden = 1;
     }
     return (c);
 }
@@ -517,7 +520,7 @@ static int optparse_print_options (optparse_t *p)
     while ((o = list_next (i))) {
         if (o->isdoc)
             optparse_doc_print (p, o->p_opt, columns);
-        else
+        else if (!o->hidden)
             optparse_option_print (p, o->p_opt, columns);
     }
     list_iterator_destroy (i);
