@@ -820,7 +820,7 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
         goto badarg;
     errno = 0;
     l = strtol (s, &endptr, 10);
-    if (errno || *endptr != '\0' ||  l < 0 || l > INT_MAX)
+    if (errno || *endptr != '\0' || l < INT_MIN || l > INT_MAX)
         goto badarg;
     return l;
 badarg:
