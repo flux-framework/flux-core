@@ -818,13 +818,44 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
         return default_value;
     if (s == NULL || strlen (s) == 0)
         goto badarg;
+    errno = 0;
     l = strtol (s, &endptr, 10);
-    if (*endptr != '\0' ||  l < 0 || l > INT_MAX)
+    if (errno || *endptr != '\0' || l < INT_MIN || l > INT_MAX)
         goto badarg;
     return l;
 badarg:
     optparse_fatalmsg (p, 1,
                        "%s: Option '%s' requires an integer argument\n",
+                       p->program_name, name);
+    return -1;
+}
+
+double optparse_get_double (optparse_t *p, const char *name,
+                            double default_value)
+{
+    int n;
+    double d;
+    const char *s;
+    char *endptr;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return -1;
+    }
+    if (n == 0)
+        return default_value;
+    if (s == NULL || strlen (s) == 0)
+        goto badarg;
+    errno = 0;
+    d = strtod (s, &endptr);
+    if (errno || *endptr != '\0')
+        goto badarg;
+    return d;
+badarg:
+    optparse_fatalmsg (p, 1,
+                       "%s: Option '%s' requires a floating point argument\n",
                        p->program_name, name);
     return -1;
 }
