@@ -224,6 +224,30 @@ This is some doc for group 1\n\
 
     /* Unset COLUMNS again */
     unsetenv ("COLUMNS");
+
+    // Add an option with no short option key
+    opt = ((struct optparse_option) {
+            .name = "long-only", .group = 1,
+            .usage = "This option is long only"
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. long only, group 1.");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+      --long-only             This option is long only\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should\n\
+                              be split across lines nicely.\n\
+  -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatSho-\n\
+                              uldBeBrokenAcrossLines.\n",
+        "Usage output with long only option");
+
+
     optparse_destroy (p);
 }
 
@@ -814,10 +838,10 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (190);
+    plan (193);
 
     test_convenience_accessors (); /* 35 tests */
-    test_usage_output (); /* 39 tests */
+    test_usage_output (); /* 42 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
