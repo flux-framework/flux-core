@@ -81,4 +81,109 @@ test_expect_success 'ping fails on invalid target' '
 	grep -q "Function not implemented" stderr
 '
 
+test_expect_success 'ping output format for "any" single rank is correct (default)' '
+	run_timeout 5 flux ping --count 1 cmb 1>stdout
+        grep -q "^cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for "any" single rank is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank any cmb 1>stdout
+        grep -q "^cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for "any" single rank is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 any!cmb 1>stdout
+        grep -q "^cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for "any" single rank is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 any 1>stdout
+        grep -q "^cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific single rank is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank 0 cmb 1>stdout
+        grep -q "^0!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific single rank is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 0!cmb 1>stdout
+        grep -q "^0!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific single rank is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 0 1>stdout
+        grep -q "^0!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping output format for specific multiple ranks is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank 0-1 cmb 1>stdout
+        grep -q "^0-1!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for specific multiple ranks is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 0-1!cmb 1>stdout
+        grep -q "^0-1!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for specific multiple ranks is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 0-1 1>stdout
+        grep -q "^0-1!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for all ranks is correct (format 1)' '
+	run_timeout 5 flux ping --count 1 --rank all cmb 1>stdout
+        grep -q "^all!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for all ranks is correct (format 2)' '
+	run_timeout 5 flux ping --count 1 all!cmb 1>stdout
+        grep -q "^all!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+test_expect_success 'ping output format for all ranks is correct (format 3)' '
+	run_timeout 5 flux ping --count 1 all 1>stdout
+        grep -q "^all!cmb.ping" stdout &&
+        grep -q -E "time=\([0-9]+\.[0-9]+:[0-9]+\.[0-9]+:[0-9]+\.[0-9]+\)" stdout
+'
+
+# test "upstream" via exec.  Ping started on rank 0 should result in
+# an error b/c there is no where to go upstream.  Ping executed on
+# rank 1 should work
+
+test_expect_success 'ping with "upstream" fails on rank 0' '
+        run_timeout 5 flux exec --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr
+	grep -q "Function not implemented" stderr
+'
+
+test_expect_success 'ping with "upstream" works (format 1)' '
+        run_timeout 5 flux exec --rank 1 flux ping --count 1 --rank upstream cmb 1>stdout
+        grep -q "^upstream!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping with "upstream" works (format 2)' '
+        run_timeout 5 flux exec --rank 1 flux ping --count 1 upstream!cmb 1>stdout
+        grep -q "^upstream!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
+test_expect_success 'ping with "upstream" works (format 3)' '
+        run_timeout 5 flux exec --rank 1 flux ping --count 1 upstream 1>stdout
+        grep -q "^upstream!cmb.ping" stdout &&
+        grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
+'
+
 test_done

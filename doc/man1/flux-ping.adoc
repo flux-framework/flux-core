@@ -38,7 +38,9 @@ OPTIONS
 -------
 *-r, --rank*'=NODESET'::
 Find target on a specific broker rank(s).  See NODESET FORMAT below
-for more information.  Default: send to FLUX_NODEID_ANY.
+for more information.  Special case strings ``_any_'' and
+``_upstream_'' available to ping FLUX_NODEID_ANY and
+FLUX_NODEID_UPSTREAM respectively.  Default: send to ``_any_''.
 
 *-p, --pad*'=N'::
 Include in the payload a string of length 'N' bytes.  The payload will be
