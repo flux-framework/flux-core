@@ -75,6 +75,24 @@ Usage: prog-foo [OPTIONS]\n\
   -t, --test             Enable a test option.\n",
         "Usage output as expected");
 
+    // Add a hidden (undocumented) option
+    opt = ((struct optparse_option) {
+            .name = "hidden", .key = 'H', .has_arg = 1,
+            .flags = OPTPARSE_OPT_HIDDEN,
+            .arginfo = "ARGINFO",
+            .usage = "This option should not be displayed"
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n\
+  -t, --test             Enable a test option.\n",
+        "Usage output as expected");
+
+
+    // Adjust left margin
     e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 0);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (LEFT_MARGIN)");
 
@@ -206,6 +224,30 @@ This is some doc for group 1\n\
 
     /* Unset COLUMNS again */
     unsetenv ("COLUMNS");
+
+    // Add an option with no short option key
+    opt = ((struct optparse_option) {
+            .name = "long-only", .group = 1,
+            .usage = "This option is long only"
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. long only, group 1.");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+      --long-only             This option is long only\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should\n\
+                              be split across lines nicely.\n\
+  -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatSho-\n\
+                              uldBeBrokenAcrossLines.\n",
+        "Usage output with long only option");
+
+
     optparse_destroy (p);
 }
 
@@ -367,7 +409,8 @@ void test_multiret (void)
       .arginfo = "", .usage = "" },
     { .name = "optional-arg", .key = 'o', .has_arg = 2,
       .arginfo = "", .usage = "" },
-    { .name = "multi-ret",    .key = 'm', .has_arg = 3,
+    { .name = "multi-ret",    .key = 'm', .has_arg = 1,
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
       .arginfo = "", .usage = "" },
       OPTPARSE_TABLE_END,
     };
@@ -604,6 +647,12 @@ int subcmd_three (optparse_t *p, int ac, char **av)
     return (0);
 }
 
+int subcmd_hidden (optparse_t *p, int ac, char **av)
+{
+    ok (p != NULL, "subcmd_hidden: valid optparse structure");
+    return (0);
+}
+
 
 int do_nothing (void *h, int code)
 {
@@ -731,6 +780,40 @@ Usage: test one [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "missing subcommand error message is expected");
 
+    // Add a hidden subcommand
+    e = optparse_reg_subcommand (a, "hidden",
+            subcmd_hidden,
+            NULL,
+            "This is a hidden subcmd",
+            OPTPARSE_SUBCMD_HIDDEN,
+            NULL);
+    ok (e == OPTPARSE_SUCCESS, "optparse_reg_subcommand()");
+    usage_ok (a, "\
+Usage: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "Hidden subcommand doesn't appear in usage output");
+
+    // Unhide subcommand
+    e = optparse_set (optparse_get_subcommand (a, "hidden"),
+                      OPTPARSE_SUBCMD_HIDE, 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 0)");
+    usage_ok (a, "\
+Usage: test hidden [OPTIONS]\n\
+   or: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "Unhidden subcommand now displayed in usage output");
+
+    // Hide again with optparse_set
+    e = optparse_set (optparse_get_subcommand (a, "hidden"),
+                      OPTPARSE_SUBCMD_HIDE, 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 1)");
+    usage_ok (a, "\
+Usage: test one [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+    "Unhidden subcommand now displayed in usage output");
 
     // Test Subcommand without option processing:
     optparse_t *d = optparse_add_subcommand (a, "three", subcmd_three);
@@ -755,14 +838,14 @@ Usage: test one [OPTIONS]\n\
 int main (int argc, char *argv[])
 {
 
-    plan (178);
+    plan (193);
 
     test_convenience_accessors (); /* 35 tests */
-    test_usage_output (); /* 36 tests */
+    test_usage_output (); /* 42 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 47 tests */
+    test_subcommand (); /* 56 tests */
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
 

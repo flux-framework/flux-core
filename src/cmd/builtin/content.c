@@ -210,30 +210,35 @@ static struct optparse_subcommand content_subcmds[] = {
       "[OPTIONS] BLOBREF",
       "Load blob for digest BLOBREF to stdout",
       internal_content_load,
+      0,
       load_opts,
     },
     { "store",
       "[OPTIONS]",
       "Store blob from stdin, print BLOBREF on stdout",
       internal_content_store,
+      0,
       store_opts,
     },
     { "dropcache",
       NULL,
       "Drop non-essential entries from local content cache",
       internal_content_dropcache,
+      0,
       NULL,
     },
     { "flush",
       NULL,
       "Flush dirty entries from local content cache",
       internal_content_flush,
+      0,
       NULL,
     },
     { "spam",
       "N [M]",
       "Store N random entries, keeping M requests in flight (default 1)",
       internal_content_spam,
+      0,
       NULL,
     },
     OPTPARSE_SUBCMD_END
@@ -244,7 +249,7 @@ int subcommand_content_register (optparse_t *p)
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p,
-            "content", cmd_content, NULL, "Access content store", NULL);
+            "content", cmd_content, NULL, "Access content store", 0, NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 

@@ -67,6 +67,7 @@ struct opt_parser {
 
     unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
+    unsigned int   hidden:1;        /* If subcmd, skip in --help output     */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -89,6 +90,7 @@ struct option_info {
     unsigned int            isdoc:1;  /* 1 if this is a 'doc-only' option   */
     unsigned int            autosplit:1;  /* 1 if we auto-split values into */
                                           /* optargs */
+    unsigned int            hidden:1; /* Skip option in --help output       */
 };
 
 /******************************************************************************
@@ -120,6 +122,7 @@ optparse_option_dup (const struct optparse_option *src)
         o->key =     src->key;
         o->group =   src->group;
         o->has_arg = src->has_arg;
+        o->flags =   src->flags;
         o->cb  =     src->cb;
     }
     return (o);
@@ -137,8 +140,10 @@ static struct option_info *option_info_create (const struct optparse_option *o)
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
             c->isdoc = 1;
-        if (o->has_arg == 3)
+        if (o->flags & OPTPARSE_OPT_AUTOSPLIT)
             c->autosplit = 1;
+        if (o->flags & OPTPARSE_OPT_HIDDEN)
+            c->hidden = 1;
     }
     return (c);
 }
@@ -516,7 +521,7 @@ static int optparse_print_options (optparse_t *p)
     while ((o = list_next (i))) {
         if (o->isdoc)
             optparse_doc_print (p, o->p_opt, columns);
-        else
+        else if (!o->hidden)
             optparse_option_print (p, o->p_opt, columns);
     }
     list_iterator_destroy (i);
@@ -578,10 +583,12 @@ static int print_usage_with_subcommands (optparse_t *parent)
     cmd = zlist_first (keys);
     while (cmd) {
         optparse_t *p = zhash_lookup (parent->subcommands, cmd);;
-        (*fp) ("%5s: %s %s\n",
-               ++lines > 1 ? "or" : "Usage",
-               optparse_fullname (p),
-               p->usage ? p->usage : "[OPTIONS]");
+        if (!p->hidden) {
+            (*fp) ("%5s: %s %s\n",
+                    ++lines > 1 ? "or" : "Usage",
+                    optparse_fullname (p),
+                    p->usage ? p->usage : "[OPTIONS]");
+        }
         cmd = zlist_next (keys);
     }
     zlist_destroy (&keys);
@@ -729,6 +736,7 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
                                         optparse_subcmd_f cb,
                                         const char *usage,
                                         const char *doc,
+                                        int flags,
                                         struct optparse_option const opts[])
 {
     optparse_err_t e;
@@ -748,6 +756,10 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
         optparse_destroy (new);
         return (e);
     }
+    if (flags & OPTPARSE_SUBCMD_SKIP_OPTS)
+        new->no_options = 1;
+    if (flags & OPTPARSE_SUBCMD_HIDDEN)
+        new->hidden = 1;
     return OPTPARSE_SUCCESS;
 }
 
@@ -758,7 +770,7 @@ optparse_err_t optparse_reg_subcommands (optparse_t *p,
     struct optparse_subcommand *cmd = &cmds[0];
     while (cmd->name) {
         e = optparse_reg_subcommand (p, cmd->name, cmd->fn, cmd->usage,
-                                        cmd->doc, cmd->opts);
+                                        cmd->doc, cmd->flags, cmd->opts);
         if (e != OPTPARSE_SUCCESS)
             return (e);
         cmd++;
@@ -1012,6 +1024,10 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
         n = va_arg (vargs, int);
         p->no_options = n;
         break;
+    case OPTPARSE_SUBCMD_HIDE:
+        n = va_arg (vargs, int);
+        p->hidden = n;
+        break;
     default:
         e = OPTPARSE_BAD_ARG;
     }
@@ -1102,7 +1118,7 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
 
     optstring = realloc (optstring, (n + 1)); /* extra character for NUL */
 
-    if (o->has_arg == 1 || o->has_arg == 3)
+    if (o->has_arg == 1)
         colons = ":";
     else if (o->has_arg == 2)
         colons = "::";

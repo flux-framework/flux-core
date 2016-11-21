@@ -1023,6 +1023,7 @@ int subcommand_proxy_register (optparse_t *p)
     e = optparse_reg_subcommand (p, "proxy", cmd_proxy,
         "[OPTIONS] JOB [COMMAND...]",
         "Route messages to/from Flux instance",
+        0,
         proxy_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);

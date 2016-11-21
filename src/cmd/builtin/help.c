@@ -84,7 +84,7 @@ int subcommand_help_register (optparse_t *p)
         cmd_help,
         "[OPTIONS...] [COMMAND...]",
         "Display help information for flux commands",
-        NULL);
+        0, NULL);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 

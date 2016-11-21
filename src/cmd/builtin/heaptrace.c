@@ -100,18 +100,21 @@ static struct optparse_subcommand heaptrace_subcmds[] = {
       "FILENAME",
       "start heap profiling, sending output to FILENAME",
       internal_heaptrace_start,
+      0,
       NULL,
     },
     { "stop",
       NULL,
       "stop heap profiling",
       internal_heaptrace_stop,
+      0,
       NULL,
     },
     { "dump",
       "REASON",
       "dump heap profile",
       internal_heaptrace_dump,
+      0,
       NULL,
     },
     OPTPARSE_SUBCMD_END
@@ -122,7 +125,7 @@ int subcommand_heaptrace_register (optparse_t *p)
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p, "heaptrace", cmd_heaptrace, NULL,
-            "Control google-perftools heap profiling of flux-broker", NULL);
+            "Control google-perftools heap profiling of flux-broker", 0, NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 

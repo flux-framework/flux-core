@@ -66,6 +66,7 @@ int subcommand_dmesg_register (optparse_t *p)
         cmd_dmesg,
         "[OPTIONS...]",
         "Print or control log ring buffer",
+        0,
         dmesg_opts);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }

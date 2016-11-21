@@ -322,18 +322,21 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       "[OPTIONS] [DIR]",
       "Reload hwloc XML, optionally from DIR/<rank>.xml files",
       internal_hwloc_reload,
+      0,
       reload_opts,
     },
    { "lstopo",
       "[lstopo-OPTIONS]",
       "Show hwloc topology of the system",
       cmd_lstopo,
+      OPTPARSE_SUBCMD_SKIP_OPTS,
       NULL,
     },
     { "topology",
       NULL,
       "Dump system topology XML to stdout",
       cmd_topology,
+      0,
       NULL,
     },
     OPTPARSE_SUBCMD_END,
@@ -345,16 +348,14 @@ int subcommand_hwloc_register (optparse_t *p)
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p, "hwloc", cmd_hwloc, NULL,
-                                "Control/query resource-hwloc service", NULL);
+                                 "Control/query resource-hwloc service",
+                                 0, NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
     c = optparse_get_subcommand (p, "hwloc");
     if ((e = optparse_reg_subcommands (c, hwloc_subcmds)) != OPTPARSE_SUCCESS)
         return (-1);
-
-    e = optparse_set (optparse_get_subcommand (c, "lstopo"),
-                      OPTPARSE_SUBCMD_NOOPTS, 1);
     return (e == OPTPARSE_SUCCESS ? 0 : -1);
 }
 
