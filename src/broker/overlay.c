@@ -256,10 +256,7 @@ int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg)
     int rc = -1;
 
     if (!ep || !ep->zs) {
-        if (ov->rank == 0)
-            errno = ENOSYS;
-        else
-            errno = EHOSTUNREACH;
+        errno = EHOSTUNREACH;
         goto done;
     }
     rc = flux_msg_sendzsock (ep->zs, msg);

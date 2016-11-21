@@ -165,7 +165,7 @@ test_expect_success 'ping output format for all ranks is correct (format 3)' '
 
 test_expect_success 'ping with "upstream" fails on rank 0' '
         run_timeout 5 flux exec --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr
-	grep -q "Function not implemented" stderr
+	grep -q "No route to host" stderr
 '
 
 test_expect_success 'ping with "upstream" works (format 1)' '

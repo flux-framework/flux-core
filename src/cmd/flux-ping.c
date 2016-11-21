@@ -107,7 +107,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
                        "time.tv_nsec", &nsec,
                        "pad", &pad,
                        "route", &route) < 0) {
-        log_err ("flux_rpc_getf");
+        log_err ("%s!%s", ctx->rank, ctx->topic);
         goto done;
     }
 
