@@ -2793,7 +2793,9 @@ static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
         rc = svc_sendmsg (ctx->services, msg);
         if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, *msg);
-            if (rc == 0) {
+            if (rc < 0 && errno == EHOSTUNREACH)
+                errno = ENOSYS;
+            else {
                 flux_msg_destroy (*msg);
                 *msg = NULL;
             }
@@ -2802,7 +2804,9 @@ static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
         rc = svc_sendmsg (ctx->services, msg);
         if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, *msg);
-            if (rc == 0) {
+            if (rc < 0 && errno == EHOSTUNREACH)
+                errno = ENOSYS;
+            else {
                 flux_msg_destroy (*msg);
                 *msg = NULL;
             }
@@ -2816,14 +2820,12 @@ static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
             flux_msg_destroy (*msg);
             *msg = NULL;
         }
-    } else if (ctx->rank > 0) {
+    } else {
         rc = overlay_sendmsg_parent (ctx->overlay, *msg);
         if (rc == 0) {
             flux_msg_destroy (*msg);
             *msg = NULL;
         }
-    } else {
-        errno = EHOSTUNREACH;
     }
 done:
     /* N.B. don't destroy msg on error as we use it to send errnum reply.
