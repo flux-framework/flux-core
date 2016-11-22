@@ -630,6 +630,8 @@ int main (int argc, char *argv[])
 
     /* Register internal services
      */
+    if (attr_register_handlers (ctx.attrs, ctx.h) < 0)
+        log_err_exit ("attr_register_handlers");
     broker_add_services (&ctx);
 
     /* Load default modules
@@ -681,6 +683,10 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         log_msg ("unloading modules");
     modhash_destroy (ctx.modhash);
+
+    /* Unregister builtin services
+     */
+    attr_unregister_handlers ();
 
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
@@ -1841,101 +1847,6 @@ done:
     return rc;
 }
 
-static int cmb_attrget_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str, *name, *val;
-    int flags;
-    json_object *in = NULL;
-    json_object *out = Jnew ();
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "name", &name)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (attr_get (ctx->attrs, name, &val, &flags) < 0)
-        goto done;
-    if (!val) {
-        errno = ENOENT;
-        goto done;
-    }
-    Jadd_str (out, "value", val);
-    Jadd_int (out, "flags", flags);
-    rc = 0;
-done:
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0,
-                                      rc < 0 ? NULL : Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (out);
-    Jput (in);
-    return rc;
-}
-
-static int cmb_attrset_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str, *name, *val = NULL;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "name", &name)) {
-        errno = EPROTO;
-        goto done;
-    }
-    (void)Jget_str (in, "value", &val); /* may be NULL for unset */
-    if (val) {
-        if (attr_set (ctx->attrs, name, val, false) < 0) {
-            if (errno != ENOENT)
-                goto done;
-            if (attr_add (ctx->attrs, name, val, 0) < 0)
-                goto done;
-        }
-    } else {
-        if (attr_delete (ctx->attrs, name, false) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (in);
-    return rc;
-}
-
-static int cmb_attrlist_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *name;
-    json_object *out = Jnew ();
-    json_object *array = Jnew_ar ();
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, NULL) < 0)
-        goto done;
-    name = attr_first (ctx->attrs);
-    while (name) {
-        Jadd_ar_str (array, name);
-        name = attr_next (ctx->attrs);
-    }
-    Jadd_obj (out, "names", array);
-    rc = 0;
-done:
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0,
-                                      rc < 0 ? NULL : Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (out);
-    Jput (array);
-    return rc;
-}
-
 static int cmb_rusage_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2447,9 +2358,6 @@ struct internal_service {
 };
 
 static struct internal_service services[] = {
-    { "cmb.attrget",    NULL,   cmb_attrget_cb      },
-    { "cmb.attrset",    NULL,   cmb_attrset_cb      },
-    { "cmb.attrlist",   NULL,   cmb_attrlist_cb     },
     { "cmb.rusage",     NULL,   cmb_rusage_cb,      },
     { "cmb.rmmod",      NULL,   cmb_rmmod_cb,       },
     { "cmb.insmod",     NULL,   cmb_insmod_cb,      },
@@ -2477,6 +2385,9 @@ static struct internal_service services[] = {
     { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
     { "hello",          NULL,   requeue_for_service },
+    { "cmb.attrget",    NULL,   requeue_for_service },
+    { "cmb.attrset",    NULL,   requeue_for_service },
+    { "cmb.attrlist",   NULL,   requeue_for_service },
     { NULL, NULL, },
 };
 
