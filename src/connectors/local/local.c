@@ -39,7 +39,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 #define CTX_MAGIC   0xf434aaab
 typedef struct {
@@ -122,42 +121,31 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return flux_msg_recvfd (c->fd, &c->inbuf);
 }
 
-static int op_event_subscribe (void *impl, const char *topic)
+static int op_event (void *impl, const char *topic, const char *msg_topic)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
-    json_object *in = Jnew ();
     int rc = 0;
 
-    Jadd_str (in, "topic", topic);
-    if (!(rpc = flux_rpc (c->h, "local.sub", Jtostr (in), FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (c->h, msg_topic, FLUX_NODEID_ANY, 0,
+                           "{s:s}", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
-    Jput (in);
     return rc;
+}
+
+static int op_event_subscribe (void *impl, const char *topic)
+{
+    return op_event (impl, topic, "local.sub");
 }
 
 static int op_event_unsubscribe (void *impl, const char *topic)
 {
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    flux_rpc_t *rpc = NULL;
-    json_object *in = Jnew ();
-    int rc = 0;
-
-    Jadd_str (in, "topic", topic);
-    if (!(rpc = flux_rpc (c->h, "local.unsub", Jtostr (in), FLUX_NODEID_ANY, 0))
-                || flux_rpc_get (rpc, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_rpc_destroy (rpc);
-    Jput (in);
-    return rc;
+    return op_event (impl, topic, "local.unsub");
 }
 
 static void op_fini (void *impl)
