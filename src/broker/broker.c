@@ -2385,9 +2385,7 @@ static struct internal_service services[] = {
     { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
     { "hello",          NULL,   requeue_for_service },
-    { "cmb.attrget",    NULL,   requeue_for_service },
-    { "cmb.attrset",    NULL,   requeue_for_service },
-    { "cmb.attrlist",   NULL,   requeue_for_service },
+    { "attr",           NULL,   requeue_for_service },
     { NULL, NULL, },
 };
 
