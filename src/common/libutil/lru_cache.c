@@ -80,13 +80,13 @@ static void lru_entry_destroy (struct lru_entry *l)
 static void lru_entry_remove (lru_cache_t *lru, struct lru_entry *l)
 {
     /* Unlink l from queue first */
-    if (l->prev == NULL)
+    if (lru->first == l)
         lru->first = l->next;
-    else
+    else if (l->prev != NULL)
         l->prev->next = l->next;
-    if (l->next == NULL)
+    if (lru->last == l)
         lru->last = l->prev;
-    else
+    else if (l->next != NULL)
         l->next->prev = l->prev;
 }
 
