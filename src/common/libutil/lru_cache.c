@@ -146,8 +146,11 @@ lru_entry_enqueue (lru_cache_t *lru, const char *key, void *value)
 static void *
 lru_entry_requeue (lru_cache_t *lru, struct lru_entry *l)
 {
-    lru_entry_remove (lru, l);
-    lru_entry_push (lru, l);
+    /*  If item is already at front of list, there is nothing to do */
+    if (lru->first != l) {
+        lru_entry_remove (lru, l);
+        lru_entry_push (lru, l);
+    }
     return (l->item);
 }
 
