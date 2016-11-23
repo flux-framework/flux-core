@@ -155,6 +155,34 @@ lru_entry_requeue (lru_cache_t *lru, struct lru_entry *l)
  *  Public functions:
  */
 
+/*
+ *  Check cache for consistency between hash and list.
+ *  Used for testing.
+ */
+int lru_cache_selfcheck (lru_cache_t *lru)
+{
+    int count = 0;
+    struct lru_entry *l = lru->first;
+
+    /* front of list should never have a prev pointer */
+    if (l && l->prev != NULL)
+        return (-1);
+
+    while (l) {
+        count++;
+        /* an entry should never point to itself */
+        if (l == l->next)
+            return (-2);
+        l = l->next;
+    }
+
+    /* number of entries on list should equal count */
+    if (lru->count != count)
+        return (-3);
+
+    return (0);
+}
+
 void lru_cache_destroy (lru_cache_t *lru)
 {
     zhash_destroy (&lru->entries);
