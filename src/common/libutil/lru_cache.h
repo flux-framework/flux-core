@@ -48,4 +48,10 @@ bool lru_cache_check (lru_cache_t *lru, const char *key);
  */
 int lru_cache_remove (lru_cache_t *lru, const char *key);
 
+/*
+ *   Run lru cache self checks on object `lru`. Used in testing.
+ *    Returns < 0 if any one of several consistency checks fails.
+ */
+int lru_cache_selfcheck (lru_cache_t *lru);
+
 #endif /* !HAVE_LRU_CACHE_H */

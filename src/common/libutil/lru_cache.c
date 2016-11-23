@@ -80,14 +80,17 @@ static void lru_entry_destroy (struct lru_entry *l)
 static void lru_entry_remove (lru_cache_t *lru, struct lru_entry *l)
 {
     /* Unlink l from queue first */
-    if (l->prev == NULL)
+    if (lru->first == l)
         lru->first = l->next;
-    else
+    else if (l->prev != NULL)
         l->prev->next = l->next;
-    if (l->next == NULL)
+    if (lru->last == l)
         lru->last = l->prev;
-    else
+    else if (l->next != NULL)
         l->next->prev = l->prev;
+
+    /* Reset l->prev,next to NULL since l is no longer on queue */
+    l->prev = l->next = NULL;
 }
 
 static void lru_entry_push (lru_cache_t *lru, struct lru_entry *l)
@@ -143,14 +146,45 @@ lru_entry_enqueue (lru_cache_t *lru, const char *key, void *value)
 static void *
 lru_entry_requeue (lru_cache_t *lru, struct lru_entry *l)
 {
-    lru_entry_remove (lru, l);
-    lru_entry_push (lru, l);
+    /*  If item is already at front of list, there is nothing to do */
+    if (lru->first != l) {
+        lru_entry_remove (lru, l);
+        lru_entry_push (lru, l);
+    }
     return (l->item);
 }
 
 /*
  *  Public functions:
  */
+
+/*
+ *  Check cache for consistency between hash and list.
+ *  Used for testing.
+ */
+int lru_cache_selfcheck (lru_cache_t *lru)
+{
+    int count = 0;
+    struct lru_entry *l = lru->first;
+
+    /* front of list should never have a prev pointer */
+    if (l && l->prev != NULL)
+        return (-1);
+
+    while (l) {
+        count++;
+        /* an entry should never point to itself */
+        if (l == l->next)
+            return (-2);
+        l = l->next;
+    }
+
+    /* number of entries on list should equal count */
+    if (lru->count != count)
+        return (-3);
+
+    return (0);
+}
 
 void lru_cache_destroy (lru_cache_t *lru)
 {

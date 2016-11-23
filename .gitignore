@@ -23,6 +23,16 @@ libtool
 .libs/
 libltdl/
 
+# libtool pull-ins
+config/libtool.m4
+config/ltoptions.m4
+config/ltsugar.m4
+config/ltversion.m4
+config/lt~obsolete.m4
+
+# docs intermediate files
+doc/man*/*.xml
+
 # Object files
 *.o
 *.ko

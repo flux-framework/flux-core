@@ -45,6 +45,7 @@ void test_basic ()
     ok (lru_cache_size (lru) == (size-1),
         "cache size %d after remove", size - 1);
 
+    ok (lru_cache_selfcheck (lru) == 0, "lru_cache_selfcheck ()");
     lru_cache_destroy (lru);
 }
 
@@ -77,11 +78,36 @@ void test_free_fn ()
     ok (z == -1, "z is now freed");
 }
 
+void test_corruption ()
+{
+    /*  Test for corruption caused by
+     *    1. Pushing a few items into the cache
+     *    2. "get" an internal value so it moves the front of list
+     *    3. Get the same item again --> list is corrupted
+     */
+    int a = 1, b = 2, c = 3;
+    lru_cache_t *lru = lru_cache_create (3);
+    lru_cache_set_free_f (lru, (lru_cache_free_f) fake_int_free);
+
+    /* 1. Push a few items */
+    ok (lru_cache_put (lru, "a", &a) == 0, "lru_cache_put (a)");
+    ok (lru_cache_put (lru, "b", &b) == 0, "lru_cache_put (b)");
+    ok (lru_cache_put (lru, "c", &c) == 0, "lru_cache_put (c)");
+
+    ok (lru_cache_get (lru, "b") != NULL, "move b to front of list");
+    ok (lru_cache_get (lru, "b") != NULL, "get b again");
+    ok (lru_cache_selfcheck (lru) == 0, "lru_cache_selfcheck ()");
+
+    lru_cache_destroy (lru);
+}
+
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
     test_basic ();
     test_free_fn ();
+    test_corruption ();
     done_testing ();
     return (0);
 }

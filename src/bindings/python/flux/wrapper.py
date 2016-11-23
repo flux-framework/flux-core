@@ -170,6 +170,9 @@ class FunctionWrapper(object):
                 elif isinstance(args[i], WrapperBase):
                     # Unpack wrapper objects
                     args[i] = args[i].handle
+                elif isinstance(args[i], unicode):
+                    # convert unicode string to ascii to make cffi happy
+                    args[i] = str(args[i])
 
             try:
                 result = self.fun(*args)
