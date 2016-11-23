@@ -45,6 +45,7 @@ void test_basic ()
     ok (lru_cache_size (lru) == (size-1),
         "cache size %d after remove", size - 1);
 
+    ok (lru_cache_selfcheck (lru) == 0, "lru_cache_selfcheck ()");
     lru_cache_destroy (lru);
 }
 
