@@ -88,6 +88,9 @@ static void lru_entry_remove (lru_cache_t *lru, struct lru_entry *l)
         lru->last = l->prev;
     else if (l->next != NULL)
         l->next->prev = l->prev;
+
+    /* Reset l->prev,next to NULL since l is no longer on queue */
+    l->prev = l->next = NULL;
 }
 
 static void lru_entry_push (lru_cache_t *lru, struct lru_entry *l)
