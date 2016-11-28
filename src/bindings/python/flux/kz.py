@@ -1,7 +1,6 @@
 from _kz import ffi, lib
 import flux
 from flux.wrapper import Wrapper, WrapperPimpl, WrapperBase
-import flux.json_c as json_c
 import json
 import collections
 import contextlib
