@@ -96,6 +96,7 @@ fluxpy_PYTHON=\
 	      message.py\
 	      constants.py\
 	      jsc.py\
+	      kz.py\
 	      command_helpers.py\
 	      sec.py
 
