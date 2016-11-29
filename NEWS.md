@@ -1,62 +1,94 @@
+flux-core version 0.6.0 - 2016-11-29
+------------------------------------
+
+#### Fixes
+
+ * Fixes for ATS testsuite compatibility (#914)
+ * python: install kz bindings file (#895)
+ * broker: adjust errno response to "upstream" request on rank 0 (#913)
+ * Fix for possible unconstrained memory growth in modules/libjsc (#891)
+ * Fix error message on flux-help failure (#887)
+ * Issue fatal error in wrexecd for invalid tasks on node (#901)
+ * Fix barrier protocol incompatability with older jansson versions (#889)
+
+#### New Features
+
+ * Add a flux content service API (#903)
+ * Enhance option parsing library for thread safety and new features
+  (#908, #910, #911)
+ * Add flux_rpcf_multi() (#909)
+ * Add new "any" and "upstream" nodeset options (#909)
+ * Add HostName key in resource-hwloc `by_rank` directory to allow
+   easy resolution of rank to hostname in a flux session (#892)
+ * Add `-d` option to `flux-kvs dir`, `dirat`, and `watchdir` to restrict
+   output to key only. (#896)
+
+#### Cleanup
+
+ * `flux-ping` refactor and cleanup (#898, #904)
+ * Check expected size of `json_int_t` during configure (#902)
+ * Other various cleanup, refactoring and testing updates.
+
+
 flux-core version 0.5.0 - 2016-10-27
 ------------------------------------
 
-* [#885](https://github.com/flux-framework/flux-core/pull/885) barrier module cleanup and debug logging
-* [#886](https://github.com/flux-framework/flux-core/pull/886) Various minor cleanup and documentation updates
-* [#884](https://github.com/flux-framework/flux-core/pull/884) use jansson >= 2.6 and document JSON payload functions
-* [#877](https://github.com/flux-framework/flux-core/pull/877) fix MANPATH for Ubuntu, and tidy up travis dep builder
-* [#876](https://github.com/flux-framework/flux-core/pull/876) fixes for minor issues detected by Coverity
-* [#871](https://github.com/flux-framework/flux-core/pull/871) build: add --disable-docs configure option
-* [#872](https://github.com/flux-framework/flux-core/pull/872) kvs: allow get_double to be called on an int
-* [#867](https://github.com/flux-framework/flux-core/pull/867) README.md: Update srun instructions
-* [#862](https://github.com/flux-framework/flux-core/pull/862) misc minor fixes
-* [#857](https://github.com/flux-framework/flux-core/pull/857) make flux_msg_t a bonafide type, add jansson payload accessors
-* [#860](https://github.com/flux-framework/flux-core/pull/860) Fix --rank issues, add NODESET documentation, and minor cleanup
-* [#858](https://github.com/flux-framework/flux-core/pull/858) Fix output errors with flux up --comma & --newline, add appropriate tests
-* [#811](https://github.com/flux-framework/flux-core/pull/811) Add hierarchical lwj directory support in kvs
-* [#852](https://github.com/flux-framework/flux-core/pull/852) doc/man1/flux-start.adoc: Fix example option usage
-* [#849](https://github.com/flux-framework/flux-core/pull/849) add dlopen RTLD_DEEPBIND flag
-* [#851](https://github.com/flux-framework/flux-core/pull/851) src/broker/broker.c: Fix typo flux_repond -> flux_respond
-* [#850](https://github.com/flux-framework/flux-core/pull/850) doc/man1/flux-module.adoc: Fix environment variable error
-* [#835](https://github.com/flux-framework/flux-core/pull/835) Pull in json-c, allowing internals to link against alternate json libraries.
-Add enhanced flux_rpc functions using libjansson json_pack/unpack functions
-* [#844](https://github.com/flux-framework/flux-core/pull/844) Update flux_t * references in man pages
-* [#841](https://github.com/flux-framework/flux-core/pull/841) Remove pointer from typedef flux_t
-* [#832](https://github.com/flux-framework/flux-core/pull/832) Remove JSON typedef, just use json_object *
-* [#831](https://github.com/flux-framework/flux-core/pull/831) module: Remove pointer from typedef flux_modlist_t
-* [#830](https://github.com/flux-framework/flux-core/pull/830) security: Remove pointer from typedef flux_sec_t
-* [#824](https://github.com/flux-framework/flux-core/pull/824) kvs: add kvs_getat() and related functions
-* [#787](https://github.com/flux-framework/flux-core/pull/787) experimental aggregator module
-* [#823](https://github.com/flux-framework/flux-core/pull/823) kvs: testing, fix use-after-free, streamline python bindings
-* [#822](https://github.com/flux-framework/flux-core/pull/822) Fix #821: crash in kvs due to NULL arg in Jget_str()
-* [#819](https://github.com/flux-framework/flux-core/pull/819) python: add a check for invalid handle types
-* [#799](https://github.com/flux-framework/flux-core/pull/799) Python json and constant rework
-* [#807](https://github.com/flux-framework/flux-core/pull/807) Python destructor refactoring and exception safety
-* [#809](https://github.com/flux-framework/flux-core/pull/809) libutil/veb: quiet uninitialized variable warning in vebnew
-* [#806](https://github.com/flux-framework/flux-core/pull/806) when tagpool is exhausted, grow up to RFC 6 limits
-* [#801](https://github.com/flux-framework/flux-core/pull/801) add KVS blobref access functions
-* [#804](https://github.com/flux-framework/flux-core/pull/804) Fix missing error checks in Lua bindings, flux-wreckrun, flux-wreck
-* [#794](https://github.com/flux-framework/flux-core/pull/794) python: Several fixes for the bindings
-* [#789](https://github.com/flux-framework/flux-core/pull/789) Switch lua scripts to use lua interpreter in PATH
-* [#788](https://github.com/flux-framework/flux-core/pull/788) restructure kvs commit handling code for correctness
-* [#786](https://github.com/flux-framework/flux-core/pull/786) broker/hello: fix leak/error detection in flux_rpc
-* [#781](https://github.com/flux-framework/flux-core/pull/781) implement scalable reduction for wireup protocol
-* [#782](https://github.com/flux-framework/flux-core/pull/782) wreck: minor enhancements for scale testing
-* [#780](https://github.com/flux-framework/flux-core/pull/780) increase KVS commit window
-* [#771](https://github.com/flux-framework/flux-core/pull/771) autogen.sh: run libtoolize before autoreconf
-* [#769](https://github.com/flux-framework/flux-core/pull/769) clean up LOG_INFO output, log wireup, rc1, rc3 times, add pmi timing.
-* [#768](https://github.com/flux-framework/flux-core/pull/768) optparse: remove requirement for option key on long-only options (and other fixes)
+* barrier module cleanup and debug logging (#885)
+* Various minor cleanup and documentation updates (#886)
+* use jansson >= 2.6 and document JSON payload functions (#884)
+* fix MANPATH for Ubuntu, and tidy up travis dep builder (#877)
+* fixes for minor issues detected by Coverity (#876)
+* build: add --disable-docs configure option (#871)
+* kvs: allow get_double to be called on an int (#872)
+* README.md: Update srun instructions (#867)
+* misc minor fixes (#862)
+* make flux_msg_t a bonafide type, add jansson payload accessors (#857)
+* Fix --rank issues, add NODESET documentation, and minor cleanup (#860)
+* Fix output errors with flux up --comma & --newline, add appropriate tests (#858)
+* Add hierarchical lwj directory support in kvs (#811)
+* doc/man1/flux-start.adoc: Fix example option usage (#852)
+* add dlopen RTLD_DEEPBIND flag (#849)
+* src/broker/broker.c: Fix typo flux_repond -> flux_respond (#851)
+* doc/man1/flux-module.adoc: Fix environment variable error (#850)
+* Pull in json-c, allowing internals to link against alternate json libraries. (#835)
+* Add enhanced flux_rpc functions using libjansson json_pack/unpack functions
+* Update flux_t * references in man pages (#844)
+* Remove pointer from typedef flux_t (#841)
+* Remove JSON typedef, just use json_object * (#832)
+* module: Remove pointer from typedef flux_modlist_t (#831)
+* security: Remove pointer from typedef flux_sec_t (#830)
+* and related functions (#824)
+* experimental aggregator module (#787)
+* kvs: testing, fix use-after-free, streamline python bindings (#823)
+* Fix #821: crash in kvs due to NULL arg in Jget_str() (#822)
+* python: add a check for invalid handle types (#819)
+* Python json and constant rework (#799)
+* Python destructor refactoring and exception safety (#807)
+* libutil/veb: quiet uninitialized variable warning in vebnew (#809)
+* when tagpool is exhausted, grow up to RFC 6 limits (#806)
+* add KVS blobref access functions (#801)
+* Fix missing error checks in Lua bindings, flux-wreckrun, flux-wreck (#804)
+* python: Several fixes for the bindings (#794)
+* Switch lua scripts to use lua interpreter in PATH (#789)
+* restructure kvs commit handling code for correctness (#788)
+* broker/hello: fix leak/error detection in flux_rpc (#786)
+* implement scalable reduction for wireup protocol (#781)
+* wreck: minor enhancements for scale testing (#782)
+* increase KVS commit window (#780)
+* autogen.sh: run libtoolize before autoreconf (#771)
+* clean up LOG_INFO output, log wireup, rc1, rc3 times, add pmi timing. (#769)
+* optparse: remove requirement for option key on long-only options (and other fixes) (#768)
 
 #### Testing
 
-* [#878](https://github.com/flux-framework/flux-core/pull/878) add test to verify KVS int can be read as double
-* [#865](https://github.com/flux-framework/flux-core/pull/865) travis-ci: minor updates
-* [#859](https://github.com/flux-framework/flux-core/pull/859) jsc test: Add timed waits to avoid races
-* [#848](https://github.com/flux-framework/flux-core/pull/848) t/t0005-exec.t: Fix corner case in test for file not found
-* [#847](https://github.com/flux-framework/flux-core/pull/847) Fix make distcheck
-* [#837](https://github.com/flux-framework/flux-core/pull/837) t/t2000-wreck.t: Fix invalid compare on per-task affinity test
-* [#836](https://github.com/flux-framework/flux-core/pull/836) t/t2000-wreck.t: Fix invalid compare on 'wreckrun: --input=0 works' test
-* [#767](https://github.com/flux-framework/flux-core/pull/767) travis.yml:  Fix ANCHOR definition
+* add test to verify KVS int can be read as double (#878)
+* travis-ci: minor updates (#865)
+* jsc test: Add timed waits to avoid races (#859)
+* t/t0005-exec.t: Fix corner case in test for file not found (#848)
+* Fix make distcheck (#847)
+* t/t2000-wreck.t: Fix invalid compare on per-task affinity test (#837)
+* t/t2000-wreck.t: Fix invalid compare on 'wreckrun: --input=0 works' test (#836)
+* travis.yml:  Fix ANCHOR definition (#767)
 
 flux-core version 0.4.1 - 2016-08-12
 ------------------------------------
