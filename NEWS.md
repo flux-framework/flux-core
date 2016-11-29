@@ -1,3 +1,35 @@
+flux-core version 0.6.0 - 2016-11-29
+------------------------------------
+
+#### Fixes
+
+ * Fixes for ATS testsuite compatibility (#914)
+ * python: install kz bindings file (#895)
+ * broker: adjust errno response to "upstream" request on rank 0 (#913)
+ * Fix for possible unconstrained memory growth in modules/libjsc (#891)
+ * Fix error message on flux-help failure (#887)
+ * Issue fatal error in wrexecd for invalid tasks on node (#901)
+ * Fix barrier protocol incompatability with older jansson versions (#889)
+
+#### New Features
+
+ * Add a flux content service API (#903)
+ * Enhance option parsing library for thread safety and new features
+  (#908, #910, #911)
+ * Add flux_rpcf_multi() (#909)
+ * Add new "any" and "upstream" nodeset options (#909)
+ * Add HostName key in resource-hwloc `by_rank` directory to allow
+   easy resolution of rank to hostname in a flux session (#892)
+ * Add `-d` option to `flux-kvs dir`, `dirat`, and `watchdir` to restrict
+   output to key only. (#896)
+
+#### Cleanup
+
+ * `flux-ping` refactor and cleanup (#898, #904)
+ * Check expected size of `json_int_t` during configure (#902)
+ * Other various cleanup, refactoring and testing updates.
+
+
 flux-core version 0.5.0 - 2016-10-27
 ------------------------------------
 
