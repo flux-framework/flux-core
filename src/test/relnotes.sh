@@ -1,21 +1,28 @@
 #!/bin/bash
 
 LASTTAG=$(git describe --tags --abbrev=0)
-URL=https://github.com/flux-framework/flux-core/pull
+
+# Uncomment URL here if you want Markdown encoded URL to PRs in output:
+# URL=https://github.com/flux-framework/flux-core/pull
+
+pr() {
+    if test -n "$URL"; then
+        echo "([#$1]($URL/$1))"
+    else
+        echo "(#$1)"
+    fi
+}
 
 echo Changes since $LASTTAG:
-git log --pretty='format:%s%n%b' --merges $LASTTAG..HEAD | while read line; do
-    if echo $line|grep -q "Merge pull"; then
-        pr=$(echo $line|sed -e 's/Merge pull request #//' -e 's/ from .*//')
-        count=0
-    else
-        count=$(($count+1))
-        if test $count -eq 1; then
-            echo "* [#$pr]($URL/$pr) $line"
-        else
-            echo "$line"
-        fi
-    fi
+git log --pretty='%H' --merges $LASTTAG..HEAD | while read commit; do
+    pr=$(git log --pretty=%s -n1 $commit | \
+        sed -e 's/Merge pull request #//' -e 's/ from .*//')
+    body=$(git log --pretty=%b -n1 $commit)
+
+    echo "${body} $(pr $pr)" | fmt -s \
+         | sed -e '1s/^/ * /'    `: # Add bullet for first line`        \
+               -e '2,$s/^/   /'  `: # Indent all other lines 3 spaces`  \
+               -e '/^\s*$/d'     `: # Remove empty lines`
 done
 
 # vi:tabstop=4 shiftwidth=4 expandtab
