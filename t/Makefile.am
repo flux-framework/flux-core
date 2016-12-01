@@ -162,6 +162,7 @@ check_PROGRAMS = \
 	kvs/watch \
 	kvs/watch_disconnect \
 	kvs/commit \
+	kvs/basic \
 	request/treq
 
 check_LTLIBRARIES = \
@@ -287,6 +288,12 @@ kvs_hashtest_SOURCES = kvs/hashtest.c
 kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
+
+kvs_basic_SOURCES = kvs/basic.c
+kvs_basic_CPPFLAGS = $(test_cppflags)
+kvs_basic_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
