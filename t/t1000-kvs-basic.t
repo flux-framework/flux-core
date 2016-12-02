@@ -257,6 +257,12 @@ EOF
 test_expect_success 'kvs: cleanup' '
 	flux kvs unlink $TEST
 '
+test_expect_success 'kvs: dropcache works' '
+	flux kvs dropcache
+'
+test_expect_success 'kvs: dropcache-all works' '
+	flux kvs dropcache-all
+'
 test_expect_success 'kvs: symlink: works' '
 	TARGET=$TEST.a.b.c &&
 	flux kvs put $TARGET=\"foo\" &&
