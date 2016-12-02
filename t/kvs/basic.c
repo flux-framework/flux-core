@@ -73,13 +73,13 @@ void cmd_readlinkat (flux_t *h, int argc, char **argv);
 void usage (void)
 {
     fprintf (stderr,
-"Usage: basic get                 key [key...]\n"
-"       basic type                key [key...]\n"
-"       basic put                 key=val [key=val...]\n"
-"       basic unlink              key [key...]\n"
+"Usage: basic get                 key\n"
+"       basic type                key\n"
+"       basic put                 key=val\n"
+"       basic unlink              key\n"
 "       basic link                target link_name\n"
 "       basic readlink            key\n"
-"       basic mkdir               key [key...]\n"
+"       basic mkdir               key\n"
 "       basic exists              key\n"
 "       basic watch               [count] key\n"
 "       basic watch-dir [-r]      [count] key\n"
@@ -189,43 +189,40 @@ void cmd_type (flux_t *h, int argc, char **argv)
 {
     char *json_str;
     json_object *o;
-    int i;
 
-    if (argc == 0)
-        log_msg_exit ("get-type: specify one or more keys");
-    for (i = 0; i < argc; i++) {
-        if (kvs_get (h, argv[i], &json_str) < 0)
-            log_err_exit ("%s", argv[i]);
-        if (!(o = Jfromstr (json_str)))
-            log_msg_exit ("%s: malformed JSON", argv[i]);
-        const char *type = "unknown";
-        switch (json_object_get_type (o)) {
-            case json_type_null:
-                type = "null";
+    if (argc != 1)
+        log_msg_exit ("get-type: specify key");
+    if (kvs_get (h, argv[0], &json_str) < 0)
+        log_err_exit ("%s", argv[0]);
+    if (!(o = Jfromstr (json_str)))
+        log_msg_exit ("%s: malformed JSON", argv[0]);
+    const char *type = "unknown";
+    switch (json_object_get_type (o)) {
+    case json_type_null:
+        type = "null";
+        break;
+    case json_type_boolean:
+        type = "boolean";
+        break;
+    case json_type_double:
+        type = "double";
                 break;
-            case json_type_boolean:
-                type = "boolean";
-                break;
-            case json_type_double:
-                type = "double";
-                break;
-            case json_type_int:
-                type = "int";
-                break;
-            case json_type_object:
-                type = "object";
-                break;
-            case json_type_array:
-                type = "array";
-                break;
-            case json_type_string:
-                type = "string";
-                break;
-        }
-        printf ("%s\n", type);
-        Jput (o);
-        free (json_str);
+    case json_type_int:
+        type = "int";
+        break;
+    case json_type_object:
+        type = "object";
+        break;
+    case json_type_array:
+        type = "array";
+        break;
+    case json_type_string:
+        type = "string";
+        break;
     }
+    printf ("%s\n", type);
+    Jput (o);
+    free (json_str);
 }
 
 static void output_key_json_object (const char *key, json_object *o)
@@ -277,52 +274,39 @@ static void output_key_json_str (const char *key,
 void cmd_get (flux_t *h, int argc, char **argv)
 {
     char *json_str;
-    int i;
 
     if (argc == 0)
         log_msg_exit ("get: specify one or more keys");
-    for (i = 0; i < argc; i++) {
-        if (kvs_get (h, argv[i], &json_str) < 0)
-            log_err_exit ("%s", argv[i]);
-        output_key_json_str (NULL, json_str, argv[i]);
-        free (json_str);
-    }
+    if (kvs_get (h, argv[0], &json_str) < 0)
+        log_err_exit ("%s", argv[0]);
+    output_key_json_str (NULL, json_str, argv[0]);
+    free (json_str);
 }
 
 void cmd_put (flux_t *h, int argc, char **argv)
 {
-    int i;
-
     if (argc == 0)
-        log_msg_exit ("put: specify one or more key=value pairs");
-    for (i = 0; i < argc; i++) {
-        char *key = xstrdup (argv[i]);
-        char *val = strchr (key, '=');
-        if (!val)
-            log_msg_exit ("put: you must specify a value as key=value");
-        *val++ = '\0';
-        if (kvs_put (h, key, val) < 0) {
-            if (errno != EINVAL || kvs_put_string (h, key, val) < 0)
-                log_err_exit ("%s", key);
-        }
-        free (key);
+        log_msg_exit ("put: specify one key=value pair");
+    char *key = xstrdup (argv[0]);
+    char *val = strchr (key, '=');
+    if (!val)
+        log_msg_exit ("put: you must specify a value as key=value");
+    *val++ = '\0';
+    if (kvs_put (h, key, val) < 0) {
+        if (errno != EINVAL || kvs_put_string (h, key, val) < 0)
+            log_err_exit ("%s", key);
     }
+    free (key);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
 }
 
 void cmd_unlink (flux_t *h, int argc, char **argv)
 {
-    int i;
-
-    if (argc == 0)
-        log_msg_exit ("unlink: specify one or more keys");
-    for (i = 0; i < argc; i++) {
-        /* FIXME: unlink nonexistent silently fails */
-        /* FIXME: unlink directory silently succeeds */
-        if (kvs_unlink (h, argv[i]) < 0)
-            log_err_exit ("%s", argv[i]);
-    }
+    if (argc != 1)
+        log_msg_exit ("unlink: specify key");
+    if (kvs_unlink (h, argv[0]) < 0)
+        log_err_exit ("%s", argv[0]);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
 }
@@ -339,30 +323,23 @@ void cmd_link (flux_t *h, int argc, char **argv)
 
 void cmd_readlink (flux_t *h, int argc, char **argv)
 {
-    int i;
     char *target;
 
-    if (argc == 0)
-        log_msg_exit ("readlink: specify one or more keys"); 
-    for (i = 0; i < argc; i++) {
-        if (kvs_get_symlink (h, argv[i], &target) < 0)
-            log_err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", target);
-        free (target);
-    }
+    if (argc != 1)
+        log_msg_exit ("readlink: specify key"); 
+    if (kvs_get_symlink (h, argv[0], &target) < 0)
+        log_err_exit ("%s", argv[0]);
+    else
+        printf ("%s\n", target);
+    free (target);
 }
 
 void cmd_mkdir (flux_t *h, int argc, char **argv)
 {
-    int i;
-
-    if (argc == 0)
-        log_msg_exit ("mkdir: specify one or more directories");
-    for (i = 0; i < argc; i++) {
-        if (kvs_mkdir (h, argv[i]) < 0)
-            log_err_exit ("%s", argv[i]);
-    }
+    if (argc != 1)
+        log_msg_exit ("mkdir: specify directory");
+    if (kvs_mkdir (h, argv[0]) < 0)
+        log_err_exit ("%s", argv[0]);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
 }
@@ -385,13 +362,10 @@ bool key_exists (flux_t *h, const char *key)
 
 void cmd_exists (flux_t *h, int argc, char **argv)
 {
-    int i;
-    if (argc == 0)
-        log_msg_exit ("exist: specify one or more keys");
-    for (i = 0; i < argc; i++) {
-        if (!key_exists (h, argv[i]))
-            exit (1);
-    }
+    if (argc != 1)
+        log_msg_exit ("exist: specify key");
+    if (!key_exists (h, argv[0]))
+        exit (1);
 }
 
 void cmd_version (flux_t *h, int argc, char **argv)
@@ -751,18 +725,15 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
 
 void cmd_readlinkat (flux_t *h, int argc, char **argv)
 {
-    int i;
     char *target;
 
-    if (argc < 2)
-        log_msg_exit ("readlink: specify treeobj and one or more keys");
-    for (i = 1; i < argc; i++) {
-        if (kvs_get_symlinkat (h, argv[0], argv[i], &target) < 0)
-            log_err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", target);
-        free (target);
-    }
+    if (argc != 2)
+        log_msg_exit ("readlink: specify treeobj and key");
+    if (kvs_get_symlinkat (h, argv[0], argv[1], &target) < 0)
+        log_err_exit ("%s", argv[1]);
+    else
+        printf ("%s\n", target);
+    free (target);
 }
 
 /*

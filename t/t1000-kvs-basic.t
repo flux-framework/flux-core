@@ -158,7 +158,11 @@ test_expect_success 'kvs: empty directory can be created' '
 	test_empty_directory $DIR
 '
 test_expect_success 'kvs: put values in a directory then retrieve them' '
-	${KVSBASIC} put $DIR.a=69 $DIR.b=70 $DIR.c=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+	${KVSBASIC} put $DIR.a=69 &&
+        ${KVSBASIC} put $DIR.b=70 &&
+        ${KVSBASIC} put $DIR.c=3.14 &&
+        ${KVSBASIC} put $DIR.d=\"snerg\" &&
+        ${KVSBASIC} put $DIR.e=true &&
 	${KVSBASIC} dir $DIR | sort >output &&
 	cat >expected <<EOF
 $DIR.a = 69
@@ -171,7 +175,11 @@ EOF
 '
 test_expect_success 'kvs: create a dir with keys and subdir' '
 	${KVSBASIC} unlink $TEST &&
-	${KVSBASIC} put $DIR.a=69 $DIR.b=70 $DIR.c.d.e.f.g=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+	${KVSBASIC} put $DIR.a=69 &&
+        ${KVSBASIC} put $DIR.b=70 &&
+        ${KVSBASIC} put $DIR.c.d.e.f.g=3.14 &&
+        ${KVSBASIC} put $DIR.d=\"snerg\" &&
+        ${KVSBASIC} put $DIR.e=true &&
 	${KVSBASIC} dir -r $DIR | sort >output &&
 	cat >expected <<EOF
 $DIR.a = 69
@@ -185,7 +193,11 @@ EOF
 
 test_expect_success 'kvs: directory with multiple subdirs' '
 	${KVSBASIC} unlink $TEST &&
-	${KVSBASIC} put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+	${KVSBASIC} put $DIR.a=69 &&
+        ${KVSBASIC} put $DIR.b.c.d.e.f.g=70 &&
+        ${KVSBASIC} put $DIR.c.a.b=3.14 &&
+        ${KVSBASIC} put $DIR.d=\"snerg\" &&
+        ${KVSBASIC} put $DIR.e=true &&
 	${KVSBASIC} dir -r $DIR | sort >output &&
 	cat >expected <<EOF
 $DIR.a = 69
@@ -199,7 +211,11 @@ EOF
 
 test_expect_success 'kvs: directory with multiple subdirs using dirat' '
 	${KVSBASIC} unlink $TEST &&
-	${KVSBASIC} put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
+	${KVSBASIC} put $DIR.a=69
+        ${KVSBASIC} put $DIR.b.c.d.e.f.g=70 &&
+        ${KVSBASIC} put $DIR.c.a.b=3.14 &&
+        ${KVSBASIC} put $DIR.d=\"snerg\" &&
+        ${KVSBASIC} put $DIR.e=true &&
         DIRREF=$(${KVSBASIC} get-treeobj $DIR) &&
 	${KVSBASIC} dirat -r $DIRREF | sort >output &&
 	cat >expected <<EOF
