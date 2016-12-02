@@ -417,6 +417,7 @@ void cmd_watch (flux_t *h, int argc, char **argv)
         if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
             log_err_exit ("%s", argv[0]);
     } while (true);
+    free (json_str);
 }
 
 void cmd_dropcache (flux_t *h, int argc, char **argv)
@@ -768,7 +769,7 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
         log_err_exit ("kvs_put_treeobj %s=%s", key, val);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
-
+    free (key);
 }
 
 void cmd_readlinkat (flux_t *h, int argc, char **argv)
