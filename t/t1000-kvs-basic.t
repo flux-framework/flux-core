@@ -217,7 +217,7 @@ test_expect_success 'kvs: directory with multiple subdirs using dirat' '
         ${KVSBASIC} put $DIR.d=\"snerg\" &&
         ${KVSBASIC} put $DIR.e=true &&
         DIRREF=$(${KVSBASIC} get-treeobj $DIR) &&
-	${KVSBASIC} dirat -r $DIRREF | sort >output &&
+	${KVSBASIC} dirat -r $DIRREF . | sort >output &&
 	cat >expected <<EOF
 a = 69
 b.c.d.e.f.g = 70
@@ -464,7 +464,7 @@ test_expect_success 'kvs: walk 16x3 directory tree' '
 test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
 	DIRREF=$(${KVSBASIC} get-treeobj $TEST.dtree) &&
 	${KVSBASIC} unlink $TEST.dtree &&
-	test $(${KVSBASIC} dirat -r $DIRREF | wc -l) = 4096
+	test $(${KVSBASIC} dirat -r $DIRREF . | wc -l) = 4096
 '
 
 test_expect_success 'kvs: store 2x4 directory tree and walk' '

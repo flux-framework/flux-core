@@ -599,7 +599,6 @@ done:
 void cmd_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
-    char *key;
     kvsdir_t *dir;
 
     if (argc > 0) {
@@ -613,14 +612,10 @@ void cmd_dir (flux_t *h, int argc, char **argv)
                 break;
         }
     }
-    if (argc == 0)
-        key = ".";
-    else if (argc == 1)
-        key = argv[0];
-    else
-        log_msg_exit ("dir: specify zero or one directory");
-    if (kvs_get_dir (h, &dir, "%s", key) < 0)
-        log_err_exit ("%s", key);
+    if (argc != 1)
+        log_msg_exit ("dir: specify directory");
+    if (kvs_get_dir (h, &dir, "%s", argv[0]) < 0)
+        log_err_exit ("%s", argv[0]);
     dump_kvs_dir (dir, ropt);
     kvsdir_destroy (dir);
 }
@@ -628,7 +623,6 @@ void cmd_dir (flux_t *h, int argc, char **argv)
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
-    char *key;
     kvsdir_t *dir;
 
     if (argc > 0) {
@@ -642,14 +636,10 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
                 break;
         }
     }
-    if (argc == 1)
-        key = ".";
-    else if (argc == 2)
-        key = argv[1];
-    else
-        log_msg_exit ("dir: specify treeobj and zero or one directory");
-    if (kvs_get_dirat (h, argv[0], key, &dir) < 0)
-        log_err_exit ("%s", key);
+    if (argc != 2)
+        log_msg_exit ("dir: specify treeobj and directory");
+    if (kvs_get_dirat (h, argv[0], argv[1], &dir) < 0)
+        log_err_exit ("%s", argv[1]);
     dump_kvs_dir (dir, ropt);
     kvsdir_destroy (dir);
 }
