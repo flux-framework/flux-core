@@ -298,7 +298,7 @@ void cmd_unlink (flux_t *h, int argc, char **argv)
         log_msg_exit ("unlink: specify one or more keys");
     for (i = 0; i < argc; i++) {
         /* FIXME: unlink nonexistent silently fails */
-        /* FIXME: unlink directory silently succedes */
+        /* FIXME: unlink directory silently succeeds */
         if (kvs_unlink (h, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
