@@ -46,15 +46,6 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
-#if WITH_TCMALLOC
-#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
-  #include <gperftools/heap-profiler.h>
-#elif HAVE_GOOGLE_HEAP_PROFILER_H
-  #include <google/heap-profiler.h>
-#else
-  #error gperftools headers not configured
-#endif
-#endif /* WITH_TCMALLOC */
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
@@ -86,6 +77,7 @@
 #include "log.h"
 #include "content-cache.h"
 #include "runlevel.h"
+#include "heaptrace.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -632,6 +624,8 @@ int main (int argc, char *argv[])
      */
     if (attr_register_handlers (ctx.attrs, ctx.h) < 0)
         log_err_exit ("attr_register_handlers");
+    if (heaptrace_initialize (ctx.h) < 0)
+        log_msg_exit ("heaptrace_initialize");
     broker_add_services (&ctx);
 
     /* Load default modules
@@ -2268,79 +2262,6 @@ static int cmb_seq (flux_msg_t **msg, void *arg)
     return (rc);
 }
 
-static int cmb_heaptrace_start_cb (flux_msg_t **msg, void *arg)
-{
-    const char *json_str, *filename;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "filename", &filename)) {
-        errno = EPROTO;
-        goto done;
-    }
-#if WITH_TCMALLOC
-    if (IsHeapProfilerRunning ()) {
-        errno = EINVAL;
-        goto done;
-    }
-    HeapProfilerStart (filename);
-    rc = 0;
-#else
-    errno = ENOSYS;
-#endif
-done:
-    Jput (in);
-    return rc;
-}
-
-static int cmb_heaptrace_dump_cb (flux_msg_t **msg, void *arg)
-{
-    const char *json_str, *reason;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "reason", &reason)) {
-        errno = EPROTO;
-        goto done;
-    }
-#if WITH_TCMALLOC
-    if (!IsHeapProfilerRunning ()) {
-        errno = EINVAL;
-        goto done;
-    }
-    HeapProfilerDump (reason);
-    rc = 0;
-#else
-    errno = ENOSYS;
-#endif
-done:
-    Jput (in);
-    return rc;
-}
-
-static int cmb_heaptrace_stop_cb (flux_msg_t **msg, void *arg)
-{
-    int rc = -1;
-    if (flux_request_decode (*msg, NULL, NULL) < 0)
-        goto done;
-#if WITH_TCMALLOC
-    if (!IsHeapProfilerRunning ()) {
-        errno = EINVAL;
-        goto done;
-    }
-    HeapProfilerStop();
-    rc = 0;
-#else
-    errno = ENOSYS;
-#endif /* WITH_TCMALLOC */
-done:
-    return rc;
-}
-
 static int requeue_for_service (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2380,12 +2301,10 @@ static struct internal_service services[] = {
     { "cmb.seq.fetch",  "[0]",  cmb_seq             },
     { "cmb.seq.set",    "[0]",  cmb_seq             },
     { "cmb.seq.destroy","[0]",  cmb_seq             },
-    { "cmb.heaptrace.start",NULL, cmb_heaptrace_start_cb },
-    { "cmb.heaptrace.dump", NULL, cmb_heaptrace_dump_cb  },
-    { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
     { "content",        NULL,   requeue_for_service },
     { "hello",          NULL,   requeue_for_service },
     { "attr",           NULL,   requeue_for_service },
+    { "heaptrace",      NULL,   requeue_for_service },
     { NULL, NULL, },
 };
 

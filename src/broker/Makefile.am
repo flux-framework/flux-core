@@ -37,7 +37,9 @@ flux_broker_SOURCES = \
 	content-cache.h \
 	content-cache.c \
 	runlevel.h \
-	runlevel.c
+	runlevel.c \
+	heaptrace.h \
+	heaptrace.c
 
 
 flux_broker_LDADD = \

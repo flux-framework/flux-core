@@ -38,10 +38,10 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
     Jadd_str (in, "filename", av[ac - 1]);
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "cmb.heaptrace.start", Jtostr (in),
+    if (!(rpc = flux_rpc (h, "heaptrace.start", Jtostr (in),
                           FLUX_NODEID_ANY, 0))
             || flux_rpc_get (rpc, NULL) < 0)
-        log_err_exit ("cmb.heaptrace.start");
+        log_err_exit ("heaptrace.start");
     flux_rpc_destroy (rpc);
     flux_close (h);
     return (0);
@@ -58,9 +58,9 @@ static int internal_heaptrace_stop (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "cmb.heaptrace.stop", NULL, FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpc (h, "heaptrace.stop", NULL, FLUX_NODEID_ANY, 0))
             || flux_rpc_get (rpc, NULL) < 0)
-        log_err_exit ("cmb.heaptrace.stop");
+        log_err_exit ("heaptrace.stop");
     flux_rpc_destroy (rpc);
     flux_close (h);
     return (0);
@@ -79,10 +79,10 @@ static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
     Jadd_str (in, "reason", av[ac - 1]);
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "cmb.heaptrace.dump", Jtostr (in),
+    if (!(rpc = flux_rpc (h, "heaptrace.dump", Jtostr (in),
                           FLUX_NODEID_ANY, 0))
             || flux_rpc_get (rpc, NULL) < 0)
-        log_err_exit ("cmb.heaptrace.dump");
+        log_err_exit ("heaptrace.dump");
     flux_rpc_destroy (rpc);
     flux_close (h);
     return (0);
