@@ -228,6 +228,35 @@ void cmd_type (flux_t *h, int argc, char **argv)
     }
 }
 
+static void output_key_json_object (const char *key, json_object *o)
+{
+    if (key)
+        printf ("%s = ", key);
+
+    switch (json_object_get_type (o)) {
+    case json_type_null:
+        printf ("nil\n");
+        break;
+    case json_type_boolean:
+        printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
+        break;
+    case json_type_double:
+        printf ("%f\n", json_object_get_double (o));
+        break;
+    case json_type_int:
+        printf ("%d\n", json_object_get_int (o));
+        break;
+    case json_type_string:
+        printf ("%s\n", json_object_get_string (o));
+        break;
+    case json_type_array:
+    case json_type_object:
+    default:
+        printf ("%s\n", Jtostr (o));
+        break;
+    }
+}
+
 void cmd_get (flux_t *h, int argc, char **argv)
 {
     char *json_str;
@@ -241,28 +270,7 @@ void cmd_get (flux_t *h, int argc, char **argv)
             log_err_exit ("%s", argv[i]);
         if (!(o = Jfromstr (json_str)))
             log_msg_exit ("%s: malformed JSON", argv[i]);
-        switch (json_object_get_type (o)) {
-            case json_type_null:
-                printf ("nil\n");
-                break;
-            case json_type_boolean:
-                printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
-                break;
-            case json_type_double:
-                printf ("%f\n", json_object_get_double (o));
-                break;
-            case json_type_int:
-                printf ("%d\n", json_object_get_int (o));
-                break;
-            case json_type_string:
-                printf ("%s\n", json_object_get_string (o));
-                break;
-            case json_type_array:
-            case json_type_object:
-            default:
-                printf ("%s\n", Jtostr (o));
-                break;
-        }
+        output_key_json_object (NULL, o);
         Jput (o);
         free (json_str);
     }
@@ -511,29 +519,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
         printf ("%s: invalid JSON", key);
         return;
     }
-    switch (json_object_get_type (o)) {
-        case json_type_null:
-            printf ("%s = nil\n", key);
-            break;
-        case json_type_boolean:
-            printf ("%s = %s\n", key, json_object_get_boolean (o)
-                                      ? "true" : "false");
-            break;
-        case json_type_double:
-            printf ("%s = %f\n", key, json_object_get_double (o));
-            break;
-        case json_type_int:
-            printf ("%s = %d\n", key, json_object_get_int (o));
-            break;
-        case json_type_string:
-            printf ("%s = %s\n", key, json_object_get_string (o));
-            break;
-        case json_type_array:
-        case json_type_object:
-        default:
-            printf ("%s = %s\n", key, Jtostr (o));
-            break;
-    }
+    output_key_json_object (key, o);
     Jput (o);
 }
 
