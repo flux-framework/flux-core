@@ -257,10 +257,26 @@ static void output_key_json_object (const char *key, json_object *o)
     }
 }
 
+static void output_key_json_str (const char *key,
+                                 const char *json_str,
+                                 const char *arg)
+{
+    json_object *o;
+
+    if (!json_str) {
+        output_key_json_object (key, NULL); 
+        return;
+    }
+
+    if (!(o = Jfromstr (json_str)))
+        log_msg_exit ("%s: malformed JSON", arg);
+    output_key_json_object (key, o);
+    Jput (o);
+}
+
 void cmd_get (flux_t *h, int argc, char **argv)
 {
     char *json_str;
-    json_object *o;
     int i;
 
     if (argc == 0)
@@ -268,10 +284,7 @@ void cmd_get (flux_t *h, int argc, char **argv)
     for (i = 0; i < argc; i++) {
         if (kvs_get (h, argv[i], &json_str) < 0)
             log_err_exit ("%s", argv[i]);
-        if (!(o = Jfromstr (json_str)))
-            log_msg_exit ("%s: malformed JSON", argv[i]);
-        output_key_json_object (NULL, o);
-        Jput (o);
+        output_key_json_str (NULL, json_str, argv[i]);
         free (json_str);
     }
 }
@@ -419,7 +432,7 @@ void cmd_watch (flux_t *h, int argc, char **argv)
     if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
         log_err_exit ("%s", key);
     do {
-        printf ("%s\n", json_str ? json_str : "NULL");
+        output_key_json_str (NULL, json_str, key);
         if (--count == 0)
             break;
         if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
@@ -733,13 +746,13 @@ void cmd_get_treeobj (flux_t *h, int argc, char **argv)
 
 void cmd_getat (flux_t *h, int argc, char **argv)
 {
-    char *val = NULL;
+    char *json_str;
     if (argc != 2)
         log_msg_exit ("getat: specify treeobj and key");
-    if (kvs_getat (h, argv[0], argv[1], &val) < 0)
+    if (kvs_getat (h, argv[0], argv[1], &json_str) < 0)
         log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
-    printf ("%s\n", val);
-    free (val);
+    output_key_json_str (NULL, json_str, argv[1]);
+    free (json_str);
 }
 
 void cmd_put_treeobj (flux_t *h, int argc, char **argv)
