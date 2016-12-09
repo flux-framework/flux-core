@@ -308,7 +308,19 @@ void cmd_watch (flux_t *h, int argc, char **argv)
     char *json_str = NULL;
     char *key;
     int count = -1;
+    bool oopt = false;
 
+    if (argc > 0) {
+        while (argc) {
+            if (!strcmp (argv[0], "-o")) {
+                oopt = true;
+                argc--;
+                argv++;
+            }
+            else
+                break;
+        }
+    }
     if (argc == 2) {
         count = strtoul (argv[0], NULL, 10);
         argc--;
@@ -319,6 +331,8 @@ void cmd_watch (flux_t *h, int argc, char **argv)
     key = argv[0];
     if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
         log_err_exit ("%s", key);
+    if (oopt)
+        output_key_json_str (NULL, json_str, key);
     while (count) {
         if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
             log_err_exit ("%s", argv[0]);
@@ -402,6 +416,7 @@ void cmd_watch_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
     bool dopt = false;
+    bool oopt = false;
     char *key;
     kvsdir_t *dir = NULL;
     int rc;
@@ -419,6 +434,11 @@ void cmd_watch_dir (flux_t *h, int argc, char **argv)
                 argc--;
                 argv++;
             }
+            else if (!strcmp (argv[0], "-o")) {
+                oopt = true;
+                argc--;
+                argv++;
+            }
             else
                 break;
         }
@@ -433,6 +453,11 @@ void cmd_watch_dir (flux_t *h, int argc, char **argv)
     key = argv[0];
 
     rc = kvs_get_dir (h, &dir, "%s", key);
+    if (oopt) {
+        dump_kvs_dir (dir, ropt, dopt);
+        printf ("======================\n");
+        fflush (stdout);
+    }
     while (rc == 0 || (rc < 0 && errno == ENOENT)) {
         rc = kvs_watch_once_dir (h, &dir, "%s", key);
         if (rc < 0) {
