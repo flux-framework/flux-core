@@ -44,60 +44,39 @@ static const struct option longopts[] = {
 };
 
 void cmd_get (flux_t *h, int argc, char **argv);
-void cmd_type (flux_t *h, int argc, char **argv);
 void cmd_put (flux_t *h, int argc, char **argv);
 void cmd_unlink (flux_t *h, int argc, char **argv);
 void cmd_link (flux_t *h, int argc, char **argv);
 void cmd_readlink (flux_t *h, int argc, char **argv);
 void cmd_mkdir (flux_t *h, int argc, char **argv);
-void cmd_exists (flux_t *h, int argc, char **argv);
 void cmd_version (flux_t *h, int argc, char **argv);
 void cmd_wait (flux_t *h, int argc, char **argv);
 void cmd_watch (flux_t *h, int argc, char **argv);
 void cmd_watch_dir (flux_t *h, int argc, char **argv);
 void cmd_dropcache (flux_t *h, int argc, char **argv);
 void cmd_dropcache_all (flux_t *h, int argc, char **argv);
-void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
-void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
 void cmd_copy (flux_t *h, int argc, char **argv);
 void cmd_move (flux_t *h, int argc, char **argv);
 void cmd_dir (flux_t *h, int argc, char **argv);
-void cmd_dirsize (flux_t *h, int argc, char **argv);
-void cmd_get_treeobj (flux_t *h, int argc, char **argv);
-void cmd_put_treeobj (flux_t *h, int argc, char **argv);
-void cmd_getat (flux_t *h, int argc, char **argv);
-void cmd_dirat (flux_t *h, int argc, char **argv);
-void cmd_readlinkat (flux_t *h, int argc, char **argv);
-
 
 void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-kvs get                 key [key...]\n"
-"       flux-kvs type                key [key...]\n"
 "       flux-kvs put                 key=val [key=val...]\n"
 "       flux-kvs unlink              key [key...]\n"
 "       flux-kvs link                target link_name\n"
 "       flux-kvs readlink            key\n"
 "       flux-kvs mkdir               key [key...]\n"
-"       flux-kvs exists              key\n"
 "       flux-kvs watch               [count] key\n"
 "       flux-kvs watch-dir [-r] [-d] [count] key\n"
-"       flux-kvs copy-tokvs          key file\n"
-"       flux-kvs copy-fromkvs        key file\n"
 "       flux-kvs copy                srckey dstkey\n"
 "       flux-kvs move                srckey dstkey\n"
 "       flux-kvs dir [-r] [-d]       [key]\n"
-"       flux-kvs dirsize             key\n"
 "       flux-kvs version\n"
 "       flux-kvs wait                version\n"
 "       flux-kvs dropcache\n"
 "       flux-kvs dropcache-all\n"
-"       flux-kvs get-treeobj         key\n"
-"       flux-kvs put-treeobj         key=treeobj\n"
-"       flux-kvs getat               treeobj key\n"
-"       flux-kvs dirat [-r] [-d]     treeobj [key]\n"
-"       flux-kvs readlinkat          treeobj key\n"
 );
     exit (1);
 }
@@ -129,8 +108,6 @@ int main (int argc, char *argv[])
 
     if (!strcmp (cmd, "get"))
         cmd_get (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "type"))
-        cmd_type (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put"))
         cmd_put (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "unlink"))
@@ -141,8 +118,6 @@ int main (int argc, char *argv[])
         cmd_readlink (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "mkdir"))
         cmd_mkdir (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "exists"))
-        cmd_exists (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "version"))
         cmd_version (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "wait"))
@@ -155,77 +130,18 @@ int main (int argc, char *argv[])
         cmd_dropcache (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dropcache-all"))
         cmd_dropcache_all (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "copy-tokvs"))
-        cmd_copy_tokvs (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "copy-fromkvs"))
-        cmd_copy_fromkvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy"))
         cmd_copy (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "move"))
         cmd_move (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dir"))
         cmd_dir (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dirsize"))
-        cmd_dirsize (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "get-treeobj"))
-        cmd_get_treeobj (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "put-treeobj"))
-        cmd_put_treeobj (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "getat"))
-        cmd_getat (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dirat"))
-        cmd_dirat (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "readlinkat"))
-        cmd_readlinkat (h, argc - optind, argv + optind);
     else
         usage ();
 
     flux_close (h);
     log_fini ();
     return 0;
-}
-
-void cmd_type (flux_t *h, int argc, char **argv)
-{
-    char *json_str;
-    json_object *o;
-    int i;
-
-    if (argc == 0)
-        log_msg_exit ("get-type: specify one or more keys");
-    for (i = 0; i < argc; i++) {
-        if (kvs_get (h, argv[i], &json_str) < 0)
-            log_err_exit ("%s", argv[i]);
-        if (!(o = Jfromstr (json_str)))
-            log_msg_exit ("%s: malformed JSON", argv[i]);
-        const char *type = "unknown";
-        switch (json_object_get_type (o)) {
-            case json_type_null:
-                type = "null";
-                break;
-            case json_type_boolean:
-                type = "boolean";
-                break;
-            case json_type_double:
-                type = "double";
-                break;
-            case json_type_int:
-                type = "int";
-                break;
-            case json_type_object:
-                type = "object";
-                break;
-            case json_type_array:
-                type = "array";
-                break;
-            case json_type_string:
-                type = "string";
-                break;
-        }
-        printf ("%s\n", type);
-        Jput (o);
-        free (json_str);
-    }
 }
 
 static void output_key_json_object (const char *key, json_object *o)
@@ -367,33 +283,6 @@ void cmd_mkdir (flux_t *h, int argc, char **argv)
         log_err_exit ("kvs_commit");
 }
 
-bool key_exists (flux_t *h, const char *key)
-{
-    char *json_str = NULL;
-    kvsdir_t *dir = NULL;
-
-    if (kvs_get (h, key, &json_str) == 0) {
-        free (json_str);
-        return true;
-    }
-    if (errno == EISDIR && kvs_get_dir (h, &dir, "%s", key) == 0) {
-        kvsdir_destroy (dir);
-        return true;
-    }
-    return false;
-}
-
-void cmd_exists (flux_t *h, int argc, char **argv)
-{
-    int i;
-    if (argc == 0)
-        log_msg_exit ("exist: specify one or more keys");
-    for (i = 0; i < argc; i++) {
-        if (!key_exists (h, argv[i]))
-            exit (1);
-    }
-}
-
 void cmd_version (flux_t *h, int argc, char **argv)
 {
     int vers;
@@ -457,72 +346,6 @@ void cmd_dropcache_all (flux_t *h, int argc, char **argv)
         log_err_exit ("flux_send");
     flux_msg_destroy (msg);
 }
-
-void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
-{
-    char *file, *key;
-    int fd, len;
-    uint8_t *buf;
-    json_object *o;
-
-    if (argc != 2)
-        log_msg_exit ("copy-tokvs: specify key and filename");
-    key = argv[0];
-    file = argv[1];
-    if (!strcmp (file, "-")) {
-        if ((len = read_all (STDIN_FILENO, &buf)) < 0)
-            log_err_exit ("stdin");
-    } else {
-        if ((fd = open (file, O_RDONLY)) < 0)
-            log_err_exit ("%s", file);
-        if ((len = read_all (fd, &buf)) < 0)
-            log_err_exit ("%s", file);
-        (void)close (fd);
-    }
-    o = Jnew ();
-    json_object_object_add (o, "data", base64_json_encode (buf, len));
-    if (kvs_put (h, key, Jtostr (o)) < 0)
-        log_err_exit ("%s", key);
-    if (kvs_commit (h) < 0)
-        log_err_exit ("kvs_commit");
-    Jput (o);
-    free (buf);
-}
-
-void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
-{
-    char *file, *key;
-    int fd, len;
-    uint8_t *buf;
-    json_object *o;
-    char *json_str;
-
-    if (argc != 2)
-        log_msg_exit ("copy-fromkvs: specify key and filename");
-    key = argv[0];
-    file = argv[1];
-    if (kvs_get (h, key, &json_str) < 0)
-        log_err_exit ("%s", key);
-    if (!(o = Jfromstr (json_str)))
-        log_msg_exit ("%s: invalid JSON", key);
-    if (base64_json_decode (Jobj_get (o, "data"), &buf, &len) < 0)
-        log_err_exit ("%s: decode error", key);
-    if (!strcmp (file, "-")) {
-        if (write_all (STDOUT_FILENO, buf, len) < 0)
-            log_err_exit ("stdout");
-    } else {
-        if ((fd = creat (file, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0)
-            log_err_exit ("%s", file);
-        if (write_all (fd, buf, len) < 0)
-            log_err_exit ("%s", file);
-        if (close (fd) < 0)
-            log_err_exit ("%s", file);
-    }
-    free (buf);
-    Jput (o);
-    free (json_str);
-}
-
 
 static void dump_kvs_val (const char *key, const char *json_str)
 {
@@ -666,52 +489,6 @@ void cmd_dir (flux_t *h, int argc, char **argv)
     kvsdir_destroy (dir);
 }
 
-void cmd_dirat (flux_t *h, int argc, char **argv)
-{
-    bool ropt = false;
-    bool dopt = false;
-    char *key;
-    kvsdir_t *dir;
-
-    if (argc > 0) {
-        while (argc) {
-            if (!strcmp (argv[0], "-r")) {
-                ropt = true;
-                argc--;
-                argv++;
-            }
-            else if (!strcmp (argv[0], "-d")) {
-                dopt = true;
-                argc--;
-                argv++;
-            }
-            else
-                break;
-        }
-    }
-    if (argc == 1)
-        key = ".";
-    else if (argc == 2)
-        key = argv[1];
-    else
-        log_msg_exit ("dir: specify treeobj and zero or one directory");
-    if (kvs_get_dirat (h, argv[0], key, &dir) < 0)
-        log_err_exit ("%s", key);
-    dump_kvs_dir (dir, ropt, dopt);
-    kvsdir_destroy (dir);
-}
-
-void cmd_dirsize (flux_t *h, int argc, char **argv)
-{
-    kvsdir_t *dir = NULL;
-    if (argc != 1)
-        log_msg_exit ("dirsize: specify one directory");
-    if (kvs_get_dir (h, &dir, "%s", argv[0]) < 0)
-        log_err_exit ("%s", argv[0]);
-    printf ("%d\n", kvsdir_get_size (dir));
-    kvsdir_destroy (dir);
-}
-
 void cmd_copy (flux_t *h, int argc, char **argv)
 {
     if (argc != 2)
@@ -730,60 +507,6 @@ void cmd_move (flux_t *h, int argc, char **argv)
         log_err_exit ("kvs_move %s %s", argv[0], argv[1]);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
-}
-
-void cmd_get_treeobj (flux_t *h, int argc, char **argv)
-{
-    char *treeobj = NULL;
-    if (argc != 1)
-        log_msg_exit ("get-treeobj: specify key");
-    if (kvs_get_treeobj (h, argv[0], &treeobj) < 0)
-        log_err_exit ("kvs_get_treeobj %s", argv[0]);
-    printf ("%s\n", treeobj);
-    free (treeobj);
-}
-
-void cmd_getat (flux_t *h, int argc, char **argv)
-{
-    char *json_str;
-    if (argc != 2)
-        log_msg_exit ("getat: specify treeobj and key");
-    if (kvs_getat (h, argv[0], argv[1], &json_str) < 0)
-        log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
-    output_key_json_str (NULL, json_str, argv[1]);
-    free (json_str);
-}
-
-void cmd_put_treeobj (flux_t *h, int argc, char **argv)
-{
-    if (argc != 1)
-        log_msg_exit ("put-treeobj: specify key=val");
-    char *key = xstrdup (argv[0]);
-    char *val = strchr (key, '=');
-    if (!val)
-        log_msg_exit ("put-treeobj: you must specify a value as key=val");
-    *val++ = '\0';
-    if (kvs_put_treeobj (h, key, val) < 0)
-        log_err_exit ("kvs_put_treeobj %s=%s", key, val);
-    if (kvs_commit (h) < 0)
-        log_err_exit ("kvs_commit");
-    free (key);
-}
-
-void cmd_readlinkat (flux_t *h, int argc, char **argv)
-{
-    int i;
-    char *target;
-
-    if (argc < 2)
-        log_msg_exit ("readlink: specify treeobj and one or more keys");
-    for (i = 1; i < argc; i++) {
-        if (kvs_get_symlinkat (h, argv[0], argv[i], &target) < 0)
-            log_err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", target);
-        free (target);
-    }
 }
 
 /*
