@@ -56,13 +56,13 @@
 #include "modservice.h"
 
 
+
 #define MODULE_MAGIC    0xfeefbe01
 struct module_struct {
     int magic;
 
-    zctx_t *zctx;
-    uint32_t rank;
-    flux_t *broker_h;
+    modhash_t *modhash;     /* back reference to modhash for this module */
+
     flux_watcher_t *broker_w;
 
     int lastseen;
@@ -109,7 +109,7 @@ static int setup_module_profiling (module_t *p)
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.type", "module");
     cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_int_byname ("flux.rank", p->rank);
+    cali_begin_int_byname ("flux.rank", p->modhash->rank);
     cali_begin_string_byname ("flux.name", p->name);
 #endif
     return (0);
@@ -117,6 +117,7 @@ static int setup_module_profiling (module_t *p)
 
 static void *module_thread (void *arg)
 {
+    zctx_t *zctx;
     module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
@@ -128,7 +129,8 @@ static void *module_thread (void *arg)
     int mod_main_errno = 0;
     flux_msg_t *msg;
 
-    assert (p->zctx);
+    assert (p->modhash->zctx);
+    zctx = p->modhash->zctx;
 
     setup_module_profiling (p);
 
@@ -136,11 +138,10 @@ static void *module_thread (void *arg)
      */
     if (!(p->h = flux_open (uri, 0)))
         log_err_exit ("flux_open %s", uri);
-    if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT,
-                      p->zctx, sizeof (p->zctx)) < 0)
+    if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT, zctx, sizeof (zctx)) < 0)
         log_err_exit ("flux_opt_set ZEROMQ_CONTEXT");
 
-    rankstr = xasprintf ("%"PRIu32, p->rank);
+    rankstr = xasprintf ("%"PRIu32, p->modhash->rank);
     if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
         goto done;
@@ -247,7 +248,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->rank);
+            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->modhash->rank);
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
             if (flux_msg_push_route (cpy, uuid) < 0)
@@ -316,7 +317,7 @@ static void module_destroy (module_t *p)
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
-    zsocket_destroy (p->zctx, p->sock);
+    zsocket_destroy (p->modhash->zctx, p->sock);
 
     dlclose (p->dso);
     zuuid_destroy (&p->uuid);
@@ -522,6 +523,7 @@ module_t *module_add (modhash_t *mh, const char *path)
         return NULL;
     }
     p = xzmalloc (sizeof (*p));
+    p->modhash = mh;
     p->name = xstrdup (*mod_namep);
     if (mod_servicep && *mod_servicep)
         p->service = xstrdup (*mod_servicep);
@@ -539,19 +541,16 @@ module_t *module_add (modhash_t *mh, const char *path)
     if (!(p->subs = zlist_new ()))
         oom ();
 
-    p->rank = mh->rank;
-    p->zctx = mh->zctx;
-    p->broker_h = mh->broker_h;
     p->heartbeat = mh->heartbeat;
 
     /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zsocket_new (p->zctx, ZMQ_PAIR)))
+    if (!(p->sock = zsocket_new (p->modhash->zctx, ZMQ_PAIR)))
         log_err_exit ("zsocket_new");
     zsocket_set_hwm (p->sock, 0);
     if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
         log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
-    if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
+    if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (mh->broker_h),
                                                  p->sock, FLUX_POLLIN,
                                                  module_cb, p)))
         log_err_exit ("flux_zmq_watcher_create");
