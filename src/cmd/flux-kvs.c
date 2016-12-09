@@ -319,13 +319,12 @@ void cmd_watch (flux_t *h, int argc, char **argv)
     key = argv[0];
     if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
         log_err_exit ("%s", key);
-    do {
-        output_key_json_str (NULL, json_str, key);
-        if (--count == 0)
-            break;
+    while (count) {
         if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
             log_err_exit ("%s", argv[0]);
-    } while (true);
+        output_key_json_str (NULL, json_str, key);
+        count--;
+    }
     free (json_str);
 }
 
@@ -435,6 +434,7 @@ void cmd_watch_dir (flux_t *h, int argc, char **argv)
 
     rc = kvs_get_dir (h, &dir, "%s", key);
     while (rc == 0 || (rc < 0 && errno == ENOENT)) {
+        rc = kvs_watch_once_dir (h, &dir, "%s", key);
         if (rc < 0) {
             printf ("%s: %s\n", key, flux_strerror (errno));
             if (dir)
@@ -447,7 +447,6 @@ void cmd_watch_dir (flux_t *h, int argc, char **argv)
         }
         if (--count == 0)
             goto done;
-        rc = kvs_watch_once_dir (h, &dir, "%s", key);
     }
     log_err_exit ("%s", key);
 done:
