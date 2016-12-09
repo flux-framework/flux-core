@@ -46,11 +46,6 @@ COMMANDS
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.
 
-*type* 'key' ['key...']::
-Display the JSON type of the value under key: 'null', 'boolean', 'double',
-'int', 'object', 'array', or 'string'.  If nothing has been stored under
-'key', display an error message.
-
 *put* 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
 overwrite it.
@@ -61,9 +56,6 @@ If 'key' does not exist or is not a directory, display an error message.
 If 'key' is not provided, "." (root of the namespace) is assumed.  If '-r'
 is specified, recursively display keys under subdirectories.  If '-d' is
 specified, do not output key values.
-
-*dirsize* 'key'::
-Get the number of keys in a directory.
 
 *unlink* 'key' ['key...']::
 Remove 'key' from the KVS and commit the change.  If 'key' represents
@@ -95,15 +87,6 @@ under subdirectories.  If '-d' is specified, do not output key values.
 If 'count' is specified, display at most 'count' versions.  Otherwise,
 this command runs forever.
 
-*copy-tokvs* 'key' 'file'::
-Copy data from 'file' to 'key', encoding to Z85 format and committing
-the change.  'file' may be a UNIX file name or "-" indicating standard
-input.
-
-*copy-fromkvs* 'key' 'file'::
-Copy data from 'key' to 'file', decoding from Z85 format.
-'file' may be a UNIX file name or "-" indicating standard output.
-
 *version*::
 Display the current KVS version, an integer value.  The version starts
 at zero and is incremented on each KVS commit.  Note that some commits
@@ -130,31 +113,6 @@ reference is created; it is unnecessary for *copy* to recurse into 'source'.
 
 *move* 'source' 'destination':: 
 Like *copy*, but 'source' is unlinked after the copy.
-
-*get-treeobj* 'key'::
-Retrieve the directory entry associated with 'key'.
-A treeobj should be treated as an opaque string value, which
-may contain spaces.
-
-*put-treeobj* 'key="treeobj"'::
-Associate a new treeobj with 'key', overwriting the previous treeobj,
-if any.  A treeobj should be treated as an opaque string value, which
-may contain spaces.
-
-*getat* 'treeobj' 'key'::
-Retrieve the value stored under 'key', starting the lookup at 'treeobj'.
-If nothing has been stored under 'key', display an error message.
-
-*dirat* [-r] [-d] 'treeobj' ['key']::
-Display all keys and their values under the directory 'key', starting
-lookup at 'treeobj'.  If 'key' does not exist or is not a directory,
-display an error message.  If 'key' is not provided, "." (root of the
-namespace) is assumed.  If '-r' is specified, recursively display keys
-under subdirectories.  If '-d' is specified, do not output key values.
-
-*readlinkat* 'treeobj' 'key'::
-Retrieve the key a link refers to rather than its value, as would be
-returned by *get*, starting lookup at 'treeobj'.
 
 
 AUTHOR
