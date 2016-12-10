@@ -64,7 +64,7 @@ static const struct option longopts[] = {
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: tcommit [--fence N] [--stats] nthreads count prefix\n");
+    fprintf (stderr, "Usage: commit [--fence N] [--stats] nthreads count prefix\n");
     exit (1);
 }
 

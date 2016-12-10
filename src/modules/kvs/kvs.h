@@ -29,10 +29,10 @@ void kvsdir_incref (kvsdir_t *dir);
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
  * on a directory (return -1, errno = EISDIR).  Use kvs_get_dir() which
- * returns the opaque kvsdir_t type.  kvs_get(), kvs_get_dir(), and
- * kvs_get_string() return values that must be freed with json_object_put(),
- * kvsdir_destroy(), and free() respectively.
- * These functions return -1 on error (errno set), 0 on success.
+ * returns the opaque kvsdir_t type.  kvs_get() and kvs_get_string()
+ * return values that must be freed with free().  kvs_get_dir() return
+ * values must be freed with kvsdir_destroy().  These functions return
+ * -1 on error (errno set), 0 on success.
  */
 int kvs_get (flux_t *h, const char *key, char **json_str);
 int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
@@ -84,12 +84,14 @@ int kvs_watch_boolean (flux_t *h, const char *key, kvs_set_boolean_f set,
 int kvs_unwatch (flux_t *h, const char *key);
 
 /* While the above callback interface makes sense in plugin context,
- * the following is better for API context.  'valp' is an IN/OUT parameter.
- * You should first read the current value, then pass it into the
- * kvs_watch_once call, which will return with a new value when it changes.
- * (The original value is freed inside the function; the new one must
- * be freed by the caller).  *valp may be passed in with a NULL value.
- * If the key is not set, ENOENT is returned without affecting *valp.
+ * the following is better for API context.  'json_str', 'dirp', and
+ * 'valp' are IN/OUT parameters.  You should first read the current
+ * value, then pass it into the respective kvs_watch_once call, which
+ * will return with a new value when it changes.  (The original value
+ * is freed inside the function; the new one must be freed by the
+ * caller).  *json_str, *dirp, and *valp may be passed in with a NULL
+ * value.  If the key is not set, ENOENT is returned without affecting
+ * *valp.
  * FIXME: add more types.
  */
 int kvs_watch_once (flux_t *h, const char *key, char **json_str);

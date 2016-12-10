@@ -73,31 +73,31 @@ void cmd_readlinkat (flux_t *h, int argc, char **argv);
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-kvs get             key [key...]\n"
-"       flux-kvs type            key [key...]\n"
-"       flux-kvs put             key=val [key=val...]\n"
-"       flux-kvs unlink          key [key...]\n"
-"       flux-kvs link            target link_name\n"
-"       flux-kvs readlink        key\n"
-"       flux-kvs mkdir           key [key...]\n"
-"       flux-kvs exists          key\n"
-"       flux-kvs watch           [count] key\n"
-"       flux-kvs watch-dir [-r]  [count] key\n"
-"       flux-kvs copy-tokvs      key file\n"
-"       flux-kvs copy-fromkvs    key file\n"
-"       flux-kvs copy            srckey dstkey\n"
-"       flux-kvs move            srckey dstkey\n"
-"       flux-kvs dir [-r]        [key]\n"
-"       flux-kvs dirsize         key\n"
+"Usage: flux-kvs get                 key [key...]\n"
+"       flux-kvs type                key [key...]\n"
+"       flux-kvs put                 key=val [key=val...]\n"
+"       flux-kvs unlink              key [key...]\n"
+"       flux-kvs link                target link_name\n"
+"       flux-kvs readlink            key\n"
+"       flux-kvs mkdir               key [key...]\n"
+"       flux-kvs exists              key\n"
+"       flux-kvs watch               [count] key\n"
+"       flux-kvs watch-dir [-r] [-d] [count] key\n"
+"       flux-kvs copy-tokvs          key file\n"
+"       flux-kvs copy-fromkvs        key file\n"
+"       flux-kvs copy                srckey dstkey\n"
+"       flux-kvs move                srckey dstkey\n"
+"       flux-kvs dir [-r] [-d]       [key]\n"
+"       flux-kvs dirsize             key\n"
 "       flux-kvs version\n"
-"       flux-kvs wait            version\n"
+"       flux-kvs wait                version\n"
 "       flux-kvs dropcache\n"
 "       flux-kvs dropcache-all\n"
-"       flux-kvs get-treeobj     key\n"
-"       flux-kvs put-treeobj     key=treeobj\n"
-"       flux-kvs getat           treeobj key\n"
-"       flux-kvs dirat [-r]      treeobj [key]\n"
-"       flux-kvs readlinkat      treeobj key\n"
+"       flux-kvs get-treeobj         key\n"
+"       flux-kvs put-treeobj         key=treeobj\n"
+"       flux-kvs getat               treeobj key\n"
+"       flux-kvs dirat [-r] [-d]     treeobj [key]\n"
+"       flux-kvs readlinkat          treeobj key\n"
 );
     exit (1);
 }
@@ -228,10 +228,55 @@ void cmd_type (flux_t *h, int argc, char **argv)
     }
 }
 
+static void output_key_json_object (const char *key, json_object *o)
+{
+    if (key)
+        printf ("%s = ", key);
+
+    switch (json_object_get_type (o)) {
+    case json_type_null:
+        printf ("nil\n");
+        break;
+    case json_type_boolean:
+        printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
+        break;
+    case json_type_double:
+        printf ("%f\n", json_object_get_double (o));
+        break;
+    case json_type_int:
+        printf ("%d\n", json_object_get_int (o));
+        break;
+    case json_type_string:
+        printf ("%s\n", json_object_get_string (o));
+        break;
+    case json_type_array:
+    case json_type_object:
+    default:
+        printf ("%s\n", Jtostr (o));
+        break;
+    }
+}
+
+static void output_key_json_str (const char *key,
+                                 const char *json_str,
+                                 const char *arg)
+{
+    json_object *o;
+
+    if (!json_str) {
+        output_key_json_object (key, NULL); 
+        return;
+    }
+
+    if (!(o = Jfromstr (json_str)))
+        log_msg_exit ("%s: malformed JSON", arg);
+    output_key_json_object (key, o);
+    Jput (o);
+}
+
 void cmd_get (flux_t *h, int argc, char **argv)
 {
     char *json_str;
-    json_object *o;
     int i;
 
     if (argc == 0)
@@ -239,31 +284,7 @@ void cmd_get (flux_t *h, int argc, char **argv)
     for (i = 0; i < argc; i++) {
         if (kvs_get (h, argv[i], &json_str) < 0)
             log_err_exit ("%s", argv[i]);
-        if (!(o = Jfromstr (json_str)))
-            log_msg_exit ("%s: malformed JSON", argv[i]);
-        switch (json_object_get_type (o)) {
-            case json_type_null:
-                printf ("nil\n");
-                break;
-            case json_type_boolean:
-                printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
-                break;
-            case json_type_double:
-                printf ("%f\n", json_object_get_double (o));
-                break;
-            case json_type_int:
-                printf ("%d\n", json_object_get_int (o));
-                break;
-            case json_type_string:
-                printf ("%s\n", json_object_get_string (o));
-                break;
-            case json_type_array:
-            case json_type_object:
-            default:
-                printf ("%s\n", Jtostr (o));
-                break;
-        }
-        Jput (o);
+        output_key_json_str (NULL, json_str, argv[i]);
         free (json_str);
     }
 }
@@ -298,7 +319,7 @@ void cmd_unlink (flux_t *h, int argc, char **argv)
         log_msg_exit ("unlink: specify one or more keys");
     for (i = 0; i < argc; i++) {
         /* FIXME: unlink nonexistent silently fails */
-        /* FIXME: unlink directory silently succedes */
+        /* FIXME: unlink directory silently succeeds */
         if (kvs_unlink (h, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
@@ -411,12 +432,13 @@ void cmd_watch (flux_t *h, int argc, char **argv)
     if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
         log_err_exit ("%s", key);
     do {
-        printf ("%s\n", json_str ? json_str : "NULL");
+        output_key_json_str (NULL, json_str, key);
         if (--count == 0)
             break;
         if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
             log_err_exit ("%s", argv[0]);
     } while (true);
+    free (json_str);
 }
 
 void cmd_dropcache (flux_t *h, int argc, char **argv)
@@ -510,29 +532,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
         printf ("%s: invalid JSON", key);
         return;
     }
-    switch (json_object_get_type (o)) {
-        case json_type_null:
-            printf ("%s = nil\n", key);
-            break;
-        case json_type_boolean:
-            printf ("%s = %s\n", key, json_object_get_boolean (o)
-                                      ? "true" : "false");
-            break;
-        case json_type_double:
-            printf ("%s = %f\n", key, json_object_get_double (o));
-            break;
-        case json_type_int:
-            printf ("%s = %d\n", key, json_object_get_int (o));
-            break;
-        case json_type_string:
-            printf ("%s = %s\n", key, json_object_get_string (o));
-            break;
-        case json_type_array:
-        case json_type_object:
-        default:
-            printf ("%s = %s\n", key, Jtostr (o));
-            break;
-    }
+    output_key_json_object (key, o);
     Jput (o);
 }
 
@@ -746,13 +746,13 @@ void cmd_get_treeobj (flux_t *h, int argc, char **argv)
 
 void cmd_getat (flux_t *h, int argc, char **argv)
 {
-    char *val = NULL;
+    char *json_str;
     if (argc != 2)
         log_msg_exit ("getat: specify treeobj and key");
-    if (kvs_getat (h, argv[0], argv[1], &val) < 0)
+    if (kvs_getat (h, argv[0], argv[1], &json_str) < 0)
         log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
-    printf ("%s\n", val);
-    free (val);
+    output_key_json_str (NULL, json_str, argv[1]);
+    free (json_str);
 }
 
 void cmd_put_treeobj (flux_t *h, int argc, char **argv)
@@ -768,7 +768,7 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
         log_err_exit ("kvs_put_treeobj %s=%s", key, val);
     if (kvs_commit (h) < 0)
         log_err_exit ("kvs_commit");
-
+    free (key);
 }
 
 void cmd_readlinkat (flux_t *h, int argc, char **argv)
