@@ -412,7 +412,6 @@ void cmd_wait (flux_t *h, int argc, char **argv)
     vers = strtoul (argv[0], NULL, 10);
     if (kvs_wait_version (h, vers) < 0)
         log_err_exit ("kvs_get_version");
-    //printf ("%d\n", vers);
 }
 
 void cmd_watch (flux_t *h, int argc, char **argv)
