@@ -75,17 +75,19 @@ returned by *get*.
 Create an empty directory and commit the change.  If 'key' exists,
 it is overwritten.
 
-*watch* [count] 'key'::
+*watch* [-o] [count] 'key'::
 Watch 'key', displaying each change on a line of output.  If the key
 is not set, display "NULL".  If 'count' is specified, display at most
-'count' versions.  Otherwise, command runs forever.
+'count' changes.  Otherwise, command runs forever.  If '-o' is
+specified, output the current value before outputting changes.
 
-*watch-dir* [-r] [-d] [count] 'key'::
+*watch-dir* [-r] [-d] [-o] [count] 'key'::
 Watch directory specified at 'key', displaying changes within it and
 in subdirectories.  If '-r' is specified, recursively display keys
 under subdirectories.  If '-d' is specified, do not output key values.
-If 'count' is specified, display at most 'count' versions.  Otherwise,
-this command runs forever.
+If 'count' is specified, display at most 'count' changes.  Otherwise,
+this command runs forever.  If '-o' is specified, output the current
+value before outputting changes.
 
 *version*::
 Display the current KVS version, an integer value.  The version starts
