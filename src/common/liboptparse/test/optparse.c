@@ -838,10 +838,31 @@ Usage: test one [OPTIONS]\n\
     optparse_destroy (a);
 }
 
+void test_corner_case (void)
+{
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("optarg");
+    char *av[] = { "cornercase", NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int optindex;
+
+    ok (p != NULL, "optparse_create");
+
+    /* Test empty options do not segfault */
+
+    e = optparse_remove_option (p, "help");
+    ok (e == OPTPARSE_SUCCESS, "optparse_remove_option");
+
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
+
+    optparse_destroy (p);
+}
+
 int main (int argc, char *argv[])
 {
 
-    plan (193);
+    plan (196);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
@@ -851,6 +872,7 @@ int main (int argc, char *argv[])
     test_subcommand (); /* 56 tests */
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
+    test_corner_case (); /* 3 tests */
 
     done_testing ();
     return (0);
