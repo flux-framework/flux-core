@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: flux-pmi
+Description: Flux Core PMI Library
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir}/flux -lpmi
+Cflags: -I${includedir}/flux

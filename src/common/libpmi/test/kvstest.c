@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_Barrier: %s", rank, pmi_strerror (e));
     if (rank == 0)
-        printf ("%d: put phase: %.3f sec\n", rank, monotime_since (t));
+        printf ("%d: put phase: %.3f msec\n", rank, monotime_since (t));
 
     /* Get phase
      * no options:    (keycount * GET) + BARRIER
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
     if (e != PMI_SUCCESS)
         log_msg_exit ("%d: PMI_Barrier: %s", rank, pmi_strerror (e));
     if (rank == 0)
-        printf ("%d: get phase: %.3f sec\n", rank, monotime_since (t));
+        printf ("%d: get phase: %.3f msec\n", rank, monotime_since (t));
 
     e = PMI_Finalize ();
     if (e != PMI_SUCCESS)
