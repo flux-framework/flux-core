@@ -622,7 +622,7 @@ int PMI_Get_clique_ranks (int ranks[], int length)
             result = pmi_wrap_get_clique_ranks (ctx.wrap, ranks, length);
             break;
         default:
-            result = PMI_ERR_INIT;
+            result = PMI_FAIL;
             break;
     }
     if (result == PMI_FAIL)
@@ -638,7 +638,7 @@ int PMI_Get_clique_size (int *size)
             result = pmi_wrap_get_clique_size (ctx.wrap, size);
             break;
         default:
-            result = PMI_ERR_INIT;
+            result = PMI_FAIL;
             break;
     }
     if (result == PMI_FAIL)
