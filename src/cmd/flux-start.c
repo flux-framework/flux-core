@@ -129,6 +129,7 @@ int main (int argc, char *argv[])
     size_t len = 0;
     struct context *ctx = xzmalloc (sizeof (*ctx));
     const char *searchpath;
+    int optindex;
 
     log_init ("flux-start");
 
@@ -137,14 +138,14 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_add_option_table");
     if (optparse_set (ctx->opts, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_set usage");
-    if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
+    if ((optindex = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
     ctx->killer_timeout = optparse_get_double (ctx->opts, "killer-timeout",
                                                default_killer_timeout);
     if (ctx->killer_timeout < 0.)
         log_msg_exit ("--killer-timeout argument must be >= 0");
-    if (optind < argc) {
-        if ((e = argz_create (argv + optind, &command, &len)) != 0)
+    if (optindex < argc) {
+        if ((e = argz_create (argv + optindex, &command, &len)) != 0)
             log_errn_exit (e, "argz_creawte");
         argz_stringify (command, len, ' ');
     }

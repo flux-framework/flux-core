@@ -27,7 +27,6 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
-#include <getopt.h>
 #include <unistd.h>
 #include <string.h>
 #include <libgen.h>
@@ -129,6 +128,7 @@ int main (int argc, char *argv[])
     const char *searchpath, *s;
     const char *argv0 = argv[0];
     int flags = 0;
+    int optindex;
 
     log_init ("flux");
 
@@ -142,8 +142,8 @@ int main (int argc, char *argv[])
         usage (p); // N.B. accesses "conf_flags"
         exit (0);
     }
-    optind = optparse_optind (p);
-    if (argc - optind == 0) {
+    optindex = optparse_optind (p);
+    if (argc - optindex == 0) {
         usage (p);
         exit (1);
     }
@@ -224,14 +224,14 @@ int main (int argc, char *argv[])
 
     if (vopt)
         print_environment (env);
-    if (optparse_get_subcommand (p, argv [optind])) {
+    if (optparse_get_subcommand (p, argv [optindex])) {
         if (optparse_run_subcommand (p, argc, argv) < 0)
             exit (1);
     } else {
         searchpath = environment_get (env, "FLUX_EXEC_PATH");
         if (vopt)
             printf ("sub-command search path: %s\n", searchpath);
-        exec_subcommand (searchpath, vopt, argv + optind);
+        exec_subcommand (searchpath, vopt, argv + optindex);
     }
 
     environment_destroy (env);

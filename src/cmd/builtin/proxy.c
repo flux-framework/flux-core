@@ -896,16 +896,16 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     char pidfile[PATH_MAX + 1];
     const char *job;
     const char *optarg;
-    int optind;
+    int optindex;
 
     log_init ("flux-proxy");
 
-    optind = optparse_optind (p);
-    if (optind == ac)
+    optindex = optparse_optind (p);
+    if (optindex == ac)
         optparse_fatal_usage (p, 1, "JOB argument is required\n");
-    job = av[optind++];
+    job = av[optindex++];
 
-    if (optparse_hasopt (p, "stdio") && optind != ac)
+    if (optparse_hasopt (p, "stdio") && optindex != ac)
         optparse_fatal_usage (p, 1, "there can be no COMMAND with --stdio\n");
 
     while ((optarg = optparse_getopt_next (p, "setenv"))) {
@@ -979,7 +979,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
         /* Create child
          */
-        if (child_create (ctx, ac - optind, av + optind, workpath) < 0)
+        if (child_create (ctx, ac - optindex, av + optindex, workpath) < 0)
             log_err_exit ("child_create");
    }
 
