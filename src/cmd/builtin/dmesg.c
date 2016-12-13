@@ -41,7 +41,7 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
     int flags = 0;
     flux_log_f print_cb = flux_log_fprint;
 
-    if ((n = optparse_optind (p)) != ac)
+    if ((n = optparse_option_index (p)) != ac)
         log_msg_exit ("flux-dmesg accepts no free arguments");
 
     if (!(h = builtin_get_flux_handle (p)))

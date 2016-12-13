@@ -900,7 +900,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     log_init ("flux-proxy");
 
-    optindex = optparse_optind (p);
+    optindex = optparse_option_index (p);
     if (optindex == ac)
         optparse_fatal_usage (p, 1, "JOB argument is required\n");
     job = av[optindex++];

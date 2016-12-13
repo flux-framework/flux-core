@@ -36,7 +36,7 @@ static void print_environment (struct environment *env)
 
 static int cmd_env (optparse_t *p, int ac, char *av[])
 {
-    int n = optparse_optind (p);
+    int n = optparse_option_index (p);
     if (av && av[n]) {
         execvp (av[n], av+n); /* no return if sucessful */
         log_err_exit ("execvp (%s)", av[n]);

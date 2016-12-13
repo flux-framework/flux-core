@@ -41,7 +41,7 @@ static int no_docs_set (optparse_t *p)
 
 static int cmd_help (optparse_t *p, int ac, char *av[])
 {
-    int n = optparse_optind (p);
+    int n = optparse_option_index (p);
     char *cmd;
 
     if (n < ac) {

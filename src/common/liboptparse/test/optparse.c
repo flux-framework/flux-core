@@ -276,11 +276,11 @@ void test_convenience_accessors (void)
     rc = optparse_add_option_table (p, opts);
     ok (rc == OPTPARSE_SUCCESS, "register options");
 
-    ok (optparse_optind (p) == -1, "optparse_optind returns -1 before parse");
+    ok (optparse_option_index (p) == -1, "optparse_option_index returns -1 before parse");
     optindex = optparse_parse_args (p, ac, av);
     ok (optindex == ac, "parse options, verify optindex");
 
-    ok (optparse_optind (p) == optindex, "optparse_optind works after parse");
+    ok (optparse_option_index (p) == optindex, "optparse_option_index works after parse");
 
     /* hasopt
      */
@@ -833,7 +833,7 @@ Usage: test one [OPTIONS]\n\
     n = optparse_run_subcommand (a, ac, av6);
     ok (n == 0, "optparse_run_subcommand with OPTPARSE_SUBCMD_NOOPTS");
     ok (value == 2, "optparse_run_subcommand() run with argc = %d (expected 2)", value);
-    ok (optparse_optind (d) == -1, "optparse_run_subcommand: skipped parse_args");
+    ok (optparse_option_index (d) == -1, "optparse_run_subcommand: skipped parse_args");
 
     optparse_destroy (a);
 }

@@ -355,10 +355,10 @@ const char *optparse_get_str (optparse_t *p, const char *name,
                               const char *default_value);
 
 /*
- *   Return optind from previous call to optparse_parse_args ().
- *    Returns -1 if  args have not yet been parsed, and thus optind is
+ *   Return option index from previous call to optparse_parse_args ().
+ *    Returns -1 if args have not yet been parsed, and thus option index is
  *    not valid.
  */
-int optparse_optind (optparse_t *p);
+int optparse_option_index (optparse_t *p);
 
 #endif /* _UTIL_OPTPARSE_H */

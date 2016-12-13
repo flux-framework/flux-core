@@ -142,7 +142,7 @@ int main (int argc, char *argv[])
         usage (p); // N.B. accesses "conf_flags"
         exit (0);
     }
-    optindex = optparse_optind (p);
+    optindex = optparse_option_index (p);
     if (argc - optindex == 0) {
         usage (p);
         exit (1);
