@@ -58,7 +58,7 @@ struct opt_parser {
     opt_fatalerr_f fatalerr_fn;
     void *         fatalerr_handle;
 
-    int            optind;
+    int            option_index;
 
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
@@ -683,7 +683,7 @@ optparse_t *optparse_create (const char *prog)
     p->fatalerr_handle = NULL;
     p->left_margin = 2;
     p->option_width = 25;
-    p->optind = -1;
+    p->option_index = -1;
 
     /*
      *  Register -h, --help
@@ -1280,8 +1280,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 
     free (optz);
     free (optstring);
-    p->optind = d.optind;
-    return (p->optind);
+    p->option_index = d.optind;
+    return (p->option_index);
 }
 
 int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
@@ -1291,13 +1291,13 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
     optparse_subcmd_f cb;
     optparse_t *sp;
 
-    if (p->optind == -1) {
+    if (p->option_index == -1) {
         if (optparse_parse_args (p, argc, argv) < 0)
             return optparse_fatalerr (p, 1);
     }
 
-    ac = argc - p->optind;
-    av = argv + p->optind;
+    ac = argc - p->option_index;
+    av = argv + p->option_index;
 
     if (ac <= 0)
         return optparse_fatal_usage (p, 1, "missing subcommand\n");
@@ -1335,9 +1335,9 @@ int optparse_fatal_usage (optparse_t *p, int code, const char *fmt, ...)
 }
 
 
-int optparse_optind (optparse_t *p)
+int optparse_option_index (optparse_t *p)
 {
-    return (p->optind);
+    return (p->option_index);
 }
 
 /*

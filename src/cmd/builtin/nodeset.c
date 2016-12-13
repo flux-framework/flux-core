@@ -110,7 +110,7 @@ static void ns_subtract (nodeset_t *ns1, nodeset_t *ns2)
 
 static int cmd_nodeset (optparse_t *p, int ac, char *av[])
 {
-    int ix = optparse_optind (p);
+    int ix = optparse_option_index (p);
     int nsc = ac - ix;
     nodeset_t *nsp, **nsv = nsc > 0 ? xzmalloc (sizeof (nsv[0]) * nsc) : NULL;
     int i;

@@ -280,7 +280,7 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
 
 static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
 {
-    int n = optparse_optind (p);
+    int n = optparse_option_index (p);
     const char *default_nodeset = "all";
     const char *nodeset = optparse_get_str (p, "rank", default_nodeset);
     const char *walk_topology = optparse_get_str (p, "walk-topology", NULL);

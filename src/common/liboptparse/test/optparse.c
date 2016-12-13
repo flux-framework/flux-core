@@ -268,7 +268,7 @@ void test_convenience_accessors (void)
     char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4",
                    "--dub=5.7", "--ndb=-3.2", NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
-    int rc, optind;
+    int rc, optindex;
 
     optparse_t *p = optparse_create ("test");
     ok (p != NULL, "create object");
@@ -276,11 +276,11 @@ void test_convenience_accessors (void)
     rc = optparse_add_option_table (p, opts);
     ok (rc == OPTPARSE_SUCCESS, "register options");
 
-    ok (optparse_optind (p) == -1, "optparse_optind returns -1 before parse");
-    optind = optparse_parse_args (p, ac, av);
-    ok (optind == ac, "parse options, verify optind");
+    ok (optparse_option_index (p) == -1, "optparse_option_index returns -1 before parse");
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
 
-    ok (optparse_optind (p) == optind, "optparse_optind works after parse");
+    ok (optparse_option_index (p) == optindex, "optparse_option_index works after parse");
 
     /* hasopt
      */
@@ -420,14 +420,15 @@ void test_multiret (void)
                    "-o", "-rtwo", "--multi-ret=a,b,c",
                    NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int optindex;
 
     ok (p != NULL, "optparse_create");
 
     e = optparse_add_option_table (p, opts);
     ok (e == OPTPARSE_SUCCESS, "register options");
 
-    optind = optparse_parse_args (p, ac, av);
-    ok (optind == ac, "parse options, verify optind");
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
 
     rc = optparse_getopt (p, "required-arg", &optarg);
     ok (rc == 2, "-r used twice");
@@ -490,14 +491,15 @@ void test_long_only (void)
                    "-b", "one", "--again-long-only",
                    NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int optindex;
 
     ok (p != NULL, "optparse_create");
 
     e = optparse_add_option_table (p, opts);
     ok (e == OPTPARSE_SUCCESS, "register options");
 
-    optind = optparse_parse_args (p, ac, av);
-    ok (optind == ac, "parse options, verify optind");
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
 
     rc = optparse_getopt (p, "basic", &optarg);
     ok (rc == 1, "got -b");
@@ -512,8 +514,8 @@ void test_long_only (void)
                     "--long-only=foo", NULL };
     ac = sizeof (av2) / sizeof(av2[0]) - 1;
 
-    optind = optparse_parse_args (p, ac, av2);
-    ok (optind == ac, "parse options, verify optind");
+    optindex = optparse_parse_args (p, ac, av2);
+    ok (optindex == ac, "parse options, verify optindex");
 
     optarg = NULL;
     rc = optparse_getopt (p, "basic", &optarg);
@@ -547,12 +549,13 @@ void test_optional_argument (void)
                    "--optional-arg", "extra-args",
                    NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int optindex;
 
     e = optparse_add_option_table (p, opts);
     ok (e == OPTPARSE_SUCCESS, "register options");
 
-    optind = optparse_parse_args (p, ac, av);
-    ok (optind == (ac - 1), "parse options, verify optind");
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == (ac - 1), "parse options, verify optindex");
 
     ok (optparse_hasopt (p, "optional-arg"),
         "found optional-arg option with no args");
@@ -566,8 +569,8 @@ void test_optional_argument (void)
                    NULL };
     ac = sizeof (av2) / sizeof (av2[0]) - 1;
 
-    optind = optparse_parse_args (p, ac, av2);
-    ok (optind == (ac - 1), "parse options, verify optind");
+    optindex = optparse_parse_args (p, ac, av2);
+    ok (optindex == (ac - 1), "parse options, verify optindex");
     ok (optparse_hasopt (p, "optional-arg"),
         "found optional-arg option with args");
 
@@ -830,7 +833,7 @@ Usage: test one [OPTIONS]\n\
     n = optparse_run_subcommand (a, ac, av6);
     ok (n == 0, "optparse_run_subcommand with OPTPARSE_SUBCMD_NOOPTS");
     ok (value == 2, "optparse_run_subcommand() run with argc = %d (expected 2)", value);
-    ok (optparse_optind (d) == -1, "optparse_run_subcommand: skipped parse_args");
+    ok (optparse_option_index (d) == -1, "optparse_run_subcommand: skipped parse_args");
 
     optparse_destroy (a);
 }

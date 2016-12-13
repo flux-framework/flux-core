@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <getopt.h>
 #include <unistd.h>
 #include <string.h>
 #include <flux/core.h>
@@ -200,13 +199,14 @@ int main (int argc, char *argv[])
     nodeset_t *ns = NULL;
     optparse_t *opts;
     struct ping_ctx ctx = {0};
+    int optindex;
 
     log_init ("flux-ping");
 
     opts = optparse_create ("flux-ping");
     if (optparse_add_option_table (opts, cmdopts) != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_add_option_table");
-    if ((optind = optparse_parse_args (opts, argc, argv)) < 0)
+    if ((optindex = optparse_parse_args (opts, argc, argv)) < 0)
         exit (1);
 
     pad_bytes = optparse_get_int (opts, "pad", 0);
@@ -228,12 +228,12 @@ int main (int argc, char *argv[])
     if (ctx.batch && ctx.count == 0)
         log_msg_exit ("--batch should only be used with --count");
 
-    if (optind != argc - 1) {
+    if (optindex != argc - 1) {
         optparse_print_usage (opts);
         exit (1);
     }
 
-    target = argv[optind++];
+    target = argv[optindex++];
 
     /* Create null terminated pad string for reuse in each message.
      * By default it's the empty string.

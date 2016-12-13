@@ -98,7 +98,7 @@ static int event_pub (optparse_t *p, int argc, char **argv)
     if (!(h = optparse_get_data (p, "handle")))
         log_err_exit ("failed to get handle");
 
-    n = optparse_optind (p);
+    n = optparse_option_index (p);
     if (n < argc - 1) {
         size_t len = 0;
         json_object *o;
@@ -179,7 +179,7 @@ static int event_sub (optparse_t *p, int argc, char **argv)
      */
     setlinebuf (stdout);
 
-    n = optparse_optind (p);
+    n = optparse_option_index (p);
     if (n < argc)
         subscribe_all (h, argc - n, argv + n);
     else if (flux_event_subscribe (h, "") < 0)

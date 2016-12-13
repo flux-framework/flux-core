@@ -38,7 +38,7 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
     flux_rpc_t *r;
     int flags = 0;
 
-    n = optparse_optind (p);
+    n = optparse_option_index (p);
     if (n != ac - 1) {
         optparse_print_usage (p);
         exit (1);
@@ -68,7 +68,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     const char *blobref;
     int flags = 0;
 
-    if (optparse_optind (p)  != ac) {
+    if (optparse_option_index (p)  != ac) {
         optparse_print_usage (p);
         exit (1);
     }
@@ -94,7 +94,7 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
     flux_t *h;
     flux_rpc_t *rpc = NULL;
 
-    if (optparse_optind (p) != ac) {
+    if (optparse_option_index (p) != ac) {
         optparse_print_usage (p);
         exit (1);
     }
@@ -114,7 +114,7 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     flux_t *h;
     flux_rpc_t *rpc = NULL;
 
-    if (optparse_optind (p) != ac) {
+    if (optparse_option_index (p) != ac) {
         optparse_print_usage (p);
         exit (1);
     }
