@@ -1167,7 +1167,8 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     /*
      *  Initialize final element of option array to zeros:
      */
-    memset (&opts[j], 0, sizeof (struct option));
+    if (opts)
+        memset (&opts[j], 0, sizeof (struct option));
 
     return (opts);
 }
