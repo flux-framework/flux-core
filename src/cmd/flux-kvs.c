@@ -47,7 +47,6 @@ int cmd_wait (optparse_t *p, int argc, char **argv);
 int cmd_watch (optparse_t *p, int argc, char **argv);
 int cmd_watch_dir (optparse_t *p, int argc, char **argv);
 int cmd_dropcache (optparse_t *p, int argc, char **argv);
-int cmd_dropcache_all (optparse_t *p, int argc, char **argv);
 int cmd_copy (optparse_t *p, int argc, char **argv);
 int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
@@ -84,6 +83,13 @@ static struct optparse_option watch_dir_opts[] =  {
     },
     { .name = "count", .key = 'c', .has_arg = 1,
       .usage = "Display at most count changes",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option dropcache_opts[] =  {
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Drop KVS across all ranks",
     },
     OPTPARSE_TABLE_END
 };
@@ -153,18 +159,11 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "dropcache",
-      "",
-      "Tell local KVS to drop its cache",
+      "[--all]",
+      "Tell KVS to drop its cache",
       cmd_dropcache,
       0,
-      NULL
-    },
-    { "dropcache-all",
-      "",
-      "Instruct all KVS to drop its cache",
-      cmd_dropcache_all,
-      0,
-      NULL
+      dropcache_opts
     },
     { "watch",
       "[-o] [-c count] key",
@@ -531,21 +530,16 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
-    if (kvs_dropcache (h) < 0)
-        log_err_exit ("kvs_dropcache");
-    return (0);
-}
-
-int cmd_dropcache_all (optparse_t *p, int argc, char **argv)
-{
-    flux_t *h;
-
-    h = (flux_t *)optparse_get_data (p, "flux_handle");
-
-    flux_msg_t *msg = flux_event_encode ("kvs.dropcache", NULL);
-    if (!msg || flux_send (h, msg, 0) < 0)
-        log_err_exit ("flux_send");
-    flux_msg_destroy (msg);
+    if (optparse_hasopt (p, "all")) {
+        flux_msg_t *msg = flux_event_encode ("kvs.dropcache", NULL);
+        if (!msg || flux_send (h, msg, 0) < 0)
+            log_err_exit ("flux_send");
+        flux_msg_destroy (msg);
+    }
+    else {
+        if (kvs_dropcache (h) < 0)
+            log_err_exit ("kvs_dropcache");
+    }
     return (0);
 }
 
