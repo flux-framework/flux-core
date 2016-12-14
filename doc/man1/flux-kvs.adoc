@@ -50,10 +50,10 @@ Retrieve the value stored under 'key'.  If nothing has been stored under
 Store 'value' under 'key' and commit it.  If it already has a value,
 overwrite it.
 
-*dir* [-r] [-d] ['key']::
+*dir* [-R] [-d] ['key']::
 Display all keys and their values under the directory 'key'.
 If 'key' does not exist or is not a directory, display an error message.
-If 'key' is not provided, "." (root of the namespace) is assumed.  If '-r'
+If 'key' is not provided, "." (root of the namespace) is assumed.  If '-R'
 is specified, recursively display keys under subdirectories.  If '-d' is
 specified, do not output key values.
 
@@ -81,9 +81,9 @@ is not set, display "NULL".  If 'count' is specified, display at most
 'count' changes.  Otherwise, command runs forever.  If '-o' is
 specified, output the current value before outputting changes.
 
-*watch-dir* [-r] [-d] [-o] [count] 'key'::
+*watch-dir* [-R] [-d] [-o] [count] 'key'::
 Watch directory specified at 'key', displaying changes within it and
-in subdirectories.  If '-r' is specified, recursively display keys
+in subdirectories.  If '-R' is specified, recursively display keys
 under subdirectories.  If '-d' is specified, do not output key values.
 If 'count' is specified, display at most 'count' changes.  Otherwise,
 this command runs forever.  If '-o' is specified, output the current
