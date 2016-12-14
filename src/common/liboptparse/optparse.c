@@ -1145,6 +1145,14 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     if (opts == NULL)
         return (NULL);
 
+    if (sp) {
+        *sp = optstring_create ();
+        if ((*sp) == NULL) {
+            free (opts);
+            return (NULL);
+        }
+    }
+
     j = 0;
     i = list_iterator_create (p->option_list);
     while ((o = list_next (i))) {
@@ -1167,7 +1175,8 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     /*
      *  Initialize final element of option array to zeros:
      */
-    memset (&opts[j], 0, sizeof (struct option));
+    if (opts)
+        memset (&opts[j], 0, sizeof (struct option));
 
     return (opts);
 }
