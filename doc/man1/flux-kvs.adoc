@@ -102,12 +102,10 @@ of synchronization between peers is:  node A puts a value, commits it,
 reads version, sends version to node B.  Node B waits for version, gets
 value.
 
-*dropcache*::
-Tell the local KVS to drop any cache it is holding.
-
-*dropcache-all*::
-Send an event across the comms session instructing all KVS instances
-to drop their caches.
+*dropcache* [--all]::
+Tell the local KVS to drop any cache it is holding.  If '--all' is
+specified, send an event across the comms session instructing all KVS
+instances to drop their caches.
 
 *copy* 'source' 'destination':: 
 Copy 'source' key to 'destination' key.  If a directory is copied, a new
