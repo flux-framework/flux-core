@@ -53,7 +53,7 @@ int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option dir_opts[] =  {
-    { .name = "recursive", .key = 'r', .has_arg = 0,
+    { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Recursively display keys under subdirectories",
     },
     { .name = "directory", .key = 'd', .has_arg = 0,
@@ -70,7 +70,7 @@ static struct optparse_option watch_opts[] =  {
 };
 
 static struct optparse_option watch_dir_opts[] =  {
-    { .name = "recursive", .key = 'r', .has_arg = 0,
+    { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Recursively display keys under subdirectories",
     },
     { .name = "directory", .key = 'd', .has_arg = 0,
@@ -98,7 +98,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "dir",
-      "[-r] [-d] [key]",
+      "[-R] [-d] [key]",
       "Display all keys under directory",
       cmd_dir,
       0,
@@ -168,7 +168,7 @@ static struct optparse_subcommand subcommands[] = {
       watch_opts
     },
     { "watch-dir",
-      "[-r] [-d] [-o] [count] key",
+      "[-R] [-d] [-o] [count] key",
       "Watch directory specified by key",
       cmd_watch_dir,
       0,
@@ -553,7 +553,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
     Jput (o);
 }
 
-static void dump_kvs_dir (kvsdir_t *dir, bool ropt, bool dopt)
+static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt)
 {
     kvsitr_t *itr;
     const char *name;
@@ -570,11 +570,11 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt, bool dopt)
             free (link);
 
         } else if (kvsdir_isdir (dir, name)) {
-            if (ropt) {
+            if (Ropt) {
                 kvsdir_t *ndir;
                 if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                     log_err_exit ("%s", key);
-                dump_kvs_dir (ndir, ropt, dopt);
+                dump_kvs_dir (ndir, Ropt, dopt);
                 kvsdir_destroy (ndir);
             } else
                 printf ("%s.\n", key);
@@ -597,7 +597,7 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt, bool dopt)
 int cmd_watch_dir (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
-    bool ropt;
+    bool Ropt;
     bool dopt;
     bool oopt;
     char *key;
@@ -617,7 +617,7 @@ int cmd_watch_dir (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 1))
         log_msg_exit ("watchdir: specify one directory");
 
-    ropt = optparse_hasopt (p, "recursive");
+    Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
     oopt = optparse_hasopt (p, "current");
 
@@ -625,7 +625,7 @@ int cmd_watch_dir (optparse_t *p, int argc, char **argv)
 
     rc = kvs_get_dir (h, &dir, "%s", key);
     if (oopt) {
-        dump_kvs_dir (dir, ropt, dopt);
+        dump_kvs_dir (dir, Ropt, dopt);
         printf ("======================\n");
         fflush (stdout);
     }
@@ -637,7 +637,7 @@ int cmd_watch_dir (optparse_t *p, int argc, char **argv)
                 kvsdir_destroy (dir);
             dir = NULL;
         } else {
-            dump_kvs_dir (dir, ropt, dopt);
+            dump_kvs_dir (dir, Ropt, dopt);
             printf ("======================\n");
             fflush (stdout);
         }
@@ -653,7 +653,7 @@ done:
 int cmd_dir (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
-    bool ropt;
+    bool Ropt;
     bool dopt;
     char *key;
     kvsdir_t *dir;
@@ -663,7 +663,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
 
     optindex = optparse_option_index (p);
 
-    ropt = optparse_hasopt (p, "recursive");
+    Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
 
     if (optindex == argc)
@@ -674,7 +674,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
         log_msg_exit ("dir: specify zero or one directory");
     if (kvs_get_dir (h, &dir, "%s", key) < 0)
         log_err_exit ("%s", key);
-    dump_kvs_dir (dir, ropt, dopt);
+    dump_kvs_dir (dir, Ropt, dopt);
     kvsdir_destroy (dir);
     return (0);
 }
