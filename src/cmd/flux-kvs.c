@@ -66,6 +66,9 @@ static struct optparse_option watch_opts[] =  {
     { .name = "current", .key = 'o', .has_arg = 0,
       .usage = "Output current value before changes",
     },
+    { .name = "count", .key = 'c', .has_arg = 1,
+      .usage = "Display at most count changes",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -78,6 +81,9 @@ static struct optparse_option watch_dir_opts[] =  {
     },
     { .name = "current", .key = 'o', .has_arg = 0,
       .usage = "Output current value before changes",
+    },
+    { .name = "count", .key = 'c', .has_arg = 1,
+      .usage = "Display at most count changes",
     },
     OPTPARSE_TABLE_END
 };
@@ -161,14 +167,14 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "watch",
-      "[-o] [count] key",
+      "[-o] [-c count] key",
       "Watch value specified by key",
       cmd_watch,
       0,
       watch_opts
     },
     { "watch-dir",
-      "[-R] [-d] [-o] [count] key",
+      "[-R] [-d] [-o] [-c count] key",
       "Watch directory specified by key",
       cmd_watch_dir,
       0,
@@ -486,7 +492,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
     flux_t *h;
     char *json_str = NULL;
     char *key;
-    int count = -1;
+    int count;
     bool oopt;
     int optindex;
 
@@ -502,6 +508,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
         log_msg_exit ("watch: specify one key");
 
     oopt = optparse_hasopt (p, "current");
+    count = optparse_get_int (p, "count", -1);
 
     key = argv[optindex];
     if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
@@ -603,7 +610,7 @@ int cmd_watch_dir (optparse_t *p, int argc, char **argv)
     char *key;
     kvsdir_t *dir = NULL;
     int rc;
-    int count = -1;
+    int count;
     int optindex;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
@@ -620,6 +627,7 @@ int cmd_watch_dir (optparse_t *p, int argc, char **argv)
     Ropt = optparse_hasopt (p, "recursive");
     dopt = optparse_hasopt (p, "directory");
     oopt = optparse_hasopt (p, "current");
+    count = optparse_get_int (p, "count", -1);
 
     key = argv[optindex];
 
