@@ -67,11 +67,11 @@ Create a new name for 'target', similar to a symbolic link, and commit
 the change.  'target' does not have to exist.  If 'linkname' exists,
 it is overwritten.
 
-*readlink* 'key'::
+*readlink* 'key' ['key...']::
 Retrieve the key a link refers to rather than its value, as would be
 returned by *get*.
 
-*mkdir* 'key'::
+*mkdir* 'key' ['key...']::
 Create an empty directory and commit the change.  If 'key' exists,
 it is overwritten.
 
