@@ -240,8 +240,6 @@ int pmi_simple_client_abort (struct pmi_simple_client *pmi,
     return PMI_FAIL;
 }
 
-#define S_(x) #x
-#define S(x) S_(x)
 int pmi_simple_client_kvs_get_my_name (struct pmi_simple_client *pmi,
                                        char *kvsname, int length)
 {
