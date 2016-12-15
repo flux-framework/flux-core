@@ -27,7 +27,7 @@ enum {
  * have flux_lsmod() return error.
  * Note: 'nodeset' will be NULL when called from flux_lsmod().
  */
-typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
+typedef int (*flux_lsmod_f)(const char *name, int size, const char *digest,
                            int idle, int status,
                            const char *nodeset, void *arg);
 
@@ -60,7 +60,7 @@ int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
 
 #define MOD_NAME(x) const char *mod_name = x
 #define MOD_SERVICE(x) const char *mod_service = x
-typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
+typedef int (*mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 
 /**

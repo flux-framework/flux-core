@@ -72,7 +72,7 @@ struct module_struct {
 
     zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
-    mod_main_f *main;       /* dlopened mod_main() */
+    mod_main_f main;       /* dlopened mod_main() */
     char *name;
     char *service;
     void *dso;              /* reference on dlopened module */
@@ -503,7 +503,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     void *dso;
     const char **mod_namep;
     const char **mod_servicep;
-    mod_main_f *mod_main;
+    mod_main_f mod_main;
     zfile_t *zf;
     int rc;
 
