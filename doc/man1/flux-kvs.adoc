@@ -57,10 +57,9 @@ If 'key' is not provided, "." (root of the namespace) is assumed.  If '-R'
 is specified, recursively display keys under subdirectories.  If '-d' is
 specified, do not output key values.
 
-*unlink* 'key' ['key...']::
+*unlink* [-R] 'key' ['key...']::
 Remove 'key' from the KVS and commit the change.  If 'key' represents
-a directory, remove all keys underneath it.  If nothing has been stored
-under 'key', do nothing (it is not an error).
+a directory, specify '-R' to remove all keys underneath it.
 
 *link* 'target' 'linkname'::
 Create a new name for 'target', similar to a symbolic link, and commit
