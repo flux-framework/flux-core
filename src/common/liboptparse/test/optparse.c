@@ -251,6 +251,73 @@ This is some doc for group 1\n\
     optparse_destroy (p);
 }
 
+int alt_print_usage (optparse_t *p, struct optparse_option *o, const char *optarg)
+{
+    output_f ("alt_print_usage called");
+    return (0);
+}
+
+void test_option_cb (void)
+{
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("test-help");
+    char *av[] = { "test-help", "-h", NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int optindex;
+
+    ok (p != NULL, "optparse_create");
+
+    e = optparse_set (p, OPTPARSE_LOG_FN, output_f);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (LOG_FN)");
+
+    e = optparse_set (p, OPTPARSE_FATALERR_FN, myfatal);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (FATALERR_FN)");
+
+    /* We will test OPTION_CB by modifying the help function callback */
+
+    /* Check default --help output works as expected */
+
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
+
+    usage_output_is ("\
+Usage: test-help [OPTIONS]...\n\
+  -h, --help             Display this message.\n",
+              "Default usage output from -h call correct");
+
+    /* Check --help calls alternate usage function when cb is changed */
+
+    e = optparse_set (p, OPTPARSE_OPTION_CB, "help", alt_print_usage);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTION_CB)");
+
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
+
+    usage_output_is ("alt_print_usage called", "alt usage output as expected");
+
+    /* Check --help doesn't call a usage function if cb set to NULL */
+
+    output_f ("no usage output");
+
+    e = optparse_set (p, OPTPARSE_OPTION_CB, "help", NULL);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTION_CB)");
+
+    optindex = optparse_parse_args (p, ac, av);
+    ok (optindex == ac, "parse options, verify optindex");
+
+    usage_output_is ("no usage output", "no usage output is expected");
+
+    /* Finally check for some proper error handling */
+
+    e = optparse_set (p, OPTPARSE_OPTION_CB, NULL, NULL);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (OPTION_CB): bad arg null name ");
+
+    e = optparse_set (p, OPTPARSE_OPTION_CB, "bad-option", NULL);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (OPTION_CB): bad arg bad name ");
+
+    optparse_destroy (p);
+}
+
 void test_convenience_accessors (void)
 {
     struct optparse_option opts [] = {
@@ -862,10 +929,11 @@ void test_corner_case (void)
 int main (int argc, char *argv[])
 {
 
-    plan (196);
+    plan (212);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
+    test_option_cb ();  /* 16 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
