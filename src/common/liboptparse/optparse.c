@@ -247,6 +247,20 @@ static optparse_err_t optparse_set_fatalerr_handle (optparse_t *p, void *handle)
     return (0);
 }
 
+static optparse_err_t optparse_set_option_cb (optparse_t *p, const char *name,
+                                              optparse_cb_f fn)
+{
+    struct option_info *o;
+
+    if (!name)
+        return (OPTPARSE_BAD_ARG);
+
+    if (!(o = find_option_info (p, name)))
+        return (OPTPARSE_BAD_ARG);
+
+    o->p_opt->cb = fn;
+    return (0);
+}
 
 /*
  *  Generic function that prints a message to stderr. Default logging function.
@@ -983,6 +997,8 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
 {
     optparse_err_t e = OPTPARSE_SUCCESS;
     va_list vargs;
+    optparse_cb_f cb;
+    char *str;
     int n;
 
     if (p == NULL)
@@ -1008,6 +1024,11 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
             e = OPTPARSE_BAD_ARG;
         else
             p->left_margin = n;
+        break;
+    case OPTPARSE_OPTION_CB:
+        str = va_arg (vargs, char *);
+        cb = va_arg (vargs, void *);
+        e = optparse_set_option_cb (p, str, cb);
         break;
     case OPTPARSE_OPTION_WIDTH:
         n = va_arg (vargs, int);
@@ -1065,6 +1086,7 @@ optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...)
     case OPTPARSE_FATALERR_FN:
     case OPTPARSE_FATALERR_HANDLE:
     case OPTPARSE_LEFT_MARGIN:
+    case OPTPARSE_OPTION_CB:
     case OPTPARSE_OPTION_WIDTH:
         e = OPTPARSE_NOT_IMPL;
         break;
