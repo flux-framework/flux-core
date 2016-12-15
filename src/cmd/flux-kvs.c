@@ -94,6 +94,13 @@ static struct optparse_option dropcache_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option unlink_opts[] =  {
+    { .name = "recursive", .key = 'R', .has_arg = 0,
+      .usage = "Remove directory contents recursively",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "get",
       "key [key...]",
@@ -121,7 +128,7 @@ static struct optparse_subcommand subcommands[] = {
       "Remove key",
       cmd_unlink,
       0,
-      NULL
+      unlink_opts
     },
     { "link",
       "target linkname",
@@ -359,10 +366,32 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+bool key_exists (flux_t *h, const char *key, bool *isdir, int *dirsize)
+{
+    char *json_str = NULL;
+    kvsdir_t *dir = NULL;
+
+    if (kvs_get (h, key, &json_str) == 0) {
+        *isdir = false;
+        free (json_str);
+        return true;
+    }
+    if (errno == EISDIR && kvs_get_dir (h, &dir, "%s", key) == 0) {
+        *dirsize = kvsdir_get_size (dir);
+        *isdir = true;
+        kvsdir_destroy (dir);
+        return true;
+    }
+    *isdir = false;
+    return false;
+}
+
 int cmd_unlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
-    int optindex, i;
+    int optindex, dirsize, i;
+    bool Ropt;
+    bool isdir;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
@@ -372,9 +401,16 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+
+    Ropt = optparse_hasopt (p, "recursive");
+
     for (i = optindex; i < argc; i++) {
-        /* FIXME: unlink nonexistent silently fails */
-        /* FIXME: unlink directory silently succeeds */
+        if (!key_exists (h, argv[i], &isdir, &dirsize))
+            log_msg_exit ("cannot unlink '%s': %s",
+                          argv[i], strerror (ENOENT));
+        if (isdir && !Ropt && dirsize > 0)
+            log_msg_exit ("cannot unlink '%s': %s",
+                          argv[i], strerror (ENOTEMPTY));
         if (kvs_unlink (h, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
