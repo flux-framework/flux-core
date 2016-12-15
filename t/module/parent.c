@@ -21,7 +21,7 @@ typedef struct {
     int idle;
     int status;
     void *dso;
-    mod_main_f *main;
+    mod_main_f main;
 } module_t;
 
 static zhash_t *modules = NULL;
