@@ -22,7 +22,7 @@ typedef int (*opt_fatalerr_f) (void *h, int exit_code);
 /*
  *  prototype for option callback hook
  */
-typedef int (*optparse_cb_f) (optparse_t *p, struct optparse_option *,
+typedef int (*optparse_cb_f) (optparse_t *p, struct optparse_option *o,
 			      const char *optarg);
 
 /*
