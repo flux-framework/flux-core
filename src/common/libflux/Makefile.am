@@ -112,7 +112,8 @@ TESTS = test_module.t \
 	test_response.t \
 	test_event.t \
 	test_tagpool.t \
-	test_reactor.t
+	test_reactor.t \
+	test_extensor.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -165,3 +166,7 @@ test_response_t_LDADD = $(test_ldadd) $(LIBDL)
 test_reactor_t_SOURCES = test/reactor.c
 test_reactor_t_CPPFLAGS = $(test_cppflags)
 test_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_extensor_t_SOURCES = test/extensor.c
+test_extensor_t_CPPFLAGS = $(test_cppflags)
+test_extensor_t_LDADD = $(test_ldadd) $(LIBDL)
