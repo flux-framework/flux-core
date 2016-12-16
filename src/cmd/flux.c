@@ -86,9 +86,6 @@ void usage (optparse_t *p)
 static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
 {
     optparse_err_t e;
-    struct optparse_option helpopt = {
-        .name = "help", .key = 'h', .usage = "Display this message"
-    };
     optparse_t *p = optparse_create ("flux");
     if (p == NULL)
         log_err_exit ("optparse_create");
@@ -97,13 +94,10 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
     if (e != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_add_option_table() failed");
 
-    // Remove automatic `--help' in favor of our own usage() from above
-    e = optparse_remove_option (p, "help");
+    // Disable automatic `--help' in favor of our own usage() from above
+    e = optparse_set (p, OPTPARSE_OPTION_CB, "help", NULL);
     if (e != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_remove_option (\"help\")");
-    e = optparse_add_option (p, &helpopt);
-    if (e != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_add_option (\"help\")");
+        log_msg_exit ("optparse_set() failed");
 
     // Don't print internal subcommands in --help (we print subcommands using
     //  emit_command_help() above.

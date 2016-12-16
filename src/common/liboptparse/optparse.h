@@ -22,7 +22,7 @@ typedef int (*opt_fatalerr_f) (void *h, int exit_code);
 /*
  *  prototype for option callback hook
  */
-typedef int (*optparse_cb_f) (optparse_t *p, struct optparse_option *,
+typedef int (*optparse_cb_f) (optparse_t *p, struct optparse_option *o,
 			      const char *optarg);
 
 /*
@@ -50,6 +50,7 @@ typedef enum {
     OPTPARSE_LOG_FN,       /* Set log function (default fprintf(stderr,..)) */
     OPTPARSE_FATALERR_FN,  /* Set fatal err function (default: exit() )     */
     OPTPARSE_FATALERR_HANDLE,  /* Set handle passed to fatalerr function    */
+    OPTPARSE_OPTION_CB,    /* Change option cb function (char *,optparse_cb_f) */
     OPTPARSE_OPTION_WIDTH, /* Width allotted to options in --help output    */
     OPTPARSE_LEFT_MARGIN,  /* Left pad for option output (default = 2)      */
     OPTPARSE_PRINT_SUBCMDS,/* Print all subcommands in --help (default = T  */
