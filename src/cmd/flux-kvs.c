@@ -45,11 +45,12 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv);
 int cmd_version (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
 int cmd_watch (optparse_t *p, int argc, char **argv);
-int cmd_watch_dir (optparse_t *p, int argc, char **argv);
 int cmd_dropcache (optparse_t *p, int argc, char **argv);
 int cmd_copy (optparse_t *p, int argc, char **argv);
 int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
+
+static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt);
 
 static struct optparse_option dir_opts[] =  {
     { .name = "recursive", .key = 'R', .has_arg = 0,
@@ -62,16 +63,6 @@ static struct optparse_option dir_opts[] =  {
 };
 
 static struct optparse_option watch_opts[] =  {
-    { .name = "current", .key = 'o', .has_arg = 0,
-      .usage = "Output current value before changes",
-    },
-    { .name = "count", .key = 'c', .has_arg = 1,
-      .usage = "Display at most count changes",
-    },
-    OPTPARSE_TABLE_END
-};
-
-static struct optparse_option watch_dir_opts[] =  {
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Recursively display keys under subdirectories",
     },
@@ -173,18 +164,11 @@ static struct optparse_subcommand subcommands[] = {
       dropcache_opts
     },
     { "watch",
-      "[-o] [-c count] key",
-      "Watch value specified by key",
+      "[-R] [-d] [-o] [-c count] key",
+      "Watch key and output changes",
       cmd_watch,
       0,
       watch_opts
-    },
-    { "watch-dir",
-      "[-R] [-d] [-o] [-c count] key",
-      "Watch directory specified by key",
-      cmd_watch_dir,
-      0,
-      watch_dir_opts
     },
     { "version",
       "",
@@ -522,14 +506,44 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+#define WATCH_DIR_SEPARATOR "======================"
+
+static void watch_dump_key (const char *json_str,
+                            const char *arg,
+                            bool *prev_output_iskey)
+{
+    output_key_json_str (NULL, json_str, arg);
+    fflush (stdout);
+    *prev_output_iskey = true;
+}
+
+static void watch_dump_kvsdir (kvsdir_t *dir, bool Ropt, bool dopt,
+                               const char *arg) {
+    if (!dir) {
+        output_key_json_str (NULL, NULL, arg);
+        printf ("%s\n", WATCH_DIR_SEPARATOR);
+        return;
+    }
+
+    dump_kvs_dir (dir, Ropt, dopt);
+    printf ("%s\n", WATCH_DIR_SEPARATOR);
+    fflush (stdout);
+}
+
 int cmd_watch (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
+    kvsdir_t *dir = NULL;
     char *json_str = NULL;
     char *key;
     int count;
+    bool Ropt;
+    bool dopt;
     bool oopt;
+    bool isdir = false;
+    bool prev_output_iskey = false;
     int optindex;
+    int rc;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
@@ -542,20 +556,107 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 1))
         log_msg_exit ("watch: specify one key");
 
+    Ropt = optparse_hasopt (p, "recursive");
+    dopt = optparse_hasopt (p, "directory");
     oopt = optparse_hasopt (p, "current");
     count = optparse_get_int (p, "count", -1);
 
     key = argv[optindex];
-    if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
+
+    rc = kvs_get (h, key, &json_str);
+    if (rc < 0 && (errno != ENOENT && errno != EISDIR))
         log_err_exit ("%s", key);
-    if (oopt)
-        output_key_json_str (NULL, json_str, key);
-    while (count) {
-        if (kvs_watch_once (h, argv[optindex], &json_str) < 0 && errno != ENOENT)
-            log_err_exit ("%s", argv[optindex]);
-        output_key_json_str (NULL, json_str, key);
+
+    /* key is a directory, setup for dir logic appropriately */
+    if (rc < 0 && errno == EISDIR) {
+        rc = kvs_get_dir (h, &dir, "%s", key);
+        if (rc < 0 && errno != ENOENT)
+            log_err_exit ("%s", key);
+        isdir = true;
+        free (json_str);
+        json_str = NULL;
+    }
+
+    if (oopt) {
+        if (isdir)
+            watch_dump_kvsdir (dir, Ropt, dopt, key);
+        else
+            watch_dump_key (json_str, key, &prev_output_iskey);
+    }
+
+    while (count && (rc == 0 || (rc < 0 && errno == ENOENT))) {
+        if (isdir) {
+            rc = kvs_watch_once_dir (h, &dir, "%s", key);
+            if (rc < 0 && (errno != ENOENT && errno != ENOTDIR)) {
+                printf ("%s: %s\n", key, flux_strerror (errno));
+                if (dir)
+                    kvsdir_destroy (dir);
+                dir = NULL;
+            }
+            else if (rc < 0 && errno == ENOENT) {
+                if (dir)
+                    kvsdir_destroy (dir);
+                dir = NULL;
+                watch_dump_kvsdir (dir, Ropt, dopt, key);
+            }
+            else if (!rc) {
+                watch_dump_kvsdir (dir, Ropt, dopt, key);
+            }
+            else { /* rc < 0 && errno == ENOTDIR */
+                /* We were watching a dir that is now a key, need to
+                 * reset logic to the 'key' part of this loop */
+                isdir = false;
+                if (dir)
+                    kvsdir_destroy (dir);
+                dir = NULL;
+
+                rc = kvs_get (h, key, &json_str);
+                if (rc < 0 && errno != ENOENT)
+                    printf ("%s: %s\n", key, flux_strerror (errno));
+                else
+                    watch_dump_key (json_str, key, &prev_output_iskey);
+            }
+        }
+        else {
+            rc = kvs_watch_once (h, key, &json_str);
+            if (rc < 0 && (errno != ENOENT && errno != EISDIR)) {
+                printf ("%s: %s\n", key, flux_strerror (errno));
+                free (json_str);
+                json_str = NULL;
+            }
+            else if (rc < 0 && errno == ENOENT) {
+                free (json_str);
+                json_str = NULL;
+                watch_dump_key (NULL, key, &prev_output_iskey);
+            }
+            else if (!rc) {
+                watch_dump_key (json_str, key, &prev_output_iskey);
+            }
+            else { /* rc < 0 && errno == EISDIR */
+                /* We were watching a key that is now a dir.  So we
+                 * have to move to the directory branch of this loop.
+                 */
+                isdir = true;
+                free (json_str);
+                json_str = NULL;
+
+                /* Output dir separator from prior key */
+                if (prev_output_iskey) {
+                    printf ("%s\n", WATCH_DIR_SEPARATOR);
+                    prev_output_iskey = false;
+                }
+
+                rc = kvs_get_dir (h, &dir, "%s", key);
+                if (rc < 0 && errno != ENOENT)
+                    printf ("%s: %s\n", key, flux_strerror (errno));
+                else /* rc == 0 || (rc < 0 && errno == ENOENT) */
+                    watch_dump_kvsdir (dir, Ropt, dopt, key);
+            }
+        }
         count--;
     }
+    if (dir)
+        kvsdir_destroy (dir);
     free (json_str);
     return (0);
 }
@@ -629,63 +730,6 @@ static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt)
         free (key);
     }
     kvsitr_destroy (itr);
-}
-
-int cmd_watch_dir (optparse_t *p, int argc, char **argv)
-{
-    flux_t *h;
-    bool Ropt;
-    bool dopt;
-    bool oopt;
-    char *key;
-    kvsdir_t *dir = NULL;
-    int rc;
-    int count;
-    int optindex;
-
-    h = (flux_t *)optparse_get_data (p, "flux_handle");
-
-    optindex = optparse_option_index (p);
-
-    if ((optindex - argc) == 0) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    if (optindex != (argc - 1))
-        log_msg_exit ("watchdir: specify one directory");
-
-    Ropt = optparse_hasopt (p, "recursive");
-    dopt = optparse_hasopt (p, "directory");
-    oopt = optparse_hasopt (p, "current");
-    count = optparse_get_int (p, "count", -1);
-
-    key = argv[optindex];
-
-    rc = kvs_get_dir (h, &dir, "%s", key);
-    if (oopt) {
-        dump_kvs_dir (dir, Ropt, dopt);
-        printf ("======================\n");
-        fflush (stdout);
-    }
-    while (rc == 0 || (rc < 0 && errno == ENOENT)) {
-        rc = kvs_watch_once_dir (h, &dir, "%s", key);
-        if (rc < 0) {
-            printf ("%s: %s\n", key, flux_strerror (errno));
-            if (dir)
-                kvsdir_destroy (dir);
-            dir = NULL;
-        } else {
-            dump_kvs_dir (dir, Ropt, dopt);
-            printf ("======================\n");
-            fflush (stdout);
-        }
-        if (--count == 0)
-            goto done;
-    }
-    log_err_exit ("%s", key);
-done:
-    kvsdir_destroy (dir);
-    return (0);
 }
 
 int cmd_dir (optparse_t *p, int argc, char **argv)
