@@ -540,6 +540,14 @@ int main (int argc, char *argv[])
      */
     unsetenv ("FLUX_URI");
 
+    /* If Flux was launched by Flux, now that PMI bootstrap is complete,
+     * unset Flux job environment variables since they don't leak into
+     * the jobs other children of this instance.
+     */
+    unsetenv ("FLUX_JOB_ID");
+    unsetenv ("FLUX_JOB_SIZE");
+    unsetenv ("FLUX_JOB_NNODES");
+
     /* If shutdown_grace was not provided on the command line,
      * make a guess.
      */

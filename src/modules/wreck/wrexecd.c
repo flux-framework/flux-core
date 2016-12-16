@@ -2184,8 +2184,9 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
     }
 
     if (kvs_get_string (ctx->flux, kvskey, &s) < 0) {
-        wlog_err (ctx, "pmi_kvs_get: kvs_get_string(%s): %s",
-                  kvskey, strerror (errno));
+        if (errno != ENOENT)
+            wlog_err (ctx, "pmi_kvs_get: kvs_get_string(%s): %s",
+                      kvskey, strerror (errno));
         free (kvskey);
         return (-1);
     }
