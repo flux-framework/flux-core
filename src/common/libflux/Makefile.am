@@ -67,7 +67,8 @@ fluxcoreinclude_HEADERS = \
 	flog.h \
 	conf.h \
 	heartbeat.h \
-	content.h
+	content.h \
+	extensor.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -96,7 +97,8 @@ libflux_la_SOURCES = \
 	ev_flux.c \
 	heartbeat.c \
 	keepalive.c \
-	content.c
+	content.c \
+	extensor.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
