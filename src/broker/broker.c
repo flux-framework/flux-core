@@ -1958,10 +1958,6 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
         goto done;
     if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
         goto done;
-    if (!(name = flux_modname (path))) {
-        errno = ENOENT;
-        goto done;
-    }
     if (!(p = module_add (ctx->modhash, path)))
         goto done;
     if (!svc_add (ctx->services, module_get_name (p),
