@@ -61,6 +61,7 @@ struct module_struct {
     int magic;
 
     modhash_t *modhash;     /* back reference to modhash for this module */
+    flux_module_t *m;       /* handle for module loaded by extensor      */
 
     flux_watcher_t *broker_w;
 
@@ -69,12 +70,9 @@ struct module_struct {
 
     void *sock;             /* broker end of PAIR socket */
 
-    zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
     mod_main_f main;       /* dlopened mod_main() */
-    char *name;
     char *service;
-    void *dso;              /* reference on dlopened module */
     int size;               /* size of .so file for lsmod */
     char *digest;           /* digest of .so file for lsmod */
     size_t argz_len;
@@ -96,6 +94,7 @@ struct module_struct {
 };
 
 struct modhash_struct {
+    flux_extensor_t *ex;
     zhash_t *zh_byuuid;
     zctx_t *zctx;
     uint32_t rank;
@@ -109,7 +108,7 @@ static int setup_module_profiling (module_t *p)
     cali_begin_string_byname ("flux.type", "module");
     cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
     cali_begin_int_byname ("flux.rank", p->modhash->rank);
-    cali_begin_string_byname ("flux.name", p->name);
+    cali_begin_string_byname ("flux.name", module_get_name (p));
 #endif
     return (0);
 }
@@ -121,7 +120,7 @@ static void *module_thread (void *arg)
     assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
     int errnum;
-    char *uri = xasprintf ("shmem://%s", zuuid_str (p->uuid));
+    char *uri = xasprintf ("shmem://%s", flux_module_uuid (p->m));
     char **av = NULL;
     char *rankstr = NULL;
     int ac;
@@ -142,16 +141,16 @@ static void *module_thread (void *arg)
 
     rankstr = xasprintf ("%u", p->modhash->rank);
     if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("%s: error faking rank attribute", p->name);
+        log_err ("%s: error faking rank attribute", module_get_name (p));
         goto done;
     }
-    flux_log_set_appname (p->h, p->name);
+    flux_log_set_appname (p->h, module_get_name (p));
     modservice_register (p->h, p);
 
     /* Block all signals
      */
     if (sigfillset (&signal_set) < 0)
-        log_err_exit ("%s: sigfillset", p->name);
+        log_err_exit ("%s: sigfillset", module_get_name (p));
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
         log_errn_exit (errnum, "pthread_sigmask");
 
@@ -197,7 +196,7 @@ done:
 const char *module_get_name (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
-    return p->name;
+    return flux_module_name (p->m);
 }
 
 const char *module_get_service (module_t *p)
@@ -208,7 +207,7 @@ const char *module_get_service (module_t *p)
 
 const char *module_get_uuid (module_t *p)
 {
-    return zuuid_str (p->uuid);
+    return flux_module_uuid (p->m);
 }
 
 static int module_get_idle (module_t *p)
@@ -318,13 +317,10 @@ static void module_destroy (module_t *p)
     flux_watcher_destroy (p->broker_w);
     zsocket_destroy (p->modhash->zctx, p->sock);
 
-    dlclose (p->dso);
-    zuuid_destroy (&p->uuid);
+    flux_module_destroy (p->m);
     free (p->digest);
     if (p->argz)
         free (p->argz);
-    if (p->name)
-        free (p->name);
     if (p->service)
         free (p->service);
     if (p->rmmod) {
@@ -349,7 +345,7 @@ static void module_destroy (module_t *p)
 int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
-    char *topic = xasprintf ("%s.shutdown", p->name);
+    char *topic = xasprintf ("%s.shutdown", module_get_name (p));
     flux_msg_t *msg;
     int rc = -1;
 
@@ -499,42 +495,40 @@ flux_msg_t *module_pop_insmod (module_t *p)
 
 module_t *module_add (modhash_t *mh, const char *path)
 {
+    flux_module_t *m;
     module_t *p;
-    void *dso;
-    const char **mod_namep;
     const char **mod_servicep;
     mod_main_f mod_main;
     zfile_t *zf;
     int rc;
 
-    dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND))) {
-        log_msg ("%s", dlerror ());
+    if (!(m = flux_module_create (mh->ex, path, 0)))
+        return NULL;
+
+    if (flux_module_load (m) < 0) {
+        log_msg ("%s", flux_module_strerror (m));
+        flux_module_destroy (m);
         errno = ENOENT;
         return NULL;
     }
-    mod_main = dlsym (dso, "mod_main");
-    mod_namep = dlsym (dso, "mod_name");
-    mod_servicep = dlsym (dso, "mod_service");
-    if (!mod_main || !mod_namep || !*mod_namep) {
-        dlclose (dso);
+    if (!(mod_main = flux_module_lookup (m, "mod_main"))) {
+        flux_module_destroy (m);
         errno = ENOENT;
-        return NULL;
+        return (NULL);
     }
+    mod_servicep = flux_module_lookup (m, "mod_service");
+
     p = xzmalloc (sizeof (*p));
     p->modhash = mh;
-    p->name = xstrdup (*mod_namep);
+    p->m = m;
     if (mod_servicep && *mod_servicep)
         p->service = xstrdup (*mod_servicep);
     p->magic = MODULE_MAGIC;
     p->main = mod_main;
-    p->dso = dso;
     zf = zfile_new (NULL, path);
     p->digest = xstrdup (zfile_digest (zf));
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
-    if (!(p->uuid = zuuid_new ()))
-        oom ();
     if (!(p->rmmod = zlist_new ()))
         oom ();
     if (!(p->subs = zlist_new ()))
@@ -572,6 +566,10 @@ void module_remove (modhash_t *mh, module_t *p)
 modhash_t *modhash_create (void)
 {
     modhash_t *mh = xzmalloc (sizeof (*mh));
+    if (!(mh->ex = flux_extensor_create ())) {
+        free (mh);
+        return NULL;
+    }
     if (!(mh->zh_byuuid = zhash_new ()))
         oom ();
     return mh;
@@ -581,6 +579,7 @@ void modhash_destroy (modhash_t *mh)
 {
     if (mh) {
         zhash_destroy (&mh->zh_byuuid);
+        flux_extensor_destroy (mh->ex);
         free (mh);
     }
 }
