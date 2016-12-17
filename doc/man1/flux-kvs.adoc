@@ -74,17 +74,13 @@ returned by *get*.
 Create an empty directory and commit the change.  If 'key' exists,
 it is overwritten.
 
-*watch* [-o] [-c count] 'key'::
-Watch 'key', displaying each change on a line of output.  If the key
-is not set, display "NULL".  If 'count' is specified, display at most
-'count' changes.  Otherwise, command runs forever.  If '-o' is
-specified, output the current value before outputting changes.
-
-*watch-dir* [-R] [-d] [-o] [-c count] 'key'::
-Watch directory specified at 'key', displaying changes within it and
-in subdirectories.  If '-R' is specified, recursively display keys
-under subdirectories.  If '-d' is specified, do not output key values.
-If 'count' is specified, display at most 'count' changes.  Otherwise,
+*watch* [-R] [-d] [-o] [-c count] 'key'::
+Watch 'key' and output changes.  If 'key' is a single value, each
+change will be displayed on a line of output.  If 'key' is a
+directory, changes within the directory and changes within it will be
+displayed.  If '-R' is specified, recursively display keys under
+subdirectories.  If '-d' is specified, do not output key values.  If
+'count' is specified, display at most 'count' changes.  Otherwise,
 this command runs forever.  If '-o' is specified, output the current
 value before outputting changes.
 
