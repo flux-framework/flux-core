@@ -1377,35 +1377,20 @@ static void load_modules (ctx_t *ctx, const char *default_modules)
         log_err_exit ("conf.module_path is not set");
 
     while ((s = strtok_r (a1, ",", &saveptr))) {
-        char *name = NULL;
-        char *path = NULL;
         char *sp;
         if ((sp = strchr (s, '['))) {
             if (!nodeset_member (sp, ctx->rank))
                 goto next;
             *sp = '\0';
         }
-        if (strchr (s, '/')) {
-            if (!(name = flux_modname (s)))
-                log_msg_exit ("%s", dlerror ());
-            path = s;
-        } else {
-            if (!(path = flux_modfind (modpath, s)))
-                log_msg_exit ("%s: not found in module search path", s);
-            name = s;
-        }
-        if (!(p = module_add (ctx->modhash, path)))
-            log_err_exit ("%s: module_add %s", name, path);
+        if (!(p = modhash_load_module (ctx->modhash, modpath, s)))
+            log_msg_exit ("%s: %s", s, strerror (errno));
         if (!svc_add (ctx->services, module_get_name (p),
                                      module_get_service (p), mod_svc_cb, p))
             log_msg_exit ("could not register service %s", module_get_name (p));
         module_set_poller_cb (p, module_cb, ctx);
         module_set_status_cb (p, module_status_cb, ctx);
 next:
-        if (name != s)
-            free (name);
-        if (path != s)
-            free (path);
         a1 = NULL;
     }
     module_start_all (ctx->modhash);
