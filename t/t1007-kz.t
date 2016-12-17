@@ -10,7 +10,7 @@ test_under_flux ${SIZE} kvs
 test_expect_success 'kz: hello world copy in, copy out' '
 	echo "hello world" >kztest.1.in &&
 	${FLUX_BUILD_DIR}/t/kz/kzutil --b 4096 -c - kztest.1 <kztest.1.in &&
-	test $(flux kvs dirsize kztest.1) -eq 2 &&
+	test $(flux kvs dir kztest.1 | wc -l) -eq 2 &&
 	${FLUX_BUILD_DIR}/t/kz/kzutil -c kztest.1 - >kztest.1.out &&
 	test_cmp kztest.1.in kztest.1.out 
 '
@@ -18,7 +18,7 @@ test_expect_success 'kz: hello world copy in, copy out' '
 test_expect_success 'kz: 128K urandom copy in, copy out' '
 	dd if=/dev/urandom bs=4096 count=32 2>/dev/null >kztest.2.in &&
 	${FLUX_BUILD_DIR}/t/kz/kzutil -b 4096 -c - kztest.2 <kztest.2.in &&
-	test $(flux kvs dirsize kztest.2) -eq 33 &&
+	test $(flux kvs dir kztest.2 | wc -l) -eq 33 &&
 	${FLUX_BUILD_DIR}/t/kz/kzutil -c kztest.2 - >kztest.2.out &&
 	test_cmp kztest.2.in kztest.2.out
 '
