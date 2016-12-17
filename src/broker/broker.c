@@ -1989,7 +1989,6 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
-    char *name = NULL;
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
@@ -2029,11 +2028,9 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
     }
     flux_msg_destroy (*msg); /* msg will be replied to later */
     *msg = NULL;
-    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
+    flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     rc = 0;
 done:
-    if (name)
-        free (name);
     if (path)
         free (path);
     if (argz)
