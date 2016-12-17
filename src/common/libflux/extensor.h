@@ -58,6 +58,12 @@ struct flux_module_loader * flux_extensor_get_loader (flux_extensor_t *e,
 int flux_extensor_loadall (flux_extensor_t *e, const char * path);
 
 /*
+ *  Load first module in searchpath matching `name`:
+ */
+flux_module_t * flux_extensor_find_module (flux_extensor_t *e,
+    const char *searchpath, const char *name);
+
+/*
  *  Get the module currently registered under `name` from extensor `m`.
  *
  *  Note that if multiple loaded modules provide `name`, the first loaded

@@ -26,6 +26,7 @@
 #include "config.h"
 #endif
 
+#include <fnmatch.h>
 #include <dlfcn.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -286,9 +287,12 @@ extensor_get_module (flux_extensor_t *s, const char *name)
 }
 
 /*
- *  Load all possible modules in directory `dirpath`.
+ *  Load all possible modules in directory `dirpath`. If `match` is non-NULL
+ *   only load modules with names that match string `match`, and stop at first
+ *   match.
  */
-static int extensor_loadall (flux_extensor_t *s, const char *dirpath)
+static int extensor_loadall (flux_extensor_t *s,
+    const char *dirpath, const char *match, int max)
 {
     int count = 0;
     int n;
@@ -312,25 +316,39 @@ static int extensor_loadall (flux_extensor_t *s, const char *dirpath)
         if (stat (path, &sb) < 0)
             continue;
         if (S_ISDIR (sb.st_mode)) {
-            if ((n = extensor_loadall (s, path)) < 0) {
+            if ((n = extensor_loadall (s, path, match, max)) < 0) {
                 count = -1;
                 break;
             }
             else
                 count += n;
+            if (max && count == max)
+                break;
         }
         else if ((p = flux_module_create (s, path, 0))) {
-            if (flux_module_load (p) < 0)
+            if (flux_module_load (p) < 0) {
                 flux_module_destroy (p);
-            else
-                ++count;
+                continue;
+            }
+            /*
+             *  If match is required, check it here. Unload module if there
+             *   is no match, otherwise return immediately.
+             */
+            if (match && (fnmatch (match, flux_module_name (p), 0) != 0)) {
+                flux_module_destroy (p);
+                continue;
+            }
+            ++count;
+            if (max && count == max)
+                break;
         }
     }
     closedir (dir);
     return (count);
 }
 
-int flux_extensor_loadall (flux_extensor_t *s, const char *searchpath)
+static int extensor_search (flux_extensor_t *s, const char *searchpath,
+    const char *pattern, int maxresults)
 {
     int count = 0;
     int n;
@@ -342,7 +360,7 @@ int flux_extensor_loadall (flux_extensor_t *s, const char *searchpath)
         return (-1);
 
     while ((dirpath = strtok_r (a1, ":", &saveptr))) {
-        if ((n = extensor_loadall (s, dirpath)) < 0) {
+        if ((n = extensor_loadall (s, dirpath, pattern, maxresults)) < 0) {
             count = -1;
             break;
         }
@@ -353,10 +371,23 @@ int flux_extensor_loadall (flux_extensor_t *s, const char *searchpath)
     return (count);
 }
 
+int flux_extensor_loadall (flux_extensor_t *s, const char *searchpath)
+{
+    return extensor_search (s, searchpath, NULL, 0);
+}
+
 flux_module_t *
 flux_extensor_get_module (flux_extensor_t *s, const char *name)
 {
     return extensor_get_module (s, name);
+}
+
+flux_module_t * flux_extensor_find_module (flux_extensor_t *s,
+    const char *searchpath, const char *name)
+{
+    if (extensor_search (s, searchpath, name, 1) != 1)
+        return NULL;
+    return (flux_extensor_get_module (s, name));
 }
 
 /*****************************************************************************
