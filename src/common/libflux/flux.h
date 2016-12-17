@@ -22,6 +22,7 @@
 #include "conf.h"
 #include "heartbeat.h"
 #include "content.h"
+#include "extensor.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 
