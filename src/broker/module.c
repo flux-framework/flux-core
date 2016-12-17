@@ -493,24 +493,14 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
-module_t *module_add (modhash_t *mh, const char *path)
+static module_t *module_add_module (modhash_t *mh, flux_module_t *m)
 {
-    flux_module_t *m;
     module_t *p;
     const char **mod_servicep;
     mod_main_f mod_main;
     zfile_t *zf;
     int rc;
 
-    if (!(m = flux_module_create (mh->ex, path, 0)))
-        return NULL;
-
-    if (flux_module_load (m) < 0) {
-        log_msg ("%s", flux_module_strerror (m));
-        flux_module_destroy (m);
-        errno = ENOENT;
-        return NULL;
-    }
     if (!(mod_main = flux_module_lookup (m, "mod_main"))) {
         flux_module_destroy (m);
         errno = ENOENT;
@@ -525,7 +515,7 @@ module_t *module_add (modhash_t *mh, const char *path)
         p->service = xstrdup (*mod_servicep);
     p->magic = MODULE_MAGIC;
     p->main = mod_main;
-    zf = zfile_new (NULL, path);
+    zf = zfile_new (NULL, flux_module_path (m));
     p->digest = xstrdup (zfile_digest (zf));
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
@@ -556,6 +546,35 @@ module_t *module_add (modhash_t *mh, const char *path)
                   (zhash_free_fn *)module_destroy);
     return p;
 }
+
+module_t *module_add (modhash_t *mh, const char *path)
+{
+    flux_module_t *m;
+    if (!(m = flux_module_create (mh->ex, path, 0)))
+        return NULL;
+
+    if (flux_module_load (m) < 0) {
+        log_msg ("%s", flux_module_strerror (m));
+        flux_module_destroy (m);
+        errno = ENOENT;
+        return NULL;
+    }
+
+    return module_add_module (mh, m);
+}
+
+module_t *modhash_load_module (modhash_t *mh,
+    const char *searchpath, const char *mod)
+{
+    flux_module_t *m;
+    if (strchr (mod, '/'))
+        return module_add (mh, mod);
+    if ((m = flux_extensor_find_module (mh->ex, searchpath, mod)))
+        return module_add_module (mh, m);
+    errno = ENOENT;
+    return NULL;
+}
+
 
 void module_remove (modhash_t *mh, module_t *p)
 {
