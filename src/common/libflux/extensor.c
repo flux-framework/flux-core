@@ -382,12 +382,24 @@ flux_extensor_get_module (flux_extensor_t *s, const char *name)
     return extensor_get_module (s, name);
 }
 
-flux_module_t * flux_extensor_find_module (flux_extensor_t *s,
-    const char *searchpath, const char *name)
+static flux_module_t * extensor_load (flux_extensor_t *s, const char *arg)
 {
-    if (extensor_search (s, searchpath, name, 1) != 1)
+    flux_module_t * m = flux_module_create (s, arg, 0);
+    if (!m || (flux_module_load (m) < 0)) {
+        flux_module_destroy (m);
+        return (NULL);
+    }
+    return (m);
+}
+
+flux_module_t * flux_extensor_load_module (flux_extensor_t *s,
+    const char *searchpath, const char *arg)
+{
+    if (strchr (arg, '/'))
+        return extensor_load (s, arg);
+    else if (extensor_search (s, searchpath, arg, 1) != 1)
         return NULL;
-    return (flux_extensor_get_module (s, name));
+    return (flux_extensor_get_module (s, arg));
 }
 
 /*****************************************************************************
