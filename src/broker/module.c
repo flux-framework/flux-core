@@ -568,14 +568,11 @@ module_t *modhash_load_module (modhash_t *mh,
     const char *searchpath, const char *mod)
 {
     flux_module_t *m;
-    if (strchr (mod, '/'))
-        return module_add (mh, mod);
-    if ((m = flux_extensor_find_module (mh->ex, searchpath, mod)))
+    if ((m = flux_extensor_load_module (mh->ex, searchpath, mod)))
         return module_add_module (mh, m);
     errno = ENOENT;
     return NULL;
 }
-
 
 void module_remove (modhash_t *mh, module_t *p)
 {
