@@ -58,10 +58,15 @@ struct flux_module_loader * flux_extensor_get_loader (flux_extensor_t *e,
 int flux_extensor_loadall (flux_extensor_t *e, const char * path);
 
 /*
- *  Load first module in searchpath matching `name`:
+ *  Load the first module in search path with name matching
+ *   pattern in 'arg'. If 'arg' contains one or more path separators,
+ *   (i.e. '/'), then arg is assumed to be an absolute or relative
+ *   path, and the module in that path will be explicitly loaded.
+ *
+ *  Returns the loaded module, or NULL on failure.
  */
-flux_module_t * flux_extensor_find_module (flux_extensor_t *e,
-    const char *searchpath, const char *name);
+flux_module_t * flux_extensor_load_module (flux_extensor_t *e,
+    const char *searchpath, const char *arg);
 
 /*
  *  Get the module currently registered under `name` from extensor `m`.
