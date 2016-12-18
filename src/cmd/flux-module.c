@@ -55,14 +55,14 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void mod_lsmod (flux_t *h, opt_t opt);
-void mod_rmmod (flux_t *h, opt_t opt);
-void mod_insmod (flux_t *h, opt_t opt);
-void mod_info (flux_t *h, opt_t opt);
+void mod_lsmod (flux_t *h, flux_extensor_t *ex, opt_t opt);
+void mod_rmmod (flux_t *h, flux_extensor_t *ex, opt_t opt);
+void mod_insmod (flux_t *h, flux_extensor_t *ex, opt_t opt);
+void mod_info (flux_t *h, flux_extensor_t *ex, opt_t opt);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t *h, opt_t opt);
+    void (*fun)(flux_t *h, flux_extensor_t *ex, opt_t opt);
 } func_t;
 
 static func_t funcs[] = {
@@ -98,6 +98,7 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     flux_t *h = NULL;
+    flux_extensor_t *ex = NULL;
     int ch;
     char *cmd;
     func_t *f;
@@ -136,6 +137,9 @@ int main (int argc, char *argv[])
     if (!(f = func_lookup (cmd)))
         log_msg_exit ("unknown function '%s'", cmd);
 
+    if (!(ex = flux_extensor_create ()))
+        log_msg_exit ("failed to create flux extensor");
+
     if (strcmp (cmd, "info") != 0) {
         if (!(h = flux_open (NULL, 0)))
             log_err_exit ("flux_open");
@@ -145,10 +149,12 @@ int main (int argc, char *argv[])
             exit (0);
     }
 
-    f->fun (h, opt);
+    f->fun (h, ex, opt);
 
     if (h)
         flux_close (h);
+
+    flux_extensor_destroy (ex);
 
     log_fini ();
     return 0;
@@ -172,45 +178,31 @@ int filesize (const char *path)
     return sb.st_size;
 }
 
-void parse_modarg (const char *arg, char **name, char **path)
+flux_module_t * find_module (flux_extensor_t *ex, const char *arg)
 {
-    char *modpath = NULL;
-    char *modname = NULL;
-
-    if (strchr (arg, '/')) {
-        if (!(modpath = realpath (arg, NULL)))
-            log_err_exit ("%s", arg);
-        if (!(modname = flux_modname (modpath)))
-            log_msg_exit ("%s", dlerror ());
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            log_msg_exit ("FLUX_MODULE_PATH is not set");
-        modname = xstrdup (arg);
-        if (!(modpath = flux_modfind (searchpath, modname)))
-            log_msg_exit ("%s: not found in module search path", modname);
-    }
-    *name = modname;
-    *path = modpath;
+    char *searchpath = getenv ("FLUX_MODULE_PATH");
+    if (!searchpath)
+        log_msg_exit ("FLUX_MODULE_PATH is not set");
+    return flux_extensor_load_module (ex, searchpath, arg);
 }
 
-void mod_info (flux_t *h, opt_t opt)
+void mod_info (flux_t *h, flux_extensor_t *ex, opt_t opt)
 {
-    char *modpath = NULL;
-    char *modname = NULL;
+    flux_module_t *m;
+    const char *arg = opt.argv[0];
     char *digest = NULL;
 
     if (opt.argc != 1)
         usage ();
-    parse_modarg (opt.argv[0], &modname, &modpath);
-    digest = sha1 (modpath);
-    printf ("Module name:  %s\n", modname);
-    printf ("Module path:  %s\n", modpath);
-    printf ("SHA1 Digest:  %s\n", digest);
-    printf ("Size:         %d bytes\n", filesize (modpath));
+    if (!(m = find_module (ex, arg)))
+        log_msg_exit ("Failed to find module %s", arg);
 
-    free (modpath);
-    free (modname);
+    digest = sha1 (flux_module_path (m));
+    printf ("Module name:  %s\n", flux_module_name (m));
+    printf ("Module path:  %s\n", flux_module_path (m));
+    printf ("SHA1 Digest:  %s\n", digest);
+    printf ("Size:         %d bytes\n", filesize (flux_module_path (m)));
+
     free (digest);
 }
 
@@ -228,21 +220,22 @@ char *getservice (const char *modname)
     return service;
 }
 
-void mod_insmod (flux_t *h, opt_t opt)
+void mod_insmod (flux_t *h, flux_extensor_t *ex, opt_t opt)
 {
-    char *modname;
-    char *modpath;
+    flux_module_t *m;
     int errors = 0;
 
     if (opt.argc < 1)
         usage ();
-    parse_modarg (opt.argv[0], &modname, &modpath);
+    if (!(m = find_module (ex, opt.argv[0])))
+        log_msg_exit ("%s: not found in module search path", opt.argv[0]);
     opt.argv++;
     opt.argc--;
 
-    char *service = getservice (modname);
+    char *service = getservice (flux_module_name (m));
     char *topic = xasprintf ("%s.insmod", service);
-    char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
+    char *json_str = flux_insmod_json_encode (flux_module_path (m),
+                                              opt.argc, opt.argv);
     assert (json_str != NULL);
     flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
     if (!r)
@@ -253,7 +246,7 @@ void mod_insmod (flux_t *h, opt_t opt)
                                     || flux_rpc_get (r, NULL) < 0) {
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
                 log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
-                     topic, nodeid, modname);
+                     topic, nodeid, flux_module_name (m));
             else if (nodeid != FLUX_NODEID_ANY)
                 log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
@@ -265,13 +258,11 @@ void mod_insmod (flux_t *h, opt_t opt)
     free (topic);
     free (service);
     free (json_str);
-    free (modpath);
-    free (modname);
     if (errors)
         exit (1);
 }
 
-void mod_rmmod (flux_t *h, opt_t opt)
+void mod_rmmod (flux_t *h, flux_extensor_t *ex, opt_t opt)
 {
     char *modname = NULL;
 
@@ -425,7 +416,7 @@ done:
     return rc;
 }
 
-void mod_lsmod (flux_t *h, opt_t opt)
+void mod_lsmod (flux_t *h, flux_extensor_t *ex, opt_t opt)
 {
     char *service = "cmb";
 
