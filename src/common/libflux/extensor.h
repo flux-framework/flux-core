@@ -120,6 +120,7 @@ void flux_module_destroy (flux_module_t *p);
  */
 const char * flux_module_path (flux_module_t *p);
 const char * flux_module_name (flux_module_t *p);
+const char * flux_module_service (flux_module_t *p);
 const char * flux_module_strerror (flux_module_t *p);
 const char * flux_module_uuid (flux_module_t *p);
 
