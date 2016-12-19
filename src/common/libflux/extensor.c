@@ -48,6 +48,7 @@ struct flux_module_handle  {
     struct flux_module_loader *loader; /* Loader implementation              */
     flux_extensor_t *owner;            /* Pointer back to them that loaded us */
     char *path;                        /* realpath to this module/plugin     */
+    char *service;                     /* "Service" name for this module     */
     zuuid_t *uuid;                     /* uuid (local to this extensor)      */
     unsigned int loaded:1;             /* module "loaded" or not?            */
     unsigned int destroyed:1;          /* module is being destroyed          */
@@ -529,6 +530,29 @@ const char * flux_module_name (flux_module_t *p)
     return p->loader->get_name (p);
 }
 
+/* Derive name of module loading service from module name.
+ */
+char *getservice (const char *modname)
+{
+    char *service = NULL;
+    if (strchr (modname, '.')) {
+        service = strdup (modname);
+        if (service) {
+            char *p = strrchr (service, '.');
+            *p = '\0';
+        }
+    } else
+        service = strdup ("cmb");
+    return service;
+}
+
+const char * flux_module_service (flux_module_t *p)
+{
+    if (!p->service)
+        p->service = getservice (flux_module_name (p));
+    return p->service;
+}
+
 const char * flux_module_path (flux_module_t *p)
 {
     return p->path;
@@ -560,6 +584,7 @@ void flux_module_destroy (flux_module_t *p)
     if (p->uuid)
         zuuid_destroy (&p->uuid);
     free (p->path);
+    free (p->service);
     free (p);
 }
 
