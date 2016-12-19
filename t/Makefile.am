@@ -47,6 +47,7 @@ TESTS = \
 	t0017-security.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
+	t1002-kvs-cmd.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
@@ -112,6 +113,7 @@ check_SCRIPTS = \
 	t0017-security.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
+	t1002-kvs-cmd.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
