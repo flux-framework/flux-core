@@ -116,7 +116,7 @@ void * flux_module_set_loader_ctx (flux_module_t *p, void *data);
  *  Get and set arbitrary context under module `p`, to be used by the caller
  *  flux_module_set_ctx() returns old value for the ctx.
  */
-void * flux_module_set_ctx (flux_module_t *p, void *);
+void * flux_module_set_ctx (flux_module_t *p, void *ctx);
 void * flux_module_get_ctx (flux_module_t *p);
 
 

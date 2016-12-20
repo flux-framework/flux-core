@@ -25,13 +25,13 @@ static int faker_init (flux_module_t *p, const char *path, int flags)
     m->basename = basename (m->path);
     m->loaded = 0;
     m->last_error = NULL;
-    flux_module_setctx (p, m);
+    flux_module_set_loader_ctx (p, m);
     return 0;
 }
 
 static int faker_load (flux_module_t *p)
 {
-    struct fake_module *m = flux_module_getctx (p);
+    struct fake_module *m = flux_module_get_loader_ctx (p);
     if (m->loaded) {
         m->last_error = strdup ("already loaded");
         return -1;
@@ -42,14 +42,14 @@ static int faker_load (flux_module_t *p)
 
 static int faker_unload (flux_module_t *p)
 {
-    struct fake_module *m = flux_module_getctx (p);
+    struct fake_module *m = flux_module_get_loader_ctx (p);
     m->loaded = 0;
     return 0;
 }
 
 static void faker_destroy (flux_module_t *p)
 {
-    struct fake_module *m = flux_module_setctx (p, NULL);
+    struct fake_module *m = flux_module_set_loader_ctx (p, NULL);
     free (m->path);
     free (m->last_error);
     free (m);
@@ -57,7 +57,7 @@ static void faker_destroy (flux_module_t *p)
 
 static int faker_is_loaded (flux_module_t *p)
 {
-    struct fake_module *m = flux_module_getctx (p);
+    struct fake_module *m = flux_module_get_loader_ctx (p);
     return (m->loaded);
 }
 
@@ -70,13 +70,13 @@ static void * faker_lookup (flux_module_t *p, const char *sym)
 
 static const char * faker_get_name (flux_module_t *p)
 {
-    struct fake_module *m = flux_module_getctx (p);
+    struct fake_module *m = flux_module_get_loader_ctx (p);
     return (m->basename);
 }
 
 static const char * faker_strerror (flux_module_t *p)
 {
-    struct fake_module *m = flux_module_getctx (p);
+    struct fake_module *m = flux_module_get_loader_ctx (p);
     return (m->last_error);
 }
 
