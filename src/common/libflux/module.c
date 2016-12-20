@@ -43,20 +43,6 @@ struct flux_modlist_struct {
     json_t *o;
 };
 
-/* Get service name from module name string.
- */
-static char *mod_service (const char *modname)
-{
-    char *service = NULL;
-    if (strchr (modname, '.')) {
-        service = xstrdup (modname);
-        char *p = strrchr (service, '.');
-        *p = '\0';
-    } else
-        service = xstrdup ("cmb");
-    return service;
-}
-
 /**
  ** JSON encode/decode functions
  **/
@@ -350,31 +336,6 @@ char *flux_modfind (const char *searchpath, const char *modname)
     return modpath;
 }
 
-int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
-{
-    flux_rpc_t *r = NULL;
-    char *service = mod_service (name);
-    char *topic = xasprintf ("%s.rmmod", service);
-    char *json_str = NULL;
-    int rc = -1;
-
-    if (!(json_str = flux_rmmod_json_encode (name)))
-        goto done;
-    if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
-        goto done;
-    if (flux_rpc_get (r, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    free (service);
-    free (topic);
-    if (json_str)
-        free (json_str);
-    if (r)
-        flux_rpc_destroy (r);
-    return rc;
-}
-
 int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg)
 {
@@ -407,42 +368,6 @@ done:
     free (topic);
     if (mods)
         flux_modlist_destroy (mods);
-    if (r)
-        flux_rpc_destroy (r);
-    return rc;
-}
-
-int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
-                 int argc, char **argv)
-{
-    flux_rpc_t *r = NULL;
-    char *name = NULL;
-    char *service = NULL;
-    char *topic = NULL;
-    char *json_str = NULL;
-    int rc = -1;
-
-    if (!(name = flux_modname (path))) {
-        goto done;
-    }
-    service = mod_service (name);
-    topic = xasprintf ("%s.insmod", service);
-
-    json_str = flux_insmod_json_encode (path, argc, argv);
-    if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
-        goto done;
-    if (flux_rpc_get (r, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (name)
-        free (name);
-    if (service)
-        free (service);
-    if (topic)
-        free (topic);
-    if (json_str)
-        free (json_str);
     if (r)
         flux_rpc_destroy (r);
     return rc;
