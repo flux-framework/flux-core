@@ -38,22 +38,6 @@ typedef int (*flux_lsmod_f)(const char *name, int size, const char *digest,
 int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg);
 
-/* Send a request to remove a module 'name'.
- * The request is sent to a service determined by parsing 'name'.
- * Returns 0 on success, -1 with errno set on failure.
- */
-int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name);
-
-/* Send a request to insert a module 'path'.
- * The request is sent to a service determined by parsing the module's name,
- * as defined by its symbol 'mod_name' (found by opening 'path').  Pass args
- * described by 'argc' and 'argv' to the module's 'mod_main' function.
- * Returns 0 on success, -1 with errno set on failure.
- */
-int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
-                int argc, char **argv);
-
-
 /**
  ** Mandatory symbols for modules
  **/
