@@ -47,21 +47,6 @@ int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
 typedef int (*mod_main_f)(flux_t *h, int argc, char *argv[]);
 
 
-/**
- ** Convenience functions for services implementing module extensions
- **/
-
-/* Read the value of 'mod_name' from the specified module filename.
- * Caller must free the returned name.  Returns NULL on failure.
- */
-char *flux_modname (const char *filename);
-
-/* Search a colon-separated list of directories (recursively) for a .so file
- * with the requested module name and return its path, or NULL on failure.
- * Caller must free the returned path.
- */
-char *flux_modfind (const char *searchpath, const char *modname);
-
 /* Encode/decode lsmod payload
  * 'flux_modlist_t' is an intermediate object that can encode/decode
  * to/from a JSON string, and provides accessors for module list entries.
