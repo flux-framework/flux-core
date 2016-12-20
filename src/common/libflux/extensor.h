@@ -105,11 +105,19 @@ flux_module_t * flux_module_create_with_loader (flux_extensor_t *e,
  *  Flux module handle (flux_module_t) interface functions:
  */
 
-/*  Get and set arbitrary context under module `p`, meant to be used by
+/*  Get and set "loader" context under module `p`, meant to be used by
  *   module loader implementations.
+ *  flux_module_set_loader_ctx() returns old ctx value.
  */
-void * flux_module_getctx (flux_module_t *p);
-void * flux_module_setctx (flux_module_t *p, void *data);
+void * flux_module_get_loader_ctx (flux_module_t *p);
+void * flux_module_set_loader_ctx (flux_module_t *p, void *data);
+
+/*
+ *  Get and set arbitrary context under module `p`, to be used by the caller
+ *  flux_module_set_ctx() returns old value for the ctx.
+ */
+void * flux_module_set_ctx (flux_module_t *p, void *);
+void * flux_module_get_ctx (flux_module_t *p);
 
 
 /*  Load/unload/destroy modules via their handles */

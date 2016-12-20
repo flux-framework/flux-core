@@ -53,7 +53,8 @@ struct flux_module_handle  {
     zuuid_t *uuid;                     /* uuid (local to this extensor)      */
     unsigned int loaded:1;             /* module "loaded" or not?            */
     unsigned int destroyed:1;          /* module is being destroyed          */
-    void *ctx;                         /* loader specific context            */
+    void *lctx;                        /* loader specific context            */
+    void *ctx;                         /* caller context                     */
 };
 
 
@@ -70,7 +71,7 @@ struct dso_loader {
 static void dso_destroy (flux_module_t *p)
 {
     struct dso_loader *d;
-    if (p && (d = flux_module_getctx (p))) {
+    if (p && (d = flux_module_get_loader_ctx (p))) {
         if (d->dso) {
             dlclose (d->dso);
             d->dso = NULL;
@@ -86,14 +87,14 @@ static int dso_init (flux_module_t *p, const char *path, int flags)
     struct dso_loader *d = calloc (1, sizeof (*d));
     if (!d)
         return -1;
-    flux_module_setctx (p, d);
+    flux_module_set_loader_ctx (p, d);
     return (0);
 }
 
 static int dso_load (flux_module_t *p)
 {
     char **namep;
-    struct dso_loader *d = flux_module_getctx (p);
+    struct dso_loader *d = flux_module_get_loader_ctx (p);
     const char *path = flux_module_path (p);
     if (!d)
         return -1;
@@ -117,7 +118,7 @@ static int dso_unload (flux_module_t *p)
 {
     int rc;
     struct dso_loader *d;
-    if (!p || !(d = flux_module_getctx (p)))
+    if (!p || !(d = flux_module_get_loader_ctx (p)))
         return (-1);
     d->name = NULL;
     rc = dlclose (d->dso);
@@ -128,7 +129,7 @@ static int dso_unload (flux_module_t *p)
 static const char * dso_get_name (flux_module_t *p)
 {
     struct dso_loader *d;
-    if (!p || !(d = flux_module_getctx (p)))
+    if (!p || !(d = flux_module_get_loader_ctx (p)))
         return (NULL);
     return d->name;
 }
@@ -136,7 +137,7 @@ static const char * dso_get_name (flux_module_t *p)
 static const char * dso_strerror (flux_module_t *p)
 {
     struct dso_loader *d;
-    if (!p || !(d = flux_module_getctx (p)))
+    if (!p || !(d = flux_module_get_loader_ctx (p)))
         return (NULL);
     return d->last_error;
 }
@@ -144,7 +145,7 @@ static const char * dso_strerror (flux_module_t *p)
 static void * dso_lookup (flux_module_t *p, const char *sym)
 {
     struct dso_loader *d;
-    if (!p || !(d = flux_module_getctx (p)))
+    if (!p || !(d = flux_module_get_loader_ctx (p)))
         return (NULL);
     return (dlsym (d->dso, sym));
 }
@@ -472,12 +473,24 @@ flux_module_t * flux_module_create_with_loader (flux_extensor_t *s,
     return module_create (s, l, path, flags);
 }
 
-void * flux_module_getctx (flux_module_t *p)
+void * flux_module_get_loader_ctx (flux_module_t *p)
+{
+    return p->lctx;
+}
+
+void * flux_module_set_loader_ctx (flux_module_t *p, void *ctx)
+{
+    void * oldctx = p->lctx;
+    p->lctx = ctx;
+    return oldctx;
+}
+
+void * flux_module_get_ctx (flux_module_t *p)
 {
     return p->ctx;
 }
 
-void * flux_module_setctx (flux_module_t *p, void *ctx)
+void * flux_module_set_ctx (flux_module_t *p, void *ctx)
 {
     void * oldctx = p->ctx;
     p->ctx = ctx;
