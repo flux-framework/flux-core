@@ -300,14 +300,14 @@ static int extensor_loadall (flux_extensor_t *s,
     int n;
     flux_module_t *p = NULL;
     DIR *dir;
-    struct dirent entry, *dent;
+    struct dirent *dent;
     char path [PATH_MAX];
     struct stat sb;
     size_t len = sizeof (path);
 
     if (!(dir = opendir (dirpath)))
         return -1;
-    while ((errno = readdir_r (dir, &entry, &dent) == 0) && dent != NULL) {
+    while ((dent = readdir (dir)) != NULL) {
         if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
             continue;
         if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len) {
