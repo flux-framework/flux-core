@@ -33,6 +33,7 @@
 
 #include <czmq.h>
 #include "extensor.h"
+#include "module.h"
 
 struct flux_module_service {
     /* Loaders:  */
@@ -586,6 +587,31 @@ void flux_module_destroy (flux_module_t *p)
     free (p->path);
     free (p->service);
     free (p);
+}
+
+
+flux_rpc_t *flux_module_insmod_rpc (flux_module_t *p, flux_t *h,
+        const char *nodeset, int argc, char **argv)
+{
+    flux_rpc_t *rpc = NULL;
+    const char *service = NULL;
+    char *topic = NULL;
+    char *json_str = NULL;
+
+    if (!(service = flux_module_service (p))) {
+        errno = EINVAL;
+        return (NULL);
+    }
+    if (asprintf (&topic, "%s.insmod", service) < 0)
+        return (NULL);
+
+    json_str = flux_insmod_json_encode (flux_module_path (p), argc, argv);
+    if (json_str)
+        rpc = flux_rpc_multi (h, topic, json_str, nodeset, 0);
+
+    free (json_str);
+    free (topic);
+    return (rpc);
 }
 
 /*

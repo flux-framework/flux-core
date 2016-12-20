@@ -1,6 +1,8 @@
 #ifndef _FLUX_CORE_MODSERVICE_H
 #define _FLUX_CORE_MODSERVICE_H
 
+#include "rpc.h"
+
 
 /*
  *  Flux extension/module loading service:
@@ -130,6 +132,17 @@ const char * flux_module_uuid (flux_module_t *p);
  *   returned.
  */
 void *flux_module_lookup (flux_module_t *p, const char *symbol);
+
+
+/*
+ *  Create an RPC to remotely insmod the module `p` on broker rank or
+ *   ranks in `nodeset`, with module args in argc,argv.
+ *  Returns a flux_rpc_t on success, which the caller must process,
+ *   NULL on failure to create rpc.
+ */
+flux_rpc_t * flux_module_insmod_rpc (flux_module_t *p, flux_t *h,
+                                     const char *nodeset,
+                                     int argc, char **argv);
 
 #endif /* !FLUX_CORE_MODSERVICE_H */
 
