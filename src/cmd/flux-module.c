@@ -222,6 +222,7 @@ char *getservice (const char *modname)
 
 void mod_insmod (flux_t *h, flux_extensor_t *ex, opt_t opt)
 {
+    flux_rpc_t *r;
     flux_module_t *m;
     int errors = 0;
 
@@ -232,32 +233,23 @@ void mod_insmod (flux_t *h, flux_extensor_t *ex, opt_t opt)
     opt.argv++;
     opt.argc--;
 
-    char *service = getservice (flux_module_name (m));
-    char *topic = xasprintf ("%s.insmod", service);
-    char *json_str = flux_insmod_json_encode (flux_module_path (m),
-                                              opt.argc, opt.argv);
-    assert (json_str != NULL);
-    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-    if (!r)
-        log_err_exit ("%s", topic);
+    if (!(r = flux_module_insmod_rpc (m, h, opt.nodeset, opt.argc, opt.argv)))
+        log_err_exit ("%s.insmod", flux_module_service (m));
     do {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get_nodeid (r, &nodeid) < 0
                                     || flux_rpc_get (r, NULL) < 0) {
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
                 log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
-                     topic, nodeid, flux_module_name (m));
+                     flux_module_service (m), nodeid, flux_module_name (m));
             else if (nodeid != FLUX_NODEID_ANY)
-                log_err ("%s[%" PRIu32 "]", topic, nodeid);
+                log_err ("%s[%" PRIu32 "]", flux_module_service (m), nodeid);
             else
-                log_err ("%s", topic);
+                log_err ("%s.insmod", flux_module_service (m));
             errors++;
         }
     } while (flux_rpc_next (r) == 0);
     flux_rpc_destroy (r);
-    free (topic);
-    free (service);
-    free (json_str);
     if (errors)
         exit (1);
 }
