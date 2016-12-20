@@ -22,4 +22,6 @@ libcompat_la_SOURCES = \
 	request.h \
 	rpc.c \
 	rpc.h \
+	module.c \
+	module.h \
 	compat.h
