@@ -543,6 +543,11 @@ static module_t *module_add_module (modhash_t *mh, flux_module_t *m)
     assert (rc == 0); /* uuids are by definition unique */
     zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
+
+    /* Add broker module as user context to flux_module_t:
+     */
+    flux_module_set_ctx (m, p);
+
     return p;
 }
 
@@ -694,25 +699,10 @@ done:
 
 module_t *module_lookup_byname (modhash_t *mh, const char *name)
 {
-    zlist_t *uuids;
-    char *uuid;
-    module_t *result = NULL;
-
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (!strcmp (module_get_name (p), name)) {
-            result = p;
-            break;
-        }
-        uuid = zlist_next (uuids);
-        p = NULL;
-    }
-    zlist_destroy (&uuids);
-    return result;
+    flux_module_t *p = flux_extensor_get_module (mh->ex, name);
+    if (p)
+        return flux_module_get_ctx (p);
+    return NULL;
 }
 
 int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
