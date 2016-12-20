@@ -542,7 +542,7 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 
 test_expect_success 'kvs: watch 5 versions of key'  '
 	${KVSBASIC} unlink $TEST.foo &&
-        ${KVSBASIC} put $TEST.a.b.c=1 &&
+        ${KVSBASIC} put $TEST.foo.a=1 &&
 	${KVSBASIC} watch 5 $TEST.foo.a >watch_out &
         for i in $(seq 2 5); do
             ${KVSBASIC} put $TEST.foo.a=${i}
