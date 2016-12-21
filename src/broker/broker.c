@@ -157,6 +157,7 @@ typedef struct {
     struct subprocess_manager *sm;
 
     char *init_shell_cmd;
+    size_t init_shell_cmd_len;
     struct subprocess *init_shell;
 } ctx_t;
 
@@ -358,10 +359,8 @@ int main (int argc, char *argv[])
         }
     }
     if (optind < argc) {
-        size_t len = 0;
-        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &len)) != 0)
+        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &ctx.init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
-        argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
 
 
@@ -579,6 +578,7 @@ int main (int argc, char *argv[])
     if (ctx.rank == 0) {
         const char *rc1, *rc3, *pmi, *uri;
         const char *rc2 = ctx.init_shell_cmd;
+        size_t rc2_len = ctx.init_shell_cmd_len;
 
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0)
             log_err_exit ("local-uri is not set");
@@ -594,11 +594,11 @@ int main (int argc, char *argv[])
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
 
-        if (runlevel_set_rc (ctx.runlevel, 1, rc1, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 1, rc1, rc1 ? strlen (rc1) + 1 : 0, uri) < 0)
             log_err_exit ("runlevel_set_rc 1");
-        if (runlevel_set_rc (ctx.runlevel, 2, rc2, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 2, rc2, rc2_len, uri) < 0)
             log_err_exit ("runlevel_set_rc 2");
-        if (runlevel_set_rc (ctx.runlevel, 3, rc3, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc1 ? strlen (rc3) + 1 : 0, uri) < 0)
             log_err_exit ("runlevel_set_rc 3");
     }
 

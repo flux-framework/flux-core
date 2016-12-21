@@ -431,6 +431,18 @@ int subprocess_set_args (struct subprocess *p, int argc, char **argv)
     return (init_argz (&p->argz, &p->argz_len, argv));
 }
 
+int subprocess_set_args_from_argz (struct subprocess *p, const char * argz, size_t argz_len)
+{
+    if (p->started || argz == NULL) {
+        errno = EINVAL;
+        return (-1);
+    }
+    free (p->argz);
+    p->argz_len = 0;
+    int e = argz_append (&p->argz, &p->argz_len, argz, argz_len);
+    return e ? (errno = e, -1) : 0;
+}
+
 const char * subprocess_get_arg (struct subprocess *p, int n)
 {
     int i;
@@ -482,6 +494,22 @@ int subprocess_argv_append (struct subprocess *p, const char *s)
     }
 
     if ((e = argz_add (&p->argz, &p->argz_len, s)) != 0) {
+        errno = e;
+        return -1;
+    }
+    return (0);
+}
+
+int subprocess_argv_append_argz (struct subprocess *p, const char *argz, size_t argz_len)
+{
+    int e;
+
+    if (p->started) {
+        errno = EINVAL;
+        return (-1);
+    }
+
+    if ((e = argz_append (&p->argz, &p->argz_len, argz, argz_len)) != 0) {
         errno = e;
         return -1;
     }
