@@ -869,8 +869,9 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
 {
     cache->h = h;
 
-    if (flux_msg_handler_addvec (h, handlers, cache) < 0
-                || flux_get_rank (h, &cache->rank) < 0)
+    if (flux_msg_handler_addvec (h, handlers, cache) < 0)
+	return -1;
+    if (flux_get_rank (h, &cache->rank) < 0)
         return -1;
     if (flux_event_subscribe (h, "hb") < 0)
         return -1;
