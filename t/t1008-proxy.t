@@ -83,7 +83,7 @@ test_expect_success 'ssh:// with jobid works' '
 
 test_expect_success 'ssh:// can handle nontrivial message load' '
 	FLUX_URI=ssh://localhost/$TEST_JOBID FLUX_SSH=$TEST_SSH \
-	  flux kvs dir -r >dir.out
+	  flux kvs dir -R >dir.out
 '
 
 test_expect_success 'ssh:// with bad query option fails in flux_open()' '
