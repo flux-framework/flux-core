@@ -342,7 +342,7 @@ int subprocess_io_complete (struct subprocess *p);
 
 /*
  *  Write data to stdin buffer of process [p]. If [eof] is true then EOF will
- *   be scheduled for stdin one all buffered data is written.
+ *   be scheduled for stdin once all buffered data is written.
  */
 int subprocess_write (struct subprocess *p, void *buf, size_t count, bool eof);
 
