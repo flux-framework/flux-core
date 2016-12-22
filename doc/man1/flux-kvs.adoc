@@ -74,6 +74,18 @@ returned by *get*.
 Create an empty directory and commit the change.  If 'key' exists,
 it is overwritten.
 
+*copy* 'source' 'destination'::
+Copy 'source' key to 'destination' key.  If a directory is copied, a new
+reference is created; it is unnecessary for *copy* to recurse into 'source'.
+
+*move* 'source' 'destination'::
+Like *copy*, but 'source' is unlinked after the copy.
+
+*dropcache* [--all]::
+Tell the local KVS to drop any cache it is holding.  If '--all' is
+specified, send an event across the comms session instructing all KVS
+instances to drop their caches.
+
 *watch* [-R] [-d] [-o] [-c count] 'key'::
 Watch 'key' and output changes.  If 'key' is a single value, each
 change will be displayed on a line of output.  If 'key' is a
@@ -96,18 +108,6 @@ Block until the KVS version reaches 'version' or greater.  A simple form
 of synchronization between peers is:  node A puts a value, commits it,
 reads version, sends version to node B.  Node B waits for version, gets
 value.
-
-*dropcache* [--all]::
-Tell the local KVS to drop any cache it is holding.  If '--all' is
-specified, send an event across the comms session instructing all KVS
-instances to drop their caches.
-
-*copy* 'source' 'destination':: 
-Copy 'source' key to 'destination' key.  If a directory is copied, a new
-reference is created; it is unnecessary for *copy* to recurse into 'source'.
-
-*move* 'source' 'destination':: 
-Like *copy*, but 'source' is unlinked after the copy.
 
 
 AUTHOR
