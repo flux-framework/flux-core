@@ -1,6 +1,12 @@
 #ifndef _BROKER_RUNLEVEL_H
 #define _BROKER_RUNLEVEL_H
 
+#include "attr.h"
+#include "src/common/libsubprocess/subprocess.h"
+
+#include <stdint.h>
+#include <stddef.h> // for size_t
+
 typedef struct runlevel runlevel_t;
 
 typedef void (*runlevel_cb_f)(runlevel_t *r, int level, int rc, double elapsed,
@@ -28,8 +34,8 @@ void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg);
 /* Associate 'command' with 'level'.  'local_uri' and 'library_path' are
  * used to set FLUX_URI and LD_LIBRARY_PATH in the subprocess environment.
  */
-int runlevel_set_rc (runlevel_t *r, int level, const char *command,
-                     const char *local_uri);
+int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
+                     size_t cmd_argz_len, const char *local_uri);
 
 /* Change the runlevel.  It is assumed that the previous run level (if any)
  * has completed and this is being called from the runlevel callback.

@@ -22,6 +22,9 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+#ifndef _SUBPROCESS_H
+#define _SUBPROCESS_H
+
 #include <stdbool.h>
 
 struct subprocess_manager;
@@ -142,6 +145,14 @@ void *subprocess_get_context (struct subprocess *p, const char *name);
 int subprocess_set_args (struct subprocess *p, int argc, char *argv[]);
 
 /*
+ *  Set argument vector for subprocess [p] from argz vector (argz, argz_len).
+ *   This function is only valid before subprocess_run() is called. Any existing
+ *   args associated with subprocess are discarded.
+ *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ */
+int subprocess_set_args_from_argz (struct subprocess *p, const char * argz, size_t argz_len);
+
+/*
  *  Identical subprocess_set_args(), subprocess_set_command() is a
  *   convenience function similar to system(3). That is, it will set
  *   arguments for subprocess [p] to
@@ -158,6 +169,13 @@ int subprocess_set_command (struct subprocess *p, const char *command);
  *   Returns -1 with errno set to EINVAL if subprocess has already started.
  */
 int subprocess_argv_append (struct subprocess *p, const char *arg);
+
+/*
+ *  Append a single argument to the subprocess [p] argument vector.
+ *   Returns -1 with errno set to EINVAL if subprocess has already started.
+ */
+int subprocess_argv_append_argz (struct subprocess *p, const char *argz, size_t argz_len);
+
 
 /*
  *  Get argument at index [n] from current argv array for process [p]
@@ -327,3 +345,5 @@ int subprocess_io_complete (struct subprocess *p);
  *   be scheduled for stdin one all buffered data is written.
  */
 int subprocess_write (struct subprocess *p, void *buf, size_t count, bool eof);
+
+#endif /* !_SUBPROCESS_H */

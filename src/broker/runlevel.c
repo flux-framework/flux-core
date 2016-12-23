@@ -22,6 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -30,14 +31,12 @@
 #include <argz.h>
 #include <flux/core.h>
 
-#include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/monotime.h"
 
-#include "attr.h"
 #include "runlevel.h"
 
 struct level {
@@ -284,8 +283,8 @@ done:
     return 0;
 }
 
-int runlevel_set_rc (runlevel_t *r, int level, const char *command,
-                     const char *local_uri)
+int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
+                     size_t cmd_argz_len, const char *local_uri)
 {
     struct subprocess *p = NULL;
     const char *shell = getenv ("SHELL");
@@ -297,19 +296,35 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *command,
         goto error;
     }
 
-    if (!(p = subprocess_create (r->sm))
-            || subprocess_set_context (p, "runlevel", r) < 0
-            || subprocess_add_hook (p, SUBPROCESS_COMPLETE, subprocess_cb) < 0
-            || subprocess_argv_append (p, shell) < 0
-            || (command && subprocess_argv_append (p, "-c") < 0)
-            || (command && subprocess_argv_append (p, command) < 0)
-            || subprocess_set_environ (p, environ) < 0
-            || subprocess_unsetenv (p, "PMI_FD") < 0
-            || subprocess_unsetenv (p, "PMI_RANK") < 0
-            || subprocess_unsetenv (p, "PMI_SIZE") < 0
-            || (local_uri && subprocess_setenv (p, "FLUX_URI",
-                                                local_uri, 1) < 0))
+    // Only wrap in a shell if there is only one argument
+    bool shell_wrap = argz_count (cmd_argz, cmd_argz_len) < 2;
+    if ((p = subprocess_create (r->sm)) == NULL)
         goto error;
+    if ((subprocess_set_context (p, "runlevel", r)) < 0)
+        goto error;
+    if ((subprocess_add_hook (p, SUBPROCESS_COMPLETE, subprocess_cb)) < 0)
+        goto error;
+    if (shell_wrap || !cmd_argz) {
+        if ((subprocess_argv_append (p, shell)) < 0)
+            goto error;
+    }
+    if (shell_wrap) {
+        if (cmd_argz && subprocess_argv_append (p, "-c") < 0)
+            goto error;
+    }
+    if (cmd_argz && subprocess_argv_append_argz (p, cmd_argz, cmd_argz_len) < 0)
+        goto error;
+    if (subprocess_set_environ (p, environ) < 0)
+        goto error;
+    if (subprocess_unsetenv (p, "PMI_FD") < 0)
+        goto error;
+    if (subprocess_unsetenv (p, "PMI_RANK") < 0)
+        goto error;
+    if (subprocess_unsetenv (p, "PMI_SIZE") < 0)
+        goto error;
+    if (local_uri && subprocess_setenv (p, "FLUX_URI", local_uri, 1) < 0)
+        goto error;
+
     if (level == 1 || level == 3) {
         if (subprocess_setenv (p, "FLUX_NODESET_MASK", r->nodeset, 1) < 0)
             goto error;
