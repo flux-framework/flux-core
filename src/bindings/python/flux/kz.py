@@ -1,44 +1,44 @@
 from _kz import ffi, lib
-import flux
-from flux.wrapper import Wrapper, WrapperPimpl, WrapperBase
-import json
-import collections
-import contextlib
+from flux.wrapper import Wrapper, WrapperPimpl
 import errno
 import os
 import sys
 
-class KZWrapper(Wrapper):
-  # This empty class accepts new methods, preventing accidental overloading
-  # across wrappers
-  pass
 
-_raw = KZWrapper(ffi, lib, prefixes=['kz_',])
+class KZWrapper(Wrapper):
+    # This empty class accepts new methods, preventing accidental overloading
+    # across wrappers
+    pass
+
+RAW = KZWrapper(ffi, lib, prefixes=['kz_', ])
 # override error check behavior for kz_get, necessary due to errno EAGAIN
-_raw.kz_get.set_error_check(lambda x: False)
+RAW.kz_get.set_error_check(lambda x: False)
+
+
 def generic_write(stream, string):
     if not isinstance(stream, int):
         stream.write(string)
     else:
-        os.write(fd, string)
+        os.write(stream, string)
 
 
 @ffi.callback('kz_ready_f')
 def kz_stream_handler(kz_handle, arg):
+    del kz_handle # unused
     (stream, prefix, handle) = ffi.from_handle(arg)
-    d = ffi.new('char *[1]')
+    buf = ffi.new('char *[1]')
     while True:
         try:
-            count = _raw.get(handle, d)
+            count = RAW.get(handle, buf)
             if count == 0:
                 break
 
             if prefix is None:
-                generic_write(stream, ffi.string(d[0]))
+                generic_write(stream, ffi.string(buf[0]))
             else:
-                for l in ffi.string(d[0]).splitlines(True):
+                for _ in ffi.string(buf[0]).splitlines(True):
                     generic_write(stream, prefix)
-                    generic_write(stream, ffi.string(d[0]))
+                    generic_write(stream, ffi.string(buf[0]))
         except EnvironmentError as err:
             if err.errno == errno.EAGAIN:
                 pass
@@ -48,36 +48,48 @@ def kz_stream_handler(kz_handle, arg):
     return None
 
 
-kzwatches = {}
+KZWATCHES = {}
 
 
-def attach(flux_handle, key, stream, prefix=None, flags=(_raw.KZ_FLAGS_READ | _raw.KZ_FLAGS_NONBLOCK | _raw.KZ_FLAGS_NOEXIST)):
-    handle = _raw.kz_open(flux_handle, key, flags)
+def attach(flux_handle,
+           key,
+           stream,
+           prefix=None,
+           flags=(RAW.KZ_FLAGS_READ
+                  | RAW.KZ_FLAGS_NONBLOCK
+                  | RAW.KZ_FLAGS_NOEXIST)):
+    handle = RAW.kz_open(flux_handle, key, flags)
     warg = (stream, prefix, handle)
-    kzwatches[key] = warg
-    return _raw.set_ready_cb(handle, kz_stream_handler, ffi.new_handle(warg))
+    KZWATCHES[key] = warg
+    return RAW.set_ready_cb(handle, kz_stream_handler, ffi.new_handle(warg))
 
 
 def detach(flux_handle, key):
-    (stream, arg, handle) = kzwatches.pop(key, None)
-    return _raw.close(handle)
+    del flux_handle # unused
+    (_, _, handle) = KZWATCHES.pop(key, None)
+    return RAW.close(handle)
+
 
 class KZStream(WrapperPimpl):
+
     class InnerWrapper(Wrapper):
+
         def __init__(self,
-                flux_handle,
-                name,
-                flags=(_raw.KZ_FLAGS_READ | _raw.KZ_FLAGS_NONBLOCK | _raw.KZ_FLAGS_NOEXIST),
-                handle=None):
-            self.destroyer = _raw.kz_close
+                     flux_handle,
+                     name,
+                     flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK |
+                            RAW.KZ_FLAGS_NOEXIST),
+                     handle=None,
+                     prefix=False):
+            self.destroyer = RAW.kz_close
             self.handle = None
+            self.prefix = prefix
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError(
-                    "flux_handle must be a valid Flux object or handle must be a valid kvsdir cdata pointer")
+                    "flux_handle must be a valid Flux object or handle must "
+                    "be a valid kvsdir cdata pointer")
             if handle is None:
-                d = ffi.new("kvsdir_t *[1]")
-                _raw.kvs_get_dir(flux_handle, d, path)
-                handle = _raw.kz_open(flux_handle, name, flags)
+                handle = RAW.kz_open(flux_handle, name, flags)
 
             super(self.__class__, self).__init__(ffi, lib,
                                                  handle=handle,
@@ -91,30 +103,36 @@ class KZStream(WrapperPimpl):
                 self.destroyer(self.handle)
                 self.handle = None
 
-    def attach(self, stream=sys.stdout, fd=None):
+    def attach(self, stream=sys.stdout):
         """ Redirect all output from this KZ stream to the specified stream"""
-        arg = (stream, self.prefix)
+        arg = (stream, self.prefix, self.handle)
 
-        self.set_ready_cb(kz_stream_handler, arg)
+        self.set_ready_cb(kz_stream_handler, ffi.new_handle(arg))
 
     def __init__(self,
-            flux_handle,
-            name,
-            flags=(_raw.KZ_FLAGS_READ | _raw.KZ_FLAGS_NONBLOCK | _raw.KZ_FLAGS_NOEXIST),
-            handle=None,
-            prefix=False):
-        self.fh = flux_handle
+                 flux_handle,
+                 name,
+                 flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK |
+                        RAW.KZ_FLAGS_NOEXIST),
+                 handle=None,
+                 prefix=False):
+        super(KZStream, self).__init__()
+        self.flux_handle = flux_handle
+        self.prefix = prefix
         self.name = name
         if flux_handle is None and handle is None:
             raise ValueError(
-                "flux_handle must be a valid Flux object or handle must be a valid kvsdir cdata pointer")
-        self.pimpl = self.InnerWrapper(flux_handle, name, flags, handle)
+                "flux_handle must be a valid Flux object or handle must be a "
+                "valid kvsdir cdata pointer")
+        self.pimpl = self.InnerWrapper(flux_handle, name, flags, handle, prefix)
 
     def __enter__(self):
         """Allow this to be used as a context manager"""
         return self
 
     def __exit__(self, type_arg, value, tb):
-        """ When used as a context manager, the KVSDir commits itself on exit """
+        """
+        When used as a context manager, the KVSDir commits itself on exit
+        """
         self.pimpl.__del__()
         return False

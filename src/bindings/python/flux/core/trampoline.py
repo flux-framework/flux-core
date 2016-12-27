@@ -1,6 +1,6 @@
 import importlib
 from flux._core import lib
-from flux.core import Flux
+from flux.core.handle import Flux
 
 
 def mod_main_trampoline(name, int_handle, args):

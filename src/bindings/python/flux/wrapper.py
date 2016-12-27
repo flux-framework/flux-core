@@ -1,3 +1,8 @@
+"""
+Flux interface wrapper generator.
+This could, in principle, be used for other projects as well, but it encodes a
+number of assumptions about the error propagation and handling that flux uses.
+"""
 import re
 import os
 import inspect
@@ -53,6 +58,7 @@ class ErrorPrinter(object):
 # A do-nothing class for checking for composition-based wrappers that offer a
 # handle attribute
 class WrapperBase(object):
+
     def __init__(self):
         self._handle = None
 
@@ -66,6 +72,11 @@ class WrapperBase(object):
 
 
 class WrapperPimpl(WrapperBase):
+
+    def __init__(self):
+        self.pimpl = None
+        super(WrapperPimpl, self).__init__()
+
     @property
     def handle(self):
         return self.pimpl.handle
@@ -77,10 +88,12 @@ class WrapperPimpl(WrapperBase):
     def __enter__(self):
         return self
 
-    def __exit__(self, type_arg, value, tb):
-        self.pimpl.__exit__(type_arg, value, tb)
+    def __exit__(self, type_arg, value, last):
+        self.pimpl.__exit__(type_arg, value, last)
+
 
 class WrongNumArguments(ValueError):
+
     def __init__(self, name, signature, ftype, arguments, htype):
         message = """
 The wrong number of arguments has been passed to wrapped C function:
@@ -89,13 +102,12 @@ Name: {name}
 C signature: {c_type}
 Arguments: {arguments}
 Handle type: {htype}
-          """.format(
-            name=name,
-            c_type=signature,
-            arguments=arguments,
-            expected=len(ftype.args),
-            received=len(arguments),
-            htype=htype)
+          """.format(name=name,
+                     c_type=signature,
+                     arguments=arguments,
+                     expected=len(ftype.args),
+                     received=len(arguments),
+                     htype=htype)
         super(WrongNumArguments, self).__init__(message)
 
 
@@ -108,79 +120,69 @@ cffi error: {err_msg}
 Name: {name}
 C signature: {c_type}
 Arguments: {arguments}
-          """.format(
-            name=name,
-            c_type=signature,
-            err_msg=err_msg,
-            arguments=arguments)
+          """.format(name=name,
+                     c_type=signature,
+                     err_msg=err_msg,
+                     arguments=arguments)
         super(InvalidArguments, self).__init__(message)
 
 
 class FunctionWrapper(object):
 
-    def __init__(self, fun, name, t, ffi, add_handle=False):
+    def __init__(self, fun, name, function_type, ffi, add_handle=False):
         self.arg_trans = []
         self.fun = fun
         self.add_handle = add_handle
-        self.build_argument_translation_list(t)
-        self.trans_len = len(self.arg_trans)
+        self.build_argument_translation_list(function_type)
         self.is_error = lambda x: False
-        self.function_type = t
+        self.function_type = function_type
         self.name = name
         self.ffi = ffi
-        if t.result.kind in ('pointer', 'array'):
+        if function_type.result.kind in ('pointer', 'array'):
             self.is_error = lambda x: x is None
-        elif t.result in [ffi.typeof(x)
-                          for x in ('char', 'int', 'short', 'long',
-                                    'long long', 'int32_t', 'int64_t')]:
+        elif function_type.result in [ffi.typeof(x)
+                                      for x in ('char', 'int', 'short',
+                                                'long', 'long long', 'int32_t',
+                                                'int64_t')]:
             self.is_error = lambda x: x < 0
 
     def set_error_check(self, fun):
         self.is_error = fun
 
-    def build_argument_translation_list(self, t):
-        alist = t.args[1:] if self.add_handle else t.args
-        for i, a in enumerate(alist, start=1 if self.add_handle else 0):
-            if a.kind == 'array' or a.kind == 'pointer':
+    def build_argument_translation_list(self, fun_type):
+        alist = fun_type.args[1:] if self.add_handle else fun_type.args
+        for i, arg in enumerate(alist, start=1 if self.add_handle else 0):
+            if arg.kind == 'array' or arg.kind == 'pointer':
                 self.arg_trans.append(i)
 
     def __call__(self, calling_object, *args_in):
         # print holder.__name__, 'got', calling_object, args_in
         calling_object.ffi.errno = 0
-        if self.trans_len == 0:
-            try:
-                if self.add_handle:
-                    result = self.fun(calling_object.handle, *args_in)
-                else:
-                    result = self.fun(*args_in)
-            except TypeError as te:
-                raise InvalidArguments(self.name, self.ffi.getctype(
-                    self.function_type), args_in, te.message)
-        else:
-            args = []
-            if self.add_handle:
-                args.append(calling_object.handle)
-            args.extend(args_in)
-            if len(self.function_type.args) != len(args):
-                raise WrongNumArguments(self.name,
-                                        self.ffi.getctype(self.function_type),
-                                        self.function_type, args,
-                                        self.ffi.typeof(calling_object.handle) if calling_object.handle else "None")
-            for i in self.arg_trans:
-                if args[i] is None:
-                    args[i] = calling_object.ffi.NULL
-                elif isinstance(args[i], WrapperBase):
-                    # Unpack wrapper objects
-                    args[i] = args[i].handle
-                elif isinstance(args[i], unicode):
-                    # convert unicode string to ascii to make cffi happy
-                    args[i] = str(args[i])
+        caller = calling_object.handle
+        args = [caller, ] + \
+            list(args_in) if self.add_handle else list(args_in)
 
-            try:
-                result = self.fun(*args)
-            except TypeError as te:
-                raise InvalidArguments(self.name, self.ffi.getctype(
-                    self.function_type), args, te.message)
+        if len(self.function_type.args) != len(args):
+            calling_type = self.ffi.typeof(caller) if caller else "None"
+            raise WrongNumArguments(self.name,
+                                    self.ffi.getctype(self.function_type),
+                                    self.function_type, args,
+                                    calling_type)
+        for i in self.arg_trans:
+            if args[i] is None:
+                args[i] = calling_object.ffi.NULL
+            elif isinstance(args[i], WrapperBase):
+                # Unpack wrapper objects
+                args[i] = args[i].handle
+            elif isinstance(args[i], unicode):
+                # convert unicode string to ascii to make cffi happy
+                args[i] = str(args[i])
+
+        try:
+            result = self.fun(*args)
+        except TypeError as err:
+            raise InvalidArguments(self.name, self.ffi.getctype(
+                self.function_type), args_in, err.message)
 
         if result == calling_object.ffi.NULL:
             result = None
@@ -195,7 +197,6 @@ class FunctionWrapper(object):
         return result
 
 
-
 class Wrapper(WrapperBase):
     """
     Forms a wrapper around an interface that dynamically searches for undefined
@@ -207,7 +208,7 @@ class Wrapper(WrapperBase):
                  handle=None,
                  match=None,
                  filter_match=True,
-                 prefixes=[],
+                 prefixes=tuple(),
                  destructor=None, ):
         self._handle = None
         super(Wrapper, self).__init__()
@@ -220,28 +221,25 @@ class Wrapper(WrapperBase):
         self.prefixes = prefixes
         self.destructor = destructor
 
-        self.NULL = ffi.NULL
-        self.initialized = True
-
-    def check_handle(self, name, t):
+    def check_handle(self, name, fun_type):
         if self.match is not None and self._handle is not None:
-            if t.kind == 'function' and t.args[
-                0
-            ] == self.match:  # first argument is of handle type
+            if (fun_type.kind == 'function' and
+                    fun_type.args[0] == self.match):
+                # first argument is of handle type
                 return True
             else:
                 if self.filter_match:
                     raise AttributeError(
                         "Flux Wrapper object {}" +
                         "masks function {} type: {} match: {}".format(
-                            self, name, t, self.match))
+                            self, name, fun_type, self.match))
         return False
 
     def check_wrap(self, fun, name):
-        t = self.ffi.typeof(fun)
+        fun_type = self.ffi.typeof(fun)
 
-        return FunctionWrapper(fun, name, t, self.ffi,
-                               add_handle=self.check_handle(name, t))
+        return FunctionWrapper(fun, name, fun_type, self.ffi,
+                               add_handle=self.check_handle(name, fun_type))
 
     def __getattr__(self, name):
         fun = None
@@ -255,7 +253,7 @@ class Wrapper(WrapperBase):
         except AttributeError:
             for prefix in self.prefixes:
                 try:
-                    #wrap it
+                    # wrap it
                     fun = getattr(llib, prefix + name)
                     break
                 except AttributeError:
@@ -276,14 +274,12 @@ class Wrapper(WrapperBase):
 
     def __clear(self):
         # avoid recursion
-        if not self.initialized:
-            return
-        h = self._handle
-        if h is None:
+        handle = self._handle
+        if handle is None:
             return
         if self.destructor is None:
             return
-        self.destructor(h)
+        self.destructor(handle)
         # ensure we don't double destruct
         self._handle = None
 
@@ -299,7 +295,7 @@ class Wrapper(WrapperBase):
                 raise TypeError("Invalid handle {} of type {} assigned to "
                                 "wrapper with handle type {}".format(
                                     h, self.ffi.typeof(h), self.match
-                                    ))
+                                ))
         if self._handle is not None:
             self.__clear()
         self._handle = h
@@ -310,5 +306,5 @@ class Wrapper(WrapperBase):
     def __enter__(self):
         return self
 
-    def __exit__(self, type_arg, value, tb):
+    def __exit__(self, type_arg, value, unused):
         self.__clear()

@@ -10,7 +10,6 @@ class Sec(Wrapper):
                                              match=ffi.typeof(
                                                  lib.flux_sec_create).result,
                                              prefixes=['flux_sec_'],
-                                             destructor=lib.flux_sec_destroy,
-                                             )
+                                             destructor=lib.flux_sec_destroy,)
         if handle is None:
             self.handle = lib.flux_sec_create()

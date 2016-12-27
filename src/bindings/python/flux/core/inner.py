@@ -16,4 +16,6 @@ class Core(Wrapper):
                                        'FLUX_',
                                    ])
 
+# keeping this for compatibility
+# pylint: disable=invalid-name
 raw = Core()

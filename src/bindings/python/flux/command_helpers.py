@@ -10,7 +10,7 @@ def list_instances(sid=None):
 
     fdir = re.compile('flux-(?P<id>[^-]+)-')
 
-    for dirname, dirs, files in os.walk(tmpdir, topdown=True):
+    for _, dirs, _ in os.walk(tmpdir, topdown=True):
         for match in [fdir.match(d) for d in dirs]:
             if not match:
                 continue
@@ -25,6 +25,6 @@ def list_instances(sid=None):
                 os.kill(pid, 0)
                 flux.Flux(uri)
                 yield (match.group('id'), uri)
-            except:
+            except: # pylint: disable=bare-except
                 pass
         break

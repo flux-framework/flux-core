@@ -1,7 +1,5 @@
-import sys
 import os
 import re
-import subprocess
 
 import argparse
 parser = argparse.ArgumentParser()
@@ -86,6 +84,8 @@ ffi.include({module}_ffi)
 
 
   print >>modfile, '''
+#pylint: disable-all
+# This is a generated file... linting is less than useful
 from cffi import FFI
 ffi = FFI()
 

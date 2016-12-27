@@ -37,12 +37,12 @@ class JSCWrapper(Wrapper):
                                              'jsc_',
                                          ])
 
-_raw = JSCWrapper()
+RAW = JSCWrapper()
 
 
 def query_jcb(flux_handle, jobid, key):
     jcb_str = ffi.new('char *[1]')
-    _raw.query_jcb(flux_handle, jobid, key, jcb_str)
+    RAW.query_jcb(flux_handle, jobid, key, jcb_str)
     if jcb_str[0] == ffi.NULL:
         return None
     else:
@@ -50,31 +50,29 @@ def query_jcb(flux_handle, jobid, key):
 
 
 def update_jcb(flux_handle, jobid, key, jcb):
-    return _raw.jsc_update_jcb(flux_handle, jobid, key, jcb)
+    return RAW.jsc_update_jcb(flux_handle, jobid, key, jcb)
 
 
 @ffi.callback('jsc_handler_f')
-def JSCNotifyWrapper(jcb, arg, errnum):
+def jsc_notify_wrapper(jcb, arg, errnum):
     if jcb != ffi.NULL:
         jcb = ffi.string(jcb)
-    cb, real_arg = ffi.from_handle(arg)
-    # TODO: necessary to check errnum?
-    ret = cb(jcb, real_arg, errnum)
+    callback, real_arg = ffi.from_handle(arg)
+    ret = callback(jcb, real_arg, errnum)
     return ret if ret is not None else 0
 
-handles = []
+HANDLES = []
 
 
 def notify_status(flux_handle, fun, arg):
     warg = (fun, arg)
     whandle = ffi.new_handle(warg)
-    # TODO: another way to keep in scope to prevent GC?
-    handles.append(whandle)
-    return _raw.notify_status(flux_handle, JSCNotifyWrapper, whandle)
+    HANDLES.append(whandle)
+    return RAW.notify_status(flux_handle, jsc_notify_wrapper, whandle)
 
 
 def job_num2state(job_state):
-    ret = _raw.job_num2state(job_state)
+    ret = RAW.job_num2state(job_state)
     if ret == ffi.NULL:
         return None
     else:
