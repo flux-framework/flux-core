@@ -1,7 +1,7 @@
+import json
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 import flux.constants
-import json
 
 
 class RPC(WrapperPimpl):

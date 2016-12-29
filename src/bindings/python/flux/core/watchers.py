@@ -1,5 +1,5 @@
-from flux.core.inner import raw, ffi
 import abc
+from flux.core.inner import raw, ffi
 
 __all__ = ['TimerWatcher', 'FDWatcher']
 

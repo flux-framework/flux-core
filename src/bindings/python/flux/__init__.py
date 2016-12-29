@@ -13,5 +13,3 @@ __all__ = ['core',
            'sec',
            'constants',
            'Flux', ]
-
-

@@ -1,8 +1,9 @@
-from _kz import ffi, lib
-from flux.wrapper import Wrapper, WrapperPimpl
 import errno
 import os
 import sys
+
+from flux._kz import ffi, lib
+from flux.wrapper import Wrapper, WrapperPimpl
 
 
 class KZWrapper(Wrapper):
@@ -24,7 +25,7 @@ def generic_write(stream, string):
 
 @ffi.callback('kz_ready_f')
 def kz_stream_handler(kz_handle, arg):
-    del kz_handle # unused
+    del kz_handle  # unused
     (stream, prefix, handle) = ffi.from_handle(arg)
     buf = ffi.new('char *[1]')
     while True:
@@ -65,7 +66,7 @@ def attach(flux_handle,
 
 
 def detach(flux_handle, key):
-    del flux_handle # unused
+    del flux_handle  # unused
     (_, _, handle) = KZWATCHES.pop(key, None)
     return RAW.close(handle)
 
@@ -124,7 +125,8 @@ class KZStream(WrapperPimpl):
             raise ValueError(
                 "flux_handle must be a valid Flux object or handle must be a "
                 "valid kvsdir cdata pointer")
-        self.pimpl = self.InnerWrapper(flux_handle, name, flags, handle, prefix)
+        self.pimpl = self.InnerWrapper(
+            flux_handle, name, flags, handle, prefix)
 
     def __enter__(self):
         """Allow this to be used as a context manager"""

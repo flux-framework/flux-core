@@ -230,9 +230,9 @@ class Wrapper(WrapperBase):
             else:
                 if self.filter_match:
                     raise AttributeError(
-                        "Flux Wrapper object {}" +
+                        "Flux Wrapper object " + str(self) +
                         "masks function {} type: {} match: {}".format(
-                            self, name, fun_type, self.match))
+                            name, fun_type, self.match))
         return False
 
     def check_wrap(self, fun, name):

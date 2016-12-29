@@ -1,8 +1,8 @@
+import json
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 from flux.core.watchers import Watcher
 import flux.constants
-import json
 
 __all__ = ['Message',
            'MessageWatcher',

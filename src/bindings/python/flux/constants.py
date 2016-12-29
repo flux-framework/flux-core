@@ -1,8 +1,8 @@
 """Global constants for the flux interface"""
 
-from flux._core import lib
 import sys
 import re
+from flux._core import lib
 
 MOD = sys.modules[__name__]
 # Inject enum/define names matching ^FLUX_[A-Z_]+$ into module
@@ -14,4 +14,3 @@ for k in dir(lib):
         ALL_LIST.append(k)
 
 __all__ = ALL_LIST
-
