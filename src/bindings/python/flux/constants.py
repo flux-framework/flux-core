@@ -1,17 +1,16 @@
 """Global constants for the flux interface"""
 
-from flux._core import ffi, lib
 import sys
 import re
+from flux._core import lib
 
-this_module = sys.modules[__name__]
+MOD = sys.modules[__name__]
 # Inject enum/define names matching ^FLUX_[A-Z_]+$ into module
-all_list = []
-p = re.compile("^FLUX_[A-Z_]+")
+ALL_LIST = []
+PATTERN = re.compile("^FLUX_[A-Z_]+")
 for k in dir(lib):
-    if p.match(k):
-        setattr(this_module, k, getattr(lib, k))
-        all_list.append(k)
+    if PATTERN.match(k):
+        setattr(MOD, k, getattr(lib, k))
+        ALL_LIST.append(k)
 
-__all__ = all_list
-
+__all__ = ALL_LIST

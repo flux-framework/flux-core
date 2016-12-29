@@ -1,4 +1,4 @@
-from flux.core.handle import Flux, open
+from flux.core.handle import Flux
 from flux.core.trampoline import mod_main_trampoline
-from flux.core.watchers import *
 
+__all__ = ["Flux", "mod_main_trampoline"]

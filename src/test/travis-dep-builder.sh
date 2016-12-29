@@ -47,7 +47,9 @@ declare -A extra_cmake_opts=(\
 #
 pips="\
 cffi>=1.1,<1.4 \
-coverage"
+coverage \
+pylint
+"
 
 #
 #  Lua rocks files to download and install:

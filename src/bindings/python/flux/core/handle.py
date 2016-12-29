@@ -1,7 +1,4 @@
-import os
-import sys
-import json
-from flux.wrapper import Wrapper, WrapperPimpl
+from flux.wrapper import Wrapper
 from flux._core import ffi, lib
 from flux.core.inner import raw
 from flux.rpc import RPC
@@ -14,7 +11,7 @@ class BarrierWrapper(Wrapper):
     pass
 
 
-_raw_barrier = BarrierWrapper(b_ffi, b_lib, prefixes=['flux_', ])
+RAW_BARRIER = BarrierWrapper(b_ffi, b_lib, prefixes=['flux_', ])
 
 
 class Flux(Wrapper):
@@ -35,17 +32,19 @@ class Flux(Wrapper):
                 'flux_',
                 'FLUX_',
             ],
-            destructor = raw.flux_close,)
+            destructor=raw.flux_close,)
 
         if handle is None:
             self.handle = raw.flux_open(url, flags)
 
     def log(self, level, fstring):
-        """Log to the flux logging facility
+        """
+        Log to the flux logging facility
 
-       :param level: A syslog log-level, check the syslog module for possible values
-       :param fstring: A string to log, C-style formatting is *not* supported
-       """
+        :param level: A syslog log-level, check the syslog module for possible
+               values
+        :param fstring: A string to log, C-style formatting is *not* supported
+        """
         # Short-circuited because variadics can't be wrapped cleanly
         lib.flux_log(self.handle, level, fstring)
 
@@ -60,7 +59,9 @@ class Flux(Wrapper):
              match_tag=raw.FLUX_MATCHTAG_NONE,
              topic_glob=None,
              flags=0):
-        """ Receive a message, returns a flux.Message containing the result or None """
+        """
+        Receive a message, returns a flux.Message containing the result or None
+        """
         match = ffi.new('struct flux_match *', {
             'typemask': type_mask,
             'matchtag': match_tag,
@@ -77,8 +78,8 @@ class Flux(Wrapper):
                  nodeid=raw.FLUX_NODEID_ANY,
                  flags=0):
         """ Create and send an RPC in one step """
-        with RPC(self, topic, payload, nodeid, flags) as r:
-            return r.get()
+        with RPC(self, topic, payload, nodeid, flags) as rpc:
+            return rpc.get()
 
     def rpc_create(self, topic,
                    payload=None,
@@ -91,15 +92,17 @@ class Flux(Wrapper):
         """ Create a new event message.
 
         :param topic: A string, the event's topic
-        :param payload: If a string, the payload is used unmodified, if it is another type json.dumps() is used to stringify it
+        :param payload: If a string, the payload is used unmodified, if it is
+            another type json.dumps() is used to stringify it
         """
+        # pylint: disable=no-self-use
         return Message.from_event_encode(topic, payload)
 
     def event_send(self, topic, payload=None):
         """ Create and send a new event in one step """
         return self.send(self.event_create(topic, payload))
 
-    def event_recv(self, topic=None, payload=None):
+    def event_recv(self, topic=None):
         return self.recv(type_mask=raw.FLUX_MSGTYPE_EVENT, topic_glob=topic)
 
     def msg_watcher_create(self, callback,
@@ -116,16 +119,9 @@ class Flux(Wrapper):
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)
 
     def barrier(self, name, nprocs):
-        _raw_barrier.barrier(self, name, nprocs)
-
+        RAW_BARRIER.barrier(self, name, nprocs)
 
     def get_rank(self):
         rank = ffi.new('uint32_t [1]')
         self.flux_get_rank(rank)
         return rank[0]
-
-def open(url, flags=0):
-    """ Open a connection to the specified flux connector """
-    return Flux(url, flags=flags)
-
-__all__ = [ 'Flux', 'open']
