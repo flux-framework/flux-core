@@ -35,11 +35,11 @@
 #include "src/common/libutil/shortjson.h"
 #include "sequence.h"
 
-struct seq_struct {
+typedef struct {
     zhash_t *vhash;
-};
+} seqhash_t;
 
-seqhash_t * sequence_hash_create (void)
+static seqhash_t * sequence_hash_create (void)
 {
     seqhash_t *s;
     zhash_t *zh;
@@ -50,7 +50,7 @@ seqhash_t * sequence_hash_create (void)
     return (s);
 }
 
-void sequence_hash_destroy (seqhash_t *s)
+static void sequence_hash_destroy (seqhash_t *s)
 {
     zhash_destroy (&s->vhash);
     free (s);
@@ -203,8 +203,8 @@ static int handle_seq_fetch (seqhash_t *s, json_object *in, json_object **outp)
     return (0);
 }
 
-int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
-			      json_object **outp)
+static int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
+			                         json_object **outp)
 {
     const char *json_str, *topic;
     const char *method;
@@ -231,6 +231,43 @@ int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
 done:
     Jput (in);
     return (rc);
+}
+
+static void sequence_request_cb (flux_t *h, flux_msg_handler_t *w,
+                                 const flux_msg_t *msg, void *arg)
+{
+    seqhash_t *seq = arg;
+    json_object *out = NULL;
+    int rc = sequence_request_handler (seq, msg, &out);
+    if (flux_respond (h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
+        flux_log_error (h, "cmb.seq: flux_respond");
+    if (out)
+        Jput (out);
+}
+
+static struct flux_msg_handler_spec handlers[] = {
+    { FLUX_MSGTYPE_REQUEST, "cmb.seq.*",     sequence_request_cb },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+static void sequence_hash_finalize (void *arg)
+{
+    seqhash_t *seq = arg;
+    sequence_hash_destroy (seq);
+    flux_msg_handler_delvec (handlers);
+}
+
+int sequence_hash_initialize (flux_t *h)
+{
+    seqhash_t *seq = sequence_hash_create ();
+    if (!seq)
+        return -1;
+    if (flux_msg_handler_addvec (h, handlers, seq) < 0) {
+        sequence_hash_destroy (seq);
+        return -1;
+    }
+    flux_aux_set (h, "flux::sequence_hash", seq, sequence_hash_finalize);
+    return 0;
 }
 
 /*

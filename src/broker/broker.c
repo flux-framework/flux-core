@@ -129,7 +129,6 @@ typedef struct {
     int event_send_seq;
     bool event_active;          /* primary event source is active */
     svchash_t *services;
-    seqhash_t *seq;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
@@ -265,8 +264,6 @@ int main (int argc, char *argv[])
     ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
-    if (!(ctx.seq = sequence_hash_create ()))
-        oom ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
@@ -626,6 +623,8 @@ int main (int argc, char *argv[])
         log_err_exit ("attr_register_handlers");
     if (heaptrace_initialize (ctx.h) < 0)
         log_msg_exit ("heaptrace_initialize");
+    if (sequence_hash_initialize (ctx.h) < 0)
+        log_err_exit ("sequence_hash_initialize");
     broker_add_services (&ctx);
 
     /* Load default modules
@@ -696,7 +695,6 @@ int main (int argc, char *argv[])
     heartbeat_destroy (ctx.heartbeat);
     snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
-    sequence_hash_destroy (ctx.seq);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
@@ -2247,21 +2245,6 @@ done:
     return rc;
 }
 
-static int cmb_seq (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *out = NULL;
-    int rc = sequence_request_handler (ctx->seq, *msg, &out);
-
-    if (flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
-        flux_log_error (ctx->h, "cmb.seq: flux_respond");
-    if (out)
-        Jput (out);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return (rc);
-}
-
 static int requeue_for_service (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2298,9 +2281,9 @@ static struct internal_service services[] = {
     { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
     { "cmb.sub",        NULL,   cmb_sub_cb,         },
     { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
-    { "cmb.seq.fetch",  "[0]",  cmb_seq             },
-    { "cmb.seq.set",    "[0]",  cmb_seq             },
-    { "cmb.seq.destroy","[0]",  cmb_seq             },
+    { "cmb.seq.fetch",  "[0]",  requeue_for_service },
+    { "cmb.seq.set",    "[0]",  requeue_for_service },
+    { "cmb.seq.destroy","[0]",  requeue_for_service },
     { "content",        NULL,   requeue_for_service },
     { "hello",          NULL,   requeue_for_service },
     { "attr",           NULL,   requeue_for_service },

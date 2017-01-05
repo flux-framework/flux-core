@@ -25,17 +25,8 @@
 #define BROKER_SEQUENCE_H
 
 #include <flux/core.h>
-#include "src/common/libutil/shortjson.h"
 
-typedef struct seq_struct seqhash_t;
-
-/* Create/destroy sequence generator handle
- */
-seqhash_t *sequence_hash_create (void);
-void sequence_hash_destroy (seqhash_t *seq);
-
-int sequence_request_handler (seqhash_t *seq, const flux_msg_t *msg,
-			      json_object **op);
+int sequence_hash_initialize (flux_t *h);
 
 #endif /* BROKER_SEQUENCE_H */
 
