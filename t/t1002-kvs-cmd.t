@@ -387,11 +387,15 @@ wait_watch_current() {
 # Note that we do not && after the final call to wait_watch_put or
 # wait_watch_empty.  We want that as a barrier before launching our
 # background watch process.
+#
+# We rm -f watch_out to remove any potential race with backgrounding
+# of kvs watch process and a previous test's watch_out file.
 
 test_expect_success 'kvs: watch a key'  '
 	flux kvs unlink -R $DIR &&
         flux kvs put $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
         wait_watch_current "0"
@@ -407,6 +411,7 @@ EOF
 test_expect_success 'kvs: watch a key that at first doesnt exist'  '
 	flux kvs unlink -R $DIR &&
         wait_watch_empty "$DIR.foo"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
         wait_watch_current "nil" &&
@@ -423,6 +428,7 @@ test_expect_success 'kvs: watch a key that gets removed'  '
 	flux kvs unlink -R $DIR &&
         flux kvs put $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$!
         wait_watch_current "0" &&
@@ -439,6 +445,7 @@ test_expect_success 'kvs: watch a key that becomes a dir'  '
 	flux kvs unlink -R $DIR &&
         flux kvs put $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
         wait_watch_current "0" &&
@@ -458,6 +465,7 @@ test_expect_success 'kvs: watch a dir'  '
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
@@ -475,6 +483,7 @@ EOF
 test_expect_success 'kvs: watch a dir that at first doesnt exist'  '
 	flux kvs unlink -R $DIR &&
         wait_watch_empty "$DIR"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "nil" &&
@@ -494,6 +503,7 @@ test_expect_success 'kvs: watch a dir that gets removed'  '
         flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
@@ -513,6 +523,7 @@ test_expect_success 'kvs: watch a dir, converted into a key'  '
         flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
@@ -535,6 +546,7 @@ test_expect_success 'kvs: watch a dir, prefix path converted into a key'  '
         flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
@@ -554,6 +566,7 @@ test_expect_success 'kvs: watch a dir with -R'  '
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -R -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
@@ -575,6 +588,7 @@ test_expect_success 'kvs: watch a dir with -R and -d'  '
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
+        rm -f watch_out
 	stdbuf -oL flux kvs watch -R -d -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
