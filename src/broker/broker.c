@@ -132,7 +132,6 @@ typedef struct {
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
-    logbuf_t *logbuf;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     struct tbon_param tbon;
@@ -271,7 +270,6 @@ int main (int argc, char *argv[])
     ctx.heartbeat = heartbeat_create ();
     ctx.shutdown = shutdown_create ();
     ctx.attrs = attr_create ();
-    ctx.logbuf = logbuf_create ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
@@ -456,18 +454,11 @@ int main (int argc, char *argv[])
         log_err_exit ("create_persistdir");
 
     /* Initialize logging.
-     * First establish a redirect callback that forces all logs
-     * to ctx.h to go to our local log class rather than be sent
-     * as a "cmb.log" request message.  Next, provide the handle
-     * and rank to the log class.
+     * OK to call flux_log*() after this.
      */
-    flux_log_set_appname (ctx.h, "broker");
-    flux_log_set_redirect (ctx.h, logbuf_append_redirect, ctx.logbuf);
-    logbuf_set_flux (ctx.logbuf, ctx.h);
-    logbuf_set_rank (ctx.logbuf, ctx.rank);
+    logbuf_initialize (ctx.h, ctx.rank, ctx.attrs);
 
-    /* Dummy up cached attributes on the broker's handle so logging's
-     * use of flux_get_rank() etc will work despite limitations.
+    /* Allow flux_get_rank() and flux_get_size() to work in the broker.
      */
     if (create_dummyattrs (&ctx) < 0)
         log_err_exit ("creating dummy attributes");
@@ -512,7 +503,6 @@ int main (int argc, char *argv[])
                                 &ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || hello_register_attrs (ctx.hello, ctx.attrs) < 0
-            || logbuf_register_attrs (ctx.logbuf, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         log_err_exit ("configuring attributes");
     }
@@ -625,6 +615,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("heaptrace_initialize");
     if (sequence_hash_initialize (ctx.h) < 0)
         log_err_exit ("sequence_hash_initialize");
+
     broker_add_services (&ctx);
 
     /* Load default modules
@@ -699,7 +690,6 @@ int main (int argc, char *argv[])
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    logbuf_destroy (ctx.logbuf);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
     runlevel_destroy (ctx.runlevel);
@@ -2051,100 +2041,6 @@ done:
     return rc;
 }
 
-static int cmb_log_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *buf;
-    int len;
-
-    if (flux_request_decode_raw (*msg, NULL, &buf, &len) < 0) {
-        log_msg ("%s: decode error", __FUNCTION__);
-        goto done;
-    }
-    if (logbuf_append (ctx->logbuf, buf, len) < 0)
-        goto done;
-done:
-    flux_msg_destroy (*msg); /* no reply */
-    *msg = NULL;
-    return 0;
-}
-
-static int cmb_dmesg_clear_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    int seq;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)) {
-        errno = EPROTO;
-        goto done;
-    }
-    logbuf_clear (ctx->logbuf, seq);
-    rc = 0;
-done:
-    flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (in);
-    return 0;
-}
-
-static void cmb_dmesg (const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    const char *buf;
-    int len;
-    int seq;
-    json_object *in = NULL;
-    json_object *out = NULL;
-    bool follow;
-    int rc = -1;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)
-                                    || !Jget_bool (in, "follow", &follow)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (logbuf_get (ctx->logbuf, seq, &seq, &buf, &len) < 0) {
-        if (follow && errno == ENOENT) {
-            flux_msg_t *cpy = flux_msg_copy (msg, true);
-            if (!cpy)
-                goto done;
-            if (logbuf_sleepon (ctx->logbuf, cmb_dmesg, cpy, arg) < 0) {
-                free (cpy);
-                goto done;
-            }
-            goto done_noreply;
-        }
-        goto done;
-    }
-    out = Jnew ();
-    Jadd_int (out, "seq", seq);
-    Jadd_str_len (out, "buf", buf, len);
-    rc = 0;
-done:
-    flux_respond (ctx->h, msg, rc < 0 ? errno : 0,
-                               rc < 0 ? NULL : Jtostr (out));
-done_noreply:
-    Jput (in);
-    Jput (out);
-}
-
-static int cmb_dmesg_cb (flux_msg_t **msg, void *arg)
-{
-    cmb_dmesg (*msg, arg);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return 0;
-}
-
 static int cmb_event_mute_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -2168,7 +2064,7 @@ static int cmb_disconnect_cb (flux_msg_t **msg, void *arg)
         goto done;
 
     terminate_subprocesses_by_uuid (ctx, sender);
-    logbuf_disconnect (ctx->logbuf, sender);
+    logbuf_disconnect (h, sender);
 done:
     if (sender)
         free (sender);
@@ -2270,9 +2166,6 @@ static struct internal_service services[] = {
     { "cmb.ping",       NULL,   cmb_ping_cb,        },
     { "cmb.reparent",   NULL,   cmb_reparent_cb,    },
     { "cmb.panic",      NULL,   cmb_panic_cb,       },
-    { "cmb.log",        NULL,   cmb_log_cb,         },
-    { "cmb.dmesg.clear",NULL,   cmb_dmesg_clear_cb, },
-    { "cmb.dmesg",      NULL,   cmb_dmesg_cb,       },
     { "cmb.event-mute", NULL,   cmb_event_mute_cb,  },
     { "cmb.exec",       NULL,   cmb_exec_cb,        },
     { "cmb.exec.signal",NULL,   cmb_signal_cb,      },
@@ -2281,6 +2174,9 @@ static struct internal_service services[] = {
     { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
     { "cmb.sub",        NULL,   cmb_sub_cb,         },
     { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
+    { "cmb.log",        NULL,   requeue_for_service,},
+    { "cmb.dmesg.clear",NULL,   requeue_for_service,},
+    { "cmb.dmesg",      NULL,   requeue_for_service,},
     { "seq",            "[0]",  requeue_for_service },
     { "content",        NULL,   requeue_for_service },
     { "hello",          NULL,   requeue_for_service },
