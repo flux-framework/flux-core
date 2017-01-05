@@ -64,7 +64,7 @@ a payload.  Events use the ZeroMQ PUB - SUB message flow.
 OPTIONS
 -------
 *-a, --all*::
-Do not suppress 'cmb.info', 'cmb.log', and 'cmb.pub' messages.
+Do not suppress 'cmb.info', 'log.append', and 'cmb.pub' messages.
 
 AUTHOR
 ------

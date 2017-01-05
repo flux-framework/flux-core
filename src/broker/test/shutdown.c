@@ -66,10 +66,10 @@ int main (int argc, char **argv)
     shutdown_set_handle (sh, h);
     shutdown_set_callback (sh, shutdown_cb, NULL);
 
-    matchlog.topic_glob = "cmb.log";
+    matchlog.topic_glob = "log.append";
     log_w = flux_msg_handler_create (h, matchlog, log_request_cb, sh);
     ok (log_w != NULL,
-        "created log request watcher");
+        "created log.append watcher");
     flux_msg_handler_start (log_w);
 
     ok (shutdown_arm (sh, 0.1, 42, "testing %d %d %d", 1, 2, 3) == 0,

@@ -468,7 +468,7 @@ static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
     assert (logbuf->magic == LOGBUF_MAGIC);
 
     flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc_raw (logbuf->h, "cmb.log", buf, len,
+    if (!(rpc = flux_rpc_raw (logbuf->h, "log.append", buf, len,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         return -1;
     flux_rpc_destroy (rpc);
@@ -525,8 +525,8 @@ static void logbuf_append_redirect (const char *buf, int len, void *arg)
 
 /* N.B. log requests have no response.
  */
-static void log_request_cb (flux_t *h, flux_msg_handler_t *w,
-                            const flux_msg_t *msg, void *arg)
+static void append_request_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
     const char *buf;
@@ -539,8 +539,8 @@ static void log_request_cb (flux_t *h, flux_msg_handler_t *w,
     (void)logbuf_append (logbuf, buf, len);
 }
 
-static void dmesg_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
-                                    const flux_msg_t *msg, void *arg)
+static void clear_request_cb (flux_t *h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
     const char *json_str;
@@ -607,9 +607,9 @@ done_noreply:
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.log",            log_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "cmb.dmesg.clear",    dmesg_clear_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "cmb.dmesg",          dmesg_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
