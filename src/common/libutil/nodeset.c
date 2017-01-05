@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 #include "veb.h"
 #include "oom.h"
@@ -443,14 +444,14 @@ const char *nodeset_string (nodeset_t *n)
                 } else if (r < NS_SIZE (n) && r == hi + 1) {
                     hi++;
                 } else if (lo == hi) {
-                    snprintf (tmp, sizeof (tmp), "%s%0*u", sep,
+                    snprintf (tmp, sizeof (tmp), "%s%0*"PRIu32, sep,
                               n->conf_padding, lo);
                     catstr (&n->s, &n->s_size, &used, tmp);
                     sep = n->conf_separator;
                     inrange = false;
                     continue;
                 } else {
-                    snprintf (tmp, sizeof (tmp), "%s%0*u-%0*u", sep,
+                    snprintf (tmp, sizeof (tmp), "%s%0*"PRIu32"-%0*"PRIu32, sep,
                              n->conf_padding, lo,
                              n->conf_padding, hi);
                     catstr (&n->s, &n->s_size, &used, tmp);
@@ -459,7 +460,7 @@ const char *nodeset_string (nodeset_t *n)
                     continue;
                 }
             } else {
-                snprintf (tmp, sizeof (tmp), "%s%0*u", sep,
+                snprintf (tmp, sizeof (tmp), "%s%0*"PRIu32, sep,
                           n->conf_padding, r);
                 catstr (&n->s, &n->s_size, &used, tmp);
                 sep = n->conf_separator;

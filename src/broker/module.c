@@ -38,6 +38,7 @@
 #include <sys/time.h>
 #include <stdarg.h>
 #include <dlfcn.h>
+#include <inttypes.h>
 #include <argz.h>
 #include <czmq.h>
 #include <flux/core.h>
@@ -139,7 +140,7 @@ static void *module_thread (void *arg)
                       p->zctx, sizeof (p->zctx)) < 0)
         log_err_exit ("flux_opt_set ZEROMQ_CONTEXT");
 
-    rankstr = xasprintf ("%u", p->rank);
+    rankstr = xasprintf ("%"PRIu32, p->rank);
     if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
         goto done;
@@ -246,7 +247,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%u", p->rank);
+            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->rank);
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
             if (flux_msg_push_route (cpy, uuid) < 0)

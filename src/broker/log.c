@@ -349,7 +349,7 @@ static int attr_get_log (const char *name, const char **val, void *arg)
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-ring-used")) {
-        n = snprintf (s, sizeof (s), "%d", (int)zlist_size (logbuf->buf));
+        n = snprintf (s, sizeof (s), "%zd", zlist_size (logbuf->buf));
         assert (n < sizeof (s));
         *val = s;
     } else if (!strcmp (name, "log-count")) {

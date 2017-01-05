@@ -29,6 +29,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include <czmq.h>
 
 #include "src/common/libflux/handle.h"
@@ -238,7 +239,7 @@ int flux_fdhandler_add (flux_t *h, int fd, short events,
         return -1;
     }
     flux_watcher_start (c->w);
-    snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
+    snprintf (hashkey, sizeof (hashkey), "fd:%d:%hd", fd, events);
     zhash_update (ctx->watchers, hashkey, c);
     zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)fd_compat_free);
     return 0;
@@ -250,7 +251,7 @@ void flux_fdhandler_remove (flux_t *h, int fd, short events)
     struct fd_compat *c;
     char hashkey[HASHKEY_LEN];
 
-    snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
+    snprintf (hashkey, sizeof (hashkey), "fd:%d:%hd", fd, events);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
         flux_watcher_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);

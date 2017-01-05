@@ -42,6 +42,7 @@
 #include <argz.h>
 #include <glob.h>
 #include <czmq.h>
+#include <inttypes.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
@@ -425,7 +426,7 @@ static int disconnect_update (client_t *c, const flux_msg_t *msg)
     svc = xstrdup (topic);
     if ((p = strchr (svc, '.')))
         *p = '\0';
-    key = xasprintf ("%s:%u:%d", svc, nodeid, flags);
+    key = xasprintf ("%s:%"PRIu32":%d", svc, nodeid, flags);
     if (!zhash_lookup (c->disconnect_notify, key)) {
         d = xzmalloc (sizeof (*d));
         d->c = c;

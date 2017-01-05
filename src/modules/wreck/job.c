@@ -100,12 +100,12 @@ static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
     for (i = levels; i > 0; i--) {
         int b = bits_per_dir * i;
         uint64_t d = prefix64 (id, b, b + bits_per_dir);
-        if ((n = snprintf (buf+len, nleft, ".%ju", d)) < 0 || n > nleft)
+        if ((n = snprintf (buf+len, nleft, ".%"PRIu64, d)) < 0 || n > nleft)
             return NULL;
         len += n;
         nleft -= n;
     }
-    n = snprintf (buf+len, sizeof (buf) - len, ".%ju", id);
+    n = snprintf (buf+len, sizeof (buf) - len, ".%"PRIu64, id);
     if (n < 0 || n > nleft)
         return NULL;
     return (strdup (buf));
@@ -460,7 +460,7 @@ static void exec_handler (const char *exe, int64_t id, const char *kvspath)
 
     if ((av == NULL)
      || ((av [0] = strdup (exe)) == NULL)
-     || (asprintf (&av[1], "--lwj-id=%ju", (uintmax_t) id) < 0)
+     || (asprintf (&av[1], "--lwj-id=%"PRId64, id) < 0)
      || (asprintf (&av[2], "--kvs-path=%s", kvspath) < 0)) {
         fprintf (stderr, "Out of Memory trying to exec wrexecd!\n");
         exit (1);

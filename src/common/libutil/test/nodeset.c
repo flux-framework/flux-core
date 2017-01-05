@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -274,7 +275,7 @@ int main (int argc, char *argv[])
         monotime_since (ts)/1000, nodeset_getattr (n, NODESET_ATTR_BYTES)/1024);
 
     monotime (&ts);
-    tmp = xasprintf ("0-%u", bigset - 1);
+    tmp = xasprintf ("0-%"PRIu32, bigset - 1);
     like (nodeset_string (n), tmp, "string conversion %s [%.2fs %u Mbytes]", tmp,
         monotime_since (ts)/1000, nodeset_getattr (n, NODESET_ATTR_BYTES)/1024);
     free (tmp);
@@ -352,7 +353,7 @@ int main (int argc, char *argv[])
     ok (nodeset_count (n) == 2, "nodeset count is sane");
     /* 7 */
 
-    tmp = xasprintf ("%u-%u", maxrank-1, maxrank);
+    tmp = xasprintf ("%"PRIu32"-%"PRIu32, maxrank-1, maxrank);
     monotime (&ts);
     like (nodeset_string (n), tmp, "convert to string %s [%.2fs %u Mbytes]", tmp,
         monotime_since (ts)/1000,

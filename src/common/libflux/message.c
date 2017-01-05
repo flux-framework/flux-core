@@ -31,6 +31,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <fnmatch.h>
+#include <inttypes.h>
 #include <czmq.h>
 #include <jansson.h>
 
@@ -1234,7 +1235,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
     /* Topic (keepalive has none)
      */
     if (topic)
-        fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (topic), topic);
+        fprintf (f, "%s[%3.3zu] %s\n", prefix, strlen (topic), topic);
     /* Payload
      */
     if (flux_msg_has_payload (msg)) {
@@ -1242,7 +1243,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         void *buf;
         int size, flags;
         if (flux_msg_get_json (msg, &json_str) == 0)
-            fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (json_str), json_str);
+            fprintf (f, "%s[%3.3zu] %s\n", prefix, strlen (json_str), json_str);
         else if (flux_msg_get_payload (msg, &flags, &buf, &size) == 0)
             fprintf (f, "%s[%3.3d] ...\n", prefix, size);
         else

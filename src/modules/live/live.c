@@ -81,6 +81,7 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include <flux/core.h>
 #include <czmq.h>
 
@@ -186,7 +187,7 @@ static ctx_t *getctx (flux_t *h)
             flux_log_error (h, "flux_get_rank");
             goto error;
         }
-        n = snprintf (ctx->rankstr, sizeof (ctx->rankstr), "%d", ctx->rank);
+        n = snprintf (ctx->rankstr, sizeof (ctx->rankstr), "%"PRIu32, ctx->rank);
         assert (n < sizeof (ctx->rankstr));
         if (!(ctx->parents = zlist_new ()) || !(ctx->children = zhash_new ())) {
             flux_log_error (h, "zlist_new/zhash_new");
@@ -713,7 +714,7 @@ static int ns_sync (ctx_t *ctx)
         if (flux_get_size (ctx->h, &size) < 0)
             goto done;
         if (size > 1)
-            if (asprintf (&unknown, "1-%d", size - 1) < 0)
+            if (asprintf (&unknown, "1-%"PRIu32, size - 1) < 0)
                 oom ();
         ctx->ns = ns_create (ok, fail, slow, unknown);
         if (size > 1)

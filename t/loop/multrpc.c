@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <czmq.h>
 #include <flux/core.h>
 
@@ -144,7 +145,7 @@ static void rpctest_set_size (flux_t *h, uint32_t newsize)
     fake_size = newsize;
     char s[16];
     uint32_t size = 0;
-    snprintf (s, sizeof (s), "%u", fake_size);
+    snprintf (s, sizeof (s), "%"PRIu32, fake_size);
     flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE);
     flux_get_size (h, &size);
     cmp_ok (size, "==", fake_size,
