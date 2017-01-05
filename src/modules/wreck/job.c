@@ -157,7 +157,7 @@ static int64_t next_jobid (flux_t *h)
     int64_t ret = (int64_t) -1;
     flux_rpc_t *rpc;
 
-    rpc = flux_rpcf (h, "cmb.seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
+    rpc = flux_rpcf (h, "seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
                         "name", "lwj",
                         "preincrement", 1,
                         "postincrement", 0,

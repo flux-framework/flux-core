@@ -207,7 +207,6 @@ static int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
 			                         json_object **outp)
 {
     const char *json_str, *topic;
-    const char *method;
     json_object *in = NULL;
     int rc = -1;
 
@@ -219,12 +218,11 @@ static int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
         goto done;
     }
 
-    method = topic + 8;
-    if (strcmp (method, "fetch") == 0)
+    if (strcmp (topic, "seq.fetch") == 0)
         rc = handle_seq_fetch (s, in, outp);
-    else if (strcmp (method, "set") == 0)
+    else if (strcmp (topic, "seq.set") == 0)
         rc = handle_seq_set (s, in, outp);
-    else if (strcmp (method, "destroy") == 0)
+    else if (strcmp (topic, "seq.destroy") == 0)
         rc = handle_seq_destroy (s, in, outp);
     else
         errno = ENOSYS;
@@ -240,13 +238,13 @@ static void sequence_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *out = NULL;
     int rc = sequence_request_handler (seq, msg, &out);
     if (flux_respond (h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
-        flux_log_error (h, "cmb.seq: flux_respond");
+        flux_log_error (h, "seq: flux_respond");
     if (out)
         Jput (out);
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.seq.*",     sequence_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "seq.*",     sequence_request_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
