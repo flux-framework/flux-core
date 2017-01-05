@@ -78,6 +78,7 @@
 #include "content-cache.h"
 #include "runlevel.h"
 #include "heaptrace.h"
+#include "exec.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -615,6 +616,8 @@ int main (int argc, char *argv[])
         log_msg_exit ("heaptrace_initialize");
     if (sequence_hash_initialize (ctx.h) < 0)
         log_err_exit ("sequence_hash_initialize");
+    if (exec_initialize (ctx.h, ctx.sm, ctx.rank, ctx.attrs) < 0)
+        log_err_exit ("exec_initialize");
 
     broker_add_services (&ctx);
 
@@ -1434,372 +1437,6 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
     }
 }
 
-/**
- ** Built-in services
- **
- ** Requests received from modules/peers via their respective reactor
- ** callbacks are sent on via broker_request_sendmsg().  The broker handle
- ** then dispatches locally matched ones to their svc handlers.
- **
- ** If the request msg is not destroyed by the service handler, an
- ** a no-payload response is generated.  If the handler returned -1,
- ** the response errnum is set to errno, else 0.
- **/
-
-static json_object *
-subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
-{
-    json_object *resp = Jnew ();
-
-    assert (ctx != NULL);
-    assert (resp != NULL);
-
-    Jadd_int (resp, "rank", ctx->rank);
-    Jadd_int (resp, "pid", subprocess_pid (p));
-    Jadd_str (resp, "state", subprocess_state_string (p));
-    return (resp);
-}
-
-static int child_exit_handler (struct subprocess *p)
-{
-    int n;
-    ctx_t *ctx = (ctx_t *) subprocess_get_context (p, "ctx");
-    flux_msg_t *msg = (flux_msg_t *) subprocess_get_context (p, "msg");
-    json_object *resp;
-
-    assert (ctx != NULL);
-    assert (msg != NULL);
-
-    resp = subprocess_json_resp (ctx, p);
-    Jadd_int (resp, "status", subprocess_exit_status (p));
-    Jadd_int (resp, "code", subprocess_exit_code (p));
-    if ((n = subprocess_signaled (p)))
-        Jadd_int (resp, "signal", n);
-    if ((n = subprocess_exec_error (p)))
-        Jadd_int (resp, "exec_errno", n);
-
-    flux_respond (ctx->h, msg, 0, Jtostr (resp));
-    flux_msg_destroy (msg);
-    json_object_put (resp);
-
-    subprocess_destroy (p);
-
-    return (0);
-}
-
-static int subprocess_io_cb (struct subprocess *p, const char *json_str)
-{
-    ctx_t *ctx = subprocess_get_context (p, "ctx");
-    flux_msg_t *orig = subprocess_get_context (p, "msg");
-    json_object *o = NULL;
-    int rc = -1;
-
-    assert (ctx != NULL);
-    assert (orig != NULL);
-
-    if (!(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    /* Add this rank */
-    Jadd_int (o, "rank", ctx->rank);
-    rc = flux_respond (ctx->h, orig, 0, Jtostr (o));
-done:
-    Jput (o);
-    return (rc);
-}
-
-static struct subprocess *
-subprocess_get_pid (struct subprocess_manager *sm, int pid)
-{
-    struct subprocess *p = NULL;
-    p = subprocess_manager_first (sm);
-    while (p) {
-        if (pid == subprocess_pid (p))
-            return (p);
-        p = subprocess_manager_next (sm);
-    }
-    return (NULL);
-}
-
-static int cmb_write_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *request = NULL;
-    json_object *o = NULL;
-    const char *json_str;
-    int pid;
-    int errnum = EPROTO;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto out;
-
-    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid) &&
-        Jget_obj (request, "stdin", &o)) {
-        int len;
-        void *data = NULL;
-        bool eof;
-        struct subprocess *p;
-
-        /* XXX: We use zio_json_decode() here for convenience. Probably
-         *  this should be bubbled up as a subprocess IO json spec with
-         *  encode/decode functions.
-         */
-        if ((len = zio_json_decode (Jtostr (o), &data, &eof)) < 0)
-            goto out;
-        if (!(p = subprocess_get_pid (ctx->sm, pid))) {
-            errnum = ENOENT;
-            free (data);
-            goto out;
-        }
-        if (subprocess_write (p, data, len, eof) < 0) {
-            errnum = errno;
-            free (data);
-            goto out;
-        }
-        free (data);
-    }
-out:
-    if (flux_respondf (ctx->h, *msg, "{si}", "code", errnum) < 0)
-        flux_log_error (ctx->h, "write_cb: flux_respondf");
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    if (request)
-        json_object_put (request);
-    return (0);
-}
-
-static int cmb_signal_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *request = NULL;
-    const char *json_str;
-    int pid;
-    int errnum = EPROTO;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto out;
-    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid)) {
-        int signum;
-        struct subprocess *p;
-        if (!Jget_int (request, "signum", &signum))
-            signum = SIGTERM;
-        p = subprocess_manager_first (ctx->sm);
-        while (p) {
-            if (pid == subprocess_pid (p)) {
-                errnum = 0;
-                /* Send signal to entire process group */
-                if (kill (-pid, signum) < 0)
-                    errnum = errno;
-            }
-            p = subprocess_manager_next (ctx->sm);
-        }
-    }
-out:
-    if (flux_respondf (ctx->h, *msg, "{si}", "code", errnum) < 0)
-        flux_log_error (ctx->h, "signal_cb: flux_respondf");
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    if (request)
-        json_object_put (request);
-    return (0);
-}
-
-static int do_setpgrp (struct subprocess *p)
-{
-    if (setpgrp () < 0)
-        fprintf (stderr, "setpgrp: %s", strerror (errno));
-    return (0);
-}
-
-/*
- *  Create a subprocess described in the msg argument.
- */
-static int cmb_exec_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *request = NULL;
-    json_object *response = NULL;
-    json_object *o;
-    const char *json_str;
-    struct subprocess *p;
-    flux_msg_t *copy;
-    int i, argc;
-    const char *local_uri;
-
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
-        log_err_exit ("%s: local_uri is not set", __FUNCTION__);
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto out_free;
-
-    if (!(request = Jfromstr (json_str))
-        || !json_object_object_get_ex (request, "cmdline", &o)
-        || o == NULL
-        || (json_object_get_type (o) != json_type_array)) {
-        errno = EPROTO;
-        goto out_free;
-    }
-
-    if ((argc = json_object_array_length (o)) < 0) {
-        errno = EPROTO;
-        goto out_free;
-    }
-
-    p = subprocess_create (ctx->sm);
-    subprocess_set_context (p, "ctx", ctx);
-    subprocess_add_hook (p, SUBPROCESS_COMPLETE, child_exit_handler);
-    subprocess_add_hook (p, SUBPROCESS_PRE_EXEC, do_setpgrp);
-
-    for (i = 0; i < argc; i++) {
-        json_object *ox = json_object_array_get_idx (o, i);
-        if (json_object_get_type (ox) == json_type_string)
-            subprocess_argv_append (p, json_object_get_string (ox));
-    }
-
-    if (json_object_object_get_ex (request, "env", &o) && o != NULL) {
-        json_object_iter iter;
-        json_object_object_foreachC (o, iter) {
-            const char *val = json_object_get_string (iter.val);
-            if (val != NULL)
-                subprocess_setenv (p, iter.key, val, 1);
-        }
-    }
-    else
-        subprocess_set_environ (p, environ);
-    /*
-     *  Override key FLUX environment variables in env array
-     */
-    subprocess_setenv (p, "FLUX_URI", local_uri, 1);
-
-    if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
-        const char *dir = json_object_get_string (o);
-        if (dir != NULL)
-            subprocess_set_cwd (p, dir);
-    }
-
-    /*
-     * Save a copy of msg for future messages
-     */
-    copy = flux_msg_copy (*msg, true);
-    subprocess_set_context (p, "msg", (void *) copy);
-
-    subprocess_set_io_callback (p, subprocess_io_cb);
-
-    if (subprocess_fork (p) < 0) {
-        /*
-         *  Fork error, respond directly to exec client with error
-         *   (There will be no subprocess to reap)
-         */
-        (void) flux_respond (ctx->h, *msg, errno, NULL);
-        goto out_free;
-    }
-
-    if (subprocess_exec (p) >= 0) {
-        /*
-         *  Send response, destroys original msg.
-         *   For "Exec Failure" allow that state to be transmitted
-         *   to caller on completion handler (which will be called
-         *   immediately)
-         */
-        response = subprocess_json_resp (ctx, p);
-        flux_respond (ctx->h, *msg, 0, Jtostr (response));
-        flux_msg_destroy (*msg);
-        *msg = NULL;
-    }
-out_free:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
-    return (0);
-}
-
-static char *subprocess_sender (struct subprocess *p)
-{
-    char *sender;
-    flux_msg_t *msg = subprocess_get_context (p, "msg");
-    if (!msg || flux_msg_get_route_first (msg, &sender) < 0)
-        return NULL;
-    return (sender);
-}
-
-static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
-{
-    struct subprocess *p = subprocess_manager_first (ctx->sm);
-    while (p) {
-        char *sender;
-        if ((sender = subprocess_sender (p))) {
-            pid_t pid;
-            if ((strcmp (id, sender) == 0)
-               && ((pid = subprocess_pid (p)) > (pid_t) 0)) {
-                /* Kill process group for subprocess p */
-                flux_log (ctx->h, LOG_INFO,
-                          "Terminating PGRP %ld", (unsigned long) pid);
-                if (kill (-pid, SIGKILL) < 0)
-                    flux_log_error (ctx->h, "killpg");
-            }
-            free (sender);
-        }
-        p = subprocess_manager_next (ctx->sm);
-    }
-    return (0);
-}
-
-static json_object *subprocess_json_info (struct subprocess *p)
-{
-    int i;
-    char buf [MAXPATHLEN];
-    const char *cwd;
-    char *sender = NULL;
-    json_object *o = Jnew ();
-    json_object *a = Jnew_ar ();
-
-    Jadd_int (o, "pid", subprocess_pid (p));
-    for (i = 0; i < subprocess_get_argc (p); i++) {
-        Jadd_ar_str (a, subprocess_get_arg (p, i));
-    }
-    /*  Avoid shortjson here so we don't take
-     *   unnecessary reference to 'a'
-     */
-    json_object_object_add (o, "cmdline", a);
-    if ((cwd = subprocess_get_cwd (p)) == NULL)
-        cwd = getcwd (buf, MAXPATHLEN-1);
-    Jadd_str (o, "cwd", cwd);
-    if ((sender = subprocess_sender (p))) {
-        Jadd_str (o, "sender", sender);
-        free (sender);
-    }
-    return (o);
-}
-
-static int cmb_ps_cb (flux_msg_t **msg, void *arg)
-{
-    struct subprocess *p;
-    ctx_t *ctx = arg;
-    json_object *out = Jnew ();
-    json_object *procs = Jnew_ar ();
-    int rc;
-
-    Jadd_int (out, "rank", ctx->rank);
-
-    p = subprocess_manager_first (ctx->sm);
-    while (p) {
-        json_object *o = subprocess_json_info (p);
-        /* Avoid shortjson here so we don't take an unnecessary
-         *  reference to 'o'.
-         */
-        json_object_array_add (procs, o);
-        p = subprocess_manager_next (ctx->sm);
-    }
-    json_object_object_add (out, "procs", procs);
-    rc = flux_respond (ctx->h, *msg, 0, Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (out);
-    return (rc);
-}
-
 static int attr_get_snoop (const char *name, const char **val, void *arg)
 {
     snoop_t *snoop = arg;
@@ -1828,6 +1465,18 @@ static int attr_get_overlay (const char *name, const char **val, void *arg)
 done:
     return rc;
 }
+
+/**
+ ** Built-in services
+ **
+ ** Requests received from modules/peers via their respective reactor
+ ** callbacks are sent on via broker_request_sendmsg().  The broker handle
+ ** then dispatches locally matched ones to their svc handlers.
+ **
+ ** If the request msg is not destroyed by the service handler, an
+ ** a no-payload response is generated.  If the handler returned -1,
+ ** the response errnum is set to errno, else 0.
+ **/
 
 static int cmb_rusage_cb (flux_msg_t **msg, void *arg)
 {
@@ -2062,8 +1711,7 @@ static int cmb_disconnect_cb (flux_msg_t **msg, void *arg)
 
     if (flux_msg_get_route_first (*msg, &sender) < 0)
         goto done;
-
-    terminate_subprocesses_by_uuid (ctx, sender);
+    exec_terminate_subprocesses_by_uuid (h, sender);
 done:
     if (sender)
         free (sender);
@@ -2166,13 +1814,13 @@ static struct internal_service services[] = {
     { "cmb.reparent",   NULL,   cmb_reparent_cb,    },
     { "cmb.panic",      NULL,   cmb_panic_cb,       },
     { "cmb.event-mute", NULL,   cmb_event_mute_cb,  },
-    { "cmb.exec",       NULL,   cmb_exec_cb,        },
-    { "cmb.exec.signal",NULL,   cmb_signal_cb,      },
-    { "cmb.exec.write", NULL,   cmb_write_cb,       },
-    { "cmb.processes",  NULL,   cmb_ps_cb,          },
     { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
     { "cmb.sub",        NULL,   cmb_sub_cb,         },
     { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
+    { "cmb.exec",       NULL,   requeue_for_service },
+    { "cmb.exec.signal",NULL,   requeue_for_service },
+    { "cmb.exec.write", NULL,   requeue_for_service },
+    { "cmb.processes",  NULL,   requeue_for_service },
     { "log",            NULL,   requeue_for_service,},
     { "seq",            "[0]",  requeue_for_service },
     { "content",        NULL,   requeue_for_service },

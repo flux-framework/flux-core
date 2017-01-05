@@ -39,7 +39,9 @@ flux_broker_SOURCES = \
 	runlevel.h \
 	runlevel.c \
 	heaptrace.h \
-	heaptrace.c
+	heaptrace.c \
+	exec.h \
+	exec.c
 
 
 flux_broker_LDADD = \
