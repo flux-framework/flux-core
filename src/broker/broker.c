@@ -1481,40 +1481,40 @@ done:
  ** the response errnum is set to errno, else 0.
  **/
 
-static int cmb_rmmod_cb (flux_msg_t **msg, void *arg)
+static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     char *name = NULL;
-    int rc = -1;
     module_t *p;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (flux_rmmod_json_decode (json_str, &name) < 0)
-        goto done;
+        goto error;
     if (!(p = module_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
     /* N.B. can't remove 'service' entry here as distributed
      * module shutdown may require inter-rank module communication.
      */
-    if (module_push_rmmod (p, *msg) < 0)
-        goto done;
-    flux_msg_destroy (*msg); /* msg will be replied to later */
-    *msg = NULL;
     if (module_stop (p) < 0)
-        goto done;
-    flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
-    rc = 0;
-done:
-    if (name)
-        free (name);
-    return rc;
+        goto error;
+    if (module_push_rmmod (p, msg) < 0) // response deferred
+        goto error;
+    flux_log (h, LOG_DEBUG, "rmmod %s", name);
+    free (name);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (name);
 }
 
-static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
+static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
@@ -1522,24 +1522,22 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
-    module_t *p;
-    int rc = -1;
+    module_t *p = NULL;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
-        goto done;
+        goto error;
     if (!(name = flux_modname (path))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
     if (!(p = module_add (ctx->modhash, path)))
-        goto done;
+        goto error;
     if (!svc_add (ctx->services, module_get_name (p),
                                  module_get_service (p), mod_svc_cb, p)) {
-        module_remove (ctx->modhash, p);
         errno = EEXIST;
-        goto done;
+        goto error;
     }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
@@ -1548,204 +1546,205 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
     }
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
-    if (module_push_insmod (p, *msg) < 0) {
+    if (module_push_insmod (p, msg) < 0) // response deferred
+        goto error;
+    if (module_start (p) < 0)
+        goto error;
+    flux_log (h, LOG_DEBUG, "insmod %s", name);
+    free (name);
+    free (path);
+    free (argz);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (p)
         module_remove (ctx->modhash, p);
-        goto done;
-    }
-    if (module_start (p) < 0) {
-        module_remove (ctx->modhash, p);
-        goto done;
-    }
-    flux_msg_destroy (*msg); /* msg will be replied to later */
-    *msg = NULL;
-    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
-    rc = 0;
-done:
-    if (name)
-        free (name);
-    if (path)
-        free (path);
-    if (argz)
-        free (argz);
-    return rc;
+    free (name);
+    free (path);
+    free (argz);
 }
 
-static int cmb_lsmod_cb (flux_msg_t **msg, void *arg)
+static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     flux_modlist_t *mods = NULL;
     char *json_str = NULL;
-    int rc = -1;
 
     if (!(mods = module_get_modlist (ctx->modhash)))
-        goto done;
+        goto error;
     if (!(json_str = flux_lsmod_json_encode (mods)))
-        goto done;
-    if (flux_respond (ctx->h, *msg, 0, json_str) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    if (json_str)
-        free (json_str);
+        goto error;
+    if (flux_respond (h, msg, 0, json_str) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (json_str);
     if (mods)
         flux_modlist_destroy (mods);
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (json_str);
+    if (mods)
+        flux_modlist_destroy (mods);
 }
 
-static int cmb_lspeer_cb (flux_msg_t **msg, void *arg)
+static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
+
     json_object *out = overlay_lspeer_encode (ctx->overlay);
-    int rc = flux_respond (ctx->h, *msg, 0, Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (out);
-    return rc;
 }
 
-static int cmb_reparent_cb (flux_msg_t **msg, void *arg)
+static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,
+                             const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *in = NULL;
     const char *uri;
     const char *json_str;
     bool recycled = false;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "uri", &uri)) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
     if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
-        goto done;
+        goto error;
     flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
                                                                   : "new");
-    rc = 0;
-done:
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (in);
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int cmb_panic_cb (flux_msg_t **msg, void *arg)
+static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     json_object *in = NULL;
     const char *s = NULL;
     const char *json_str;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "msg", &s))
         s = "no reason";
     log_msg_exit ("PANIC: %s", s ? s : "no reason");
-done:
+    /*NOTREACHED*/
     Jput (in);
-    return rc;
+    return;
+error:
+    Jput (in);
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int cmb_event_mute_cb (flux_msg_t **msg, void *arg)
+static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     char *uuid = NULL;
 
-    if (flux_msg_get_route_last (*msg, &uuid) == 0)
+    if (flux_msg_get_route_last (msg, &uuid) == 0)
         overlay_mute_child (ctx->overlay, uuid);
-    if (uuid)
-        free (uuid);
-    flux_msg_destroy (*msg); /* no reply */
-    *msg = NULL;
-    return 0;
+    free (uuid);
+    /* no response */
 }
 
-static int cmb_disconnect_cb (flux_msg_t **msg, void *arg)
+static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
     char *sender = NULL;;
 
-    if (flux_msg_get_route_first (*msg, &sender) < 0)
-        goto done;
-    exec_terminate_subprocesses_by_uuid (h, sender);
-done:
-    if (sender)
+    if (flux_msg_get_route_first (msg, &sender) == 0) {
+        exec_terminate_subprocesses_by_uuid (h, sender);
         free (sender);
-    flux_msg_destroy (*msg); /* no reply */
-    *msg = NULL;
-    return 0;
+    }
+    /* no response */
 }
 
-static int cmb_sub_cb (flux_msg_t **msg, void *arg)
+static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
+                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
     json_object *in = NULL;
     const char *topic;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_route_first (*msg, &uuid) < 0)
-        goto done;
+    if (flux_msg_get_route_first (msg, &uuid) < 0)
+        goto error;
     if (!uuid) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    rc = module_subscribe (ctx->modhash, uuid, topic);
-done:
-    if (rc < 0)
-        FLUX_LOG_ERROR (ctx->h);
-    if (uuid)
-        free (uuid);
+    if (module_subscribe (ctx->modhash, uuid, topic) < 0)
+        goto error;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
     Jput (in);
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
+    Jput (in);
 }
 
-static int cmb_unsub_cb (flux_msg_t **msg, void *arg)
+static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
     json_object *in = NULL;
     const char *topic;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_route_first (*msg, &uuid) < 0)
-        goto done;
+    if (flux_msg_get_route_first (msg, &uuid) < 0)
+        goto error;
     if (!uuid) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    rc = module_unsubscribe (ctx->modhash, uuid, topic);
-done:
-    if (rc < 0)
-        FLUX_LOG_ERROR (ctx->h);
-    if (uuid)
-        free (uuid);
+    if (module_unsubscribe (ctx->modhash, uuid, topic) < 0)
+        goto error;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
     Jput (in);
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
+    Jput (in);
 }
 
-static int requeue_for_service (flux_msg_t **msg, void *arg)
+static int route_to_handle (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
     if (flux_requeue (ctx->h, *msg, FLUX_RQ_TAIL) < 0)
@@ -1755,49 +1754,63 @@ static int requeue_for_service (flux_msg_t **msg, void *arg)
     return 0;
 }
 
+static struct flux_msg_handler_spec handlers[] = {
+    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb,      },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb,      },
+    { FLUX_MSGTYPE_REQUEST, "cmb.reparent",   cmb_reparent_cb,    },
+    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb,  },
+    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb,  },
+    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb,         },
+    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb,       },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 struct internal_service {
     const char *topic;
     const char *nodeset;
-    int (*fun)(flux_msg_t **msg, void *arg);
 };
 
 static struct internal_service services[] = {
-    { "cmb.rmmod",      NULL,   cmb_rmmod_cb,       },
-    { "cmb.insmod",     NULL,   cmb_insmod_cb,      },
-    { "cmb.lsmod",      NULL,   cmb_lsmod_cb,       },
-    { "cmb.lspeer",     NULL,   cmb_lspeer_cb,      },
-    { "cmb.ping",       NULL,   cmb_ping_cb,        },
-    { "cmb.reparent",   NULL,   cmb_reparent_cb,    },
-    { "cmb.panic",      NULL,   cmb_panic_cb,       },
-    { "cmb.event-mute", NULL,   cmb_event_mute_cb,  },
-    { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
-    { "cmb.sub",        NULL,   cmb_sub_cb,         },
-    { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
-    { "cmb.rusage",     NULL,   requeue_for_service },
-    { "cmb.ping",       NULL,   requeue_for_service },
-    { "cmb.exec",       NULL,   requeue_for_service },
-    { "cmb.exec.signal",NULL,   requeue_for_service },
-    { "cmb.exec.write", NULL,   requeue_for_service },
-    { "cmb.processes",  NULL,   requeue_for_service },
-    { "log",            NULL,   requeue_for_service,},
-    { "seq",            "[0]",  requeue_for_service },
-    { "content",        NULL,   requeue_for_service },
-    { "hello",          NULL,   requeue_for_service },
-    { "attr",           NULL,   requeue_for_service },
-    { "heaptrace",      NULL,   requeue_for_service },
+    { "cmb.rusage",         NULL },
+    { "cmb.ping",           NULL },
+    { "cmb.exec",           NULL },
+    { "cmb.exec.signal",    NULL },
+    { "cmb.exec.write",     NULL },
+    { "cmb.processes",      NULL },
+    { "log",                NULL },
+    { "seq",                "[0]" },
+    { "content",            NULL },
+    { "hello",              NULL },
+    { "attr",               NULL },
+    { "heaptrace",          NULL },
     { NULL, NULL, },
 };
 
+/* Register builtin services (sharing ctx->h and broker thread).
+ * First loop is for services that are registered in other files.
+ * Second loop is for services registered here.
+ */
 static void broker_add_services (ctx_t *ctx)
 {
     struct internal_service *svc;
-
     for (svc = &services[0]; svc->topic != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (!svc_add (ctx->services, svc->topic, NULL, svc->fun, ctx))
-            log_err_exit ("error adding handler for %s", svc->topic);
+        if (!svc_add (ctx->services, svc->topic, NULL, route_to_handle, ctx))
+            log_err_exit ("error registering service for %s", svc->topic);
     }
+
+    struct flux_msg_handler_spec *spec;
+    for (spec = &handlers[0]; spec->topic_glob != NULL; spec++) {
+        if (!svc_add (ctx->services, spec->topic_glob, NULL,
+                      route_to_handle, ctx))
+            log_err_exit ("error registering service for %s", spec->topic_glob);
+    }
+    if (flux_msg_handler_addvec (ctx->h, handlers, ctx) < 0)
+        log_err_exit ("error registering message handlers");
 }
 
 /**
