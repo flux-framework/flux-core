@@ -161,11 +161,6 @@ typedef struct {
     struct subprocess *init_shell;
 } ctx_t;
 
-struct boot_method {
-    const char *name;
-    int (*fun)(ctx_t *ctx);
-};
-
 static int broker_event_sendmsg (ctx_t *ctx, flux_msg_t **msg);
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg);
