@@ -27,7 +27,7 @@ enum {
  * have flux_lsmod() return error.
  * Note: 'nodeset' will be NULL when called from flux_lsmod().
  */
-typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
+typedef int (*flux_lsmod_f)(const char *name, int size, const char *digest,
                            int idle, int status,
                            const char *nodeset, void *arg);
 
@@ -38,45 +38,14 @@ typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
 int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg);
 
-/* Send a request to remove a module 'name'.
- * The request is sent to a service determined by parsing 'name'.
- * Returns 0 on success, -1 with errno set on failure.
- */
-int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name);
-
-/* Send a request to insert a module 'path'.
- * The request is sent to a service determined by parsing the module's name,
- * as defined by its symbol 'mod_name' (found by opening 'path').  Pass args
- * described by 'argc' and 'argv' to the module's 'mod_main' function.
- * Returns 0 on success, -1 with errno set on failure.
- */
-int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
-                int argc, char **argv);
-
-
 /**
  ** Mandatory symbols for modules
  **/
 
 #define MOD_NAME(x) const char *mod_name = x
 #define MOD_SERVICE(x) const char *mod_service = x
-typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
+typedef int (*mod_main_f)(flux_t *h, int argc, char *argv[]);
 
-
-/**
- ** Convenience functions for services implementing module extensions
- **/
-
-/* Read the value of 'mod_name' from the specified module filename.
- * Caller must free the returned name.  Returns NULL on failure.
- */
-char *flux_modname (const char *filename);
-
-/* Search a colon-separated list of directories (recursively) for a .so file
- * with the requested module name and return its path, or NULL on failure.
- * Caller must free the returned path.
- */
-char *flux_modfind (const char *searchpath, const char *modname);
 
 /* Encode/decode lsmod payload
  * 'flux_modlist_t' is an intermediate object that can encode/decode

@@ -16,11 +16,11 @@ if ! test -r $dict; then
 fi
 
 if test  -z "$ASPELL"; then
-   echo "1..$# # skip because aspell is not installed"
+   echo "1..0 # skip because aspell is not installed"
    exit 0
 fi
 if ! $ASPELL -n list </dev/null >/dev/null; then
-   echo "1..$# # skip because aspell dry run failed"
+   echo "1..0 # skip because aspell dry run failed"
    exit 0
 fi
 

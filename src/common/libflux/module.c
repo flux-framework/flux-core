@@ -43,20 +43,6 @@ struct flux_modlist_struct {
     json_t *o;
 };
 
-/* Get service name from module name string.
- */
-static char *mod_service (const char *modname)
-{
-    char *service = NULL;
-    if (strchr (modname, '.')) {
-        service = xstrdup (modname);
-        char *p = strrchr (service, '.');
-        *p = '\0';
-    } else
-        service = xstrdup ("cmb");
-    return service;
-}
-
 /**
  ** JSON encode/decode functions
  **/
@@ -254,127 +240,6 @@ flux_modlist_t *flux_lsmod_json_decode (const char *json_str)
     return mods;
 }
 
-char *flux_modname(const char *path)
-{
-    void *dso;
-    const char **np;
-    char *name = NULL;
-
-    dlerror ();
-    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND))) {
-        if ((np = dlsym (dso, "mod_name")) && *np)
-            name = xstrdup (*np);
-        dlclose (dso);
-        return name;
-    }
-    // Another reporting method may be warranted here, but when a dynamic
-    // library dependency doesn't resolve, it really helps to know that's
-    // the error.  Otherwise it prints as "invalid argument" from the
-    // broker.
-    log_msg ("%s", dlerror ());
-    errno = ENOENT;
-    return NULL;
-}
-
-/* helper for flux_modfind() */
-static int flux_modname_cmp(const char *path, const char *name)
-{
-    char * modname = flux_modname(path);
-    int rc = modname ? strcmp(modname, name) : -1;
-    free(modname);
-    return rc;
-}
-
-#ifndef MAX
-#define MAX(a,b)    ((a)>(b)?(a):(b))
-#endif
-
-/* helper for flux_modfind() */
-static int strcmpend (const char *s1, const char *s2)
-{
-    int skip = MAX (strlen (s1) - strlen (s2), 0);
-    return strcmp (s1 + skip, s2);
-}
-
-/* helper for flux_modfind() */
-static char *modfind (const char *dirpath, const char *modname)
-{
-    DIR *dir;
-    struct dirent entry, *dent;
-    char *modpath = NULL;
-    struct stat sb;
-    char path[PATH_MAX];
-    size_t len = sizeof (path);
-
-    if (!(dir = opendir (dirpath)))
-        goto done;
-    while (!modpath) {
-        if ((errno = readdir_r (dir, &entry, &dent)) > 0 || dent == NULL)
-            break;
-        if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
-            continue;
-        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len) {
-            errno = EINVAL;
-            break;
-        }
-        if (stat (path, &sb) == 0) {
-            if (S_ISDIR (sb.st_mode))
-                modpath = modfind (path, modname);
-            else if (!strcmpend (path, ".so")) {
-                if (!flux_modname_cmp (path, modname))
-                    if (!(modpath = realpath (path, NULL)))
-                        oom ();
-
-            }
-        }
-    }
-    closedir (dir);
-done:
-    return modpath;
-}
-
-char *flux_modfind (const char *searchpath, const char *modname)
-{
-    char *cpy = xstrdup (searchpath);
-    char *dirpath, *saveptr = NULL, *a1 = cpy;
-    char *modpath = NULL;
-
-    while ((dirpath = strtok_r (a1, ":", &saveptr))) {
-        if ((modpath = modfind (dirpath, modname)))
-            break;
-        a1 = NULL;
-    }
-    free (cpy);
-    if (!modpath)
-        errno = ENOENT;
-    return modpath;
-}
-
-int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
-{
-    flux_rpc_t *r = NULL;
-    char *service = mod_service (name);
-    char *topic = xasprintf ("%s.rmmod", service);
-    char *json_str = NULL;
-    int rc = -1;
-
-    if (!(json_str = flux_rmmod_json_encode (name)))
-        goto done;
-    if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
-        goto done;
-    if (flux_rpc_get (r, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    free (service);
-    free (topic);
-    if (json_str)
-        free (json_str);
-    if (r)
-        flux_rpc_destroy (r);
-    return rc;
-}
-
 int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg)
 {
@@ -407,42 +272,6 @@ done:
     free (topic);
     if (mods)
         flux_modlist_destroy (mods);
-    if (r)
-        flux_rpc_destroy (r);
-    return rc;
-}
-
-int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
-                 int argc, char **argv)
-{
-    flux_rpc_t *r = NULL;
-    char *name = NULL;
-    char *service = NULL;
-    char *topic = NULL;
-    char *json_str = NULL;
-    int rc = -1;
-
-    if (!(name = flux_modname (path))) {
-        goto done;
-    }
-    service = mod_service (name);
-    topic = xasprintf ("%s.insmod", service);
-
-    json_str = flux_insmod_json_encode (path, argc, argv);
-    if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
-        goto done;
-    if (flux_rpc_get (r, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (name)
-        free (name);
-    if (service)
-        free (service);
-    if (topic)
-        free (topic);
-    if (json_str)
-        free (json_str);
     if (r)
         flux_rpc_destroy (r);
     return rc;

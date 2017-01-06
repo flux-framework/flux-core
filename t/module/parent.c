@@ -15,16 +15,16 @@
 #include "src/common/libutil/oom.h"
 
 typedef struct {
-    char *name;
+    flux_module_t *m;
     int size;
     char *digest;
     int idle;
     int status;
-    void *dso;
-    mod_main_f *main;
+    mod_main_f main;
 } module_t;
 
 static zhash_t *modules = NULL;
+static flux_extensor_t *extensor = NULL;
 
 /* Calculate file digest using zfile() class from czmq.
  * Caller must free.
@@ -41,12 +41,10 @@ char *digest (const char *path)
 
 static void module_destroy (module_t *m)
 {
-    if (m->name)
-        free (m->name);
+    if (m->m)
+        flux_module_destroy (m->m);
     if (m->digest)
         free (m->digest);
-    if (m->dso)
-        dlclose (m->dso);
     free (m);
 }
 
@@ -56,15 +54,16 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     struct stat sb;
     char **av = NULL;
 
-    if (stat (path, &sb) < 0 || !(m->name = flux_modname (path))
-                             || !(m->digest = digest (path))) {
+    if (stat (path, &sb) < 0
+        || !(m->m = flux_module_create (extensor, path, 0))
+        || !(m->digest = digest (path))) {
         module_destroy (m);
         errno = ESRCH;
         return NULL;
     }
     m->size = sb.st_size;
-    m->dso = dlopen (path, RTLD_NOW | RTLD_LOCAL);
-    if (!m->dso || !(m->main = dlsym (m->dso, "mod_main"))) {
+    if (flux_module_load (m->m) < 0
+        || !(m->main = flux_module_lookup (m->m, "mod_main"))) {
         module_destroy (m);
         errno = EINVAL;
         return NULL;
@@ -76,13 +75,14 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
         errno = EINVAL;
         return NULL;
     }
-    if (zhash_lookup (modules, m->name)) {
+    if (zhash_lookup (modules, flux_module_name (m->m))) {
         module_destroy (m);
         errno = EEXIST;
         return NULL;
     }
-    zhash_update (modules, m->name, m);
-    zhash_freefn (modules, m->name, (zhash_free_fn *)module_destroy);
+    zhash_update (modules, flux_module_name (m->m), m);
+    zhash_freefn (modules, flux_module_name (m->m),
+                  (zhash_free_fn *)module_destroy);
     if (av)
         free (av);
     return m;
@@ -103,8 +103,8 @@ static flux_modlist_t *module_list (void)
     while (name) {
         m = zhash_lookup (modules, name);
         assert (m != NULL);
-        rc = flux_modlist_append (mods, m->name, m->size, m->digest, m->status,
-                                                                     m->idle);
+        rc = flux_modlist_append (mods, name, m->size, m->digest, m->status,
+                                                                  m->idle);
         assert (rc == 0);
         name = zlist_next (keys);
     }
@@ -134,7 +134,7 @@ static void insmod_request_cb (flux_t *h, flux_msg_handler_t *w,
         saved_errno = errno;
         goto done;
     }
-    flux_log (h, LOG_DEBUG, "insmod %s", m->name);
+    flux_log (h, LOG_DEBUG, "insmod %s", flux_module_name (m->m));
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, NULL) < 0)
@@ -224,6 +224,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         saved_errno = ENOMEM;
         goto error;
     }
+    if (!(extensor = flux_extensor_create ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
     if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
         saved_errno = errno;
         flux_log_error (h, "flux_msghandler_addvec");
@@ -234,6 +238,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto error;
     }
+    flux_extensor_destroy (extensor);
     zhash_destroy (&modules);
     return 0;
 error:

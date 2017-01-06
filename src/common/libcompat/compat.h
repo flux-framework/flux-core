@@ -28,11 +28,16 @@
 #define flux_json_rpc               compat_rpc
 #define flux_json_multrpc           compat_multrpc
 
+/* module */
+#define flux_modfind                compat_modfind
+#define flux_modname                compat_modname
+
 #include "handle.h"
 #include "reactor.h"
 #include "info.h"
 #include "request.h"
 #include "rpc.h"
+#include "module.h"
 
 #endif /* !_FLUX_COMPAT_H */
 

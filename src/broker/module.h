@@ -18,6 +18,12 @@ void modhash_set_rank (modhash_t *mh, uint32_t rank);
 void modhash_set_flux (modhash_t *mh, flux_t *h);
 void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb);
 
+/*
+ *  search for module name or path in search path `path`
+ */
+module_t *modhash_load_module (modhash_t *mh,
+    const char *searchpath, const char *mod);
+
 /* Prepare module at 'path' for starting.
  */
 module_t *module_add (modhash_t *mh, const char *path);
