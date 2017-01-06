@@ -43,7 +43,9 @@ flux_broker_SOURCES = \
 	exec.h \
 	exec.c \
 	ping.h \
-	ping.c
+	ping.c \
+	rusage.h \
+	rusage.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \

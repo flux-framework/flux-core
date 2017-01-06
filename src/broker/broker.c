@@ -40,8 +40,6 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <dlfcn.h>
 #include <argz.h>
 #include <flux/core.h>
@@ -57,7 +55,6 @@
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
@@ -80,6 +77,7 @@
 #include "heaptrace.h"
 #include "exec.h"
 #include "ping.h"
+#include "rusage.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -621,6 +619,8 @@ int main (int argc, char *argv[])
         log_err_exit ("exec_initialize");
     if (ping_initialize (ctx.h) < 0)
         log_err_exit ("ping_initialize");
+    if (rusage_initialize (ctx.h) < 0)
+        log_err_exit ("rusage_initialize");
 
     broker_add_services (&ctx);
 
@@ -1481,22 +1481,6 @@ done:
  ** the response errnum is set to errno, else 0.
  **/
 
-static int cmb_rusage_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *out = NULL;
-    int rc = -1;
-
-    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
-        goto done;
-    rc = flux_respond (ctx->h, *msg, 0, Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-done:
-    Jput (out);
-    return rc;
-}
-
 static int cmb_rmmod_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1778,7 +1762,6 @@ struct internal_service {
 };
 
 static struct internal_service services[] = {
-    { "cmb.rusage",     NULL,   cmb_rusage_cb,      },
     { "cmb.rmmod",      NULL,   cmb_rmmod_cb,       },
     { "cmb.insmod",     NULL,   cmb_insmod_cb,      },
     { "cmb.lsmod",      NULL,   cmb_lsmod_cb,       },
@@ -1790,6 +1773,7 @@ static struct internal_service services[] = {
     { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
     { "cmb.sub",        NULL,   cmb_sub_cb,         },
     { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
+    { "cmb.rusage",     NULL,   requeue_for_service },
     { "cmb.ping",       NULL,   requeue_for_service },
     { "cmb.exec",       NULL,   requeue_for_service },
     { "cmb.exec.signal",NULL,   requeue_for_service },
