@@ -2064,7 +2064,6 @@ static int cmb_disconnect_cb (flux_msg_t **msg, void *arg)
         goto done;
 
     terminate_subprocesses_by_uuid (ctx, sender);
-    logbuf_disconnect (h, sender);
 done:
     if (sender)
         free (sender);
