@@ -49,7 +49,9 @@
 #define PROTO_OFF_BIGINT    4 /* 4 bytes */
 #define PROTO_OFF_BIGINT2   8 /* 4 bytes */
 
+#define FLUX_MSG_MAGIC 0x33321eee
 struct flux_msg {
+    int magic;
     zmsg_t *zmsg;
     json_t *json;
 };
@@ -188,6 +190,7 @@ flux_msg_t *flux_msg_create (int type)
         errno = ENOMEM;
         goto error;
     }
+    msg->magic = FLUX_MSG_MAGIC;
     proto_init (proto, PROTO_SIZE, 0);
     if (proto_set_type (proto, PROTO_SIZE, type) < 0) {
         errno = EINVAL;
@@ -208,9 +211,11 @@ error:
 void flux_msg_destroy (flux_msg_t *msg)
 {
     if (msg) {
+        assert (msg->magic == FLUX_MSG_MAGIC);
         int saved_errno = errno;
         json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
+        msg->magic =~ FLUX_MSG_MAGIC;
         free (msg);
         errno = saved_errno;
     }
@@ -271,7 +276,10 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
     zframe_t *zf;
     int saved_errno;
 
-    if (!msg || !(msg->zmsg = zmsg_new ()))
+    if (!msg)
+        goto nomem;
+    msg->magic = FLUX_MSG_MAGIC;
+    if (!(msg->zmsg = zmsg_new ()))
         goto nomem;
     while (p - (uint8_t *)buf < size) {
         size_t n = *p++;
@@ -1155,14 +1163,18 @@ done:
  */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
 {
+    assert (msg->magic == FLUX_MSG_MAGIC);
     flux_msg_t *cpy = calloc (1, sizeof (*cpy));
-    if (!cpy || !(cpy->zmsg = zmsg_dup (msg->zmsg))) {
-        errno = ENOMEM;
-        goto error;
-    }
+    if (!cpy)
+        goto nomem;
+    cpy->magic = FLUX_MSG_MAGIC;
+    if (!(cpy->zmsg = zmsg_dup (msg->zmsg)))
+        goto nomem;
     if (!payload && flux_msg_set_payload (cpy, 0, NULL, 0) < 0)
         goto error;
     return cpy;
+nomem:
+    errno = ENOMEM;
 error:
     flux_msg_destroy (cpy);
     return NULL;
@@ -1419,6 +1431,7 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
         errno = ENOMEM;
         return NULL;
     }
+    msg->magic = FLUX_MSG_MAGIC;
     msg->zmsg = zmsg;
     return msg;
 }
