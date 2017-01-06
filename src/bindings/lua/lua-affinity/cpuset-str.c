@@ -31,6 +31,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h> /* ULONG_MAX */
+#include <inttypes.h>
 
 char * cpuset_to_cstr (cpu_set_t *mask, char *str)
 {
@@ -119,7 +120,7 @@ int cpuset_to_hex (cpu_set_t *mask, char *str, size_t len)
 
         for (bit = HEXCHUNKSZ - 1; bit >= 0; bit--)
             val = val << 1 | CPU_ISSET (chunk * HEXCHUNKSZ + bit, mask);
-        cnt += snprintf (str + cnt, max (len - cnt, 0), "%s%0*x",
+        cnt += snprintf (str + cnt, max (len - cnt, 0), "%s%0*"PRIx32,
                 sep, HEXCHARSIZE, val);
 
         sep = ",";

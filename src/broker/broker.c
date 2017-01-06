@@ -33,6 +33,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <sys/types.h>
+#include <inttypes.h>
 #include <sys/stat.h>
 #include <sys/prctl.h>
 #include <sys/signalfd.h>
@@ -770,7 +771,7 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 static void update_proctitle (ctx_t *ctx)
 {
     char *s;
-    if (asprintf (&s, "flux-broker-%d", ctx->rank) < 0)
+    if (asprintf (&s, "flux-broker-%"PRIu32, ctx->rank) < 0)
         oom ();
     (void)prctl (PR_SET_NAME, s, 0, 0, 0);
     if (ctx->proctitle)
@@ -786,7 +787,7 @@ static void update_pidfile (ctx_t *ctx)
 
     if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0)
         log_msg_exit ("scratch-directory attribute is not set");
-    pidfile = xasprintf ("%s/%d/broker.pid", scratch_dir, ctx->rank);
+    pidfile = xasprintf ("%s/%"PRIu32"/broker.pid", scratch_dir, ctx->rank);
     if (!(f = fopen (pidfile, "w+")))
         log_err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
@@ -847,12 +848,12 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
 static int create_dummyattrs (ctx_t *ctx)
 {
     char *s;
-    s = xasprintf ("%u", ctx->rank);
+    s = xasprintf ("%"PRIu32, ctx->rank);
     if (flux_attr_fake (ctx->h, "rank", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     free (s);
 
-    s = xasprintf ("%u", ctx->size);
+    s = xasprintf ("%"PRIu32, ctx->size);
     if (flux_attr_fake (ctx->h, "size", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     free (s);
@@ -898,7 +899,7 @@ static int create_rankdir (ctx_t *ctx)
             errno = EINVAL;
             goto done;
         }
-        dir = xasprintf ("%s/%d", scratch_dir, ctx->rank);
+        dir = xasprintf ("%s/%"PRIu32, scratch_dir, ctx->rank);
         if (mkdir (dir, 0700) < 0)
             goto done;
         if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
@@ -1118,7 +1119,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
     /* Set TBON request addr.  We will need any wildcards expanded below.
      */
     if (ctx->shared_ipc_namespace) {
-        char *reqfile = xasprintf ("%s/%d/req", scratch_dir, ctx->rank);
+        char *reqfile = xasprintf ("%s/%"PRIu32"/req", scratch_dir, ctx->rank);
         overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
         cleanup_push_string (cleanup_file, reqfile);
         free (reqfile);
@@ -2762,10 +2763,10 @@ static int subvert_sendmsg_child (ctx_t *ctx, const flux_msg_t *msg,
     char uuid[16];
     int rc = -1;
 
-    snprintf (uuid, sizeof (uuid), "%u", ctx->rank);
+    snprintf (uuid, sizeof (uuid), "%"PRIu32, ctx->rank);
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
-    snprintf (uuid, sizeof (uuid), "%u", nodeid);
+    snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
     if (overlay_sendmsg_child (ctx->overlay, cpy) < 0)
@@ -2854,7 +2855,7 @@ static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
     }
 
     parent = kary_parentof (ctx->tbon.k, ctx->rank);
-    snprintf (puuid, sizeof (puuid), "%u", parent);
+    snprintf (puuid, sizeof (puuid), "%"PRIu32, parent);
 
     /* See if it should go to the parent (backwards!)
      * (receiving end will compensate for reverse ROUTER behavior)

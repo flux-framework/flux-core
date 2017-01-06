@@ -208,7 +208,7 @@ static int jscctx_add_jobid_path (jscctx_t *ctx, int64_t id, const char *path)
     char *s;
     char key [21];
     memset (key, 0, sizeof (key));
-    if (sprintf (key, "%ju", (uintmax_t) id) < 0)
+    if (sprintf (key, "%"PRId64, id) < 0)
         return (-1);
     if (!(s = strdup (path)))
         return (-1);
@@ -226,7 +226,7 @@ static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
     char key [21];
 
     memset (key, 0, sizeof (key));
-    if (sprintf (key, "%ju", (uintmax_t) id) < 0)
+    if (sprintf (key, "%"PRId64, id) < 0)
         return (NULL);
     if ((path = lru_cache_get (ctx->kvs_paths, key)))
         return path;
@@ -273,7 +273,7 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
     char *key = NULL;
 
     if (!aj) return J_FOR_RENT;
-    key = xasprintf ("%"PRId64"", j);
+    key = xasprintf ("%"PRId64, j);
     if ( !(t = ((int *)zhash_lookup (aj, (const char *)key)))) {
         free (key);
         return J_FOR_RENT;
@@ -498,7 +498,7 @@ static int extract_raw_pdescs (flux_t *h, int64_t j, int64_t n, json_object *jcb
 
         eix = build_name_array (eh, cmd, ens);
         /* FIXME: we need a hostname service */
-        hnm = xasprintf ("%"PRId64"", nid);
+        hnm = xasprintf ("%"PRId64, nid);
         hix = build_name_array (hh, hnm, hns);
         po = build_parray_elem (pid, eix, hix);
         json_object_array_add (pa, po);
@@ -931,7 +931,7 @@ static void fixup_newjob_event (flux_t *h, int64_t nj)
     json_object *ss = NULL;
     json_object *jcb = NULL;
     int64_t js = J_NULL;
-    char *key = xasprintf ("%"PRId64"", nj);
+    char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
     /* We fix up ordering problem only when new job
@@ -961,7 +961,7 @@ done:
 static inline void delete_jobinfo (flux_t *h, int64_t jobid)
 {
     jscctx_t *ctx = getctx (h);
-    char *key = xasprintf ("%"PRId64"", jobid);
+    char *key = xasprintf ("%"PRId64, jobid);
     zhash_delete (ctx->active_jobs, key);
     free (key);
 }

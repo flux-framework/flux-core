@@ -28,6 +28,7 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <inttypes.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -158,7 +159,7 @@ void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
 void overlay_set_rank (overlay_t *ov, uint32_t rank)
 {
     ov->rank = rank;
-    snprintf (ov->rankstr, sizeof (ov->rankstr), "%u", rank);
+    snprintf (ov->rankstr, sizeof (ov->rankstr), "%"PRIu32, rank);
 }
 
 void overlay_set_flux (overlay_t *ov, flux_t *h)

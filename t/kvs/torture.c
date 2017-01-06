@@ -32,6 +32,7 @@
 #include <libgen.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <inttypes.h>
 #include <czmq.h>
 #include <flux/core.h>
 
@@ -116,7 +117,7 @@ int main (int argc, char *argv[])
         uint32_t rank;
         if (flux_get_rank (h, &rank) < 0)
             log_err_exit ("flux_get_rank");
-        prefix = xasprintf ("kvstorture-%u", rank);
+        prefix = xasprintf ("kvstorture-%"PRIu32, rank);
     }
 
     if (kvs_unlink (h, prefix) < 0)

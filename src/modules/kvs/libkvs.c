@@ -40,6 +40,7 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <inttypes.h>
 #include <flux/core.h>
 #include <czmq.h>
 
@@ -571,7 +572,7 @@ static kvs_watcher_t *add_watcher (flux_t *h, const char *key, watch_type_t type
     wp->type = type;
     wp->arg = arg;
 
-    char *k = xasprintf ("%u", matchtag);
+    char *k = xasprintf ("%"PRIu32, matchtag);
     zhash_update (ctx->watchers, k, wp);
     zhash_freefn (ctx->watchers, k, destroy_watcher);
     free (k);
@@ -584,7 +585,7 @@ static kvs_watcher_t *add_watcher (flux_t *h, const char *key, watch_type_t type
 static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
 {
     kvsctx_t *ctx = getctx (h);
-    char *k = xasprintf ("%u", matchtag);
+    char *k = xasprintf ("%"PRIu32, matchtag);
     kvs_watcher_t *wp = zhash_lookup (ctx->watchers, k);
     free (k);
     return wp;

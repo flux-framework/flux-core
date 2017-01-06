@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <inttypes.h>
 #include <flux/core.h>
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
@@ -130,7 +131,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     ctx.batchnum = 0;
     if (flux_get_rank (h, &rank) < 0)
         return -1;
-    snprintf (ctx.rankstr, sizeof (ctx.rankstr), "%d", rank);
+    snprintf (ctx.rankstr, sizeof (ctx.rankstr), "%"PRIu32, rank);
     ctx.h = h;
 
     if (!(ctx.r = flux_reduce_create (h, reduce_ops, timeout, &ctx, flags)))

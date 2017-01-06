@@ -31,6 +31,7 @@
 #include <libgen.h>
 #include <pthread.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <czmq.h>
 #include <flux/core.h>
 
@@ -92,7 +93,7 @@ void *thread (void *arg)
         goto done;
     }
     for (i = 0; i < count; i++) {
-        key = xasprintf ("%s.%u.%d.%d", prefix, rank, t->n, i);
+        key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
         if (fopt)
             fence = xasprintf ("%s-%d", prefix, i);
         if (sopt)

@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <inttypes.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 
@@ -138,7 +139,7 @@ done:
                 char s[16] = {0};
                 if (strcmp (ctx->rank, "any"))
                     snprintf (s, sizeof (s), "%s!", ctx->rank);
-                printf ("%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
+                printf ("%s%s pad=%zu seq=%d time=%0.3f ms (%s)\n",
                         s, ctx->topic, strlen (ctx->pad), pdata->seq,
                         tstat_mean (tstat), pdata->route);
             }

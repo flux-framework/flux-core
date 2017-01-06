@@ -93,7 +93,7 @@ static void child (struct popen2_child *p, const char *path, char *const argv[])
     saved_errno = errno;
 error:
     if (write (p->ctl[SP_CHILD], &saved_errno, sizeof (saved_errno)) < 0)
-        fprintf (stderr, "child: write to ctl failed: %m\n");
+        fprintf (stderr, "child: write to ctl failed: %s\n", strerror (errno));
     (void) close (p->ctl[SP_CHILD]);
     exit (0);
 }

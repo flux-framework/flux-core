@@ -27,6 +27,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <inttypes.h>
 #include <czmq.h>
 #include <flux/core.h>
 #include "src/common/libutil/xzmalloc.h"
@@ -893,7 +894,7 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
     else if (!strcmp (name, "content-backing"))
         *val = cache->backing_name;
     else if (!strcmp (name, "content-acct-entries")) {
-        snprintf (s, sizeof (s), "%ld", zhash_size (cache->entries));
+        snprintf (s, sizeof (s), "%zd", zhash_size (cache->entries));
         *val = s;
     } else
         return -1;

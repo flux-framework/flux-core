@@ -30,6 +30,7 @@
 #include <stdbool.h>
 #include <argz.h>
 #include <flux/core.h>
+#include <inttypes.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
@@ -137,8 +138,8 @@ int main (int argc, char *argv[])
         if (!(s = flux_attr_get (h, "tbon.arity", NULL)))
             log_err_exit ("flux_attr_get tbon.arity");
         arity = strtoul (s, NULL, 10);
-        printf ("rank=%d\n", rank);
-        printf ("size=%d\n", size);
+        printf ("rank=%"PRIu32"\n", rank);
+        printf ("size=%"PRIu32"\n", size);
         printf ("arity=%d\n", arity);
     } else
         usage ();

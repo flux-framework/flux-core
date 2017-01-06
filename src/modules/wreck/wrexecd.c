@@ -37,6 +37,7 @@
 #include <sys/syslog.h>
 #include <envz.h>
 #include <sys/ptrace.h>
+#include <inttypes.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -172,7 +173,8 @@ static flux_t *prog_ctx_flux_handle (struct prog_ctx *ctx)
     if (!t->f) {
         char name [128];
         t->f = flux_open (NULL, 0);
-        snprintf (name, sizeof (name) - 1, "lwj.%ld.%d", ctx->id, t->globalid);
+        snprintf (name, sizeof (name) - 1, "lwj.%"PRId64".%d",
+		  ctx->id, t->globalid);
         flux_log_set_appname (t->f, name);
     }
     return (t->f);
@@ -188,7 +190,7 @@ static int archive_lwj (struct prog_ctx *ctx)
 
     wlog_msg (ctx, "archiving lwj %lu", ctx->id);
 
-    if (asprintf (&link, "lwj-complete.%d.%lu", ctx->epoch, ctx->id) < 0) {
+    if (asprintf (&link, "lwj-complete.%d.%"PRId64, ctx->epoch, ctx->id) < 0) {
         flux_log_error (ctx->flux, "archive_lwj: asprintf");
         goto out;
     }
@@ -894,7 +896,8 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
                 prog_ctx_setopt (ctx, opt, json_object_get_string (v));
                 break;
             case json_type_int:
-                snprintf (s, sizeof (s) -1, "%ld", json_object_get_int64 (v));
+                snprintf (s, sizeof (s) -1, "%"PRId64,
+			  json_object_get_int64 (v));
                 prog_ctx_setopt (ctx, opt, s);
                 break;
             case json_type_boolean:
@@ -1017,7 +1020,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     if (!(ctx->flux = flux_open (NULL, 0)))
         wlog_fatal (ctx, 1, "flux_open");
 
-    snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
+    snprintf (name, sizeof (name) - 1, "lwj.%"PRId64, ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
     if (kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
@@ -1122,7 +1125,7 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
     char *json = NULL;
     char *topic = NULL;
 
-    if ((asprintf (&json, "{\"lwj\":%ld, \"kvs_path\": \"%s\"}",
+    if ((asprintf (&json, "{\"lwj\":%"PRId64", \"kvs_path\": \"%s\"}",
                    ctx->id, ctx->kvspath) < 0)
         || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
         wlog_err (ctx, "failed to create state change event: %s", state);
@@ -1173,7 +1176,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 int rexec_state_change (struct prog_ctx *ctx, const char *state)
 {
     char *name;
-    if (asprintf (&name, "lwj.%ju.%s", ctx->id, state) < 0)
+    if (asprintf (&name, "lwj.%"PRId64".%s", ctx->id, state) < 0)
         wlog_fatal (ctx, 1, "rexec_state_change: asprintf: %s",
                     flux_strerror (errno));
 
@@ -1909,7 +1912,7 @@ int rexecd_init (struct prog_ctx *ctx)
 {
     int errnum = 0;
     char *name = NULL;
-    int rc = asprintf (&name, "lwj.%ju.init", (uintmax_t) ctx->id);
+    int rc = asprintf (&name, "lwj.%"PRId64".init", (uintmax_t) ctx->id);
     if (rc < 0) {
         errno = ENOMEM;
         wlog_fatal (ctx, 1, "rexecd_init: asprintf: %s", flux_strerror (errno));
@@ -2116,7 +2119,7 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
 {
     int i;
 
-    if (asprintf (&ctx->topic, "wreck.%ld.", ctx->id) < 0)
+    if (asprintf (&ctx->topic, "wreck.%"PRId64".", ctx->id) < 0)
            wlog_fatal (ctx, 1, "failed to create topic string: %s",
                       flux_strerror (errno));
 
@@ -2206,7 +2209,7 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
 
 static void wreck_barrier_next (struct prog_ctx *ctx)
 {
-    snprintf (ctx->barrier_name, sizeof (ctx->barrier_name), "lwj.%ju.%u",
+    snprintf (ctx->barrier_name, sizeof (ctx->barrier_name), "lwj.%"PRId64".%u",
               ctx->id, ctx->barrier_sequence++);
 }
 
