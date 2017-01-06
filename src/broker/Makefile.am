@@ -41,8 +41,9 @@ flux_broker_SOURCES = \
 	heaptrace.h \
 	heaptrace.c \
 	exec.h \
-	exec.c
-
+	exec.c \
+	ping.h \
+	ping.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \

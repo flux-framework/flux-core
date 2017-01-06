@@ -79,6 +79,7 @@
 #include "runlevel.h"
 #include "heaptrace.h"
 #include "exec.h"
+#include "ping.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -618,6 +619,8 @@ int main (int argc, char *argv[])
         log_err_exit ("sequence_hash_initialize");
     if (exec_initialize (ctx.h, ctx.sm, ctx.rank, ctx.attrs) < 0)
         log_err_exit ("exec_initialize");
+    if (ping_initialize (ctx.h) < 0)
+        log_err_exit ("ping_initialize");
 
     broker_add_services (&ctx);
 
@@ -1618,36 +1621,6 @@ static int cmb_lspeer_cb (flux_msg_t **msg, void *arg)
     return rc;
 }
 
-static int cmb_ping_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *inout = NULL;
-    const char *json_str;
-    char *s = NULL;
-    char *route = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(inout = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(s = flux_msg_get_route_string (*msg)))
-        goto done;
-    route = xasprintf ("%s!%u", s, ctx->rank);
-    Jadd_str (inout, "route", route);
-    rc = flux_respond (ctx->h, *msg, 0, Jtostr (inout));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-done:
-    if (s)
-        free (s);
-    if (route)
-        free (route);
-    return rc;
-}
-
 static int cmb_reparent_cb (flux_msg_t **msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1817,6 +1790,7 @@ static struct internal_service services[] = {
     { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
     { "cmb.sub",        NULL,   cmb_sub_cb,         },
     { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
+    { "cmb.ping",       NULL,   requeue_for_service },
     { "cmb.exec",       NULL,   requeue_for_service },
     { "cmb.exec.signal",NULL,   requeue_for_service },
     { "cmb.exec.write", NULL,   requeue_for_service },
