@@ -29,6 +29,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
@@ -75,6 +76,7 @@ int main (int argc, char *argv[])
     bool Ropt = false;
     double scale = 1.0;
     json_type type = json_type_object;
+    char *endptr;
 
     log_init ("flux-stats");
 
@@ -84,7 +86,10 @@ int main (int argc, char *argv[])
                 usage ();
                 break;
             case 'r': /* --rank */
-                nodeid = strtoul (optarg, NULL, 10);
+                errno = 0;
+                nodeid = strtoul (optarg, &endptr, 10);
+                if (errno || *endptr != '\0')
+                    usage();
                 break;
             case 'c': /* --clear */
                 copt = true;
@@ -99,7 +104,10 @@ int main (int argc, char *argv[])
                 objname = optarg;
                 break;
             case 's': /* --scale N */
-                scale = strtod (optarg, NULL);
+                errno = 0;
+                scale = strtod (optarg, &endptr);
+                if (errno || *endptr != '\0')
+                    usage();
                 break;
             case 't': /* --type TYPE */
                 if (!strcasecmp (optarg, "int"))
