@@ -157,7 +157,7 @@ typedef struct {
     struct subprocess *init_shell;
 } ctx_t;
 
-static int broker_event_sendmsg (ctx_t *ctx, flux_msg_t **msg);
+static int broker_event_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
                                    request_error_mode_t errmode);
@@ -1852,7 +1852,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
-            (void)broker_event_sendmsg (ctx, &msg);
+            (void)broker_event_sendmsg (ctx, msg);
             break;
     }
 done:
@@ -1862,13 +1862,13 @@ done:
 }
 
 /* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
-static int handle_event (ctx_t *ctx, flux_msg_t **msg)
+static int handle_event (ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t seq;
     const char *topic, *s;
 
-    if (flux_msg_get_seq (*msg, &seq) < 0
-            || flux_msg_get_topic (*msg, &topic) < 0) {
+    if (flux_msg_get_seq (msg, &seq) < 0
+            || flux_msg_get_topic (msg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
@@ -1886,21 +1886,21 @@ static int handle_event (ctx_t *ctx, flux_msg_t **msg)
     }
     ctx->event_recv_seq = seq;
 
-    (void)overlay_mcast_child (ctx->overlay, *msg);
-    (void)overlay_sendmsg_relay (ctx->overlay, *msg);
+    (void)overlay_mcast_child (ctx->overlay, msg);
+    (void)overlay_sendmsg_relay (ctx->overlay, msg);
 
     /* Internal services may install message handlers for events.
      */
     s = zlist_first (ctx->subscriptions);
     while (s) {
         if (!strncmp (s, topic, strlen (s))) {
-            if (flux_requeue (ctx->h, *msg, FLUX_RQ_TAIL) < 0)
+            if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
                 flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
             break;
         }
         s = zlist_next (ctx->subscriptions);
     }
-    return module_event_mcast (ctx->modhash, *msg);
+    return module_event_mcast (ctx->modhash, msg);
 }
 
 /* helper for parent_cb */
@@ -1947,7 +1947,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event");
                 goto done;
             }
-            if (handle_event (ctx, &msg) < 0)
+            if (handle_event (ctx, msg) < 0)
                 goto done;
             break;
         case FLUX_MSGTYPE_REQUEST:
@@ -1983,7 +1983,7 @@ static void module_cb (module_t *p, void *arg)
             (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, &msg) < 0) {
+            if (broker_event_sendmsg (ctx, msg) < 0) {
                 flux_log_error (ctx->h, "%s(%s): broker_event_sendmsg %s",
                                 __FUNCTION__, module_get_name (p),
                                 flux_msg_typestr (type));
@@ -2060,7 +2060,7 @@ static void event_cb (overlay_t *ov, void *sock, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_EVENT:
-            if (handle_event (ctx, &msg) < 0)
+            if (handle_event (ctx, msg) < 0)
                 goto done;
             break;
         default:
@@ -2223,38 +2223,41 @@ done:
  * Rank 0 doesn't (generally) receive the events it transmits so we have
  * to "loop back" here via handle_event().
  */
-static int broker_event_sendmsg (ctx_t *ctx, flux_msg_t **msg)
+static int broker_event_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 {
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
     if (ctx->rank > 0) {
-        if (flux_msg_enable_route (*msg) < 0)
+        if (flux_msg_enable_route (cpy) < 0)
             goto done;
-        rc = overlay_sendmsg_parent (ctx->overlay, *msg);
+        rc = overlay_sendmsg_parent (ctx->overlay, cpy);
     } else {
-        if (flux_msg_clear_route (*msg) < 0)
+        if (flux_msg_clear_route (cpy) < 0)
             goto done;
-        if (flux_msg_set_seq (*msg, ++ctx->event_send_seq) < 0)
+        if (flux_msg_set_seq (cpy, ++ctx->event_send_seq) < 0)
             goto done;
-        if (overlay_sendmsg_event (ctx->overlay, *msg) < 0)
+        if (overlay_sendmsg_event (ctx->overlay, cpy) < 0)
             goto done;
-        rc = handle_event (ctx, msg);
+        rc = handle_event (ctx, cpy);
     }
 done:
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    flux_msg_destroy (cpy);
     return rc;
 }
 
 /**
- ** Broker's internal, minimal flux_t implementation.
+ ** Broker's internal flux_t implementation
+ ** N.B. recv() method is missing because messages are "received"
+ ** when routing logic calls flux_requeue().
  **/
 
 static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     int type;
-    flux_msg_t *cpy = NULL;
     int rc = -1;
 
     (void)snoop_sendmsg (ctx->snoop, msg);
@@ -2269,9 +2272,7 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
             rc = broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            rc = broker_event_sendmsg (ctx, &cpy);
+            rc = broker_event_sendmsg (ctx, msg);
             break;
         default:
             errno = EINVAL;
