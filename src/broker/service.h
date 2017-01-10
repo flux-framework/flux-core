@@ -3,7 +3,7 @@
 
 typedef struct svc_struct svc_t;
 typedef struct svchash_struct svchash_t;
-typedef int (*svc_cb_f)(flux_msg_t **msg, void *arg);
+typedef int (*svc_cb_f)(const flux_msg_t *msg, void *arg);
 
 svchash_t *svchash_create (void);
 void svchash_destroy (svchash_t *sh);
@@ -12,7 +12,7 @@ svc_t *svc_add (svchash_t *sh, const char *name, const char *alias,
                 svc_cb_f cb, void *arg);
 void svc_remove (svchash_t *sh, const char *name);
 
-int svc_sendmsg (svchash_t *sh, flux_msg_t **msg);
+int svc_sendmsg (svchash_t *sh, const flux_msg_t *msg);
 
 #endif /* !_BROKER_SERVICE_H */
 

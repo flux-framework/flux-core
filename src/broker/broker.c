@@ -1348,12 +1348,10 @@ static bool nodeset_member (const char *s, uint32_t rank)
     return member;
 }
 
-static int mod_svc_cb (flux_msg_t **msg, void *arg)
+static int mod_svc_cb (const flux_msg_t *msg, void *arg)
 {
     module_t *p = arg;
-    int rc = module_sendmsg (p, *msg);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    int rc = module_sendmsg (p, msg);
     return rc;
 }
 
@@ -1744,13 +1742,11 @@ error:
     Jput (in);
 }
 
-static int route_to_handle (flux_msg_t **msg, void *arg)
+static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    if (flux_requeue (ctx->h, *msg, FLUX_RQ_TAIL) < 0)
+    if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
         flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
     return 0;
 }
 
@@ -2146,8 +2142,11 @@ static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
             *msg = NULL;
         }
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
-        rc = svc_sendmsg (ctx->services, msg);
-        if (rc < 0 && errno == ENOSYS) {
+        rc = svc_sendmsg (ctx->services, *msg);
+        if (rc == 0) {
+            flux_msg_destroy (*msg);
+            *msg = NULL;
+        } else if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, *msg);
             if (rc < 0 && errno == EHOSTUNREACH)
                 errno = ENOSYS;
@@ -2157,8 +2156,11 @@ static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
             }
         }
     } else if (nodeid == FLUX_NODEID_ANY) {
-        rc = svc_sendmsg (ctx->services, msg);
-        if (rc < 0 && errno == ENOSYS) {
+        rc = svc_sendmsg (ctx->services, *msg);
+        if (rc == 0) {
+            flux_msg_destroy (*msg);
+            *msg = NULL;
+        } else if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, *msg);
             if (rc < 0 && errno == EHOSTUNREACH)
                 errno = ENOSYS;
@@ -2168,7 +2170,11 @@ static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
             }
         }
     } else if (nodeid == ctx->rank) {
-        rc = svc_sendmsg (ctx->services, msg);
+        rc = svc_sendmsg (ctx->services, *msg);
+        if (rc == 0) {
+            flux_msg_destroy (*msg);
+            *msg = NULL;
+        }
     } else if ((gw = kary_child_route (ctx->tbon.k, ctx->size,
                                        ctx->rank, nodeid)) != KARY_NONE) {
         rc = subvert_sendmsg_child (ctx, *msg, gw);
