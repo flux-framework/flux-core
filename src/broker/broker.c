@@ -262,7 +262,7 @@ int main (int argc, char *argv[])
     int security_clr = 0;
     int security_set = 0;
     int e;
-
+    char *endptr;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -323,7 +323,10 @@ int main (int argc, char *argv[])
                     log_err_exit ("setting conf.module_path attribute");
                 break;
             case 'k':   /* --k-ary k */
-                ctx.tbon.k = strtoul (optarg, NULL, 10);
+                errno = 0;
+                ctx.tbon.k = strtoul (optarg, &endptr, 10);
+                if (errno || *endptr != '\0')
+                    log_err_exit ("k-ary '%s'", optarg);
                 if (ctx.tbon.k < 1)
                     usage ();
                 break;
@@ -332,7 +335,12 @@ int main (int argc, char *argv[])
                     log_err_exit ("heartrate `%s'", optarg);
                 break;
             case 'g':   /* --shutdown-grace SECS */
-                ctx.shutdown_grace = strtod (optarg, NULL);
+                errno = 0;
+                ctx.shutdown_grace = strtod (optarg, &endptr);
+                if (errno || *endptr != '\0')
+                    log_err_exit ("shutdown-grace '%s'", optarg);
+                if (ctx.shutdown_grace < 0)
+                    usage ();
                 break;
             case 'E': /* --enable-epgm */
                 ctx.enable_epgm = true;
@@ -594,7 +602,7 @@ int main (int argc, char *argv[])
             log_err_exit ("runlevel_set_rc 1");
         if (runlevel_set_rc (ctx.runlevel, 2, rc2, rc2_len, uri) < 0)
             log_err_exit ("runlevel_set_rc 2");
-        if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc1 ? strlen (rc3) + 1 : 0, uri) < 0)
+        if (runlevel_set_rc (ctx.runlevel, 3, rc3, rc3 ? strlen (rc3) + 1 : 0, uri) < 0)
             log_err_exit ("runlevel_set_rc 3");
     }
 
