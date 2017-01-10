@@ -86,6 +86,11 @@
 
 const char *default_modules = "connector-local";
 
+typedef enum {
+    ERROR_MODE_RESPOND,
+    ERROR_MODE_RETURN,
+} request_error_mode_t;
+
 struct tbon_param {
     int k;
     int level;
@@ -154,7 +159,8 @@ typedef struct {
 
 static int broker_event_sendmsg (ctx_t *ctx, flux_msg_t **msg);
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg);
+static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
+                                   request_error_mode_t errmode);
 
 static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
@@ -1469,14 +1475,6 @@ done:
 
 /**
  ** Built-in services
- **
- ** Requests received from modules/peers via their respective reactor
- ** callbacks are sent on via broker_request_sendmsg().  The broker handle
- ** then dispatches locally matched ones to their svc handlers.
- **
- ** If the request msg is not destroyed by the service handler, an
- ** a no-payload response is generated.  If the handler returned -1,
- ** the response errnum is set to errno, else 0.
  **/
 
 static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
@@ -1821,7 +1819,6 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
     ctx_t *ctx = arg;
     int type;
     char *uuid = NULL;
-    int rc;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
 
     if (!msg)
@@ -1836,9 +1833,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
             (void)snoop_sendmsg (ctx->snoop, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &msg);
-            if (msg)
-                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
+            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* TRICKY:  Fix up ROUTER socket used in reverse direction.
@@ -1857,7 +1852,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, &msg);
+            (void)broker_event_sendmsg (ctx, &msg);
             break;
     }
 done:
@@ -1932,7 +1927,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
-    int type, rc;
+    int type;
 
     if (!msg)
         goto done;
@@ -1956,11 +1951,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &msg);
-            if (msg)
-                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
-            if (rc < 0)
-                goto done;
+            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
@@ -1977,7 +1968,7 @@ static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
     flux_msg_t *msg = module_recvmsg (p);
-    int type, rc;
+    int type;
     int ka_errnum, ka_status;
 
     if (!msg)
@@ -1989,9 +1980,7 @@ static void module_cb (module_t *p, void *arg)
             (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &msg);
-            if (msg)
-                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
+            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, &msg) < 0) {
@@ -2127,72 +2116,67 @@ done:
     return rc;
 }
 
-static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
+/* Select error mode for local errors (routing, bad msg, etc) with 'errmode'.
+ *
+ * ERROR_MODE_RESPOND:
+ *    any local errors such as message decoding or routing failure
+ *    trigger a response message, and function returns 0.
+ * ERROR_MODE_RETURN:
+ *    any local errors do not trigger a response, and function
+ *    returns -1 with errno set.
+ */
+static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
+                                   request_error_mode_t errmode)
 {
     uint32_t nodeid, gw;
     int flags;
     int rc = -1;
 
-    if (flux_msg_get_nodeid (*msg, &nodeid, &flags) < 0)
-        goto done;
+    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+        goto error;
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
-        rc = overlay_sendmsg_parent (ctx->overlay, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = overlay_sendmsg_parent (ctx->overlay, msg);
+        if (rc < 0)
+            goto error;
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
-        rc = svc_sendmsg (ctx->services, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        } else if (rc < 0 && errno == ENOSYS) {
-            rc = overlay_sendmsg_parent (ctx->overlay, *msg);
+        rc = svc_sendmsg (ctx->services, msg);
+        if (rc < 0 && errno == ENOSYS) {
+            rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
                 errno = ENOSYS;
-            else {
-                flux_msg_destroy (*msg);
-                *msg = NULL;
-            }
         }
+        if (rc < 0)
+            goto error;
     } else if (nodeid == FLUX_NODEID_ANY) {
-        rc = svc_sendmsg (ctx->services, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        } else if (rc < 0 && errno == ENOSYS) {
-            rc = overlay_sendmsg_parent (ctx->overlay, *msg);
+        rc = svc_sendmsg (ctx->services, msg);
+        if (rc < 0 && errno == ENOSYS) {
+            rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
                 errno = ENOSYS;
-            else {
-                flux_msg_destroy (*msg);
-                *msg = NULL;
-            }
         }
+        if (rc < 0)
+            goto error;
     } else if (nodeid == ctx->rank) {
-        rc = svc_sendmsg (ctx->services, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = svc_sendmsg (ctx->services, msg);
+        if (rc < 0)
+            goto error;
     } else if ((gw = kary_child_route (ctx->tbon.k, ctx->size,
                                        ctx->rank, nodeid)) != KARY_NONE) {
-        rc = subvert_sendmsg_child (ctx, *msg, gw);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = subvert_sendmsg_child (ctx, msg, gw);
+        if (rc < 0)
+            goto error;
     } else {
-        rc = overlay_sendmsg_parent (ctx->overlay, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = overlay_sendmsg_parent (ctx->overlay, msg);
+        if (rc < 0)
+            goto error;
     }
-done:
-    /* N.B. don't destroy msg on error as we use it to send errnum reply.
-     */
-    return rc;
+    return 0;
+error:
+    if (errmode == ERROR_MODE_RETURN)
+        return -1;
+    /* ERROR_MODE_RESPOND */
+    (void)flux_respond (ctx->h, msg, errno, NULL);
+    return 0;
 }
 
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
@@ -2279,9 +2263,7 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            rc = broker_request_sendmsg (ctx, &cpy);
+            rc = broker_request_sendmsg (ctx, msg, ERROR_MODE_RETURN);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             rc = broker_response_sendmsg (ctx, msg);
