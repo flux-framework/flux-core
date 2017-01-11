@@ -39,7 +39,8 @@ const fop_class_t *fop_class_c ();
 // utility functions
 fop_object_t *fop_cast_object (void *o);
 void *fop_cast (const fop_class_t *c, void *o);
-const fop_class_t *fop_get_class (const void *o);
+const void *fop_get_class (const void *o);
+const void *fop_get_class_checked (const fop_class_t *c, const void *o);
 bool fop_is_a (const void *o, const fop_class_t *c);
 bool fop_is_instance_of (const void *o, const fop_class_t *c);
 

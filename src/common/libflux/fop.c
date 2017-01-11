@@ -75,6 +75,12 @@ const fop_class_t *fop_get_class (const void *o)
     return obj ? obj->fclass : NULL;
 }
 
+const fop_class_t *fop_get_class_checked (const fop_class_t *c, const void *o)
+{
+    struct object *obj = fop_cast (c, (void *)o);
+    return obj ? obj->fclass : NULL;
+}
+
 bool fop_is_a (const void *o, const fop_class_t *c)
 {
     struct object *obj = fop_cast_object ((void *)o);
