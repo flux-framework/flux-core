@@ -1,0 +1,46 @@
+#ifndef __FLUX_CORE_FOP_PROT_H
+#define __FLUX_CORE_FOP_PROT_H
+#define FOP_PROT
+#include "fop.h"
+#undef FOP_PROT
+
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+
+struct object {
+    int32_t magic;
+    int32_t refcount;
+    const fop_class_t *fclass;
+};
+
+typedef int (*self_only_i_f) (void *);
+typedef void *(*self_only_p_f) (void *);
+typedef void *(*new_f) (const fop_class_t *, va_list *);
+typedef void *(*init_f) (void *, va_list *);
+typedef int (*putter_f) (void *, FILE *);
+
+struct fclass_inner {
+    size_t tags_len;
+    size_t tags_cap;
+    struct fop_method_record * tags_by_selector;
+    bool sorted;
+};
+
+struct fclass {
+    struct object _;  // A class is also an object
+    const char *name;
+    const fop_class_t *super;
+    size_t size;
+    struct fclass_inner inner;
+
+    new_f new;
+    init_f initialize;
+    self_only_p_f finalize;
+    putter_f describe;
+    putter_f represent;
+    self_only_i_f retain;
+    self_only_i_f release;
+};
+
+#endif /* __FLUX_CORE_FOP_PROT_H */
