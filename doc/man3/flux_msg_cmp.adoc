@@ -15,7 +15,6 @@ SYNOPSIS
  struct flux_match {
      int typemask;
      uint32_t matchtag;
-     int bsize;
      char *topic_glob;
  };
 
@@ -29,12 +28,10 @@ DESCRIPTION
 If _match.typemask_ is nonzero, the type of the message must match
 one of the types in the mask.
 
-If _match.matchtag_ is not FLUX_MATCHTAG_NONE, and _match.bsize_ == 0 or 1,
-then the message matchtag must be equal to _match.matchtag_.
-
-If _match.matchtag_ is not FLUX_MATCHTAG_NONE, and _match.bsize_ > 1,
-then the message matchtag must be within the range of _match.matchtag_
-and _match.matchtag_ + _match.bsize_ - 1 (inclusive).
+If _match.matchtag_ is not FLUX_MATCHTAG_NONE, and the message
+matchtag group is nonzero, match on the group bits only (as defined by
+FLUX_MATCHTAG_GROUP_MASK).  If the matchtag group is zero, match on
+non-group bits only.
 
 If _match.topic_glob_ is not NULL, then the message topic string must
 match _match.topic_glob_ according to the rules of shell wildcards.
