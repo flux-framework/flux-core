@@ -87,6 +87,13 @@ OPTIONS
 	`--input=file.in` will use `file.in` as input for all tasks, and
 	`--input=0` will send stdin to task 0 only.
 
+--walltime='N[SUFFIX]'::
+-T 'N[SUFFIX]'::
+        Set max job walltime to N seconds. Optional suffix may be 's'
+        for seconds (default), 'm' for minutes, 'h' for hours or 'd'
+        for days.  N may be an arbitrary floating point number, but
+        will be rounded up to nearest second.
+
 --options='options,...'::
 -o 'options,...'::
 	Apply extended job options to the current execution. Examples of
@@ -136,6 +143,19 @@ via commas. Currently available options include:
 	Start tasks in a STOPPED state waiting for attach from a
 	debugger. This option is provided for use with parallel
 	debuggers such as TotalView.
+
+'no-aggregate-task-exit'::
+        Do not use aggregator for task exit messages.  This option
+        will result in each task's exit status being commited
+        separately into the kvs.
+
+'no-pmi-server'::
+        Do not start simple pmi server.  This option can be used to
+        not launch the pmi server if a non-MPI job is being run.
+
+'trace-pmi-server'::
+        Log simple pmi server protocol exchange.  This option is used
+        for debugging.
 
 OPERATION
 ----------
