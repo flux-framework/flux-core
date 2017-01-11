@@ -18,17 +18,17 @@ static struct fclass __Class;
 static struct fclass __Object;
 
 // Statically bound utility functions
-fop_object_t *fop_cast_object (void *o)
+fop_object_t *fop_cast_object (const void *o)
 {
     if (!o)
         return NULL;
-    struct object *obj = o;
+    const struct object *obj = o;
     if (obj->magic != (int)magic)
         return NULL;
-    return o;
+    return (struct object *)o;
 }
 
-void *fop_cast (const fop_class_t *c, void *o)
+void *fop_cast (const fop_class_t *c, const void *o)
 {
     // TODO: lots of extra error checking can go here
     struct object *obj = fop_cast_object (o);
@@ -36,7 +36,7 @@ void *fop_cast (const fop_class_t *c, void *o)
         return NULL;
     // If we've gotten this far, it has to descend from object
     if (c == fop_object_c ())
-        return o;
+        return (void *)o;
     const fop_class_t *cur = obj->fclass;
     while (cur != c) {
         if (cur == fop_object_c ())
@@ -44,7 +44,7 @@ void *fop_cast (const fop_class_t *c, void *o)
         cur = cur->super;
     }
 
-    return o;
+    return (void *)o;
 }
 
 const void *fop_get_class (const void *o)
@@ -57,6 +57,13 @@ const void *fop_get_class_checked (const void *o, const fop_class_t *c)
 {
     struct object *obj = fop_cast (c, (void *)o);
     return obj ? obj->fclass : NULL;
+}
+
+const fop_class_t *fop_super (const fop_class_t *c)
+{
+    c = fop_cast (fop_class_c (), c);
+    assert(c && c->super);
+    return c->super;
 }
 
 bool fop_is_a (const void *o, const fop_class_t *c)
@@ -110,12 +117,27 @@ void *fop_initialize (void *self, va_list *app)
     assert (c);
     return c->initialize ? c->initialize (self, app) : self;
 };
+void *fop_initialize_super (const fop_class_t *c, void *self, va_list *app)
+{
+    if (!self)
+        return NULL;
+    const fop_class_t *superclass = fop_super (c);
+    assert (superclass);
+    return superclass->initialize ? superclass->initialize (self, app) : self;
+};
 void fop_finalize (void *o)
 {
     if (!o) return;
     const fop_class_t *c = fop_get_class (o);
     if (c && c->finalize )
         c->finalize (o);
+};
+void fop_finalize_super (const fop_class_t *c, void *o)
+{
+    if (!o) return;
+    const fop_class_t *superclass = fop_super (c);
+    if (superclass && superclass->finalize )
+        superclass->finalize (o);
 };
 void fop_retain (void *o)
 {
@@ -196,9 +218,6 @@ void object_release (void *o)
     }
     assert (obj->refcount > 0);
     if (--obj->refcount == 0) {
-        fprintf (stderr, "finalizing: ");
-        fop_describe (o, stderr);
-        fprintf (stderr, "\n");
         fop_finalize (o);
         free (o);
     }
@@ -226,9 +245,9 @@ void *class_initialize (fop *c_in, va_list *app)
     size_t offset = offsetof (fop_class_t, new);
 
     const fop_class_t *super_metaclass = fop_get_class (super);
-    fprintf (stderr, "inheriting %s(%zu) from %s(%zu), meta %s(%zu)\n", name,
-             size, super->name, super->size, super_metaclass->name,
-             super_metaclass->size);
+    /* fprintf (stderr, "inheriting %s(%zu) from %s(%zu), meta %s(%zu)\n", name, */
+    /*          size, super->name, super->size, super_metaclass->name, */
+    /*          super_metaclass->size); */
     if (super != NULL && super != c && super->size) {
         fop_dynamic_class_init (c, super);
         // inheritence...
