@@ -7,26 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct geom {
-    fop_object_t _;
-};
-
+struct geom;
+// geom_class metaclass
 struct geomClass {
     fop_class_t _;
     double (*area) (struct geom *);
     double (*perim) (struct geom *);
 };
-
-struct rect {
-    struct geom _;
-    double w, h;
-};
-struct circle {
-    struct geom _;
-    double r;
-};
-
-// geom_class metaclass
 const fop_class_t *geom_class_c ()
 {
     static fop_class_t *cls = NULL;
@@ -39,6 +26,9 @@ const fop_class_t *geom_class_c ()
 }
 
 // abstract class geom, instance of metaclass geom_class
+struct geom {
+    fop_object_t _;
+};
 double geom_area (struct geom *self);
 double geom_perim (struct geom *self);
 fop_class_t *geom_c ()
@@ -66,6 +56,10 @@ double geom_perim (struct geom *o)
 }
 
 // class rect, instance of metaclass geom_class, child of geom
+struct rect {
+    struct geom _;
+    double w, h;
+};
 const fop_class_t *rect_c ();
 void *rect_init (void *_self, va_list *app)
 {
@@ -100,6 +94,10 @@ const fop_class_t *rect_c ()
 }
 
 // class rect, instance of metaclass geom_class, child of geom
+struct circle {
+    struct geom _;
+    double r;
+};
 const fop_class_t *circle_c ();
 double circle_area (struct geom *_c)
 {
