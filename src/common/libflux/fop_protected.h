@@ -1,8 +1,6 @@
 #ifndef __FLUX_CORE_FOP_PROT_H
 #define __FLUX_CORE_FOP_PROT_H
-#define FOP_PROT
 #include "fop.h"
-#undef FOP_PROT
 
 #include <stdarg.h>
 #include <stdint.h>
@@ -14,11 +12,12 @@ struct object {
     const fop_class_t *fclass;
 };
 
+typedef void (*self_only_v_f) (void *);
 typedef int (*self_only_i_f) (void *);
-typedef void *(*self_only_p_f) (void *);
-typedef void *(*new_f) (const fop_class_t *, va_list *);
-typedef void *(*init_f) (void *, va_list *);
-typedef int (*putter_f) (void *, FILE *);
+typedef fop *(*self_only_p_f) (fop *);
+typedef fop *(*new_f) (const fop_class_t *, va_list *);
+typedef fop *(*init_f) (fop *, va_list *);
+typedef fop *(*putter_f) (fop *, FILE *);
 
 struct fclass_inner {
     size_t tags_len;
@@ -36,11 +35,11 @@ struct fclass {
 
     new_f new;
     init_f initialize;
-    self_only_p_f finalize;
+    self_only_v_f finalize;
     putter_f describe;
     putter_f represent;
-    self_only_i_f retain;
-    self_only_i_f release;
+    self_only_v_f retain;
+    self_only_v_f release;
 };
 
 #endif /* __FLUX_CORE_FOP_PROT_H */
