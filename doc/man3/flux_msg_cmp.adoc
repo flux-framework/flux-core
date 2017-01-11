@@ -24,7 +24,7 @@ SYNOPSIS
 DESCRIPTION
 -----------
 
-`flux_msg_match()` compares _msg_ to _match_ criteria.
+`flux_msg_cmp()` compares _msg_ to _match_ criteria.
 
 If _match.typemask_ is nonzero, the type of the message must match
 one of the types in the mask.
