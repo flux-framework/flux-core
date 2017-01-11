@@ -27,8 +27,7 @@ can be received.
 ....
 struct flux_match {
     int typemask;      // bitmask of matching message types
-    uint32_t matchtag; // matchtag block begin
-    int bsize;         // matchtag block size
+    uint32_t matchtag; // matchtag
     char *topic_glob;  // glob matching topic string
 };
 ....
@@ -39,6 +38,8 @@ Match any message.
 
 FLUX_MATCH_EVENT::
 Match any event message.
+
+For additional details on how to use _match_, see flux_msg_cmp(3).
 
 _flags_ is the logical "or" of zero or more of the following flags:
 
@@ -119,4 +120,4 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_open(3), flux_send(3), flux_requeue(3)
+flux_open(3), flux_send(3), flux_requeue(3), flux_msg_cmp(3)
