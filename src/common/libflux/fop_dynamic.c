@@ -25,8 +25,80 @@ static int cmp_frm_sel (const void *l, const void *r)
     return 1;
 }
 
+static int cmp_interface (const void *key, const void *member)
+{
+    const fop_class_t *k = key;
+    return fop_cast (k, member) == 0;
+}
+
+const fop_class_t *fop_interface_c ()
+{
+    static fop_class_t *cls = NULL;
+    if (!cls) {
+        cls = fop_new (fop_class_c (), "Interface", fop_class_c (),
+                sizeof (fop_class_t));
+        free (cls->inner.tags_by_selector);
+        cls->inner.tags_by_selector = NULL;
+        cls->inner.tags_len = 0;
+    }
+    return cls;
+}
+
+const void *fop_get_interface (const fop *o, const fop_class_t *interface)
+{
+    // TODO: Make interfaces un-allocatable, not really classes, just
+    // interfaces
+    const fop_class_t *c = fop_get_class (o);
+    fop_describe ((void*)c, stderr);
+    fop_describe ((void*)interface, stderr);
+
+    interface = fop_cast (fop_class_c (), interface);
+    if (!c || !interface)
+        return NULL;
+    size_t nel = c->inner.interfaces_len;
+    const fop_class_t *ret =
+            bsearch (&interface, c->inner.interfaces, nel,
+                     sizeof (void *), cmp_interface);
+    if (ret)
+        return ret;
+
+    ret = fop_new (interface, c->name, interface, 0);
+
+    for (size_t i = 0; i < interface->inner.tags_len; ++i) {
+        fop_vv_f fn = fop_get_method (c, interface->inner.tags_by_selector[i].tag);
+        assert (fn);
+
+        fop_vv_f *target = (((void *)ret) + interface->inner.tags_by_selector[i].offset);
+        *target = fn;
+    }
+
+    return ret;
+}
+
 // method registration and implementation functions
 
+fop_vv_f fop_get_method (const fop_class_t *c, const char *name)
+{
+    struct fop_method_record matcher = {.tag = name};
+    size_t nel = c->inner.tags_len;
+    struct fop_method_record *r =
+            bsearch (&matcher, c->inner.tags_by_selector, nel,
+                   sizeof *r, cmp_frm);
+    if (!r)
+        return NULL;
+    return r->method;
+}
+fop_vv_f fop_get_method_by_sel (const fop_class_t *c, fop_vv_f sel)
+{
+    struct fop_method_record matcher = {.selector = sel};
+    size_t nel = c->inner.tags_len;
+    struct fop_method_record *r =
+            lfind (&matcher, c->inner.tags_by_selector, &nel,
+                   sizeof *r, cmp_frm_sel);
+    if (!r)
+        return NULL;
+    return r->method;
+}
 int fop_implement_method (fop_class_t *c, const char *tag, fop_vv_f method)
 {
     struct fop_method_record matcher = {.tag = tag};

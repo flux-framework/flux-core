@@ -3,6 +3,10 @@
 
 #include "fop_protected.h"
 typedef void (*fop_vv_f) (void);
+const fop_class_t *fop_interface_c ();
+const void *fop_get_interface (const fop *o, const fop_class_t *interface);
+fop_vv_f fop_get_method (const fop_class_t *c, const char *name);
+fop_vv_f fop_get_method_by_sel (const fop_class_t *c, fop_vv_f sel);
 int fop_register_method (fop_class_t *c,
                          fop_vv_f selector,
                          const char *name,

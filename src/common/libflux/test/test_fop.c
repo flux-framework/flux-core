@@ -1,11 +1,56 @@
 #include "fop_protected.h"
+#include "fop_dynamic.h"
 
 #include "src/common/libtap/tap.h"
 
 #include <assert.h>
+#include <jansson.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// Dynamic method resolution test
+struct jsonableInterface {
+    fop_class_t _;
+    json_t *(*to_json) (void *o);
+};
+typedef struct jsonable {
+    const struct jsonableInterface *i;
+    void *data;
+} jsonable_i;
+const fop_class_t *jsonable_interface_c ();
+json_t *jsonable_to_json (jsonable_i o)
+{
+    if (!o.i || !o.data)
+        return NULL;
+    return o.i->to_json (o.data);
+}
+jsonable_i jsonable_cast (fop *o) {
+    jsonable_i iface = {0};
+    iface.i = fop_get_interface (o, jsonable_interface_c ());
+    if (iface.i)
+        iface.data = o;
+    return iface;
+}
+const fop_class_t *jsonable_interface_c ()
+{
+    static fop_class_t *cls = NULL;
+    if (!cls) {
+        cls = fop_new (fop_interface_c (), "jsonable_interface_c", fop_interface_c (),
+                sizeof (struct jsonableInterface));
+        fop_register_method (cls, (fop_vv_f)jsonable_to_json, "jsonable_to_json", offsetof(struct jsonableInterface, to_json), NULL);
+    }
+    return cls;
+}
+
+// impl for geom
+json_t *geom_to_json (void *o)
+{
+    fprintf (stderr, "in to_json\n");
+    return o;
+}
+// END Dynamic method resolution test
 
 struct geom;
 // geom_class metaclass
@@ -19,7 +64,7 @@ const fop_class_t *geom_class_c ()
     static fop_class_t *cls = NULL;
     if (!cls) {
         cls = fop_new (fop_class_c (), "geom_class_c", fop_class_c (),
-                       sizeof (struct geomClass));
+                sizeof (struct geomClass));
     }
     return cls;
 }
@@ -50,9 +95,10 @@ const fop_class_t *geom_c ()
     static struct geomClass *cls = NULL;
     if (!cls) {
         cls = fop_new (geom_class_c (), "geom_c", fop_object_c (),
-                       sizeof (struct geom));
+                sizeof (struct geom));
         cls->_.initialize = geom_init;
         cls->_.finalize = geom_fini;
+        fop_register_method ((void*)cls, 0, "jsonable_to_json", 0, (fop_vv_f)geom_to_json);
     }
     return (void *)cls;
 }
@@ -104,7 +150,7 @@ const fop_class_t *rect_c ()
     static struct geomClass *cls = NULL;
     if (!cls) {
         cls = fop_new (geom_class_c (), "rect_c", geom_c (),
-                       sizeof (struct rect));
+                sizeof (struct rect));
         cls->_.initialize = rect_init;
         cls->area = rect_area;
         cls->perim = rect_perim;
@@ -147,7 +193,7 @@ const fop_class_t *circle_c ()
     static struct geomClass *cls = NULL;
     if (!cls) {
         cls = fop_new (geom_class_c (), "circle_c", geom_c (),
-                       sizeof (struct circle));
+                sizeof (struct circle));
         cls->_.finalize = circle_fini;
         cls->_.describe = circle_desc;
         cls->perim = circle_perim;
@@ -172,6 +218,8 @@ int main (int argc, char *argv[])
     c->r = 5;
     measure (&r->_);
     measure (&c->_);
+    jsonable_i j = jsonable_cast (r);
+    jsonable_to_json (j);
     fop_describe (r, stderr);
     fprintf (stderr, "\n");
     fop_describe (c, stderr);

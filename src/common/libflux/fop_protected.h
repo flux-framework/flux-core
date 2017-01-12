@@ -19,10 +19,14 @@ typedef fop *(*new_f) (const fop_class_t *, va_list *);
 typedef fop *(*init_f) (fop *, va_list *);
 typedef fop *(*putter_f) (fop *, FILE *);
 
+struct fclass;
+
 struct fclass_inner {
     size_t tags_len;
     size_t tags_cap;
     struct fop_method_record * tags_by_selector;
+    size_t interfaces_len;
+    fop_class_t **interfaces;
     bool sorted;
 };
 

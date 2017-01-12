@@ -261,40 +261,53 @@ void *class_initialize (fop *c_in, va_list *app)
     return c;
 };
 
+void *class_desc (fop *c_in, FILE *s)
+{
+    fop_class_t *c = c_in;
+    fprintf (s, "class %s(%s){\n", c->name, fop_super(c)->name);
+    fprintf (s, "    size: %zu\n", c->size);
+    fprintf (s, "    tags: %zu\n", c->inner.tags_len);
+    for (size_t i = 0; i < c->inner.tags_len; ++i) {
+        struct fop_method_record *rec = c->inner.tags_by_selector + i;
+        fprintf (s, "        %s: %p, %p, %zu\n", rec->tag, rec->selector, rec->method, rec->offset);
+    }
+    return c_in;
+};
+
 // Object and Class definition, static for this special case
 
 // DYNAMIC METHOD INFORMATION
 static struct fop_method_record object_tags[] = {
     {"new", (fop_vv_f)fop_new, (fop_vv_f)object_new,
-     offsetof (fop_class_t, new)},
+        offsetof (fop_class_t, new)},
     {"initialize", (fop_vv_f)fop_initialize, (fop_vv_f)object_initialize,
-     offsetof (fop_class_t, initialize)},
+        offsetof (fop_class_t, initialize)},
     {"finalize", (fop_vv_f)fop_finalize, (fop_vv_f)object_finalize,
-     offsetof (fop_class_t, finalize)},
+        offsetof (fop_class_t, finalize)},
     {"describe", (fop_vv_f)fop_describe, 0,
-     offsetof (fop_class_t, describe)},  // describe
+        offsetof (fop_class_t, describe)},  // describe
     {"represent", (fop_vv_f)fop_represent, (fop_vv_f)object_represent,
-     offsetof (fop_class_t, represent)},
+        offsetof (fop_class_t, represent)},
     {"retain", (fop_vv_f)fop_retain, (fop_vv_f)object_retain,
-     offsetof (fop_class_t, retain)},
+        offsetof (fop_class_t, retain)},
     {"release", (fop_vv_f)fop_release, (fop_vv_f)object_release,
-     offsetof (fop_class_t, release)}};
+        offsetof (fop_class_t, release)}};
 
 static struct fop_method_record class_tags[] = {
-        {"new", (fop_vv_f)fop_new, (fop_vv_f)object_new,
-                offsetof (fop_class_t, new)},
-        {"initialize", (fop_vv_f)fop_initialize, (fop_vv_f)object_initialize,
-                offsetof (fop_class_t, initialize)},
-        {"finalize", (fop_vv_f)fop_finalize, (fop_vv_f)object_finalize,
-                offsetof (fop_class_t, finalize)},
-        {"describe", (fop_vv_f)fop_describe, 0,
-                offsetof (fop_class_t, describe)},  // describe
-        {"represent", (fop_vv_f)fop_represent, (fop_vv_f)object_represent,
-                offsetof (fop_class_t, represent)},
-        {"retain", (fop_vv_f)fop_retain, (fop_vv_f)object_retain,
-                offsetof (fop_class_t, retain)},
-        {"release", (fop_vv_f)fop_release, (fop_vv_f)object_release,
-                offsetof (fop_class_t, release)}};
+    {"new", (fop_vv_f)fop_new, (fop_vv_f)object_new,
+        offsetof (fop_class_t, new)},
+    {"initialize", (fop_vv_f)fop_initialize, (fop_vv_f)object_initialize,
+        offsetof (fop_class_t, initialize)},
+    {"finalize", (fop_vv_f)fop_finalize, (fop_vv_f)object_finalize,
+        offsetof (fop_class_t, finalize)},
+    {"describe", (fop_vv_f)fop_describe, 0,
+        offsetof (fop_class_t, describe)},  // describe
+    {"represent", (fop_vv_f)fop_represent, (fop_vv_f)object_represent,
+        offsetof (fop_class_t, represent)},
+    {"retain", (fop_vv_f)fop_retain, (fop_vv_f)object_retain,
+        offsetof (fop_class_t, retain)},
+    {"release", (fop_vv_f)fop_release, (fop_vv_f)object_release,
+        offsetof (fop_class_t, release)}};
 // END DYNAMIC METHOD INFORMATION
 
 
@@ -310,8 +323,10 @@ static struct fclass __Object = {
     &__Object,               // superclass
     sizeof (struct object),  // size
     {sizeof (object_tags) / sizeof (struct fop_method_record),
-     sizeof (object_tags) / sizeof (struct fop_method_record), object_tags,
-     0},  // Inner
+        sizeof (object_tags) / sizeof (struct fop_method_record), object_tags,
+        0,
+        0,
+        0},  // Inner
     object_new,
     object_initialize,
     object_finalize,
@@ -332,12 +347,14 @@ static struct fclass __Class = {
     &__Object,               // superclass
     sizeof (struct fclass),  // size
     {sizeof (object_tags) / sizeof (struct fop_method_record),
-     sizeof (object_tags) / sizeof (struct fop_method_record), class_tags,
-     0},  // Inner
+        sizeof (object_tags) / sizeof (struct fop_method_record), class_tags,
+        0,
+        0,
+        0},  // Inner
     object_new,
     class_initialize,
     0,  // finalize
-    0,  // describe
+    class_desc,  // describe
     object_represent,
     0,  // retain
     0   // release
