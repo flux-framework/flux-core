@@ -800,7 +800,7 @@ static void update_pidfile (ctx_t *ctx)
         log_err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
         log_err_exit ("%s", pidfile);
-    if (fclose(f) < 0)
+    if (fclose (f) < 0)
         log_err_exit ("%s", pidfile);
     cleanup_push_string (cleanup_file, pidfile);
     free (pidfile);
