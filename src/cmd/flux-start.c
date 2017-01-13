@@ -158,7 +158,7 @@ int main (int argc, char *argv[])
 
     ctx->size = optparse_get_int (ctx->opts, "size", default_size);
     if (ctx->size <= 0)
-        log_msg_exit ("--size argument must be >= 0");
+        log_msg_exit ("--size argument must be > 0");
 
     if (ctx->size == 1) {
         status = exec_broker (ctx, command, len);
