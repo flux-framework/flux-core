@@ -16,16 +16,14 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-flux-start(1) launches a new Flux instance.  If a size other than
-one is specified on the command line, it is assumed that an
-instance of that size is to be started on the local host
-with flux-start as the parent.
+flux-start(1) launches a new Flux instance.  By default, flux-start
+execs a single flux-broker(1) directly.  If a PMI environment is
+available, flux-broker will use it to fetch job information and
+bootstrap a session of geometry determined from PMI.  If PMI is
+unavailable, flux-broker will run as a standalone, single-rank job.
 
-If size is one (the default), flux-start execs a single flux-broker(1)
-directly.  If a PMI environment is available, flux-broker will
-use it to fetch job information and bootstrap a session of geometry
-determined from PMI.  If PMI is unavailable, flux-broker will run
-as a standalone, single-rank job.
+If a size is specified via '--size', an instance of that size is to be
+started on the local host with flux-start as the parent.
 
 A failure of the initial program (such as non-zero exit code)
 causes flux-start to exit with a non-zero exit code.
@@ -36,8 +34,7 @@ long-term CURVE keys using flux-keygen(1).
 OPTIONS
 -------
 *-s, --size*='N'::
-Set the size of the instance (number of message broker ranks).
-The default is 1.
+Launch an instance of size 'N' on the local host.
 
 *-o, --broker-opts*='option_string'::
 Add options to the message broker daemon, separated by commas.
@@ -57,8 +54,8 @@ set in the environment, it will default to 0 for all brokers.
 EXAMPLES
 --------
 
-Launch an 8-way Flux instance with an interactive shell
-as the initial program and all logs output to stderr:
+Launch an 8-way local Flux instance with an interactive shell as the
+initial program and all logs output to stderr:
 
   flux start -s8 -o,--setattr=log-stderr-level=7
 
