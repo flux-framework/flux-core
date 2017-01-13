@@ -798,7 +798,7 @@ static void update_pidfile (ctx_t *ctx)
     pidfile = xasprintf ("%s/%"PRIu32"/broker.pid", scratch_dir, ctx->rank);
     if (!(f = fopen (pidfile, "w+")))
         log_err_exit ("%s", pidfile);
-    if (fprintf (f, "%u", getpid ()) < 0)
+    if (fprintf (f, "%u", ctx->pid) < 0)
         log_err_exit ("%s", pidfile);
     if (fclose (f) < 0)
         log_err_exit ("%s", pidfile);
