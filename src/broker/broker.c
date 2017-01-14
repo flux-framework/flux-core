@@ -812,13 +812,13 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_pidfile (ctx_t *ctx)
 {
-    const char *scratch_dir;
+    const char *rankdir;
     char *pidfile;
     FILE *f;
 
-    if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0)
-        log_msg_exit ("scratch-directory attribute is not set");
-    pidfile = xasprintf ("%s/%"PRIu32"/broker.pid", scratch_dir, ctx->rank);
+    if (attr_get (ctx->attrs, "scratch-directory-rank", &rankdir, NULL) < 0)
+        log_msg_exit ("scratch-directory-rank attribute is not set");
+    pidfile = xasprintf ("%s/broker.pid", rankdir);
     if (!(f = fopen (pidfile, "w+")))
         log_err_exit ("%s", pidfile);
     if (fprintf (f, "%u", ctx->pid) < 0)
