@@ -200,7 +200,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec);
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
-static void init_attrs_from_environment (attr_t *attrs);
+static void init_attrs (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -292,9 +292,7 @@ int main (int argc, char *argv[])
 
     ctx.pid = getpid();
 
-    /* Initialize config attrs from environment set up by flux(1)
-     */
-    init_attrs_from_environment (ctx.attrs);
+    init_attrs (&ctx);
 
     if (!(ctx.sm = subprocess_manager_create ()))
         oom ();
@@ -747,6 +745,31 @@ static void init_attrs_from_environment (attr_t *attrs)
         if (attr_add (attrs, m->attr, val, flags) < 0)
             log_err_exit ("attr_add %s", m->attr);
     }
+}
+
+static void init_attrs_broker_pid (ctx_t *ctx)
+{
+    char *attrname = "broker.pid";
+    char *pidval;
+
+    pidval = xasprintf ("%u", ctx->pid);
+    if (attr_add (ctx->attrs,
+                  attrname,
+                  pidval,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("attr_add %s", attrname);
+    free (pidval);
+}
+
+static void init_attrs (ctx_t *ctx)
+{
+    /* Initialize config attrs from environment set up by flux(1)
+     */
+    init_attrs_from_environment (ctx->attrs);
+
+    /* Initialize other miscellaneous attrs
+     */
+    init_attrs_broker_pid (ctx);
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)
