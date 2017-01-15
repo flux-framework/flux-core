@@ -1,4 +1,3 @@
-#include "fop_protected.h"
 #include "fop_dynamic.h"
 
 #include "src/common/libtap/tap.h"
@@ -10,36 +9,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Dynamic method resolution test
+// Interface implementation test
 struct jsonableInterface {
-    fop_class_t _;
-    json_t *(*to_json) (void *o);
+    fop_interface_t _;
+    json_t *(*to_json) (fop *o);
 };
-typedef struct jsonable {
-    const struct jsonableInterface *i;
-    void *data;
-} jsonable_i;
 const fop_class_t *jsonable_interface_c ();
-json_t *jsonable_to_json (jsonable_i o)
+json_t *jsonable_to_json (fop *o)
 {
-    if (!o.i || !o.data)
+    const struct jsonableInterface *iface =
+        fop_get_interface (o, jsonable_interface_c ());
+    if (!iface || !iface->to_json)
         return NULL;
-    return o.i->to_json (o.data);
-}
-jsonable_i jsonable_cast (fop *o) {
-    jsonable_i iface = {0};
-    iface.i = fop_get_interface (o, jsonable_interface_c ());
-    if (iface.i)
-        iface.data = o;
-    return iface;
+    return iface->to_json (o);
 }
 const fop_class_t *jsonable_interface_c ()
 {
     static fop_class_t *cls = NULL;
     if (!cls) {
-        cls = fop_new (fop_interface_c (), "jsonable_interface_c", fop_interface_c (),
-                sizeof (struct jsonableInterface));
-        fop_register_method (cls, (fop_vv_f)jsonable_to_json, "jsonable_to_json", offsetof(struct jsonableInterface, to_json), NULL);
+        cls = fop_new (fop_interface_c (), "jsonable_interface_c",
+                       fop_interface_c (), sizeof (struct jsonableInterface));
     }
     return cls;
 }
@@ -58,13 +47,14 @@ struct geomClass {
     fop_class_t _;
     double (*area) (struct geom *);
     double (*perim) (struct geom *);
+    struct jsonableInterface jsonable;
 };
 const fop_class_t *geom_class_c ()
 {
     static fop_class_t *cls = NULL;
     if (!cls) {
         cls = fop_new (fop_class_c (), "geom_class_c", fop_class_c (),
-                sizeof (struct geomClass));
+                       sizeof (struct geomClass));
     }
     return cls;
 }
@@ -87,7 +77,7 @@ void *geom_init (void *_self, va_list *app)
 }
 void geom_fini (void *_c)
 {
-    fop_finalize_super (geom_c(), _c);
+    fop_finalize_super (geom_c (), _c);
     fprintf (stderr, "FINALIZING GEOM!\n");
 }
 const fop_class_t *geom_c ()
@@ -95,10 +85,13 @@ const fop_class_t *geom_c ()
     static struct geomClass *cls = NULL;
     if (!cls) {
         cls = fop_new (geom_class_c (), "geom_c", fop_object_c (),
-                sizeof (struct geom));
-        cls->_.initialize = geom_init;
-        cls->_.finalize = geom_fini;
-        fop_register_method ((void*)cls, 0, "jsonable_to_json", 0, (fop_vv_f)geom_to_json);
+                       sizeof (struct geom));
+        fop_class_set_init (cls, geom_init);
+        fop_class_set_fini (cls, geom_fini);
+        cls->jsonable.to_json = geom_to_json;
+
+        fop_implement_interface ((void *)cls, jsonable_interface_c (),
+                                 offsetof (struct geomClass, jsonable));
     }
     return (void *)cls;
 }
@@ -106,13 +99,13 @@ const fop_class_t *geom_c ()
 // selectors
 double geom_area (struct geom *o)
 {
-    const struct geomClass *c = (void *)fop_get_class_checked (o, geom_c());
+    const struct geomClass *c = (void *)fop_get_class_checked (o, geom_c ());
     assert (c->area);
     return c->area (o);
 }
 double geom_perim (struct geom *o)
 {
-    const struct geomClass *c = (void *)fop_get_class_checked (o, geom_c());
+    const struct geomClass *c = (void *)fop_get_class_checked (o, geom_c ());
     assert (c->perim);
     return c->perim (o);
 }
@@ -126,7 +119,7 @@ const fop_class_t *rect_c ();
 void *rect_init (void *_self, va_list *app)
 {
     struct rect *self = fop_initialize_super (rect_c (), _self, app);
-    self = fop_cast (rect_c (),self);
+    self = fop_cast (rect_c (), self);
     if (!self)
         return NULL;
     self->w = va_arg (*app, double);
@@ -136,13 +129,13 @@ void *rect_init (void *_self, va_list *app)
 }
 double rect_area (struct geom *_r)
 {
-    struct rect *r = fop_cast (rect_c(), _r);
+    struct rect *r = fop_cast (rect_c (), _r);
     return r->w * r->h;
 }
 
 double rect_perim (struct geom *_r)
 {
-    struct rect *r = fop_cast (rect_c(), _r);
+    struct rect *r = fop_cast (rect_c (), _r);
     return r->w * 2 + 2 * r->h;
 }
 const fop_class_t *rect_c ()
@@ -150,8 +143,8 @@ const fop_class_t *rect_c ()
     static struct geomClass *cls = NULL;
     if (!cls) {
         cls = fop_new (geom_class_c (), "rect_c", geom_c (),
-                sizeof (struct rect));
-        cls->_.initialize = rect_init;
+                       sizeof (struct rect));
+        fop_class_set_init (cls, rect_init);
         cls->area = rect_area;
         cls->perim = rect_perim;
     }
@@ -166,26 +159,26 @@ struct circle {
 const fop_class_t *circle_c ();
 double circle_area (struct geom *_c)
 {
-    struct circle *c = fop_cast (circle_c(), _c);
+    struct circle *c = fop_cast (circle_c (), _c);
     return c->r * c->r * 3.14159;
 }
 
 double circle_perim (struct geom *_c)
 {
-    struct circle *c = fop_cast (circle_c(), _c);
+    struct circle *c = fop_cast (circle_c (), _c);
     return 3.14159 * c->r * 2;
 }
 void circle_fini (void *_c)
 {
-    fop_finalize_super (circle_c(), _c);
+    fop_finalize_super (circle_c (), _c);
     fprintf (stderr, "FINALIZING CIRCLE!\n");
 }
 void *circle_desc (void *_c, FILE *s)
 {
-    struct circle *c = fop_cast (circle_c(), _c);
+    struct circle *c = fop_cast (circle_c (), _c);
     if (!c)
         return NULL;
-    fprintf(s, "<Circle: radius=%lf>", c->r);
+    fprintf (s, "<Circle: radius=%lf>", c->r);
     return c;
 }
 const fop_class_t *circle_c ()
@@ -193,9 +186,9 @@ const fop_class_t *circle_c ()
     static struct geomClass *cls = NULL;
     if (!cls) {
         cls = fop_new (geom_class_c (), "circle_c", geom_c (),
-                sizeof (struct circle));
-        cls->_.finalize = circle_fini;
-        cls->_.describe = circle_desc;
+                       sizeof (struct circle));
+        fop_class_set_fini (cls, circle_fini);
+        fop_class_set_describe (cls, circle_desc);
         cls->perim = circle_perim;
         cls->area = circle_area;
     }
@@ -218,8 +211,7 @@ int main (int argc, char *argv[])
     c->r = 5;
     measure (&r->_);
     measure (&c->_);
-    jsonable_i j = jsonable_cast (r);
-    jsonable_to_json (j);
+    jsonable_to_json (r);
     fop_describe (r, stderr);
     fprintf (stderr, "\n");
     fop_describe (c, stderr);

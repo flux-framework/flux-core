@@ -1,12 +1,15 @@
 #ifndef __FLUX_CORE_FOP_PROT_H
 #define __FLUX_CORE_FOP_PROT_H
+#define FOP_PROT
 #include "fop.h"
+#undef FOP_PROT
 
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 
-struct object {
+void fop_tag_object (fop_object_t *o, const fop_class_t *c);
+struct fop_object {
     int32_t magic;
     int32_t refcount;
     const fop_class_t *fclass;
@@ -15,35 +18,37 @@ struct object {
 typedef void (*self_only_v_f) (void *);
 typedef int (*self_only_i_f) (void *);
 typedef fop *(*self_only_p_f) (fop *);
-typedef fop *(*new_f) (const fop_class_t *, va_list *);
-typedef fop *(*init_f) (fop *, va_list *);
-typedef fop *(*putter_f) (fop *, FILE *);
 
 struct fclass;
 
-struct fclass_inner {
-    size_t tags_len;
-    size_t tags_cap;
-    struct fop_method_record * tags_by_selector;
-    size_t interfaces_len;
-    fop_class_t **interfaces;
-    bool sorted;
+struct iface_pair {
+    const fop_class_t *iface;
+    void *impl;
+    size_t offset;
 };
 
-struct fclass {
-    struct object _;  // A class is also an object
+struct fclass_inner {
+    struct iface_pair *interfaces;
+};
+
+struct fop_class {
+    fop_object_t _;  // A class is also an object
     const char *name;
     const fop_class_t *super;
     size_t size;
     struct fclass_inner inner;
 
-    new_f new;
-    init_f initialize;
-    self_only_v_f finalize;
-    putter_f describe;
-    putter_f represent;
-    self_only_v_f retain;
-    self_only_v_f release;
+    fop_new_f new;
+    fop_init_f initialize;
+    fop_fini_f finalize;
+    fop_putter_f describe;
+    fop_putter_f represent;
+    fop_retain_f retain;
+    fop_release_f release;
+    uintptr_t (*hash) (fop *);
+    bool (*equal) (fop *, fop *);
+    int (*compare) (fop *, fop *);
+    fop *(*copy) (fop *);
 };
 
 #endif /* __FLUX_CORE_FOP_PROT_H */
