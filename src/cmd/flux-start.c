@@ -83,8 +83,6 @@ static void setup_profiling_env (struct context *ctx);
 
 double default_killer_timeout = 1.0;
 
-const int default_size = 1;
-
 #ifndef HAVE_CALIPER
 static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
                                  const char *optarg)
@@ -156,14 +154,14 @@ int main (int argc, char *argv[])
 
     setup_profiling_env (ctx);
 
-    ctx->size = optparse_get_int (ctx->opts, "size", default_size);
-    if (ctx->size <= 0)
-        log_msg_exit ("--size argument must be >= 0");
+    if (optparse_hasopt (ctx->opts, "size")) {
+        ctx->size = optparse_get_int (ctx->opts, "size", -1);
+        if (ctx->size <= 0)
+            log_msg_exit ("--size argument must be > 0");
 
-    if (ctx->size == 1) {
-        status = exec_broker (ctx, command, len);
-    } else {
         status = start_session (ctx, command, len);
+    } else {
+        status = exec_broker (ctx, command, len);
     }
 
     optparse_destroy (ctx->opts);

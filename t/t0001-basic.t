@@ -30,19 +30,28 @@ test_expect_success 'flux-keygen works' '
 	rm -rf $tmpkeydir
 '
 test_expect_success 'flux-start in exec mode works' "
+	flux start 'flux comms info' | grep 'size=1'
+"
+test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
 	flux start --size=1 'flux comms info' | grep 'size=1'
 "
-test_expect_success 'flux-start in subprocess/pmi mode works' "
+test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start --size=2 'flux comms info' | grep 'size=2'
 "
-test_expect_success 'flux-start passes through errors from command' "
+test_expect_success 'flux-start in exec mode passes through errors from command' "
+	test_must_fail flux start /bin/false
+"
+test_expect_success 'flux-start in subprocess/pmi mode passes through errors from command' "
 	test_must_fail flux start --size=1 /bin/false
 "
-test_expect_success 'flux-start passes exit code due to signal' "
+test_expect_success 'flux-start in exec mode passes exit code due to signal' "
+	test_expect_code 130 flux start 'kill -INT \$\$'
+"
+test_expect_success 'flux-start in subprocess/pmi mode passes exit code due to signal' "
 	test_expect_code 130 flux start --size=1 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in exec mode works as initial program' "
-	flux start --size=2 flux start --size=1 flux comms info | grep size=1
+	flux start --size=2 flux start flux comms info | grep size=1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works as initial program' "
 	flux start --size=2 flux start --size=1 flux comms info | grep size=1
