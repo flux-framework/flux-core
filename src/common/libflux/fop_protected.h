@@ -45,10 +45,9 @@ struct fop_class {
     fop_putter_f represent;
     fop_retain_f retain;
     fop_release_f release;
-    uintptr_t (*hash) (fop *);
-    bool (*equal) (fop *, fop *);
-    int (*compare) (fop *, fop *);
-    fop *(*copy) (fop *);
+    fop_hash_f hash;
+    fop_equal_f equal;
+    fop_copy_f copy;
 };
 
 #endif /* __FLUX_CORE_FOP_PROT_H */

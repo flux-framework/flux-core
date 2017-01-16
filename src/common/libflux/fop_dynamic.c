@@ -26,11 +26,18 @@ const fop_class_t *fop_interface_c ()
 {
     // TODO: make un-allocatable
     static fop_class_t *cls = NULL;
-    if (!cls) {
-        cls = fop_new (fop_class_c (), "interface_class", fop_class_c (),
-                       sizeof (fop_class_t));
+    if (fop_class_needs_init (&cls)) {
+        cls = fop_new_metaclass ("interface_class", fop_class_c (),
+                                 sizeof (fop_class_t));
     }
     return (void *)cls;
+}
+
+fop_class_t *fop_new_interface_class (const char *name,
+                                      const fop_class_t *parent,
+                                      size_t size)
+{
+    return fop_new (fop_interface_c (), name, parent, size);
 }
 
 static void add_interface (fop_class_t *c, struct iface_pair *p)
@@ -82,7 +89,7 @@ const void *fop_get_interface (const fop *o, const fop_class_t *interface)
     interface = fop_cast (fop_class_c (), interface);
     if (!c || !interface || !c->inner.interfaces)
         return NULL;
-    struct iface_pair p = {interface, 0};
+    struct iface_pair p = {interface, 0, 0};
     size_t nel = sdslen ((void *)c->inner.interfaces) / sizeof p;
     const struct iface_pair *ret =
         lfind (&p, c->inner.interfaces, &nel, sizeof p, cmp_interface_pair);

@@ -7,6 +7,9 @@ typedef struct fop_interface {
 } fop_interface_t;
 const fop_class_t *fop_interface_c ();
 const void *fop_get_interface (const fop *o, const fop_class_t *interface);
+fop_class_t *fop_new_interface_class (const char *name,
+                                      const fop_class_t *parent,
+                                      size_t size);
 void fop_implement_interface (fop_class_t *c,
                               const fop_class_t *interface,
                               size_t offset);

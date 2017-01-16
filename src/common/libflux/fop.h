@@ -47,14 +47,28 @@ void fop_retain (fop *o);
 void fop_release (fop *o);
 fop *fop_describe (fop *o, FILE *s);
 fop *fop_represent (fop *o, FILE *s);
+uintptr_t fop_hash (fop *);
+bool fop_equal (const fop *, const fop *);
+fop *fop_copy (const fop *);
 
 // fop class construction routines
+
+fop_class_t *fop_new_metaclass (const char *name,
+                                const fop_class_t *parent,
+                                size_t size);
+fop *fop_new_class (const fop_class_t *metaclass,
+                    const char *name,
+                    const fop_class_t *parent,
+                    size_t size);
 typedef fop *(*fop_new_f) (const fop_class_t *, va_list *);
 typedef fop *(*fop_init_f) (fop *, va_list *);
 typedef void (*fop_fini_f) (void *);
 typedef void (*fop_retain_f) (void *);
 typedef void (*fop_release_f) (void *);
 typedef fop *(*fop_putter_f) (fop *, FILE *);
+typedef uintptr_t (*fop_hash_f) (fop *);
+typedef bool (*fop_equal_f) (const fop *, const fop *);
+typedef fop *(*fop_copy_f) (const fop *);
 
 fop_class_t *fop_class_set_new (fop *c, fop_new_f fn);
 fop_class_t *fop_class_set_init (fop *c, fop_init_f fn);
@@ -63,6 +77,25 @@ fop_class_t *fop_class_set_describe (fop *c, fop_putter_f fn);
 fop_class_t *fop_class_set_represent (fop *c, fop_putter_f fn);
 fop_class_t *fop_class_set_retain (fop *c, fop_retain_f fn);
 fop_class_t *fop_class_set_release (fop *c, fop_release_f fn);
+fop_class_t *fop_class_set_hash (fop *c, fop_hash_f fn);
+fop_class_t *fop_class_set_equal (fop *c, fop_equal_f fn);
+fop_class_t *fop_class_set_copy (fop *c, fop_copy_f fn);
+
+// Thread safety for class init
+static inline bool fop_class_needs_init (fop_class_t **cls)
+{
+    void *oldval = NULL;
+    void *newval = oldval + 1;
+    if ((void*)*cls <= newval) {
+        // TODO: add c11 standard version
+        if (__sync_bool_compare_and_swap (cls, oldval, newval))
+            return true;
+        while (__sync_val_compare_and_swap ((void**)cls, oldval, newval) <= newval) {
+            // spin
+        }
+    }
+    return false;
+}
 
 // super helpers
 void *fop_initialize_super (const fop_class_t *c, void *self, va_list *app);

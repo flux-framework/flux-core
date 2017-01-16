@@ -1,4 +1,4 @@
-#include "fop_dynamic.h"
+#include "src/common/libflux/fop_dynamic.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -26,9 +26,10 @@ json_t *jsonable_to_json (fop *o)
 const fop_class_t *jsonable_interface_c ()
 {
     static fop_class_t *cls = NULL;
-    if (!cls) {
-        cls = fop_new (fop_interface_c (), "jsonable_interface_c",
-                       fop_interface_c (), sizeof (struct jsonableInterface));
+    if (fop_class_needs_init (&cls)) {
+        cls =
+            fop_new_interface_class ("jsonable_interface_c", fop_interface_c (),
+                                     sizeof (struct jsonableInterface));
     }
     return cls;
 }
@@ -52,9 +53,9 @@ struct geomClass {
 const fop_class_t *geom_class_c ()
 {
     static fop_class_t *cls = NULL;
-    if (!cls) {
-        cls = fop_new (fop_class_c (), "geom_class_c", fop_class_c (),
-                       sizeof (struct geomClass));
+    if (fop_class_needs_init (&cls) ) {
+        cls = fop_new_metaclass ("geom_class_c", fop_class_c (),
+                                 sizeof (struct geomClass));
     }
     return cls;
 }
@@ -83,9 +84,9 @@ void geom_fini (void *_c)
 const fop_class_t *geom_c ()
 {
     static struct geomClass *cls = NULL;
-    if (!cls) {
-        cls = fop_new (geom_class_c (), "geom_c", fop_object_c (),
-                       sizeof (struct geom));
+    if (fop_class_needs_init (&cls)) {
+        cls = fop_new_class (geom_class_c (), "geom_c", fop_object_c (),
+                             sizeof (struct geom));
         fop_class_set_init (cls, geom_init);
         fop_class_set_fini (cls, geom_fini);
         cls->jsonable.to_json = geom_to_json;
@@ -141,7 +142,7 @@ double rect_perim (struct geom *_r)
 const fop_class_t *rect_c ()
 {
     static struct geomClass *cls = NULL;
-    if (!cls) {
+    if (fop_class_needs_init (&cls)) {
         cls = fop_new (geom_class_c (), "rect_c", geom_c (),
                        sizeof (struct rect));
         fop_class_set_init (cls, rect_init);
@@ -184,7 +185,7 @@ void *circle_desc (void *_c, FILE *s)
 const fop_class_t *circle_c ()
 {
     static struct geomClass *cls = NULL;
-    if (!cls) {
+    if (fop_class_needs_init (&cls)) {
         cls = fop_new (geom_class_c (), "circle_c", geom_c (),
                        sizeof (struct circle));
         fop_class_set_fini (cls, circle_fini);

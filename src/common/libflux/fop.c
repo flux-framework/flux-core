@@ -180,6 +180,20 @@ fop *fop_represent (void *o, FILE *s)
 };
 
 // Class construction routines
+fop_class_t *fop_new_metaclass (const char *name,
+                                const fop_class_t *parent,
+                                size_t size)
+{
+    return fop_new (fop_class_c (), name, parent, size);
+}
+
+fop *fop_new_class (const fop_class_t *metaclass,
+                            const char *name,
+                            const fop_class_t *parent,
+                            size_t size)
+{
+    return fop_new (metaclass, name, parent, size);
+}
 
 fop_class_t *fop_class_set_new (fop *_c, fop_new_f fn)
 {
@@ -244,6 +258,33 @@ fop_class_t *fop_class_set_release (fop *_c, fop_release_f fn)
     c->release = fn;
     return c;
 }
+fop_class_t *fop_class_set_hash (fop *_c, fop_hash_f fn)
+{
+    fop_class_t * c = fop_cast (fop_class_c (), _c);
+    if (!c) {
+        return NULL;
+    }
+    c->hash = fn;
+    return c;
+}
+fop_class_t *fop_class_set_equal (fop *_c, fop_equal_f fn)
+{
+    fop_class_t * c = fop_cast (fop_class_c (), _c);
+    if (!c) {
+        return NULL;
+    }
+    c->equal = fn;
+    return c;
+}
+fop_class_t *fop_class_set_copy (fop *_c, fop_copy_f fn)
+{
+    fop_class_t * c = fop_cast (fop_class_c (), _c);
+    if (!c) {
+        return NULL;
+    }
+    c->copy = fn;
+    return c;
+}
 
 // Object methods
 
@@ -273,6 +314,7 @@ void *object_new (const fop_class_t *c, va_list *app)
 };
 void object_finalize (void *o){
     // Nothing to do, release does the free
+    (void)(o);
 };
 void object_retain (void *o)
 {
@@ -291,8 +333,10 @@ void object_release (void *o)
     }
     assert (obj->refcount > 0);
     if (--obj->refcount == 0) {
-        fop_finalize (o);
-        free (o);
+        fop_finalize (obj);
+        // muss up magic to keep this from being reused
+        obj->magic = 0xeeeeeeee;
+        free (obj);
     }
 };
 fop *object_represent (fop *o, FILE *s)
@@ -306,6 +350,18 @@ fop *object_represent (fop *o, FILE *s)
     }
     return o;
 };
+
+uintptr_t object_hash (fop *o)
+{
+    // use the address as a hash when all else fails
+    return (uintptr_t) o;
+}
+
+bool object_equal (const fop *l, const fop *r)
+{
+    // use the addresses if we ended up here
+    return l == r;
+}
 
 // Class methods
 
@@ -397,7 +453,10 @@ static fop_class_t __Object = {
     0,  // describe
     object_represent,
     object_retain,
-    object_release};
+    object_release,
+    object_hash,
+    object_equal,
+    0}; // copy, no default
 
 static fop_class_t __Class = {
 
@@ -417,8 +476,10 @@ static fop_class_t __Class = {
     class_desc,  // describe
     object_represent,
     0,  // retain
-    0   // release
-};
+    0,   // release
+    object_hash,
+    object_equal,
+    0 }; // no default copy
 
 // object and class class getters
 const fop_class_t *fop_object_c ()
