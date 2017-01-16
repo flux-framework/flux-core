@@ -72,6 +72,7 @@ fluxcoreinclude_HEADERS = \
 	content.h \
 	fop.h \
 	fop_dynamic.h \
+	arp.h \
 	fop_protected.h
 
 noinst_LTLIBRARIES = \
@@ -103,6 +104,7 @@ libflux_la_SOURCES = \
 	keepalive.c \
 	fop.c \
 	fop_dynamic.c \
+	arp.c \
 	content.c
 
 libflux_la_CPPFLAGS = \
