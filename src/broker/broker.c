@@ -1143,7 +1143,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
         goto done;
     }
     if (create_rankdir (ctx) < 0) {
-        log_err ("could not initialize ankdir");
+        log_err ("could not initialize rankdir");
         goto done;
     }
 
