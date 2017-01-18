@@ -40,21 +40,10 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <dlfcn.h>
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
-#if WITH_TCMALLOC
-#if HAVE_GPERFTOOLS_HEAP_PROFILER_H
-  #include <gperftools/heap-profiler.h>
-#elif HAVE_GOOGLE_HEAP_PROFILER_H
-  #include <google/heap-profiler.h>
-#else
-  #error gperftools headers not configured
-#endif
-#endif /* WITH_TCMALLOC */
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
@@ -66,7 +55,6 @@
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
@@ -86,6 +74,10 @@
 #include "log.h"
 #include "content-cache.h"
 #include "runlevel.h"
+#include "heaptrace.h"
+#include "exec.h"
+#include "ping.h"
+#include "rusage.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -93,6 +85,11 @@
 #endif
 
 const char *default_modules = "connector-local";
+
+typedef enum {
+    ERROR_MODE_RESPOND,
+    ERROR_MODE_RETURN,
+} request_error_mode_t;
 
 struct tbon_param {
     int k;
@@ -137,11 +134,9 @@ typedef struct {
     int event_send_seq;
     bool event_active;          /* primary event source is active */
     svchash_t *services;
-    seqhash_t *seq;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
-    logbuf_t *logbuf;
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     struct tbon_param tbon;
@@ -162,9 +157,10 @@ typedef struct {
     struct subprocess *init_shell;
 } ctx_t;
 
-static int broker_event_sendmsg (ctx_t *ctx, flux_msg_t **msg);
+static int broker_event_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg);
+static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
+                                   request_error_mode_t errmode);
 
 static void event_cb (overlay_t *ov, void *sock, void *arg);
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
@@ -273,8 +269,6 @@ int main (int argc, char *argv[])
     ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
-    if (!(ctx.seq = sequence_hash_create ()))
-        oom ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
@@ -282,7 +276,6 @@ int main (int argc, char *argv[])
     ctx.heartbeat = heartbeat_create ();
     ctx.shutdown = shutdown_create ();
     ctx.attrs = attr_create ();
-    ctx.logbuf = logbuf_create ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
@@ -467,18 +460,11 @@ int main (int argc, char *argv[])
         log_err_exit ("create_persistdir");
 
     /* Initialize logging.
-     * First establish a redirect callback that forces all logs
-     * to ctx.h to go to our local log class rather than be sent
-     * as a "cmb.log" request message.  Next, provide the handle
-     * and rank to the log class.
+     * OK to call flux_log*() after this.
      */
-    flux_log_set_appname (ctx.h, "broker");
-    flux_log_set_redirect (ctx.h, logbuf_append_redirect, ctx.logbuf);
-    logbuf_set_flux (ctx.logbuf, ctx.h);
-    logbuf_set_rank (ctx.logbuf, ctx.rank);
+    logbuf_initialize (ctx.h, ctx.rank, ctx.attrs);
 
-    /* Dummy up cached attributes on the broker's handle so logging's
-     * use of flux_get_rank() etc will work despite limitations.
+    /* Allow flux_get_rank() and flux_get_size() to work in the broker.
      */
     if (create_dummyattrs (&ctx) < 0)
         log_err_exit ("creating dummy attributes");
@@ -523,7 +509,6 @@ int main (int argc, char *argv[])
                                 &ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || hello_register_attrs (ctx.hello, ctx.attrs) < 0
-            || logbuf_register_attrs (ctx.logbuf, ctx.attrs) < 0
             || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
         log_err_exit ("configuring attributes");
     }
@@ -630,6 +615,19 @@ int main (int argc, char *argv[])
 
     /* Register internal services
      */
+    if (attr_register_handlers (ctx.attrs, ctx.h) < 0)
+        log_err_exit ("attr_register_handlers");
+    if (heaptrace_initialize (ctx.h) < 0)
+        log_msg_exit ("heaptrace_initialize");
+    if (sequence_hash_initialize (ctx.h) < 0)
+        log_err_exit ("sequence_hash_initialize");
+    if (exec_initialize (ctx.h, ctx.sm, ctx.rank, ctx.attrs) < 0)
+        log_err_exit ("exec_initialize");
+    if (ping_initialize (ctx.h) < 0)
+        log_err_exit ("ping_initialize");
+    if (rusage_initialize (ctx.h) < 0)
+        log_err_exit ("rusage_initialize");
+
     broker_add_services (&ctx);
 
     /* Load default modules
@@ -682,6 +680,10 @@ int main (int argc, char *argv[])
         log_msg ("unloading modules");
     modhash_destroy (ctx.modhash);
 
+    /* Unregister builtin services
+     */
+    attr_unregister_handlers ();
+
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
 
@@ -696,12 +698,10 @@ int main (int argc, char *argv[])
     heartbeat_destroy (ctx.heartbeat);
     snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
-    sequence_hash_destroy (ctx.seq);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    logbuf_destroy (ctx.logbuf);
     zlist_destroy (&ctx.subscriptions);
     content_cache_destroy (ctx.cache);
     runlevel_destroy (ctx.runlevel);
@@ -1354,12 +1354,10 @@ static bool nodeset_member (const char *s, uint32_t rank)
     return member;
 }
 
-static int mod_svc_cb (flux_msg_t **msg, void *arg)
+static int mod_svc_cb (const flux_msg_t *msg, void *arg)
 {
     module_t *p = arg;
-    int rc = module_sendmsg (p, *msg);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    int rc = module_sendmsg (p, msg);
     return rc;
 }
 
@@ -1446,372 +1444,6 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
     }
 }
 
-/**
- ** Built-in services
- **
- ** Requests received from modules/peers via their respective reactor
- ** callbacks are sent on via broker_request_sendmsg().  The broker handle
- ** then dispatches locally matched ones to their svc handlers.
- **
- ** If the request msg is not destroyed by the service handler, an
- ** a no-payload response is generated.  If the handler returned -1,
- ** the response errnum is set to errno, else 0.
- **/
-
-static json_object *
-subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
-{
-    json_object *resp = Jnew ();
-
-    assert (ctx != NULL);
-    assert (resp != NULL);
-
-    Jadd_int (resp, "rank", ctx->rank);
-    Jadd_int (resp, "pid", subprocess_pid (p));
-    Jadd_str (resp, "state", subprocess_state_string (p));
-    return (resp);
-}
-
-static int child_exit_handler (struct subprocess *p)
-{
-    int n;
-    ctx_t *ctx = (ctx_t *) subprocess_get_context (p, "ctx");
-    flux_msg_t *msg = (flux_msg_t *) subprocess_get_context (p, "msg");
-    json_object *resp;
-
-    assert (ctx != NULL);
-    assert (msg != NULL);
-
-    resp = subprocess_json_resp (ctx, p);
-    Jadd_int (resp, "status", subprocess_exit_status (p));
-    Jadd_int (resp, "code", subprocess_exit_code (p));
-    if ((n = subprocess_signaled (p)))
-        Jadd_int (resp, "signal", n);
-    if ((n = subprocess_exec_error (p)))
-        Jadd_int (resp, "exec_errno", n);
-
-    flux_respond (ctx->h, msg, 0, Jtostr (resp));
-    flux_msg_destroy (msg);
-    json_object_put (resp);
-
-    subprocess_destroy (p);
-
-    return (0);
-}
-
-static int subprocess_io_cb (struct subprocess *p, const char *json_str)
-{
-    ctx_t *ctx = subprocess_get_context (p, "ctx");
-    flux_msg_t *orig = subprocess_get_context (p, "msg");
-    json_object *o = NULL;
-    int rc = -1;
-
-    assert (ctx != NULL);
-    assert (orig != NULL);
-
-    if (!(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    /* Add this rank */
-    Jadd_int (o, "rank", ctx->rank);
-    rc = flux_respond (ctx->h, orig, 0, Jtostr (o));
-done:
-    Jput (o);
-    return (rc);
-}
-
-static struct subprocess *
-subprocess_get_pid (struct subprocess_manager *sm, int pid)
-{
-    struct subprocess *p = NULL;
-    p = subprocess_manager_first (sm);
-    while (p) {
-        if (pid == subprocess_pid (p))
-            return (p);
-        p = subprocess_manager_next (sm);
-    }
-    return (NULL);
-}
-
-static int cmb_write_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *request = NULL;
-    json_object *o = NULL;
-    const char *json_str;
-    int pid;
-    int errnum = EPROTO;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto out;
-
-    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid) &&
-        Jget_obj (request, "stdin", &o)) {
-        int len;
-        void *data = NULL;
-        bool eof;
-        struct subprocess *p;
-
-        /* XXX: We use zio_json_decode() here for convenience. Probably
-         *  this should be bubbled up as a subprocess IO json spec with
-         *  encode/decode functions.
-         */
-        if ((len = zio_json_decode (Jtostr (o), &data, &eof)) < 0)
-            goto out;
-        if (!(p = subprocess_get_pid (ctx->sm, pid))) {
-            errnum = ENOENT;
-            free (data);
-            goto out;
-        }
-        if (subprocess_write (p, data, len, eof) < 0) {
-            errnum = errno;
-            free (data);
-            goto out;
-        }
-        free (data);
-    }
-out:
-    if (flux_respondf (ctx->h, *msg, "{si}", "code", errnum) < 0)
-        flux_log_error (ctx->h, "write_cb: flux_respondf");
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    if (request)
-        json_object_put (request);
-    return (0);
-}
-
-static int cmb_signal_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *request = NULL;
-    const char *json_str;
-    int pid;
-    int errnum = EPROTO;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto out;
-    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid)) {
-        int signum;
-        struct subprocess *p;
-        if (!Jget_int (request, "signum", &signum))
-            signum = SIGTERM;
-        p = subprocess_manager_first (ctx->sm);
-        while (p) {
-            if (pid == subprocess_pid (p)) {
-                errnum = 0;
-                /* Send signal to entire process group */
-                if (kill (-pid, signum) < 0)
-                    errnum = errno;
-            }
-            p = subprocess_manager_next (ctx->sm);
-        }
-    }
-out:
-    if (flux_respondf (ctx->h, *msg, "{si}", "code", errnum) < 0)
-        flux_log_error (ctx->h, "signal_cb: flux_respondf");
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    if (request)
-        json_object_put (request);
-    return (0);
-}
-
-static int do_setpgrp (struct subprocess *p)
-{
-    if (setpgrp () < 0)
-        fprintf (stderr, "setpgrp: %s", strerror (errno));
-    return (0);
-}
-
-/*
- *  Create a subprocess described in the msg argument.
- */
-static int cmb_exec_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *request = NULL;
-    json_object *response = NULL;
-    json_object *o;
-    const char *json_str;
-    struct subprocess *p;
-    flux_msg_t *copy;
-    int i, argc;
-    const char *local_uri;
-
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
-        log_err_exit ("%s: local_uri is not set", __FUNCTION__);
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto out_free;
-
-    if (!(request = Jfromstr (json_str))
-        || !json_object_object_get_ex (request, "cmdline", &o)
-        || o == NULL
-        || (json_object_get_type (o) != json_type_array)) {
-        errno = EPROTO;
-        goto out_free;
-    }
-
-    if ((argc = json_object_array_length (o)) < 0) {
-        errno = EPROTO;
-        goto out_free;
-    }
-
-    p = subprocess_create (ctx->sm);
-    subprocess_set_context (p, "ctx", ctx);
-    subprocess_add_hook (p, SUBPROCESS_COMPLETE, child_exit_handler);
-    subprocess_add_hook (p, SUBPROCESS_PRE_EXEC, do_setpgrp);
-
-    for (i = 0; i < argc; i++) {
-        json_object *ox = json_object_array_get_idx (o, i);
-        if (json_object_get_type (ox) == json_type_string)
-            subprocess_argv_append (p, json_object_get_string (ox));
-    }
-
-    if (json_object_object_get_ex (request, "env", &o) && o != NULL) {
-        json_object_iter iter;
-        json_object_object_foreachC (o, iter) {
-            const char *val = json_object_get_string (iter.val);
-            if (val != NULL)
-                subprocess_setenv (p, iter.key, val, 1);
-        }
-    }
-    else
-        subprocess_set_environ (p, environ);
-    /*
-     *  Override key FLUX environment variables in env array
-     */
-    subprocess_setenv (p, "FLUX_URI", local_uri, 1);
-
-    if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
-        const char *dir = json_object_get_string (o);
-        if (dir != NULL)
-            subprocess_set_cwd (p, dir);
-    }
-
-    /*
-     * Save a copy of msg for future messages
-     */
-    copy = flux_msg_copy (*msg, true);
-    subprocess_set_context (p, "msg", (void *) copy);
-
-    subprocess_set_io_callback (p, subprocess_io_cb);
-
-    if (subprocess_fork (p) < 0) {
-        /*
-         *  Fork error, respond directly to exec client with error
-         *   (There will be no subprocess to reap)
-         */
-        (void) flux_respond (ctx->h, *msg, errno, NULL);
-        goto out_free;
-    }
-
-    if (subprocess_exec (p) >= 0) {
-        /*
-         *  Send response, destroys original msg.
-         *   For "Exec Failure" allow that state to be transmitted
-         *   to caller on completion handler (which will be called
-         *   immediately)
-         */
-        response = subprocess_json_resp (ctx, p);
-        flux_respond (ctx->h, *msg, 0, Jtostr (response));
-        flux_msg_destroy (*msg);
-        *msg = NULL;
-    }
-out_free:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
-    return (0);
-}
-
-static char *subprocess_sender (struct subprocess *p)
-{
-    char *sender;
-    flux_msg_t *msg = subprocess_get_context (p, "msg");
-    if (!msg || flux_msg_get_route_first (msg, &sender) < 0)
-        return NULL;
-    return (sender);
-}
-
-static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
-{
-    struct subprocess *p = subprocess_manager_first (ctx->sm);
-    while (p) {
-        char *sender;
-        if ((sender = subprocess_sender (p))) {
-            pid_t pid;
-            if ((strcmp (id, sender) == 0)
-               && ((pid = subprocess_pid (p)) > (pid_t) 0)) {
-                /* Kill process group for subprocess p */
-                flux_log (ctx->h, LOG_INFO,
-                          "Terminating PGRP %ld", (unsigned long) pid);
-                if (kill (-pid, SIGKILL) < 0)
-                    flux_log_error (ctx->h, "killpg");
-            }
-            free (sender);
-        }
-        p = subprocess_manager_next (ctx->sm);
-    }
-    return (0);
-}
-
-static json_object *subprocess_json_info (struct subprocess *p)
-{
-    int i;
-    char buf [MAXPATHLEN];
-    const char *cwd;
-    char *sender = NULL;
-    json_object *o = Jnew ();
-    json_object *a = Jnew_ar ();
-
-    Jadd_int (o, "pid", subprocess_pid (p));
-    for (i = 0; i < subprocess_get_argc (p); i++) {
-        Jadd_ar_str (a, subprocess_get_arg (p, i));
-    }
-    /*  Avoid shortjson here so we don't take
-     *   unnecessary reference to 'a'
-     */
-    json_object_object_add (o, "cmdline", a);
-    if ((cwd = subprocess_get_cwd (p)) == NULL)
-        cwd = getcwd (buf, MAXPATHLEN-1);
-    Jadd_str (o, "cwd", cwd);
-    if ((sender = subprocess_sender (p))) {
-        Jadd_str (o, "sender", sender);
-        free (sender);
-    }
-    return (o);
-}
-
-static int cmb_ps_cb (flux_msg_t **msg, void *arg)
-{
-    struct subprocess *p;
-    ctx_t *ctx = arg;
-    json_object *out = Jnew ();
-    json_object *procs = Jnew_ar ();
-    int rc;
-
-    Jadd_int (out, "rank", ctx->rank);
-
-    p = subprocess_manager_first (ctx->sm);
-    while (p) {
-        json_object *o = subprocess_json_info (p);
-        /* Avoid shortjson here so we don't take an unnecessary
-         *  reference to 'o'.
-         */
-        json_object_array_add (procs, o);
-        p = subprocess_manager_next (ctx->sm);
-    }
-    json_object_object_add (out, "procs", procs);
-    rc = flux_respond (ctx->h, *msg, 0, Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (out);
-    return (rc);
-}
-
 static int attr_get_snoop (const char *name, const char **val, void *arg)
 {
     snoop_t *snoop = arg;
@@ -1841,151 +1473,44 @@ done:
     return rc;
 }
 
-static int cmb_attrget_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str, *name, *val;
-    int flags;
-    json_object *in = NULL;
-    json_object *out = Jnew ();
-    int rc = -1;
+/**
+ ** Built-in services
+ **/
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "name", &name)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (attr_get (ctx->attrs, name, &val, &flags) < 0)
-        goto done;
-    if (!val) {
-        errno = ENOENT;
-        goto done;
-    }
-    Jadd_str (out, "value", val);
-    Jadd_int (out, "flags", flags);
-    rc = 0;
-done:
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0,
-                                      rc < 0 ? NULL : Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (out);
-    Jput (in);
-    return rc;
-}
-
-static int cmb_attrset_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str, *name, *val = NULL;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "name", &name)) {
-        errno = EPROTO;
-        goto done;
-    }
-    (void)Jget_str (in, "value", &val); /* may be NULL for unset */
-    if (val) {
-        if (attr_set (ctx->attrs, name, val, false) < 0) {
-            if (errno != ENOENT)
-                goto done;
-            if (attr_add (ctx->attrs, name, val, 0) < 0)
-                goto done;
-        }
-    } else {
-        if (attr_delete (ctx->attrs, name, false) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (in);
-    return rc;
-}
-
-static int cmb_attrlist_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *name;
-    json_object *out = Jnew ();
-    json_object *array = Jnew_ar ();
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, NULL) < 0)
-        goto done;
-    name = attr_first (ctx->attrs);
-    while (name) {
-        Jadd_ar_str (array, name);
-        name = attr_next (ctx->attrs);
-    }
-    Jadd_obj (out, "names", array);
-    rc = 0;
-done:
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0,
-                                      rc < 0 ? NULL : Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    Jput (out);
-    Jput (array);
-    return rc;
-}
-
-static int cmb_rusage_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *out = NULL;
-    int rc = -1;
-
-    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
-        goto done;
-    rc = flux_respond (ctx->h, *msg, 0, Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-done:
-    Jput (out);
-    return rc;
-}
-
-static int cmb_rmmod_cb (flux_msg_t **msg, void *arg)
+static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     char *name = NULL;
-    int rc = -1;
     module_t *p;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (flux_rmmod_json_decode (json_str, &name) < 0)
-        goto done;
+        goto error;
     if (!(p = module_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
     /* N.B. can't remove 'service' entry here as distributed
      * module shutdown may require inter-rank module communication.
      */
-    if (module_push_rmmod (p, *msg) < 0)
-        goto done;
-    flux_msg_destroy (*msg); /* msg will be replied to later */
-    *msg = NULL;
     if (module_stop (p) < 0)
-        goto done;
-    flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
-    rc = 0;
-done:
-    if (name)
-        free (name);
-    return rc;
+        goto error;
+    if (module_push_rmmod (p, msg) < 0) // response deferred
+        goto error;
+    flux_log (h, LOG_DEBUG, "rmmod %s", name);
+    free (name);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (name);
 }
 
-static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
+static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
@@ -1993,24 +1518,22 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
-    module_t *p;
-    int rc = -1;
+    module_t *p = NULL;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
-        goto done;
+        goto error;
     if (!(name = flux_modname (path))) {
         errno = ENOENT;
-        goto done;
+        goto error;
     }
     if (!(p = module_add (ctx->modhash, path)))
-        goto done;
+        goto error;
     if (!svc_add (ctx->services, module_get_name (p),
                                  module_get_service (p), mod_svc_cb, p)) {
-        module_remove (ctx->modhash, p);
         errno = EEXIST;
-        goto done;
+        goto error;
     }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
@@ -2019,477 +1542,269 @@ static int cmb_insmod_cb (flux_msg_t **msg, void *arg)
     }
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
-    if (module_push_insmod (p, *msg) < 0) {
+    if (module_push_insmod (p, msg) < 0) // response deferred
+        goto error;
+    if (module_start (p) < 0)
+        goto error;
+    flux_log (h, LOG_DEBUG, "insmod %s", name);
+    free (name);
+    free (path);
+    free (argz);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (p)
         module_remove (ctx->modhash, p);
-        goto done;
-    }
-    if (module_start (p) < 0) {
-        module_remove (ctx->modhash, p);
-        goto done;
-    }
-    flux_msg_destroy (*msg); /* msg will be replied to later */
-    *msg = NULL;
-    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
-    rc = 0;
-done:
-    if (name)
-        free (name);
-    if (path)
-        free (path);
-    if (argz)
-        free (argz);
-    return rc;
+    free (name);
+    free (path);
+    free (argz);
 }
 
-static int cmb_lsmod_cb (flux_msg_t **msg, void *arg)
+static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     flux_modlist_t *mods = NULL;
     char *json_str = NULL;
-    int rc = -1;
 
     if (!(mods = module_get_modlist (ctx->modhash)))
-        goto done;
+        goto error;
     if (!(json_str = flux_lsmod_json_encode (mods)))
-        goto done;
-    if (flux_respond (ctx->h, *msg, 0, json_str) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    if (json_str)
-        free (json_str);
+        goto error;
+    if (flux_respond (h, msg, 0, json_str) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (json_str);
     if (mods)
         flux_modlist_destroy (mods);
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (json_str);
+    if (mods)
+        flux_modlist_destroy (mods);
 }
 
-static int cmb_lspeer_cb (flux_msg_t **msg, void *arg)
+static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
+                           const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
+
     json_object *out = overlay_lspeer_encode (ctx->overlay);
-    int rc = flux_respond (ctx->h, *msg, 0, Jtostr (out));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (out);
-    return rc;
 }
 
-static int cmb_ping_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *inout = NULL;
-    const char *json_str;
-    char *s = NULL;
-    char *route = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(inout = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(s = flux_msg_get_route_string (*msg)))
-        goto done;
-    route = xasprintf ("%s!%u", s, ctx->rank);
-    Jadd_str (inout, "route", route);
-    rc = flux_respond (ctx->h, *msg, 0, Jtostr (inout));
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-done:
-    if (s)
-        free (s);
-    if (route)
-        free (route);
-    return rc;
-}
-
-static int cmb_reparent_cb (flux_msg_t **msg, void *arg)
+static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,
+                             const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *in = NULL;
     const char *uri;
     const char *json_str;
     bool recycled = false;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "uri", &uri)) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
     if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
-        goto done;
+        goto error;
     flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
                                                                   : "new");
-    rc = 0;
-done:
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (in);
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int cmb_panic_cb (flux_msg_t **msg, void *arg)
+static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     json_object *in = NULL;
     const char *s = NULL;
     const char *json_str;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "msg", &s))
         s = "no reason";
     log_msg_exit ("PANIC: %s", s ? s : "no reason");
-done:
+    /*NOTREACHED*/
     Jput (in);
-    return rc;
-}
-
-static int cmb_log_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *buf;
-    int len;
-
-    if (flux_request_decode_raw (*msg, NULL, &buf, &len) < 0) {
-        log_msg ("%s: decode error", __FUNCTION__);
-        goto done;
-    }
-    if (logbuf_append (ctx->logbuf, buf, len) < 0)
-        goto done;
-done:
-    flux_msg_destroy (*msg); /* no reply */
-    *msg = NULL;
-    return 0;
-}
-
-static int cmb_dmesg_clear_cb (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    int seq;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)) {
-        errno = EPROTO;
-        goto done;
-    }
-    logbuf_clear (ctx->logbuf, seq);
-    rc = 0;
-done:
-    flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    return;
+error:
     Jput (in);
-    return 0;
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void cmb_dmesg (const flux_msg_t *msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    const char *json_str;
-    const char *buf;
-    int len;
-    int seq;
-    json_object *in = NULL;
-    json_object *out = NULL;
-    bool follow;
-    int rc = -1;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)
-                                    || !Jget_bool (in, "follow", &follow)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (logbuf_get (ctx->logbuf, seq, &seq, &buf, &len) < 0) {
-        if (follow && errno == ENOENT) {
-            flux_msg_t *cpy = flux_msg_copy (msg, true);
-            if (!cpy)
-                goto done;
-            if (logbuf_sleepon (ctx->logbuf, cmb_dmesg, cpy, arg) < 0) {
-                free (cpy);
-                goto done;
-            }
-            goto done_noreply;
-        }
-        goto done;
-    }
-    out = Jnew ();
-    Jadd_int (out, "seq", seq);
-    Jadd_str_len (out, "buf", buf, len);
-    rc = 0;
-done:
-    flux_respond (ctx->h, msg, rc < 0 ? errno : 0,
-                               rc < 0 ? NULL : Jtostr (out));
-done_noreply:
-    Jput (in);
-    Jput (out);
-}
-
-static int cmb_dmesg_cb (flux_msg_t **msg, void *arg)
-{
-    cmb_dmesg (*msg, arg);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return 0;
-}
-
-static int cmb_event_mute_cb (flux_msg_t **msg, void *arg)
+static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     char *uuid = NULL;
 
-    if (flux_msg_get_route_last (*msg, &uuid) == 0)
+    if (flux_msg_get_route_last (msg, &uuid) == 0)
         overlay_mute_child (ctx->overlay, uuid);
-    if (uuid)
-        free (uuid);
-    flux_msg_destroy (*msg); /* no reply */
-    *msg = NULL;
-    return 0;
+    free (uuid);
+    /* no response */
 }
 
-static int cmb_disconnect_cb (flux_msg_t **msg, void *arg)
+static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
     char *sender = NULL;;
 
-    if (flux_msg_get_route_first (*msg, &sender) < 0)
-        goto done;
-
-    terminate_subprocesses_by_uuid (ctx, sender);
-    logbuf_disconnect (ctx->logbuf, sender);
-done:
-    if (sender)
+    if (flux_msg_get_route_first (msg, &sender) == 0) {
+        exec_terminate_subprocesses_by_uuid (h, sender);
         free (sender);
-    flux_msg_destroy (*msg); /* no reply */
-    *msg = NULL;
-    return 0;
+    }
+    /* no response */
 }
 
-static int cmb_sub_cb (flux_msg_t **msg, void *arg)
+static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
+                        const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
     json_object *in = NULL;
     const char *topic;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_route_first (*msg, &uuid) < 0)
-        goto done;
+    if (flux_msg_get_route_first (msg, &uuid) < 0)
+        goto error;
     if (!uuid) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    rc = module_subscribe (ctx->modhash, uuid, topic);
-done:
-    if (rc < 0)
-        FLUX_LOG_ERROR (ctx->h);
-    if (uuid)
-        free (uuid);
+    if (module_subscribe (ctx->modhash, uuid, topic) < 0)
+        goto error;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
     Jput (in);
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
+    Jput (in);
 }
 
-static int cmb_unsub_cb (flux_msg_t **msg, void *arg)
+static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
     json_object *in = NULL;
     const char *topic;
-    int rc = -1;
 
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
     if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    if (flux_msg_get_route_first (*msg, &uuid) < 0)
-        goto done;
+    if (flux_msg_get_route_first (msg, &uuid) < 0)
+        goto error;
     if (!uuid) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
-    rc = module_unsubscribe (ctx->modhash, uuid, topic);
-done:
-    if (rc < 0)
-        FLUX_LOG_ERROR (ctx->h);
-    if (uuid)
-        free (uuid);
+    if (module_unsubscribe (ctx->modhash, uuid, topic) < 0)
+        goto error;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
     Jput (in);
-    rc = flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, NULL);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return rc;
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    free (uuid);
+    Jput (in);
 }
 
-static int cmb_seq (flux_msg_t **msg, void *arg)
+static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *out = NULL;
-    int rc = sequence_request_handler (ctx->seq, *msg, &out);
-
-    if (flux_respond (ctx->h, *msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
-        flux_log_error (ctx->h, "cmb.seq: flux_respond");
-    if (out)
-        Jput (out);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
-    return (rc);
-}
-
-static int cmb_heaptrace_start_cb (flux_msg_t **msg, void *arg)
-{
-    const char *json_str, *filename;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "filename", &filename)) {
-        errno = EPROTO;
-        goto done;
-    }
-#if WITH_TCMALLOC
-    if (IsHeapProfilerRunning ()) {
-        errno = EINVAL;
-        goto done;
-    }
-    HeapProfilerStart (filename);
-    rc = 0;
-#else
-    errno = ENOSYS;
-#endif
-done:
-    Jput (in);
-    return rc;
-}
-
-static int cmb_heaptrace_dump_cb (flux_msg_t **msg, void *arg)
-{
-    const char *json_str, *reason;
-    json_object *in = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (*msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "reason", &reason)) {
-        errno = EPROTO;
-        goto done;
-    }
-#if WITH_TCMALLOC
-    if (!IsHeapProfilerRunning ()) {
-        errno = EINVAL;
-        goto done;
-    }
-    HeapProfilerDump (reason);
-    rc = 0;
-#else
-    errno = ENOSYS;
-#endif
-done:
-    Jput (in);
-    return rc;
-}
-
-static int cmb_heaptrace_stop_cb (flux_msg_t **msg, void *arg)
-{
-    int rc = -1;
-    if (flux_request_decode (*msg, NULL, NULL) < 0)
-        goto done;
-#if WITH_TCMALLOC
-    if (!IsHeapProfilerRunning ()) {
-        errno = EINVAL;
-        goto done;
-    }
-    HeapProfilerStop();
-    rc = 0;
-#else
-    errno = ENOSYS;
-#endif /* WITH_TCMALLOC */
-done:
-    return rc;
-}
-
-static int requeue_for_service (flux_msg_t **msg, void *arg)
-{
-    ctx_t *ctx = arg;
-    if (flux_requeue (ctx->h, *msg, FLUX_RQ_TAIL) < 0)
+    if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
         flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
-    flux_msg_destroy (*msg);
-    *msg = NULL;
     return 0;
 }
+
+static struct flux_msg_handler_spec handlers[] = {
+    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb,      },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb,      },
+    { FLUX_MSGTYPE_REQUEST, "cmb.reparent",   cmb_reparent_cb,    },
+    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb,  },
+    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb,  },
+    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb,         },
+    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb,       },
+    FLUX_MSGHANDLER_TABLE_END,
+};
 
 struct internal_service {
     const char *topic;
     const char *nodeset;
-    int (*fun)(flux_msg_t **msg, void *arg);
 };
 
 static struct internal_service services[] = {
-    { "cmb.attrget",    NULL,   cmb_attrget_cb      },
-    { "cmb.attrset",    NULL,   cmb_attrset_cb      },
-    { "cmb.attrlist",   NULL,   cmb_attrlist_cb     },
-    { "cmb.rusage",     NULL,   cmb_rusage_cb,      },
-    { "cmb.rmmod",      NULL,   cmb_rmmod_cb,       },
-    { "cmb.insmod",     NULL,   cmb_insmod_cb,      },
-    { "cmb.lsmod",      NULL,   cmb_lsmod_cb,       },
-    { "cmb.lspeer",     NULL,   cmb_lspeer_cb,      },
-    { "cmb.ping",       NULL,   cmb_ping_cb,        },
-    { "cmb.reparent",   NULL,   cmb_reparent_cb,    },
-    { "cmb.panic",      NULL,   cmb_panic_cb,       },
-    { "cmb.log",        NULL,   cmb_log_cb,         },
-    { "cmb.dmesg.clear",NULL,   cmb_dmesg_clear_cb, },
-    { "cmb.dmesg",      NULL,   cmb_dmesg_cb,       },
-    { "cmb.event-mute", NULL,   cmb_event_mute_cb,  },
-    { "cmb.exec",       NULL,   cmb_exec_cb,        },
-    { "cmb.exec.signal",NULL,   cmb_signal_cb,      },
-    { "cmb.exec.write", NULL,   cmb_write_cb,       },
-    { "cmb.processes",  NULL,   cmb_ps_cb,          },
-    { "cmb.disconnect", NULL,   cmb_disconnect_cb,  },
-    { "cmb.sub",        NULL,   cmb_sub_cb,         },
-    { "cmb.unsub",      NULL,   cmb_unsub_cb,       },
-    { "cmb.seq.fetch",  "[0]",  cmb_seq             },
-    { "cmb.seq.set",    "[0]",  cmb_seq             },
-    { "cmb.seq.destroy","[0]",  cmb_seq             },
-    { "cmb.heaptrace.start",NULL, cmb_heaptrace_start_cb },
-    { "cmb.heaptrace.dump", NULL, cmb_heaptrace_dump_cb  },
-    { "cmb.heaptrace.stop", NULL, cmb_heaptrace_stop_cb  },
-    { "content",        NULL,   requeue_for_service },
-    { "hello",          NULL,   requeue_for_service },
+    { "cmb.rusage",         NULL },
+    { "cmb.ping",           NULL },
+    { "cmb.exec",           NULL },
+    { "cmb.exec.signal",    NULL },
+    { "cmb.exec.write",     NULL },
+    { "cmb.processes",      NULL },
+    { "log",                NULL },
+    { "seq",                "[0]" },
+    { "content",            NULL },
+    { "hello",              NULL },
+    { "attr",               NULL },
+    { "heaptrace",          NULL },
     { NULL, NULL, },
 };
 
+/* Register builtin services (sharing ctx->h and broker thread).
+ * First loop is for services that are registered in other files.
+ * Second loop is for services registered here.
+ */
 static void broker_add_services (ctx_t *ctx)
 {
     struct internal_service *svc;
-
     for (svc = &services[0]; svc->topic != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (!svc_add (ctx->services, svc->topic, NULL, svc->fun, ctx))
-            log_err_exit ("error adding handler for %s", svc->topic);
+        if (!svc_add (ctx->services, svc->topic, NULL, route_to_handle, ctx))
+            log_err_exit ("error registering service for %s", svc->topic);
     }
+
+    struct flux_msg_handler_spec *spec;
+    for (spec = &handlers[0]; spec->topic_glob != NULL; spec++) {
+        if (!svc_add (ctx->services, spec->topic_glob, NULL,
+                      route_to_handle, ctx))
+            log_err_exit ("error registering service for %s", spec->topic_glob);
+    }
+    if (flux_msg_handler_addvec (ctx->h, handlers, ctx) < 0)
+        log_err_exit ("error registering message handlers");
 }
 
 /**
@@ -2504,7 +1819,6 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
     ctx_t *ctx = arg;
     int type;
     char *uuid = NULL;
-    int rc;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
 
     if (!msg)
@@ -2519,9 +1833,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
             (void)snoop_sendmsg (ctx->snoop, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &msg);
-            if (msg)
-                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
+            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* TRICKY:  Fix up ROUTER socket used in reverse direction.
@@ -2540,7 +1852,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, &msg);
+            (void)broker_event_sendmsg (ctx, msg);
             break;
     }
 done:
@@ -2550,13 +1862,13 @@ done:
 }
 
 /* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
-static int handle_event (ctx_t *ctx, flux_msg_t **msg)
+static int handle_event (ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t seq;
     const char *topic, *s;
 
-    if (flux_msg_get_seq (*msg, &seq) < 0
-            || flux_msg_get_topic (*msg, &topic) < 0) {
+    if (flux_msg_get_seq (msg, &seq) < 0
+            || flux_msg_get_topic (msg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
@@ -2574,21 +1886,21 @@ static int handle_event (ctx_t *ctx, flux_msg_t **msg)
     }
     ctx->event_recv_seq = seq;
 
-    (void)overlay_mcast_child (ctx->overlay, *msg);
-    (void)overlay_sendmsg_relay (ctx->overlay, *msg);
+    (void)overlay_mcast_child (ctx->overlay, msg);
+    (void)overlay_sendmsg_relay (ctx->overlay, msg);
 
     /* Internal services may install message handlers for events.
      */
     s = zlist_first (ctx->subscriptions);
     while (s) {
         if (!strncmp (s, topic, strlen (s))) {
-            if (flux_requeue (ctx->h, *msg, FLUX_RQ_TAIL) < 0)
+            if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
                 flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
             break;
         }
         s = zlist_next (ctx->subscriptions);
     }
-    return module_event_mcast (ctx->modhash, *msg);
+    return module_event_mcast (ctx->modhash, msg);
 }
 
 /* helper for parent_cb */
@@ -2615,7 +1927,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
-    int type, rc;
+    int type;
 
     if (!msg)
         goto done;
@@ -2635,15 +1947,11 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event");
                 goto done;
             }
-            if (handle_event (ctx, &msg) < 0)
+            if (handle_event (ctx, msg) < 0)
                 goto done;
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &msg);
-            if (msg)
-                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
-            if (rc < 0)
-                goto done;
+            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
@@ -2660,7 +1968,7 @@ static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
     flux_msg_t *msg = module_recvmsg (p);
-    int type, rc;
+    int type;
     int ka_errnum, ka_status;
 
     if (!msg)
@@ -2672,12 +1980,10 @@ static void module_cb (module_t *p, void *arg)
             (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, &msg);
-            if (msg)
-                flux_respond (ctx->h, msg, rc < 0 ? errno : 0, NULL);
+            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, &msg) < 0) {
+            if (broker_event_sendmsg (ctx, msg) < 0) {
                 flux_log_error (ctx->h, "%s(%s): broker_event_sendmsg %s",
                                 __FUNCTION__, module_get_name (p),
                                 flux_msg_typestr (type));
@@ -2754,7 +2060,7 @@ static void event_cb (overlay_t *ov, void *sock, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_EVENT:
-            if (handle_event (ctx, &msg) < 0)
+            if (handle_event (ctx, msg) < 0)
                 goto done;
             break;
         default:
@@ -2810,62 +2116,67 @@ done:
     return rc;
 }
 
-static int broker_request_sendmsg (ctx_t *ctx, flux_msg_t **msg)
+/* Select error mode for local errors (routing, bad msg, etc) with 'errmode'.
+ *
+ * ERROR_MODE_RESPOND:
+ *    any local errors such as message decoding or routing failure
+ *    trigger a response message, and function returns 0.
+ * ERROR_MODE_RETURN:
+ *    any local errors do not trigger a response, and function
+ *    returns -1 with errno set.
+ */
+static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
+                                   request_error_mode_t errmode)
 {
     uint32_t nodeid, gw;
     int flags;
     int rc = -1;
 
-    if (flux_msg_get_nodeid (*msg, &nodeid, &flags) < 0)
-        goto done;
+    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+        goto error;
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
-        rc = overlay_sendmsg_parent (ctx->overlay, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = overlay_sendmsg_parent (ctx->overlay, msg);
+        if (rc < 0)
+            goto error;
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
         rc = svc_sendmsg (ctx->services, msg);
         if (rc < 0 && errno == ENOSYS) {
-            rc = overlay_sendmsg_parent (ctx->overlay, *msg);
+            rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
                 errno = ENOSYS;
-            else {
-                flux_msg_destroy (*msg);
-                *msg = NULL;
-            }
         }
+        if (rc < 0)
+            goto error;
     } else if (nodeid == FLUX_NODEID_ANY) {
         rc = svc_sendmsg (ctx->services, msg);
         if (rc < 0 && errno == ENOSYS) {
-            rc = overlay_sendmsg_parent (ctx->overlay, *msg);
+            rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
                 errno = ENOSYS;
-            else {
-                flux_msg_destroy (*msg);
-                *msg = NULL;
-            }
         }
+        if (rc < 0)
+            goto error;
     } else if (nodeid == ctx->rank) {
         rc = svc_sendmsg (ctx->services, msg);
+        if (rc < 0)
+            goto error;
     } else if ((gw = kary_child_route (ctx->tbon.k, ctx->size,
                                        ctx->rank, nodeid)) != KARY_NONE) {
-        rc = subvert_sendmsg_child (ctx, *msg, gw);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = subvert_sendmsg_child (ctx, msg, gw);
+        if (rc < 0)
+            goto error;
     } else {
-        rc = overlay_sendmsg_parent (ctx->overlay, *msg);
-        if (rc == 0) {
-            flux_msg_destroy (*msg);
-            *msg = NULL;
-        }
+        rc = overlay_sendmsg_parent (ctx->overlay, msg);
+        if (rc < 0)
+            goto error;
     }
-done:
-    /* N.B. don't destroy msg on error as we use it to send errnum reply.
-     */
-    return rc;
+    return 0;
+error:
+    if (errmode == ERROR_MODE_RETURN)
+        return -1;
+    /* ERROR_MODE_RESPOND */
+    (void)flux_respond (ctx->h, msg, errno, NULL);
+    return 0;
 }
 
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
@@ -2912,38 +2223,41 @@ done:
  * Rank 0 doesn't (generally) receive the events it transmits so we have
  * to "loop back" here via handle_event().
  */
-static int broker_event_sendmsg (ctx_t *ctx, flux_msg_t **msg)
+static int broker_event_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 {
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
     if (ctx->rank > 0) {
-        if (flux_msg_enable_route (*msg) < 0)
+        if (flux_msg_enable_route (cpy) < 0)
             goto done;
-        rc = overlay_sendmsg_parent (ctx->overlay, *msg);
+        rc = overlay_sendmsg_parent (ctx->overlay, cpy);
     } else {
-        if (flux_msg_clear_route (*msg) < 0)
+        if (flux_msg_clear_route (cpy) < 0)
             goto done;
-        if (flux_msg_set_seq (*msg, ++ctx->event_send_seq) < 0)
+        if (flux_msg_set_seq (cpy, ++ctx->event_send_seq) < 0)
             goto done;
-        if (overlay_sendmsg_event (ctx->overlay, *msg) < 0)
+        if (overlay_sendmsg_event (ctx->overlay, cpy) < 0)
             goto done;
-        rc = handle_event (ctx, msg);
+        rc = handle_event (ctx, cpy);
     }
 done:
-    flux_msg_destroy (*msg);
-    *msg = NULL;
+    flux_msg_destroy (cpy);
     return rc;
 }
 
 /**
- ** Broker's internal, minimal flux_t implementation.
+ ** Broker's internal flux_t implementation
+ ** N.B. recv() method is missing because messages are "received"
+ ** when routing logic calls flux_requeue().
  **/
 
 static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     int type;
-    flux_msg_t *cpy = NULL;
     int rc = -1;
 
     (void)snoop_sendmsg (ctx->snoop, msg);
@@ -2952,17 +2266,13 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            rc = broker_request_sendmsg (ctx, &cpy);
+            rc = broker_request_sendmsg (ctx, msg, ERROR_MODE_RETURN);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             rc = broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            rc = broker_event_sendmsg (ctx, &cpy);
+            rc = broker_event_sendmsg (ctx, msg);
             break;
         default:
             errno = EINVAL;

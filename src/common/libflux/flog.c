@@ -133,7 +133,7 @@ void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     if (ctx->cb) {
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
-        if (!(rpc = flux_rpc_raw (h, "cmb.log", ctx->buf, len,
+        if (!(rpc = flux_rpc_raw (h, "log.append", ctx->buf, len,
                                   FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
             goto done;
     }
@@ -175,7 +175,7 @@ static int dmesg_clear (flux_t *h, int seq)
     flux_rpc_t *rpc;
     int rc = -1;
 
-    if (!(rpc = flux_rpcf (h, "cmb.dmesg.clear", FLUX_NODEID_ANY, 0,
+    if (!(rpc = flux_rpcf (h, "log.clear", FLUX_NODEID_ANY, 0,
                            "{s:i}", "seq", seq)))
         goto done;
     if (flux_rpc_get (rpc, NULL) < 0)
@@ -188,7 +188,7 @@ done:
 
 static flux_rpc_t *dmesg_rpc (flux_t *h, int seq, bool follow)
 {
-    return flux_rpcf (h, "cmb.dmesg", FLUX_NODEID_ANY, 0,
+    return flux_rpcf (h, "log.dmesg", FLUX_NODEID_ANY, 0,
                       "{s:i s:b}", "seq", seq, "follow", follow);
 }
 

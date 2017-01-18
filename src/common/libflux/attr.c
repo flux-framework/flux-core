@@ -92,7 +92,7 @@ static int attr_get_rpc (ctx_t *ctx, const char *name, attr_t **attrp)
     attr_t *attr;
     int rc = -1;
 
-    if (!(r = flux_rpcf (ctx->h, "cmb.attrget", FLUX_NODEID_ANY, 0,
+    if (!(r = flux_rpcf (ctx->h, "attr.get", FLUX_NODEID_ANY, 0,
                          "{s:s}", "name", name)))
         goto done;
     if (flux_rpc_getf (r, "{s:s, s:i}", "value", &val, "flags", &flags) < 0)
@@ -115,10 +115,10 @@ static int attr_set_rpc (ctx_t *ctx, const char *name, const char *val)
 
 #if JANSSON_VERSION_HEX >= 0x020800
     /* $? format specifier was introduced in jansson 2.8 */
-    r = flux_rpcf (ctx->h, "cmb.attrset", FLUX_NODEID_ANY, 0,
+    r = flux_rpcf (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
                    "{s:s, s:s?}", "name", name, "value", val);
 #else
-    r = flux_rpcf (ctx->h, "cmb.attrset", FLUX_NODEID_ANY, 0,
+    r = flux_rpcf (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
                    val ? "{s:s, s:s}" : "{s:s, s:n}",
                    "name", name, "value", val);
 #endif
@@ -157,7 +157,7 @@ static int attr_list_rpc (ctx_t *ctx)
     size_t index;
     int rc = -1;
 
-    if (!(r = flux_rpc (ctx->h, "cmb.attrlist", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(r = flux_rpc (ctx->h, "attr.list", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
     if (flux_rpc_getf (r, "{s:o}", "names", &array) < 0)
         goto done;

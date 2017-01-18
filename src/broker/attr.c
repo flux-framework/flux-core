@@ -26,6 +26,7 @@
 #include "config.h"
 #endif
 #include <czmq.h>
+#include <jansson.h>
 
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -66,22 +67,6 @@ static struct entry *entry_create (const char *name, const char *val, int flags)
         e->val = xstrdup (val);
     e->flags = flags;
     return e;
-}
-
-attr_t *attr_create (void)
-{
-    attr_t *attrs = xzmalloc (sizeof (*attrs));
-    if (!(attrs->hash = zhash_new ()))
-        oom ();
-    return attrs;
-}
-
-void attr_destroy (attr_t *attrs)
-{
-    if (attrs) {
-        zhash_destroy (&attrs->hash);
-        free (attrs);
-    }
 }
 
 int attr_delete (attr_t *attrs, const char *name, bool force)
@@ -305,6 +290,141 @@ const char *attr_next (attr_t *attrs)
 {
     struct entry *e = zhash_next (attrs->hash);
     return e ? e->name : NULL;
+}
+
+/**
+ ** Service
+ **/
+
+void getattr_request_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg, void *arg)
+{
+    attr_t *attrs = arg;
+    const char *name;
+    const char *val;
+    int flags;
+
+    if (flux_request_decodef (msg, NULL, "{s:s}", "name", &name) < 0)
+        goto error;
+    if (attr_get (attrs, name, &val, &flags) < 0)
+        goto error;
+    if (!val) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_respondf (h, msg, "{s:s s:i}", "value", val, "flags", flags) < 0)
+        FLUX_LOG_ERROR (h);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        FLUX_LOG_ERROR (h);
+}
+
+void setattr_request_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg, void *arg)
+{
+    attr_t *attrs = arg;
+    const char *name;
+    const char *val;
+
+    if (flux_request_decodef (msg, NULL, "{s:s s:s}",       /* SET */
+                              "name", &name,
+                              "value", &val) == 0) {
+        if (attr_set (attrs, name, val, false) < 0) {
+            if (errno != ENOENT)
+                goto error;
+            if (attr_add (attrs, name, val, 0) < 0)
+                goto error;
+        }
+    }
+    else if (flux_request_decodef (msg, NULL, "{s:s s:n}",  /* DELETE */
+                                   "name", &name,
+                                   "value") == 0) {
+        if (attr_delete (attrs, name, false) < 0)
+            goto error;
+    }
+    else
+        goto error;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        FLUX_LOG_ERROR (h);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        FLUX_LOG_ERROR (h);
+}
+
+void lsattr_request_cb (flux_t *h, flux_msg_handler_t *w,
+                        const flux_msg_t *msg, void *arg)
+{
+    attr_t *attrs = arg;
+    const char *name;
+    json_t *names = NULL, *js;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(names = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    name = attr_first (attrs);
+    while (name) {
+        if (!(js = json_string (name))) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (json_array_append_new (names, js) < 0) {
+            json_decref (js);
+            errno = ENOMEM;
+            goto error;
+        }
+        name = attr_next (attrs);
+    }
+    if (flux_respondf (h, msg, "{s:O}", "names", names) < 0)
+        FLUX_LOG_ERROR (h);
+    json_decref (names);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        FLUX_LOG_ERROR (h);
+    json_decref (names);
+}
+
+/**
+ ** Initialization
+ **/
+
+static struct flux_msg_handler_spec handlers[] = {
+    { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+
+int attr_register_handlers (attr_t *attrs, flux_t *h)
+{
+    return flux_msg_handler_addvec (h, handlers, attrs);
+}
+
+void attr_unregister_handlers (void)
+{
+    flux_msg_handler_delvec (handlers);
+}
+
+attr_t *attr_create (void)
+{
+    attr_t *attrs = xzmalloc (sizeof (*attrs));
+    if (!(attrs->hash = zhash_new ()))
+        oom ();
+    return attrs;
+}
+
+void attr_destroy (attr_t *attrs)
+{
+    if (attrs) {
+        zhash_destroy (&attrs->hash);
+        free (attrs);
+    }
 }
 
 /*

@@ -314,7 +314,7 @@ prog:SubCommand {
        postincrement = 0,
        create = false
     }
-    local resp, err = f:rpc ("cmb.seq.fetch", req)
+    local resp, err = f:rpc ("seq.fetch", req)
     if not resp then
         self:die ("No last jobid found: %s", err)
     end

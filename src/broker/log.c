@@ -43,7 +43,7 @@ static const int default_stderr_level = LOG_ERR;
 static const int default_level = LOG_DEBUG;
 
 #define LOGBUF_MAGIC 0xe1e2e3e4
-struct logbuf_struct {
+typedef struct {
     int magic;
     flux_t *h;
     uint32_t rank;
@@ -57,7 +57,7 @@ struct logbuf_struct {
     int ring_size;
     int seq;
     zlist_t *sleepers;
-};
+} logbuf_t;
 
 struct logbuf_entry {
     char *buf;
@@ -65,8 +65,12 @@ struct logbuf_entry {
     int seq;
 };
 
+#define SLEEPER_MAGIC 0xe4e3e2e1
 struct sleeper {
-    logbuf_sleeper_f fun;
+    int magic;
+    flux_t *h;
+    flux_msg_handler_t *w;
+    flux_msg_handler_f fun;
     flux_msg_t *msg;
     void *arg;
 };
@@ -74,18 +78,29 @@ struct sleeper {
 static void sleeper_destroy (struct sleeper *s)
 {
     if (s) {
+        assert (s->magic == SLEEPER_MAGIC);
         flux_msg_destroy (s->msg);
+        s->magic =~ SLEEPER_MAGIC;
         free (s);
     }
 }
 
-static struct sleeper *sleeper_create (logbuf_sleeper_f fun, flux_msg_t *msg,
-                                       void *arg)
+static struct sleeper *sleeper_create (flux_msg_handler_f fun,
+                                       flux_t *h, flux_msg_handler_t *w,
+                                       const flux_msg_t *msg, void *arg)
 {
-    struct sleeper *s = xzmalloc (sizeof (*s));
+    struct sleeper *s = calloc (1, sizeof (*s));
+    if (!s)
+        return NULL;
+    s->magic = SLEEPER_MAGIC;
+    s->h = h;
+    s->w = w;
     s->fun = fun;
-    s->msg = msg;
     s->arg = arg;
+    if (!(s->msg = flux_msg_copy (msg, true))) {
+        sleeper_destroy (s);
+        return NULL;
+    }
     return s;
 }
 
@@ -117,7 +132,7 @@ static void logbuf_trim (logbuf_t *logbuf, int size)
     }
 }
 
-void logbuf_clear (logbuf_t *logbuf, int seq_index)
+static void logbuf_clear (logbuf_t *logbuf, int seq_index)
 {
     struct logbuf_entry *e;
 
@@ -131,8 +146,8 @@ void logbuf_clear (logbuf_t *logbuf, int seq_index)
     }
 }
 
-int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
-                const char **buf, int *len)
+static int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
+                       const char **buf, int *len)
 {
     struct logbuf_entry *e = zlist_first (logbuf->buf);
 
@@ -151,33 +166,20 @@ int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
     return 0;
 }
 
-int logbuf_sleepon (logbuf_t *logbuf, logbuf_sleeper_f fun,
-                    flux_msg_t *msg, void *arg)
+static int logbuf_sleepon (logbuf_t *logbuf, flux_msg_handler_f fun, flux_t *h,
+                           flux_msg_handler_t *w, const flux_msg_t *msg,
+                           void *arg)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
-    struct sleeper *s = sleeper_create (fun, msg, arg);
+    struct sleeper *s = sleeper_create (fun, h, w, msg, arg);
+    if (!s)
+        return -1;
     if (zlist_append (logbuf->sleepers, s) < 0) {
+        sleeper_destroy (s);
         errno = ENOMEM;
         return -1;
     }
     return 0;
-}
-
-void logbuf_disconnect (logbuf_t *logbuf, const char *uuid)
-{
-    assert (logbuf->magic == LOGBUF_MAGIC);
-    struct sleeper *s = zlist_first (logbuf->sleepers);
-    while (s) {
-        char *sender = NULL;
-        if (flux_msg_get_route_first (s->msg, &sender) == 0 && sender) {
-            if (!strcmp (uuid, sender)) {
-                zlist_remove (logbuf->sleepers, s);
-                sleeper_destroy (s);
-            }
-            free (sender);
-        }
-        s = zlist_next (logbuf->sleepers);
-    }
 }
 
 static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
@@ -196,14 +198,14 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
             return -1;
         }
         while ((s = zlist_pop (logbuf->sleepers))) {
-            s->fun (s->msg, s->arg);
+            s->fun (s->h, s->w, s->msg, s->arg);
             sleeper_destroy (s);
         }
     }
     return 0;
 }
 
-logbuf_t *logbuf_create (void)
+static logbuf_t *logbuf_create (void)
 {
     logbuf_t *logbuf = xzmalloc (sizeof (*logbuf));
     logbuf->magic = LOGBUF_MAGIC;
@@ -241,17 +243,6 @@ void logbuf_destroy (logbuf_t *logbuf)
         logbuf->magic = ~LOGBUF_MAGIC;
         free (logbuf);
     }
-}
-
-void logbuf_set_flux (logbuf_t *logbuf, flux_t *h)
-{
-    assert (logbuf->magic == LOGBUF_MAGIC);
-    logbuf->h = h;
-}
-
-void logbuf_set_rank (logbuf_t *logbuf, uint32_t rank)
-{
-    logbuf->rank = rank;
 }
 
 static int logbuf_set_forward_level (logbuf_t *logbuf, int level)
@@ -408,7 +399,7 @@ done:
     return rc;
 }
 
-int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
+static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
 {
     char s[PATH_MAX];
     const char *val;
@@ -468,19 +459,19 @@ done:
     return rc;
 }
 
-int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
+static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
 
     flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc_raw (logbuf->h, "cmb.log", buf, len,
+    if (!(rpc = flux_rpc_raw (logbuf->h, "log.append", buf, len,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         return -1;
     flux_rpc_destroy (rpc);
     return 0;
 }
 
-int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
+static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
     bool logged_stderr = false;
@@ -518,10 +509,187 @@ int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
     return rc;
 }
 
-void logbuf_append_redirect (const char *buf, int len, void *arg)
+/* Receive a log entry.
+ * This is a flux_log_f that is passed to flux_log_redirect()
+ * to capture log entries from the broker itself.
+ */
+static void logbuf_append_redirect (const char *buf, int len, void *arg)
 {
     logbuf_t *logbuf = arg;
     (void)logbuf_append (logbuf, buf, len);
+}
+
+/* N.B. log requests have no response.
+ */
+static void append_request_cb (flux_t *h, flux_msg_handler_t *w,
+                               const flux_msg_t *msg, void *arg)
+{
+    logbuf_t *logbuf = arg;
+    const char *buf;
+    int len;
+
+    if (flux_request_decode_raw (msg, NULL, &buf, &len) < 0) {
+        log_msg ("%s: decode error", __FUNCTION__);
+        return;
+    }
+    (void)logbuf_append (logbuf, buf, len);
+}
+
+static void clear_request_cb (flux_t *h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
+{
+    logbuf_t *logbuf = arg;
+    const char *json_str;
+    int seq;
+    json_object *in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)) {
+        errno = EPROTO;
+        goto done;
+    }
+    logbuf_clear (logbuf, seq);
+    rc = 0;
+done:
+    flux_respond (h, msg, rc < 0 ? errno : 0, NULL);
+    Jput (in);
+}
+
+static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
+                              const flux_msg_t *msg, void *arg)
+{
+    logbuf_t *logbuf = arg;
+    const char *json_str;
+    const char *buf;
+    int len;
+    int seq;
+    json_object *in = NULL;
+    json_object *out = NULL;
+    bool follow;
+    int rc = -1;
+
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)
+                                    || !Jget_bool (in, "follow", &follow)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (logbuf_get (logbuf, seq, &seq, &buf, &len) < 0) {
+        if (follow && errno == ENOENT) {
+            if (logbuf_sleepon (logbuf, dmesg_request_cb, h, w, msg, arg) < 0)
+                goto done;
+            goto done_noreply;
+        }
+        goto done;
+    }
+    out = Jnew ();
+    Jadd_int (out, "seq", seq);
+    Jadd_str_len (out, "buf", buf, len);
+    rc = 0;
+done:
+    flux_respond (h, msg, rc < 0 ? errno : 0,
+                          rc < 0 ? NULL : Jtostr (out));
+done_noreply:
+    Jput (in);
+    Jput (out);
+}
+
+static int cmp_sender (flux_msg_t *msg, const char *uuid)
+{
+    char *sender = NULL;
+    int rc = 0;
+
+    if (flux_msg_get_route_first (msg, &sender) < 0)
+        goto done;
+    if (!sender || strcmp (sender, uuid) != 0)
+        goto done;
+    rc = 1;
+done:
+    free (sender);
+    return rc;
+}
+
+static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
+                                   const flux_msg_t *msg, void *arg)
+{
+    logbuf_t *logbuf = arg;
+    char *sender = NULL;
+    struct sleeper *s;
+    zlist_t *tmp = NULL;
+
+    assert (logbuf->magic == LOGBUF_MAGIC);
+    if (flux_msg_get_route_first (msg, &sender) < 0 || !sender)
+        goto done;
+    s = zlist_first (logbuf->sleepers);
+    while (s) {
+        assert (s->magic == SLEEPER_MAGIC);
+        if (cmp_sender (s->msg, sender)) {
+            if (!tmp && !(tmp = zlist_new ()))
+                goto done;
+            if (zlist_append (tmp, s) < 0)
+                goto done;
+        }
+        s = zlist_next (logbuf->sleepers);
+    }
+    if (tmp) {
+        while ((s = zlist_pop (tmp))) {
+            zlist_remove (logbuf->sleepers, s);
+            sleeper_destroy (s);
+        }
+    }
+done:
+    free (sender);
+    zlist_destroy (&tmp);
+    /* no response */
+}
+
+static struct flux_msg_handler_spec handlers[] = {
+    { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+static void logbuf_finalize (void *arg)
+{
+    logbuf_t *logbuf = arg;
+    logbuf_destroy (logbuf);
+    flux_msg_handler_delvec (handlers);
+    /* FIXME: need logbuf_unregister_attrs() */
+}
+
+static int fake_rank (flux_t *h, uint32_t rank)
+{
+    char buf[16];
+    snprintf (buf, sizeof (buf), "%u", rank);
+    return flux_attr_fake (h, "rank", buf, FLUX_ATTRFLAG_IMMUTABLE);
+}
+
+int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
+{
+    logbuf_t *logbuf = logbuf_create ();
+    if (!logbuf)
+        goto error;
+    if (logbuf_register_attrs (logbuf, attrs) < 0)
+        goto error;
+    if (fake_rank (h, rank) < 0)
+        goto error;
+    if (flux_msg_handler_addvec (h, handlers, logbuf) < 0)
+        goto error;
+    flux_log_set_appname (h, "broker");
+    flux_log_set_redirect (h, logbuf_append_redirect, logbuf);
+    logbuf->h = h;
+    logbuf->rank = rank;
+    flux_aux_set (h, "flux::logbuf", logbuf, logbuf_finalize);
+    return 0;
+error:
+    logbuf_destroy (logbuf);
+    /* FIXME: need logbuf_unregister_attrs() */
+    return -1;
 }
 
 /*

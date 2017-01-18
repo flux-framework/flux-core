@@ -352,7 +352,7 @@ static int64_t next_cronid (flux_t *h)
     Jadd_int64 (req, "postincrement", 0);
     Jadd_bool (req, "create", true);
 
-    if (!(rpc = flux_rpc (h, "cmb.seq.fetch", Jtostr (req), 0, 0))) {
+    if (!(rpc = flux_rpc (h, "seq.fetch", Jtostr (req), 0, 0))) {
         flux_log_error (h, "flux_rpc");
         return ret;
     }

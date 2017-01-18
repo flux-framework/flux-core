@@ -28,7 +28,7 @@ int main (int argc, char **argv)
     Jadd_str (o, "name", "rank");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc_multi (h, "cmb.attrget", Jtostr (o), "all", 0)))
+    if (!(rpc = flux_rpc_multi (h, "attr.get", Jtostr (o), "all", 0)))
         log_err_exit ("flux_rpc");
     if (flux_rpc_then (rpc, get_rank, NULL) < 0)
         log_err_exit ("flux_rpc_then");

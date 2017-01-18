@@ -37,8 +37,15 @@ flux_broker_SOURCES = \
 	content-cache.h \
 	content-cache.c \
 	runlevel.h \
-	runlevel.c
-
+	runlevel.c \
+	heaptrace.h \
+	heaptrace.c \
+	exec.h \
+	exec.c \
+	ping.h \
+	ping.c \
+	rusage.h \
+	rusage.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
