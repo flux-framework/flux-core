@@ -200,7 +200,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec);
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
-static void init_attrs_from_environment (attr_t *attrs);
+static void init_attrs (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -292,9 +292,7 @@ int main (int argc, char *argv[])
 
     ctx.pid = getpid();
 
-    /* Initialize config attrs from environment set up by flux(1)
-     */
-    init_attrs_from_environment (ctx.attrs);
+    init_attrs (&ctx);
 
     if (!(ctx.sm = subprocess_manager_create ()))
         oom ();
@@ -749,6 +747,31 @@ static void init_attrs_from_environment (attr_t *attrs)
     }
 }
 
+static void init_attrs_broker_pid (ctx_t *ctx)
+{
+    char *attrname = "broker.pid";
+    char *pidval;
+
+    pidval = xasprintf ("%u", ctx->pid);
+    if (attr_add (ctx->attrs,
+                  attrname,
+                  pidval,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("attr_add %s", attrname);
+    free (pidval);
+}
+
+static void init_attrs (ctx_t *ctx)
+{
+    /* Initialize config attrs from environment set up by flux(1)
+     */
+    init_attrs_from_environment (ctx->attrs);
+
+    /* Initialize other miscellaneous attrs
+     */
+    init_attrs_broker_pid (ctx);
+}
+
 static void hello_update_cb (hello_t *hello, void *arg)
 {
     ctx_t *ctx = arg;
@@ -789,18 +812,18 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_pidfile (ctx_t *ctx)
 {
-    const char *scratch_dir;
+    const char *rankdir;
     char *pidfile;
     FILE *f;
 
-    if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0)
-        log_msg_exit ("scratch-directory attribute is not set");
-    pidfile = xasprintf ("%s/%"PRIu32"/broker.pid", scratch_dir, ctx->rank);
+    if (attr_get (ctx->attrs, "scratch-directory-rank", &rankdir, NULL) < 0)
+        log_msg_exit ("scratch-directory-rank attribute is not set");
+    pidfile = xasprintf ("%s/broker.pid", rankdir);
     if (!(f = fopen (pidfile, "w+")))
         log_err_exit ("%s", pidfile);
-    if (fprintf (f, "%u", getpid ()) < 0)
+    if (fprintf (f, "%u", ctx->pid) < 0)
         log_err_exit ("%s", pidfile);
-    if (fclose(f) < 0)
+    if (fclose (f) < 0)
         log_err_exit ("%s", pidfile);
     cleanup_push_string (cleanup_file, pidfile);
     free (pidfile);
@@ -1120,7 +1143,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
         goto done;
     }
     if (create_rankdir (ctx) < 0) {
-        log_err ("could not initialize ankdir");
+        log_err ("could not initialize rankdir");
         goto done;
     }
 

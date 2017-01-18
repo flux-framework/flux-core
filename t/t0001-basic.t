@@ -90,6 +90,13 @@ test_expect_success 'broker scratch-directory override works' '
 	test -d $SCRATCHDIR &&
 	rmdir $SCRATCHDIR
 '
+test_expect_success 'broker scratch-directory-rank override works' '
+	RANKDIR=`mktemp -d` &&
+	DIR=`flux start -o,--setattr=scratch-directory-rank=$RANKDIR flux getattr scratch-directory-rank` &&
+	test "$DIR" = "$RANKDIR" &&
+	test -d $RANKDIR &&
+	rmdir $RANKDIR
+'
 test_expect_success 'broker persist-directory works' '
 	PERSISTDIR=`mktemp -d` &&
 	flux start -o,--setattr=persist-directory=$PERSISTDIR /bin/true &&
@@ -115,6 +122,15 @@ test_expect_success 'broker persist-filesystem is ignored if persist-directory s
 	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
 	rmdir $PERSISTFS &&
 	rm -rf $PERSISTDIR
+'
+# Use -eq hack to test that BROKERPID is a number
+test_expect_success 'broker broker.pid attribute is readable' '
+	BROKERPID=`flux start flux getattr broker.pid` &&
+	test -n "$BROKERPID" &&
+	test "$BROKERPID" -eq "$BROKERPID"
+'
+test_expect_success 'broker broker.pid attribute is immutable' '
+	test_must_fail flux start -o,--setattr=broker.pid=1234 flux getattr broker.pid
 '
 test_expect_success 'flux-help command list can be extended' '
 	mkdir help.d &&
