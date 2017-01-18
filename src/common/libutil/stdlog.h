@@ -1,6 +1,8 @@
 #ifndef _UTIL_STDLOG_H
 #define _UTIL_STDLOG_H
 
+#include <stdarg.h>
+
 /* RFC 5424 syslog wire format */
 
 #define STDLOG_MAX_PRI          5
@@ -36,6 +38,12 @@ int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
 
 int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
                    const char *sd, const char *msg);
+
+int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
+                     const char *sd, const char *fmt, va_list ap);
+
+int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
+                    const char *sd, const char *fmt, ...);
 
 void stdlog_init (struct stdlog_header *hdr);
 
