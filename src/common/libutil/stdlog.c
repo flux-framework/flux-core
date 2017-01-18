@@ -145,7 +145,7 @@ int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
 int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
                      const char *sd, const char *fmt, va_list ap)
 {
-    int m, n;
+    int m, n, i;
     int rc; // includes any overflow
 
     m = snprintf (buf, len, "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
@@ -164,6 +164,8 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
     rc += n;
     if (n > len - m)
         n = len - m;
+    for (i = 0; i < n; i++)
+        buf[m + i] &= 0x7f; // ensure only ascii chars are logged
     return rc;
 }
 
