@@ -2328,6 +2328,7 @@ int main (int ac, char **av)
 {
     int code = 0;
     int parent_fd = -1;
+    int exec_rc = -1;
     struct prog_ctx *ctx = NULL;
     optparse_t *p;
     struct optparse_option opts [] = {
@@ -2382,16 +2383,10 @@ int main (int ac, char **av)
     if (!prog_ctx_getopt (ctx, "no-pmi-server") && prog_ctx_initialize_pmi (ctx) < 0)
         wlog_fatal (ctx, 1, "failed to initialize pmi-server");
 
-    if (exec_commands (ctx) == 0) {
+    exec_rc = exec_commands (ctx);
 
-        if (flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
-            wlog_err (ctx, "flux_reactor_run: %s", flux_strerror (errno));
-
-        rexec_state_change (ctx, "complete");
-        wlog_msg (ctx, "job complete. exiting...");
-
-        lua_stack_call (ctx->lua_stack, "rexecd_exit");
-    }
+    if (exec_rc == 0 && flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
+        wlog_err (ctx, "flux_reactor_run: %s", flux_strerror (errno));
 
     if (ctx->nodeid == 0) {
         /* At final job state, archive the completed lwj back to the
@@ -2399,7 +2394,13 @@ int main (int ac, char **av)
          */
         if (archive_lwj (ctx) < 0)
             wlog_err (ctx, "archive_lwj failed");
+    }
 
+    if (exec_rc == 0) {
+        rexec_state_change (ctx, "complete");
+        wlog_msg (ctx, "job complete. exiting...");
+
+        lua_stack_call (ctx->lua_stack, "rexecd_exit");
     }
 
     code = ctx->errnum;
