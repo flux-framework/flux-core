@@ -13,10 +13,6 @@ fop_class_t *fop_new_interface_class (const char *name,
 void fop_implement_interface (fop_class_t *c,
                               const fop_class_t *interface,
                               size_t offset);
-void fop_implement_dynamic_interface (fop_class_t *c,
-                                      const fop_class_t *interface,
-                                      fop_interface_t *impl);
-
 void fop_dynamic_class_init (fop_class_t *c, const fop_class_t *super);
 
 #endif /* __FLUX_CORE_FOP_DYNAMIC_H */

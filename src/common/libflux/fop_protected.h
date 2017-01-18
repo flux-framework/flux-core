@@ -38,7 +38,7 @@ struct fop_class {
     size_t size;
     struct fclass_inner inner;
 
-    fop_new_f new;
+    fop_new_f new_fn;
     fop_init_f initialize;
     fop_fini_f finalize;
     fop_putter_f describe;

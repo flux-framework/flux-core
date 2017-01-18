@@ -49,7 +49,7 @@ fop *fop_describe (fop *o, FILE *s);
 fop *fop_represent (fop *o, FILE *s);
 uintptr_t fop_hash (fop *);
 bool fop_equal (const fop *, const fop *);
-fop *fop_copy (const fop *);
+fop *fop_copy (fop *self, const fop *from);
 
 // fop class construction routines
 
@@ -68,7 +68,7 @@ typedef void (*fop_release_f) (void *);
 typedef fop *(*fop_putter_f) (fop *, FILE *);
 typedef uintptr_t (*fop_hash_f) (fop *);
 typedef bool (*fop_equal_f) (const fop *, const fop *);
-typedef fop *(*fop_copy_f) (const fop *);
+typedef fop *(*fop_copy_f) (fop *self, const fop *from);
 
 fop_class_t *fop_class_set_new (fop *c, fop_new_f fn);
 fop_class_t *fop_class_set_init (fop *c, fop_init_f fn);

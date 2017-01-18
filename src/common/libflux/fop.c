@@ -108,7 +108,7 @@ void *fop_new (const fop_class_t *c, ...)
     va_list ap;
     assert (c);
     va_start (ap, c);
-    fop_object_t *result = c->new ? c->new (c, &ap) : NULL;
+    fop_object_t *result = c->new_fn ? c->new_fn (c, &ap) : NULL;
     va_end (ap);
     return result;
 };
@@ -178,6 +178,49 @@ fop *fop_represent (void *o, FILE *s)
         return NULL;
     return c->represent ? c->represent (o, s) : NULL;
 };
+uintptr_t fop_hash (fop *o)
+{
+    const fop_class_t *c = fop_get_class (o);
+    if (!c || !c->hash)
+        return 0;
+    return c->hash (o);
+};
+bool fop_equal (const fop *self, const fop *other)
+{
+    const fop_class_t *sc = fop_get_class (self);
+    const fop_class_t *oc = fop_get_class (other);
+    // To be equal, they must have the same class
+    if (sc != oc)
+        return false;
+    // To be equal, they must have the same equal method
+    if (sc->equal != oc->equal)
+        return false;
+    if (sc->equal == NULL)
+        return self == other; //pointer equality
+    return sc->equal (self, other);
+};
+fop *fop_copy (fop *self, const fop *from)
+{
+    const fop_class_t *sc = fop_get_class (self);
+    const fop_class_t *fc = fop_get_class (from);
+    if (!sc || !fc || sc != fc || !sc->copy)
+        return NULL;
+
+    return sc->copy (self, from);
+};
+fop *fop_dup (const fop *self)
+{
+    const fop_class_t *c = fop_get_class (self);
+    if (!c)
+        return NULL;
+    // NOTE: alloc, not new, copy construction precludes the invocation of
+    // init routines on construction of the target
+    fop * new_obj = fop_alloc (c, 0);
+    fop * ret = fop_copy (new_obj, self);
+    if (!ret)
+        fop_release (new_obj);
+    return ret;
+};
 
 // Class construction routines
 fop_class_t *fop_new_metaclass (const char *name,
@@ -201,7 +244,7 @@ fop_class_t *fop_class_set_new (fop *_c, fop_new_f fn)
     if (!c) {
         return NULL;
     }
-    c->new = fn;
+    c->new_fn = fn;
     return c;
 }
 fop_class_t *fop_class_set_init (fop *_c, fop_init_f fn)
@@ -306,8 +349,6 @@ void *object_new (const fop_class_t *c, va_list *app)
         // XXX: it's arguable if this should be release or not, since init
         // failed, it may not be valid to release it and call finalize, but
         // not doing so may leave it partially allocated internally.
-        // auto-release pools would help a lot here, but one thing at a
-        // time...
         free (buf);
     }
     return res;
@@ -371,7 +412,7 @@ void *class_initialize (fop *c_in, va_list *app)
     const char *name = va_arg (*app, char *);
     const fop_class_t *super = va_arg (*app, fop_class_t *);
     size_t size = va_arg (*app, size_t);
-    size_t offset = offsetof (fop_class_t, new);
+    size_t offset = offsetof (fop_class_t, new_fn);
 
     const fop_class_t *super_metaclass = fop_get_class (super);
     /* fprintf (stderr, "inheriting %s(%zu) from %s(%zu), meta %s(%zu)\n", name,
@@ -408,7 +449,7 @@ void *class_desc (fop *c_in, FILE *s)
     }
     fprintf (s, "    default methods:\n");
     fprintf (s, "        new: %s\n",
-             c->new ? (c->new == object_new ? "default" : "custom") : "unimplem"
+             c->new_fn ? (c->new_fn == object_new ? "default" : "custom") : "unimplem"
                                                                       "ented");
     fprintf (s, "        initialize: %s\n",
              c->initialize
