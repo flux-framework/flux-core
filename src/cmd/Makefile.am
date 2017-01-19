@@ -66,7 +66,6 @@ endif
 
 fluxcmd_PROGRAMS = \
 	flux-ping \
-	flux-up \
 	flux-keygen \
 	flux-logger \
 	flux-snoop \
