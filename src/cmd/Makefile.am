@@ -54,7 +54,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-wreckrun \
 	flux-wreck \
 	flux-exec \
-	flux-topo \
 	flux-ps \
 	flux-cron \
 	flux-aggregate
@@ -66,7 +65,6 @@ endif
 
 fluxcmd_PROGRAMS = \
 	flux-ping \
-	flux-up \
 	flux-keygen \
 	flux-logger \
 	flux-snoop \
