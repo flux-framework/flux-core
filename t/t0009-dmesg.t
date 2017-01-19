@@ -58,4 +58,10 @@ test_expect_success 'ring buffer wraps over old entries' '
 	flux setattr log-ring-size $OLD_RINGSIZE
 '
 
+# Try to make flux dmesg get an EPROTO error
+test_expect_success 'logged non-ascii characters handled ok' '
+	/bin/echo -n -e "\xFF\xFE\x82\x00" | flux logger
+	flux dmesg
+'
+
 test_done

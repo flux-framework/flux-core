@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
+#include <stdarg.h>
 
 #include "stdlog.h"
 
@@ -140,17 +141,50 @@ int stdlog_decode (const char *buf, int len, struct stdlog_header *hdr,
     return 0;
 }
 
+
+int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
+                     const char *sd, const char *fmt, va_list ap)
+{
+    int m, n, i;
+    int rc; // includes any overflow
+
+    m = snprintf (buf, len, "<%d>%d %.*s %.*s %.*s %.*s %.*s %s ",
+                  hdr->pri, hdr->version,
+                  STDLOG_MAX_TIMESTAMP, hdr->timestamp,
+                  STDLOG_MAX_HOSTNAME, hdr->hostname,
+                  STDLOG_MAX_APPNAME, hdr->appname,
+                  STDLOG_MAX_PROCID, hdr->procid,
+                  STDLOG_MAX_MSGID, hdr->msgid,
+                  sd);
+    rc = m;
+    if (m > len)
+        m = len;
+
+    n = vsnprintf (buf + m, len - m, fmt, ap);
+    rc += n;
+    if (n > len - m)
+        n = len - m;
+    for (i = 0; i < n; i++)
+        buf[m + i] &= 0x7f; // ensure only ascii chars are logged
+    return rc;
+}
+
+int stdlog_encodef (char *buf, int len, struct stdlog_header *hdr,
+                    const char *sd, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = stdlog_vencodef (buf, len, hdr, sd, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 int stdlog_encode (char *buf, int len, struct stdlog_header *hdr,
                    const char *sd, const char *msg)
 {
-    return snprintf (buf, len, "<%d>%d %.*s %.*s %.*s %.*s %.*s %s %s",
-                     hdr->pri, hdr->version,
-                     STDLOG_MAX_TIMESTAMP, hdr->timestamp,
-                     STDLOG_MAX_HOSTNAME, hdr->hostname,
-                     STDLOG_MAX_APPNAME, hdr->appname,
-                     STDLOG_MAX_PROCID, hdr->procid,
-                     STDLOG_MAX_MSGID, hdr->msgid,
-                     sd, msg);
+    return stdlog_encodef (buf, len, hdr, sd, "%s", msg);
 }
 
 void stdlog_init (struct stdlog_header *hdr)

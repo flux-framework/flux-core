@@ -105,7 +105,7 @@ void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     int saved_errno = errno;
     uint32_t rank;
     flux_rpc_t *rpc = NULL;
-    int n, len;
+    int len;
     char timestamp[WALLCLOCK_MAXLEN];
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
@@ -121,15 +121,10 @@ void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     hdr.appname = ctx->appname;
     hdr.procid = ctx->procid;
 
-    len = stdlog_encode (ctx->buf, sizeof (ctx->buf), &hdr,
-                         STDLOG_NILVALUE, "");
-    assert (len < sizeof (ctx->buf));
-
-    n = vsnprintf (ctx->buf + len, sizeof (ctx->buf) - len, fmt, ap);
-    if (n > sizeof (ctx->buf) - len) /* ignore truncation of message */
-        n = sizeof (ctx->buf) - len;
-    len += n;
-
+    len = stdlog_vencodef (ctx->buf, sizeof (ctx->buf), &hdr,
+                           STDLOG_NILVALUE, fmt, ap);
+    if (len >= sizeof (ctx->buf))
+        len = sizeof (ctx->buf);
     if (ctx->cb) {
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {

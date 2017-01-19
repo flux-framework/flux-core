@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <argz.h>
@@ -33,6 +34,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/stdlog.h"
+#include "src/common/libutil/readall.h"
 
 
 #define OPTIONS "hs:n:"
@@ -79,12 +81,13 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (optind == argc)
-        usage ();
-
-    if ((e = argz_create (argv + optind, &message, &len)) != 0)
-        log_errn_exit (e, "argz_create");
-    argz_stringify (message, len, ' ');
+    if (optind == argc) {
+        len = read_all (STDIN_FILENO, (uint8_t **)&message);
+    } else {
+        if ((e = argz_create (argv + optind, &message, &len)) != 0)
+            log_errn_exit (e, "argz_create");
+        argz_stringify (message, len, ' ');
+    }
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
