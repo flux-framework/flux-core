@@ -30,11 +30,33 @@ DESCRIPTION
 to monitor for events on file descriptors, ZeroMQ sockets, timers, and
 flux_t broker handles.
 
+There is currently only one possible flag for reactor creation:
+
+FLUX_REACTOR_SIGCHLD::
+  The reactor will internally register a SIGCHLD handler and be capable
+  of handling flux child watchers (see flux_child_watcher_create(3)).
+
 For each event source and type that is to be monitored, a flux_watcher_t
 object is created using a type-specific create function, and started
-with flux_watcher_start(3).  To receive events, control must be
-transferred to the reactor event loop by calling `flux_reactor_run()`,
-which processes events until one of the following conditions is met:
+with flux_watcher_start(3).
+
+For each event source and type that is to be monitored, a flux_watcher_t
+object is created and associated with a specific reactor using a type-specific
+create function, and started with flux_watcher_start(3). To receive events,
+control must be transferred to the reactor event loop by calling
+`flux_reactor_run()`.
+
+The full list of flux reactor run flags is as follows:
+
+FLUX_REACTOR_NOWAIT::
+  Return after all outstanding events have been consumed.  If there are remaining
+  registered watchers, flux_reactor_run() will return an error.  See RETURN VALUE.
+FLUX_REACTOR_ONCE::
+  Return after at least on event has occurred, and all outstanding
+  events have been consumed.  If there are remaining registered watchers,
+  flux_reactor_run() will return an error.  See RETURN VALUE.
+
+flux_reactor_run() processes events until one of the following conditions is met:
 
 * There are no more active watchers.
 * The `flux_reactor_stop()` or `flux_reactor_stop_error()` functions
@@ -49,10 +71,9 @@ If `flux_reactor_stop_error()` is called, this will cause
 The caller should ensure that a valid error code has been assigned to
 errno(3) before calling this function.
 
-If `flux_reactor_create()` is called with the FLUX_REACTOR_SIGCHLD flag,
-the reactor will internally register a SIGCHLD handler and be capable
-of handling child watchers.
-
+`flux_reactor_destroy()` releases an internal reference taken at
+`flux_reactor_create()` time.  Freeing of the underlying resources will
+be deferred if there are any remaining watchers associated with the reactor.
 
 RETURN VALUE
 ------------
@@ -61,8 +82,10 @@ RETURN VALUE
 On error, NULL is returned, and errno is set appropriately.
 
 `flux_reactor_run()` returns zero on normal termination.
-On failure, or on termination by `flux_reactor_stop_error()`, -1 is returned
-with errno set.
+On failure, termination by `flux_reactor_stop_error()` -1 is returned
+with errno set.  Additionally if either FLUX_REACTOR_NOWAIT or FLUX_REACTOR_ONCE
+is set and there are still watchers registered -1 is returned and errno set
+to EWOULDBLOCK.
 
 
 ERRORS
