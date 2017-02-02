@@ -180,6 +180,11 @@ if test "$enable_caliper" = "yes"; then
     AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
 fi
 
+##
+# Check for systemd
+##
+RRA_WITH_SYSTEMD_UNITDIR
+
 
 ##
 # Embedded libev
