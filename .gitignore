@@ -24,14 +24,14 @@ libtool
 libltdl/
 
 # libtool pull-ins
-config/libtool.m4
-config/ltoptions.m4
-config/ltsugar.m4
-config/ltversion.m4
-config/lt~obsolete.m4
+/config/libtool.m4
+/config/ltoptions.m4
+/config/ltsugar.m4
+/config/ltversion.m4
+/config/lt~obsolete.m4
 
 # docs intermediate files
-doc/man*/*.xml
+/doc/man*/*.xml
 
 # Object files
 *.o
@@ -63,6 +63,7 @@ Makefile
 *.1
 *.3
 *.5
+*.7
 *.8
 *.spec
 *.pc
@@ -79,3 +80,6 @@ Makefile
 *.log
 .dirstamp
 
+# Rules to ignore auto-generated test harness scripts
+test_*.t
+!/src/bindings/python/test_commands/test_runner.t
