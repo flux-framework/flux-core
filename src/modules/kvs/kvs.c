@@ -155,7 +155,7 @@ static ctx_t *getctx (flux_t *h)
         }
         if (ctx->rank == 0) {
             ctx->prep_w = flux_prepare_watcher_create (r, commit_prep_cb, ctx);
-            ctx->check_w = flux_prepare_watcher_create (r, commit_check_cb,ctx);
+            ctx->check_w = flux_check_watcher_create (r, commit_check_cb, ctx);
             ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
             if (!ctx->prep_w || !ctx->check_w || !ctx->idle_w)
                 goto error;
