@@ -1,0 +1,12 @@
+[Unit]
+Description=Flux message broker
+
+[Service]
+ExecStart=@X_BINDIR@/flux start -o,-Sbroker.rundir=%t/flux sleep inf
+User=flux
+Group=flux
+RuntimeDirectory=flux
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
