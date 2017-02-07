@@ -160,7 +160,7 @@ static void *module_thread (void *arg)
     ac = argz_count (p->argz, p->argz_len);
     av = xzmalloc (sizeof (av[0]) * (ac + 1));
     argz_extract (p->argz, p->argz_len, av);
-    if (p->main(p->h, ac, av) < 0) {
+    if (p->main (p->h, ac, av) < 0) {
         mod_main_errno = errno;
         if (mod_main_errno == 0)
             mod_main_errno = ECONNRESET;
