@@ -164,6 +164,7 @@ check_PROGRAMS = \
 	kvs/watch \
 	kvs/watch_disconnect \
 	kvs/commit \
+	kvs/commitmerge \
 	kvs/basic \
 	request/treq
 
@@ -276,6 +277,12 @@ kvs_watch_LDADD = \
 kvs_commit_SOURCES = kvs/commit.c
 kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_commitmerge_SOURCES = kvs/commitmerge.c
+kvs_commitmerge_CPPFLAGS = $(test_cppflags)
+kvs_commitmerge_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
