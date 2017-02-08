@@ -137,7 +137,7 @@ done:
     if (flux_rpc_next (rpc) < 0) {
         if (pdata->rpc_count) {
             if (ctx->rank_count > 1) {
-                printf ("%s!%s pad=%lu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
+                printf ("%s!%s pad=%zu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
                         "stddev %0.3f\n",
                         ctx->rank, ctx->topic, strlen (ctx->pad), pdata->seq,
                         tstat_min (tstat), tstat_mean (tstat),
