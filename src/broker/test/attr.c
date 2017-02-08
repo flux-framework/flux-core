@@ -174,7 +174,7 @@ int main (int argc, char **argv)
         "attr_get on active uint32_t tracks value: %s", val);
     b = UINT_MAX - 1;
     ok (attr_get (attrs, "b", &val, NULL) == 0
-        && strtol (val, NULL, 10) == UINT_MAX - 1,
+        && strtoul (val, NULL, 10) == UINT_MAX - 1,
         "attr_get on active uint32_t tracks value: %s", val);
 
     ok (attr_set (attrs, "b", "0", false) == 0 && b == 0,
