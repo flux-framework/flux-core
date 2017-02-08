@@ -22,7 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* tcommit - performance test for KVS commits */
+/* commit - performance test for KVS commits */
 
 #if HAVE_CONFIG_H
 #include "config.h"
