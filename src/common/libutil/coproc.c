@@ -79,7 +79,13 @@ void coproc_destroy (coproc_t *c)
 
 static void trampoline (const unsigned int high, const unsigned int low)
 {
+#if SIZEOF_UINTPTR_T == SIZEOF_INT
+    coproc_t *c = (coproc_t *)(uintptr_t)(high);
+#elif SIZEOF_UINTPTR_T == 8 && SIZEOF_INT == 4
     coproc_t *c = (coproc_t *)((((uintptr_t)high) << 32) | low);
+#else
+#error FIXME: unexpected pointer/integer size
+#endif
     assert (c->magic == COPROC_MAGIC);
 
     c->rc = c->cb (c, c->arg);
@@ -156,10 +162,15 @@ int coproc_start (coproc_t *c, void *arg)
         return -1;
     }
 
-    const unsigned int high = ((uintptr_t)c) >> 32;
-    const unsigned int low = ((uintptr_t)c) & 0xffffffff;
-    makecontext (&c->uc, (void (*)(void))trampoline, 2, high, low);
-
+#if SIZEOF_UINTPTR_T == SIZEOF_INT
+    makecontext (&c->uc, (void (*)(void))trampoline, 2,
+                 (uintptr_t)c, 0);
+#elif SIZEOF_UINTPTR_T == 8 && SIZEOF_INT == 4
+    makecontext (&c->uc, (void (*)(void))trampoline, 2,
+                ((uintptr_t)c) >> 32, ((uintptr_t)c) & 0xffffffff);
+#else
+#error FIXME: unexpected pointer/integer size
+#endif
     c->arg = arg;
     c->state = CS_RUNNING;
     return swapcontext (&c->parent, &c->uc);
