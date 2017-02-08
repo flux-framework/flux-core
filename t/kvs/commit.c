@@ -116,7 +116,7 @@ void *thread (void *arg)
 done:
     if (t->h)
         flux_close (t->h);
-  return NULL;
+    return NULL;
 }
 
 int main (int argc, char *argv[])
