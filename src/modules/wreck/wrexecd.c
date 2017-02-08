@@ -247,8 +247,10 @@ static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
     va_start (ap, format);
     if ((ctx != NULL) && ((c = prog_ctx_flux_handle (ctx)) != NULL))
         flux_vlog (c, LOG_EMERG, format, ap);
-    else
+    else {
         vfprintf (stderr, format, ap);
+        putc ('\n', stderr);
+    }
     va_end (ap);
 
     /* Copy error to kvs if we're not in task context:
@@ -390,7 +392,7 @@ static void wreck_pmi_line (struct task_info *t, const char *line)
     struct prog_ctx *ctx = t->ctx;
     int rc;
     if ((rc = pmi_simple_server_request (ctx->pmi, line, t)) < 0)
-        wlog_fatal (ctx, 1, "pmi_simple_server_request: %s\n",
+        wlog_fatal (ctx, 1, "pmi_simple_server_request: %s",
                     strerror (errno));
     if (rc == 1)
         wreck_pmi_close (t);
@@ -2303,7 +2305,7 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
     char *end;
 
     if (!optparse_getopt (p, "kvs-path", &kvspath))
-        wlog_fatal (ctx, 1, "Required arg --kvs-path missing\n");
+        wlog_fatal (ctx, 1, "Required arg --kvs-path missing");
     ctx->kvspath = strdup (kvspath);
 
     if (!optparse_getopt (p, "lwj-id", &id)) {
