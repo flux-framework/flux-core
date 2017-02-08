@@ -176,8 +176,8 @@ void send_ping (struct ping_ctx *ctx)
     rpc = flux_rpcf_multi (ctx->h, ctx->topic, ctx->rank, 0,
                            "{s:i s:I s:I s:s}",
                            "seq", ctx->send_count,
-                           "time.tv_sec", t0.tv_sec,
-                           "time.tv_nsec", t0.tv_nsec,
+                           "time.tv_sec", (uint64_t)t0.tv_sec,
+                           "time.tv_nsec", (uint64_t)t0.tv_nsec,
                            "pad", ctx->pad);
     if (!rpc)
         log_err_exit ("flux_rpcf_multi");
