@@ -143,32 +143,61 @@ int main (int argc, char *argv[])
     ok (pthread_join (t, NULL) == 0,
         "pthread_join OK");
 
-    coproc_t *cps[10000];
-    for (i = 0; i < 10000; i++) {
-        if (!(cps[i] = coproc_create (bar_cb)))
+// N.B. coproc_create allocates ~2mb per coproc
+#define NUM_COPROCS 500
+    coproc_t *cps[NUM_COPROCS];
+    for (i = 0; i < NUM_COPROCS; i++) {
+        if (!(cps[i] = coproc_create (bar_cb))) {
+            diag ("coproc_create #%d failed: %s", i, strerror (errno));
             break;
-        if (coproc_start (cps[i], NULL) < 0 || coproc_returned (cps[i], NULL))
+        }
+        if (coproc_start (cps[i], NULL) < 0) {
+            diag ("coproc_start #%d failed", i);
             break;
+        }
+        if (coproc_returned (cps[i], NULL)) {
+            diag ("coproc_returned #%d returned true", i);
+            break;
+        }
     }
-    ok (i == 10000,
-        "started 10000 coprocs that yielded");
-    for (i = 0; i < 10000; i++) {
-        if (coproc_resume (cps[i]) < 0 || coproc_returned (cps[i], NULL))
+    ok (i == NUM_COPROCS,
+        "started %d coprocs that yielded", NUM_COPROCS);
+    int num = i;
+    if (num != NUM_COPROCS)
+        diag ("continuing with %d procs", num);
+    for (i = 0; i < num; i++) {
+        if (coproc_resume (cps[i]) < 0) {
+            diag ("coproc_resume #%d failed", i);
             break;
+        }
+        if (coproc_returned (cps[i], NULL)) {
+            diag ("coproc_returned #%d returned true", i);
+            break;
+        }
     }
-    ok (i == 10000,
-        "resumed 10000 coprocs that yielded");
+    ok (i == num,
+        "resumed %d coprocs that yielded", num);
     death = true;
-    for (i = 0; i < 10000; i++) {
-        if (coproc_resume (cps[i]) < 0 || !coproc_returned (cps[i], &rc)
-                                       || rc != 0)
+    for (i = 0; i < num; i++) {
+        if (coproc_resume (cps[i]) < 0) {
+            diag ("coproc_resume #%d failed", i);
             break;
+        }
+        if (!coproc_returned (cps[i], &rc)) {
+            diag ("coproc_returned #%d returned false", i);
+            break;
+        }
+        if (rc != 0) {
+            diag ("rc #%d == %d, wanted 0", i, rc);
+            break;
+        }
     }
-    ok (i == 10000,
-        "resumed 10000 coprocs that exited with rc=0");
+    ok (i == num,
+        "resumed %d coprocs that exited with rc=0", num);
 
-    for (i = 0; i < 10000; i++)
-        coproc_destroy (cps[i]);
+    for (i = 0; i < num; i++)
+        if (cps[i])
+            coproc_destroy (cps[i]);
 
     /* Test stack guard page(s)
      */
