@@ -186,10 +186,10 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
 static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg);
 
-static int create_persistdir (ctx_t *ctx);
-static int create_scratchdir (ctx_t *ctx);
-static int create_rankdir (ctx_t *ctx);
-static int create_dummyattrs (ctx_t *ctx);
+static int create_persistdir (attr_t *attrs, uint32_t rank);
+static int create_scratchdir (attr_t *attrs);
+static int create_rankdir (attr_t *attrs, uint32_t rank);
+static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int boot_pmi (ctx_t *ctx, double *elapsed_sec);
 
@@ -452,11 +452,11 @@ int main (int argc, char *argv[])
      * If persist-filesystem or persist-directory are set, initialize those,
      * but only on rank 0.
      */
-    if (create_scratchdir (&ctx) < 0)
+    if (create_scratchdir (ctx.attrs) < 0)
         log_err_exit ("create_scratchdir");
-    if (create_rankdir (&ctx) < 0)
+    if (create_rankdir (ctx.attrs, ctx.rank) < 0)
         log_err_exit ("create_rankdir");
-    if (create_persistdir (&ctx) < 0)
+    if (create_persistdir (ctx.attrs, ctx.rank) < 0)
         log_err_exit ("create_persistdir");
 
     /* Initialize logging.
@@ -466,7 +466,7 @@ int main (int argc, char *argv[])
 
     /* Allow flux_get_rank() and flux_get_size() to work in the broker.
      */
-    if (create_dummyattrs (&ctx) < 0)
+    if (create_dummyattrs (ctx.h, ctx.rank, ctx.size) < 0)
         log_err_exit ("creating dummy attributes");
 
     overlay_set_rank (ctx.overlay, ctx.rank);
@@ -876,16 +876,16 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
     }
 }
 
-static int create_dummyattrs (ctx_t *ctx)
+static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
 {
     char *s;
-    s = xasprintf ("%"PRIu32, ctx->rank);
-    if (flux_attr_fake (ctx->h, "rank", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    s = xasprintf ("%"PRIu32, rank);
+    if (flux_attr_fake (h, "rank", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     free (s);
 
-    s = xasprintf ("%"PRIu32, ctx->size);
-    if (flux_attr_fake (ctx->h, "size", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    s = xasprintf ("%"PRIu32, size);
+    if (flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     free (s);
 
@@ -898,7 +898,7 @@ static int create_dummyattrs (ctx_t *ctx)
  * If we created the directory, arrange to remove it on exit.
  * This function is idempotent.
  */
-static int create_rankdir (ctx_t *ctx)
+static int create_rankdir (attr_t *attrs, uint32_t rank)
 {
     const char *attr = "scratch-directory-rank";
     const char *rank_dir, *scratch_dir, *local_uri;
@@ -906,7 +906,7 @@ static int create_rankdir (ctx_t *ctx)
     char *uri = NULL;
     int rc = -1;
 
-    if (attr_get (ctx->attrs, attr, &rank_dir, NULL) == 0) {
+    if (attr_get (attrs, attr, &rank_dir, NULL) == 0) {
         struct stat sb;
         if (stat (rank_dir, &sb) < 0)
             goto done;
@@ -918,29 +918,29 @@ static int create_rankdir (ctx_t *ctx)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     } else {
-        if (attr_get (ctx->attrs, "scratch-directory",
+        if (attr_get (attrs, "scratch-directory",
                                                 &scratch_dir, NULL) < 0) {
             errno = EINVAL;
             goto done;
         }
-        if (ctx->rank == FLUX_NODEID_ANY) {
+        if (rank == FLUX_NODEID_ANY) {
             errno = EINVAL;
             goto done;
         }
-        dir = xasprintf ("%s/%"PRIu32, scratch_dir, ctx->rank);
+        dir = xasprintf ("%s/%"PRIu32, scratch_dir, rank);
         if (mkdir (dir, 0700) < 0)
             goto done;
-        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         cleanup_push_string (cleanup_directory, dir);
         rank_dir = dir;
     }
-    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
+    if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
         uri = xasprintf ("local://%s", rank_dir);
-        if (attr_add (ctx->attrs, "local-uri", uri,
+        if (attr_add (attrs, "local-uri", uri,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
@@ -960,7 +960,7 @@ done:
  * If we created the directory, arrange to remove it on exit.
  * This function is idempotent.
  */
-static int create_scratchdir (ctx_t *ctx)
+static int create_scratchdir (attr_t *attrs)
 {
     const char *attr = "scratch-directory";
     const char *sid, *scratch_dir;
@@ -968,7 +968,7 @@ static int create_scratchdir (ctx_t *ctx)
     char *dir, *tmpl = NULL;
     int rc = -1;
 
-    if (attr_get (ctx->attrs, attr, &scratch_dir, NULL) == 0) {
+    if (attr_get (attrs, attr, &scratch_dir, NULL) == 0) {
         struct stat sb;
         if (stat (scratch_dir, &sb) < 0)
             goto done;
@@ -980,17 +980,17 @@ static int create_scratchdir (ctx_t *ctx)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     } else {
-        if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
+        if (attr_get (attrs, "session-id", &sid, NULL) < 0) {
             errno = EINVAL;
             goto done;
         }
         tmpl = xasprintf ("%s/flux-%s-XXXXXX", tmpdir ? tmpdir : "/tmp", sid);
         if (!(dir = mkdtemp (tmpl)))
             goto done;
-        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         cleanup_push_string (cleanup_directory, dir);
     }
@@ -1007,7 +1007,7 @@ done:
  * a different basename than 'scratch-directory' (in case persist-filesystem
  * is set to TMPDIR).
  */
-static int create_persistdir (ctx_t *ctx)
+static int create_persistdir (attr_t *attrs, uint32_t rank)
 {
     struct stat sb;
     const char *attr = "persist-directory";
@@ -1015,12 +1015,12 @@ static int create_persistdir (ctx_t *ctx)
     char *dir, *tmpl = NULL;
     int rc = -1;
 
-    if (ctx->rank > 0) {
-        (void) attr_delete (ctx->attrs, "persist-filesystem", true);
-        (void) attr_delete (ctx->attrs, "persist-directory", true);
+    if (rank > 0) {
+        (void) attr_delete (attrs, "persist-filesystem", true);
+        (void) attr_delete (attrs, "persist-directory", true);
         goto done_success;
     }
-    if (attr_get (ctx->attrs, attr, &persist_dir, NULL) == 0) {
+    if (attr_get (attrs, attr, &persist_dir, NULL) == 0) {
         if (stat (persist_dir, &sb) < 0)
             goto done;
         if (!S_ISDIR (sb.st_mode)) {
@@ -1031,14 +1031,14 @@ static int create_persistdir (ctx_t *ctx)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (ctx->attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     } else {
-        if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
+        if (attr_get (attrs, "session-id", &sid, NULL) < 0) {
             errno = EINVAL;
             goto done;
         }
-        if (attr_get (ctx->attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
+        if (attr_get (attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
             goto done_success;
         }
         if (stat (persist_fs, &sb) < 0)
@@ -1051,23 +1051,23 @@ static int create_persistdir (ctx_t *ctx)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (ctx->attrs, "persist-filesystem",
+        if (attr_set_flags (attrs, "persist-filesystem",
                                                 FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         tmpl = xasprintf ("%s/fluxP-%s-XXXXXX", persist_fs, sid);
         if (!(dir = mkdtemp (tmpl)))
             goto done;
-        if (attr_add (ctx->attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
 done_success:
-    if (attr_get (ctx->attrs, "persist-filesystem", NULL, NULL) < 0) {
-        if (attr_add (ctx->attrs, "persist-filesystem", NULL,
+    if (attr_get (attrs, "persist-filesystem", NULL, NULL) < 0) {
+        if (attr_add (attrs, "persist-filesystem", NULL,
                                                 FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
-    if (attr_get (ctx->attrs, "persist-directory", NULL, NULL) < 0) {
-        if (attr_add (ctx->attrs, "persist-directory", NULL,
+    if (attr_get (attrs, "persist-directory", NULL, NULL) < 0) {
+        if (attr_add (attrs, "persist-directory", NULL,
                                                 FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
@@ -1134,7 +1134,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
 
     /* Initialize scratch-directory/rankdir
      */
-    if (create_scratchdir (ctx) < 0) {
+    if (create_scratchdir (ctx->attrs) < 0) {
         log_err ("pmi: could not initialize scratch-directory");
         goto done;
     }
@@ -1142,7 +1142,7 @@ static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
         log_msg ("scratch-directory attribute is not set");
         goto done;
     }
-    if (create_rankdir (ctx) < 0) {
+    if (create_rankdir (ctx->attrs, ctx->rank) < 0) {
         log_err ("could not initialize rankdir");
         goto done;
     }
@@ -1904,7 +1904,7 @@ static int handle_event (ctx_t *ctx, const flux_msg_t *msg)
 }
 
 /* helper for parent_cb */
-static void send_mute_request (ctx_t *ctx, void *sock)
+static void send_mute_request (flux_t *h, void *sock)
 {
     flux_msg_t *msg;
 
@@ -1915,7 +1915,7 @@ static void send_mute_request (ctx_t *ctx, void *sock)
     if (flux_msg_enable_route (msg))
         goto done;
     if (flux_msg_sendzsock (sock, msg) < 0)
-        flux_log_error (ctx->h, "failed to send mute request");
+        flux_log_error (h, "failed to send mute request");
     /* No response will be sent */
 done:
     flux_msg_destroy (msg);
@@ -1940,7 +1940,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (ctx->event_active) {
-                send_mute_request (ctx, sock);
+                send_mute_request (ctx->h, sock);
                 goto done;
             }
             if (flux_msg_clear_route (msg) < 0) {
