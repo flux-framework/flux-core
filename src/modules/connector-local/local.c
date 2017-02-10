@@ -60,7 +60,7 @@ typedef struct {
     flux_reactor_t *reactor;
     uid_t session_owner;
     zhash_t *subscriptions;
-} ctx_t;
+} mod_local_ctx_t;
 
 typedef void (*unsubscribe_f)(void *handle, const char *topic);
 
@@ -78,7 +78,7 @@ typedef struct {
     struct flux_msg_iobuf inbuf;
     struct flux_msg_iobuf outbuf;
     zlist_t *outqueue;  /* queue of outbound flux_msg_t */
-    ctx_t *ctx;
+    mod_local_ctx_t *ctx;
     zhash_t *disconnect_notify;
     zhash_t *subscriptions;
     zuuid_t *uuid;
@@ -100,15 +100,15 @@ static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    mod_local_ctx_t *ctx = arg;
     zlist_destroy (&ctx->clients);
     zhash_destroy (&ctx->subscriptions);
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t *h)
+static mod_local_ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::local_connector");
+    mod_local_ctx_t *ctx = (mod_local_ctx_t *)flux_aux_get (h, "flux::local_connector");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -140,7 +140,7 @@ static int set_nonblock (int fd, bool nonblock)
     return 0;
 }
 
-static client_t * client_create (ctx_t *ctx, int fd)
+static client_t * client_create (mod_local_ctx_t *ctx, int fd)
 {
     client_t *c;
     socklen_t crlen = sizeof (c->ucred);
@@ -250,7 +250,7 @@ static void subscription_destroy (void *data)
     free (sub);
 }
 
-static int global_subscribe (ctx_t *ctx, const char *topic)
+static int global_subscribe (mod_local_ctx_t *ctx, const char *topic)
 {
     subscription_t *sub;
     int rc = -1;
@@ -275,7 +275,7 @@ done:
     return rc;
 }
 
-static int global_unsubscribe (ctx_t *ctx, const char *topic)
+static int global_unsubscribe (mod_local_ctx_t *ctx, const char *topic)
 {
     subscription_t *sub;
     int rc = -1;
@@ -585,7 +585,7 @@ disconnect:
 static void response_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    mod_local_ctx_t *ctx = arg;
     char *uuid = NULL;
     client_t *c;
     flux_msg_t *cpy = flux_msg_copy (msg, true);
@@ -630,7 +630,7 @@ done:
 static void event_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    mod_local_ctx_t *ctx = arg;
     client_t *c;
     const char *topic;
     int count = 0;
@@ -665,7 +665,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
-    ctx_t *ctx = arg;
+    mod_local_ctx_t *ctx = arg;
     flux_t *h = ctx->h;
 
     if (revents & FLUX_POLLIN) {
@@ -690,7 +690,7 @@ done:
     return;
 }
 
-static int listener_init (ctx_t *ctx, char *sockpath)
+static int listener_init (mod_local_ctx_t *ctx, char *sockpath)
 {
     struct sockaddr_un addr;
     int fd;
@@ -733,7 +733,7 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
-    ctx_t *ctx = getctx (h);
+    mod_local_ctx_t *ctx = getctx (h);
     char sockpath[PATH_MAX + 1];
     const char *local_uri = NULL;
     char *tmpdir;

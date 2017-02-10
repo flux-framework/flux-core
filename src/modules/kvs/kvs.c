@@ -88,7 +88,7 @@ typedef struct {
     flux_watcher_t *check_w;
     int commit_merge;
     char *hash_name;
-} ctx_t;
+} kvs_ctx_t;
 
 typedef struct {
     json_object *ops;
@@ -97,15 +97,15 @@ typedef struct {
     int nprocs;
     int count;
     int errnum;
-    ctx_t *ctx;
+    kvs_ctx_t *ctx;
     json_object *rootcpy;   /* working copy of root dir */
     int blocked:1;
     int rootcpy_stored:1;
     href_t newroot;
 } fence_t;
 
-static int setroot_event_send (ctx_t *ctx, json_object *names);
-static int error_event_send (ctx_t *ctx, json_object *names, int errnum);
+static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
+static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
 void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg);
 void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -113,7 +113,7 @@ void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     if (ctx) {
         cache_destroy (ctx->cache);
         zhash_destroy (&ctx->fences);
@@ -129,9 +129,9 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t *h)
+static kvs_ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "kvssrv");
+    kvs_ctx_t *ctx = (kvs_ctx_t *)flux_aux_get (h, "kvssrv");
     flux_reactor_t *r;
 
     if (!ctx) {
@@ -174,7 +174,7 @@ error:
 
 static void content_load_completion (flux_rpc_t *rpc, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     json_object *o;
     const void *data;
     int size;
@@ -205,7 +205,7 @@ done:
 /* If now is true, perform the load rpc synchronously;
  * otherwise arrange for a continuation to handle the response.
  */
-static int content_load_request_send (ctx_t *ctx, const href_t ref, bool now)
+static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now)
 {
     flux_rpc_t *rpc = NULL;
 
@@ -225,7 +225,7 @@ error:
     return -1;
 }
 
-static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
+static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     bool stall = false;
@@ -254,7 +254,7 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
 
 static int content_store_get (flux_rpc_t *rpc, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     struct cache_entry *hp;
     const char *blobref;
     int blobref_size;
@@ -283,7 +283,7 @@ static void content_store_completion (flux_rpc_t *rpc, void *arg)
     (void)content_store_get (rpc, arg);
 }
 
-static int content_store_request_send (ctx_t *ctx, const href_t ref,
+static int content_store_request_send (kvs_ctx_t *ctx, const href_t ref,
                                        json_object *val, bool now)
 {
     flux_rpc_t *rpc;
@@ -311,7 +311,7 @@ error:
  * do it asynchronously and push wait onto cache object's wait queue.
  * FIXME: asynchronous errors need to be propagated back to caller.
  */
-static int store (ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
+static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
 {
     struct cache_entry *hp;
     const char *s = json_object_to_json_string (o);
@@ -351,7 +351,7 @@ done:
     return rc;
 }
 
-static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
+static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
 {
     if (rootseq == 0 || rootseq > ctx->rootseq) {
         memcpy (ctx->rootdir, rootdir, sizeof (href_t));
@@ -379,7 +379,7 @@ static json_object *copydir (json_object *dir)
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
  */
-static int commit_unroll (ctx_t *ctx, json_object *dir, wait_t *wait)
+static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, wait_t *wait)
 {
     json_object_iter iter;
     json_object *subdir, *value;
@@ -414,7 +414,7 @@ done:
 
 /* link (key, dirent) into directory 'dir'.
  */
-static int commit_link_dirent (ctx_t *ctx, json_object *rootdir,
+static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
                                const char *key, json_object *dirent,
                                wait_t *wait)
 {
@@ -492,7 +492,7 @@ done:
  */
 static void commit_apply_fence (fence_t *f)
 {
-    ctx_t *ctx = f->ctx;
+    kvs_ctx_t *ctx = f->ctx;
     wait_t *wait = NULL;
     int count;
 
@@ -592,7 +592,7 @@ stall:
 void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     fence_t *f;
     if ((f = zlist_first (ctx->ready)) && !f->blocked)
         flux_watcher_start (ctx->idle_w);
@@ -603,7 +603,7 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
  * The top commit can be appended to if it hasn't started, or is still
  * building the rootcpy, e.g. stalled walking the namespace.
  */
-void commit_merge_all (ctx_t *ctx)
+void commit_merge_all (kvs_ctx_t *ctx)
 {
     fence_t *f = zlist_first (ctx->ready);
 
@@ -637,7 +637,7 @@ void commit_merge_all (ctx_t *ctx)
 void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                       int revents, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     fence_t *f;
 
     flux_watcher_stop (ctx->idle_w);
@@ -653,7 +653,7 @@ void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
     int rc = -1;
 
@@ -671,7 +671,7 @@ done:
 static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
 
     if (flux_event_decode (msg, NULL, NULL) < 0)
@@ -684,7 +684,7 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
 static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
 
     if (flux_heartbeat_decode (msg, &ctx->epoch) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
@@ -703,7 +703,7 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
 
 /* Get dirent containing requested key.
  */
-static bool walk (ctx_t *ctx, json_object *root, const char *path,
+static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                   json_object **direntp, wait_t *wait, int flags, int depth)
 {
     char *cpy = xstrdup (path);
@@ -768,7 +768,7 @@ stall:
     return false;
 }
 
-static bool lookup (ctx_t *ctx, json_object *root, wait_t *wait,
+static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
                     int flags, const char *name,
                     json_object **valp, int *ep)
 {
@@ -865,7 +865,7 @@ stall:
 static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
     json_object *out = NULL;
@@ -938,7 +938,7 @@ static bool compare_json (json_object *o1, json_object *o2)
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
     json_object *in2 = NULL;
@@ -1050,7 +1050,7 @@ done:
 static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
     unwatch_param_t p = { NULL, NULL };
@@ -1096,7 +1096,7 @@ static void fence_destroy (fence_t *f)
     }
 }
 
-static fence_t *fence_create (ctx_t *ctx, const char *name, int nprocs)
+static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs)
 {
     fence_t *f;
 
@@ -1145,7 +1145,7 @@ static int fence_append_request (fence_t *f, const flux_msg_t *request)
     return 0;
 }
 
-static int fence_add (ctx_t *ctx, fence_t *f)
+static int fence_add (kvs_ctx_t *ctx, fence_t *f)
 {
     const char *name;
 
@@ -1163,12 +1163,12 @@ error:
     return -1;
 }
 
-static fence_t *fence_lookup (ctx_t *ctx, const char *name)
+static fence_t *fence_lookup (kvs_ctx_t *ctx, const char *name)
 {
     return zhash_lookup (ctx->fences, name);
 }
 
-static void fence_finalize (ctx_t *ctx, fence_t *f, int errnum)
+static void fence_finalize (kvs_ctx_t *ctx, fence_t *f, int errnum)
 {
     flux_msg_t *msg;
     const char *name;
@@ -1182,7 +1182,7 @@ static void fence_finalize (ctx_t *ctx, fence_t *f, int errnum)
         zhash_delete (ctx->fences, name);
 }
 
-static void fence_finalize_bynames (ctx_t *ctx, json_object *names, int errnum)
+static void fence_finalize_bynames (kvs_ctx_t *ctx, json_object *names, int errnum)
 {
     int i, len;
     const char *name;
@@ -1207,7 +1207,7 @@ static void fence_finalize_bynames (ctx_t *ctx, json_object *names, int errnum)
 static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str, *name;
     int nprocs;
     json_object *in = NULL;
@@ -1259,7 +1259,7 @@ done:
 static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str, *name;
     int nprocs;
     json_object *in = NULL;
@@ -1319,7 +1319,7 @@ error:
 static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
     json_object *out = Jnew ();
@@ -1355,7 +1355,7 @@ done:
 static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     json_object *out = NULL;
     int rc = -1;
 
@@ -1371,7 +1371,7 @@ done:
     Jput (out);
 }
 
-static int getroot_rpc (ctx_t *ctx, int *rootseq, href_t rootdir)
+static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
 {
     flux_rpc_t *rpc;
     const char *json_str;
@@ -1405,7 +1405,7 @@ done:
 static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     const char *json_str;
     json_object *out = NULL;
     json_object *names = NULL;
@@ -1429,7 +1429,7 @@ done:
     Jput (out);
 }
 
-static int error_event_send (ctx_t *ctx, json_object *names, int errnum)
+static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum)
 {
     json_object *in = NULL;
     flux_msg_t *msg = NULL;
@@ -1453,7 +1453,7 @@ done:
 static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     json_object *out = NULL;
     int rootseq;
     const char *json_str;
@@ -1498,7 +1498,7 @@ done:
     Jput (out);
 }
 
-static int setroot_event_send (ctx_t *ctx, json_object *names)
+static int setroot_event_send (kvs_ctx_t *ctx, json_object *names)
 {
     json_object *in = NULL;
     json_object *root = NULL;
@@ -1538,7 +1538,7 @@ static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
 static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     char *sender = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -1567,7 +1567,7 @@ static void add_tstat (json_object *o, const char *name, tstat_t *ts,
 static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
     json_object *o = Jnew ();
     tstat_t ts;
     int size, incomplete, dirty;
@@ -1596,7 +1596,7 @@ done:
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
 
     memset (&ctx->stats, 0, sizeof (ctx->stats));
 }
@@ -1604,7 +1604,7 @@ static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
 static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
                                     const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = arg;
 
     memset (&ctx->stats, 0, sizeof (ctx->stats));
 
@@ -1632,7 +1632,7 @@ static struct flux_msg_handler_spec handlers[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-static void process_args (ctx_t *ctx, int ac, char **av)
+static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 {
     int i;
 
@@ -1646,7 +1646,7 @@ static void process_args (ctx_t *ctx, int ac, char **av)
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
-    ctx_t *ctx = getctx (h);
+    kvs_ctx_t *ctx = getctx (h);
 
     if (!ctx) {
         flux_log_error (h, "error creating KVS context");

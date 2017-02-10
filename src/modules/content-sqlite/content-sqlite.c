@@ -65,14 +65,14 @@ typedef struct {
     uint32_t blob_size_limit;
     size_t lzo_bufsize;
     void *lzo_buf;
-} ctx_t;
+} sqlite_ctx_t;
 
 #define HEAP_ALLOC(var,size) \
         lzo_align_t __LZO_MMODEL var [ ((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t) ]
 
 static HEAP_ALLOC(lzo_wrkmem, LZO1X_1_MEM_COMPRESS);
 
-static void log_sqlite_error (ctx_t *ctx, const char *fmt, ...)
+static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
 {
     va_list ap;
     va_start (ap, fmt);
@@ -86,7 +86,7 @@ static void log_sqlite_error (ctx_t *ctx, const char *fmt, ...)
     free (s);
 }
 
-static void set_errno_from_sqlite_error (ctx_t *ctx)
+static void set_errno_from_sqlite_error (sqlite_ctx_t *ctx)
 {
     switch (sqlite3_errcode (ctx->db)) {
         case SQLITE_IOERR:      /* os io error */
@@ -114,7 +114,7 @@ static void set_errno_from_sqlite_error (ctx_t *ctx)
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    sqlite_ctx_t *ctx = arg;
     if (ctx) {
         if (ctx->store_stmt)
             sqlite3_finalize (ctx->store_stmt);
@@ -136,9 +136,9 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t *h)
+static sqlite_ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::content-sqlite");
+    sqlite_ctx_t *ctx = (sqlite_ctx_t *)flux_aux_get (h, "flux::content-sqlite");
     const char *dir;
     const char *tmp;
     bool cleanup = false;
@@ -228,7 +228,7 @@ error:
     return NULL;
 }
 
-int grow_lzo_buf (ctx_t *ctx, size_t size)
+int grow_lzo_buf (sqlite_ctx_t *ctx, size_t size)
 {
     size_t newsize = ctx->lzo_bufsize;
     void *newbuf;
@@ -246,7 +246,7 @@ int grow_lzo_buf (ctx_t *ctx, size_t size)
 void load_cb (flux_t *h, flux_msg_handler_t *w,
               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    sqlite_ctx_t *ctx = arg;
     char *blobref = "-";
     int blobref_size;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
@@ -322,7 +322,7 @@ done:
 void store_cb (flux_t *h, flux_msg_handler_t *w,
                const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    sqlite_ctx_t *ctx = arg;
     void *data;
     int size, hash_len;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
@@ -417,7 +417,7 @@ done:
 void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    sqlite_ctx_t *ctx = arg;
     ctx->broker_shutdown = true;
     flux_log (h, LOG_DEBUG, "broker shutdown in progress");
 }
@@ -429,7 +429,7 @@ void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *w,
 void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
                   const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    sqlite_ctx_t *ctx = arg;
     flux_rpc_t *rpc;
     int count = 0;
 
@@ -513,7 +513,7 @@ static struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int lzo_rc = lzo_init ();
-    ctx_t *ctx = getctx (h);
+    sqlite_ctx_t *ctx = getctx (h);
     if (!ctx)
         return -1;
     if (lzo_rc != LZO_E_OK) {

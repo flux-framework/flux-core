@@ -40,7 +40,7 @@ typedef struct {
     zhash_t *hash;
     zlist_t *names;
     flux_t *h;
-} ctx_t;
+} attr_ctx_t;
 
 typedef struct {
     char *val;
@@ -49,15 +49,15 @@ typedef struct {
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    attr_ctx_t *ctx = arg;
     zhash_destroy (&ctx->hash);
     zlist_destroy (&ctx->names);
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t *h)
+static attr_ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = flux_aux_get (h, "flux::attr");
+    attr_ctx_t *ctx = flux_aux_get (h, "flux::attr");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -84,7 +84,7 @@ static attr_t *attr_create (const char *val, int flags)
     return attr;
 }
 
-static int attr_get_rpc (ctx_t *ctx, const char *name, attr_t **attrp)
+static int attr_get_rpc (attr_ctx_t *ctx, const char *name, attr_t **attrp)
 {
     flux_rpc_t *r;
     const char *val;
@@ -107,7 +107,7 @@ done:
     return rc;
 }
 
-static int attr_set_rpc (ctx_t *ctx, const char *name, const char *val)
+static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
 {
     flux_rpc_t *r;
     attr_t *attr;
@@ -150,7 +150,7 @@ static int attr_strcmp (const char *s1, const char *s2)
 }
 #endif
 
-static int attr_list_rpc (ctx_t *ctx)
+static int attr_list_rpc (attr_ctx_t *ctx)
 {
     flux_rpc_t *r;
     json_t *array, *value;
@@ -182,7 +182,7 @@ done:
 
 const char *flux_attr_get (flux_t *h, const char *name, int *flags)
 {
-    ctx_t *ctx = getctx (h);
+    attr_ctx_t *ctx = getctx (h);
     attr_t *attr;
 
     if (!(attr = zhash_lookup (ctx->hash, name))
@@ -196,7 +196,7 @@ const char *flux_attr_get (flux_t *h, const char *name, int *flags)
 
 int flux_attr_set (flux_t *h, const char *name, const char *val)
 {
-    ctx_t *ctx = getctx (h);
+    attr_ctx_t *ctx = getctx (h);
 
     if (attr_set_rpc (ctx, name, val) < 0)
         return -1;
@@ -205,7 +205,7 @@ int flux_attr_set (flux_t *h, const char *name, const char *val)
 
 int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
 {
-    ctx_t *ctx = getctx (h);
+    attr_ctx_t *ctx = getctx (h);
     attr_t *attr = attr_create (val, flags);
     zhash_update (ctx->hash, name, attr);
     zhash_freefn (ctx->hash, name, attr_destroy);
@@ -214,7 +214,7 @@ int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
 
 const char *flux_attr_first (flux_t *h)
 {
-    ctx_t *ctx = getctx (h);
+    attr_ctx_t *ctx = getctx (h);
 
     if (attr_list_rpc (ctx) < 0)
         return NULL;
@@ -223,7 +223,7 @@ const char *flux_attr_first (flux_t *h)
 
 const char *flux_attr_next (flux_t *h)
 {
-    ctx_t *ctx = flux_aux_get (h, "flux::attr");
+    attr_ctx_t *ctx = flux_aux_get (h, "flux::attr");
 
     return ctx->names ? zlist_next (ctx->names) : NULL;
 }

@@ -63,7 +63,7 @@ typedef struct {
     struct subprocess *p;
     bool oneshot;
     int exit_code;
-} ctx_t;
+} proxy_ctx_t;
 
 typedef void (*unsubscribe_f)(void *handle, const char *topic);
 
@@ -82,7 +82,7 @@ typedef struct {
     struct flux_msg_iobuf inbuf;
     struct flux_msg_iobuf outbuf;
     zlist_t *outqueue;  /* queue of outbound flux_msg_t */
-    ctx_t *ctx;
+    proxy_ctx_t *ctx;
     zhash_t *disconnect_notify;
     zhash_t *subscriptions;
     zuuid_t *uuid;
@@ -101,7 +101,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 
-static void ctx_destroy (ctx_t *ctx)
+static void ctx_destroy (proxy_ctx_t *ctx)
 {
     if (ctx) {
         zlist_destroy (&ctx->clients);
@@ -114,9 +114,9 @@ static void ctx_destroy (ctx_t *ctx)
     }
 }
 
-static ctx_t *ctx_create (flux_t *h)
+static proxy_ctx_t *ctx_create (flux_t *h)
 {
-    ctx_t *ctx = xzmalloc (sizeof (*ctx));
+    proxy_ctx_t *ctx = xzmalloc (sizeof (*ctx));
     ctx->h = h;
     if (!(ctx->reactor = flux_reactor_create (SIGCHLD)))
         log_err_exit ("flux_reactor_create");
@@ -150,7 +150,7 @@ static int set_nonblock (int fd, bool nonblock)
     return 0;
 }
 
-static client_t * client_create (ctx_t *ctx, int rfd, int wfd)
+static client_t * client_create (proxy_ctx_t *ctx, int rfd, int wfd)
 {
     client_t *c;
     flux_t *h = ctx->h;
@@ -252,7 +252,7 @@ static void subscription_destroy (void *data)
     free (sub);
 }
 
-static int global_subscribe (ctx_t *ctx, const char *topic)
+static int global_subscribe (proxy_ctx_t *ctx, const char *topic)
 {
     subscription_t *sub;
     int rc = -1;
@@ -277,7 +277,7 @@ done:
     return rc;
 }
 
-static int global_unsubscribe (ctx_t *ctx, const char *topic)
+static int global_unsubscribe (proxy_ctx_t *ctx, const char *topic)
 {
     subscription_t *sub;
     int rc = -1;
@@ -477,7 +477,7 @@ static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     client_t *c = arg;
-    ctx_t *ctx = c->ctx;
+    proxy_ctx_t *ctx = c->ctx;
 
     if (revents & FLUX_POLLERR)
         goto disconnect;
@@ -529,7 +529,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     client_t *c = arg;
-    ctx_t *ctx = c->ctx;
+    proxy_ctx_t *ctx = c->ctx;
     flux_t *h = ctx->h;
     flux_msg_t *msg = NULL;
     int type;
@@ -595,7 +595,7 @@ disconnect:
 static void response_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    proxy_ctx_t *ctx = arg;
     char *uuid = NULL;
     client_t *c;
     flux_msg_t *cpy = flux_msg_copy (msg, true);
@@ -640,7 +640,7 @@ done:
 static void event_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    proxy_ctx_t *ctx = arg;
     client_t *c;
     const char *topic;
     int count = 0;
@@ -669,7 +669,7 @@ static void event_cb (flux_t *h, flux_msg_handler_t *w,
     //flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic, count);
 }
 
-static int check_cred (ctx_t *ctx, int fd)
+static int check_cred (proxy_ctx_t *ctx, int fd)
 {
     struct ucred ucred;
     socklen_t crlen = sizeof (ucred);
@@ -696,7 +696,7 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
-    ctx_t *ctx = arg;
+    proxy_ctx_t *ctx = arg;
     flux_t *h = ctx->h;
 
     if (revents & FLUX_POLLIN) {
@@ -725,7 +725,7 @@ done:
     return;
 }
 
-static int listener_init (ctx_t *ctx, char *sockpath)
+static int listener_init (proxy_ctx_t *ctx, char *sockpath)
 {
     struct sockaddr_un addr;
     int fd;
@@ -820,7 +820,7 @@ done:
 
 static int child_cb (struct subprocess *p)
 {
-    ctx_t *ctx = subprocess_get_context (p, "ctx");
+    proxy_ctx_t *ctx = subprocess_get_context (p, "ctx");
 
     ctx->exit_code = subprocess_exit_code (p);
     flux_reactor_stop (ctx->reactor);
@@ -828,7 +828,7 @@ static int child_cb (struct subprocess *p)
     return 0;
 }
 
-static int child_create (ctx_t *ctx, int ac, char **av, const char *workpath)
+static int child_create (proxy_ctx_t *ctx, int ac, char **av, const char *workpath)
 {
     const char *shell = getenv ("SHELL");
     char *argz = NULL;
@@ -890,7 +890,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
     flux_t *h = NULL;
     int n;
-    ctx_t *ctx;
+    proxy_ctx_t *ctx;
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];

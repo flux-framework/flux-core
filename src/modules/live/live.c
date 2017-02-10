@@ -127,20 +127,20 @@ typedef struct {
     ns_t *ns;           /* master only */
     json_object *topo;          /* master only */
     flux_t *h;
-} ctx_t;
+} live_ctx_t;
 
 static void parent_destroy (parent_t *p);
 static void child_destroy (child_t *c);
-static int hello (ctx_t *ctx);
-static void goodbye (ctx_t *ctx, int parent_rank);
-static void manage_subscriptions (ctx_t *ctx);
+static int hello (live_ctx_t *ctx);
+static void goodbye (live_ctx_t *ctx, int parent_rank);
+static void manage_subscriptions (live_ctx_t *ctx);
 
 static const int default_max_idle = 5;
 static const int default_slow_idle = 3;
 static const double reduce_timeout = 0.800;
 
-static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to);
-static int ns_sync (ctx_t *ctx);
+static void ns_chg_one (live_ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to);
+static int ns_sync (live_ctx_t *ctx);
 
 static void hello_destroy (void *arg);
 static void hello_forward (flux_reduce_t *r, int batchnum, void *arg);
@@ -157,7 +157,7 @@ static struct flux_reduce_ops hello_ops = {
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     parent_t *p;
 
     if (ctx) {
@@ -174,9 +174,9 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t *h)
+static live_ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = flux_aux_get (h, "flux::live");
+    live_ctx_t *ctx = flux_aux_get (h, "flux::live");
     int n;
 
     if (!ctx) {
@@ -272,7 +272,7 @@ static json_object *parent_tojson (parent_t *p)
     return o;
 }
 
-static json_object *parents_tojson (ctx_t *ctx)
+static json_object *parents_tojson (live_ctx_t *ctx)
 {
     parent_t *p;
     json_object *el;
@@ -294,7 +294,7 @@ static json_object *parents_tojson (ctx_t *ctx)
  * zmq_connect(), as opposed to the parent which has a zmq_bind() URI
  * that could be a wildcard.
  */
-static void parents_fromjson (ctx_t *ctx, json_object *ar)
+static void parents_fromjson (live_ctx_t *ctx, json_object *ar)
 {
     int i, len;
     json_object *el;
@@ -317,7 +317,7 @@ static void parents_fromjson (ctx_t *ctx, json_object *ar)
     }
 }
 
-static int reparent (ctx_t *ctx, int oldrank, parent_t *p)
+static int reparent (live_ctx_t *ctx, int oldrank, parent_t *p)
 {
     int rc = -1;
 
@@ -342,7 +342,7 @@ done:
 
 /* Reparent to next alternate parent.
  */
-static int failover (ctx_t *ctx)
+static int failover (live_ctx_t *ctx)
 {
     parent_t *p;
     int oldrank;
@@ -362,7 +362,7 @@ static int failover (ctx_t *ctx)
 
 /* Reparent to original parent.
  */
-static int recover (ctx_t *ctx)
+static int recover (live_ctx_t *ctx)
 {
     parent_t *p;
     int oldrank, maxrank = -1; /* max rank will be orig. parent */
@@ -387,7 +387,7 @@ static int recover (ctx_t *ctx)
 static void cstate_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     const char *json_str;
     json_object *event = NULL;
     int epoch, parent, rank;
@@ -432,7 +432,7 @@ done:
     Jput (event);
 }
 
-static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
+static void cstate_change (live_ctx_t *ctx, child_t *c, cstate_t newstate)
 {
     json_object *event = Jnew ();
     flux_msg_t *msg;
@@ -467,7 +467,7 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 static void hb_cb (flux_t *h, flux_msg_handler_t *w,
                    const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     char *peers_str = NULL;
     json_object *peers = NULL;
     zlist_t *keys = NULL;
@@ -524,7 +524,7 @@ done:
         free (peers_str);
 }
 
-static void manage_subscriptions (ctx_t *ctx)
+static void manage_subscriptions (live_ctx_t *ctx)
 {
     if (ctx->hb_subscribed && zhash_size (ctx->children) == 0) {
         if (flux_event_unsubscribe (ctx->h, "hb") < 0)
@@ -543,7 +543,7 @@ static void manage_subscriptions (ctx_t *ctx)
 
 static int max_idle_cb (const char *key, int val, void *arg, int errnum)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
 
     if (errnum != ENOENT && errnum != 0)
         return 0;
@@ -555,7 +555,7 @@ static int max_idle_cb (const char *key, int val, void *arg, int errnum)
 
 static int slow_idle_cb (const char *key, int val, void *arg, int errnum)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
 
     if (errnum != ENOENT && errnum != 0)
         return 0;
@@ -570,7 +570,7 @@ static int slow_idle_cb (const char *key, int val, void *arg, int errnum)
 static void goodbye_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
     int n, rank, prank;
@@ -599,7 +599,7 @@ done:
     Jput (in);
 }
 
-static void goodbye (ctx_t *ctx, int parent_rank)
+static void goodbye (live_ctx_t *ctx, int parent_rank)
 {
     json_object *in = Jnew ();
     flux_rpc_t *rpc;
@@ -666,7 +666,7 @@ static ns_t *ns_fromjson (json_object *o)
     return ns;
 }
 
-static int ns_tokvs (ctx_t *ctx)
+static int ns_tokvs (live_ctx_t *ctx)
 {
     json_object *o = ns_tojson (ctx->ns);
     int rc = -1;
@@ -681,7 +681,7 @@ done:
     return rc;
 }
 
-static int ns_fromkvs (ctx_t *ctx)
+static int ns_fromkvs (live_ctx_t *ctx)
 {
     char *json_str = NULL;
     json_object *o = NULL;
@@ -702,7 +702,7 @@ done:
 /* If ctx->ns is uninitialized, initialize it, using kvs data if any.
  * If ctx->ns is initialized, write it to kvs.
  */
-static int ns_sync (ctx_t *ctx)
+static int ns_sync (live_ctx_t *ctx)
 {
     int rc = -1;
     bool writekvs = false;
@@ -732,7 +732,7 @@ done:
 
 /* N.B. from=CS_UNKNOWN is treated as "from any other state".
  */
-static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to)
+static void ns_chg_one (live_ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to)
 {
     if (from == CS_UNKNOWN)
         nodeset_delete_rank (ctx->ns->unknown, r);
@@ -764,7 +764,7 @@ static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to)
  * FIXME: should we generate a live.cstate event if state is
  * transitioning from CS_SLOW or CS_FAIL e.g. after reparenting?
  */
-static void ns_chg_hello (ctx_t *ctx, json_object *a)
+static void ns_chg_hello (live_ctx_t *ctx, json_object *a)
 {
     json_object_iter iter;
     int i, len, crank;
@@ -782,7 +782,7 @@ static void ns_chg_hello (ctx_t *ctx, json_object *a)
  * Topology in the kvs is a JSON array of arrays.
  * Topology in ctx->topo is a JSON hash of arrays, for ease of merging.
  */
-static int topo_fromkvs (ctx_t *ctx)
+static int topo_fromkvs (live_ctx_t *ctx)
 {
     char *json_str = NULL;
     json_object *car;
@@ -814,7 +814,7 @@ done:
     return rc;
 }
 
-static int topo_tokvs (ctx_t *ctx)
+static int topo_tokvs (live_ctx_t *ctx)
 {
     json_object_iter iter;
     json_object *ar = Jnew_ar ();
@@ -837,7 +837,7 @@ done:
 /* If ctx->topo is uninitialized, initialize it, using kvs data if any.
  * If ctx->topo is initialized, write it to kvs.
  */
-static int topo_sync (ctx_t *ctx)
+static int topo_sync (live_ctx_t *ctx)
 {
     int rc = -1;
     bool writekvs = false;
@@ -901,7 +901,7 @@ static void hello_destroy (void *arg)
 
 static void hello_forward (flux_reduce_t *r, int batchnum, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     flux_rpc_t *rpc;
     json_object *o;
 
@@ -917,7 +917,7 @@ static void hello_forward (flux_reduce_t *r, int batchnum, void *arg)
 
 static void hello_sink (flux_reduce_t *r, int batchnum, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     json_object *o;
 
     while ((o = flux_reduce_pop (r))) {
@@ -948,7 +948,7 @@ static void hello_reduce (flux_reduce_t *r, int batchnum, void *arg)
 
 /* Source:  { "prank":[crank] }
  */
-static void hello_source (ctx_t *ctx, const char *prank, int crank)
+static void hello_source (live_ctx_t *ctx, const char *prank, int crank)
 {
     json_object *a = Jnew ();
     json_object *c = Jnew_ar ();
@@ -965,7 +965,7 @@ static void hello_source (ctx_t *ctx, const char *prank, int crank)
 static void push_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
 
@@ -989,7 +989,7 @@ done:
 static void hello_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     const char *json_str;
     json_object *in = NULL;
     json_object *out = NULL;
@@ -1038,7 +1038,7 @@ done:
 /* Request: {"rank":N}
  * Response: {"parents":[...]}
  */
-static int hello (ctx_t *ctx)
+static int hello (live_ctx_t *ctx)
 {
     const char *json_str;
     json_object *in = Jnew ();
@@ -1075,7 +1075,7 @@ done:
 static void failover_request_cb (flux_t *h, flux_msg_handler_t *w,
                                  const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0) {
@@ -1093,7 +1093,7 @@ done:
 static void recover_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0) {
@@ -1111,7 +1111,7 @@ done:
 static void recover_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    live_ctx_t *ctx = arg;
 
     if (zlist_size (ctx->parents) > 0 && recover (ctx) < 0) {
         if (errno == EINVAL)
@@ -1136,7 +1136,7 @@ static struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
-    ctx_t *ctx = getctx (h);
+    live_ctx_t *ctx = getctx (h);
     int i, barrier_count = 0;
     const char *barrier_name = "live-init";
 
