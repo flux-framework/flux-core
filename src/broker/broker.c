@@ -120,6 +120,8 @@ typedef struct {
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
     attr_t *attrs;
+    uint32_t userid;            /* instance owner */
+    uint32_t rolemask;
 
     /* Modules
      */
@@ -356,6 +358,12 @@ int main (int argc, char *argv[])
             log_errn_exit (e, "argz_create");
     }
 
+    /* Record the instance owner: the effective uid of the broker.
+     * Set default rolemask for messages sent with flux_send()
+     * on the broker's internal handle.
+     */
+    ctx.userid = geteuid ();
+    ctx.rolemask = FLUX_ROLE_OWNER;
 
     /* Connect to enclosing instance, if any.
      */
@@ -2168,27 +2176,45 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     broker_ctx_t *ctx = impl;
     int type;
+    uint32_t userid, rolemask;
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
-    (void)snoop_sendmsg (ctx->snoop, msg);
-
-    if (flux_msg_get_type (msg, &type) < 0)
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
+    if (flux_msg_get_type (cpy, &type) < 0)
+        goto done;
+    if (flux_msg_get_userid (cpy, &userid) < 0)
+        goto done;
+    if (flux_msg_get_rolemask (cpy, &rolemask) < 0)
+        goto done;
+    if (userid == FLUX_USERID_UNKNOWN)
+        userid = ctx->userid;
+    if (rolemask == FLUX_ROLE_NONE)
+        rolemask = ctx->rolemask;
+    if (flux_msg_set_userid (cpy, userid) < 0)
+        goto done;
+    if (flux_msg_set_rolemask (cpy, rolemask) < 0)
+        goto done;
+
+    (void)snoop_sendmsg (ctx->snoop, cpy);
+
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, msg, ERROR_MODE_RETURN);
+            rc = broker_request_sendmsg (ctx, cpy, ERROR_MODE_RETURN);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = broker_response_sendmsg (ctx, msg);
+            rc = broker_response_sendmsg (ctx, cpy);
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, msg);
+            rc = broker_event_sendmsg (ctx, cpy);
             break;
         default:
             errno = EINVAL;
             break;
     }
 done:
+    flux_msg_destroy (cpy);
     return rc;
 }
 
