@@ -18,6 +18,12 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w);
 void flux_msg_handler_start (flux_msg_handler_t *w);
 void flux_msg_handler_stop (flux_msg_handler_t *w);
 
+/* By default, only messages from FLUX_ROLE_OWNER are delivered to handler.
+ * Use _allow_rolemask() add roles, _deny_rolemask() to remove them.
+ * (N.B. FLUX_ROLE_OWNER cannot be denied)
+ */
+void flux_msg_handler_allow_rolemask (flux_msg_handler_t *w, uint32_t rolemask);
+void flux_msg_handler_deny_rolemask (flux_msg_handler_t *w, uint32_t rolemask);
 
 struct flux_msg_handler_spec {
     int typemask;
