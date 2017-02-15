@@ -69,6 +69,8 @@ struct module_struct {
     heartbeat_t *heartbeat;
 
     void *sock;             /* broker end of PAIR socket */
+    uint32_t userid;        /* creds of connection */
+    uint32_t rolemask;
 
     zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
@@ -220,6 +222,8 @@ flux_msg_t *module_recvmsg (module_t *p)
 {
     flux_msg_t *msg = NULL;
     int type;
+    uint32_t userid, rolemask;
+
     assert (p->magic == MODULE_MAGIC);
 
     if (!(msg = flux_msg_recvzsock (p->sock)))
@@ -228,6 +232,25 @@ flux_msg_t *module_recvmsg (module_t *p)
         if (flux_msg_pop_route (msg, NULL) < 0) /* simulate DEALER socket */
             goto error;
     }
+    /* All shmem:// connections to the broker have FLUX_ROLE_OWNER
+     * and are "authenticated" as the instance owner.
+     * Allow modules so endowed to change the userid/rolemask on messages when
+     * sending on behalf of other users.  This is necessary for connectors
+     * implemented as comms modules.
+     */
+    assert ((p->rolemask & FLUX_ROLE_OWNER));
+    if (flux_msg_get_userid (msg, &userid) < 0)
+        goto error;
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        goto error;
+    if (userid == FLUX_USERID_UNKNOWN)
+        userid = p->userid;
+    if (rolemask == FLUX_ROLE_NONE)
+        rolemask = p->rolemask;
+    if (flux_msg_set_userid (msg, userid) < 0)
+        goto error;
+    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+        goto error;
     return msg;
 error:
     flux_msg_destroy (msg);
@@ -555,6 +578,12 @@ module_t *module_add (modhash_t *mh, const char *path)
                                                  p->sock, FLUX_POLLIN,
                                                  module_cb, p)))
         log_err_exit ("flux_zmq_watcher_create");
+    /* Set creds for connection.
+     * Since this is a point to point connection between broker threads,
+     * credentials are always those of the instance owner.
+     */
+    p->userid = geteuid ();
+    p->rolemask = FLUX_ROLE_OWNER;
 
     /* Update the modhash.
      */
