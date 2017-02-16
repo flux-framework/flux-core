@@ -1821,24 +1821,6 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     return module_event_mcast (ctx->modhash, msg);
 }
 
-/* helper for parent_cb */
-static void send_mute_request (flux_t *h, void *sock)
-{
-    flux_msg_t *msg;
-
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (msg, "cmb.event-mute") < 0)
-        goto done;
-    if (flux_msg_enable_route (msg))
-        goto done;
-    if (flux_msg_sendzsock (sock, msg) < 0)
-        flux_log_error (h, "failed to send mute request");
-    /* No response will be sent */
-done:
-    flux_msg_destroy (msg);
-}
-
 /* Handle messages from one or more parents.
  */
 static void parent_cb (overlay_t *ov, void *sock, void *arg)
@@ -1858,8 +1840,12 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (ctx->event_active) {
-                send_mute_request (ctx->h, sock);
+                flux_rpc_t *rpc;
+                if (!(rpc = flux_rpc (ctx->h, "cmb.event-mute", NULL,
+                              FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
+                    flux_log_error (ctx->h, "cmb.event-mute RPC");
                 goto done;
+                flux_rpc_destroy (rpc);
             }
             if (flux_msg_clear_route (msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event");
