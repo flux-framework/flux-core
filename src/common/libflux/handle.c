@@ -312,16 +312,14 @@ flux_t *flux_open (const char *uri, int flags)
         errno = EINVAL;
         goto done;
     }
-    if (uri) {
-        if (!(scheme = strdup (uri))) {
-            errno = ENOMEM;
-            goto done;
-        }
-        path = strstr (scheme, "://");
-        if (path) {
-            *path = '\0';
-            path = strtrim (path + 3, " \t");
-        }
+    if (!(scheme = strdup (uri))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    path = strstr (scheme, "://");
+    if (path) {
+        *path = '\0';
+        path = strtrim (path + 3, " \t");
     }
     if (!(connector_init = find_connector (scheme, &dso)))
         goto done;

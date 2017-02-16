@@ -59,8 +59,8 @@ enum {
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a connector to dynamically load.
  * The rest of the URI is parsed in an connector-specific manner.
- * A NULL uri selects the "local" connector with path derived from
- * FLUX_TMPDIR.
+ * A NULL uri selects the "local" connector with path stored
+ * in the environment variable FLUX_URI.
  */
 flux_t *flux_open (const char *uri, int flags);
 void flux_close (flux_t *h);
