@@ -613,4 +613,15 @@ test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
 	test_cmp random.data reread.data
 '
 
+# All tests below assume commit-merge=0
+
+# commit-merge option test
+test_expect_success 'kvs: commit-merge disabling works' '
+        THREADS=64 &&
+        flux module remove -r 0 kvs &&
+        flux module load -r 0 kvs commit-merge=0 &&
+        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge ${THREADS} $(basename ${SHARNESS_TEST_FILE})`
+	test "$OUTPUT" = "${THREADS}"
+'
+
 test_done

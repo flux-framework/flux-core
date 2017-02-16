@@ -22,7 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* tcommit - performance test for KVS commits */
+/* commit - performance test for KVS commits */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -116,7 +116,7 @@ void *thread (void *arg)
 done:
     if (t->h)
         flux_close (t->h);
-  return NULL;
+    return NULL;
 }
 
 int main (int argc, char *argv[])
@@ -134,6 +134,8 @@ int main (int argc, char *argv[])
             case 'f':
                 fopt = true;
                 fence_nprocs = strtoul (optarg, NULL, 10);
+                if (!fence_nprocs)
+                    log_msg_exit ("fence value must be > 0");
                 break;
             case 's':
                 sopt = true;
@@ -146,7 +148,11 @@ int main (int argc, char *argv[])
         usage ();
 
     nthreads = strtoul (argv[optind++], NULL, 10);
+    if (!nthreads)
+        log_msg_exit ("thread count must be > 0");
     count = strtoul (argv[optind++], NULL, 10);
+    if (!count)
+        log_msg_exit ("commit count must be > 0");
     prefix = argv[optind++];
 
     memset (&ts, 0, sizeof (ts));
