@@ -209,6 +209,24 @@ EOF
 	test_cmp expected output
 '
 
+test_expect_success 'kvs: put using no-merge flag' '
+	${KVSBASIC} unlink $TEST &&
+	${KVSBASIC} put-no-merge $DIR.a=69 &&
+        ${KVSBASIC} put-no-merge $DIR.b.c.d.e.f.g=70 &&
+        ${KVSBASIC} put-no-merge $DIR.c.a.b=3.14 &&
+        ${KVSBASIC} put-no-merge $DIR.d=\"snerg\" &&
+        ${KVSBASIC} put-no-merge $DIR.e=true &&
+	${KVSBASIC} dir -r $DIR | sort >output &&
+	cat >expected <<EOF
+$DIR.a = 69
+$DIR.b.c.d.e.f.g = 70
+$DIR.c.a.b = 3.140000
+$DIR.d = snerg
+$DIR.e = true
+EOF
+	test_cmp expected output
+'
+
 test_expect_success 'kvs: directory with multiple subdirs using dirat' '
 	${KVSBASIC} unlink $TEST &&
 	${KVSBASIC} put $DIR.a=69
