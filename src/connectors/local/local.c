@@ -47,6 +47,8 @@ typedef struct {
     int fd_nonblock;
     struct flux_msg_iobuf outbuf;
     struct flux_msg_iobuf inbuf;
+    uint32_t testing_userid;
+    uint32_t testing_rolemask;
     flux_t *h;
 } local_ctx_t;
 
@@ -99,16 +101,42 @@ static int op_pollfd (void *impl)
     return c->fd;
 }
 
-static int op_send (void *impl, const flux_msg_t *msg, int flags)
+static int send_normal (local_ctx_t *c, const flux_msg_t *msg, int flags)
 {
-    local_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
         return -1;
     if (flux_msg_sendfd (c->fd, msg, &c->outbuf) < 0)
         return -1;
     return 0;
+}
+
+static int send_testing (local_ctx_t *c, const flux_msg_t *msg, int flags)
+{
+    flux_msg_t *cpy;
+    int rc = -1;
+
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if (flux_msg_set_userid (cpy, c->testing_userid) < 0)
+        goto done;
+    if (flux_msg_set_rolemask (cpy, c->testing_rolemask) < 0)
+        goto done;
+    rc = send_normal (c, cpy, flags);
+done:
+    flux_msg_destroy (cpy);
+    return rc;
+}
+
+
+static int op_send (void *impl, const flux_msg_t *msg, int flags)
+{
+    local_ctx_t *c = impl;
+    assert (c->magic == CTX_MAGIC);
+    if (c->testing_userid != FLUX_USERID_UNKNOWN
+                                || c->testing_rolemask != FLUX_ROLE_NONE)
+        return send_testing (c, msg, flags);
+    else
+        return send_normal (c, msg, flags);
 }
 
 static flux_msg_t *op_recv (void *impl, int flags)
@@ -148,6 +176,37 @@ static int op_event_subscribe (void *impl, const char *topic)
 static int op_event_unsubscribe (void *impl, const char *topic)
 {
     return op_event (impl, topic, "local.unsub");
+}
+
+static int op_setopt (void *impl, const char *option,
+                      const void *val, size_t size)
+{
+    local_ctx_t *ctx = impl;
+    assert (ctx->magic == CTX_MAGIC);
+    size_t val_size;
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+        val_size = sizeof (ctx->testing_userid);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->testing_userid, val, val_size);
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        val_size = sizeof (ctx->testing_rolemask);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->testing_rolemask, val, val_size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 static void op_fini (void *impl)
@@ -193,6 +252,9 @@ flux_t *connector_init (const char *path, int flags)
     }
     memset (c, 0, sizeof (*c));
     c->magic = CTX_MAGIC;
+
+    c->testing_userid = FLUX_USERID_UNKNOWN;
+    c->testing_rolemask = FLUX_ROLE_NONE;
 
     c->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (c->fd < 0)
@@ -244,6 +306,8 @@ static const struct flux_handle_ops handle_ops = {
     .recv = op_recv,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,
+    .setopt = op_setopt,
+    .getopt = NULL,
     .impl_destroy = op_fini,
 };
 
