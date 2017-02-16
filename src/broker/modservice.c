@@ -257,7 +257,7 @@ static void register_event (modservice_ctx_t *ctx, const char *name,
 }
 
 static void register_request (modservice_ctx_t *ctx, const char *name,
-                              flux_msg_handler_f cb)
+                              flux_msg_handler_f cb, uint32_t rolemask)
 {
     struct flux_match match = FLUX_MATCH_REQUEST;
     flux_msg_handler_t *w;
@@ -265,6 +265,7 @@ static void register_request (modservice_ctx_t *ctx, const char *name,
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
     if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
         log_err_exit ("flux_msg_handler_create");
+    flux_msg_handler_allow_rolemask (w, rolemask);
     flux_msg_handler_start (w);
     if (zlist_append (ctx->handlers, w) < 0)
         oom ();
@@ -276,12 +277,12 @@ void modservice_register (flux_t *h, module_t *p)
     modservice_ctx_t *ctx = getctx (h, p);
     flux_reactor_t *r = flux_get_reactor (h);
 
-    register_request (ctx, "shutdown", shutdown_cb);
-    register_request (ctx, "ping", ping_cb);
-    register_request (ctx, "stats.get", stats_get_cb);
-    register_request (ctx, "stats.clear", stats_clear_request_cb);
-    register_request (ctx, "rusage", rusage_cb);
-    register_request (ctx, "debug", debug_cb);
+    register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER);
+    register_request (ctx, "ping", ping_cb, FLUX_ROLE_ALL);
+    register_request (ctx, "stats.get", stats_get_cb, FLUX_ROLE_ALL);
+    register_request (ctx, "stats.clear", stats_clear_request_cb, FLUX_ROLE_OWNER);
+    register_request (ctx, "rusage", rusage_cb, FLUX_ROLE_ALL);
+    register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER);
 
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
 
