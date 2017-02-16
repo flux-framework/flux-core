@@ -373,19 +373,16 @@ int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
-    flux_msg_t *msg;
+    flux_rpc_t *rpc;
     int rc = -1;
 
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (msg, topic) < 0)
-        goto done;
-    if (flux_msg_sendzsock (p->sock, msg) < 0)
+    if (!(rpc = flux_rpc (p->broker_h, topic, NULL,
+                          FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
     free (topic);
-    flux_msg_destroy (msg);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
