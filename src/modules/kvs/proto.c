@@ -206,13 +206,15 @@ done:
 
 /* kvs.fence
  */
-json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops)
+json_object *kp_tfence_enc (const char *name, int nprocs, int flags,
+                            json_object *ops)
 {
     json_object *o = Jnew ();
     json_object *empty_ops = NULL;
 
     Jadd_str (o, "name", name);
     Jadd_int (o, "nprocs", nprocs);
+    Jadd_int (o, "flags", flags);
     if (!ops)
         ops = empty_ops = Jnew_ar();
     Jadd_obj (o, "ops", ops); /* takes a ref on ops */
@@ -221,15 +223,16 @@ json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops)
 }
 
 int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
-		   json_object **ops)
+                   int *flags, json_object **ops)
 {
     int rc = -1;
 
-    if (!name || !nprocs || !ops) {
+    if (!name || !nprocs || !flags || !ops ) {
         errno = EINVAL;
         goto done;
     }
     if (!Jget_obj (o, "ops", ops) || !Jget_str (o, "name", name)
+                                  || !Jget_int (o, "flags", flags)
                                   || !Jget_int (o, "nprocs", nprocs)) {
         errno = EPROTO;
         goto done;

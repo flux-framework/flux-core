@@ -95,6 +95,7 @@ typedef struct {
     zlist_t *requests;
     json_object *names;
     int nprocs;
+    int flags;
     int count;
     int errnum;
     kvs_ctx_t *ctx;
@@ -1096,7 +1097,8 @@ static void fence_destroy (fence_t *f)
     }
 }
 
-static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs)
+static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs,
+                              int flags)
 {
     fence_t *f;
 
@@ -1106,6 +1108,7 @@ static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs)
         goto error;
     }
     f->nprocs = nprocs;
+    f->flags = flags;
     f->ctx = ctx;
     f->names = Jnew_ar ();
     Jadd_ar_str (f->names, name);
@@ -1209,7 +1212,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
     const char *json_str, *name;
-    int nprocs;
+    int nprocs, flags;
     json_object *in = NULL;
     json_object *ops = NULL;
     fence_t *f;
@@ -1219,7 +1222,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
     if (!(in = Jfromstr (json_str))
-                    || kp_tfence_dec (in, &name, &nprocs, &ops) < 0) {
+                    || kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
         flux_log_error (h, "%s payload decode", __FUNCTION__);
         goto done;
@@ -1228,7 +1231,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
      * occurs after we know the fence name
      */
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs))) {
+        if (!(f = fence_create (ctx, name, nprocs, flags))) {
             flux_log_error (h, "%s fence_create %s", __FUNCTION__, name);
             goto done;
         }
@@ -1238,6 +1241,9 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
             goto done;
         }
     }
+    else
+        f->flags |= flags;
+
     if (fence_append_ops (f, ops) < 0) {
         flux_log_error (h, "%s fence_append_ops %s", __FUNCTION__, name);
         goto done;
@@ -1261,7 +1267,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
     const char *json_str, *name;
-    int nprocs;
+    int nprocs, flags;
     json_object *in = NULL;
     json_object *ops = NULL;
     fence_t *f;
@@ -1272,18 +1278,21 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (kp_tfence_dec (in, &name, &nprocs, &ops) < 0) {
+    if (kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
         goto error;
     }
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs)))
+        if (!(f = fence_create (ctx, name, nprocs, flags)))
             goto error;
         if (fence_add (ctx, f) < 0) {
             fence_destroy (f);
             goto error;
         }
     }
+    else
+        f->flags |= flags;
+
     if (fence_append_request (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {

@@ -1276,11 +1276,11 @@ flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs, int flags)
     if (ctx->fence_ops)
         fence_ops = zhash_lookup (ctx->fence_ops, name);
     if (fence_ops) {
-        if (!(in = kp_tfence_enc (name, nprocs, fence_ops)))
+        if (!(in = kp_tfence_enc (name, nprocs, flags, fence_ops)))
             goto done;
         zhash_delete (ctx->fence_ops, name);
     } else {
-        if (!(in = kp_tfence_enc (name, nprocs, ctx->ops)))
+        if (!(in = kp_tfence_enc (name, nprocs, flags, ctx->ops)))
             goto done;
         Jput (ctx->ops);
         ctx->ops = NULL;
