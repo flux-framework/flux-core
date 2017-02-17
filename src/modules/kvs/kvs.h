@@ -5,6 +5,12 @@
 #include <stdint.h>
 #include <flux/core.h>
 
+/* Flags for commit and fence operations
+ */
+enum {
+    KVS_NO_MERGE = 1,  /* disallow commits to be mergeable with others */
+};
+
 typedef struct kvsdir_struct kvsdir_t;
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,

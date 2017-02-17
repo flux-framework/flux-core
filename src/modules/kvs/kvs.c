@@ -599,21 +599,43 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
-/* Merge ready commits, where merging consists of popping the "donor"
- * commit off the ready list, and appending its ops to the top commit.
- * The top commit can be appended to if it hasn't started, or is still
- * building the rootcpy, e.g. stalled walking the namespace.
+/* Merge ready commits that are mergeable, where merging consists of
+ * popping the "donor" commit off the ready list, and appending its
+ * ops to the top commit.  The top commit can be appended to if it
+ * hasn't started, or is still building the rootcpy, e.g. stalled
+ * walking the namespace.
+ *
+ * Break when an unmergeable commit is discovered.  We do not wish to
+ * merge non-adjacent fences, as it can create undesireable out of
+ * order scenarios.  e.g.
+ *
+ * commit #1 is mergeable:     set A=1
+ * commit #2 is non-mergeable: set A=2
+ * commit #3 is mergeable:     set A=3
+ *
+ * If we were to merge commit #1 and commit #3, A=2 would be set after
+ * A=3.
  */
 void commit_merge_all (kvs_ctx_t *ctx)
 {
     fence_t *f = zlist_first (ctx->ready);
 
-    if (f && f->errnum == 0 && !f->rootcpy_stored) {
+    if (f
+        && f->errnum == 0
+        && !f->rootcpy_stored
+        && !(f->flags & KVS_NO_MERGE)) {
         fence_t *nf;
         nf = zlist_pop (ctx->ready);
         assert (nf == f);
-        while ((nf = zlist_pop (ctx->ready))) {
+        while ((nf = zlist_first (ctx->ready))) {
             int i, len;
+
+            /* We've merged as many as we currently can */
+            if (nf->flags & KVS_NO_MERGE)
+                break;
+
+            /* Fence is mergeable, pop off list */
+            nf = zlist_pop (ctx->ready);
 
             if (Jget_ar_len (nf->names, &len)) {
                 for (i = 0; i < len; i++) {
