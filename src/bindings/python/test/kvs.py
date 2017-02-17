@@ -70,6 +70,11 @@ class TestKVS(unittest.TestCase):
     def test_exists_false(self):
         self.assertFalse(flux.kvs.exists(self.f, 'argbah'))
 
+    def test_commit_flags(self):
+        flux.kvs.put(self.f, 'flagcheck', 42)
+        flux.kvs.commit(self.f, 1)
+        self.assertTrue(flux.kvs.exists(self.f, 'flagcheck'))
+
     def test_remove(self):
         kd = self.set_and_check_context('todel', "things to delete")
         del kd['todel']
