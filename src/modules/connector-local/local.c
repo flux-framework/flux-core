@@ -154,13 +154,28 @@ static int send_auth_response (int fd, unsigned char e)
     return write (fd, &e, 1);
 }
 
-/* Deny connections by user other than instance owner for now.
- */
+static int lookup_userdb (flux_t *h, uint32_t userid, uint32_t *rolemask)
+{
+    flux_rpc_t *rpc;
+    int rc = -1;
+
+    if (!(rpc = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
+                           "{s:i}", "userid", userid)))
+        goto done;
+    if (flux_rpc_getf (rpc, "{s:i}", "rolemask", rolemask) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_rpc_destroy (rpc);
+    return rc;
+}
+
 static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
                                 uint32_t *userid, uint32_t *rolemask)
 {
     struct ucred ucred;
     socklen_t crlen = sizeof (ucred);
+    uint32_t lookup_rolemask;
 
     if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &ucred, &crlen) < 0) {
         flux_log_error (h, "%s: getsockopt SO_PEERCRED", __FUNCTION__);
@@ -177,18 +192,31 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
                   ucred.uid, (int)ucred.pid);
         *debug_flags &= ~1; // one shot
         errno = EPERM;
+        goto error;
     }
-    if (ucred.uid != instance_owner) {
-        flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied",
-                  ucred.uid, (int)ucred.pid);
+    if (ucred.uid == instance_owner) {
+        lookup_rolemask = FLUX_ROLE_OWNER;
+        goto success;
+    }
+    if (lookup_userdb (h, ucred.uid, &lookup_rolemask) < 0) {
+        flux_log_error (h, "%s: userdb lookup uid=%d pid=%d",
+                        __FUNCTION__, ucred.uid, ucred.pid);
+        goto error;
+    }
+    if (lookup_rolemask == FLUX_ROLE_NONE) {
+        flux_log (h, LOG_ERR, "%s: uid=%d pid=%d no assigned roles",
+                  __FUNCTION__, ucred.uid, ucred.pid);
         errno = EPERM;
         goto error;
     }
+success:
     *userid = ucred.uid;
-    *rolemask = FLUX_ROLE_OWNER;
+    *rolemask = lookup_rolemask;
+    flux_log (h, LOG_INFO, "%s: uid=%d pid=%d allowed rolemask=0x%x",
+              __FUNCTION__, ucred.uid, ucred.pid, lookup_rolemask);
     return 0;
 error:
-   return -1;
+    return -1;
 }
 
 static client_t * client_create (mod_local_ctx_t *ctx, int fd)
