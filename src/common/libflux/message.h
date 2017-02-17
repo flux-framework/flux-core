@@ -188,6 +188,7 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid);
 enum {
     FLUX_ROLE_NONE = 0,
     FLUX_ROLE_OWNER = 1,
+    FLUX_ROLE_USER = 2,
     FLUX_ROLE_ALL = 0xFFFFFFFF,
 };
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask);
