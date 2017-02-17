@@ -10,7 +10,8 @@ SUBDIRS = \
  libjsc \
  resource-hwloc \
  cron \
- aggregator
+ aggregator \
+ userdb
 
 if HAVE_PYTHON
 SUBDIRS += pymod
