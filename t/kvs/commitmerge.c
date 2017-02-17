@@ -68,14 +68,21 @@ static int threadcount = -1;
 static int changecount = 0;
 static char *prefix = NULL;
 static char *key = NULL;
+static bool nopt = false;
 
 static int watch_init = 0;
 static pthread_cond_t watch_init_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t watch_init_lock = PTHREAD_MUTEX_INITIALIZER;
 
+#define OPTIONS "n"
+static const struct option longopts[] = {
+    {"nomerge", no_argument, 0, 'n'},
+    {0, 0, 0, 0},
+};
+
 static void usage (void)
 {
-    fprintf (stderr, "Usage: commitmerge threadcount prefix\n");
+    fprintf (stderr, "Usage: commitmerge [--nomerge] threadcount prefix\n");
     exit (1);
 }
 
@@ -193,7 +200,7 @@ void *committhread (void *arg)
     if (kvs_put_int (t->h, key, t->n) < 0)
         log_err_exit ("%s", key);
 
-    if (kvs_commit (t->h, 0) < 0)
+    if (kvs_commit (t->h, nopt ? KVS_NO_MERGE : 0) < 0)
         log_err_exit ("kvs_commit");
 
     flux_close (t->h);
@@ -203,9 +210,19 @@ void *committhread (void *arg)
 int main (int argc, char *argv[])
 {
     thd_t *thd;
-    int i, rc;
+    int i, rc, ch;
 
     log_init (basename (argv[0]));
+
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+        case 'n':
+            nopt = true;
+            break;
+        default:
+            usage ();
+        }
+    }
 
     if (argc - optind != 2)
         usage ();

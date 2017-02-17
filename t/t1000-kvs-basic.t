@@ -631,6 +631,18 @@ test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
 	test_cmp random.data reread.data
 '
 
+# kvs merging tests
+
+# If commit-merge=1 and we set KVS_NO_MERGE on all commits, this test
+# should behave similarly to commit-merge=0 and OUTPUT should equal
+# THREADS.
+test_expect_success 'kvs: test that KVS_NO_MERGE works with kvs_commit()' '
+        THREADS=64 &&
+        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge --nomerge ${THREADS} \
+                $(basename ${SHARNESS_TEST_FILE})`
+	test "$OUTPUT" = "${THREADS}"
+'
+
 # All tests below assume commit-merge=0
 
 # commit-merge option test
