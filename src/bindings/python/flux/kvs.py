@@ -66,8 +66,8 @@ def put(flux_handle, key, value):
     RAW.put(flux_handle, key, json_str)
 
 
-def commit(flux_handle):
-    return RAW.kvs_commit(flux_handle)
+def commit(flux_handle, flags=0):
+    return RAW.kvs_commit(flux_handle, flags)
 
 
 def dropcache(flux_handle):
@@ -128,8 +128,8 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                              "handle must be a valid kvsdir cdata pointer")
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
-    def commit(self):
-        commit(self.fhdl.handle)
+    def commit(self, flags=0):
+        commit(self.fhdl.handle, flags)
 
     def key_at(self, key):
         c_str = self.pimpl.key_at(key)

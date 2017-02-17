@@ -256,7 +256,7 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
         flux_log_error (h, "sink: kvs_put");
         goto out;
     }
-    if ((rc = kvs_commit (h)) < 0)
+    if ((rc = kvs_commit (h, 0)) < 0)
         flux_log_error (h, "sink: kvs_commit");
 out:
     Jput (o);

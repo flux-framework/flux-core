@@ -668,7 +668,7 @@ static int update_state (flux_t *h, int64_t j, json_object *o)
     key = lwj_key (h, j, ".state");
     if (kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0)
         flux_log_error (h, "update %s", key);
-    else if (kvs_commit (h) < 0)
+    else if (kvs_commit (h, 0) < 0)
         flux_log_error (h, "commit %s", key);
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
@@ -708,7 +708,7 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
         flux_log_error (h, "update %s", key2);
     else if (kvs_put_int64 (h, key3, walltime) < 0)
         flux_log_error (h, "update %s", key3);
-    else if (kvs_commit (h) < 0)
+    else if (kvs_commit (h, 0) < 0)
         flux_log_error (h, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
@@ -726,7 +726,7 @@ static int update_rdl (flux_t *h, int64_t j, const char *rs)
     char *key = lwj_key (h, j, ".rdl");
     if (kvs_put_string (h, key, rs) < 0)
         flux_log_error (h, "update %s", key);
-    else if (kvs_commit (h) < 0)
+    else if (kvs_commit (h, 0) < 0)
         flux_log_error (h, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
@@ -795,7 +795,7 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
             goto done;
         }
     }
-    if (kvs_commit (h) < 0) {
+    if (kvs_commit (h, 0) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
         goto done;
     }
@@ -873,7 +873,7 @@ static int update_pdesc (flux_t *h, int64_t j, json_object *o)
         if ( (rc = update_1pdesc (h, i, j, pde, h_arr, e_arr)) < 0)
             goto done;
     }
-    if (kvs_commit (h) < 0) {
+    if (kvs_commit (h, 0) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
         goto done;
     }

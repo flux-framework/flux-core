@@ -94,7 +94,7 @@ int main (int argc, char *argv[])
         kvsdir_t *dir;
         if (kvs_mkdir (h, prefix) < 0)
             log_err_exit ("kvs_mkdir %s", prefix);
-        if (kvs_commit (h) < 0)
+        if (kvs_commit (h, 0) < 0)
             log_err_exit ("kvs_commit");
         if (kvs_get_dir (h, &dir, "%s", prefix) < 0)
             log_err_exit ("kvs_get_dir %s", prefix);
@@ -103,7 +103,7 @@ int main (int argc, char *argv[])
     } else {
         dtree (h, prefix, width, height);
     }
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
        log_err_exit ("kvs_commit");
     flux_close (h);
 }
@@ -145,7 +145,7 @@ void dtree_mkdir (flux_t *h, kvsdir_t *dir, int width, int height)
         } else {
             if (kvsdir_mkdir (dir, key) < 0)
                 log_err_exit ("kvsdir_mkdir %s", key);
-            if (kvs_commit (h) < 0)
+            if (kvs_commit (h, 0) < 0)
                 log_err_exit ("kvs_commit");
             if (kvsdir_get_dir (dir, &ndir, "%s", key) < 0)
                 log_err_exit ("kvsdir_get_dir");

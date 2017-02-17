@@ -1226,7 +1226,7 @@ out:
  ** Commit/synchronization
  **/
 
-flux_rpc_t *kvs_commit_begin (flux_t *h)
+flux_rpc_t *kvs_commit_begin (flux_t *h, int flags)
 {
     zuuid_t *uuid = NULL;
     flux_rpc_t *rpc = NULL;
@@ -1236,7 +1236,7 @@ flux_rpc_t *kvs_commit_begin (flux_t *h)
         errno = ENOMEM;
         goto done;
     }
-    if (!(rpc = kvs_fence_begin (h, zuuid_str (uuid), 1)))
+    if (!(rpc = kvs_fence_begin (h, zuuid_str (uuid), 1, flags)))
         goto done;
 done:
     saved_errno = errno;
@@ -1250,12 +1250,12 @@ int kvs_commit_finish (flux_rpc_t *rpc)
     return flux_rpc_get (rpc, NULL);
 }
 
-int kvs_commit (flux_t *h)
+int kvs_commit (flux_t *h, int flags)
 {
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
-    if (!(rpc = kvs_commit_begin (h)))
+    if (!(rpc = kvs_commit_begin (h, flags)))
         goto done;
     if (kvs_commit_finish (rpc) < 0)
         goto done;
@@ -1265,7 +1265,7 @@ done:
     return rc;
 }
 
-flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs)
+flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs, int flags)
 {
     kvsctx_t *ctx = getctx (h);
     json_object *in = NULL;
@@ -1321,12 +1321,12 @@ void kvs_fence_clear_context (flux_t *h)
     kvs_fence_set_context (h, NULL);
 }
 
-int kvs_fence (flux_t *h, const char *name, int nprocs)
+int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
 {
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
-    if (!(rpc = kvs_fence_begin (h, name, nprocs)))
+    if (!(rpc = kvs_fence_begin (h, name, nprocs, flags)))
         goto done;
     if (kvs_fence_finish (rpc) < 0)
         goto done;

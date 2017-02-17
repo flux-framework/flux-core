@@ -101,10 +101,10 @@ void *thread (void *arg)
         if (kvs_put_int (t->h, key, 42) < 0)
             log_err_exit ("%s", key);
         if (fopt) {
-            if (kvs_fence (t->h, fence, fence_nprocs) < 0)
+            if (kvs_fence (t->h, fence, fence_nprocs, 0) < 0)
                 log_err_exit ("kvs_fence");
         } else {
-            if (kvs_commit (t->h) < 0)
+            if (kvs_commit (t->h, 0) < 0)
                 log_err_exit ("kvs_commit");
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)

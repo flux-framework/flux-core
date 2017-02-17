@@ -673,7 +673,7 @@ static int ns_tokvs (live_ctx_t *ctx)
 
     if (kvs_put (ctx->h, "conf.live.status", Jtostr (o)) < 0)
         goto done;
-    if (kvs_commit (ctx->h) < 0)
+    if (kvs_commit (ctx->h, 0) < 0)
         goto done;
     rc = 0;
 done:
@@ -826,7 +826,7 @@ static int topo_tokvs (live_ctx_t *ctx)
     }
     if (kvs_put (ctx->h, "conf.live.topology", Jtostr (ar)) < 0)
         goto done;
-    if (kvs_commit (ctx->h) < 0)
+    if (kvs_commit (ctx->h, 0) < 0)
         goto done;
     rc = 0;
 done:

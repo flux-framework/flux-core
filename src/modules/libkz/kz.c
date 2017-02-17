@@ -128,7 +128,7 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
         if (kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
-            if (kvs_commit (h) < 0)
+            if (kvs_commit (h, 0) < 0)
                 goto error;
         }
     } else if ((flags & KZ_FLAGS_READ)) {
@@ -149,7 +149,7 @@ static int kz_fence (kz_t *kz)
     int rc;
     if (asprintf (&name, "%s.%d", kz->grpname, kz->fencecount++) < 0)
         oom ();
-    rc = kvs_fence (kz->h, name, kz->nprocs);
+    rc = kvs_fence (kz->h, name, kz->nprocs, 0);
     free (name);
     return rc;
 }
@@ -191,7 +191,7 @@ static int putnext (kz_t *kz, const char *json_str)
     if (kvs_put (kz->h, key, json_str) < 0)
         goto done;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
-        if (kvs_commit (kz->h) < 0)
+        if (kvs_commit (kz->h, 0) < 0)
             goto done;
     }
     rc = 0;
@@ -323,7 +323,7 @@ int kz_flush (kz_t *kz)
 {
     int rc = 0;
     if ((kz->flags & KZ_FLAGS_WRITE))
-        rc = kvs_commit (kz->h);
+        rc = kvs_commit (kz->h, 0);
     return rc;
 }
 
@@ -345,7 +345,7 @@ int kz_close (kz_t *kz)
                 goto done;
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
-            if (kvs_commit (kz->h) < 0)
+            if (kvs_commit (kz->h, 0) < 0)
                 goto done;
         }
         if (kz->nprocs > 0 && kz->grpname) {

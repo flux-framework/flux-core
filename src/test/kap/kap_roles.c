@@ -222,7 +222,8 @@ commit_kv_cache (kap_params_t *param)
             Begin = now ();
             if ( kvs_fence (param->pers.handle,
                             fence_n,
-                            param->config.nproducers) < 0) {
+                            param->config.nproducers,
+                            0) < 0) {
                 fprintf (stderr, "kvs_commit failed.\n\n");
                     goto error;
                 }
@@ -234,7 +235,7 @@ commit_kv_cache (kap_params_t *param)
              *        MEASURE Commit_bn_Puts LATENCY       *
              **********************************************/
             Begin = now ();
-            if ( kvs_commit (param->pers.handle) < 0) {
+            if ( kvs_commit (param->pers.handle, 0) < 0) {
                 fprintf (stderr, "kvs_commit failed.\n\n");
                 goto error;
             }
@@ -320,8 +321,9 @@ run_fence_sync (kap_params_t *param)
                   "pr-co-fen-%d",
                   (int) param->config.instance_num);   
         if ( kvs_fence (param->pers.handle, 
-                       fn, 
-                       fence_count)  < 0) {
+                        fn, 
+                        fence_count,
+                        0)  < 0) {
             fprintf (stderr,
                 "kvs_fence failed.\n");
             goto error;
@@ -415,8 +417,9 @@ run_causal_sync (kap_params_t *param)
                   "pr-causal-fen-%d",
                   (int) param->config.instance_num);
         if ( kvs_fence (param->pers.handle, 
-                       fn, 
-                       param->config.nproducers) < 0) {
+                        fn, 
+                        param->config.nproducers,
+                        0) < 0) {
             fprintf (stderr,
                 "kvs_fence failed.\n");
             goto error;
@@ -480,7 +483,7 @@ run_producer (kap_params_t *param)
         "prod-st-fen-%d",
         (int) param->config.instance_num);
     if ( kvs_fence (param->pers.handle, fn, 
-                     param->config.nproducers) < 0) {
+                    param->config.nproducers, 0) < 0) {
         fprintf (stderr, 
             "flux_fence (%s) failed.\n", fn);       
         goto error;

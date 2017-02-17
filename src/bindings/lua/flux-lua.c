@@ -340,7 +340,7 @@ static int l_flux_kvs_type (lua_State *L)
 int l_flux_kvs_commit (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
-    if (kvs_commit (f) < 0)
+    if (kvs_commit (f, 0) < 0)
          return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);

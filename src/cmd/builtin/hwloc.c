@@ -230,7 +230,7 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
         if (kvs_put_string (h, key, path) < 0)
             log_err_exit ("kvs_put_string");
     }
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 }
 

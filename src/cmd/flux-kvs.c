@@ -345,7 +345,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         }
         free (key);
     }
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     return (0);
 }
@@ -398,7 +398,7 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
         if (kvs_unlink (h, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     return (0);
 }
@@ -420,7 +420,7 @@ int cmd_link (optparse_t *p, int argc, char **argv)
         log_msg_exit ("link: specify target and link_name");
     if (kvs_symlink (h, argv[optindex + 1], argv[optindex]) < 0)
         log_err_exit ("%s", argv[optindex + 1]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     return (0);
 }
@@ -466,7 +466,7 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
         if (kvs_mkdir (h, argv[i]) < 0)
             log_err_exit ("%s", argv[i]);
     }
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     return (0);
 }
@@ -778,7 +778,7 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
         log_msg_exit ("copy: specify srckey dstkey");
     if (kvs_copy (h, argv[optindex], argv[optindex + 1]) < 0)
         log_err_exit ("kvs_copy %s %s", argv[optindex], argv[optindex + 1]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     return (0);
 }
@@ -800,7 +800,7 @@ int cmd_move (optparse_t *p, int argc, char **argv)
         log_msg_exit ("move: specify srckey dstkey");
     if (kvs_move (h, argv[optindex], argv[optindex + 1]) < 0)
         log_err_exit ("kvs_move %s %s", argv[optindex], argv[optindex + 1]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     return (0);
 }

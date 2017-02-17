@@ -148,7 +148,7 @@ void *watchthread (void *arg)
     if (!rc) {
         if (kvs_unlink (t->h, key) < 0)
             log_err_exit ("kvs_unlink");
-        if (kvs_commit (t->h) < 0)
+        if (kvs_commit (t->h, 0) < 0)
             log_err_exit ("kvs_commit");
     }
 
@@ -193,7 +193,7 @@ void *committhread (void *arg)
     if (kvs_put_int (t->h, key, t->n) < 0)
         log_err_exit ("%s", key);
 
-    if (kvs_commit (t->h) < 0)
+    if (kvs_commit (t->h, 0) < 0)
         log_err_exit ("kvs_commit");
 
     flux_close (t->h);

@@ -199,7 +199,7 @@ static int archive_lwj (struct prog_ctx *ctx)
     if (kvs_symlink (ctx->flux, link, to) < 0)
         flux_log_error (ctx->flux, "kvs_symlink (%s -> %s)", link, to);
 
-    if ((rc = kvs_commit (ctx->flux)) < 0)
+    if ((rc = kvs_commit (ctx->flux, 0)) < 0)
         flux_log_error (ctx->flux, "kvs_commit");
 out:
     free (link);
@@ -228,7 +228,7 @@ static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va
     if (fatal) {
         // best effort
         if (kvsdir_put_int (ctx->kvs, "fatalerror", fatal) == 0)
-            (void)kvs_commit (ctx->flux);
+            (void)kvs_commit (ctx->flux, 0);
     }
 }
 
@@ -1185,7 +1185,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         wlog_fatal (ctx, 1, "update_job_state");
 
     /* Wait for all wrexecds to finish and commit */
-    if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
+    if (kvs_fence (ctx->flux, name, ctx->nnodes, 0) < 0)
         wlog_fatal (ctx, 1, "kvs_fence");
 
     /* Also emit event to avoid racy kvs_watch for clients */
@@ -1228,7 +1228,7 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
     rc = kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
     free (key);
     json_object_put (o);
-    //kvs_commit (ctx->flux);
+    //kvs_commit (ctx->flux, 0);
 
     if (rc < 0)
         return wlog_err (ctx, "kvs_put failure");
@@ -1397,7 +1397,7 @@ int send_exit_message (struct task_info *t)
 
     if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
         wlog_debug (ctx, "kvs_commit on task exit");
-        if (kvs_commit (ctx->flux) < 0)
+        if (kvs_commit (ctx->flux, 0) < 0)
             return (-1);
     }
 
@@ -1922,7 +1922,7 @@ int rexecd_init (struct prog_ctx *ctx)
 
     /*  Wait for all nodes to finish calling init plugins:
      */
-    if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
+    if (kvs_fence (ctx->flux, name, ctx->nnodes, 0) < 0)
         wlog_fatal (ctx, 1, "kvs_fence %s: %s", name, flux_strerror (errno));
 
     /*  Now, check for `fatalerror` key in the kvs, which indicates
@@ -2228,7 +2228,7 @@ static int wreck_pmi_barrier_enter (void *arg)
     flux_rpc_t *rpc;
 
     if ((rpc = kvs_fence_begin (ctx->flux, ctx->barrier_name,
-                                           ctx->nnodes)) == NULL) {
+                                ctx->nnodes, 0)) == NULL) {
         wlog_err (ctx, "pmi_barrier_enter: kvs_fence_begin: %s",
                   strerror (errno));
         goto out;

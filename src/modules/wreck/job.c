@@ -138,7 +138,7 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
         goto out;
     }
 
-    if ((rc = kvs_commit (h)) < 0)
+    if ((rc = kvs_commit (h, 0)) < 0)
         flux_log_error (h, "kvs_job_set_state: kvs_commit");
 
 out:
@@ -304,7 +304,7 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
         goto out;
     }
 
-    if (kvs_commit (h) < 0) {
+    if (kvs_commit (h, 0) < 0) {
         flux_log_error (h, "job_request: kvs_commit");
         goto out;
     }
