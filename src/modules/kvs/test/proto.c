@@ -120,18 +120,19 @@ void test_fence (void)
     json_object *o;
     json_object *out;
     json_object *ops = Jnew_ar();
-    int nprocs;
+    int nprocs, flags;
     const char *name;
 
-    ok ((o = kp_tfence_enc ("foo", 42, ops)) != NULL,
+    ok ((o = kp_tfence_enc ("foo", 42, 55, ops)) != NULL,
         "kp_tfence_enc works");
     name = NULL;
     nprocs = 0;
+    flags = 0;
     out = NULL;
     diag ("fence: %s", Jtostr (o));
-    ok (kp_tfence_dec (o, &name, &nprocs, &out) == 0
+    ok (kp_tfence_dec (o, &name, &nprocs, &flags, &out) == 0
         && name != NULL && !strcmp (name, "foo")
-        && nprocs == 42 && out != NULL,
+        && nprocs == 42 && flags == 55 && out != NULL,
         "kp_tfence_dec works");
     Jput (out);
     Jput (o);
