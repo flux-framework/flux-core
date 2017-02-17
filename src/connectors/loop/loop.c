@@ -45,7 +45,7 @@ typedef struct {
     int pollevents;
 
     msglist_t *queue;
-} ctx_t;
+} loop_ctx_t;
 
 
 static const struct flux_handle_ops handle_ops;
@@ -54,7 +54,7 @@ const char *fake_uuid = "12345678123456781234567812345678";
 
 static int op_pollevents (void *impl)
 {
-    ctx_t *c = impl;
+    loop_ctx_t *c = impl;
     int e, revents = 0;
 
     if ((e = msglist_pollevents (c->queue)) < 0)
@@ -70,13 +70,13 @@ static int op_pollevents (void *impl)
 
 static int op_pollfd (void *impl)
 {
-    ctx_t *c = impl;
+    loop_ctx_t *c = impl;
     return msglist_pollfd (c->queue);
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    ctx_t *c = impl;
+    loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     int type;
     flux_msg_t *cpy = NULL;
@@ -98,7 +98,7 @@ done:
 
 static flux_msg_t *op_recv (void *impl, int flags)
 {
-    ctx_t *c = impl;
+    loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_msg_t *msg = msglist_pop (c->queue);
     if (!msg)
@@ -108,7 +108,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
 
 static void op_fini (void *impl)
 {
-    ctx_t *c = impl;
+    loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     if (c->pollfd >= 0)
@@ -120,7 +120,7 @@ static void op_fini (void *impl)
 
 flux_t *connector_init (const char *path, int flags)
 {
-    ctx_t *c = malloc (sizeof (*c));
+    loop_ctx_t *c = malloc (sizeof (*c));
     if (!c) {
         errno = ENOMEM;
         goto error;

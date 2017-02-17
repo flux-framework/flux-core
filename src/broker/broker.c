@@ -155,11 +155,11 @@ typedef struct {
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
     struct subprocess *init_shell;
-} ctx_t;
+} broker_ctx_t;
 
-static int broker_event_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
-static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
+static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
+static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
+static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
                                    request_error_mode_t errmode);
 
 static void event_cb (overlay_t *ov, void *sock, void *arg);
@@ -172,15 +172,15 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static void broker_block_signals (void);
-static void broker_handle_signals (ctx_t *ctx, zlist_t *sigwatchers);
+static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
-static void broker_add_services (ctx_t *ctx);
+static void broker_add_services (broker_ctx_t *ctx);
 
-static void load_modules (ctx_t *ctx, const char *default_modules);
+static void load_modules (broker_ctx_t *ctx, const char *default_modules);
 
-static void update_proctitle (ctx_t *ctx);
-static void update_pidfile (ctx_t *ctx);
+static void update_proctitle (broker_ctx_t *ctx);
+static void update_pidfile (broker_ctx_t *ctx);
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *state, void *arg);
 static void runlevel_io_cb (runlevel_t *r, const char *name,
@@ -191,12 +191,12 @@ static int create_scratchdir (attr_t *attrs);
 static int create_rankdir (attr_t *attrs, uint32_t rank);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
-static int boot_pmi (ctx_t *ctx, double *elapsed_sec);
+static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
-static void init_attrs (ctx_t *ctx);
+static void init_attrs (broker_ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -253,7 +253,7 @@ static int setup_profiling (const char *program, int rank)
 int main (int argc, char *argv[])
 {
     int c;
-    ctx_t ctx;
+    broker_ctx_t ctx;
     zlist_t *sigwatchers;
     int security_clr = 0;
     int security_set = 0;
@@ -747,7 +747,7 @@ static void init_attrs_from_environment (attr_t *attrs)
     }
 }
 
-static void init_attrs_broker_pid (ctx_t *ctx)
+static void init_attrs_broker_pid (broker_ctx_t *ctx)
 {
     char *attrname = "broker.pid";
     char *pidval;
@@ -761,7 +761,7 @@ static void init_attrs_broker_pid (ctx_t *ctx)
     free (pidval);
 }
 
-static void init_attrs (ctx_t *ctx)
+static void init_attrs (broker_ctx_t *ctx)
 {
     /* Initialize config attrs from environment set up by flux(1)
      */
@@ -774,7 +774,7 @@ static void init_attrs (ctx_t *ctx)
 
 static void hello_update_cb (hello_t *hello, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
 
     if (hello_complete (hello)) {
         flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (complete) %.1fs",
@@ -794,12 +794,12 @@ static void hello_update_cb (hello_t *hello, void *arg)
  */
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     if (expired)
         exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
 }
 
-static void update_proctitle (ctx_t *ctx)
+static void update_proctitle (broker_ctx_t *ctx)
 {
     char *s;
     if (asprintf (&s, "flux-broker-%"PRIu32, ctx->rank) < 0)
@@ -810,7 +810,7 @@ static void update_proctitle (ctx_t *ctx)
     ctx->proctitle = s;
 }
 
-static void update_pidfile (ctx_t *ctx)
+static void update_pidfile (broker_ctx_t *ctx)
 {
     const char *rankdir;
     char *pidfile;
@@ -834,7 +834,7 @@ static void update_pidfile (ctx_t *ctx)
 static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
     int runlevel = runlevel_get_level (r);
 
@@ -846,7 +846,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *exit_string, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     int new_level = -1;
 
     flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
@@ -1078,7 +1078,7 @@ done:
     return rc;
 }
 
-static int boot_pmi (ctx_t *ctx, double *elapsed_sec)
+static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 {
     const char *scratch_dir;
     int spawned, size, rank, appnum;
@@ -1364,7 +1364,7 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
-static void load_modules (ctx_t *ctx, const char *default_modules)
+static void load_modules (broker_ctx_t *ctx, const char *default_modules)
 {
     char *cpy = xstrdup (default_modules);
     char *s, *saveptr = NULL, *a1 = cpy;
@@ -1419,7 +1419,7 @@ static void broker_block_signals (void)
         log_err_exit ("sigprocmask");
 }
 
-static void broker_handle_signals (ctx_t *ctx, zlist_t *sigwatchers)
+static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 {
     int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE };
     flux_watcher_t *w;
@@ -1480,7 +1480,7 @@ done:
 static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     const char *json_str;
     char *name = NULL;
     module_t *p;
@@ -1512,7 +1512,7 @@ error:
 static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     const char *json_str;
     char *name = NULL;
     char *path = NULL;
@@ -1564,7 +1564,7 @@ error:
 static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     flux_modlist_t *mods = NULL;
     char *json_str = NULL;
 
@@ -1589,7 +1589,7 @@ error:
 static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
 
     json_object *out = overlay_lspeer_encode (ctx->overlay);
     if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
@@ -1600,7 +1600,7 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
 static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     json_object *in = NULL;
     const char *uri;
     const char *json_str;
@@ -1649,7 +1649,7 @@ error:
 static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     char *uuid = NULL;
 
     if (flux_msg_get_route_last (msg, &uuid) == 0)
@@ -1673,7 +1673,7 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *w,
 static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
     json_object *in = NULL;
@@ -1708,7 +1708,7 @@ error:
 static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     const char *json_str;
     char *uuid = NULL;
     json_object *in = NULL;
@@ -1742,7 +1742,7 @@ error:
 
 static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
         flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
     return 0;
@@ -1787,7 +1787,7 @@ static struct internal_service services[] = {
  * First loop is for services that are registered in other files.
  * Second loop is for services registered here.
  */
-static void broker_add_services (ctx_t *ctx)
+static void broker_add_services (broker_ctx_t *ctx)
 {
     struct internal_service *svc;
     for (svc = &services[0]; svc->topic != NULL; svc++) {
@@ -1816,7 +1816,7 @@ static void broker_add_services (ctx_t *ctx)
  */
 static void child_cb (overlay_t *ov, void *sock, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     int type;
     char *uuid = NULL;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
@@ -1862,7 +1862,7 @@ done:
 }
 
 /* helper for event_cb, parent_cb, and (on rank 0) broker_event_sendmsg */
-static int handle_event (ctx_t *ctx, const flux_msg_t *msg)
+static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t seq;
     const char *topic, *s;
@@ -1925,7 +1925,7 @@ done:
  */
 static void parent_cb (overlay_t *ov, void *sock, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
     int type;
 
@@ -1966,7 +1966,7 @@ done:
  */
 static void module_cb (module_t *p, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     flux_msg_t *msg = module_recvmsg (p);
     int type;
     int ka_errnum, ka_status;
@@ -2011,7 +2011,7 @@ done:
 
 static void module_status_cb (module_t *p, int prev_status, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     flux_msg_t *msg;
     int status = module_get_status (p);
     const char *name = module_get_name (p);
@@ -2049,7 +2049,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
 
 static void event_cb (overlay_t *ov, void *sock, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     flux_msg_t *msg = overlay_recvmsg_event (ov);
     int type;
 
@@ -2075,7 +2075,7 @@ done:
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
-    ctx_t *ctx = arg;
+    broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
 
     shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
@@ -2092,7 +2092,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
  * sending end by pushing the identity of the sender onto the stack,
  * followed by the identity of the peer we want to route the message to.
  */
-static int subvert_sendmsg_child (ctx_t *ctx, const flux_msg_t *msg,
+static int subvert_sendmsg_child (broker_ctx_t *ctx, const flux_msg_t *msg,
                                   uint32_t nodeid)
 {
     flux_msg_t *cpy = flux_msg_copy (msg, true);
@@ -2125,7 +2125,7 @@ done:
  *    any local errors do not trigger a response, and function
  *    returns -1 with errno set.
  */
-static int broker_request_sendmsg (ctx_t *ctx, const flux_msg_t *msg,
+static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
                                    request_error_mode_t errmode)
 {
     uint32_t nodeid, gw;
@@ -2179,7 +2179,7 @@ error:
     return 0;
 }
 
-static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
+static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     int rc = -1;
     char *uuid = NULL;
@@ -2223,7 +2223,7 @@ done:
  * Rank 0 doesn't (generally) receive the events it transmits so we have
  * to "loop back" here via handle_event().
  */
-static int broker_event_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
+static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     flux_msg_t *cpy = NULL;
     int rc = -1;
@@ -2256,7 +2256,7 @@ done:
 
 static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    ctx_t *ctx = impl;
+    broker_ctx_t *ctx = impl;
     int type;
     int rc = -1;
 
@@ -2284,7 +2284,7 @@ done:
 
 static int broker_subscribe (void *impl, const char *topic)
 {
-    ctx_t *ctx = impl;
+    broker_ctx_t *ctx = impl;
     if (zlist_append (ctx->subscriptions, xstrdup (topic)))
         oom();
     return 0;
@@ -2292,7 +2292,7 @@ static int broker_subscribe (void *impl, const char *topic)
 
 static int broker_unsubscribe (void *impl, const char *topic)
 {
-    ctx_t *ctx = impl;
+    broker_ctx_t *ctx = impl;
     char *s = zlist_first (ctx->subscriptions);
     while (s) {
         if (!strcmp (s, topic)) {

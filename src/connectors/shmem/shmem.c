@@ -44,15 +44,15 @@ typedef struct {
     char *uri;
     flux_t *h;
     zctx_t *zctx;
-} ctx_t;
+} shmem_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
 
-static int connect_socket (ctx_t *ctx);
+static int connect_socket (shmem_ctx_t *ctx);
 
 static int op_pollevents (void *impl)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     uint32_t e;
     size_t esize = sizeof (e);
@@ -76,7 +76,7 @@ done:
 
 static int op_pollfd (void *impl)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     int fd = -1;
     size_t fdsize = sizeof (fd);
@@ -92,7 +92,7 @@ done:
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     flux_msg_t *cpy = NULL;
     int type;
@@ -131,7 +131,7 @@ done:
 
 static flux_msg_t *op_recv (void *impl, int flags)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     zmq_pollitem_t zp = {
         .events = ZMQ_POLLIN, .socket = ctx->sock, .revents = 0, .fd = -1,
@@ -155,7 +155,7 @@ done:
 
 static int op_event_subscribe (void *impl, const char *topic)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     json_object *in = Jnew ();
     flux_rpc_t *rpc = NULL;
@@ -176,7 +176,7 @@ done:
 
 static int op_event_unsubscribe (void *impl, const char *topic)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     json_object *in = Jnew ();
     flux_rpc_t *rpc = NULL;
@@ -197,7 +197,7 @@ done:
 
 static int op_getopt (void *impl, const char *option, void *val, size_t size)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     int rc = -1;
 
@@ -219,7 +219,7 @@ done:
 static int op_setopt (void *impl, const char *option,
                       const void *val, size_t size)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     size_t val_size;
     int rc = -1;
@@ -244,7 +244,7 @@ done:
 
 static void op_fini (void *impl)
 {
-    ctx_t *ctx = impl;
+    shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     if (ctx->sock)
         zsocket_destroy (ctx->zctx, ctx->sock);
@@ -259,7 +259,7 @@ static void op_fini (void *impl)
 /* We have to defer connection until the zctx is available to us.
  * This function is idempotent.
  */
-static int connect_socket (ctx_t *ctx)
+static int connect_socket (shmem_ctx_t *ctx)
 {
     if (!ctx->sock) {
         if (!ctx->zctx) {
@@ -289,7 +289,7 @@ flux_t *connector_init (const char *path, int flags)
                          1, &uuid, (const void **)&path, &length);
 #endif
 
-    ctx_t *ctx = NULL;
+    shmem_ctx_t *ctx = NULL;
     if (!path) {
         errno = EINVAL;
         goto error;

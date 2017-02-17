@@ -48,11 +48,11 @@ typedef struct {
     struct flux_msg_iobuf outbuf;
     struct flux_msg_iobuf inbuf;
     flux_t *h;
-} ctx_t;
+} local_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
 
-static int set_nonblock (ctx_t *c, int nonblock)
+static int set_nonblock (local_ctx_t *c, int nonblock)
 {
     int flags;
     if (c->fd_nonblock != nonblock) {
@@ -68,7 +68,7 @@ static int set_nonblock (ctx_t *c, int nonblock)
 
 static int op_pollevents (void *impl)
 {
-    ctx_t *c = impl;
+    local_ctx_t *c = impl;
     struct pollfd pfd = {
         .fd = c->fd,
         .events = POLLIN | POLLOUT | POLLERR | POLLHUP,
@@ -95,13 +95,13 @@ static int op_pollevents (void *impl)
 
 static int op_pollfd (void *impl)
 {
-    ctx_t *c = impl;
+    local_ctx_t *c = impl;
     return c->fd;
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    ctx_t *c = impl;
+    local_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
@@ -113,7 +113,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
 
 static flux_msg_t *op_recv (void *impl, int flags)
 {
-    ctx_t *c = impl;
+    local_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
@@ -123,7 +123,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
 
 static int op_event (void *impl, const char *topic, const char *msg_topic)
 {
-    ctx_t *c = impl;
+    local_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
     int rc = 0;
@@ -150,7 +150,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
 
 static void op_fini (void *impl)
 {
-    ctx_t *c = impl;
+    local_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     flux_msg_iobuf_clean (&c->outbuf);
@@ -189,7 +189,7 @@ static int env_getint (char *name, int dflt)
  */
 flux_t *connector_init (const char *path, int flags)
 {
-    ctx_t *c = NULL;
+    local_ctx_t *c = NULL;
     struct sockaddr_un addr;
     char pidfile[PATH_MAX + 1];
     char sockfile[PATH_MAX + 1];

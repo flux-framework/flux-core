@@ -46,7 +46,7 @@ typedef struct {
     kz_t *kz[3];
     int readers;
     int blocksize;
-} ctx_t;
+} t_kzutil_ctx_t;
 
 static void copy (flux_t *h, const char *src, const char *dst, int kzoutflags,
                   int blocksize);
@@ -203,7 +203,7 @@ static int write_all (int fd, char *buf, int len)
 
 static void attach_stdout_ready_cb (kz_t *kz, void *arg)
 {
-    ctx_t *ctx = arg;
+    t_kzutil_ctx_t *ctx = arg;
     char *data;
     int len;
 
@@ -225,7 +225,7 @@ static void attach_stdout_ready_cb (kz_t *kz, void *arg)
 
 static void attach_stderr_ready_cb (kz_t *kz, void *arg)
 {
-    ctx_t *ctx = arg;
+    t_kzutil_ctx_t *ctx = arg;
     int len;
     char *data;
 
@@ -249,7 +249,7 @@ static void attach_stdin_ready_cb (flux_reactor_t *r, flux_watcher_t *w,
                                    int revents, void *arg)
 {
     int fd = flux_fd_watcher_get_fd (w);
-    ctx_t *ctx = arg;
+    t_kzutil_ctx_t *ctx = arg;
     char *buf = xzmalloc (ctx->blocksize);
     int len;
 
@@ -272,7 +272,7 @@ static void attach_stdin_ready_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void attach (flux_t *h, const char *key, bool rawtty, int kzoutflags,
                     int blocksize)
 {
-    ctx_t *ctx = xzmalloc (sizeof (*ctx));
+    t_kzutil_ctx_t *ctx = xzmalloc (sizeof (*ctx));
     char *name;
     int fdin = dup (STDIN_FILENO);
     struct termios saved_tio;

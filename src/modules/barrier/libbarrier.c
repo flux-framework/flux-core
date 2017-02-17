@@ -33,17 +33,17 @@
 typedef struct {
     const char *id;
     int seq;
-} ctx_t;
+} libbarrier_ctx_t;
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    libbarrier_ctx_t *ctx = arg;
     free (ctx);
 }
 
-static ctx_t *getctx (flux_t *h)
+static libbarrier_ctx_t *getctx (flux_t *h)
 {
-    ctx_t *ctx = flux_aux_get (h, "flux::barrier_client");
+    libbarrier_ctx_t *ctx = flux_aux_get (h, "flux::barrier_client");
     if (!ctx) {
         const char *id = getenv ("FLUX_JOB_ID");
         if (!id && !(id = getenv ("SLURM_STEPID")))
@@ -62,7 +62,7 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
     int ret = -1;
 
     if (!name) {
-        ctx_t *ctx = getctx (h);
+        libbarrier_ctx_t *ctx = getctx (h);
         if (!ctx) {
             errno = EINVAL;
             goto done;

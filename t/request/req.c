@@ -14,11 +14,11 @@ typedef struct {
     int ping_seq;
     zlist_t *clog_requests;
     uint32_t rank;
-} ctx_t;
+} t_req_ctx_t;
 
 static void freectx (void *arg)
 {
-    ctx_t *ctx = arg;
+    t_req_ctx_t *ctx = arg;
     flux_msg_t *msg;
 
     if (ctx) {
@@ -32,10 +32,10 @@ static void freectx (void *arg)
     }
 }
 
-static ctx_t *getctx (flux_t *h)
+static t_req_ctx_t *getctx (flux_t *h)
 {
     int saved_errno;
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "req");
+    t_req_ctx_t *ctx = (t_req_ctx_t *)flux_aux_get (h, "req");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -64,7 +64,7 @@ error:
 void count_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = getctx (h);
+    t_req_ctx_t *ctx = getctx (h);
     json_object *o = Jnew ();
 
     Jadd_int (o, "count", zlist_size (ctx->clog_requests));
@@ -78,7 +78,7 @@ void count_request_cb (flux_t *h, flux_msg_handler_t *w,
 void clog_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = getctx (h);
+    t_req_ctx_t *ctx = getctx (h);
     flux_msg_t *cpy = flux_msg_copy (msg, true);
 
     if (zlist_push (ctx->clog_requests, cpy) < 0)
@@ -90,7 +90,7 @@ void clog_request_cb (flux_t *h, flux_msg_handler_t *w,
 void flush_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = getctx (h);
+    t_req_ctx_t *ctx = getctx (h);
     flux_msg_t *req;
 
     while ((req = zlist_pop (ctx->clog_requests))) {
@@ -214,7 +214,7 @@ done:
 void xping_request_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    t_req_ctx_t *ctx = arg;
     const char *json_str;
     int saved_errno;
     int rank, seq = ctx->ping_seq++;
@@ -270,7 +270,7 @@ error:
 void ping_response_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    t_req_ctx_t *ctx = arg;
     const char *json_str;
     json_object *o = NULL;
     json_object *out = Jnew ();;
@@ -313,7 +313,7 @@ done:
 void null_request_cb (flux_t *h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
-    ctx_t *ctx = arg;
+    t_req_ctx_t *ctx = arg;
     const char *topic;
     int type, size;
     void *buf;
@@ -388,7 +388,7 @@ struct flux_msg_handler_spec htab[] = {
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno;
-    ctx_t *ctx = getctx (h);
+    t_req_ctx_t *ctx = getctx (h);
 
     if (!ctx) {
         saved_errno = errno;

@@ -59,11 +59,11 @@ typedef struct {
     int ssh_argc;
     struct popen2_child *p;
     flux_t *h;
-} ctx_t;
+} ssh_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
 
-static int set_nonblock (ctx_t *c, int nonblock)
+static int set_nonblock (ssh_ctx_t *c, int nonblock)
 {
     int flags;
     if (c->fd_nonblock != nonblock) {
@@ -79,7 +79,7 @@ static int set_nonblock (ctx_t *c, int nonblock)
 
 static int op_pollevents (void *impl)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     struct pollfd pfd = {
         .fd = c->fd,
         .events = POLLIN | POLLOUT | POLLERR | POLLHUP,
@@ -106,13 +106,13 @@ static int op_pollevents (void *impl)
 
 static int op_pollfd (void *impl)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     return c->fd;
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
@@ -124,7 +124,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
 
 static flux_msg_t *op_recv (void *impl, int flags)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     if (set_nonblock (c, (flags & FLUX_O_NONBLOCK)) < 0)
@@ -134,7 +134,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
 
 static int op_event_subscribe (void *impl, const char *topic)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
     json_object *in = Jnew ();
@@ -153,7 +153,7 @@ done:
 
 static int op_event_unsubscribe (void *impl, const char *topic)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
     json_object *in = Jnew ();
@@ -172,7 +172,7 @@ done:
 
 static void op_fini (void *impl)
 {
-    ctx_t *c = impl;
+    ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
     flux_msg_iobuf_clean (&c->outbuf);
@@ -189,7 +189,7 @@ static void op_fini (void *impl)
     free (c);
 }
 
-static int parse_ssh_port (ctx_t *c, const char *path)
+static int parse_ssh_port (ssh_ctx_t *c, const char *path)
 {
     char *p, *cpy = NULL;
     int rc = -1;
@@ -214,7 +214,7 @@ done:
     return rc;
 }
 
-static int parse_ssh_user_at_host (ctx_t *c, const char *path)
+static int parse_ssh_user_at_host (ssh_ctx_t *c, const char *path)
 {
     char *p, *cpy = NULL;
     int rc = -1;
@@ -289,7 +289,7 @@ static char *which (const char *prog, char *buf, size_t size)
     return result;
 }
 
-static int parse_ssh_rcmd (ctx_t *c, const char *path)
+static int parse_ssh_rcmd (ssh_ctx_t *c, const char *path)
 {
     char *cpy = NULL, *local = NULL, *extra = NULL;
     char *proxy_argz = NULL;
@@ -344,7 +344,7 @@ done:
     return rc;
 }
 
-static int test_broker_connection (ctx_t *c)
+static int test_broker_connection (ssh_ctx_t *c)
 {
     flux_msg_t *in = NULL;
     flux_msg_t *out = NULL;
@@ -373,7 +373,7 @@ done:
  */
 flux_t *connector_init (const char *path, int flags)
 {
-    ctx_t *c = NULL;
+    ssh_ctx_t *c = NULL;
 
     if (!(c = malloc (sizeof (*c)))) {
         errno = ENOMEM;
