@@ -54,18 +54,20 @@ static int nthreads = -1;
 static char *prefix = NULL;
 static bool fopt = false;
 static bool sopt = false;
+static bool nopt = false;
 static int fence_nprocs;
 
-#define OPTIONS "f:s"
+#define OPTIONS "f:sn"
 static const struct option longopts[] = {
    {"fence",   required_argument,   0, 'f'},
    {"stats",   no_argument,         0, 's'},
+   {"nomerge", no_argument,         0, 'n'},
    {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: commit [--fence N] [--stats] nthreads count prefix\n");
+    fprintf (stderr, "Usage: commit [--fence N] [--stats] [--nomerge] nthreads count prefix\n");
     exit (1);
 }
 
@@ -80,7 +82,7 @@ void *thread (void *arg)
 {
     thd_t *t = arg;
     char *key, *fence = NULL;
-    int i;
+    int i, flags = 0;
     struct timespec t0;
     uint32_t rank;
 
@@ -92,6 +94,8 @@ void *thread (void *arg)
         log_err ("%d: flux_get_rank", t->n);
         goto done;
     }
+    if (nopt)
+        flags |= KVS_NO_MERGE;
     for (i = 0; i < count; i++) {
         key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
         if (fopt)
@@ -101,10 +105,10 @@ void *thread (void *arg)
         if (kvs_put_int (t->h, key, 42) < 0)
             log_err_exit ("%s", key);
         if (fopt) {
-            if (kvs_fence (t->h, fence, fence_nprocs, 0) < 0)
+            if (kvs_fence (t->h, fence, fence_nprocs, flags) < 0)
                 log_err_exit ("kvs_fence");
         } else {
-            if (kvs_commit (t->h, 0) < 0)
+            if (kvs_commit (t->h, flags) < 0)
                 log_err_exit ("kvs_commit");
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
@@ -139,6 +143,9 @@ int main (int argc, char *argv[])
                 break;
             case 's':
                 sopt = true;
+                break;
+            case 'n':
+                nopt = true;
                 break;
             default:
                 usage ();

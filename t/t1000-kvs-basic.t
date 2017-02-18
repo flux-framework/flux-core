@@ -547,12 +547,25 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
+test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop, no merging' '
+	THREADS=8 &&
+	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit --nomerge ${THREADS} 100 \
+		$(basename ${SHARNESS_TEST_FILE})
+'
+
 # fence test
 
 test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
 	THREADS=8 &&
 	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
 		--fence $((${SIZE}*${THREADS})) ${THREADS} 100 \
+		$(basename ${SHARNESS_TEST_FILE})
+'
+
+test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, no merging' '
+	THREADS=8 &&
+	flux exec ${FLUX_BUILD_DIR}/t/kvs/commit \
+		--fence $((${SIZE}*${THREADS})) --nomerge ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
