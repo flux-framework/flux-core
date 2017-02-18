@@ -55,19 +55,20 @@ static char *prefix = NULL;
 static bool fopt = false;
 static bool sopt = false;
 static bool nopt = false;
+static int nopt_divisor = 1;
 static int fence_nprocs;
 
-#define OPTIONS "f:sn"
+#define OPTIONS "f:sn:"
 static const struct option longopts[] = {
    {"fence",   required_argument,   0, 'f'},
    {"stats",   no_argument,         0, 's'},
-   {"nomerge", no_argument,         0, 'n'},
+   {"nomerge", required_argument,   0, 'n'},
    {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: commit [--fence N] [--stats] [--nomerge] nthreads count prefix\n");
+    fprintf (stderr, "Usage: commit [--fence N] [--stats] [--nomerge N] nthreads count prefix\n");
     exit (1);
 }
 
@@ -94,8 +95,6 @@ void *thread (void *arg)
         log_err ("%d: flux_get_rank", t->n);
         goto done;
     }
-    if (nopt)
-        flags |= KVS_NO_MERGE;
     for (i = 0; i < count; i++) {
         key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
         if (fopt)
@@ -104,6 +103,10 @@ void *thread (void *arg)
             monotime (&t0);
         if (kvs_put_int (t->h, key, 42) < 0)
             log_err_exit ("%s", key);
+        if (nopt && (i % nopt_divisor) == 0)
+            flags |= KVS_NO_MERGE;
+        else
+            flags = 0;
         if (fopt) {
             if (kvs_fence (t->h, fence, fence_nprocs, flags) < 0)
                 log_err_exit ("kvs_fence");
@@ -146,6 +149,9 @@ int main (int argc, char *argv[])
                 break;
             case 'n':
                 nopt = true;
+                nopt_divisor = strtoul (optarg, NULL, 10);
+                if (!nopt_divisor)
+                    log_msg_exit ("nopt value must be > 0");
                 break;
             default:
                 usage ();
