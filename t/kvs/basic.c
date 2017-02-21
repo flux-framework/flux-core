@@ -46,6 +46,7 @@ static const struct option longopts[] = {
 void cmd_get (flux_t *h, int argc, char **argv);
 void cmd_type (flux_t *h, int argc, char **argv);
 void cmd_put (flux_t *h, int argc, char **argv);
+void cmd_put_no_merge (flux_t *h, int argc, char **argv);
 void cmd_unlink (flux_t *h, int argc, char **argv);
 void cmd_link (flux_t *h, int argc, char **argv);
 void cmd_readlink (flux_t *h, int argc, char **argv);
@@ -76,6 +77,7 @@ void usage (void)
 "Usage: basic get                 key\n"
 "       basic type                key\n"
 "       basic put                 key=val\n"
+"       basic put-no-merge        key=val\n"
 "       basic unlink              key\n"
 "       basic link                target link_name\n"
 "       basic readlink            key\n"
@@ -133,6 +135,8 @@ int main (int argc, char *argv[])
         cmd_type (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put"))
         cmd_put (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "put-no-merge"))
+        cmd_put_no_merge (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "unlink"))
         cmd_unlink (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "link"))
@@ -283,7 +287,7 @@ void cmd_get (flux_t *h, int argc, char **argv)
     free (json_str);
 }
 
-void cmd_put (flux_t *h, int argc, char **argv)
+void cmd_put_common (flux_t *h, int argc, char **argv, bool mergeable)
 {
     if (argc == 0)
         log_msg_exit ("put: specify one key=value pair");
@@ -297,8 +301,18 @@ void cmd_put (flux_t *h, int argc, char **argv)
             log_err_exit ("%s", key);
     }
     free (key);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, mergeable ? 0 : KVS_NO_MERGE) < 0)
         log_err_exit ("kvs_commit");
+}
+
+void cmd_put (flux_t *h, int argc, char **argv)
+{
+    cmd_put_common (h, argc, argv, true);
+}
+
+void cmd_put_no_merge (flux_t *h, int argc, char **argv)
+{
+    cmd_put_common (h, argc, argv, false);
 }
 
 void cmd_unlink (flux_t *h, int argc, char **argv)
@@ -307,7 +321,7 @@ void cmd_unlink (flux_t *h, int argc, char **argv)
         log_msg_exit ("unlink: specify key");
     if (kvs_unlink (h, argv[0]) < 0)
         log_err_exit ("%s", argv[0]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 }
 
@@ -317,7 +331,7 @@ void cmd_link (flux_t *h, int argc, char **argv)
         log_msg_exit ("link: specify target and link_name");
     if (kvs_symlink (h, argv[1], argv[0]) < 0)
         log_err_exit ("%s", argv[1]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 }
 
@@ -340,7 +354,7 @@ void cmd_mkdir (flux_t *h, int argc, char **argv)
         log_msg_exit ("mkdir: specify directory");
     if (kvs_mkdir (h, argv[0]) < 0)
         log_err_exit ("%s", argv[0]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 }
 
@@ -458,7 +472,7 @@ void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
     json_object_object_add (o, "data", base64_json_encode (buf, len));
     if (kvs_put (h, key, Jtostr (o)) < 0)
         log_err_exit ("%s", key);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     Jput (o);
     free (buf);
@@ -661,7 +675,7 @@ void cmd_copy (flux_t *h, int argc, char **argv)
         log_msg_exit ("copy: specify srckey dstkey");
     if (kvs_copy (h, argv[0], argv[1]) < 0)
         log_err_exit ("kvs_copy %s %s", argv[0], argv[1]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 }
 
@@ -671,7 +685,7 @@ void cmd_move (flux_t *h, int argc, char **argv)
         log_msg_exit ("move: specify srckey dstkey");
     if (kvs_move (h, argv[0], argv[1]) < 0)
         log_err_exit ("kvs_move %s %s", argv[0], argv[1]);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 }
 
@@ -708,7 +722,7 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
     *val++ = '\0';
     if (kvs_put_treeobj (h, key, val) < 0)
         log_err_exit ("kvs_put_treeobj %s=%s", key, val);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     free (key);
 }

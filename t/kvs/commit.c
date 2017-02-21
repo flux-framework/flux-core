@@ -54,18 +54,21 @@ static int nthreads = -1;
 static char *prefix = NULL;
 static bool fopt = false;
 static bool sopt = false;
+static bool nopt = false;
+static int nopt_divisor = 1;
 static int fence_nprocs;
 
-#define OPTIONS "f:s"
+#define OPTIONS "f:sn:"
 static const struct option longopts[] = {
    {"fence",   required_argument,   0, 'f'},
    {"stats",   no_argument,         0, 's'},
+   {"nomerge", required_argument,   0, 'n'},
    {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: commit [--fence N] [--stats] nthreads count prefix\n");
+    fprintf (stderr, "Usage: commit [--fence N] [--stats] [--nomerge N] nthreads count prefix\n");
     exit (1);
 }
 
@@ -80,7 +83,7 @@ void *thread (void *arg)
 {
     thd_t *t = arg;
     char *key, *fence = NULL;
-    int i;
+    int i, flags = 0;
     struct timespec t0;
     uint32_t rank;
 
@@ -100,11 +103,15 @@ void *thread (void *arg)
             monotime (&t0);
         if (kvs_put_int (t->h, key, 42) < 0)
             log_err_exit ("%s", key);
+        if (nopt && (i % nopt_divisor) == 0)
+            flags |= KVS_NO_MERGE;
+        else
+            flags = 0;
         if (fopt) {
-            if (kvs_fence (t->h, fence, fence_nprocs) < 0)
+            if (kvs_fence (t->h, fence, fence_nprocs, flags) < 0)
                 log_err_exit ("kvs_fence");
         } else {
-            if (kvs_commit (t->h) < 0)
+            if (kvs_commit (t->h, flags) < 0)
                 log_err_exit ("kvs_commit");
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
@@ -139,6 +146,12 @@ int main (int argc, char *argv[])
                 break;
             case 's':
                 sopt = true;
+                break;
+            case 'n':
+                nopt = true;
+                nopt_divisor = strtoul (optarg, NULL, 10);
+                if (!nopt_divisor)
+                    log_msg_exit ("nopt value must be > 0");
                 break;
             default:
                 usage ();

@@ -349,7 +349,7 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "%s: kvs_put_int", __FUNCTION__);
         goto done;
     }
-    if (kvs_commit (h) < 0) {
+    if (kvs_commit (h, 0) < 0) {
         flux_log_error (h, "%s: kvs_commit", __FUNCTION__);
         goto done;
     }

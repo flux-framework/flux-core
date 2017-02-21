@@ -122,7 +122,7 @@ int main (int argc, char *argv[])
 
     if (kvs_unlink (h, prefix) < 0)
         log_err_exit ("kvs_unlink %s", prefix);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 
     val = xzmalloc (size);
@@ -146,7 +146,7 @@ int main (int argc, char *argv[])
              monotime_since (t0)/1000, count, size);
 
     monotime (&t0);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     if (!quiet)
         log_msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);

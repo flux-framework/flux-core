@@ -16,7 +16,7 @@ void kput (flux_t *h, const char *s, int val)
 
 void kcommit (flux_t *h)
 {
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     log_msg ("kvs_commit");
 }
@@ -38,7 +38,7 @@ void kfence (flux_t *h, const char *s)
 {
     char name[128];
     snprintf (name, sizeof (name), "test.asyncfence.%s", s);
-    if (kvs_fence (h, name, 1) < 0)
+    if (kvs_fence (h, name, 1, 0) < 0)
         log_err_exit ("kvs_fence %s", name);
     log_msg ("kvs_fence %s", name);
 }
@@ -93,7 +93,7 @@ int main (int argc, char *argv[])
      * get a,b (should be 42,43)
      */
     kput (h, "a", 42);
-    if (!(rpc = kvs_fence_begin (h, "test.asyncfence.1", 1)))
+    if (!(rpc = kvs_fence_begin (h, "test.asyncfence.1", 1, 0)))
         log_err_exit ("kvs_fence_begin 1");
     log_msg ("kvs_fence_begin 1");
     kput (h, "b", 43);

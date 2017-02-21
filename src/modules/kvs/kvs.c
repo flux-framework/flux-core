@@ -95,6 +95,7 @@ typedef struct {
     zlist_t *requests;
     json_object *names;
     int nprocs;
+    int flags;
     int count;
     int errnum;
     kvs_ctx_t *ctx;
@@ -598,21 +599,43 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
-/* Merge ready commits, where merging consists of popping the "donor"
- * commit off the ready list, and appending its ops to the top commit.
- * The top commit can be appended to if it hasn't started, or is still
- * building the rootcpy, e.g. stalled walking the namespace.
+/* Merge ready commits that are mergeable, where merging consists of
+ * popping the "donor" commit off the ready list, and appending its
+ * ops to the top commit.  The top commit can be appended to if it
+ * hasn't started, or is still building the rootcpy, e.g. stalled
+ * walking the namespace.
+ *
+ * Break when an unmergeable commit is discovered.  We do not wish to
+ * merge non-adjacent fences, as it can create undesireable out of
+ * order scenarios.  e.g.
+ *
+ * commit #1 is mergeable:     set A=1
+ * commit #2 is non-mergeable: set A=2
+ * commit #3 is mergeable:     set A=3
+ *
+ * If we were to merge commit #1 and commit #3, A=2 would be set after
+ * A=3.
  */
 void commit_merge_all (kvs_ctx_t *ctx)
 {
     fence_t *f = zlist_first (ctx->ready);
 
-    if (f && f->errnum == 0 && !f->rootcpy_stored) {
+    if (f
+        && f->errnum == 0
+        && !f->rootcpy_stored
+        && !(f->flags & KVS_NO_MERGE)) {
         fence_t *nf;
         nf = zlist_pop (ctx->ready);
         assert (nf == f);
-        while ((nf = zlist_pop (ctx->ready))) {
+        while ((nf = zlist_first (ctx->ready))) {
             int i, len;
+
+            /* We've merged as many as we currently can */
+            if (nf->flags & KVS_NO_MERGE)
+                break;
+
+            /* Fence is mergeable, pop off list */
+            nf = zlist_pop (ctx->ready);
 
             if (Jget_ar_len (nf->names, &len)) {
                 for (i = 0; i < len; i++) {
@@ -1096,7 +1119,8 @@ static void fence_destroy (fence_t *f)
     }
 }
 
-static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs)
+static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs,
+                              int flags)
 {
     fence_t *f;
 
@@ -1106,6 +1130,7 @@ static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs)
         goto error;
     }
     f->nprocs = nprocs;
+    f->flags = flags;
     f->ctx = ctx;
     f->names = Jnew_ar ();
     Jadd_ar_str (f->names, name);
@@ -1209,7 +1234,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
     const char *json_str, *name;
-    int nprocs;
+    int nprocs, flags;
     json_object *in = NULL;
     json_object *ops = NULL;
     fence_t *f;
@@ -1219,7 +1244,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
     if (!(in = Jfromstr (json_str))
-                    || kp_tfence_dec (in, &name, &nprocs, &ops) < 0) {
+                    || kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
         flux_log_error (h, "%s payload decode", __FUNCTION__);
         goto done;
@@ -1228,7 +1253,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
      * occurs after we know the fence name
      */
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs))) {
+        if (!(f = fence_create (ctx, name, nprocs, flags))) {
             flux_log_error (h, "%s fence_create %s", __FUNCTION__, name);
             goto done;
         }
@@ -1238,6 +1263,9 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
             goto done;
         }
     }
+    else
+        f->flags |= flags;
+
     if (fence_append_ops (f, ops) < 0) {
         flux_log_error (h, "%s fence_append_ops %s", __FUNCTION__, name);
         goto done;
@@ -1261,7 +1289,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
     const char *json_str, *name;
-    int nprocs;
+    int nprocs, flags;
     json_object *in = NULL;
     json_object *ops = NULL;
     fence_t *f;
@@ -1272,18 +1300,21 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (kp_tfence_dec (in, &name, &nprocs, &ops) < 0) {
+    if (kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
         goto error;
     }
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs)))
+        if (!(f = fence_create (ctx, name, nprocs, flags)))
             goto error;
         if (fence_add (ctx, f) < 0) {
             fence_destroy (f);
             goto error;
         }
     }
+    else
+        f->flags |= flags;
+
     if (fence_append_request (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {

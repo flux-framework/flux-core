@@ -39,9 +39,10 @@ int kp_tunwatch_dec (json_object *o, const char **key);
 /* kvs.fence
  * kvs.relayfence
  */
-json_object *kp_tfence_enc (const char *name, int nprocs, json_object *ops);
+json_object *kp_tfence_enc (const char *name, int nprocs, int flags,
+                            json_object *ops);
 int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
-                   json_object **ops);
+                   int *flags, json_object **ops);
 
 /* kvs.getroot (request)
  */

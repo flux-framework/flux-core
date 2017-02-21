@@ -216,7 +216,7 @@ void test_mt (int argc, char **argv)
     if (kvs_put_int (h, key_stable, 0) < 0)
         log_err_exit ("kvs_put_int %s", key);
 
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
 
     for (i = 0; i < nthreads; i++) {
@@ -232,7 +232,7 @@ void test_mt (int argc, char **argv)
     for (i = 0; i < changes; i++) {
         if (kvs_put_int (h, key, i) < 0)
             log_err_exit ("kvs_put_int %s", key);
-        if (kvs_commit (h) < 0)
+        if (kvs_commit (h, 0) < 0)
             log_err_exit ("kvs_commit");
     }
 
@@ -277,7 +277,7 @@ static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
     flux_t *h = arg;
     if (kvs_put_int (h, key, val + 1) < 0)
         log_err_exit ("%s: kvs_put_int", __FUNCTION__);
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("%s: kvs_commit", __FUNCTION__);
     return (val == 0 ? -1 : 0);
 }
@@ -297,7 +297,7 @@ void test_selfmod (int argc, char **argv)
 
     if (kvs_put_int (h, key, -1) < 0)
         log_err_exit ("kvs_put_int");
-    if (kvs_commit (h) < 0)
+    if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     if (kvs_watch_int (h, key, selfmod_watch_cb, h) < 0)
         log_err_exit ("kvs_watch_int");
@@ -329,7 +329,7 @@ static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     log_msg ("%s", __FUNCTION__);
     if (kvs_put_int (ctx->h, ctx->key, count++) < 0)
         log_err_exit ("%s: kvs_put_int", __FUNCTION__);
-    if (kvs_commit (ctx->h) < 0)
+    if (kvs_commit (ctx->h, 0) < 0)
         log_err_exit ("%s: kvs_commit", __FUNCTION__);
     if (count == 10) {
         if (kvs_unwatch (ctx->h, ctx->key) < 0)

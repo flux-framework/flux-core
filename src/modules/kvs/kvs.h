@@ -5,6 +5,12 @@
 #include <stdint.h>
 #include <flux/core.h>
 
+/* Flags for commit and fence operations
+ */
+enum {
+    KVS_NO_MERGE = 1,  /* disallow commits to be mergeable with others */
+};
+
 typedef struct kvsdir_struct kvsdir_t;
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
@@ -173,13 +179,13 @@ int kvs_mkdir (flux_t *h, const char *key);
  * the calling node when the commit returns.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_commit (flux_t *h);
+int kvs_commit (flux_t *h, int flags);
 
 /* kvs_commit_begin() sends the commit request and returns immediately.
  * kvs_commit_finish() blocks until the response is received, then returns.
  * Use flux_rpc_then() to arrange for the commit to complete asynchronously.
  */
-flux_rpc_t *kvs_commit_begin (flux_t *h);
+flux_rpc_t *kvs_commit_begin (flux_t *h, int flags);
 int kvs_commit_finish (flux_rpc_t *rpc);
 
 /* kvs_fence() is a collective commit operation.  nprocs tasks make the
@@ -192,13 +198,13 @@ int kvs_commit_finish (flux_rpc_t *rpc);
  * queued in the handle become part of the fence.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_fence (flux_t *h, const char *name, int nprocs);
+int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);
 
 /* kvs_fence_begin() sends the fence request and returns immediately.
  * kvs_fence_finish() blocks until the response is received, then returns.
  * Use flux_rpc_then() to arrange for the fence to complete asynchronously.
  */
-flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs);
+flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs, int flags);
 int kvs_fence_finish (flux_rpc_t *rpc);
 
 /* Operations (put, unlink, symlink, mkdir) may be associated with a named

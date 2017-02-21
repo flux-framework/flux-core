@@ -206,7 +206,7 @@ static int l_kvsdir_commit (lua_State *L)
 {
     kvsdir_t *d = lua_get_kvsdir (L, 1);
     if (lua_isnoneornil (L, 2)) {
-        if (kvs_commit (kvsdir_handle (d)) < 0)
+        if (kvs_commit (kvsdir_handle (d), 0) < 0)
             return lua_pusherror (L, "kvs_commit: %s",
                                   (char *)flux_strerror (errno));
     }
