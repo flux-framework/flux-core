@@ -124,13 +124,15 @@ static flux_msg_t *op_recv (void *impl, int flags)
 static int op_event (void *impl, const char *topic, const char *msg_topic)
 {
     local_ctx_t *c = impl;
+    flux_rpc_t *rpc;
+    int rc = -1;
+
     assert (c->magic == CTX_MAGIC);
-    flux_rpc_t *rpc = NULL;
-    int rc = 0;
 
     if (!(rpc = flux_rpcf (c->h, msg_topic, FLUX_NODEID_ANY, 0,
-                           "{s:s}", "topic", topic))
-                || flux_rpc_get (rpc, NULL) < 0)
+                           "{s:s}", "topic", topic)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
