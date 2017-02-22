@@ -209,8 +209,9 @@ static int event_sub (optparse_t *p, int argc, char **argv)
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */
-    if (argc > 1)
-        unsubscribe_all (h, argc - 1, argv + 1);
+    n = optparse_option_index (p);
+    if (n < argc)
+        unsubscribe_all (h, argc - n, argv + n);
     else if (flux_event_unsubscribe (h, "") < 0)
         log_err_exit ("flux_event_subscribe");
     return (0);
