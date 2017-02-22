@@ -43,11 +43,6 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libsubprocess/subprocess.h"
 
-struct pmi_server {
-    zhash_t *kvs;
-    struct pmi_simple_server *srv;
-};
-
 static struct {
     double killer_timeout;
     flux_reactor_t *reactor;
@@ -57,7 +52,10 @@ static struct {
     int size;
     int count;
     int exit_rc;
-    struct pmi_server pmi;
+    struct {
+        zhash_t *kvs;
+        struct pmi_simple_server *srv;
+    } pmi;
 } ctx;
 
 struct client {
