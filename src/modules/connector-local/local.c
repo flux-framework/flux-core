@@ -318,8 +318,10 @@ static int client_unsubscribe (client_t *c, const char *topic)
     subscription_t *sub;
     int rc = -1;
 
-    if (!(sub = zhash_lookup (c->subscriptions, topic)))
+    if (!(sub = zhash_lookup (c->subscriptions, topic))) {
+        errno = ENOENT;
         goto done;
+    }
     if (--sub->usecount == 0) {
         zhash_delete (c->subscriptions, topic);
         //flux_log (c->ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
