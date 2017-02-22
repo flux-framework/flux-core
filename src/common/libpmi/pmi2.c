@@ -46,7 +46,7 @@ struct pmi2_context {
     int rank;
     int appnum;
 };
-struct pmi2_context ctx = { .initialized = 0, .rank = -1 };
+static struct pmi2_context ctx = { .initialized = 0, .rank = -1 };
 
 #define DPRINTF(fmt,...) do { \
         if (ctx.debug) fprintf (stderr, fmt, ##__VA_ARGS__); \
