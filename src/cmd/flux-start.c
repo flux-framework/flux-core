@@ -54,7 +54,6 @@ static struct {
     flux_watcher_t *timer;
     struct subprocess_manager *sm;
     optparse_t *opts;
-    char *broker_path;
     int size;
     int count;
     int exit_rc;
@@ -70,11 +69,13 @@ struct client {
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
-int start_session (const char *cmd_argz, size_t cmd_argz_len);
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len);
+int start_session (const char *cmd_argz, size_t cmd_argz_len,
+                   const char *broker_path);
+int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
+                 const char *broker_path);
 char *create_scratch_dir (const char *session_id);
-struct client *client_create (const char *scratch_dir, int rank,
-                              const char *cmd_argz, size_t cmd_argz_len);
+struct client *client_create (const char *broker_path, const char *scratch_dir,
+                              int rank, const char *cmd_argz, size_t cmd_argz_len);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
@@ -125,6 +126,7 @@ int main (int argc, char *argv[])
     size_t len = 0;
     const char *searchpath;
     int optindex;
+    char *broker_path;
 
     log_init ("flux-start");
 
@@ -146,7 +148,7 @@ int main (int argc, char *argv[])
 
     if (!(searchpath = getenv ("FLUX_EXEC_PATH")))
         log_msg_exit ("FLUX_EXEC_PATH is not set");
-    if (!(ctx.broker_path = find_broker (searchpath)))
+    if (!(broker_path = find_broker (searchpath)))
         log_msg_exit ("Could not locate broker in %s", searchpath);
 
     setup_profiling_env ();
@@ -156,13 +158,13 @@ int main (int argc, char *argv[])
         if (ctx.size <= 0)
             log_msg_exit ("--size argument must be > 0");
 
-        status = start_session (command, len);
+        status = start_session (command, len, broker_path);
     } else {
-        status = exec_broker (command, len);
+        status = exec_broker (command, len, broker_path);
     }
 
     optparse_destroy (ctx.opts);
-    free (ctx.broker_path);
+    free (broker_path);
 
     if (command)
         free (command);
@@ -349,13 +351,14 @@ int execvp_argz (const char *cmd_argz, char *argz, size_t argz_len)
     return -1;
 }
 
-int exec_broker (const char *cmd_argz, size_t cmd_argz_len)
+int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
+                 const char *broker_path)
 {
     char *argz = NULL;
     size_t argz_len = 0;
     const char *arg;
 
-    if (argz_add (&argz, &argz_len, ctx.broker_path) != 0)
+    if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
 
     optparse_getopt_iterator_reset (ctx.opts, "broker-opts");
@@ -377,7 +380,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len)
         free (cpy);
     }
     if (!optparse_hasopt (ctx.opts, "noexec")) {
-        if (execvp_argz (ctx.broker_path, argz, argz_len) < 0)
+        if (execvp_argz (broker_path, argz, argz_len) < 0)
             goto error;
     }
     free (argz);
@@ -389,8 +392,8 @@ error:
     return -1;
 }
 
-struct client *client_create (const char *scratch_dir, int rank,
-                              const char *cmd_argz, size_t cmd_argz_len)
+struct client *client_create (const char *broker_path, const char *scratch_dir,
+                              int rank, const char *cmd_argz, size_t cmd_argz_len)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     int client_fd;
@@ -404,7 +407,7 @@ struct client *client_create (const char *scratch_dir, int rank,
     subprocess_set_context (cli->p, "cli", cli);
     subprocess_add_hook (cli->p, SUBPROCESS_COMPLETE, child_exit);
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
-    argz_add (&argz, &argz_len, ctx.broker_path);
+    argz_add (&argz, &argz_len, broker_path);
     argz_add (&argz, &argz_len, "--shared-ipc-namespace");
     char *dir_arg = xasprintf ("--setattr=scratch-directory=%s", scratch_dir);
     argz_add (&argz, &argz_len, dir_arg);
@@ -491,7 +494,8 @@ int client_run (struct client *cli)
     return subprocess_run (cli->p);
 }
 
-int start_session (const char *cmd_argz, size_t cmd_argz_len)
+int start_session (const char *cmd_argz, size_t cmd_argz_len,
+                   const char *broker_path)
 {
     struct client *cli;
     int rank;
@@ -518,7 +522,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len)
     pmi_server_initialize (flags, session_id);
 
     for (rank = 0; rank < ctx.size; rank++) {
-        if (!(cli = client_create (scratch_dir, rank, cmd_argz, cmd_argz_len)))
+        if (!(cli = client_create (broker_path, scratch_dir, rank,
+                                   cmd_argz, cmd_argz_len)))
             log_err_exit ("client_create");
         if (optparse_hasopt (ctx.opts, "verbose"))
             client_dumpargs (cli);
