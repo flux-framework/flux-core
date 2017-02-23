@@ -7,7 +7,7 @@
 
 /* Flags for commit and fence operations
  */
-enum {
+enum flux_kvs_flags {
     KVS_NO_MERGE = 1,  /* disallow commits to be mergeable with others */
 };
 
