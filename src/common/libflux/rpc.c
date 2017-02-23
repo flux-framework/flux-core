@@ -183,13 +183,18 @@ bool flux_rpc_check (flux_rpc_t *rpc)
     assert (rpc->magic == RPC_MAGIC);
     if (rpc->rx_msg || rpc->rx_errnum)
         return true;
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.message.rpc", "single");
+#endif
     if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, FLUX_O_NONBLOCK))) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             errno = 0;
-            return false;
-        } else
+        else
             rpc->rx_errnum = errno;
     }
+#if HAVE_CALIPER
+    cali_end_byname ("flux.message.rpc");
+#endif
     return (rpc->rx_msg || rpc->rx_errnum);
 }
 
