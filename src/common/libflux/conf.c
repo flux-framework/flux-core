@@ -54,6 +54,7 @@ static struct config default_config[] = {
                                                     INTREE_WRECK_LUA_PATTERN },
     { "keydir",         NULL,                       INTREE_KEYDIR },
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
+    { "rundir",         INSTALLED_RUNDIR,           NULL },
     { NULL, NULL, NULL },
 };
 
