@@ -34,7 +34,7 @@ enum {
 
 /* Create/destroy protocol engine.
  */
-struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
+struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     int appnum,
                                                     int universe_size,
                                                     int local_procs,

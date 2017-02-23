@@ -2266,7 +2266,7 @@ static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
         flags |= PMI_SIMPLE_SERVER_TRACE;
     ctx->barrier_sequence = 0;
     wreck_barrier_next (ctx);
-    ctx->pmi = pmi_simple_server_create (&ops, (int) ctx->id,
+    ctx->pmi = pmi_simple_server_create (ops, (int) ctx->id,
                                          ctx->total_ntasks,
                                          ctx->nprocs,
                                          kvsname,
