@@ -43,6 +43,8 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libsubprocess/subprocess.h"
 
+#define DEFAULT_KILLER_TIMEOUT 1.0
+
 static struct {
     double killer_timeout;
     flux_reactor_t *reactor;
@@ -77,8 +79,6 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
-
-double default_killer_timeout = 1.0;
 
 #ifndef HAVE_CALIPER
 static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
@@ -136,7 +136,7 @@ int main (int argc, char *argv[])
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
     ctx.killer_timeout = optparse_get_double (ctx.opts, "killer-timeout",
-                                               default_killer_timeout);
+                                              DEFAULT_KILLER_TIMEOUT);
     if (ctx.killer_timeout < 0.)
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optindex < argc) {
