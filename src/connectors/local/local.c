@@ -161,23 +161,6 @@ static void op_fini (void *impl)
     free (c);
 }
 
-static bool pidcheck (const char *pidfile)
-{
-    pid_t pid;
-    FILE *f = NULL;
-    bool running = false;
-
-    if (!(f = fopen (pidfile, "r")))
-        goto done;
-    if (fscanf (f, "%u", &pid) != 1 || kill (pid, 0) < 0)
-        goto done;
-    running = true;
-done:
-    if (f)
-        (void)fclose (f);
-    return running;
-}
-
 static int env_getint (char *name, int dflt)
 {
     char *s = getenv (name);
@@ -222,7 +205,7 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     c->fd_nonblock = -1;
     for (count=0;;count++) {
-        if (count >= env_getint("FLUX_RETRY_COUNT", 5) || !pidcheck (pidfile))
+        if (count >= env_getint("FLUX_RETRY_COUNT", 5))
             goto error;
         memset (&addr, 0, sizeof (struct sockaddr_un));
         addr.sun_family = AF_UNIX;
