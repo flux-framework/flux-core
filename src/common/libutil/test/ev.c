@@ -123,17 +123,26 @@ void test_zmq_events (void)
     ok ((zin = zmq_socket (zctx, ZMQ_PAIR)) != NULL
         && zmq_connect (zin, "inproc://eventloop_test") == 0,
         "PAIR socket connect ok");
-    ok (zstr_send (zout, "TEST") == 0,
-        "sent a message over PAIR sockets");
     size_t fd_size = sizeof (fd);
     ok (zmq_getsockopt (zin, ZMQ_FD, &fd, &fd_size) == 0 && fd >= 0,
         "zmq_getsockopt ZMQ_FD returned valid file descriptor");
+    /* ZMQ_EVENTS must be called after ZMQ_FD and before each poll()
+     * to "reset" event trigger.  For more details see Issue #524.
+     */
+    uint32_t zevents;
+    size_t zevents_size = sizeof (zevents);
+    ok (zmq_getsockopt (zin, ZMQ_EVENTS, &zevents, &zevents_size) == 0
+        && !(zevents & ZMQ_POLLIN),
+        "zmq_getsockopt ZMQ_EVENTS says PAIR socket not ready to recv");
     // this test is somewhat questionable as there may be false positives
     struct pollfd pfd = { .fd = fd, .events = POLLIN };
     ok (poll (&pfd, 1, 10) == 0,
         "poll says edge triggered mailbox descriptor is not ready");
-    uint32_t zevents;
-    size_t zevents_size = sizeof (zevents);
+    ok (zstr_send (zout, "TEST") == 0,
+        "sent a message over PAIR sockets");
+    ok (poll (&pfd, 1, 10) == 1
+        && (pfd.revents & POLLIN),
+        "poll says edge triggered mailbox descriptor is ready");
     ok (zmq_getsockopt (zin, ZMQ_EVENTS, &zevents, &zevents_size) == 0
         && (zevents & ZMQ_POLLIN),
         "zmq_getsockopt ZMQ_EVENTS says PAIR socket ready to recv");
@@ -288,11 +297,11 @@ void test_ev_zlist (void)
 
 int main (int argc, char *argv[])
 {
-    plan (27);
+    plan (29);
 
     test_libev_timer (); // 5
     test_libev_io (); // 3
-    test_zmq_events (); // 11
+    test_zmq_events (); // 13
     test_ev_zmq (); // 6
     test_ev_zlist (); // 2
 
