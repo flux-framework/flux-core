@@ -38,6 +38,12 @@ test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start --size=2 'flux comms info' | grep 'size=2'
 "
+test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
+	flux start --size=1 --bootstrap=selfpmi /bin/true
+"
+test_expect_success 'flux-start --size=1 --boostrap=pmi fails' "
+	test_must_fail flux start --size=1 --bootstrap=pmi /bin/true
+"
 test_expect_success 'flux-start in exec mode passes through errors from command' "
 	test_must_fail flux start /bin/false
 "
