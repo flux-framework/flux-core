@@ -55,6 +55,8 @@ Specify ranks to exclude the command from.  See NODESET FORMAT below
 for more information.
 
 
+*-x, --exclude*=['nodeset']::
+Specify ranks to exclude the command from.
 
 LIST OUTPUT
 -----------
