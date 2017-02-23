@@ -483,7 +483,7 @@ void pmi_server_initialize (struct context *ctx, int flags)
     int appnum = strtol (ctx->session_id, NULL, 10);
     if (!(ctx->pmi.kvs = zhash_new()))
         oom ();
-    ctx->pmi.srv = pmi_simple_server_create (&ops, appnum, ctx->size,
+    ctx->pmi.srv = pmi_simple_server_create (ops, appnum, ctx->size,
                                              ctx->size, "-", flags, ctx);
     if (!ctx->pmi.srv)
         log_err_exit ("pmi_simple_server_create");

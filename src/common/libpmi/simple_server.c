@@ -70,7 +70,7 @@ static void trace (struct pmi_simple_server *pmi,
     }
 }
 
-struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
+struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     int appnum,
                                                     int universe_size,
                                                     int local_procs,
@@ -85,7 +85,7 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops *ops,
         errno = ENOMEM;
         goto error;
     }
-    pmi->ops = *ops;
+    pmi->ops = ops;
     pmi->arg = arg;
     pmi->appnum = appnum;
     if (!(pmi->kvsname = strdup (kvsname))) {
