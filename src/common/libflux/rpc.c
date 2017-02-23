@@ -203,14 +203,14 @@ static int rpc_get (flux_rpc_t *rpc)
     }
     if (!rpc->rx_msg && !rpc->rx_errnum) {
 #if HAVE_CALIPER
-        cali_begin_string_byname("flux.message.rpc", "single");
+        cali_begin_string_byname ("flux.message.rpc", "single");
 #endif
         if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0))) {
             rpc->rx_errnum = errno;
             goto done;
         }
 #if HAVE_CALIPER
-        cali_end_byname("flux.message.rpc");
+        cali_end_byname ("flux.message.rpc");
 #endif
         rpc->rx_count++;
     }
