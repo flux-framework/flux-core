@@ -54,7 +54,6 @@ static struct {
     flux_watcher_t *timer;
     struct subprocess_manager *sm;
     optparse_t *opts;
-    char *scratch_dir;
     char *broker_path;
     int size;
     int count;
@@ -74,7 +73,8 @@ void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 int start_session (const char *cmd_argz, size_t cmd_argz_len);
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len);
 char *create_scratch_dir (const char *session_id);
-struct client *client_create (int rank, const char *cmd_argz, size_t cmd_argz_len);
+struct client *client_create (const char *scratch_dir, int rank,
+                              const char *cmd_argz, size_t cmd_argz_len);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
@@ -389,7 +389,8 @@ error:
     return -1;
 }
 
-struct client *client_create (int rank, const char *cmd_argz, size_t cmd_argz_len)
+struct client *client_create (const char *scratch_dir, int rank,
+                              const char *cmd_argz, size_t cmd_argz_len)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     int client_fd;
@@ -405,9 +406,9 @@ struct client *client_create (int rank, const char *cmd_argz, size_t cmd_argz_le
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
     argz_add (&argz, &argz_len, ctx.broker_path);
     argz_add (&argz, &argz_len, "--shared-ipc-namespace");
-    char * scratch_dir = xasprintf ("--setattr=scratch-directory=%s", ctx.scratch_dir);
-    argz_add (&argz, &argz_len, scratch_dir);
-    free(scratch_dir);
+    char *dir_arg = xasprintf ("--setattr=scratch-directory=%s", scratch_dir);
+    argz_add (&argz, &argz_len, dir_arg);
+    free(dir_arg);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
@@ -496,6 +497,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len)
     int rank;
     int flags = 0;
     char *session_id;
+    char *scratch_dir;
 
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
@@ -508,7 +510,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len)
     if (subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor) < 0)
         log_err_exit ("subprocess_manager_set reactor");
     session_id = xasprintf ("%d", getpid ());
-    ctx.scratch_dir = create_scratch_dir (session_id);
+    scratch_dir = create_scratch_dir (session_id);
 
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;
@@ -516,7 +518,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len)
     pmi_server_initialize (flags, session_id);
 
     for (rank = 0; rank < ctx.size; rank++) {
-        if (!(cli = client_create (rank, cmd_argz, cmd_argz_len)))
+        if (!(cli = client_create (scratch_dir, rank, cmd_argz, cmd_argz_len)))
             log_err_exit ("client_create");
         if (optparse_hasopt (ctx.opts, "verbose"))
             client_dumpargs (cli);
@@ -534,7 +536,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len)
     pmi_server_finalize ();
 
     free (session_id);
-    free (ctx.scratch_dir);
+    free (scratch_dir);
 
     subprocess_manager_destroy (ctx.sm);
     flux_watcher_destroy (ctx.timer);
