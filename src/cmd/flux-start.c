@@ -141,7 +141,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("--killer-timeout argument must be >= 0");
     if (optindex < argc) {
         if ((e = argz_create (argv + optindex, &command, &len)) != 0)
-            log_errn_exit (e, "argz_creawte");
+            log_errn_exit (e, "argz_create");
     }
 
     if (!(searchpath = getenv ("FLUX_EXEC_PATH")))
