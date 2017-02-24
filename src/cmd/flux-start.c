@@ -105,6 +105,8 @@ static struct optparse_option opts[] = {
       .usage = "After a broker exits, kill other brokers after SECONDS", },
     { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
       .usage = "Trace pmi simple server protocol exchange", },
+    { .name = "scratchdir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
+      .usage = "Use DIR as scratch directory", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
@@ -201,6 +203,8 @@ int main (int argc, char *argv[])
 
     switch (bootstrap) {
     case BOOTSTRAP_PMI:
+        if (optparse_hasopt (ctx.opts, "scratchdir"))
+            log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
         status = exec_broker (command, len, broker_path);
         break;
     case BOOTSTRAP_SELFPMI:
@@ -573,7 +577,11 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor) < 0)
         log_err_exit ("subprocess_manager_set reactor");
     session_id = xasprintf ("%d", getpid ());
-    scratch_dir = create_scratch_dir (session_id);
+
+    if (optparse_hasopt (ctx.opts, "scratchdir"))
+        scratch_dir = xstrdup (optparse_get_str (ctx.opts, "scratchdir", NULL));
+    else
+        scratch_dir = create_scratch_dir (session_id);
 
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;
