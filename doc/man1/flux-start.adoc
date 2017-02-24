@@ -17,13 +17,12 @@ SYNOPSIS
 DESCRIPTION
 -----------
 flux-start(1) launches a new Flux instance.  By default, flux-start
-execs a single flux-broker(1) directly.  If a PMI environment is
-available, flux-broker will use it to fetch job information and
-bootstrap a session of geometry determined from PMI.  If PMI is
-unavailable, flux-broker will run as a standalone, single-rank job.
+execs a single flux-broker(1) directly.  By default it will attempt to use
+PMI to fetch job information and bootstrap a flux instance.
 
 If a size is specified via '--size', an instance of that size is to be
-started on the local host with flux-start as the parent.
+started on the local host with flux-start as the parent. (Mostly used for testing
+purposes.)
 
 A failure of the initial program (such as non-zero exit code)
 causes flux-start to exit with a non-zero exit code.
@@ -34,7 +33,15 @@ long-term CURVE keys using flux-keygen(1).
 OPTIONS
 -------
 *-s, --size*='N'::
-Launch an instance of size 'N' on the local host.
+Launch an instance of size 'N' on the local host.  Only works with
+'--bootstrap=selfpmi'.  Automatically sets '--bootstrap=selfpmi' and prints
+a warning to stderr if no '--bootstrap' option is specified.
+
+*-b, --bootstrap*='METHOD'::
+Select the flux bootstrap method.  Possible values of 'METHOD' are:
+  * pmi - Use PMI (Process Management Interface)
+  * selfpmi - The flux-start process will activate its own internal PMI server,
+    and then it will launch flux-brokers that will bootstrap using said PMI server.
 
 *-o, --broker-opts*='option_string'::
 Add options to the message broker daemon, separated by commas.
