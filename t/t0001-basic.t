@@ -96,12 +96,12 @@ test_expect_success 'broker scratch-directory override works' '
 	test -d $SCRATCHDIR &&
 	rmdir $SCRATCHDIR
 '
-test_expect_success 'broker scratch-directory-rank override works' '
-	RANKDIR=`mktemp -d` &&
-	DIR=`flux start -o,--setattr=scratch-directory-rank=$RANKDIR flux getattr scratch-directory-rank` &&
-	test "$DIR" = "$RANKDIR" &&
-	test -d $RANKDIR &&
-	rmdir $RANKDIR
+test_expect_success 'broker.rundir override works' '
+	RUNDIR=`mktemp -d` &&
+	DIR=`flux start -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&
+	test "$DIR" = "$RUNDIR" &&
+	test -d $RUNDIR &&
+	rmdir $RUNDIR
 '
 test_expect_success 'broker persist-directory works' '
 	PERSISTDIR=`mktemp -d` &&

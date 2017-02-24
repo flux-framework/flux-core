@@ -188,7 +188,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_scratchdir (attr_t *attrs);
-static int create_rankdir (attr_t *attrs, uint32_t rank);
+static int create_rundir (attr_t *attrs, uint32_t rank);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
@@ -454,8 +454,8 @@ int main (int argc, char *argv[])
      */
     if (create_scratchdir (ctx.attrs) < 0)
         log_err_exit ("create_scratchdir");
-    if (create_rankdir (ctx.attrs, ctx.rank) < 0)
-        log_err_exit ("create_rankdir");
+    if (create_rundir (ctx.attrs, ctx.rank) < 0)
+        log_err_exit ("create_rundir");
     if (create_persistdir (ctx.attrs, ctx.rank) < 0)
         log_err_exit ("create_persistdir");
 
@@ -812,13 +812,13 @@ static void update_proctitle (broker_ctx_t *ctx)
 
 static void update_pidfile (broker_ctx_t *ctx)
 {
-    const char *rankdir;
+    const char *rundir;
     char *pidfile;
     FILE *f;
 
-    if (attr_get (ctx->attrs, "scratch-directory-rank", &rankdir, NULL) < 0)
-        log_msg_exit ("scratch-directory-rank attribute is not set");
-    pidfile = xasprintf ("%s/broker.pid", rankdir);
+    if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0)
+        log_msg_exit ("broker.rundir attribute is not set");
+    pidfile = xasprintf ("%s/broker.pid", rundir);
     if (!(f = fopen (pidfile, "w+")))
         log_err_exit ("%s", pidfile);
     if (fprintf (f, "%u", ctx->pid) < 0)
@@ -892,23 +892,22 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
     return 0;
 }
 
-/* If user set the 'scratch-directory-rank' attribute on the command line,
+/* If user set the 'broker.rundir' attribute on the command line,
  * validate the directory and its permissions, and set the immutable flag
  * on the attribute.  If unset, create it within 'scratch-directory'.
  * If we created the directory, arrange to remove it on exit.
  * This function is idempotent.
  */
-static int create_rankdir (attr_t *attrs, uint32_t rank)
+static int create_rundir (attr_t *attrs, uint32_t rank)
 {
-    const char *attr = "scratch-directory-rank";
-    const char *rank_dir, *scratch_dir, *local_uri;
+    const char *run_dir, *scratch_dir, *local_uri;
     char *dir = NULL;
     char *uri = NULL;
     int rc = -1;
 
-    if (attr_get (attrs, attr, &rank_dir, NULL) == 0) {
+    if (attr_get (attrs, "broker.rundir", &run_dir, NULL) == 0) {
         struct stat sb;
-        if (stat (rank_dir, &sb) < 0)
+        if (stat (run_dir, &sb) < 0)
             goto done;
         if (!S_ISDIR (sb.st_mode)) {
             errno = ENOTDIR;
@@ -918,7 +917,7 @@ static int create_rankdir (attr_t *attrs, uint32_t rank)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs, "broker.rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     } else {
         if (attr_get (attrs, "scratch-directory",
@@ -933,13 +932,13 @@ static int create_rankdir (attr_t *attrs, uint32_t rank)
         dir = xasprintf ("%s/%"PRIu32, scratch_dir, rank);
         if (mkdir (dir, 0700) < 0)
             goto done;
-        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, "broker.rundir", dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
         cleanup_push_string (cleanup_directory, dir);
-        rank_dir = dir;
+        run_dir = dir;
     }
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        uri = xasprintf ("local://%s", rank_dir);
+        uri = xasprintf ("local://%s", run_dir);
         if (attr_add (attrs, "local-uri", uri,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
@@ -1132,7 +1131,7 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
             goto done;
     }
 
-    /* Initialize scratch-directory/rankdir
+    /* Initialize scratch-directory/rundir
      */
     if (create_scratchdir (ctx->attrs) < 0) {
         log_err ("pmi: could not initialize scratch-directory");
@@ -1142,8 +1141,8 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         log_msg ("scratch-directory attribute is not set");
         goto done;
     }
-    if (create_rankdir (ctx->attrs, ctx->rank) < 0) {
-        log_err ("could not initialize rankdir");
+    if (create_rundir (ctx->attrs, ctx->rank) < 0) {
+        log_err ("could not initialize rundir");
         goto done;
     }
 

@@ -35,10 +35,9 @@ the session.  This directory _may_ be shared by multiple ranks.
 Cleanup of directory contents is the responsibility of
 the creator.
 
-scratch-directory-rank::
+broker.rundir::
 A temporary directory available for scratch storage within
-the session.  This directory is unique to the local rank,
-and is usually a sub-directory of scratch-directory.
+the session.  This directory is unique to the local rank.
 Cleanup of directory contents is the responsibility of
 the creator.
 
