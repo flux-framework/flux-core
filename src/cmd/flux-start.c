@@ -349,6 +349,11 @@ int execvp_argz (const char *cmd_argz, char *argz, size_t argz_len)
     return -1;
 }
 
+/* Directly exec() a single flux broker.  It is assumed that we
+ * are running in an environment with an external PMI service, and the
+ * broker will figure out how to bootstrap without any further aid from
+ * flux-start.
+ */
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
                  const char *broker_path)
 {
@@ -492,6 +497,13 @@ int client_run (struct client *cli)
     return subprocess_run (cli->p);
 }
 
+/* Start an internal PMI server, and then launch "size" number of
+ * broker processes that inherit a file desciptor to the internal PMI
+ * server.  They will use that to bootstrap.  Since the PMI server is
+ * internal and the connections to it passed through inherited file
+ * descriptors it implies that the brokers in this instance must all
+ * be contained on one node.  This is mostly useful for testing purposes.
+ */
 int start_session (const char *cmd_argz, size_t cmd_argz_len,
                    const char *broker_path)
 {
