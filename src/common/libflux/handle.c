@@ -45,6 +45,7 @@
 #include "tagpool.h"
 #include "dispatch.h" // for flux_sleep_on ()
 #include "flog.h"
+#include "conf.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/msglist.h"
@@ -300,6 +301,7 @@ static char *strtrim (char *s, const char *trim)
 
 flux_t *flux_open (const char *uri, int flags)
 {
+    char *default_uri = NULL;
     char *path = NULL;
     char *scheme = NULL;
     void *dso = NULL;
@@ -309,8 +311,10 @@ flux_t *flux_open (const char *uri, int flags)
     if (!uri)
         uri = getenv ("FLUX_URI");
     if (!uri) {
-        errno = EINVAL;
-        goto done;
+        if (asprintf (&default_uri, "local://%s",
+                      flux_conf_get ("rundir", 0)) < 0)
+            goto done;
+        uri = default_uri;
     }
     if (!(scheme = strdup (uri))) {
         errno = ENOMEM;
@@ -334,8 +338,8 @@ flux_t *flux_open (const char *uri, int flags)
     profiling_context_init(&h->prof);
 #endif
 done:
-    if (scheme)
-        free (scheme);
+    free (scheme);
+    free (default_uri);
     return h;
 }
 void flux_close (flux_t *h)
