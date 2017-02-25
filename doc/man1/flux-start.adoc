@@ -58,6 +58,14 @@ configuration profile named 'PROFILE'. Requires a version of Flux
 built with --enable-caliper. Unless CALI_LOG_VERBOSITY is already
 set in the environment, it will default to 0 for all brokers.
 
+*--scratchdir*='DIR'::
+For selfpmi bootstrap mode, set a pre-existing directory that will
+contain the generated broker.rundir directories for the instance.
+If a DIR is not set with this option, a unique temporary directory will
+be created for the lifetime of the instance and removed when the
+instance is destroyed.
+
+
 EXAMPLES
 --------
 

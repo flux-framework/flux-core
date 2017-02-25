@@ -89,19 +89,12 @@ test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes'
 	ATTR_VAL=`flux start -o,--setattr=foo-test=42 flux getattr foo-test` &&
 	test $ATTR_VAL -eq 42
 '
-test_expect_success 'broker scratch-directory override works' '
-	SCRATCHDIR=`mktemp -d` &&
-	DIR=`flux start -o,--setattr=scratch-directory=$SCRATCHDIR flux getattr scratch-directory` &&
-	test "$DIR" = "$SCRATCHDIR" &&
-	test -d $SCRATCHDIR &&
-	rmdir $SCRATCHDIR
-'
-test_expect_success 'broker scratch-directory-rank override works' '
-	RANKDIR=`mktemp -d` &&
-	DIR=`flux start -o,--setattr=scratch-directory-rank=$RANKDIR flux getattr scratch-directory-rank` &&
-	test "$DIR" = "$RANKDIR" &&
-	test -d $RANKDIR &&
-	rmdir $RANKDIR
+test_expect_success 'broker.rundir override works' '
+	RUNDIR=`mktemp -d` &&
+	DIR=`flux start -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&
+	test "$DIR" = "$RUNDIR" &&
+	test -d $RUNDIR &&
+	rmdir $RUNDIR
 '
 test_expect_success 'broker persist-directory works' '
 	PERSISTDIR=`mktemp -d` &&

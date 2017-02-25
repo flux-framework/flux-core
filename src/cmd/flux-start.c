@@ -105,6 +105,8 @@ static struct optparse_option opts[] = {
       .usage = "After a broker exits, kill other brokers after SECONDS", },
     { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
       .usage = "Trace pmi simple server protocol exchange", },
+    { .name = "scratchdir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
+      .usage = "Use DIR as scratch directory", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
@@ -201,6 +203,8 @@ int main (int argc, char *argv[])
 
     switch (bootstrap) {
     case BOOTSTRAP_PMI:
+        if (optparse_hasopt (ctx.opts, "scratchdir"))
+            log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
         status = exec_broker (command, len, broker_path);
         break;
     case BOOTSTRAP_SELFPMI:
@@ -461,9 +465,14 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     subprocess_add_hook (cli->p, SUBPROCESS_STATUS, child_report);
     argz_add (&argz, &argz_len, broker_path);
     argz_add (&argz, &argz_len, "--shared-ipc-namespace");
-    char *dir_arg = xasprintf ("--setattr=scratch-directory=%s", scratch_dir);
+    char *run_dir = xasprintf ("%s/%d", scratch_dir, rank);
+    if (mkdir (run_dir, 0755) < 0)
+        log_err_exit ("mkdir %s", run_dir);
+    cleanup_push_string (cleanup_directory, run_dir);
+    char *dir_arg = xasprintf ("--setattr=broker.rundir=%s", run_dir);
     argz_add (&argz, &argz_len, dir_arg);
-    free(dir_arg);
+    free (run_dir);
+    free (dir_arg);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)
         argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len); /* must be last arg */
@@ -573,7 +582,11 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor) < 0)
         log_err_exit ("subprocess_manager_set reactor");
     session_id = xasprintf ("%d", getpid ());
-    scratch_dir = create_scratch_dir (session_id);
+
+    if (optparse_hasopt (ctx.opts, "scratchdir"))
+        scratch_dir = xstrdup (optparse_get_str (ctx.opts, "scratchdir", NULL));
+    else
+        scratch_dir = create_scratch_dir (session_id);
 
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;

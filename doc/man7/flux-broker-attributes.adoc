@@ -29,23 +29,16 @@ The number of ranks in the comms session.
 session-id::
 The identity of the comms session.
 
-scratch-directory::
+broker.rundir::
 A temporary directory available for scratch storage within
-the session.  This directory _may_ be shared by multiple ranks.
-Cleanup of directory contents is the responsibility of
-the creator.
-
-scratch-directory-rank::
-A temporary directory available for scratch storage within
-the session.  This directory is unique to the local rank,
-and is usually a sub-directory of scratch-directory.
+the session.  This directory is unique to the local rank.
 Cleanup of directory contents is the responsibility of
 the creator.
 
 persist-directory::
 A persistent directory available for storage on rank 0 only.
 If persist-directory is not defined, persistence is unavailable
-and users should fall back to scratch-directory, with cleanup.
+and users should fall back to broker.rundir, with cleanup.
 
 persist-filesystem::
 If defined, and persist-directory is not defined, the rank

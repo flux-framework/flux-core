@@ -163,9 +163,9 @@ static sqlite_ctx_t *getctx (flux_t *h)
         ctx->blob_size_limit = strtoul (tmp, NULL, 10);
 
         if (!(dir = flux_attr_get (h, "persist-directory", NULL))) {
-            if (!(dir = flux_attr_get (h, "scratch-directory", NULL))) {
+            if (!(dir = flux_attr_get (h, "broker.rundir", NULL))) {
                 saved_errno = errno;
-                flux_log_error (h, "scratch-directory");
+                flux_log_error (h, "broker.rundir");
                 goto error;
             }
             cleanup = true;

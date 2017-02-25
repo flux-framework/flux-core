@@ -187,8 +187,7 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg);
 
 static int create_persistdir (attr_t *attrs, uint32_t rank);
-static int create_scratchdir (attr_t *attrs);
-static int create_rankdir (attr_t *attrs, uint32_t rank);
+static int create_rundir (attr_t *attrs);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
@@ -446,16 +445,13 @@ int main (int argc, char *argv[])
     // Setup profiling
     setup_profiling (argv[0], ctx.rank);
 
-    /* Create directory for sockets, and a subdirectory specific
-     * to this rank that will contain the pidfile and local connector socket.
-     * (These may have already been called by boot method)
-     * If persist-filesystem or persist-directory are set, initialize those,
+    /* Create/validate runtime directory (this function is idempotent)
+     */
+    if (create_rundir (ctx.attrs) < 0)
+        log_err_exit ("create_rundir");
+    /* If persist-filesystem or persist-directory are set, initialize those,
      * but only on rank 0.
      */
-    if (create_scratchdir (ctx.attrs) < 0)
-        log_err_exit ("create_scratchdir");
-    if (create_rankdir (ctx.attrs, ctx.rank) < 0)
-        log_err_exit ("create_rankdir");
     if (create_persistdir (ctx.attrs, ctx.rank) < 0)
         log_err_exit ("create_persistdir");
 
@@ -603,11 +599,11 @@ int main (int argc, char *argv[])
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
     {
-        const char *scratch_dir;
-        if (attr_get (ctx.attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
-            log_msg_exit ("scratch-directory attribute is not set");
+        const char *rundir;
+        if (attr_get (ctx.attrs, "broker.rundir", &rundir, NULL) < 0) {
+            log_msg_exit ("broker.rundir attribute is not set");
         }
-        snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", scratch_dir, ctx.rank);
+        snoop_set_uri (ctx.snoop, "ipc://%s/snoop", rundir, ctx.rank);
     }
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
@@ -812,13 +808,13 @@ static void update_proctitle (broker_ctx_t *ctx)
 
 static void update_pidfile (broker_ctx_t *ctx)
 {
-    const char *rankdir;
+    const char *rundir;
     char *pidfile;
     FILE *f;
 
-    if (attr_get (ctx->attrs, "scratch-directory-rank", &rankdir, NULL) < 0)
-        log_msg_exit ("scratch-directory-rank attribute is not set");
-    pidfile = xasprintf ("%s/broker.pid", rankdir);
+    if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0)
+        log_msg_exit ("broker.rundir attribute is not set");
+    pidfile = xasprintf ("%s/broker.pid", rundir);
     if (!(f = fopen (pidfile, "w+")))
         log_err_exit ("%s", pidfile);
     if (fprintf (f, "%u", ctx->pid) < 0)
@@ -892,23 +888,21 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
     return 0;
 }
 
-/* If user set the 'scratch-directory-rank' attribute on the command line,
+/* If user set the 'broker.rundir' attribute on the command line,
  * validate the directory and its permissions, and set the immutable flag
- * on the attribute.  If unset, create it within 'scratch-directory'.
- * If we created the directory, arrange to remove it on exit.
- * This function is idempotent.
+ * on the attribute.  If unset, a unique directory and arrange to remove
+ * it on exit.  This function is idempotent.
  */
-static int create_rankdir (attr_t *attrs, uint32_t rank)
+static int create_rundir (attr_t *attrs)
 {
-    const char *attr = "scratch-directory-rank";
-    const char *rank_dir, *scratch_dir, *local_uri;
+    const char *run_dir, *local_uri;
     char *dir = NULL;
     char *uri = NULL;
     int rc = -1;
 
-    if (attr_get (attrs, attr, &rank_dir, NULL) == 0) {
+    if (attr_get (attrs, "broker.rundir", &run_dir, NULL) == 0) {
         struct stat sb;
-        if (stat (rank_dir, &sb) < 0)
+        if (stat (run_dir, &sb) < 0)
             goto done;
         if (!S_ISDIR (sb.st_mode)) {
             errno = ENOTDIR;
@@ -918,94 +912,35 @@ static int create_rankdir (attr_t *attrs, uint32_t rank)
             errno = EPERM;
             goto done;
         }
-        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attrs, "broker.rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     } else {
-        if (attr_get (attrs, "scratch-directory",
-                                                &scratch_dir, NULL) < 0) {
-            errno = EINVAL;
-            goto done;
-        }
-        if (rank == FLUX_NODEID_ANY) {
-            errno = EINVAL;
-            goto done;
-        }
-        dir = xasprintf ("%s/%"PRIu32, scratch_dir, rank);
-        if (mkdir (dir, 0700) < 0)
-            goto done;
-        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        const char *tmpdir = getenv ("TMPDIR");
+        dir = xasprintf ("%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp");
+        if (!mkdtemp (dir))
             goto done;
         cleanup_push_string (cleanup_directory, dir);
-        rank_dir = dir;
+        if (attr_add (attrs, "broker.rundir", dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
+        run_dir = dir;
     }
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        uri = xasprintf ("local://%s", rank_dir);
+        uri = xasprintf ("local://%s", run_dir);
         if (attr_add (attrs, "local-uri", uri,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
     rc = 0;
 done:
-    if (dir)
-        free (dir);
-    if (uri)
-        free (uri);
-    return rc;
-}
-
-/* If user set the 'scratch-directory' attribute on the command line,
- * validate the directory and its permissions, and set the immutable flag
- * on the attribute.  If unset, create it in TMPDIR such that it will
- * be unique in the enclosing instance, and in a hierarchy of instances.
- * If we created the directory, arrange to remove it on exit.
- * This function is idempotent.
- */
-static int create_scratchdir (attr_t *attrs)
-{
-    const char *attr = "scratch-directory";
-    const char *sid, *scratch_dir;
-    const char *tmpdir = getenv ("TMPDIR");
-    char *dir, *tmpl = NULL;
-    int rc = -1;
-
-    if (attr_get (attrs, attr, &scratch_dir, NULL) == 0) {
-        struct stat sb;
-        if (stat (scratch_dir, &sb) < 0)
-            goto done;
-        if (!S_ISDIR (sb.st_mode)) {
-            errno = ENOTDIR;
-            goto done;
-        }
-        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-            errno = EPERM;
-            goto done;
-        }
-        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    } else {
-        if (attr_get (attrs, "session-id", &sid, NULL) < 0) {
-            errno = EINVAL;
-            goto done;
-        }
-        tmpl = xasprintf ("%s/flux-%s-XXXXXX", tmpdir ? tmpdir : "/tmp", sid);
-        if (!(dir = mkdtemp (tmpl)))
-            goto done;
-        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-        cleanup_push_string (cleanup_directory, dir);
-    }
-    rc = 0;
-done:
-    if (tmpl)
-        free (tmpl);
+    free (dir);
+    free (uri);
     return rc;
 }
 
 /* If 'persist-directory' set, validate it, make it immutable, done.
  * If 'persist-filesystem' set, validate it, make it immutable, then:
- * Create 'persist-directory' beneath it such that it is both unique and
- * a different basename than 'scratch-directory' (in case persist-filesystem
- * is set to TMPDIR).
+ * Avoid name collisions with other flux tmpdirs used in testing
+ * e.g. "flux-<sid>-XXXXXX"
  */
 static int create_persistdir (attr_t *attrs, uint32_t rank)
 {
@@ -1080,7 +1015,7 @@ done:
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 {
-    const char *scratch_dir;
+    const char *rundir;
     int spawned, size, rank, appnum;
     int relay_rank = -1, parent_rank;
     int clique_size;
@@ -1132,25 +1067,21 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
             goto done;
     }
 
-    /* Initialize scratch-directory/rankdir
+    /* Initialize rundir
      */
-    if (create_scratchdir (ctx->attrs) < 0) {
-        log_err ("pmi: could not initialize scratch-directory");
+    if (create_rundir (ctx->attrs) < 0) {
+        log_err ("could not initialize rundir");
         goto done;
     }
-    if (attr_get (ctx->attrs, "scratch-directory", &scratch_dir, NULL) < 0) {
-        log_msg ("scratch-directory attribute is not set");
-        goto done;
-    }
-    if (create_rankdir (ctx->attrs, ctx->rank) < 0) {
-        log_err ("could not initialize rankdir");
+    if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
+        log_msg ("broker.rundir attribute is not set");
         goto done;
     }
 
     /* Set TBON request addr.  We will need any wildcards expanded below.
      */
     if (ctx->shared_ipc_namespace) {
-        char *reqfile = xasprintf ("%s/%"PRIu32"/req", scratch_dir, ctx->rank);
+        char *reqfile = xasprintf ("%s/req", rundir);
         overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
         cleanup_push_string (cleanup_file, reqfile);
         free (reqfile);
@@ -1180,7 +1111,7 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/%d/relay", scratch_dir, rank);
+                char *relayfile = xasprintf ("%s/relay", rundir);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
@@ -1310,7 +1241,7 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
                                ipaddr, port);
         }
     } else if (ctx->shared_ipc_namespace) {
-        char *eventfile = xasprintf ("%s/event", scratch_dir);
+        char *eventfile = xasprintf ("%s/event", rundir);
         overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
         if (ctx->rank == 0)
             cleanup_push_string (cleanup_file, eventfile);
