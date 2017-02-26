@@ -1,13 +1,13 @@
 #!/usr/bin/env lua
 --
---  Basic flux reactor testing using ping interface to kvs
+--  Basic flux event testing
 --
 local test = require 'fluxometer'.init (...)
 test:start_session {}
 
 local fmt = string.format
 
-plan (20)
+plan (22)
 
 local flux = require_ok ('flux')
 local f, err = flux.new()
@@ -17,6 +17,11 @@ is (err, nil, "error is nil")
 local rc, err = f:subscribe ("testevent.")
 isnt (rc, -1, "subscribe: return code >= 0")
 is (err, nil, "subscribe: error is nil")
+
+local rc, err = f:unsubscribe ("notmytopic")
+is (rc, nil, "unsubscribe: return code == nil")
+is (err, "No such file or directory",
+    "unsubscribe: error is No such file or directory")
 
 local rc, err = f:sendevent ({ test = "xxx" }, "testevent.1")
 isnt (rc, -1, "sendevent: return code >= 0")
