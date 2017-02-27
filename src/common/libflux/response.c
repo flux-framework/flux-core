@@ -190,6 +190,10 @@ static flux_msg_t *derive_response (flux_t *h, const flux_msg_t *request,
         goto fatal;
     if (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto fatal;
+    if (flux_msg_set_userid (msg, FLUX_USERID_UNKNOWN) < 0)
+        goto fatal;
+    if (flux_msg_set_rolemask (msg, FLUX_ROLE_NONE) < 0)
+        goto fatal;
     if (errnum && flux_msg_set_errnum (msg, errnum) < 0)
         goto fatal;
     return msg;
