@@ -395,15 +395,20 @@ error:
 
 static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb },
     { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 
 int attr_register_handlers (attr_t *attrs, flux_t *h)
 {
-    return flux_msg_handler_addvec (h, handlers, attrs);
+    if (flux_msg_handler_addvec (h, handlers, attrs) < 0)
+        return -1;
+    /* allow any user to attr.get and attr.list */
+    flux_msg_handler_allow_rolemask (handlers[0].w, FLUX_ROLE_ALL);
+    flux_msg_handler_allow_rolemask (handlers[1].w, FLUX_ROLE_ALL);
+    return 0;
 }
 
 void attr_unregister_handlers (void)
