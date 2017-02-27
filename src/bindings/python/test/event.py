@@ -25,6 +25,7 @@ class TestEvent(unittest.TestCase):
 
     def test_t1_1_unsub(self):
         """Unsubscribe from an event"""
+        self.assertGreaterEqual(self.f.event_subscribe("testevent.1"), 0)
         self.assertGreaterEqual(self.f.event_unsubscribe("testevent.1"), 0)
 
     def test_full_event(self):
