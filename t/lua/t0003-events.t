@@ -15,7 +15,7 @@ type_ok (f, 'userdata', "create new flux handle")
 is (err, nil, "error is nil")
 
 local rc, err = f:subscribe ("testevent.")
-isnt (rc, -1, "subscribe: return code >= 0")
+isnt (rc, nil, "subscribe: return code != nil")
 is (err, nil, "subscribe: error is nil")
 
 local rc, err = f:unsubscribe ("notmytopic")
@@ -24,7 +24,7 @@ is (err, "No such file or directory",
     "unsubscribe: error is No such file or directory")
 
 local rc, err = f:sendevent ({ test = "xxx" }, "testevent.1")
-isnt (rc, -1, "sendevent: return code >= 0")
+isnt (rc, nil, "sendevent: return code != nil")
 is (err, nil, "sendevent: error is nil")
 
 local msg, tag = f:recv_event ()
@@ -35,7 +35,7 @@ is (msg.test, "xxx", "recv_event: got payload intact")
 
 -- sendevent takes string.format args...
 local rc, err = f:sendevent ({ test = "yyy"}, "testevent.%d", 2)
-isnt (rc, -1, "sendevent: return code >= 0")
+isnt (rc, nil, "sendevent: return code != nil")
 is (err, nil, "sendevent: error is nil")
 
 local msg, tag = f:recv_event ()
@@ -46,7 +46,7 @@ is (msg.test, "yyy", "recv_event: got payload intact")
 
 -- sendevent with empty payload...
 local rc, err = f:sendevent ("testevent.%d", 2)
-isnt (rc, -1, "sendevent: return code >= 0")
+isnt (rc, nil, "sendevent: return code != nil")
 is (err, nil, "sendevent: error is nil")
 
 local msg, tag = f:recv_event ()
