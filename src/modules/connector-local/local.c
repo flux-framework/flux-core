@@ -714,6 +714,10 @@ static int listener_init (mod_local_ctx_t *ctx, char *sockpath)
         flux_log_error (ctx->h, "bind");
         goto error_close;
     }
+    if (chmod (sockpath, 0777) < 0) {
+        flux_log_error (ctx->h, "chmod");
+        goto error_close;
+    }
     if (listen (fd, LISTEN_BACKLOG) < 0) {
         flux_log_error (ctx->h, "listen");
         goto error_close;
