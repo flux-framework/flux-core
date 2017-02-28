@@ -184,6 +184,14 @@ static client_t * client_create (mod_local_ctx_t *ctx, int fd)
         errno = EPERM;
         goto error;
     }
+    int *debug_flags = flux_aux_get (h, "flux::debug_flags");
+    if (debug_flags && (*debug_flags & 1)) {
+        flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied by debug flag",
+                  c->ucred.uid, (int)c->ucred.pid);
+        *debug_flags &= ~1; // one shot
+        errno = EPERM;
+        goto error;
+    }
     if (!(c->inw = flux_fd_watcher_create (ctx->reactor, fd, FLUX_POLLIN,
                                            client_read_cb, c)) != 0)
         goto error;
