@@ -683,11 +683,17 @@ static int check_cred (proxy_ctx_t *ctx, int fd)
     if (ucred.uid != ctx->session_owner) {
         flux_log (ctx->h, LOG_ERR, "connect by uid=%d pid=%d denied",
                   ucred.uid, (int)ucred.pid);
+        errno = EPERM;
         goto done;
     }
     rc = 0;
 done:
     return rc;
+}
+
+static int send_auth_response (int fd, unsigned char e)
+{
+    return write (fd, &e, 1);
 }
 
 /* Accept a connection from new client.
@@ -708,9 +714,11 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
             goto done;
         }
         if (check_cred (ctx, cfd) < 0) {
+            send_auth_response (cfd, errno);
             close (cfd);
             goto done;
         }
+        send_auth_response (cfd, 0);
         if (!(c = client_create (ctx, cfd, cfd))) {
             close (cfd);
             goto done;
