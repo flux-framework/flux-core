@@ -422,7 +422,7 @@ void rpcftest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         count++;
     } while (flux_rpc_next (r) == 0);
     ok (count == fake_size,
-        "flux_rpc_get succeded %d times", fake_size);
+        "flux_rpc_getf succeded %d times", fake_size);
 
     cmp_ok (hello_count - old_count, "==", fake_size,
         "rpc was called %d times", fake_size);
