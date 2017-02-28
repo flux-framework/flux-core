@@ -2,7 +2,7 @@
 Description=Flux message broker
 
 [Service]
-ExecStart=@X_BINDIR@/flux start -o,-Sbroker.rundir=%t/flux sleep inf
+ExecStart=@X_BINDIR@/flux start -o,-Sbroker.rundir=%t/flux,-Ssession-id=%H sleep inf
 User=flux
 Group=flux
 RuntimeDirectory=flux
