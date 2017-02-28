@@ -44,10 +44,7 @@
 #include <inttypes.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/log.h"
 
 
 #define LISTEN_BACKLOG      5
@@ -101,29 +98,40 @@ static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void freectx (void *arg)
 {
     mod_local_ctx_t *ctx = arg;
-    zlist_destroy (&ctx->clients);
-    zhash_destroy (&ctx->subscriptions);
-    free (ctx);
+    if (ctx) {
+        zlist_destroy (&ctx->clients);
+        zhash_destroy (&ctx->subscriptions);
+        free (ctx);
+    }
 }
 
 static mod_local_ctx_t *getctx (flux_t *h)
 {
-    mod_local_ctx_t *ctx = (mod_local_ctx_t *)flux_aux_get (h, "flux::local_connector");
+    mod_local_ctx_t *ctx = flux_aux_get (h, "flux::local_connector");
 
     if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx = calloc (1, sizeof (*ctx)))) {
+            errno = ENOMEM;
+            goto error;
+        }
         ctx->h = h;
         if (!(ctx->reactor = flux_get_reactor (h)))
-            log_err_exit ("flux_get_reactor");
-        if (!(ctx->clients = zlist_new ()))
-            oom ();
-        if (!(ctx->subscriptions = zhash_new ()))
-            oom ();
+            goto error;
+        if (!(ctx->clients = zlist_new ())) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (!(ctx->subscriptions = zhash_new ())) {
+            errno = ENOMEM;
+            goto error;
+        }
         ctx->session_owner = geteuid ();
         flux_aux_set (h, "flux::local_connector", ctx, freectx);
     }
-
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
 }
 
 static int set_nonblock (int fd, bool nonblock)
@@ -151,20 +159,23 @@ static client_t * client_create (mod_local_ctx_t *ctx, int fd)
     socklen_t crlen = sizeof (c->ucred);
     flux_t *h = ctx->h;
 
-    c = xzmalloc (sizeof (*c));
-    c->fd = fd;
-    if (!(c->uuid = zuuid_new ()))
-        oom ();
+    if (!(c = calloc (1, sizeof (*c)))) {
+        errno = ENOMEM;
+        goto error;
+    }
     c->ctx = ctx;
-    if (!(c->disconnect_notify = zhash_new ()))
-        oom ();
-    if (!(c->subscriptions = zhash_new ()))
-        oom ();
-    if (!(c->outqueue = zlist_new ()))
-        oom ();
+    c->fd = -1;
+    c->uuid = zuuid_new ();
+    c->disconnect_notify = zhash_new ();
+    c->subscriptions = zhash_new ();
+    c->outqueue = zlist_new ();
+    if (!c->uuid || !c->disconnect_notify || !c->subscriptions
+                                          || !c->outqueue) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &c->ucred, &crlen) < 0)
         goto error;
-    assert (crlen == sizeof (c->ucred));
     /* Deny connections by uid other than session owner for now.
      */
     if (c->ucred.uid != ctx->session_owner) {
@@ -184,8 +195,9 @@ static client_t * client_create (mod_local_ctx_t *ctx, int fd)
     flux_msg_iobuf_init (&c->outbuf);
     if (send_auth_response (fd, 0) < 0)
         goto error_noresponse;
-    if (set_nonblock (c->fd, true) < 0)
+    if (set_nonblock (fd, true) < 0)
         goto error_noresponse;
+    c->fd = fd;
     return (c);
 error:
     if (send_auth_response (fd, errno) < 0)
@@ -240,18 +252,28 @@ static int client_send (client_t *c, const flux_msg_t *msg)
 
 static subscription_t *subscription_create (const char *topic)
 {
-    subscription_t *sub = xzmalloc (sizeof (*sub));
-    sub->topic = xstrdup (topic);
+    subscription_t *sub = calloc (1, sizeof (*sub));
+    if (!sub) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(sub->topic = strdup (topic))) {
+        free (sub);
+        errno = ENOMEM;
+        return NULL;
+    }
     return sub;
 }
 
 static void subscription_destroy (void *data)
 {
     subscription_t *sub = data;
-    if (sub->unsubscribe)
-        (void) sub->unsubscribe (sub->handle, sub->topic);
-    free (sub->topic);
-    free (sub);
+    if (sub) {
+        if (sub->unsubscribe)
+            (void) sub->unsubscribe (sub->handle, sub->topic);
+        free (sub->topic);
+        free (sub);
+    }
 }
 
 static int global_subscribe (mod_local_ctx_t *ctx, const char *topic)
@@ -260,12 +282,17 @@ static int global_subscribe (mod_local_ctx_t *ctx, const char *topic)
     int rc = -1;
 
     if (!(sub = zhash_lookup (ctx->subscriptions, topic))) {
-        if (flux_event_subscribe (ctx->h, topic) < 0) {
-            flux_log_error (ctx->h, "%s: flux_event_subscribe %s",
+        if (!(sub = subscription_create (topic))) {
+            flux_log_error (ctx->h, "%s: subscription_create %s",
                             __FUNCTION__, topic);
             goto done;
         }
-        sub = subscription_create (topic);
+        if (flux_event_subscribe (ctx->h, topic) < 0) {
+            flux_log_error (ctx->h, "%s: flux_event_subscribe %s",
+                            __FUNCTION__, topic);
+            subscription_destroy (sub);
+            goto done;
+        }
         sub->unsubscribe = (unsubscribe_f) flux_event_unsubscribe;
         sub->handle = ctx->h;
         zhash_update (ctx->subscriptions, topic, sub);
@@ -302,9 +329,15 @@ static int client_subscribe (client_t *c, const char *topic)
     int rc = -1;
 
     if (!(sub = zhash_lookup (c->subscriptions, topic))) {
-        if (global_subscribe (c->ctx, topic) < 0)
+        if (!(sub = subscription_create (topic))) {
+            flux_log_error (c->ctx->h, "%s: subscription_create %s",
+                            __FUNCTION__, topic);
             goto done;
-        sub = subscription_create (topic);
+        }
+        if (global_subscribe (c->ctx, topic) < 0) {
+            subscription_destroy (sub);
+            goto done;
+        }
         sub->unsubscribe = (unsubscribe_f) global_unsubscribe;
         sub->handle = c->ctx;
         zhash_update (c->subscriptions, topic, sub);
@@ -421,52 +454,64 @@ static int disconnect_update (client_t *c, const flux_msg_t *msg)
         goto done;
     if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
         goto done;
-    svc = xstrdup (topic);
+    if (!(svc = strdup (topic))) {
+        errno = ENOMEM;
+        goto done;
+    }
     if ((p = strchr (svc, '.')))
         *p = '\0';
-    key = xasprintf ("%s:%"PRIu32":%d", svc, nodeid, flags);
+    if (asprintf (&key, "%s:%"PRIu32":%d", svc, nodeid, flags) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
     if (!zhash_lookup (c->disconnect_notify, key)) {
-        d = xzmalloc (sizeof (*d));
+        if (!(d = calloc (1, sizeof (*d)))) {
+            errno = ENOMEM;
+            goto done;
+        }
         d->c = c;
         d->nodeid = nodeid;
         d->flags = flags;
-        d->topic = xasprintf ("%s.disconnect", svc);
+        if (asprintf (&d->topic, "%s.disconnect", svc) < 0) {
+            free (d);
+            errno = ENOMEM;
+            goto done;
+        }
         zhash_update (c->disconnect_notify, key, d);
         zhash_freefn (c->disconnect_notify, key, disconnect_destroy);
     }
     rc = 0;
 done:
-    if (svc)
-        free (svc);
-    if (key)
-        free (key);
+    free (svc);
+    free (key);
     return rc;
 }
 
 static void client_destroy (client_t *c)
 {
-    zhash_destroy (&c->disconnect_notify);
-    zhash_destroy (&c->subscriptions);
-    if (c->uuid)
+    if (c) {
+        zhash_destroy (&c->disconnect_notify);
+        zhash_destroy (&c->subscriptions);
         zuuid_destroy (&c->uuid);
-    if (c->outqueue) {
-        flux_msg_t *msg;
-        while ((msg = zlist_pop (c->outqueue)))
-            flux_msg_destroy (msg);
-        zlist_destroy (&c->outqueue);
+        if (c->outqueue) {
+            flux_msg_t *msg;
+            while ((msg = zlist_pop (c->outqueue)))
+                flux_msg_destroy (msg);
+            zlist_destroy (&c->outqueue);
+        }
+        flux_watcher_stop (c->outw);
+        flux_watcher_destroy (c->outw);
+        flux_msg_iobuf_clean (&c->outbuf);
+
+        flux_watcher_stop (c->inw);
+        flux_watcher_destroy (c->inw);
+        flux_msg_iobuf_clean (&c->inbuf);
+
+        if (c->fd != -1)
+            close (c->fd);
+
+        free (c);
     }
-    flux_watcher_stop (c->outw);
-    flux_watcher_destroy (c->outw);
-    flux_msg_iobuf_clean (&c->outbuf);
-
-    flux_watcher_stop (c->inw);
-    flux_watcher_destroy (c->inw);
-    flux_msg_iobuf_clean (&c->inbuf);
-
-    if (c->fd != -1)
-        close (c->fd);
-
-    free (c);
 }
 
 static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -541,7 +586,7 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
     int type;
 
     if (revents & FLUX_POLLERR)
-        goto disconnect;
+        goto error_disconnect;
     if (!(revents & FLUX_POLLIN))
         return;
     /* EPROTO, ECONNRESET are normal disconnect errors
@@ -555,11 +600,11 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
         }
         if (errno != ECONNRESET && errno != EPROTO)
             flux_log_error (h, "flux_msg_recvfd");
-        goto disconnect;
+        goto error_disconnect;
     }
     if (flux_msg_get_type (msg, &type) < 0) {
         flux_log_error (h, "flux_msg_get_type");
-        goto disconnect;
+        goto error;
     }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -567,29 +612,36 @@ static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                 /* insert disconnect notifier before forwarding request */
                 if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
                     flux_log_error (h, "disconnect_update");
-                    goto disconnect;
+                    goto error_disconnect;
                 }
-                if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
-                    oom (); /* FIXME */
-                if (flux_send (h, msg, 0) < 0)
-                    log_err ("%s: flux_send", __FUNCTION__);
+                if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0) {
+                    flux_log_error (h, "flux_msg_push_route");
+                    goto error;
+                }
+                if (flux_send (h, msg, 0) < 0) {
+                    flux_log_error (h, "%s: flux_send", __FUNCTION__);
+                    goto error;
+                }
             }
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (flux_send (h, msg, 0) < 0)
-                log_err ("%s: flux_send", __FUNCTION__);
+            if (flux_send (h, msg, 0) < 0) {
+                flux_log_error (h, "%s: flux_send", __FUNCTION__);
+                goto error;
+            }
             break;
         default:
             flux_log (h, LOG_ERR, "drop unexpected %s",
                       flux_msg_typestr (type));
-            break;
+            goto error;
     }
     flux_msg_destroy (msg);
     return;
-disconnect:
-    flux_msg_destroy (msg);
+error_disconnect:
     zlist_remove (c->ctx->clients, c);
     client_destroy (c);
+error:
+    flux_msg_destroy (msg);
 }
 
 /* Received response message from broker.
@@ -604,10 +656,14 @@ static void response_cb (flux_t *h, flux_msg_handler_t *w,
     client_t *c;
     flux_msg_t *cpy = flux_msg_copy (msg, true);
 
-    if (!cpy)
-        oom ();
-    if (flux_msg_pop_route (cpy, &uuid) < 0)
+    if (!cpy) {
+        flux_log_error (h, "flux_msg_copy");
         goto done;
+    }
+    if (flux_msg_pop_route (cpy, &uuid) < 0) {
+        flux_log_error (h, "flux_msg_pop_route");
+        goto done;
+    }
     if (!uuid) {
         const char *topic = NULL;
         (void) flux_msg_get_topic (msg, &topic);
@@ -633,8 +689,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *w,
         c = zlist_next (ctx->clients);
     }
 done:
-    if (uuid)
-        free (uuid);
+    free (uuid);
     flux_msg_destroy (cpy);
 }
 
@@ -694,8 +749,11 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
             close (cfd);
             goto done;
         }
-        if (zlist_append (ctx->clients, c) < 0)
-            oom ();
+        if (zlist_append (ctx->clients, c) < 0) {
+            client_destroy (c); // closes cfd
+            errno = ENOMEM;
+            goto done;
+        }
     }
     if (revents & FLUX_POLLERR) {
         flux_log_error (h, "poll listen fd");
@@ -757,6 +815,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     char *tmpdir;
     int rc = -1;
 
+    if (!ctx)
+        goto done;
     if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
         flux_log_error (h, "flux_attr_get local-uri");
         goto done;
@@ -791,11 +851,12 @@ int mod_main (flux_t *h, int argc, char **argv)
      */
     if (flux_reactor_run (ctx->reactor, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done;
+        goto done_delvec;
     }
     rc = 0;
-done:
+done_delvec:
     flux_msg_handler_delvec (htab);
+done:
     flux_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
         if (close (ctx->listen_fd) < 0)
