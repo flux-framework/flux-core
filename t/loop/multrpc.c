@@ -422,7 +422,7 @@ void rpcftest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         count++;
     } while (flux_rpc_next (r) == 0);
     ok (count == fake_size,
-        "flux_rpc_get succeded %d times", fake_size);
+        "flux_rpc_getf succeded %d times", fake_size);
 
     cmp_ok (hello_count - old_count, "==", fake_size,
         "rpc was called %d times", fake_size);
@@ -443,7 +443,7 @@ void rpcftest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         count++;
     } while (flux_rpc_next (r) == 0);
     ok (count == 64,
-        "flux_rpc_get succeded %d times, with correct nodeid map", 64);
+        "flux_rpc_getf succeded %d times, with correct nodeid map", 64);
 
     cmp_ok (hello_count - old_count, "==", 64,
         "rpc was called %d times", 64);
@@ -491,7 +491,7 @@ void rpcftest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         }
     } while (flux_rpc_next (r) == 0);
     ok (fail_count == 1 && fail_nodeid_last == 20 && fail_errno_last == EPERM,
-        "flux_rpc_get correctly reports single error");
+        "flux_rpc_getf correctly reports single error");
     flux_rpc_destroy (r);
 
     /* test that a fatal handle error causes flux_rpc_next () to fail */
