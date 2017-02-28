@@ -48,6 +48,7 @@ int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
+int cmd_debug (optparse_t *p, int argc, char **argv);
 
 #define RANK_OPTION { \
     .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET", \
@@ -97,6 +98,17 @@ static struct optparse_option stats_opts[] =  {
     },
     OPTPARSE_TABLE_END
 };
+static struct optparse_option debug_opts[] = {
+    { .name = "clear",  .key = 'C',  .has_arg = 0,
+      .usage = "Set debug flags to 0", },
+    { .name = "set",  .key = 'S',  .has_arg = 1,
+      .usage = "Set debug flags to MASK", },
+    { .name = "setbit",  .key = 's',  .has_arg = 1,
+      .usage = "Set one debug flag to 1", },
+    { .name = "clearbit",  .key = 'c',  .has_arg = 1,
+      .usage = "Set one debug flag to 0", },
+    OPTPARSE_TABLE_END,
+};
 
 static struct optparse_subcommand subcommands[] = {
     { "list",
@@ -133,6 +145,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_stats,
       0,
       stats_opts,
+    },
+    { "debug",
+      "[OPTIONS] module",
+      "Get/set module debug flags",
+      cmd_debug,
+      0,
+      debug_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -651,6 +670,47 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+int cmd_debug (optparse_t *p, int argc, char **argv)
+{
+    int n;
+    flux_t *h;
+    char *topic = NULL;
+    const char *op = "setbit";
+    int flags = 0;
+    flux_rpc_t *rpc = NULL;
+
+    if ((n = optparse_option_index (p)) != argc - 1)
+        log_msg_exit ("flux-debug requires service argument");
+    topic = xasprintf ("%s.debug", argv[n]);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (optparse_hasopt (p, "clear")) {
+        op = "clr";
+    }
+    else if (optparse_hasopt (p, "set")) {
+        op = "set";
+        flags = strtoul (optparse_get_str (p, "set", NULL), NULL, 0);
+    }
+    else if (optparse_hasopt (p, "clearbit")) {
+        op = "clrbit";
+        flags = strtoul (optparse_get_str (p, "clearbit", NULL), NULL, 0);
+    }
+    else if (optparse_hasopt (p, "setbit")) {
+        op = "setbit";
+        flags = strtoul (optparse_get_str (p, "setbit", NULL), NULL, 0);
+    }
+    if (!(rpc = flux_rpcf (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
+                           "op", op, "flags", flags)))
+        log_err_exit ("%s", topic);
+    if (flux_rpc_getf (rpc, "{s:i}", "flags", &flags) < 0)
+        log_err_exit ("%s", topic);
+    printf ("0x%x\n", flags);
+    flux_close (h);
+    free (topic);
+    return (0);
+}
+
 /*
- * vi:tabstop=4 shiftwidth=4 expandtab
+ * vi: ts=4 sw=4 expandtab
  */
