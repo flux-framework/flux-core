@@ -44,9 +44,9 @@
 #include <inttypes.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 
 
@@ -337,22 +337,16 @@ done:
 
 int sub_request (client_t *c, const flux_msg_t *msg, bool subscribe)
 {
-    const char *json_str, *topic;
-    json_object *in = NULL;
+    const char *topic;
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{s:s}", "topic", &topic) < 0)
         goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
-        errno = EPROTO;
-        goto done;
-    }
     if (subscribe)
         rc = client_subscribe (c, topic);
     else
         rc = client_unsubscribe (c, topic);
 done:
-    Jput (in);
     return rc;
 }
 
