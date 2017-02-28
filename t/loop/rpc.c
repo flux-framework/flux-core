@@ -156,6 +156,9 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok ((r = flux_rpcf (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
                         "{s:i}", "n", 107)) != NULL,
         "flux_rpcf works");
+    ok (flux_rpc_getf (r, NULL) < 0
+        && errno == EINVAL,
+        "flux_rpc_getf fails with EINVAL");
     ok (flux_rpc_getf (r, "{s:i}", "n", &i) == 0,
         "flux_rpc_getf works");
     ok (i == 108,
