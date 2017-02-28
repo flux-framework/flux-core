@@ -140,6 +140,11 @@ static int set_nonblock (int fd, bool nonblock)
     return 0;
 }
 
+static int send_auth_response (int fd, unsigned char e)
+{
+    return write (fd, &e, 1);
+}
+
 static client_t * client_create (mod_local_ctx_t *ctx, int fd)
 {
     client_t *c;
@@ -157,36 +162,35 @@ static client_t * client_create (mod_local_ctx_t *ctx, int fd)
         oom ();
     if (!(c->outqueue = zlist_new ()))
         oom ();
-    if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &c->ucred, &crlen) < 0) {
-        flux_log_error (h, "getsockopt SO_PEERCRED");
+    if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &c->ucred, &crlen) < 0)
         goto error;
-    }
     assert (crlen == sizeof (c->ucred));
     /* Deny connections by uid other than session owner for now.
      */
     if (c->ucred.uid != ctx->session_owner) {
         flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied",
                   c->ucred.uid, (int)c->ucred.pid);
+        errno = EPERM;
         goto error;
     }
-    c->inw = flux_fd_watcher_create (ctx->reactor,
-                                     fd, FLUX_POLLIN, client_read_cb, c);
-    c->outw = flux_fd_watcher_create (ctx->reactor,
-                                      fd, FLUX_POLLOUT, client_write_cb, c);
-    if (!c->inw || !c->outw) {
-        flux_log_error (h, "flux_fd_watcher_create");
+    if (!(c->inw = flux_fd_watcher_create (ctx->reactor, fd, FLUX_POLLIN,
+                                           client_read_cb, c)) != 0)
         goto error;
-    }
+    if (!(c->outw = flux_fd_watcher_create (ctx->reactor, fd, FLUX_POLLOUT,
+                                            client_write_cb, c)) != 0)
+        goto error;
     flux_watcher_start (c->inw);
     flux_msg_iobuf_init (&c->inbuf);
     flux_msg_iobuf_init (&c->outbuf);
-    if (set_nonblock (c->fd, true) < 0) {
-        flux_log_error (h, "set_nonblock");
-        goto error;
-    }
-
+    if (send_auth_response (fd, 0) < 0)
+        goto error_noresponse;
+    if (set_nonblock (c->fd, true) < 0)
+        goto error_noresponse;
     return (c);
 error:
+    if (send_auth_response (fd, errno) < 0)
+        goto error_noresponse;
+error_noresponse:
     client_destroy (c);
     return NULL;
 }

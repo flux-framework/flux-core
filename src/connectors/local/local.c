@@ -217,6 +217,20 @@ flux_t *connector_init (const char *path, int flags)
             break;
         usleep (100*1000);
     }
+    /* read 1 byte indicating success or failure of auth */
+    unsigned char e;
+    int rc;
+    rc = read (c->fd, &e, 1);
+    if (rc < 0)
+        goto error;
+    if (rc == 0) {
+        errno = ECONNRESET;
+        goto error;
+    }
+    if (e != 0) {
+        errno = e;
+        goto error;
+    }
     flux_msg_iobuf_init (&c->outbuf);
     flux_msg_iobuf_init (&c->inbuf);
     if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
