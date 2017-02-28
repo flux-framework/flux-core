@@ -177,6 +177,43 @@ static void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
     flux_reactor_stop (flux_get_reactor (h));
 }
 
+static void debug_cb (flux_t *h, flux_msg_handler_t *w,
+                      const flux_msg_t *msg, void *arg)
+{
+    int flags;
+    int *debug_flags;
+    const char *op;
+
+    if (flux_request_decodef (msg, NULL, "{s:s s:i}", "op", &op,
+                                                    "flags", &flags) < 0)
+        goto error;
+    if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
+        if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
+            errno = ENOMEM;
+            goto error;
+        }
+        flux_aux_set (h, "flux::debug_flags", debug_flags, free);
+    }
+    if (!strcmp (op, "setbit"))
+        *debug_flags |= flags;
+    else if (!strcmp (op, "clrbit"))
+        *debug_flags &= ~flags;
+    else if (!strcmp (op, "set"))
+        *debug_flags = flags;
+    else if (!strcmp (op, "clr"))
+        *debug_flags = 0;
+    else {
+        errno = EPROTO;
+        goto error;
+    }
+    if (flux_respondf (h, msg, "{s:i}", "flags", *debug_flags) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+}
+
 /* Reactor loop is about to block.
  */
 static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -244,6 +281,7 @@ void modservice_register (flux_t *h, module_t *p)
     register_request (ctx, "stats.get", stats_get_cb);
     register_request (ctx, "stats.clear", stats_clear_request_cb);
     register_request (ctx, "rusage", rusage_cb);
+    register_request (ctx, "debug", debug_cb);
 
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
 
