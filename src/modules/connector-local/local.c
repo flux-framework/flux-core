@@ -496,24 +496,38 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
     flux_msg_t *rmsg = NULL;
     uint32_t matchtag;
 
-    if (flux_msg_get_topic (msg, &topic) < 0
-            || flux_msg_get_matchtag (msg, &matchtag) < 0)
-        return false;
-    else if (!strcmp (topic, "local.sub"))
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log_error (c->ctx->h, "%s: flux_msg_get_topic", __FUNCTION__);
+        goto done; // drop
+    }
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0) {
+        flux_log_error (c->ctx->h, "%s: flux_msg_get_matchtag", __FUNCTION__);
+        goto done; // drop
+    }
+    if (!strcmp (topic, "local.sub")) {
         rc = sub_request (c, msg, true);
-    else if (!strcmp (topic, "local.unsub"))
+        goto done_respond;
+    }
+    else if (!strcmp (topic, "local.unsub")) {
         rc = sub_request (c, msg, false);
+        goto done_respond;
+    }
     else
-        return false;
+        return false; // no match - forward to broker
 
-    /* Respond to client
-     */
-    if (!(rmsg = flux_response_encode (topic, rc < 0 ? errno : 0, NULL))
-                    || flux_msg_set_matchtag (rmsg, matchtag) < 0)
-        flux_log_error (c->ctx->h, "%s: encoding response", __FUNCTION__);
-
-    else if (client_send_nocopy (c, &rmsg) < 0)
+done_respond:
+    if (!(rmsg = flux_response_encode (topic, rc < 0 ? errno : 0, NULL))) {
+        flux_log_error (c->ctx->h, "%s: flux_response_encode", __FUNCTION__);
+        goto done;
+    }
+    if (flux_msg_set_matchtag (rmsg, matchtag) < 0) {
+        flux_log_error (c->ctx->h, "%s: flux_response_set_patchtag",
+                        __FUNCTION__);
+        goto done;
+    }
+    if (client_send_nocopy (c, &rmsg) < 0)
         flux_log_error (c->ctx->h, "%s: client_send_nocopy", __FUNCTION__);
+done:
     flux_msg_destroy (rmsg);
     return true;
 }
