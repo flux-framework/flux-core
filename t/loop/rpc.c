@@ -86,11 +86,17 @@ done:
 void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
-    if (flux_request_decodef (msg, NULL, "{}") < 0) {
+    int errnum = 0;
+
+    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+        errnum = errno;
         goto done;
     }
  done:
-    (void)flux_respondf (h, msg, "{}");
+    if (errnum)
+        (void)flux_respond (h, msg, errnum, NULL);
+    else
+        (void)flux_respondf (h, msg, "{}");
 }
 
 void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
@@ -182,6 +188,18 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_check says get would block");
     ok (flux_rpc_getf (r, "{}") == 0,
         "flux_rpc_getf works");
+    flux_rpc_destroy (r);
+
+    /* cause remote EPROTO (unexpected payload) - will be picked up in _getf() */
+    ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
+                        "{ s:i }", "foo", 42)) != NULL,
+        "flux_rpcf with payload when none is expected works, at first");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_getf (r, "{}") < 0
+        && errno == EPROTO,
+        "flux_rpc_getf fails with EPROTO");
     flux_rpc_destroy (r);
 
     flux_reactor_stop (flux_get_reactor (h));
