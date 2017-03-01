@@ -132,4 +132,32 @@ test_expect_success 'module: info fails on invalid module' '
 	! flux module info nosuchmodule
 '
 
+# N.B. avoid setting the actual debug bits - lets reserve LSB
+TESTMOD=connector-local
+
+test_expect_success 'flux module debug gets debug flags' '
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0x0"
+'
+test_expect_success 'flux module debug --setbit sets individual debug flags' '
+	flux module debug --setbit 0x10000 $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0x10000"
+'
+test_expect_success 'flux module debug --set replaces debug flags' '
+	flux module debug --set 0xff00 $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0xff00"
+'
+test_expect_success 'flux module debug --clearbit clears individual debug flags' '
+	flux module debug --clearbit 0x1000 $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0xef00"
+'
+test_expect_success 'flux module debug --clear clears debug flags' '
+	flux module debug --clear $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0x0"
+'
+
 test_done
