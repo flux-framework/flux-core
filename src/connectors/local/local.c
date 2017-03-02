@@ -169,14 +169,12 @@ static int env_getint (char *name, int dflt)
     return s ? strtol (s, NULL, 10) : dflt;
 }
 
-/* Path is interpreted as the directory containing the unix domain socket
- * and broker pid.
+/* Path is interpreted as the directory containing the unix domain socket.
  */
 flux_t *connector_init (const char *path, int flags)
 {
     local_ctx_t *c = NULL;
     struct sockaddr_un addr;
-    char pidfile[PATH_MAX + 1];
     char sockfile[PATH_MAX + 1];
     int n, count;
 
@@ -189,12 +187,6 @@ flux_t *connector_init (const char *path, int flags)
         errno = EINVAL;
         goto error;
     }
-    n = snprintf (pidfile, sizeof (pidfile), "%s/broker.pid", path);
-    if (n >= sizeof (pidfile)) {
-        errno = EINVAL;
-        goto error;
-    }
-
     if (!(c = malloc (sizeof (*c)))) {
         errno = ENOMEM;
         goto error;
