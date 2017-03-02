@@ -160,4 +160,72 @@ test_expect_success 'flux module debug --clear clears debug flags' '
 	test "$FLAGS" = "0x0"
 '
 
+# test stats
+
+test_expect_success 'flux module stats gets comms statistics' '
+	flux module stats $TESTMOD >comms.stats &&
+	grep -q "#request (tx)" comms.stats &&
+	grep -q "#request (rx)" comms.stats &&
+	grep -q "#response (tx)" comms.stats &&
+	grep -q "#response (rx)" comms.stats &&
+	grep -q "#event (tx)" comms.stats &&
+	grep -q "#event (rx)" comms.stats &&
+	grep -q "#keepalive (tx)" comms.stats &&
+	grep -q "#keepalive (rx)" comms.stats
+'
+
+test_expect_success 'flux module stats --parse "#event (tx)" counts events' '
+	EVENT_TX=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	flux event pub xyz &&
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	test "$EVENT_TX" = $((${EVENT_TX2}-1))
+'
+
+test_expect_success 'flux module stats --clear works' '
+	flux event pub xyz &&
+	flux module stats --clear $TESTMOD
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	test "$EVENT_TX" = 0
+'
+
+test_expect_success 'flux module stats --clear-all works' '
+	flux event pub xyz &&
+	flux module stats --clear-all $TESTMOD
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	test "$EVENT_TX" = 0
+'
+
+test_expect_success 'flux module stats --scale works' '
+	flux event pub xyz &&
+	EVENT_TX=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" --scale=2 $TESTMOD) &&
+	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
+'
+
+test_expect_success 'flux module stats --rusage works' '
+	flux module stats --rusage $TESTMOD >rusage.stats &&
+	grep -q utime rusage.stats &&
+	grep -q stime rusage.stats &&
+	grep -q maxrss rusage.stats &&
+	grep -q ixrss rusage.stats &&
+	grep -q idrss rusage.stats &&
+	grep -q isrss rusage.stats &&
+	grep -q minflt rusage.stats &&
+	grep -q majflt rusage.stats &&
+	grep -q nswap rusage.stats &&
+	grep -q inblock rusage.stats &&
+	grep -q oublock rusage.stats &&
+	grep -q msgsnd rusage.stats &&
+	grep -q msgrcv rusage.stats &&
+	grep -q nsignals rusage.stats &&
+	grep -q nvcsw rusage.stats &&
+	grep -q nivcsw rusage.stats
+'
+
+test_expect_success 'flux module stats --rusage --parse maxrss works' '
+	RSS=$(flux module stats --rusage --parse maxrss $TESTMOD) &&
+	test "$RSS" -gt 0
+'
+
+
 test_done
