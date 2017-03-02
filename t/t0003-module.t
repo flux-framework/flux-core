@@ -227,5 +227,37 @@ test_expect_success 'flux module stats --rusage --parse maxrss works' '
 	test "$RSS" -gt 0
 '
 
+# try to hit some error cases
+
+test_expect_success 'flux module with no arguments prints usage and fails' '
+	! flux module 2>noargs.help &&
+	grep -q Usage: noargs.help
+'
+
+test_expect_success 'flux module -h lists subcommands' '
+	! flux module -h 2>module.help &&
+	grep -q list module.help &&
+	grep -q remove module.help &&
+	grep -q load module.help &&
+	grep -q info module.help &&
+	grep -q stats module.help &&
+	grep -q debug module.help
+'
+
+test_expect_success 'flux module load "noexist" fails' '
+	! flux module load noexist 2>noexist.out &&
+	grep -q "not found" noexist.out
+'
+
+test_expect_success 'flux module detects bad nodeset' '
+	! flux module load -r smurf kvs 2>badns-load.out &&
+	grep -q "target nodeset" badns-load.out
+	! flux module remove -r smurf kvs 2>badns-remove.out &&
+	grep -q "target nodeset" badns-remove.out
+	! flux module list -r smurf 2>badns-list.out &&
+	grep -q "target nodeset" badns-list.out
+'
+
+
 
 test_done
