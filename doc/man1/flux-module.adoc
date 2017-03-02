@@ -43,18 +43,69 @@ inferred from the name specified on the command line.
 *list* ['OPTIONS'] ['service']::
 List modules loaded by 'service', or by flux-broker(1) if 'service' is unspecified.
 
+*stats* ['OPTIONS'] ['name']::
+Request statistics from module 'name'.  A JSON object containing a set of
+counters for each type of Flux message is returned by default, however
+the object may be customized on a module basis.
+
+*debug* ['OPTIONS'] ['name']::
+Manipulate debug flags in module 'name'.  The interpretation of debug
+flag bits is private to the module and its test drivers.
 
 OPTIONS
 -------
 *-r, --rank*'=NODESET'::
 Specify which ranks to apply the command to.  See NODESET FORMAT below
-for more information.
+for more information.  The 'stats' and 'debug' commands accept only
+a single rank here.
 
 *-x, --exclude*'=NODESET'::
 Specify ranks to exclude the command from.  See NODESET FORMAT below
-for more information.
+for more information.  This option is not accepted by the 'stats'
+and 'debug' commands.
 
+STATS OPTIONS
+-------------
+*-p, --parse*'=OBJNAME'::
+OBJNAME is a period delimited list of field names that should be walked
+to obtain a specific value or object in the returned JSON.
 
+*-t, --type*'=int|double'::
+Force the returned value to be converted to int or double.
+
+*-s, --scale*'=N'::
+Multiply the returned (int or double) value by the specified
+floating point value.
+
+*-R, --rusage*::
+Return a JSON object representing an 'rusage' structure
+returned by getrusage(2).
+
+*-c, --clear*::
+Send a request message to clear statistics in the target module.
+
+*-C, --clear-all*::
+Broadcast an event message to clear statistics in the target module
+on all ranks.
+
+DEBUG OPTIONS
+-------------
+
+*-c, --clear*::
+Set debug flags to zero.
+
+*-S, --set*'=MASK'::
+Set debug flags to MASK.
+The value may be prefixed with 0x to indicate hexadecimal or 0
+to indicate octal, otherwise the value is interpreted as decimal.
+
+*-c, --clearbit*'=MASK'::
+Clear the debug bits specified in MASK without disturbing other bits.
+The value is interpreted as above.
+
+*-s, --setbit*'=MASK'::
+Set the debug bits specified in MASK without disturbing other bits.
+The value is interpreted as above.
 
 LIST OUTPUT
 -----------
