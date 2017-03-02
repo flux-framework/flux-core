@@ -33,7 +33,7 @@ test_expect_success 'load content-sqlite module on rank 0' '
 
 test_expect_success 'store 100 blobs on rank 0' '
 	store_junk test 100 &&
-        TOTAL=`flux comms-stats --type int --parse count content` &&
+        TOTAL=`flux module stats --type int --parse count content` &&
         test $TOTAL -ge 100
 '
 
@@ -114,13 +114,13 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 
 test_expect_success 'flush rank 0 cache' '
         run_timeout 10 flux content flush &&
-	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
+	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test $NDIRTY -eq 0
 '
 
 test_expect_success 'drop rank 0 cache' '
         flux content dropcache &&
-	ECOUNT=`flux comms-stats --type int --parse count content` &&
+	ECOUNT=`flux module stats --type int --parse count content` &&
 	test $ECOUNT -eq 0
 '
 
@@ -129,8 +129,8 @@ test_expect_success 'unload content-sqlite module' '
 '
 
 test_expect_success 'check that content returned dirty' '
-	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
-	ECOUNT=`flux comms-stats --type int --parse count content` &&
+	NDIRTY=`flux module stats --type int --parse dirty content` &&
+	ECOUNT=`flux module stats --type int --parse count content` &&
 	test $NDIRTY -eq $ECOUNT
 '
 
@@ -161,7 +161,7 @@ test_expect_success 'load content-sqlite module on rank 0' '
 
 test_expect_success 'flush rank 0 cache' '
         run_timeout 10 flux content flush &&
-	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
+	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test $NDIRTY -eq 0
 '
 
@@ -187,19 +187,19 @@ test_expect_success 'exercise batching of synchronous flush to backing store' '
 	flux setattr content-flush-batch-limit 5 &&
         store_junk loadunload 200 &&
     	flux content flush &&
-	NDIRTY=`flux comms-stats --type int --parse dirty content` &&
+	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test ${NDIRTY} -eq 0
 '
 
 test_expect_success 'exercise batching of asynchronous flush to backing store' '
-        OLD_COUNT=`flux comms-stats --type int --parse count content` &&
+        OLD_COUNT=`flux module stats --type int --parse count content` &&
 	flux module remove --rank 0 content-sqlite &&
 	flux module load --rank 0 content-sqlite &&
 	flux module remove --rank 0 content-sqlite &&
 	flux module load --rank 0 content-sqlite &&
 	flux module remove --rank 0 content-sqlite &&
 	flux module load --rank 0 content-sqlite &&
-        NEW_COUNT=`flux comms-stats --type int --parse count content` &&
+        NEW_COUNT=`flux module stats --type int --parse count content` &&
 	test $OLD_COUNT -le $NEW_COUNT
 '
 

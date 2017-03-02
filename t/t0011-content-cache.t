@@ -21,7 +21,7 @@ HASHFUN=`flux getattr content-hash`
 test_expect_success 'store 100 blobs on rank 0' '
         for i in `seq 0 99`; do echo test$i | \
             flux content store >/dev/null; done &&
-	TOTAL=`flux comms-stats --type int --parse count content` &&
+	TOTAL=`flux module stats --type int --parse count content` &&
         test $TOTAL -ge 100 
 '
 
@@ -136,15 +136,15 @@ test_expect_success 'store on all ranks can be retrieved from rank 0' '
 
 # Backing store is not loaded so all entries on rank 0 should be dirty
 test_expect_success 'rank 0 cache is all dirty' '
-	DIRTY=`flux comms-stats --type int --parse dirty content` &&
-	TOTAL=`flux comms-stats --type int --parse count content` &&
+	DIRTY=`flux module stats --type int --parse dirty content` &&
+	TOTAL=`flux module stats --type int --parse count content` &&
 	test $DIRTY -eq $TOTAL
 '
 
 # Backing store is not loaded so all entries on rank 0 should be valid
 test_expect_success 'rank 0 cache is all valid' '
-	VALID=`flux comms-stats --type int --parse valid content` &&
-	TOTAL=`flux comms-stats --type int --parse count content` &&
+	VALID=`flux module stats --type int --parse valid content` &&
+	TOTAL=`flux module stats --type int --parse count content` &&
 	test $VALID -eq $TOTAL
 '
 

@@ -132,4 +132,132 @@ test_expect_success 'module: info fails on invalid module' '
 	! flux module info nosuchmodule
 '
 
+# N.B. avoid setting the actual debug bits - lets reserve LSB
+TESTMOD=connector-local
+
+test_expect_success 'flux module debug gets debug flags' '
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0x0"
+'
+test_expect_success 'flux module debug --setbit sets individual debug flags' '
+	flux module debug --setbit 0x10000 $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0x10000"
+'
+test_expect_success 'flux module debug --set replaces debug flags' '
+	flux module debug --set 0xff00 $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0xff00"
+'
+test_expect_success 'flux module debug --clearbit clears individual debug flags' '
+	flux module debug --clearbit 0x1000 $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0xef00"
+'
+test_expect_success 'flux module debug --clear clears debug flags' '
+	flux module debug --clear $TESTMOD &&
+	FLAGS=$(flux module debug $TESTMOD) &&
+	test "$FLAGS" = "0x0"
+'
+
+# test stats
+
+test_expect_success 'flux module stats gets comms statistics' '
+	flux module stats $TESTMOD >comms.stats &&
+	grep -q "#request (tx)" comms.stats &&
+	grep -q "#request (rx)" comms.stats &&
+	grep -q "#response (tx)" comms.stats &&
+	grep -q "#response (rx)" comms.stats &&
+	grep -q "#event (tx)" comms.stats &&
+	grep -q "#event (rx)" comms.stats &&
+	grep -q "#keepalive (tx)" comms.stats &&
+	grep -q "#keepalive (rx)" comms.stats
+'
+
+test_expect_success 'flux module stats --parse "#event (tx)" counts events' '
+	EVENT_TX=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	flux event pub xyz &&
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	test "$EVENT_TX" = $((${EVENT_TX2}-1))
+'
+
+test_expect_success 'flux module stats --clear works' '
+	flux event pub xyz &&
+	flux module stats --clear $TESTMOD
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	test "$EVENT_TX" = 0
+'
+
+test_expect_success 'flux module stats --clear-all works' '
+	flux event pub xyz &&
+	flux module stats --clear-all $TESTMOD
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	test "$EVENT_TX" = 0
+'
+
+test_expect_success 'flux module stats --scale works' '
+	flux event pub xyz &&
+	EVENT_TX=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse "#event (tx)" --scale=2 $TESTMOD) &&
+	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
+'
+
+test_expect_success 'flux module stats --rusage works' '
+	flux module stats --rusage $TESTMOD >rusage.stats &&
+	grep -q utime rusage.stats &&
+	grep -q stime rusage.stats &&
+	grep -q maxrss rusage.stats &&
+	grep -q ixrss rusage.stats &&
+	grep -q idrss rusage.stats &&
+	grep -q isrss rusage.stats &&
+	grep -q minflt rusage.stats &&
+	grep -q majflt rusage.stats &&
+	grep -q nswap rusage.stats &&
+	grep -q inblock rusage.stats &&
+	grep -q oublock rusage.stats &&
+	grep -q msgsnd rusage.stats &&
+	grep -q msgrcv rusage.stats &&
+	grep -q nsignals rusage.stats &&
+	grep -q nvcsw rusage.stats &&
+	grep -q nivcsw rusage.stats
+'
+
+test_expect_success 'flux module stats --rusage --parse maxrss works' '
+	RSS=$(flux module stats --rusage --parse maxrss $TESTMOD) &&
+	test "$RSS" -gt 0
+'
+
+# try to hit some error cases
+
+test_expect_success 'flux module with no arguments prints usage and fails' '
+	! flux module 2>noargs.help &&
+	grep -q Usage: noargs.help
+'
+
+test_expect_success 'flux module -h lists subcommands' '
+	! flux module -h 2>module.help &&
+	grep -q list module.help &&
+	grep -q remove module.help &&
+	grep -q load module.help &&
+	grep -q info module.help &&
+	grep -q stats module.help &&
+	grep -q debug module.help
+'
+
+test_expect_success 'flux module load "noexist" fails' '
+	! flux module load noexist 2>noexist.out &&
+	grep -q "not found" noexist.out
+'
+
+test_expect_success 'flux module detects bad nodeset' '
+	! flux module load -r smurf kvs 2>badns-load.out &&
+	grep -q "target nodeset" badns-load.out
+	! flux module remove -r smurf kvs 2>badns-remove.out &&
+	grep -q "target nodeset" badns-remove.out
+	! flux module list -r smurf 2>badns-list.out &&
+	grep -q "target nodeset" badns-list.out
+'
+
+
+
 test_done

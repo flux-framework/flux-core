@@ -180,6 +180,11 @@ if test "$enable_caliper" = "yes"; then
     AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
 fi
 
+##
+# Check for systemd
+##
+RRA_WITH_SYSTEMD_UNITDIR
+
 
 ##
 # Embedded libev
@@ -280,6 +285,7 @@ AC_CONFIG_FILES( \
   etc/Makefile \
   etc/flux-core.pc \
   etc/flux-pmi.pc \
+  etc/flux.service \
   doc/Makefile \
   doc/man1/Makefile \
   doc/man3/Makefile \

@@ -29,6 +29,8 @@
 #include <getopt.h>
 #include <dlfcn.h>
 #include <flux/core.h>
+#include <flux/optparse.h>
+#include <jansson.h>
 #include <czmq.h>
 #include <assert.h>
 
@@ -41,117 +43,165 @@
 
 const int max_idle = 99;
 
-typedef struct {
-    const char *nodeset;
-    int argc;
-    char **argv;
-} opt_t;
+int cmd_list (optparse_t *p, int argc, char **argv);
+int cmd_remove (optparse_t *p, int argc, char **argv);
+int cmd_load (optparse_t *p, int argc, char **argv);
+int cmd_info (optparse_t *p, int argc, char **argv);
+int cmd_stats (optparse_t *p, int argc, char **argv);
+int cmd_debug (optparse_t *p, int argc, char **argv);
 
-#define OPTIONS "+hr:x:"
-static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"rank",       required_argument,  0, 'r'},
-    {"exclude",    required_argument,  0, 'x'},
-    { 0, 0, 0, 0 },
-};
-
-void mod_lsmod (flux_t *h, opt_t opt);
-void mod_rmmod (flux_t *h, opt_t opt);
-void mod_insmod (flux_t *h, opt_t opt);
-void mod_info (flux_t *h, opt_t opt);
-
-typedef struct {
-    const char *name;
-    void (*fun)(flux_t *h, opt_t opt);
-} func_t;
-
-static func_t funcs[] = {
-    { "list",   &mod_lsmod},
-    { "remove", &mod_rmmod},
-    { "load",   &mod_insmod},
-    { "info",   &mod_info},
-};
-
-func_t *func_lookup (const char *name)
-{
-    int i;
-    for (i = 0; i < sizeof (funcs) / sizeof (funcs[0]); i++)
-        if (!strcmp (funcs[i].name, name))
-            return &funcs[i];
-    return NULL;
+#define RANK_OPTION { \
+    .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET", \
+    .usage = "Include NODESET in operation target", \
+}
+#define EXCLUDE_OPTION { \
+    .name = "exclude", .key = 'x', .has_arg = 1, .arginfo = "NODESET", \
+    .usage = "Exclude NODESET from operation target", \
 }
 
-void usage (void)
+static struct optparse_option list_opts[] =  {
+    RANK_OPTION,
+    EXCLUDE_OPTION,
+    OPTPARSE_TABLE_END
+};
+static struct optparse_option remove_opts[] =  {
+    RANK_OPTION,
+    EXCLUDE_OPTION,
+    OPTPARSE_TABLE_END
+};
+static struct optparse_option load_opts[] =  {
+    RANK_OPTION,
+    EXCLUDE_OPTION,
+    OPTPARSE_TABLE_END
+};
+static struct optparse_option stats_opts[] =  {
+    { .name = "parse", .key = 'p', .has_arg = 1, .arginfo = "OBJNAME",
+      .usage = "Parse object period-delimited object name",
+    },
+    { .name = "scale", .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Scale numeric JSON value by N",
+    },
+    { .name = "type", .key = 't', .has_arg = 1, .arginfo = "int|double",
+      .usage = "Convert JSON value to specified type",
+    },
+    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
+      .usage = "Target specified rank",
+    },
+    { .name = "rusage", .key = 'R', .has_arg = 0,
+      .usage = "Request rusage data instead of stats",
+    },
+    { .name = "clear", .key = 'c', .has_arg = 0,
+      .usage = "Clear stats on target rank",
+    },
+    { .name = "clear-all", .key = 'C', .has_arg = 0,
+      .usage = "Clear stats on all ranks",
+    },
+    OPTPARSE_TABLE_END
+};
+static struct optparse_option debug_opts[] = {
+    { .name = "clear",  .key = 'C',  .has_arg = 0,
+      .usage = "Set debug flags to 0", },
+    { .name = "set",  .key = 'S',  .has_arg = 1,
+      .usage = "Set debug flags to MASK", },
+    { .name = "setbit",  .key = 's',  .has_arg = 1,
+      .usage = "Set one debug flag to 1", },
+    { .name = "clearbit",  .key = 'c',  .has_arg = 1,
+      .usage = "Set one debug flag to 0", },
+    OPTPARSE_TABLE_END,
+};
+
+static struct optparse_subcommand subcommands[] = {
+    { "list",
+      "[OPTIONS] [module]",
+      "List loaded modules",
+      cmd_list,
+      0,
+      list_opts,
+    },
+    { "remove",
+      "[OPTIONS] module",
+      "Unload module",
+      cmd_remove,
+      0,
+      remove_opts,
+    },
+    { "load",
+      "[OPTIONS] module",
+      "Load module",
+      cmd_load,
+      0,
+      load_opts,
+    },
+    { "info",
+      "[OPTIONS] module",
+      "Display module info",
+      cmd_info,
+      0,
+      NULL
+    },
+    { "stats",
+      "[OPTIONS] module",
+      "Display stats on module",
+      cmd_stats,
+      0,
+      stats_opts,
+    },
+    { "debug",
+      "[OPTIONS] module",
+      "Get/set module debug flags",
+      cmd_debug,
+      0,
+      debug_opts,
+    },
+    OPTPARSE_SUBCMD_END
+};
+
+int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
 {
-    fprintf (stderr,
-"Usage: flux-module list   [OPTIONS]\n"
-"       flux-module info   [OPTIONS] module\n"
-"       flux-module load   [OPTIONS] module [arg ...]\n"
-"       flux-module remove [OPTIONS] module\n"
-"where OPTIONS are:\n"
-"       -r,--rank=NODESET     add ranks (default \"self\") \n"
-"       -x,--exclude=NODESET  exclude ranks\n"
-);
+    struct optparse_subcommand *s;
+    optparse_print_usage (p);
+    fprintf (stderr, "\n");
+    fprintf (stderr, "flux module subcommands:\n");
+    s = subcommands;
+    while (s->name) {
+        fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
+        s++;
+    }
     exit (1);
 }
 
 int main (int argc, char *argv[])
 {
-    flux_t *h = NULL;
-    int ch;
-    char *cmd;
-    func_t *f;
-    opt_t opt;
-    const char *rankopt = "self";
-    const char *excludeopt = NULL;
+    optparse_t *p;
+    char *cmdusage = "COMMAND [OPTIONS]";
+    int optindex;
+    int exitval;
 
     log_init ("flux-module");
 
-    memset (&opt, 0, sizeof (opt));
-    if (argc < 2)
-        usage ();
-    cmd = argv[1];
-    argc--;
-    argv++;
+    p = optparse_create ("flux-module");
 
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'r': /* --rank=NODESET */
-                rankopt = optarg;
-                break;
-            case 'x': /* --exclude=NODESET */
-                excludeopt = optarg;
-                break;
-            default:
-                usage ();
-                break;
-        }
-    }
-    opt.argc = argc - optind;
-    opt.argv = argv + optind;
+    if (optparse_set (p, OPTPARSE_USAGE, cmdusage) != OPTPARSE_SUCCESS)
+        log_msg_exit ("optparse_set (USAGE)");
 
-    if (!(f = func_lookup (cmd)))
-        log_msg_exit ("unknown function '%s'", cmd);
+    if (optparse_reg_subcommands (p, subcommands) != OPTPARSE_SUCCESS)
+        log_msg_exit ("optparse_reg_subcommands");
 
-    if (strcmp (cmd, "info") != 0) {
-        if (!(h = flux_open (NULL, 0)))
-            log_err_exit ("flux_open");
-        if (!(opt.nodeset = flux_get_nodeset (h, rankopt, excludeopt)))
-            log_err_exit ("--exclude/--rank");
-        if (strlen (opt.nodeset) == 0)
-            exit (0);
-    }
+    if (optparse_set (p, OPTPARSE_OPTION_CB, "help", usage) != OPTPARSE_SUCCESS)
+        log_msg_exit ("optparse_set() failed");
 
-    f->fun (h, opt);
+    if (optparse_set (p, OPTPARSE_PRINT_SUBCMDS, 0) != OPTPARSE_SUCCESS)
+        log_msg_exit ("optparse_set (PRINT_SUBCMDS)");
 
-    if (h)
-        flux_close (h);
+    if ((optindex = optparse_parse_args (p, argc, argv)) < 0)
+        exit (1);
 
+    if ((exitval = optparse_run_subcommand (p, argc, argv)) < 0)
+        exit (1);
+
+    optparse_destroy (p);
     log_fini ();
-    return 0;
+    return (exitval);
 }
 
 char *sha1 (const char *path)
@@ -194,15 +244,18 @@ void parse_modarg (const char *arg, char **name, char **path)
     *path = modpath;
 }
 
-void mod_info (flux_t *h, opt_t opt)
+int cmd_info (optparse_t *p, int argc, char **argv)
 {
     char *modpath = NULL;
     char *modname = NULL;
     char *digest = NULL;
+    int n;
 
-    if (opt.argc != 1)
-        usage ();
-    parse_modarg (opt.argv[0], &modname, &modpath);
+    if ((n = optparse_option_index (p)) != argc - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    parse_modarg (argv[n], &modname, &modpath);
     digest = sha1 (modpath);
     printf ("Module name:  %s\n", modname);
     printf ("Module path:  %s\n", modpath);
@@ -212,6 +265,21 @@ void mod_info (flux_t *h, opt_t opt)
     free (modpath);
     free (modname);
     free (digest);
+    return (0);
+}
+
+int parse_nodeset (flux_t *h, optparse_t *p, const char **nsp)
+{
+    const char *ns;
+
+    ns = flux_get_nodeset (h, optparse_get_str (p, "rank", "self"),
+                              optparse_get_str (p, "exclude", NULL));
+    if (!ns)
+        log_err_exit ("target nodeset");
+    if (strlen (ns) == 0)
+        return -1;
+    *nsp = ns;
+    return 0;
 }
 
 /* Derive name of module loading service from module name.
@@ -228,32 +296,42 @@ char *getservice (const char *modname)
     return service;
 }
 
-void mod_insmod (flux_t *h, opt_t opt)
+int cmd_load (optparse_t *p, int argc, char **argv)
 {
     char *modname;
     char *modpath;
     int errors = 0;
+    int n;
+    flux_t *h;
+    const char *ns;
+    flux_rpc_t *r = NULL;
 
-    if (opt.argc < 1)
-        usage ();
-    parse_modarg (opt.argv[0], &modname, &modpath);
-    opt.argv++;
-    opt.argc--;
+    if ((n = optparse_option_index (p)) == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    parse_modarg (argv[n++], &modname, &modpath);
 
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.insmod", service);
-    char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
+    char *json_str = flux_insmod_json_encode (modpath, argc - n, argv + n);
     assert (json_str != NULL);
-    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-    if (!r)
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (parse_nodeset (h, p, &ns) < 0)
+        goto done;
+    if (!(r = flux_rpc_multi (h, topic, json_str, ns, 0)))
         log_err_exit ("%s", topic);
     do {
-        uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get_nodeid (r, &nodeid) < 0
-                                    || flux_rpc_get (r, NULL) < 0) {
+        if (flux_rpc_get (r, NULL) < 0) {
+            uint32_t nodeid = FLUX_NODEID_ANY;
+            int saved_errno = errno;
+            (void)flux_rpc_get_nodeid (r, &nodeid);
+            errno = saved_errno;
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
                 log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
-                     topic, nodeid, modname);
+                         topic, nodeid, modname);
             else if (nodeid != FLUX_NODEID_ANY)
                 log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
@@ -261,42 +339,60 @@ void mod_insmod (flux_t *h, opt_t opt)
             errors++;
         }
     } while (flux_rpc_next (r) == 0);
+done:
     flux_rpc_destroy (r);
     free (topic);
     free (service);
     free (json_str);
     free (modpath);
     free (modname);
-    if (errors)
-        exit (1);
+    flux_close (h);
+    return (errors ? 1 : 0);
 }
 
-void mod_rmmod (flux_t *h, opt_t opt)
+int cmd_remove (optparse_t *p, int argc, char **argv)
 {
-    char *modname = NULL;
+    char *modname;
+    const char *ns;
+    flux_t *h;
+    flux_rpc_t *r = NULL;
+    int n;
 
-    if (opt.argc != 1)
-        usage ();
-    modname = opt.argv[0];
+    if ((n = optparse_option_index (p)) != argc - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    modname = argv[n++];
 
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.rmmod", service);
     char *json_str = flux_rmmod_json_encode (modname);
     assert (json_str != NULL);
-    flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
-    if (!r)
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (parse_nodeset (h, p, &ns) < 0)
+        goto done;
+    if (!(r = flux_rpc_multi (h, topic, json_str, ns, 0)))
         log_err_exit ("%s %s", topic, modname);
     do {
-        uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get_nodeid (r, &nodeid) < 0 || flux_rpc_get (r, NULL) < 0)
+        if (flux_rpc_get (r, NULL) < 0) {
+            uint32_t nodeid = FLUX_NODEID_ANY;
+            int saved_errno = errno;
+            (void)flux_rpc_get_nodeid (r, &nodeid);
+            errno = saved_errno;
             log_err ("%s[%d] %s",
                  topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
                  modname);
+        }
     } while (flux_rpc_next (r) == 0);
+done:
     flux_rpc_destroy (r);
     free (topic);
     free (service);
     free (json_str);
+    flux_close (h);
+    return (0);
 }
 
 int lsmod_print_cb (const char *name, int size, const char *digest, int idle,
@@ -425,22 +521,33 @@ done:
     return rc;
 }
 
-void mod_lsmod (flux_t *h, opt_t opt)
+int cmd_list (optparse_t *p, int argc, char **argv)
 {
     char *service = "cmb";
-
-    if (opt.argc > 1)
-        usage ();
-    if (opt.argc == 1)
-        service = opt.argv[0];
-    printf ("%-20s %-7s %-7s %4s  %c  %s\n",
-            "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
+    char *topic = NULL;
+    const char *ns;
+    flux_rpc_t *r = NULL;
+    flux_t *h;
+    int n;
     zhash_t *mods = zhash_new ();
+
     if (!mods)
         oom ();
-    char *topic = xasprintf ("%s.lsmod", service);
-    flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
-    if (!r)
+    if ((n = optparse_option_index (p)) < argc - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (n < argc)
+        service = argv[n++];
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (parse_nodeset (h, p, &ns) < 0)
+        goto done;
+
+    printf ("%-20s %-7s %-7s %4s  %c  %s\n",
+            "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
+    topic = xasprintf ("%s.lsmod", service);
+    if (!(r = flux_rpc_multi (h, topic, NULL, ns, 0)))
         log_err_exit ("%s", topic);
     do {
         const char *json_str;
@@ -454,12 +561,156 @@ void mod_lsmod (flux_t *h, opt_t opt)
                 log_err ("%s", topic);
         }
     } while (flux_rpc_next (r) == 0);
+done:
     flux_rpc_destroy (r);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
     zhash_destroy (&mods);
     free (topic);
+    flux_close (h);
+    return (0);
+}
+
+static void parse_json (optparse_t *p, const char *json_str)
+{
+    json_t *obj, *o;
+    const char *objname, *typestr;
+    double scale;
+
+    if (!(obj = json_loads (json_str, 0, NULL)))
+        log_msg_exit ("error parsing JSON response");
+
+    /* If --parse OBJNAME was provided, walk to that
+     * portion of the returned object.
+     */
+    o = obj;
+    if ((objname = optparse_get_str (p, "parse", NULL))) {
+        char *cpy = xstrdup (objname);
+        char *name, *saveptr = NULL, *a1 = cpy;
+        while ((name = strtok_r (a1, ".", &saveptr))) {
+            if (!(o = json_object_get (o, name)))
+                log_msg_exit ("`%s' not found in response", objname);
+            a1 = NULL;
+        }
+        free (cpy);
+    }
+
+    /* Display the resulting object/value, optionally forcing
+     * the type to int or dobule, and optionally scaling the result.
+     */
+    scale = optparse_get_double (p, "scale", 1.0);
+    typestr = optparse_get_str (p, "type", NULL);
+    if (json_typeof (o) == JSON_INTEGER || (typestr && !strcmp (typestr, "int"))) {
+        double d = json_number_value (o);
+        printf ("%d\n", (int)(d * scale));
+    } else if (json_typeof (o) == JSON_REAL || (typestr && !strcmp (typestr, "double"))) {
+        double d = json_number_value (o);
+        printf ("%lf\n", d * scale);
+    } else {
+        char *s;
+        s = json_dumps (o, JSON_INDENT(1) | JSON_ENCODE_ANY);
+        printf ("%s\n", s ? s : "Error encoding JSON");
+        free (s);
+    }
+
+    json_decref (obj);
+}
+
+int cmd_stats (optparse_t *p, int argc, char **argv)
+{
+    int n;
+    char *topic = NULL;
+    char *service;
+    uint32_t nodeid;
+    const char *json_str;
+    flux_rpc_t *r = NULL;
+    flux_t *h;
+
+    if ((n = optparse_option_index (p)) < argc - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    service = n < argc ? argv[n++] : "cmb";
+    nodeid = optparse_get_int (p, "rank", FLUX_NODEID_ANY);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (optparse_hasopt (p, "clear")) {
+        topic = xasprintf ("%s.stats.clear", service);
+        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+            log_err_exit ("%s", topic);
+        if (flux_rpc_get (r, NULL) < 0)
+            log_err_exit ("%s", topic);
+    } else if (optparse_hasopt (p, "clear-all")) {
+        topic = xasprintf ("%s.stats.clear", service);
+        flux_msg_t *msg = flux_event_encode (topic, NULL);
+        if (!msg)
+            log_err_exit ("creating event");
+        if (flux_send (h, msg, 0) < 0)
+            log_err_exit ("sending event");
+        flux_msg_destroy (msg);
+    } else if (optparse_hasopt (p, "rusage")) {
+        topic = xasprintf ("%s.rusage", service);
+        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+            log_err_exit ("%s", topic);
+        if (flux_rpc_get (r, &json_str) < 0)
+            log_err_exit ("%s", topic);
+        parse_json (p, json_str);
+    } else {
+        topic = xasprintf ("%s.stats.get", service);
+        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+            log_err_exit ("%s", topic);
+        if (flux_rpc_get (r, &json_str) < 0)
+            log_err_exit ("%s", topic);
+        parse_json (p, json_str);
+    }
+    free (topic);
+    flux_rpc_destroy (r);
+    flux_close (h);
+    return (0);
+}
+
+int cmd_debug (optparse_t *p, int argc, char **argv)
+{
+    int n;
+    flux_t *h;
+    char *topic = NULL;
+    const char *op = "setbit";
+    int flags = 0;
+    flux_rpc_t *rpc = NULL;
+
+    if ((n = optparse_option_index (p)) != argc - 1)
+        log_msg_exit ("flux-debug requires service argument");
+    topic = xasprintf ("%s.debug", argv[n]);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (optparse_hasopt (p, "clear")) {
+        op = "clr";
+    }
+    else if (optparse_hasopt (p, "set")) {
+        op = "set";
+        flags = strtoul (optparse_get_str (p, "set", NULL), NULL, 0);
+    }
+    else if (optparse_hasopt (p, "clearbit")) {
+        op = "clrbit";
+        flags = strtoul (optparse_get_str (p, "clearbit", NULL), NULL, 0);
+    }
+    else if (optparse_hasopt (p, "setbit")) {
+        op = "setbit";
+        flags = strtoul (optparse_get_str (p, "setbit", NULL), NULL, 0);
+    }
+    if (!(rpc = flux_rpcf (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
+                           "op", op, "flags", flags)))
+        log_err_exit ("%s", topic);
+    if (flux_rpc_getf (rpc, "{s:i}", "flags", &flags) < 0)
+        log_err_exit ("%s", topic);
+    printf ("0x%x\n", flags);
+    flux_close (h);
+    free (topic);
+    return (0);
 }
 
 /*
- * vi:tabstop=4 shiftwidth=4 expandtab
+ * vi: ts=4 sw=4 expandtab
  */

@@ -180,7 +180,6 @@ static void broker_add_services (broker_ctx_t *ctx);
 static void load_modules (broker_ctx_t *ctx, const char *default_modules);
 
 static void update_proctitle (broker_ctx_t *ctx);
-static void update_pidfile (broker_ctx_t *ctx);
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *state, void *arg);
 static void runlevel_io_cb (runlevel_t *r, const char *name,
@@ -556,7 +555,6 @@ int main (int argc, char *argv[])
     }
 
     update_proctitle (&ctx);
-    update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
         const char *rc1, *rc3, *pmi, *uri;
@@ -804,25 +802,6 @@ static void update_proctitle (broker_ctx_t *ctx)
     if (ctx->proctitle)
         free (ctx->proctitle);
     ctx->proctitle = s;
-}
-
-static void update_pidfile (broker_ctx_t *ctx)
-{
-    const char *rundir;
-    char *pidfile;
-    FILE *f;
-
-    if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0)
-        log_msg_exit ("broker.rundir attribute is not set");
-    pidfile = xasprintf ("%s/broker.pid", rundir);
-    if (!(f = fopen (pidfile, "w+")))
-        log_err_exit ("%s", pidfile);
-    if (fprintf (f, "%u", ctx->pid) < 0)
-        log_err_exit ("%s", pidfile);
-    if (fclose (f) < 0)
-        log_err_exit ("%s", pidfile);
-    cleanup_push_string (cleanup_file, pidfile);
-    free (pidfile);
 }
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.

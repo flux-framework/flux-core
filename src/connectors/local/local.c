@@ -169,14 +169,12 @@ static int env_getint (char *name, int dflt)
     return s ? strtol (s, NULL, 10) : dflt;
 }
 
-/* Path is interpreted as the directory containing the unix domain socket
- * and broker pid.
+/* Path is interpreted as the directory containing the unix domain socket.
  */
 flux_t *connector_init (const char *path, int flags)
 {
     local_ctx_t *c = NULL;
     struct sockaddr_un addr;
-    char pidfile[PATH_MAX + 1];
     char sockfile[PATH_MAX + 1];
     int n, count;
 
@@ -189,12 +187,6 @@ flux_t *connector_init (const char *path, int flags)
         errno = EINVAL;
         goto error;
     }
-    n = snprintf (pidfile, sizeof (pidfile), "%s/broker.pid", path);
-    if (n >= sizeof (pidfile)) {
-        errno = EINVAL;
-        goto error;
-    }
-
     if (!(c = malloc (sizeof (*c)))) {
         errno = ENOMEM;
         goto error;
@@ -216,6 +208,20 @@ flux_t *connector_init (const char *path, int flags)
                      sizeof (struct sockaddr_un)) == 0)
             break;
         usleep (100*1000);
+    }
+    /* read 1 byte indicating success or failure of auth */
+    unsigned char e;
+    int rc;
+    rc = read (c->fd, &e, 1);
+    if (rc < 0)
+        goto error;
+    if (rc == 0) {
+        errno = ECONNRESET;
+        goto error;
+    }
+    if (e != 0) {
+        errno = e;
+        goto error;
     }
     flux_msg_iobuf_init (&c->outbuf);
     flux_msg_iobuf_init (&c->inbuf);

@@ -1,3 +1,7 @@
+#if HAVE_SYSTEMD
+systemdsystemunit_SCRIPTS = flux.service
+#endif
+
 noinst_DATA = \
 	flux/curve
 
@@ -30,4 +34,5 @@ pkgconfig_DATA = flux-core.pc flux-pmi.pc
 endif
 
 EXTRA_DIST = \
-	gen-cmdhelp.pl
+	gen-cmdhelp.pl \
+	flux.service

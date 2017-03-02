@@ -683,11 +683,17 @@ static int check_cred (proxy_ctx_t *ctx, int fd)
     if (ucred.uid != ctx->session_owner) {
         flux_log (ctx->h, LOG_ERR, "connect by uid=%d pid=%d denied",
                   ucred.uid, (int)ucred.pid);
+        errno = EPERM;
         goto done;
     }
     rc = 0;
 done:
     return rc;
+}
+
+static int send_auth_response (int fd, unsigned char e)
+{
+    return write (fd, &e, 1);
 }
 
 /* Accept a connection from new client.
@@ -708,9 +714,11 @@ static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
             goto done;
         }
         if (check_cred (ctx, cfd) < 0) {
+            send_auth_response (cfd, errno);
             close (cfd);
             goto done;
         }
+        send_auth_response (cfd, 0);
         if (!(c = client_create (ctx, cfd, cfd))) {
             close (cfd);
             goto done;
@@ -894,7 +902,6 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];
-    char pidfile[PATH_MAX + 1];
     const char *job;
     const char *optarg;
     int optindex;
@@ -953,16 +960,6 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         if (!mkdtemp (workpath))
             log_err_exit ("error creating proxy socket directory");
         cleanup_push_string(cleanup_directory, workpath);
-
-        /* Write proxy pid to broker.pid file.
-         * Local connector expects this.
-         */
-        n = snprintf (pidfile, sizeof (pidfile), "%s/broker.pid", workpath);
-        assert (n < sizeof (pidfile));
-        FILE *f = fopen (pidfile, "w");
-        if (!f || fprintf (f, "%d", getpid ()) < 0 || fclose (f) == EOF)
-            log_err_exit ("%s", pidfile);
-        cleanup_push_string(cleanup_file, pidfile);
 
         /* Listen on socket
          */
