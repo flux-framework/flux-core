@@ -71,7 +71,6 @@ fluxcmd_PROGRAMS = \
 	flux-event \
 	flux-module \
 	flux-comms \
-	flux-comms-stats \
 	flux-kvs \
 	flux-start \
 	flux-jstat

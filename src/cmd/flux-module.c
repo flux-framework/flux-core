@@ -30,6 +30,7 @@
 #include <dlfcn.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
+#include <jansson.h>
 #include <czmq.h>
 #include <assert.h>
 
@@ -46,6 +47,7 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
+int cmd_stats (optparse_t *p, int argc, char **argv);
 
 #define RANK_OPTION { \
     .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODESET", \
@@ -71,10 +73,34 @@ static struct optparse_option load_opts[] =  {
     EXCLUDE_OPTION,
     OPTPARSE_TABLE_END
 };
+static struct optparse_option stats_opts[] =  {
+    { .name = "parse", .key = 'p', .has_arg = 1, .arginfo = "OBJNAME",
+      .usage = "Parse object period-delimited object name",
+    },
+    { .name = "scale", .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Scale numeric JSON value by N",
+    },
+    { .name = "type", .key = 't', .has_arg = 1, .arginfo = "int|double",
+      .usage = "Convert JSON value to specified type",
+    },
+    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
+      .usage = "Target specified rank",
+    },
+    { .name = "rusage", .key = 'R', .has_arg = 0,
+      .usage = "Request rusage data instead of stats",
+    },
+    { .name = "clear", .key = 'c', .has_arg = 0,
+      .usage = "Clear stats on target rank",
+    },
+    { .name = "clear-all", .key = 'C', .has_arg = 0,
+      .usage = "Clear stats on all ranks",
+    },
+    OPTPARSE_TABLE_END
+};
 
 static struct optparse_subcommand subcommands[] = {
     { "list",
-      "[OPTIONS]",
+      "[OPTIONS] [module]",
       "List loaded modules",
       cmd_list,
       0,
@@ -100,6 +126,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_info,
       0,
       NULL
+    },
+    { "stats",
+      "[OPTIONS] module",
+      "Display stats on module",
+      cmd_stats,
+      0,
+      stats_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -514,6 +547,106 @@ done:
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
     zhash_destroy (&mods);
     free (topic);
+    flux_close (h);
+    return (0);
+}
+
+static void parse_json (optparse_t *p, const char *json_str)
+{
+    json_t *obj, *o;
+    const char *objname, *typestr;
+    double scale;
+
+    if (!(obj = json_loads (json_str, 0, NULL)))
+        log_msg_exit ("error parsing JSON response");
+
+    /* If --parse OBJNAME was provided, walk to that
+     * portion of the returned object.
+     */
+    o = obj;
+    if ((objname = optparse_get_str (p, "parse", NULL))) {
+        char *cpy = xstrdup (objname);
+        char *name, *saveptr = NULL, *a1 = cpy;
+        while ((name = strtok_r (a1, ".", &saveptr))) {
+            if (!(o = json_object_get (o, name)))
+                log_msg_exit ("`%s' not found in response", objname);
+            a1 = NULL;
+        }
+        free (cpy);
+    }
+
+    /* Display the resulting object/value, optionally forcing
+     * the type to int or dobule, and optionally scaling the result.
+     */
+    scale = optparse_get_double (p, "scale", 1.0);
+    typestr = optparse_get_str (p, "type", NULL);
+    if (json_typeof (o) == JSON_INTEGER || (typestr && !strcmp (typestr, "int"))) {
+        double d = json_number_value (o);
+        printf ("%d\n", (int)(d * scale));
+    } else if (json_typeof (o) == JSON_REAL || (typestr && !strcmp (typestr, "double"))) {
+        double d = json_number_value (o);
+        printf ("%lf\n", d * scale);
+    } else {
+        char *s;
+        s = json_dumps (o, JSON_INDENT(1) | JSON_ENCODE_ANY);
+        printf ("%s\n", s ? s : "Error encoding JSON");
+        free (s);
+    }
+
+    json_decref (obj);
+}
+
+int cmd_stats (optparse_t *p, int argc, char **argv)
+{
+    int n;
+    char *topic = NULL;
+    char *service;
+    uint32_t nodeid;
+    const char *json_str;
+    flux_rpc_t *r = NULL;
+    flux_t *h;
+
+    if ((n = optparse_option_index (p)) < argc - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    service = n < argc ? argv[n++] : "cmb";
+    nodeid = optparse_get_int (p, "rank", FLUX_NODEID_ANY);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (optparse_hasopt (p, "clear")) {
+        topic = xasprintf ("%s.stats.clear", service);
+        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+            log_err_exit ("%s", topic);
+        if (flux_rpc_get (r, NULL) < 0)
+            log_err_exit ("%s", topic);
+    } else if (optparse_hasopt (p, "clear-all")) {
+        topic = xasprintf ("%s.stats.clear", service);
+        flux_msg_t *msg = flux_event_encode (topic, NULL);
+        if (!msg)
+            log_err_exit ("creating event");
+        if (flux_send (h, msg, 0) < 0)
+            log_err_exit ("sending event");
+        flux_msg_destroy (msg);
+    } else if (optparse_hasopt (p, "rusage")) {
+        topic = xasprintf ("%s.rusage", service);
+        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+            log_err_exit ("%s", topic);
+        if (flux_rpc_get (r, &json_str) < 0)
+            log_err_exit ("%s", topic);
+        parse_json (p, json_str);
+    } else {
+        topic = xasprintf ("%s.stats.get", service);
+        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+            log_err_exit ("%s", topic);
+        if (flux_rpc_get (r, &json_str) < 0)
+            log_err_exit ("%s", topic);
+        parse_json (p, json_str);
+    }
+    free (topic);
+    flux_rpc_destroy (r);
     flux_close (h);
     return (0);
 }

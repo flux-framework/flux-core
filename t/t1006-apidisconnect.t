@@ -12,7 +12,7 @@ test_under_flux ${SIZE} kvs
 check_kvs_watchers() {
 	local i n
 	for i in `seq 1 $2`; do
-	    n=`flux comms-stats --parse "#watchers" kvs`
+	    n=`flux module stats --parse "#watchers" kvs`
 	    echo "Try $i: $n"
 	    test $n -eq $1 && return 0
 	    sleep 1
@@ -22,7 +22,7 @@ check_kvs_watchers() {
 
 
 test_expect_success 'kvs watcher gets disconnected on client exit' '
-	before_watchers=`flux comms-stats --parse "#watchers" kvs` &&
+	before_watchers=`flux module stats --parse "#watchers" kvs` &&
 	echo "waiters before test: $before_watchers" &&
 	test_expect_code 142 run_timeout 1 flux kvs watch noexist &&
 	check_kvs_watchers $before_watchers 3
