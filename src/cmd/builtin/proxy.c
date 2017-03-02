@@ -902,7 +902,6 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];
-    char pidfile[PATH_MAX + 1];
     const char *job;
     const char *optarg;
     int optindex;
@@ -961,16 +960,6 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         if (!mkdtemp (workpath))
             log_err_exit ("error creating proxy socket directory");
         cleanup_push_string(cleanup_directory, workpath);
-
-        /* Write proxy pid to broker.pid file.
-         * Local connector expects this.
-         */
-        n = snprintf (pidfile, sizeof (pidfile), "%s/broker.pid", workpath);
-        assert (n < sizeof (pidfile));
-        FILE *f = fopen (pidfile, "w");
-        if (!f || fprintf (f, "%d", getpid ()) < 0 || fclose (f) == EOF)
-            log_err_exit ("%s", pidfile);
-        cleanup_push_string(cleanup_file, pidfile);
 
         /* Listen on socket
          */
