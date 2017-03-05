@@ -196,7 +196,7 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
     }
     if (ucred.uid == instance_owner) {
         lookup_rolemask = FLUX_ROLE_OWNER;
-        goto success;
+        goto success_nolog;
     }
     if (lookup_userdb (h, ucred.uid, &lookup_rolemask) < 0) {
         flux_log_error (h, "%s: userdb lookup uid=%d pid=%d",
@@ -209,11 +209,11 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
         errno = EPERM;
         goto error;
     }
-success:
-    *userid = ucred.uid;
-    *rolemask = lookup_rolemask;
     flux_log (h, LOG_INFO, "%s: uid=%d pid=%d allowed rolemask=0x%x",
               __FUNCTION__, ucred.uid, ucred.pid, lookup_rolemask);
+success_nolog:
+    *userid = ucred.uid;
+    *rolemask = lookup_rolemask;
     return 0;
 error:
     return -1;
