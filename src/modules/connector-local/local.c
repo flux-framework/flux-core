@@ -46,6 +46,10 @@
 
 #include "src/common/libutil/cleanup.h"
 
+enum {
+    DEBUG_AUTHFAIL_ONESHOT = 1,
+};
+
 
 #define LISTEN_BACKLOG      5
 
@@ -187,10 +191,10 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
         goto error;
     }
     int *debug_flags = flux_aux_get (h, "flux::debug_flags");
-    if (debug_flags && (*debug_flags & 1)) {
+    if (debug_flags && (*debug_flags & DEBUG_AUTHFAIL_ONESHOT)) {
         flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied by debug flag",
                   ucred.uid, (int)ucred.pid);
-        *debug_flags &= ~1; // one shot
+        *debug_flags &= ~DEBUG_AUTHFAIL_ONESHOT;
         errno = EPERM;
         goto error;
     }
