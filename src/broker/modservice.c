@@ -49,6 +49,7 @@
 
 #include "module.h"
 #include "modservice.h"
+#include "ping.h"
 
 typedef struct {
     flux_t *h;
@@ -83,41 +84,6 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
         flux_aux_set (h, "flux::modservice", ctx, freectx);
     }
     return ctx;
-}
-
-
-/* Route string will not include the endpoints.
- */
-static void ping_cb (flux_t *h, flux_msg_handler_t *w,
-                     const flux_msg_t *msg, void *arg)
-{
-    module_t *p = arg;
-    const char *json_str;
-    json_object *o = NULL;
-    char *route = NULL;
-    char *route_plus_uuid = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(route = flux_msg_get_route_string (msg)))
-        goto done;
-    route_plus_uuid = xasprintf ("%s!%.5s", route, module_get_uuid (p));
-    Jadd_str (o, "route", route_plus_uuid);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                                rc < 0 ? NULL : Jtostr (o)) < 0)
-        FLUX_LOG_ERROR (h);
-    Jput (o);
-    if (route_plus_uuid)
-        free (route_plus_uuid);
-    if (route)
-        free (route);
 }
 
 static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
@@ -278,11 +244,13 @@ void modservice_register (flux_t *h, module_t *p)
     flux_reactor_t *r = flux_get_reactor (h);
 
     register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER);
-    register_request (ctx, "ping", ping_cb, FLUX_ROLE_ALL);
     register_request (ctx, "stats.get", stats_get_cb, FLUX_ROLE_ALL);
     register_request (ctx, "stats.clear", stats_clear_request_cb, FLUX_ROLE_OWNER);
     register_request (ctx, "rusage", rusage_cb, FLUX_ROLE_ALL);
     register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER);
+
+    if (ping_initialize (h, module_get_name (ctx->p)) < 0)
+        log_err_exit ("ping_initialize");
 
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
 

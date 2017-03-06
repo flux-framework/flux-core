@@ -49,6 +49,7 @@ struct ping_ctx {
     bool batch;         /* begin receiving only after count sent */
     flux_t *h;
     flux_reactor_t *reactor;
+    bool userid;        /* include userid/rolemask in output */
 };
 
 struct ping_data {
@@ -73,6 +74,9 @@ static struct optparse_option cmdopts[] = {
     },
     { .name = "batch",    .key = 'b', .has_arg = 0,
       .usage = "Begin processing responses after all requests are sent",
+    },
+    { .name = "userid",   .key = 'u', .has_arg = 0,
+      .usage = "Include userid and rolemask in ping output",
     },
     OPTPARSE_TABLE_END
 };
@@ -100,13 +104,16 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     int seq;
     struct ping_data *pdata = flux_rpc_aux_get (rpc);
     tstat_t *tstat = pdata->tstat;
+    uint32_t rolemask, userid;
 
-    if (flux_rpc_getf (rpc, "{ s:i s:I s:I s:s s:s !}",
+    if (flux_rpc_getf (rpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
                        "seq", &seq,
                        "time.tv_sec", &sec,
                        "time.tv_nsec", &nsec,
                        "pad", &pad,
-                       "route", &route) < 0) {
+                       "route", &route,
+                       "userid", &userid,
+                       "rolemask", &rolemask) < 0) {
         log_err ("%s!%s", ctx->rank, ctx->topic);
         goto done;
     }
@@ -137,10 +144,15 @@ done:
                         tstat_max (tstat), tstat_stddev (tstat));
             } else {
                 char s[16] = {0};
+                char u[32] = {0};
                 if (strcmp (ctx->rank, "any"))
                     snprintf (s, sizeof (s), "%s!", ctx->rank);
-                printf ("%s%s pad=%zu seq=%d time=%0.3f ms (%s)\n",
-                        s, ctx->topic, strlen (ctx->pad), pdata->seq,
+                if (ctx->userid)
+                    snprintf (u, sizeof (u),
+                              " userid=%" PRIu32 " rolemask=0x%" PRIx32,
+                              userid, rolemask);
+                printf ("%s%s pad=%zu%s seq=%d time=%0.3f ms (%s)\n",
+                        s, ctx->topic, strlen (ctx->pad), u, pdata->seq,
                         tstat_mean (tstat), pdata->route);
             }
         }
@@ -225,6 +237,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("count must be >= 0");
 
     ctx.batch = optparse_hasopt (opts, "batch");
+    ctx.userid = optparse_hasopt (opts, "userid");
 
     if (ctx.batch && ctx.count == 0)
         log_msg_exit ("--batch should only be used with --count");
