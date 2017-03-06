@@ -210,6 +210,7 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
     if (lookup_userdb (h, ucred.uid, &lookup_rolemask) < 0) {
         flux_log_error (h, "%s: userdb lookup uid=%d pid=%d",
                         __FUNCTION__, ucred.uid, ucred.pid);
+        errno = EPERM;
         goto error;
     }
     if (lookup_rolemask == FLUX_ROLE_NONE) {
