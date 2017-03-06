@@ -306,6 +306,7 @@ flux_t *flux_open (const char *uri, int flags)
     char *scheme = NULL;
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
+    const char *s;
     flux_t *h = NULL;
 
     if (!uri)
@@ -337,6 +338,18 @@ flux_t *flux_open (const char *uri, int flags)
 #if HAVE_CALIPER
     profiling_context_init(&h->prof);
 #endif
+    if ((s = getenv ("FLUX_HANDLE_USERID"))) {
+        uint32_t userid = strtoul (s, NULL, 10);
+        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid,
+                                                      sizeof (userid)) < 0)
+            goto done;
+    }
+    if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
+        uint32_t rolemask = strtoul (s, NULL, 0);
+        if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask,
+                                                        sizeof (rolemask)) < 0)
+            goto done;
+    }
 done:
     free (scheme);
     free (default_uri);
