@@ -47,7 +47,8 @@
 #include "src/common/libutil/cleanup.h"
 
 enum {
-    DEBUG_AUTHFAIL_ONESHOT = 1,
+    DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
+    DEBUG_USERDB_ONESHOT = 2,   /* force userdb lookup of instance owner */
 };
 
 
@@ -198,9 +199,13 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
         errno = EPERM;
         goto error;
     }
-    if (ucred.uid == instance_owner) {
-        lookup_rolemask = FLUX_ROLE_OWNER;
-        goto success_nolog;
+    if (debug_flags && (*debug_flags & DEBUG_USERDB_ONESHOT)) {
+        *debug_flags &= ~DEBUG_USERDB_ONESHOT;
+    } else {
+        if (ucred.uid == instance_owner) {
+            lookup_rolemask = FLUX_ROLE_OWNER;
+            goto success_nolog;
+        }
     }
     if (lookup_userdb (h, ucred.uid, &lookup_rolemask) < 0) {
         flux_log_error (h, "%s: userdb lookup uid=%d pid=%d",
