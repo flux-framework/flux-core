@@ -32,7 +32,6 @@
 #include <czmq.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 #include "sequence.h"
 
 typedef struct {
@@ -132,59 +131,58 @@ static int seq_cmp_and_set (seqhash_t *s, const char *name,
     return (0);
 }
 
-static int handle_seq_destroy (seqhash_t *s, json_object *in,
-			       json_object **outp)
+static int handle_seq_destroy (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
 {
     const char *name;
-    if (!Jget_str (in, "name", &name)) {
-        errno = EPROTO;
+
+    if (flux_request_decodef (msg, NULL, "{ s:s }", "name", &name) < 0)
         return (-1);
-    }
     if (seq_destroy (s, name) < 0)
         return (-1);
-    *outp = Jnew ();
-    Jadd_str (*outp, "name", name);
-    Jadd_bool (*outp, "destroyed", true);
-    return (0);
+    return flux_respondf (h, msg, "{ s:s s:b }",
+                          "name", name,
+                          "destroyed", true);
 }
 
-static int handle_seq_set (seqhash_t *s, json_object *in, json_object **outp)
+static int handle_seq_set (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
 {
     const char *name;
     int64_t old, v;
-    if (!Jget_str (in, "name", &name)
-        || !Jget_int64 (in, "value", &v)) {
-        errno = EPROTO;
-        return (-1);
-    }
 
-    if (Jget_int64 (in, "oldvalue", &old)
+    if (flux_request_decodef (msg, NULL, "{ s:s s:I }",
+                              "name", &name,
+                              "value", &v) < 0)
+        return (-1);
+
+    if (!flux_request_decodef (msg, NULL, "{ s:I }", "oldvalue", &old)
         && seq_cmp_and_set (s, name, old, v) < 0)
         return (-1);
     else if (seq_set (s, name, v) < 0)
         return (-1);
 
-    *outp = Jnew ();
-    Jadd_str (*outp, "name", name);
-    Jadd_bool (*outp, "set", true);
-    Jadd_int64 (*outp, "value", v);
+    if (flux_respondf (h, msg, "{ s:s s:b s:I }",
+                       "name", name,
+                       "set", true,
+                       "value", v) < 0)
+        return (-1);
+
     return (0);
 }
 
-static int handle_seq_fetch (seqhash_t *s, json_object *in, json_object **outp)
+static int handle_seq_fetch (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
 {
     const char *name;
-    bool create = false;
+    int create = false;
     bool created = false;
     int64_t v, pre, post, *valp;
 
-    if (!Jget_str (in, "name", &name)
-        || !Jget_bool (in, "create", &create)
-        || !Jget_int64 (in, "preincrement", &pre)
-        || !Jget_int64 (in, "postincrement", &post)) {
-        errno = EPROTO;
+    if (flux_request_decodef (msg, NULL, "{ s:s s:b s:I s:I }",
+                              "name", &name,
+                              "create", &create,
+                              "preincrement", &pre,
+                              "postincrement", &post) < 0)
         return (-1);
-    }
+
     if (seq_fetch_and_add (s, name, pre, post, &v) < 0) {
         if (!create || (errno != ENOENT))
             return (-1);
@@ -197,52 +195,40 @@ static int handle_seq_fetch (seqhash_t *s, json_object *in, json_object **outp)
         created = true;
     }
 
-    *outp = Jnew ();
-    Jadd_str (*outp, "name", name);
-    Jadd_int64 (*outp, "value", v);
     if (create && created)
-        Jadd_bool (*outp, "created", true);
-    return (0);
-}
+        return flux_respondf (h, msg, "{ s:s s:I s:b }",
+                              "name", name,
+                              "value", v,
+                              "created", true);
 
-static int sequence_request_handler (seqhash_t *s, const flux_msg_t *msg,
-			                         json_object **outp)
-{
-    const char *json_str, *topic;
-    json_object *in = NULL;
-    int rc = -1;
-
-    *outp = NULL;
-    if (flux_request_decode (msg, &topic, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-
-    if (strcmp (topic, "seq.fetch") == 0)
-        rc = handle_seq_fetch (s, in, outp);
-    else if (strcmp (topic, "seq.set") == 0)
-        rc = handle_seq_set (s, in, outp);
-    else if (strcmp (topic, "seq.destroy") == 0)
-        rc = handle_seq_destroy (s, in, outp);
-    else
-        errno = ENOSYS;
-done:
-    Jput (in);
-    return (rc);
+    return flux_respondf (h, msg, "{ s:s s:I }",
+                          "name", name,
+                          "value", v);
 }
 
 static void sequence_request_cb (flux_t *h, flux_msg_handler_t *w,
                                  const flux_msg_t *msg, void *arg)
 {
     seqhash_t *seq = arg;
-    json_object *out = NULL;
-    int rc = sequence_request_handler (seq, msg, &out);
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
-        flux_log_error (h, "seq: flux_respond");
-    if (out)
-        Jput (out);
+    const char *topic;
+    int rc = -1;
+
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        goto done;
+
+    if (strcmp (topic, "seq.fetch") == 0)
+        rc = handle_seq_fetch (h, seq, msg);
+    else if (strcmp (topic, "seq.set") == 0)
+        rc = handle_seq_set (h, seq, msg);
+    else if (strcmp (topic, "seq.destroy") == 0)
+        rc = handle_seq_destroy (h, seq, msg);
+    else
+        errno = ENOSYS;
+done:
+    if (rc < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", topic);
+    }
 }
 
 static struct flux_msg_handler_spec handlers[] = {
