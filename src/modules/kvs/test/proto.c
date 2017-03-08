@@ -140,22 +140,6 @@ void test_fence (void)
     Jput (ops);
 }
 
-void test_getroot (void)
-{
-    json_object *o;
-    const char *rootdir;
-    int rootseq;
-
-    ok ((o = kp_rgetroot_enc (42, "blah")) != NULL,
-        "kp_rgetroot_enc works");
-    diag ("getroot: %s", Jtostr (o));
-    diag ("getroot: %s", Jtostr (o));
-    ok (kp_rgetroot_dec (o, &rootseq, &rootdir) == 0
-        && rootseq == 42 && rootdir != NULL && !strcmp (rootdir, "blah"),
-        "kp_rgetroot_dec works");
-    Jput (o);
-}
-
 void test_setroot (void)
 {
     json_object *o;
@@ -214,7 +198,6 @@ int main (int argc, char *argv[])
     test_get ();
     test_watch ();
     test_unwatch ();
-    test_getroot ();
     test_setroot ();
     test_fence ();
     test_error ();
