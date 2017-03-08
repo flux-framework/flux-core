@@ -183,13 +183,18 @@ bool flux_rpc_check (flux_rpc_t *rpc)
     assert (rpc->magic == RPC_MAGIC);
     if (rpc->rx_msg || rpc->rx_errnum)
         return true;
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.message.rpc", "single");
+#endif
     if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, FLUX_O_NONBLOCK))) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             errno = 0;
-            return false;
-        } else
+        else
             rpc->rx_errnum = errno;
     }
+#if HAVE_CALIPER
+    cali_end_byname ("flux.message.rpc");
+#endif
     return (rpc->rx_msg || rpc->rx_errnum);
 }
 
@@ -203,15 +208,19 @@ static int rpc_get (flux_rpc_t *rpc)
     }
     if (!rpc->rx_msg && !rpc->rx_errnum) {
 #if HAVE_CALIPER
-        cali_begin_string_byname("flux.message.rpc", "single");
+        cali_begin_string_byname ("flux.message.rpc", "single");
 #endif
-        if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0))) {
+
+        if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
             rpc->rx_errnum = errno;
-            goto done;
-        }
+
 #if HAVE_CALIPER
-        cali_end_byname("flux.message.rpc");
+        cali_end_byname ("flux.message.rpc");
 #endif
+
+        if (!rpc->rx_msg)
+            goto done;
+
         rpc->rx_count++;
     }
     rc = 0;
@@ -369,7 +378,7 @@ static flux_rpc_t *rpc_request (flux_t *h,
                                 flux_msg_t *msg)
 {
     flux_rpc_t *rpc;
-    int rx_expected = 1;
+    int rv, rx_expected = 1;
 
     if ((flags & FLUX_RPC_NORESPONSE))
         rx_expected = 0;
@@ -381,13 +390,14 @@ static flux_rpc_t *rpc_request (flux_t *h,
     cali_begin_int_byname ("flux.message.response_expected",
                            !(flags & FLUX_RPC_NORESPONSE));
 #endif
-    if (rpc_request_prepare_send (rpc, msg, nodeid) < 0)
-        goto error;
+    rv = rpc_request_prepare_send (rpc, msg, nodeid);
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
     cali_end_byname ("flux.message.rpc.nodeid");
     cali_end_byname ("flux.message.rpc");
 #endif
+    if (rv < 0)
+        goto error;
     return rpc;
 error:
     flux_rpc_destroy (rpc);
@@ -466,7 +476,7 @@ static flux_rpc_t *rpc_multi (flux_t *h,
     nodeset_t *ns = NULL;
     nodeset_iterator_t *itr = NULL;
     flux_rpc_t *rpc = NULL;
-    int i;
+    int i, rv = 0;
     uint32_t count;
     int rx_expected;
 
@@ -514,16 +524,19 @@ static flux_rpc_t *rpc_multi (flux_t *h,
 #if HAVE_CALIPER
         cali_begin_int_byname ("flux.message.rpc.nodeid", nodeid);
 #endif
-        if (rpc_request_prepare_send (rpc, msg, nodeid) < 0)
-            goto error;
+        rv = rpc_request_prepare_send (rpc, msg, nodeid);
 #if HAVE_CALIPER
         cali_end_byname ("flux.message.rpc.nodeid");
 #endif
+        if (rv < 0)
+            break;
     }
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
     cali_end_byname ("flux.message.rpc");
 #endif
+    if (rv < 0)
+        goto error;
     nodeset_iterator_destroy (itr);
     return rpc;
 error:
