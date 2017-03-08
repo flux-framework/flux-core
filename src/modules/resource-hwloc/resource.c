@@ -397,7 +397,7 @@ static void reload_request_cb (flux_t *h,
         || (ctx_hwloc_init (h, ctx) < 0)
         || (load_hwloc (h, ctx) < 0))
         errnum = errno;
-    if (flux_respond (h, msg, errnum, "{}") < 0)
+    if (flux_respond (h, msg, errnum, NULL) < 0)
         flux_log_error (h, "flux_respond");
 }
 
