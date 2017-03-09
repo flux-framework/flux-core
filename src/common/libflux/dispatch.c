@@ -78,6 +78,7 @@ struct flux_msg_handler {
     int magic;
     struct dispatch *d;
     struct flux_match match;
+    uint32_t rolemask;
     flux_msg_handler_f fn;
     void *arg;
     flux_free_f arg_free;
@@ -350,20 +351,32 @@ done:
     return rc;
 }
 
+static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
+{
+    uint32_t rolemask;
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        return;
+    if (!(rolemask & w->rolemask)) {
+        if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST))
+            (void)flux_respond (w->d->h, msg, EPERM, NULL);
+        return;
+    }
+    w->fn (w->d->h, w, msg, w->arg);
+}
+
 static int coproc_cb (coproc_t *c, void *arg)
 {
     flux_msg_handler_t *w = arg;
     flux_msg_t *msg;
-    int type;
     int rc = -1;
+
     if (!(msg = flux_recv (w->d->h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK))) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             rc = 0;
         goto done;
     }
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    w->fn (w->d->h, w, msg, w->arg);
+    call_handler (w, msg);
     rc = 0;
 done:
     flux_msg_destroy (msg);
@@ -479,7 +492,7 @@ static int dispatch_message (struct dispatch *d,
     /* fastpath */
     if (type == FLUX_MSGTYPE_RESPONSE) {
         if (fastpath_response_lookup (d, msg, &w) == 0 && w->running) {
-            w->fn (d->h, w, msg, w->arg);
+            call_handler (w, msg);
             match = true;
         }
     }
@@ -489,7 +502,7 @@ static int dispatch_message (struct dispatch *d,
             if (!w->running)
                 continue;
             if (flux_msg_cmp (msg, w->match)) {
-                w->fn (d->h, w, msg, w->arg);
+                call_handler (w, msg);
                 match = true;
                 if (type != FLUX_MSGTYPE_EVENT)
                     break;
@@ -675,6 +688,21 @@ void flux_msg_handler_stop (flux_msg_handler_t *w)
     }
 }
 
+void flux_msg_handler_allow_rolemask (flux_msg_handler_t *w, uint32_t rolemask)
+{
+    if (w) {
+        w->rolemask |= rolemask;
+    }
+}
+
+void flux_msg_handler_deny_rolemask (flux_msg_handler_t *w, uint32_t rolemask)
+{
+    if (w) {
+        w->rolemask &= ~rolemask;
+        w->rolemask |= FLUX_ROLE_OWNER;
+    }
+}
+
 static void free_msg_handler (flux_msg_handler_t *w)
 {
     if (w) {
@@ -734,6 +762,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
     w->magic = HANDLER_MAGIC;
     if (copy_match (&w->match, match) < 0)
         goto nomem;
+    w->rolemask = FLUX_ROLE_OWNER;
     w->fn = cb;
     w->arg = arg;
     w->d = d;

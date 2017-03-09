@@ -49,6 +49,7 @@
 
 #include "module.h"
 #include "modservice.h"
+#include "ping.h"
 
 typedef struct {
     flux_t *h;
@@ -83,41 +84,6 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
         flux_aux_set (h, "flux::modservice", ctx, freectx);
     }
     return ctx;
-}
-
-
-/* Route string will not include the endpoints.
- */
-static void ping_cb (flux_t *h, flux_msg_handler_t *w,
-                     const flux_msg_t *msg, void *arg)
-{
-    module_t *p = arg;
-    const char *json_str;
-    json_object *o = NULL;
-    char *route = NULL;
-    char *route_plus_uuid = NULL;
-    int rc = -1;
-
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!(route = flux_msg_get_route_string (msg)))
-        goto done;
-    route_plus_uuid = xasprintf ("%s!%.5s", route, module_get_uuid (p));
-    Jadd_str (o, "route", route_plus_uuid);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                                rc < 0 ? NULL : Jtostr (o)) < 0)
-        FLUX_LOG_ERROR (h);
-    Jput (o);
-    if (route_plus_uuid)
-        free (route_plus_uuid);
-    if (route)
-        free (route);
 }
 
 static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
@@ -257,7 +223,7 @@ static void register_event (modservice_ctx_t *ctx, const char *name,
 }
 
 static void register_request (modservice_ctx_t *ctx, const char *name,
-                              flux_msg_handler_f cb)
+                              flux_msg_handler_f cb, uint32_t rolemask)
 {
     struct flux_match match = FLUX_MATCH_REQUEST;
     flux_msg_handler_t *w;
@@ -265,6 +231,7 @@ static void register_request (modservice_ctx_t *ctx, const char *name,
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
     if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
         log_err_exit ("flux_msg_handler_create");
+    flux_msg_handler_allow_rolemask (w, rolemask);
     flux_msg_handler_start (w);
     if (zlist_append (ctx->handlers, w) < 0)
         oom ();
@@ -276,12 +243,14 @@ void modservice_register (flux_t *h, module_t *p)
     modservice_ctx_t *ctx = getctx (h, p);
     flux_reactor_t *r = flux_get_reactor (h);
 
-    register_request (ctx, "shutdown", shutdown_cb);
-    register_request (ctx, "ping", ping_cb);
-    register_request (ctx, "stats.get", stats_get_cb);
-    register_request (ctx, "stats.clear", stats_clear_request_cb);
-    register_request (ctx, "rusage", rusage_cb);
-    register_request (ctx, "debug", debug_cb);
+    register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER);
+    register_request (ctx, "stats.get", stats_get_cb, FLUX_ROLE_ALL);
+    register_request (ctx, "stats.clear", stats_clear_request_cb, FLUX_ROLE_OWNER);
+    register_request (ctx, "rusage", rusage_cb, FLUX_ROLE_ALL);
+    register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER);
+
+    if (ping_initialize (h, module_get_name (ctx->p)) < 0)
+        log_err_exit ("ping_initialize");
 
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
 

@@ -91,7 +91,6 @@ int module_start_all (modhash_t *mh);
 /* Stop module thread by sending a shutdown request.
  */
 int module_stop (module_t *p);
-int module_stop_all (modhash_t *mh);
 
 /* Prepare an 'lsmod' response payload.
  */

@@ -120,6 +120,8 @@ typedef struct {
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
     attr_t *attrs;
+    uint32_t userid;            /* instance owner */
+    uint32_t rolemask;
 
     /* Modules
      */
@@ -356,6 +358,12 @@ int main (int argc, char *argv[])
             log_errn_exit (e, "argz_create");
     }
 
+    /* Record the instance owner: the effective uid of the broker.
+     * Set default rolemask for messages sent with flux_send()
+     * on the broker's internal handle.
+     */
+    ctx.userid = geteuid ();
+    ctx.rolemask = FLUX_ROLE_OWNER;
 
     /* Connect to enclosing instance, if any.
      */
@@ -617,7 +625,7 @@ int main (int argc, char *argv[])
         log_err_exit ("sequence_hash_initialize");
     if (exec_initialize (ctx.h, ctx.sm, ctx.rank, ctx.attrs) < 0)
         log_err_exit ("exec_initialize");
-    if (ping_initialize (ctx.h) < 0)
+    if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
     if (rusage_initialize (ctx.h) < 0)
         log_err_exit ("rusage_initialize");
@@ -1813,24 +1821,6 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     return module_event_mcast (ctx->modhash, msg);
 }
 
-/* helper for parent_cb */
-static void send_mute_request (flux_t *h, void *sock)
-{
-    flux_msg_t *msg;
-
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (msg, "cmb.event-mute") < 0)
-        goto done;
-    if (flux_msg_enable_route (msg))
-        goto done;
-    if (flux_msg_sendzsock (sock, msg) < 0)
-        flux_log_error (h, "failed to send mute request");
-    /* No response will be sent */
-done:
-    flux_msg_destroy (msg);
-}
-
 /* Handle messages from one or more parents.
  */
 static void parent_cb (overlay_t *ov, void *sock, void *arg)
@@ -1850,8 +1840,12 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (ctx->event_active) {
-                send_mute_request (ctx->h, sock);
+                flux_rpc_t *rpc;
+                if (!(rpc = flux_rpc (ctx->h, "cmb.event-mute", NULL,
+                              FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
+                    flux_log_error (ctx->h, "cmb.event-mute RPC");
                 goto done;
+                flux_rpc_destroy (rpc);
             }
             if (flux_msg_clear_route (msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event");
@@ -2168,27 +2162,45 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     broker_ctx_t *ctx = impl;
     int type;
+    uint32_t userid, rolemask;
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
-    (void)snoop_sendmsg (ctx->snoop, msg);
-
-    if (flux_msg_get_type (msg, &type) < 0)
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
+    if (flux_msg_get_type (cpy, &type) < 0)
+        goto done;
+    if (flux_msg_get_userid (cpy, &userid) < 0)
+        goto done;
+    if (flux_msg_get_rolemask (cpy, &rolemask) < 0)
+        goto done;
+    if (userid == FLUX_USERID_UNKNOWN)
+        userid = ctx->userid;
+    if (rolemask == FLUX_ROLE_NONE)
+        rolemask = ctx->rolemask;
+    if (flux_msg_set_userid (cpy, userid) < 0)
+        goto done;
+    if (flux_msg_set_rolemask (cpy, rolemask) < 0)
+        goto done;
+
+    (void)snoop_sendmsg (ctx->snoop, cpy);
+
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, msg, ERROR_MODE_RETURN);
+            rc = broker_request_sendmsg (ctx, cpy, ERROR_MODE_RETURN);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = broker_response_sendmsg (ctx, msg);
+            rc = broker_response_sendmsg (ctx, cpy);
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, msg);
+            rc = broker_event_sendmsg (ctx, cpy);
             break;
         default:
             errno = EINVAL;
             break;
     }
 done:
+    flux_msg_destroy (cpy);
     return rc;
 }
 

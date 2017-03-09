@@ -41,13 +41,15 @@
  */
 #define PROTO_MAGIC         0x8e
 #define PROTO_VERSION       1
-#define PROTO_SIZE          12
+#define PROTO_SIZE          20
 #define PROTO_OFF_MAGIC     0 /* 1 byte */
 #define PROTO_OFF_VERSION   1 /* 1 byte */
 #define PROTO_OFF_TYPE      2 /* 1 byte */
 #define PROTO_OFF_FLAGS     3 /* 1 byte */
-#define PROTO_OFF_BIGINT    4 /* 4 bytes */
-#define PROTO_OFF_BIGINT2   8 /* 4 bytes */
+#define PROTO_OFF_USERID    4 /* 4 bytes */
+#define PROTO_OFF_ROLEMASK  8 /* 4 bytes */
+#define PROTO_OFF_BIGINT    12 /* 4 bytes */
+#define PROTO_OFF_BIGINT2   16 /* 4 bytes */
 
 #define FLUX_MSG_MAGIC 0x33321eee
 struct flux_msg {
@@ -170,6 +172,48 @@ static int proto_get_bigint2 (uint8_t *data, int len, uint32_t *bigint)
     *bigint = ntohl (x);
     return 0;
 }
+static int proto_set_userid (uint8_t *data, int len, uint32_t userid)
+{
+    uint32_t x = htonl (userid);
+
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    memcpy (&data[PROTO_OFF_USERID], &x, sizeof (x));
+    return 0;
+}
+static int proto_get_userid (uint8_t *data, int len, uint32_t *userid)
+{
+    uint32_t x;
+
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    memcpy (&x, &data[PROTO_OFF_USERID], sizeof (x));
+    *userid = ntohl (x);
+    return 0;
+}
+static int proto_set_rolemask (uint8_t *data, int len, uint32_t rolemask)
+{
+    uint32_t x = htonl (rolemask);
+
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    memcpy (&data[PROTO_OFF_ROLEMASK], &x, sizeof (x));
+    return 0;
+}
+static int proto_get_rolemask (uint8_t *data, int len, uint32_t *rolemask)
+{
+    uint32_t x;
+
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    memcpy (&x, &data[PROTO_OFF_ROLEMASK], sizeof (x));
+    *rolemask = ntohl (x);
+    return 0;
+}
 static void proto_init (uint8_t *data, int len, uint8_t flags)
 {
     assert (len >= PROTO_SIZE);
@@ -177,6 +221,8 @@ static void proto_init (uint8_t *data, int len, uint8_t flags)
     data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
     data[PROTO_OFF_VERSION] = PROTO_VERSION;
     data[PROTO_OFF_FLAGS] = flags;
+    proto_set_userid (data, len, FLUX_USERID_UNKNOWN);
+    proto_set_rolemask (data, len, FLUX_ROLE_NONE);
 }
 /* End manual codec
  */
@@ -348,6 +394,50 @@ static int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
+{
+    zframe_t *zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_set_userid (zframe_data (zf),
+                                 zframe_size (zf), userid) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
+{
+    zframe_t *zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_get_userid (zframe_data (zf),
+                                 zframe_size (zf), userid) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
+{
+    zframe_t *zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_set_rolemask (zframe_data (zf),
+                                   zframe_size (zf), rolemask) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
+{
+    zframe_t *zf = zmsg_last (msg->zmsg);
+    if (!zf || proto_get_rolemask (zframe_data (zf),
+                                   zframe_size (zf), rolemask) < 0) {
         errno = EPROTO;
         return -1;
     }

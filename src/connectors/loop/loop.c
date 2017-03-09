@@ -44,6 +44,9 @@ typedef struct {
     int pollfd;
     int pollevents;
 
+    uint32_t userid;
+    uint32_t rolemask;
+
     msglist_t *queue;
 } loop_ctx_t;
 
@@ -80,11 +83,24 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     assert (c->magic == CTX_MAGIC);
     int type;
     flux_msg_t *cpy = NULL;
+    uint32_t userid, rolemask;
     int rc = -1;
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
     if (flux_msg_get_type (cpy, &type) < 0)
+        goto done;
+    if (flux_msg_get_userid (cpy, &userid) < 0)
+        goto done;
+    if (flux_msg_get_rolemask (cpy, &rolemask) < 0)
+        goto done;
+    if (userid == FLUX_USERID_UNKNOWN)
+        userid = c->userid;
+    if (rolemask == FLUX_ROLE_NONE)
+        rolemask = c->rolemask;
+    if (flux_msg_set_userid (cpy, userid) < 0)
+        goto done;
+    if (flux_msg_set_rolemask (cpy, rolemask) < 0)
         goto done;
     if (msglist_append (c->queue, cpy) < 0)
         goto done;
@@ -104,6 +120,64 @@ static flux_msg_t *op_recv (void *impl, int flags)
     if (!msg)
         errno = EWOULDBLOCK;
     return msg;
+}
+
+static int op_getopt (void *impl, const char *option, void *val, size_t size)
+{
+    loop_ctx_t *ctx = impl;
+    assert (ctx->magic == CTX_MAGIC);
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+        if (size != sizeof (ctx->userid)) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (val, &ctx->userid, size);
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        if (size != sizeof (ctx->rolemask)) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (val, &ctx->rolemask, size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static int op_setopt (void *impl, const char *option,
+                      const void *val, size_t size)
+{
+    loop_ctx_t *ctx = impl;
+    assert (ctx->magic == CTX_MAGIC);
+    size_t val_size;
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+        val_size = sizeof (ctx->userid);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->userid, val, val_size);
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        val_size = sizeof (ctx->rolemask);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->rolemask, val, val_size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 static void op_fini (void *impl)
@@ -139,6 +213,8 @@ flux_t *connector_init (const char *path, int flags)
                 || flux_attr_fake (c->h, "tbon-arity", "2",
                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
         goto error;
+    c->userid = geteuid ();
+    c->rolemask = FLUX_ROLE_OWNER;
     return c->h;
 error:
     if (c) {
@@ -154,6 +230,8 @@ static const struct flux_handle_ops handle_ops = {
     .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
+    .getopt = op_getopt,
+    .setopt = op_setopt,
     .impl_destroy = op_fini,
 };
 

@@ -41,9 +41,13 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *json_str;
     char *s = NULL;
     char *route = NULL;
-    uint32_t rank;
+    uint32_t rank, userid, rolemask;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto error;
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        goto error;
+    if (flux_msg_get_userid (msg, &userid) < 0)
         goto error;
     if (!(inout = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -58,6 +62,8 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     }
     Jadd_str (inout, "route", route);
+    Jadd_int (inout, "userid", userid);
+    Jadd_int (inout, "rolemask", rolemask);
     if (flux_respond (h, msg, 0, Jtostr (inout)) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (s);
@@ -78,7 +84,7 @@ static void ping_finalize (void *arg)
     free (p);
 }
 
-int ping_initialize (flux_t *h)
+int ping_initialize (flux_t *h, const char *service)
 {
     struct flux_match match = FLUX_MATCH_ANY;
     struct ping_context *p = calloc (1, sizeof (*p));
@@ -87,14 +93,20 @@ int ping_initialize (flux_t *h)
         goto error;
     }
     match.typemask = FLUX_MSGTYPE_REQUEST;
-    match.topic_glob = "cmb.ping";
+    if (asprintf (&match.topic_glob, "%s.ping", service) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (!(p->w = flux_msg_handler_create (h, match, ping_request_cb, p)))
         goto error;
+    flux_msg_handler_allow_rolemask (p->w, FLUX_ROLE_ALL);
     flux_msg_handler_start (p->w);
     flux_aux_set (h, "flux::ping", p, ping_finalize);
+    free (match.topic_glob);
     return 0;
 error:
     if (p) {
+        free (match.topic_glob);
         flux_msg_handler_stop (p->w);
         flux_msg_handler_destroy (p->w);
         free (p);

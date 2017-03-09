@@ -55,6 +55,8 @@ enum {
  * (Connectors may define custom option names)
  */
 #define FLUX_OPT_ZEROMQ_CONTEXT     "flux::zeromq_context"
+#define FLUX_OPT_TESTING_USERID     "flux::testing_userid"
+#define FLUX_OPT_TESTING_ROLEMASK   "flux::testing_rolemask"
 
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a connector to dynamically load.

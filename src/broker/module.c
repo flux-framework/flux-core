@@ -69,6 +69,8 @@ struct module_struct {
     heartbeat_t *heartbeat;
 
     void *sock;             /* broker end of PAIR socket */
+    uint32_t userid;        /* creds of connection */
+    uint32_t rolemask;
 
     zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
@@ -220,6 +222,8 @@ flux_msg_t *module_recvmsg (module_t *p)
 {
     flux_msg_t *msg = NULL;
     int type;
+    uint32_t userid, rolemask;
+
     assert (p->magic == MODULE_MAGIC);
 
     if (!(msg = flux_msg_recvzsock (p->sock)))
@@ -228,6 +232,25 @@ flux_msg_t *module_recvmsg (module_t *p)
         if (flux_msg_pop_route (msg, NULL) < 0) /* simulate DEALER socket */
             goto error;
     }
+    /* All shmem:// connections to the broker have FLUX_ROLE_OWNER
+     * and are "authenticated" as the instance owner.
+     * Allow modules so endowed to change the userid/rolemask on messages when
+     * sending on behalf of other users.  This is necessary for connectors
+     * implemented as comms modules.
+     */
+    assert ((p->rolemask & FLUX_ROLE_OWNER));
+    if (flux_msg_get_userid (msg, &userid) < 0)
+        goto error;
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        goto error;
+    if (userid == FLUX_USERID_UNKNOWN)
+        userid = p->userid;
+    if (rolemask == FLUX_ROLE_NONE)
+        rolemask = p->rolemask;
+    if (flux_msg_set_userid (msg, userid) < 0)
+        goto error;
+    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+        goto error;
     return msg;
 error:
     flux_msg_destroy (msg);
@@ -350,19 +373,16 @@ int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
-    flux_msg_t *msg;
+    flux_rpc_t *rpc;
     int rc = -1;
 
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (msg, topic) < 0)
-        goto done;
-    if (flux_msg_sendzsock (p->sock, msg) < 0)
+    if (!(rpc = flux_rpc (p->broker_h, topic, NULL,
+                          FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
     free (topic);
-    flux_msg_destroy (msg);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
@@ -555,6 +575,12 @@ module_t *module_add (modhash_t *mh, const char *path)
                                                  p->sock, FLUX_POLLIN,
                                                  module_cb, p)))
         log_err_exit ("flux_zmq_watcher_create");
+    /* Set creds for connection.
+     * Since this is a point to point connection between broker threads,
+     * credentials are always those of the instance owner.
+     */
+    p->userid = geteuid ();
+    p->rolemask = FLUX_ROLE_OWNER;
 
     /* Update the modhash.
      */
@@ -634,28 +660,6 @@ flux_modlist_t *module_get_modlist (modhash_t *mh)
 done:
     zlist_destroy (&uuids);
     return mods;
-}
-
-int module_stop_all (modhash_t *mh)
-{
-    zlist_t *uuids;
-    char *uuid;
-    int rc = -1;
-
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (module_stop (p) < 0)
-            goto done;
-        uuid = zlist_next (uuids);
-    }
-    rc = 0;
-done:
-    zlist_destroy (&uuids);
-    return rc;
 }
 
 int module_start_all (modhash_t *mh)

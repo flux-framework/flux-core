@@ -59,6 +59,10 @@ responses have been received for all the requests.  Default: unlimited.
 *-b, --batch*::
 Begin processing responses after all requests are sent.  Requires --count.
 
+*-u, --userid*::
+Include userid and rolemask of original request, which are echoed back
+in ping response, in ping output.
+
 EXAMPLES
 --------
 

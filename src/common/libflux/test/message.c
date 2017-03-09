@@ -408,6 +408,30 @@ void check_matchtag (void)
     flux_msg_destroy (msg);
 }
 
+void check_security (void)
+{
+    flux_msg_t *msg;
+    uint32_t userid, rolemask;
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "flux_msg_create works");
+    ok (flux_msg_get_userid (msg, &userid) == 0
+        && userid == FLUX_USERID_UNKNOWN,
+        "message created with userid=FLUX_USERID_UNKNOWN");
+    ok (flux_msg_get_rolemask (msg, &rolemask) == 0
+        && rolemask == FLUX_ROLE_NONE,
+        "message created with rolemask=FLUX_ROLE_NONE");
+    ok (flux_msg_set_userid (msg, 4242) == 0
+        && flux_msg_get_userid (msg, &userid) == 0
+        && userid == 4242,
+        "flux_msg_set_userid 4242 works");
+    ok (flux_msg_set_rolemask (msg, FLUX_ROLE_ALL) == 0
+        && flux_msg_get_rolemask (msg, &rolemask) == 0
+        && rolemask == FLUX_ROLE_ALL,
+        "flux_msg_set_rolemask FLUX_ROLE_ALL works");
+    flux_msg_destroy (msg);
+}
+
 void check_cmp (void)
 {
     struct flux_match match = FLUX_MATCH_ANY;
@@ -566,6 +590,7 @@ int main (int argc, char *argv[])
     check_payload_json ();
     check_payload_json_formatted ();
     check_matchtag ();
+    check_security ();
 
     check_cmp ();
 

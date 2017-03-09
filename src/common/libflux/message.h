@@ -175,6 +175,25 @@ enum {
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid, int flags);
 int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags);
 
+/* Get/set userid
+ */
+enum {
+    FLUX_USERID_UNKNOWN = 0xFFFFFFFF
+};
+int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid);
+int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid);
+
+/* Get/set rolemask
+ */
+enum {
+    FLUX_ROLE_NONE = 0,
+    FLUX_ROLE_OWNER = 1,
+    FLUX_ROLE_USER = 2,
+    FLUX_ROLE_ALL = 0xFFFFFFFF,
+};
+int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask);
+int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask);
+
 /* Get/set errnum (response/keepalive only)
  */
 int flux_msg_set_errnum (flux_msg_t *msg, int errnum);

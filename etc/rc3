@@ -16,6 +16,8 @@ if PERSISTDIR=$(flux getattr persist-directory 2>/dev/null); then
     flux wreck ls >${PERSISTDIR}/joblog 2>/dev/null || :
 fi
 
+flux module remove -r 0 userdb
+
 flux module remove -r 0 cron
 flux module remove -r all job
 flux module remove -r all resource-hwloc
