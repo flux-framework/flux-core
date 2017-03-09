@@ -264,9 +264,9 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
                                                         nodeset, 0)))
         log_err_exit ("flux_rpc_multi");
     do {
-        const char *json_str;
+        const char *tmp_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get (rpc, &json_str) < 0
+        if (flux_rpc_get (rpc, &tmp_str) < 0
                         || flux_rpc_get_nodeid (rpc, &nodeid)) {
             if (nodeid == FLUX_NODEID_ANY)
                 log_err ("flux_rpc_get");
