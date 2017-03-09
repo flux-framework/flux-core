@@ -32,7 +32,6 @@
 #include <flux/core.h>
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/iterators.h"
 
 #include "attr.h"
@@ -630,21 +629,16 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *w,
                                      const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
-    const char *json_str;
     const char *name;
-    json_object *in = NULL;
     int rc = -1;
-    bool backing;
+    int backing;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{ s:b s:s }",
+                              "backing", &backing,
+                              "name", &name) < 0)
         goto done;
     if (cache->rank != 0) {
         errno = EINVAL;
-        goto done;
-    }
-    if (!(in = Jfromstr (json_str)) || !Jget_bool (in, "backing", &backing)
-                                    || !Jget_str (in, "name", &name)) {
-        errno = EPROTO;
         goto done;
     }
     if (!cache->backing && backing) {
@@ -664,7 +658,6 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *w,
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
         flux_log_error (h, "content backing");
-    Jput (in);
 };
 
 /* Forcibly drop all entries from the cache that can be dropped
