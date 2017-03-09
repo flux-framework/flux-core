@@ -132,8 +132,10 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
     int pid;
     int errnum = EPROTO;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        errnum = errno;
         goto out;
+    }
 
     if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid) &&
         Jget_obj (request, "stdin", &o)) {
@@ -176,8 +178,10 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
     int pid;
     int errnum = EPROTO;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        errnum = errno;
         goto out;
+    }
     if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid)) {
         int signum;
         struct subprocess *p;
