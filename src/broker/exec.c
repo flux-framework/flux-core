@@ -162,6 +162,7 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
         free (data);
     }
+    errnum = 0;
 out:
     if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
         flux_log_error (h, "write_request_cb: flux_respondf");
