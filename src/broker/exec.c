@@ -174,36 +174,30 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     exec_t *x = arg;
-    json_object *request = NULL;
-    const char *json_str;
     int pid;
     int errnum = EPROTO;
+    int signum;
+    struct subprocess *p;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+    if (flux_request_decodef (msg, NULL, "{ s:i }", "pid", &pid) < 0) {
         errnum = errno;
         goto out;
     }
-    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid)) {
-        int signum;
-        struct subprocess *p;
-        if (!Jget_int (request, "signum", &signum))
-            signum = SIGTERM;
-        p = subprocess_manager_first (x->sm);
-        while (p) {
-            if (pid == subprocess_pid (p)) {
-                errnum = 0;
-                /* Send signal to entire process group */
-                if (kill (-pid, signum) < 0)
-                    errnum = errno;
-            }
-            p = subprocess_manager_next (x->sm);
+    if (flux_request_decodef (msg, NULL, "{ s:i }", "signum", &signum) < 0)
+        signum = SIGTERM;
+    p = subprocess_manager_first (x->sm);
+    while (p) {
+        if (pid == subprocess_pid (p)) {
+            errnum = 0;
+            /* Send signal to entire process group */
+            if (kill (-pid, signum) < 0)
+                errnum = errno;
         }
+        p = subprocess_manager_next (x->sm);
     }
 out:
     if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
         flux_log_error (h, "signal_request_cb: flux_respondf");
-    if (request)
-        json_object_put (request);
 }
 
 static int do_setpgrp (struct subprocess *p)
