@@ -40,7 +40,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/popen2.h"
 
 static const char *default_ssh_cmd = "/usr/bin/rsh";
@@ -137,17 +136,15 @@ static int op_event_subscribe (void *impl, const char *topic)
     ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
-    json_object *in = Jnew ();
     int rc = 0;
 
-    Jadd_str (in, "topic", topic);
-    if (!(rpc = flux_rpc (c->h, "local.sub", Jtostr (in), FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (c->h, "local.sub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
-    Jput (in);
     return rc;
 }
 
@@ -156,17 +153,15 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_rpc_t *rpc = NULL;
-    json_object *in = Jnew ();
     int rc = 0;
 
-    Jadd_str (in, "topic", topic);
-    if (!(rpc = flux_rpc (c->h, "local.unsub", Jtostr (in), FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (c->h, "local.unsub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
-    Jput (in);
     return rc;
 }
 
