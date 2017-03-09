@@ -1,0 +1,76 @@
+// flux-help-include: true
+FLUX-USER(1)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux-user - Flux user database client
+
+
+SYNOPSIS
+--------
+*flux* *user* 'COMMAND' ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+The Flux user database is used to authorize users to access the
+Flux instance with assigned roles, as described in Flux RFC 12.
+
+This command line client can be used to manipulate the database.
+
+If the 'userdb' module is loaded with the '--default-rolemask'
+option, then users are added to the user database when they successfully
+authenticate to a Flux connector.  Otherwise, users that are not
+already present in the database are denied access.
+
+COMMANDS
+--------
+*list*::
+List the contents of the user database.  Each entry is listed with
+fields separated by colons.  The first field is the 32-bit userid
+in decimal.  The second field is the 32-bit rolemask, represented as
+a comma-delimited list of strings.
+
+*lookup* 'USERID'::
+Look up 'USERID' in the user database and display its entry,
+as described above.  If any part of 'USERID' is non-numeric,
+an attempt is made to look up 'USERID' as a name in the password file.
+If successful, the resulting UID is used in the query.
+
+*addrole* 'USERID' 'ROLEMASK'::
+Request that the database add the roles in 'ROLEMASK' to the existing
+roles held by 'USERID'.  If 'USERID' has no entry in the database,
+one is added.  If any part of 'USERID' is non-numeric, an attempt is
+made to look up 'USERID' as a name in the password file and use the UID
+from the result. 'ROLEMASK' may be numeric (any base - use strtoul base
+prefix rules), or may be a comma-separated list of roles, e.g.
+"owner", "user", etc..
+
+*delrole* 'USERID' 'ROLEMASK'::
+Request that the database remove the roles in 'ROLEMASK' from the existing
+roles held by 'USERID'.  If after removing those roles, 'USERID' has no
+roles, the entry is removed from the database.  'USERID' and 'ROLEMASK'
+may be specified as described above.
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+https://github.com/flux-framework/rfc/blob/master/spec_12.adoc[RFC 12: Flux Security Architecture]
+
