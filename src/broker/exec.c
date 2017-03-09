@@ -161,7 +161,7 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
         free (data);
     }
 out:
-    if (flux_respondf (h, msg, "{si}", "code", errnum) < 0)
+    if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
         flux_log_error (h, "write_cb: flux_respondf");
     if (request)
         json_object_put (request);
@@ -195,7 +195,7 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
     }
 out:
-    if (flux_respondf (h, msg, "{si}", "code", errnum) < 0)
+    if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
         flux_log_error (h, "signal_cb: flux_respondf");
     if (request)
         json_object_put (request);
