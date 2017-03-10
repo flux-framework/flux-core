@@ -90,21 +90,19 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     flux_msgcounters_t mcs;
-    json_object *out = Jnew ();
 
     flux_get_msgcounters (h, &mcs);
-    Jadd_int (out, "#request (tx)", mcs.request_tx);
-    Jadd_int (out, "#request (rx)", mcs.request_rx);
-    Jadd_int (out, "#response (tx)", mcs.response_tx);
-    Jadd_int (out, "#response (rx)", mcs.response_rx);
-    Jadd_int (out, "#event (tx)", mcs.event_tx);
-    Jadd_int (out, "#event (rx)", mcs.event_rx);
-    Jadd_int (out, "#keepalive (tx)", mcs.keepalive_tx);
-    Jadd_int (out, "#keepalive (rx)", mcs.keepalive_rx);
 
-    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
-        FLUX_LOG_ERROR (h);
-    Jput (out);
+    if (flux_respondf (h, msg, "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
+                       "#request (tx)", mcs.request_tx,
+                       "#request (rx)", mcs.request_rx,
+                       "#response (tx)", mcs.response_tx,
+                       "#response (rx)", mcs.response_rx,
+                       "#event (tx)", mcs.event_tx,
+                       "#event (rx)", mcs.event_rx,
+                       "#keepalive (tx)", mcs.keepalive_tx,
+                       "#keepalive (rx)", mcs.keepalive_rx) < 0)
+      FLUX_LOG_ERROR (h);
 }
 
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
