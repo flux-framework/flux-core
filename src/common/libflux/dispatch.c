@@ -353,13 +353,16 @@ done:
 
 static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
 {
-    uint32_t rolemask;
+    uint32_t rolemask, matchtag;
 
     if (flux_msg_get_rolemask (msg, &rolemask) < 0)
         return;
     if (!(rolemask & w->rolemask)) {
-        if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST))
-            (void)flux_respond (w->d->h, msg, EPERM, NULL);
+        if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
+                        && flux_msg_get_matchtag (msg, &matchtag) == 0
+                        && matchtag != FLUX_MATCHTAG_NONE) {
+                (void)flux_respond (w->d->h, msg, EPERM, NULL);
+        }
         return;
     }
     w->fn (w->d->h, w, msg, w->arg);
