@@ -142,4 +142,16 @@ test_expect_success 'flux setattr NOT allowed for non-owner' '
 	test $(flux getattr log-stderr-level) -eq 7
 '
 
+test_expect_success 'flux logger not allowed for non-owner' '
+	MSG="hello world $$" &&
+	! FLUX_HANDLE_ROLEMASK=0x2 flux logger $MSG 2>logger.err &&
+	grep -q "Operation not permitted" logger.err
+'
+
+test_expect_success 'flux dmesg not allowed for non-owner' '
+	MSG="hello world $$" &&
+	! FLUX_HANDLE_ROLEMASK=0x2 flux dmesg 2>dmesg.err &&
+	grep -q "Operation not permitted" dmesg.err
+'
+
 test_done
