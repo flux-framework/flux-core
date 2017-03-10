@@ -38,7 +38,8 @@ MAN3_FILES_PRIMARY = \
 	flux_reactor_now.3 \
 	flux_request_decode.3 \
 	flux_event_decode.3 \
-	flux_content_load.3
+	flux_content_load.3 \
+	flux_log.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -92,6 +93,7 @@ MAN3_FILES_SECONDARY = \
 	flux_msg_handler_delvec.3 \
 	flux_child_watcher_get_rpid.3 \
 	flux_child_watcher_get_rstatus.3 \
+	flux_signal_watcher_get_signum.3 \
 	flux_stat_watcher_get_rstat.3 \
 	flux_rpc_get_raw.3 \
 	flux_respond_raw.3 \
@@ -102,9 +104,12 @@ MAN3_FILES_SECONDARY = \
 	flux_event_decodef.3 \
 	flux_event_encode.3 \
 	flux_event_encodef.3 \
-	flux_content_load_get.3
+	flux_content_load_get.3 \
 	flux_content_store.3 \
-	flux_content_store_get.3
+	flux_content_store_get.3 \
+	flux_vlog.3 \
+	flux_log_set_appname.3 \
+	flux_log_set_procid.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -177,6 +182,7 @@ flux_msg_handler_stop.3: flux_msg_handler_create.3
 flux_msg_handler_delvec.3: flux_msg_handler_addvec.3
 flux_child_watcher_get_rpid.3: flux_child_watcher_create.3
 flux_child_watcher_get_rstatus.3: flux_child_watcher_create.3
+flux_signal_watcher_get_signum.3: flux_signal_watcher_create.3
 flux_stat_watcher_get_rstat.3: flux_stat_watcher_create.3
 flux_rpc_get_raw.3: flux_rpc_raw.3
 flux_respond_raw.3: flux_respond.3
@@ -190,6 +196,9 @@ flux_event_encodef.3: flux_event_decode.3
 flux_content_load_get.3: flux_content_load.3
 flux_content_store.3: flux_content_load.3
 flux_content_store_get.3: flux_content_load.3
+flux_vlog.3: flux_log.3
+flux_log_set_appname.3: flux_log.3
+flux_log_set_procid.3: flux_log.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c

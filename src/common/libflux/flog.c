@@ -99,16 +99,38 @@ const char *flux_strerror (int errnum)
     return zmq_strerror (errnum);
 }
 
-void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
+static int log_rpc (flux_t *h, const char *buf, int len, int flags)
+{
+    flux_rpc_t *r = NULL;
+    int rc = (flags & FLUX_RPC_NORESPONSE) ? 0 : -1;
+
+    if (!(r = flux_rpc_raw (h, "log.append", buf, len, FLUX_NODEID_ANY, flags)))
+        goto done;
+    if ((flags & FLUX_RPC_NORESPONSE))
+        goto done;
+    if (flux_rpc_get (r, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_rpc_destroy (r);
+    return rc;
+}
+
+int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
     int saved_errno = errno;
     uint32_t rank;
-    flux_rpc_t *rpc = NULL;
     int len;
     char timestamp[WALLCLOCK_MAXLEN];
     char hostname[STDLOG_MAX_HOSTNAME + 1];
     struct stdlog_header hdr;
+    int rpc_flags = FLUX_RPC_NORESPONSE;
+
+    if ((level & FLUX_LOG_CHECK)) {
+        rpc_flags &= ~FLUX_RPC_NORESPONSE;
+        level &= ~FLUX_LOG_CHECK;
+    }
 
     stdlog_init (&hdr);
     hdr.pri = STDLOG_PRI (level, LOG_USER);
@@ -128,22 +150,22 @@ void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     if (ctx->cb) {
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
-        if (!(rpc = flux_rpc_raw (h, "log.append", ctx->buf, len,
-                                  FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
-            goto done;
+        if (log_rpc (h, ctx->buf, len, rpc_flags) < 0)
+            return -1;
     }
-done:
-    flux_rpc_destroy (rpc);
     errno = saved_errno;
+    return 0;
 }
 
-void flux_log (flux_t *h, int lev, const char *fmt, ...)
+int flux_log (flux_t *h, int lev, const char *fmt, ...)
 {
     va_list ap;
+    int rc;
 
     va_start (ap, fmt);
-    flux_vlog (h, lev, fmt, ap);
+    rc = flux_vlog (h, lev, fmt, ap);
     va_end (ap);
+    return rc;
 }
 
 void flux_log_verror (flux_t *h, const char *fmt, va_list ap)

@@ -16,21 +16,19 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-flux-logger(1) creates Flux log entries.  Log entries are sent to
-the local Flux communications broker, then forwarded to the
-root of the overlay network, where they are disposed of according
-to the logging configuration of the communications session.
+flux-logger(1) appends Flux log entries to the local Flux
+broker's circular buffer.
 
 Log entries are associated with a syslog(3) style severity.
 Valid severity names are 'emerg', 'alert', 'crit', 'err',
 'warning', 'notice', 'info', 'debug'.
 
-Log entries may also have an application name (default 'logger').
+Log entries may also have a user-defined application name.
+This is different than the syslog 'facility', which is always set
+to LOG_USER in Flux log messages.
 
-Log entries are timestamped with the wall clock time, as
-reported by gettimeofday(2) at the point of origin, and with
-the rank of the communications broker originating the message.
-
+The wall clock time (UTC) and the broker rank are added to the log
+message when it is created.
 
 OPTIONS
 -------
@@ -38,7 +36,7 @@ OPTIONS
 Specify the log message severity.  The default severity is 'info'.
 
 *-n, --appname*='NAME'::
-Specify an application name to associate with the log message.
+Specify a user-defined application name to associate with the log message.
 The default appname is 'logger'.
 
 AUTHOR
@@ -58,4 +56,4 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 --------
-syslog(3)
+flux-dmesg(1), flux_log(3), syslog(3)
