@@ -525,14 +525,28 @@ static void append_request_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
+    uint32_t matchtag;
     const char *buf;
     int len;
 
-    if (flux_request_decode_raw (msg, NULL, &buf, &len) < 0) {
-        log_msg ("%s: decode error", __FUNCTION__);
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0) {
+        log_msg ("%s: malformed log request", __FUNCTION__);
         return;
     }
-    (void)logbuf_append (logbuf, buf, len);
+    if (flux_request_decode_raw (msg, NULL, &buf, &len) < 0)
+        goto error;
+    if (logbuf_append (logbuf, buf, len) < 0)
+        goto error;
+    if (matchtag != FLUX_MATCHTAG_NONE) {
+        if (flux_respond (h, msg, 0, NULL) < 0)
+            log_err ("%s: error responding to log request", __FUNCTION__);
+    }
+    return;
+error:
+    if (matchtag != FLUX_MATCHTAG_NONE) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            log_err ("%s: error responding to log request", __FUNCTION__);
+    }
 }
 
 static void clear_request_cb (flux_t *h, flux_msg_handler_t *w,
