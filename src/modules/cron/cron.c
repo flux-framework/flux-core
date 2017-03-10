@@ -341,31 +341,23 @@ static void cron_entry_destroy (cron_entry_t *e)
 static int64_t next_cronid (flux_t *h)
 {
     int64_t ret = (int64_t) -1;
-    const char *json_str;
-    json_object *req;
-    json_object *resp;
     flux_rpc_t *rpc;
 
-    req = Jnew ();
-    Jadd_str (req, "name", "cron");
-    Jadd_int64 (req, "preincrement", 1);
-    Jadd_int64 (req, "postincrement", 0);
-    Jadd_bool (req, "create", true);
-
-    if (!(rpc = flux_rpc (h, "seq.fetch", Jtostr (req), 0, 0))) {
-        flux_log_error (h, "flux_rpc");
-        return ret;
-    }
-    Jput (req);
-
-    if ((flux_rpc_get (rpc, &json_str) < 0)
-        || !(resp = Jfromstr (json_str))) {
-        flux_log_error (h, "next_cronid: rpc_get");
+    if (!(rpc = flux_rpcf (h, "seq.fetch", 0, 0,
+                           "{ s:s s:i s:i s:b }",
+                           "name", "cron",
+                           "preincrement", 1,
+                           "postincrement", 0,
+                           "create", true))) {
+        flux_log_error (h, "flux_rpcf");
         goto out;
     }
 
-    (void) Jget_int64 (resp, "value", &ret);
-    Jput (resp);
+    if (flux_rpc_getf (rpc, "{ s:I }", "value", &ret) < 0) {
+        flux_log_error (h, "next_cronid: rpc_getf");
+        goto out;
+    }
+
 out:
     flux_rpc_destroy (rpc);
     return ret;
@@ -698,48 +690,41 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     cron_ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *in = NULL;
-    json_object *out = NULL;
     const char *topic;
-    bool disable;
+    int disable;
     double epsilon;
-    int saved_errno = 0;
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0
-        || !(in = Jfromstr (json_str))) {
-        flux_log_error (h, "cron request decode");
-        saved_errno = EPROTO;
-        goto done;
-    }
-    if (!Jget_str (in, "topic", &topic))
+    if (flux_request_decodef (msg, NULL, "{}") < 0)
+        goto error;
+    if (flux_request_decodef (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         topic = NULL; /* Disable sync-event */
-    if (!Jget_bool (in, "disable", &disable))
+    if (flux_request_decodef (msg, NULL, "{ s:b }", "disable", &disable) < 0)
         disable = false;
 
     if (topic || disable)
         cron_ctx_sync_event_stop (ctx);
     rc = topic ? cron_ctx_sync_event_init (ctx, topic) : 0;
+    if (rc < 0)
+        goto error;
 
-    if (Jget_double (in, "sync_epsilon", &epsilon))
+    if (!flux_request_decodef (msg, NULL, "{ s:F }", "sync_epsilon", &epsilon))
         ctx->sync_epsilon = epsilon;
 
-    out = Jnew ();
     if (ctx->sync_event) {
-        Jadd_str (out, "sync_event", ctx->sync_event);
-        Jadd_double (out, "sync_epsilon", ctx->sync_epsilon);
-    } else
-        Jadd_bool (out, "sync_disabled", true);
+        if (flux_respondf (h, msg, "{ s:s s:f }",
+                           "sync_event", ctx->sync_event,
+                           "sync_epsilon", ctx->sync_epsilon) < 0)
+            flux_log_error (h, "cron.request: flux_respondf");
+    } else {
+        if (flux_respondf (h, msg, "{ s:b }", "sync_disabled", true) < 0)
+            flux_log_error (h, "cron.request: flux_respondf");
+    }
+    return;
 
-done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              rc < 0 ? NULL: Jtostr (out)) < 0)
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "cron.request: flux_respond");
-    if (in)
-        Jput (in);
-    if (out)
-        Jput (out);
 }
 
 static cron_entry_t *cron_ctx_find_entry (cron_ctx_t *ctx, int64_t id)
@@ -755,26 +740,15 @@ static cron_entry_t *cron_ctx_find_entry (cron_ctx_t *ctx, int64_t id)
  *  [service] is name of service for logging purposes.
  */
 static cron_entry_t *entry_from_request (flux_t *h, const flux_msg_t *msg,
-                                         cron_ctx_t *ctx, json_object **r,
-                                         const char *service)
+                                         cron_ctx_t *ctx, const char *service)
 {
-    const char *json_str;
-    json_object *in = NULL;
     int64_t id;
 
-    if ((flux_request_decode (msg, NULL, &json_str) < 0)
-        || !(in = Jfromstr (json_str))
-        || !(Jget_int64 (in, "id", &id))) {
-        flux_log_error (h, "%s: request decode", service);
-        if (in)
-            Jput (in);
-        errno = EPROTO;
+    if (flux_request_decodef (msg, NULL, "{ s:I }", "id", &id) < 0) {
+        flux_log_error (h, "%s: request decodef", service);
         return NULL;
     }
-    if (r != NULL)
-        *r = in;
-    else
-        Jput (in);
+
     errno = ENOENT;
     return cron_ctx_find_entry (ctx, id);
 }
@@ -787,20 +761,21 @@ static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    json_object *in = NULL;
     json_object *out = NULL;
-    bool kill = false;
+    int kill = false;
     int saved_errno;
     int rc = -1;
 
-    if (!(e = entry_from_request (h, msg, ctx, &in, "cron.delete"))) {
+    if (!(e = entry_from_request (h, msg, ctx, "cron.delete"))) {
         saved_errno = errno;
         goto done;
     }
 
     rc = 0;
     out = cron_entry_to_json (e);
-    if (e->task && Jget_bool (in, "kill", &kill) && kill == true)
+    if (e->task
+        && !flux_request_decodef (msg, NULL, "{ s:b }", "kill", &kill)
+        && kill == true)
         cron_task_kill (e->task, SIGTERM);
     cron_entry_destroy (e);
 
@@ -809,7 +784,6 @@ done:
                               rc < 0 ? NULL : Jtostr (out)) < 0)
         flux_log_error (h, "cron.delete: flux_respond");
     Jput (out);
-    Jput (in);
 }
 
 /*
@@ -824,7 +798,7 @@ static void cron_stop_handler (flux_t *h, flux_msg_handler_t *w,
     int saved_errno = 0;
     int rc = -1;
 
-    if (!(e = entry_from_request (h, msg, ctx, NULL, "cron.stop"))) {
+    if (!(e = entry_from_request (h, msg, ctx, "cron.stop"))) {
         saved_errno = errno;
         goto done;
     }
@@ -848,7 +822,7 @@ static void cron_start_handler (flux_t *h, flux_msg_handler_t *w,
     int saved_errno = 0;
     int rc = -1;
 
-    if (!(e = entry_from_request (h, msg, ctx, NULL, "cron.start"))) {
+    if (!(e = entry_from_request (h, msg, ctx, "cron.start"))) {
         saved_errno = errno;
         goto done;
     }
