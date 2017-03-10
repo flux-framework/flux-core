@@ -369,8 +369,12 @@ static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
     json_object *in = NULL;
     bool walk_topology = ctx->walk_topology;
 
-    if ((flux_request_decode (msg, NULL, &json_str) < 0)
-       || (!(in = Jfromstr (json_str)))) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (h, "%s: flux_request_decode", __FUNCTION__);
+        return (-1);
+    }
+
+    if (!(in = Jfromstr (json_str))) {
         errno = EPROTO;
         return (-1);
     }
@@ -476,6 +480,7 @@ static void topo_request_cb (flux_t *h,
 
     hwloc_topology_load (global);
     if (hwloc_topology_export_xmlbuffer (global, &buffer, &buflen) < 0) {
+        flux_log (h, LOG_ERR, "error hwloc_topology_export_xmlbuffer");
         flux_respond (h, msg, errno, NULL);
         goto done;
     }
@@ -485,8 +490,12 @@ static void topo_request_cb (flux_t *h,
         flux_log (h, LOG_ERR, "only got %d out of %d ranks aggregated",
                 count, size);
         flux_respond (h, msg, EAGAIN, NULL);
-    } else
-        flux_respond (h, msg, 0, Jtostr (out));
+    } else {
+        if (flux_respond (h, msg, 0, Jtostr (out)) < 0) {
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+            flux_respond (h, msg, errno, NULL);
+        }
+    }
 done:
     hwloc_topology_destroy (global);
     Jput (out);
