@@ -33,10 +33,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/modules/kvs/kvs.h"
 
 typedef struct
@@ -365,27 +365,20 @@ done:
 static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
                                   const flux_msg_t *msg)
 {
-    const char *json_str;
-    json_object *in = NULL;
-    bool walk_topology = ctx->walk_topology;
+    int walk_topology = ctx->walk_topology;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (h, "%s: flux_request_decode", __FUNCTION__);
-        return (-1);
-    }
-
-    if (!(in = Jfromstr (json_str))) {
-        errno = EPROTO;
+    if (flux_request_decodef (msg, NULL, "{}") < 0) {
+        flux_log_error (h, "%s: flux_request_decodef", __FUNCTION__);
         return (-1);
     }
 
     /*
      *  Set ctx->walk_topology to value in payload, if given.
      */
-    if (Jget_bool (in, "walk_topology", &walk_topology))
+    if (!flux_request_decodef (msg, NULL, "{ s:b }",
+                               "walk_topology", &walk_topology))
         ctx->walk_topology = walk_topology;
 
-    Jput (in);
     return (0);
 }
 
@@ -412,8 +405,7 @@ static void topo_request_cb (flux_t *h,
 {
     resource_ctx_t *ctx = (resource_ctx_t *)arg;
     kvsdir_t *kd = NULL;
-    json_object *out = NULL;
-    char *buffer;
+    char *buffer = NULL;
     int buflen;
     hwloc_topology_t global;
     hwloc_topology_init (&global);
@@ -475,34 +467,31 @@ static void topo_request_cb (flux_t *h,
     kvsitr_destroy (base_iter);
     kvsdir_destroy (kd);
 
-    out = Jnew ();
-
     hwloc_topology_load (global);
     if (hwloc_topology_export_xmlbuffer (global, &buffer, &buflen) < 0) {
         flux_log (h, LOG_ERR, "error hwloc_topology_export_xmlbuffer");
         goto done;
     }
-    Jadd_str (out, "topology", buffer);
-    hwloc_free_xmlbuffer (global, buffer);
     if (count < size) {
         flux_log (h, LOG_ERR, "only got %d out of %d ranks aggregated",
                 count, size);
         errno = EAGAIN;
         goto done;
     } else {
-        if (flux_respond (h, msg, 0, Jtostr (out)) < 0) {
-            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        if (flux_respondf (h, msg, "{ s:s# }", "topology", buffer, buflen) < 0) {
+            flux_log_error (h, "%s: flux_respondf", __FUNCTION__);
             goto done;
         }
     }
     rc = 0;
 done:
+    if (buffer)
+        hwloc_free_xmlbuffer (global, buffer);
     if (rc < 0) {
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     hwloc_topology_destroy (global);
-    Jput (out);
 }
 
 static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
