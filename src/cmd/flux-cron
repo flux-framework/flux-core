@@ -460,8 +460,13 @@ program:SubCommand {
         os.exit (1)
     end
 
+    -- opt.k is always nil or 1, so this is safe to perform
+    local function toboolean(X)
+         return not not X
+    end
+
     for _,id in ipairs (arg) do
-        local resp, err = f:rpc ("cron.delete", { id = id, kill = self.opt.k })
+        local resp, err = f:rpc ("cron.delete", { id = tonumber (id), kill = toboolean (self.opt.k) })
         if not resp then self:die (err) end
 
         local t = resp.tasks [1]
@@ -492,7 +497,7 @@ program:SubCommand {
     end
 
     for _,id in ipairs (arg) do
-        local resp, err = f:rpc ("cron.stop", { id = id })
+        local resp, err = f:rpc ("cron.stop", { id = tonumber (id) })
         if not resp then self:die (err) end
         printf ("Stopped cron-%d\n", arg[1])
     end
@@ -510,7 +515,7 @@ program:SubCommand {
     end
 
     for _,id in ipairs (arg) do
-        local resp, err = f:rpc ("cron.start", { id = id })
+        local resp, err = f:rpc ("cron.start", { id = tonumber (id) })
         if not resp then self:die (err) end
         printf ("Started cron-%d\n", arg[1])
     end
