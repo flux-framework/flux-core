@@ -34,7 +34,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 #define MODHANDLE_MAGIC    0xfeefbe02
 typedef struct {
@@ -157,19 +156,17 @@ static int op_event_subscribe (void *impl, const char *topic)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    json_object *in = Jnew ();
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
     if (connect_socket (ctx) < 0)
         goto done;
-    Jadd_str (in, "topic", topic);
-    if (!(rpc = flux_rpc (ctx->h, "cmb.sub", Jtostr (in), FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (ctx->h, "cmb.sub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (rpc);
     return rc;
 }
@@ -178,19 +175,17 @@ static int op_event_unsubscribe (void *impl, const char *topic)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    json_object *in = Jnew ();
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
     if (connect_socket (ctx) < 0)
         goto done;
-    Jadd_str (in, "topic", topic);
-    if (!(rpc = flux_rpc (ctx->h, "cmb.unsub", Jtostr (in), FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (ctx->h, "cmb.unsub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (rpc);
     return rc;
 }
