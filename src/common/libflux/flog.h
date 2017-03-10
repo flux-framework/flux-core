@@ -11,6 +11,11 @@
 
 #define FLUX_MAX_LOGBUF     2048
 
+/* May be ored with 'level' to cause log request
+ * to wait for a success/fail response.
+ */
+#define FLUX_LOG_CHECK      0x1000
+
 typedef void (*flux_log_f)(const char *buf, int len, void *arg);
 
 /* Set log appname for handle instance.
@@ -25,8 +30,8 @@ void flux_log_set_procid (flux_t *h, const char *s);
 
 /* Log a message at the specified level, as defined for syslog(3).
  */
-void flux_vlog (flux_t *h, int level, const char *fmt, va_list ap);
-void flux_log (flux_t *h, int level, const char *fmt, ...)
+int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap);
+int flux_log (flux_t *h, int level, const char *fmt, ...)
               __attribute__ ((format (printf, 3, 4)));
 
 /* Log a message at LOG_ERR level, appending a colon, space, and error string.
