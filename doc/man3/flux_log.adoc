@@ -1,0 +1,132 @@
+flux_log(3)
+===========
+:doctype: manpage
+
+
+NAME
+----
+flux_log, flux_vlog, flux_log_set_appname, flux_log_set_procid - Log messages to the Flux Message Broker
+
+
+SYNOPSIS
+--------
+#include <flux/core.h>
+
+int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap);
+
+int flux_log (flux_t *h, int level, const char *fmt, ...);
+
+void flux_log_set_appname (flux_t *h, const char *s);
+
+void flux_log_set_procid (flux_t *h, const char *s);
+
+DESCRIPTION
+-----------
+
+`flux_log()` creates RFC 5424 format log messages and sends them
+to the Flux message broker on 'h' for handling.
+
+The 'level' parameter should be set to one of the syslog(3) severity
+levels, which are, in order of decreasing importance:
+
+'LOG_EMERG'::      system is unusable
+'LOG_ALERT'::      action must be taken immediately
+'LOG_CRIT'::       critical conditions
+'LOG_ERR'::        error conditions
+'LOG_WARNING'::    warning conditions
+'LOG_NOTICE'::     normal, but significant, condition
+'LOG_INFO'::       informational message
+'LOG_DEBUG'::      debug-level message
+
+In addition, the flag 'FLUX_LOG_CHECK' may be logically ORed with
+the 'level' to direct `flux_log()` to wait for a response from the broker
+indicating whether the log request was accepted or not.  Otherwise, log
+requests are "fire and forget".
+
+Log messages are are added to the broker's circular buffer which
+can be accessed with flux-dmesg(3).  From there, a message's disposition
+is up to the broker's log configuration.
+
+`flux_log_set_procid()` may be used to override the default procid,
+which is initialized to the calling process's PID.
+
+`flux_log_set_appname()` may be used to override the default
+application name, which is initialized to the value of the '__progname'
+symbol (normally the argv[0] program name).
+
+MAPPING TO SYSLOG
+-----------------
+
+A Flux log message is formatted as a Flux request with a "raw" payload,
+as defined by Flux RFC 3.  The raw payload is formatted according to
+Internet RFC 5424.
+
+The following Syslog header fields are set in a Flux log messages when it is
+created within `flux_log()`:
+
+PRI::
+Set to the user-specified severity level combined with the facility,
+which is hardwired to 'LOG_USER' in Flux log messages.
+
+VERSION::
+Set to 1.
+
+TIMESTAMP::
+Set to the current UTC wallclock time.
+
+HOSTNAME::
+Set to the broker rank associated with 'h'.
+
+APP-NAME::
+Set to the user-defined application name, truncated to 48 characters,
+excluding terminating NULL.
+
+PROCID::
+Set to the PID of the calling process.
+
+MSGID::
+Set to the NIL string "-".
+
+The STRUCTURED-DATA portion of the message is empty, and reserved for
+future use by Flux.
+
+The MSG portion is post-processed to ensure it contains no NULL's or non-ASCII
+characters.  At this time non-ASCII UTF-8 is not supported by `flux_log()`.
+
+RETURN VALUE
+------------
+
+`flux_log()` normally returns 0 with no possibility of error.
+However, if the 'FLUX_LOG_CHECK' check flag is specified, it may
+return -1 with errno set on error.
+
+
+ERRORS
+------
+
+EPERM::
+The user does not have permission to log messages to this Flux instance.
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-dmesg(1), flux-logger(1),
+https://tools.ietf.org/html/rfc5424[RFC 5424 The Syslog Protocol]
