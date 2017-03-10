@@ -712,20 +712,19 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
-    json_object *out = Jnew ();
-    int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
-    Jadd_int (out, "count", zhash_size (cache->entries));
-    Jadd_int (out, "valid", cache->acct_valid);
-    Jadd_int (out, "dirty", cache->acct_dirty);
-    Jadd_int (out, "size", cache->acct_size);
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, Jtostr (out)) < 0)
+        goto error;
+    if (flux_respondf (h, msg, "{ s:i s:i s:i s:i}",
+                       "count", zhash_size (cache->entries),
+                       "valid", cache->acct_valid,
+                       "dirty", cache->acct_dirty,
+                       "size", cache->acct_size) < 0)
         flux_log_error (h, "content stats");
-    Jput (out);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "content stats");
 }
 
 /* Flush all dirty entries by walking the entire cache, issuing store
