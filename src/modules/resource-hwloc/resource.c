@@ -369,8 +369,12 @@ static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
     json_object *in = NULL;
     bool walk_topology = ctx->walk_topology;
 
-    if ((flux_request_decode (msg, NULL, &json_str) < 0)
-       || (!(in = Jfromstr (json_str)))) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        flux_log_error (h, "%s: flux_request_decode", __FUNCTION__);
+        return (-1);
+    }
+
+    if (!(in = Jfromstr (json_str))) {
         errno = EPROTO;
         return (-1);
     }
@@ -397,7 +401,7 @@ static void reload_request_cb (flux_t *h,
         || (ctx_hwloc_init (h, ctx) < 0)
         || (load_hwloc (h, ctx) < 0))
         errnum = errno;
-    if (flux_respond (h, msg, errnum, "{}") < 0)
+    if (flux_respond (h, msg, errnum, NULL) < 0)
         flux_log_error (h, "flux_respond");
 }
 
@@ -415,9 +419,9 @@ static void topo_request_cb (flux_t *h,
     hwloc_topology_init (&global);
     int count = 0;
     uint32_t size;
+    int rc = -1;
 
     if (flux_get_size (h, &size) < 0) {
-        flux_respond (h, msg, errno, NULL);
         flux_log_error (h, "%s: flux_get_size", __FUNCTION__);
         goto done;
     }
@@ -425,13 +429,12 @@ static void topo_request_cb (flux_t *h,
         flux_log (h,
                   LOG_ERR,
                   "topology cannot be aggregated, it has not been loaded");
-        flux_respond (h, msg, EINVAL, NULL);
+        errno = EINVAL;
         goto done;
     }
 
     if (kvs_get_dir (h, &kd, "resource.hwloc.xml") < 0) {
         flux_log (h, LOG_ERR, "xml dir is not available");
-        flux_respond (h, msg, errno, NULL);
         goto done;
     }
 
@@ -476,7 +479,7 @@ static void topo_request_cb (flux_t *h,
 
     hwloc_topology_load (global);
     if (hwloc_topology_export_xmlbuffer (global, &buffer, &buflen) < 0) {
-        flux_respond (h, msg, errno, NULL);
+        flux_log (h, LOG_ERR, "error hwloc_topology_export_xmlbuffer");
         goto done;
     }
     Jadd_str (out, "topology", buffer);
@@ -484,10 +487,20 @@ static void topo_request_cb (flux_t *h,
     if (count < size) {
         flux_log (h, LOG_ERR, "only got %d out of %d ranks aggregated",
                 count, size);
-        flux_respond (h, msg, EAGAIN, NULL);
-    } else
-        flux_respond (h, msg, 0, Jtostr (out));
+        errno = EAGAIN;
+        goto done;
+    } else {
+        if (flux_respond (h, msg, 0, Jtostr (out)) < 0) {
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+            goto done;
+        }
+    }
+    rc = 0;
 done:
+    if (rc < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    }
     hwloc_topology_destroy (global);
     Jput (out);
 }

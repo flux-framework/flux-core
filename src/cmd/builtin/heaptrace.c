@@ -44,6 +44,7 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
         log_err_exit ("heaptrace.start");
     flux_rpc_destroy (rpc);
     flux_close (h);
+    Jput (in);
     return (0);
 }
 
@@ -85,6 +86,7 @@ static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
         log_err_exit ("heaptrace.dump");
     flux_rpc_destroy (rpc);
     flux_close (h);
+    Jput (in);
     return (0);
 }
 

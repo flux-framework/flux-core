@@ -132,8 +132,10 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
     int pid;
     int errnum = EPROTO;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        errnum = errno;
         goto out;
+    }
 
     if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid) &&
         Jget_obj (request, "stdin", &o)) {
@@ -160,9 +162,10 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
         free (data);
     }
+    errnum = 0;
 out:
-    if (flux_respondf (h, msg, "{si}", "code", errnum) < 0)
-        flux_log_error (h, "write_cb: flux_respondf");
+    if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
+        flux_log_error (h, "write_request_cb: flux_respondf");
     if (request)
         json_object_put (request);
 }
@@ -176,8 +179,10 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
     int pid;
     int errnum = EPROTO;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+        errnum = errno;
         goto out;
+    }
     if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid)) {
         int signum;
         struct subprocess *p;
@@ -195,8 +200,8 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
     }
 out:
-    if (flux_respondf (h, msg, "{si}", "code", errnum) < 0)
-        flux_log_error (h, "signal_cb: flux_respondf");
+    if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
+        flux_log_error (h, "signal_request_cb: flux_respondf");
     if (request)
         json_object_put (request);
 }

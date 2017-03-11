@@ -970,12 +970,12 @@ static void push_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *in = NULL;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (ctx->h, "%s: reuqest decode", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: request decode", __FUNCTION__);
         goto done;
     }
     if (!(in = Jfromstr (json_str))) {
         errno = EPROTO;
-        flux_log_error (ctx->h, "%s: reuqest decode", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: request decode", __FUNCTION__);
         goto done;
     }
     flux_reduce_append (ctx->r, Jget (in), 0);

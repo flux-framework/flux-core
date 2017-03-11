@@ -157,10 +157,12 @@ static int handle_seq_set (seqhash_t *s, json_object *in, json_object **outp)
         errno = EPROTO;
         return (-1);
     }
-    if ((Jget_int64 (in, "oldvalue", &old)
-        && (seq_cmp_and_set (s, name, old, v) < 0))
-        || (seq_set (s, name, v) < 0))
-            return (-1);
+
+    if (Jget_int64 (in, "oldvalue", &old)
+        && seq_cmp_and_set (s, name, old, v) < 0)
+        return (-1);
+    else if (seq_set (s, name, v) < 0)
+        return (-1);
 
     *outp = Jnew ();
     Jadd_str (*outp, "name", name);
