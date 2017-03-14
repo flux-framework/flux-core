@@ -50,9 +50,6 @@ void usage (void)
 "       flux-comms        info\n"
 "       flux-comms [-r N] reparent new-uri\n"
 "       flux-comms [-r N] panic [msg ...]\n"
-"       flux-comms [-r N] failover\n"
-"       flux-comms [-r N] recover\n"
-"       flux-comms        recover-all\n"
 );
     exit (1);
 }
@@ -114,21 +111,6 @@ int main (int argc, char *argv[])
         flux_panic (h, rank, msg);
         if (msg)
             free (msg);
-    } else if (!strcmp (cmd, "failover")) {
-        if (optind != argc)
-            usage ();
-        if (flux_failover (h, rank) < 0)
-            log_err_exit ("flux_failover");
-    } else if (!strcmp (cmd, "recover")) {
-        if (optind != argc)
-            usage ();
-        if (flux_recover (h, rank) < 0)
-            log_err_exit ("flux_recover");
-    } else if (!strcmp (cmd, "recover-all")) {
-        if (optind != argc)
-            usage ();
-        if (flux_recover_all (h) < 0)
-            log_err_exit ("flux_recover_all");
     } else if (!strcmp (cmd, "info")) {
         int arity;
         uint32_t rank, size;

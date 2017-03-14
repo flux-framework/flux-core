@@ -11,20 +11,6 @@ SIZE=4
 LASTRANK=$((SIZE-1))
 test_under_flux ${SIZE} kvs
 
-test_expect_success 'up: load live module' '
-	flux module load -r all barrier &&
-	flux module load -r all live barrier-count=${SIZE}
-'
-#
-# Wait for all ranks to leave unknown state in live module:
-# (i.e. conf.live.status has unknown == ""), since this is required
-# for predictable results with flux-up:
-test "$debug" = "t" && ARG="--verbose"
-$SHARNESS_TEST_SRCDIR/scripts/kvs-watch-until.lua ${ARG} \
-	--timeout=5 \
-	conf.live.status 'v.unknown == ""' \
-    || die "failed to wait on live module status"
-
 test_expect_success 'event: can publish' '
 	run_timeout 5 \
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
