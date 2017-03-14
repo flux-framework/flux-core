@@ -684,6 +684,28 @@ done:
     return rc;
 }
 
+int module_stop_all (modhash_t *mh)
+{
+    zlist_t *uuids;
+    char *uuid;
+    int rc = -1;
+
+    if (!(uuids = zhash_keys (mh->zh_byuuid)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
+        assert (p != NULL);
+        if (module_stop (p) < 0)
+            goto done;
+        uuid = zlist_next (uuids);
+    }
+    rc = 0;
+done:
+    zlist_destroy (&uuids);
+    return rc;
+}
+
 module_t *module_lookup_byname (modhash_t *mh, const char *name)
 {
     zlist_t *uuids;
