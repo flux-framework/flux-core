@@ -5,7 +5,6 @@ SUBDIRS = \
  kvs \
  content-sqlite \
  libkz \
- live \
  wreck \
  libjsc \
  resource-hwloc \

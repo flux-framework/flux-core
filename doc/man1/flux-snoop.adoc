@@ -28,20 +28,24 @@ display, is shown.  For example, a "kvs.get" request and response look
 like this:
 
  --------------------------------------
- >[002] |3C4ED!A76A7|
+ >[000] ||
  >[007] kvs.get
- >[028] { "conf.live.status": null }
+ >[028] { "key": "foo", "flags": 0 }
+ >[020] 8E01010FFFFFFFFF00000000FFFFFFFF00000000
  --------------------------------------
- <[002] |3C4ED!A76A7|
+ <[000] ||
  <[007] kvs.get
- <[080] { "conf.live.status": { "ok": "[0-7]", "fail":...
+ <[090] { "rootdir": { "DIRREF": "sha1-1b7ec2c61b...
+ <[020] 8E01020F0000216C000000010000000000000001
  --------------------------------------
 
 While a heartbeat event looks like this:
 
  --------------------------------------
+ e[000] ||
  e[002] hb
- e[015] { "epoch": 19 }
+ e[013] {"epoch":437}
+ e[020] 8E01040F0000216C000000010000000000000000
  --------------------------------------
 
 Flux requests consist of a string message part denoting the service

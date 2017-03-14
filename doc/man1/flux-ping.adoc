@@ -22,12 +22,12 @@ essentially an echo of the request, with the route taken to the service
 added by the service.  This route is displayed in the output and can
 give insight into how various addresses are routed.
 
-'target' may be the name of a comms module service, e.g. "kvs" or "live".
-flux-ping(1) will send a request to "kvs.ping" or "live.ping".
-As a shorthand, 'target' can include a rank or nodeset prefix delimited by an
-exclamation point.  "flux ping 4!kvs" is equivalent to
-"flux ping --rank 4 kvs" (see --rank option below).
-Don't forget to quote the exclamation point if it is interpreted by your shell.
+'target' may be the name of a comms module service, e.g. "kvs".
+flux-ping(1) will send a request to "kvs.ping".  As a shorthand,
+'target' can include a rank or nodeset prefix delimited by an
+exclamation point.  "flux ping 4!kvs" is equivalent to "flux ping
+--rank 4 kvs" (see --rank option below).  Don't forget to quote the
+exclamation point if it is interpreted by your shell.
 
 As a shorthand, 'target' may also simply be a rank or nodeset by itself
 indicating that the broker on that rank or ranks, rather than a comms
