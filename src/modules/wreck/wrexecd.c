@@ -1122,18 +1122,17 @@ void close_child_fds (struct task_info *t)
 void send_job_state_event (struct prog_ctx *ctx, const char *state)
 {
     flux_msg_t *msg;
-    char *json = NULL;
     char *topic = NULL;
 
-    if ((asprintf (&json, "{\"lwj\":%"PRId64", \"kvs_path\": \"%s\"}",
-                   ctx->id, ctx->kvspath) < 0)
-        || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
+    if (asprintf (&topic, "wreck.state.%s", state) < 0) {
         wlog_err (ctx, "failed to create state change event: %s", state);
         goto out;
     }
 
-    if ((msg = flux_event_encode (topic, json)) == NULL) {
-        wlog_err (ctx, "flux_event_encode: %s", flux_strerror (errno));
+    if ((msg = flux_event_encodef (topic, "{ s:I, s:s }",
+                                   "lwj", ctx->id,
+                                   "kvs_path", ctx->kvspath)) == NULL) {
+        wlog_err (ctx, "flux_event_encodef: %s", flux_strerror (errno));
         goto out;
     }
 
@@ -1143,7 +1142,6 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
     flux_msg_destroy (msg);
 out:
     free (topic);
-    free (json);
 }
 
 int update_job_state (struct prog_ctx *ctx, const char *state)
