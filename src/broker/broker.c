@@ -200,6 +200,8 @@ static void init_attrs (broker_ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
+static int exit_rc = 0;
+
 #define OPTIONS "+vqM:X:k:s:g:EIS:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
@@ -708,7 +710,7 @@ int main (int argc, char *argv[])
     zlist_destroy (&ctx.subscriptions);
     runlevel_destroy (ctx.runlevel);
 
-    return 0;
+    return exit_rc;
 }
 
 struct attrmap {
@@ -797,8 +799,11 @@ static void hello_update_cb (hello_t *hello, void *arg)
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (expired)
-        exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
+    if (expired) {
+        if (ctx->rank == 0)
+            exit_rc = shutdown_get_rc (s);
+        flux_reactor_stop (flux_get_reactor (ctx->h));
+    }
 }
 
 static void update_proctitle (broker_ctx_t *ctx)
