@@ -390,6 +390,7 @@ int main (int argc, char *argv[])
 
     /* Initailize zeromq context
      */
+    zsys_set_logstream (stderr);
     zsys_handler_set (NULL);
     ctx.zctx = zctx_new ();
     if (!ctx.zctx)
