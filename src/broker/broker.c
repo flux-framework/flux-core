@@ -650,7 +650,6 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         log_msg ("initializing modules");
-    modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);

@@ -38,38 +38,28 @@
 #define MODHANDLE_MAGIC    0xfeefbe02
 typedef struct {
     int magic;
-    void *sock;
+    zsock_t *sock;
     char *uuid;
-    char *uri;
     flux_t *h;
-    zctx_t *zctx;
 } shmem_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
-
-static int connect_socket (shmem_ctx_t *ctx);
 
 static int op_pollevents (void *impl)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     uint32_t e;
-    size_t esize = sizeof (e);
     int revents = 0;
 
-    if (connect_socket (ctx) < 0)
-        goto done;
-    if (zmq_getsockopt (ctx->sock, ZMQ_EVENTS, &e, &esize) < 0) {
-        revents |= FLUX_POLLERR;
-        goto done;
-    }
+    e = zsock_events (ctx->sock);
     if (e & ZMQ_POLLIN)
         revents |= FLUX_POLLIN;
     if (e & ZMQ_POLLOUT)
         revents |= FLUX_POLLOUT;
     if (e & ZMQ_POLLERR)
         revents |= FLUX_POLLERR;
-done:
+
     return revents;
 }
 
@@ -77,17 +67,9 @@ static int op_pollfd (void *impl)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    int fd = -1;
-    size_t fdsize = sizeof (fd);
 
-    if (connect_socket (ctx) < 0)
-        goto done;
-    if (zmq_getsockopt (ctx->sock, ZMQ_FD, &fd, &fdsize) < 0)
-        goto done;
-done:
-    return fd;
+    return zsock_fd (ctx->sock);
 }
-
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
@@ -97,8 +79,6 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     int type;
     int rc = -1;
 
-    if (connect_socket (ctx) < 0)
-        goto done;
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     switch (type) {
@@ -133,12 +113,13 @@ static flux_msg_t *op_recv (void *impl, int flags)
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     zmq_pollitem_t zp = {
-        .events = ZMQ_POLLIN, .socket = ctx->sock, .revents = 0, .fd = -1,
+        .events = ZMQ_POLLIN,
+        .socket = zsock_resolve (ctx->sock),
+        .revents = 0,
+        .fd = -1,
     };
     flux_msg_t *msg = NULL;
 
-    if (connect_socket (ctx) < 0)
-        goto done;
     if ((flags & FLUX_O_NONBLOCK)) {
         int n;
         if ((n = zmq_poll (&zp, 1, 0L)) <= 0) {
@@ -159,8 +140,6 @@ static int op_event_subscribe (void *impl, const char *topic)
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
-    if (connect_socket (ctx) < 0)
-        goto done;
     if (!(rpc = flux_rpcf (ctx->h, "cmb.sub", FLUX_NODEID_ANY, 0,
                            "{ s:s }", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
@@ -178,8 +157,6 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     flux_rpc_t *rpc = NULL;
     int rc = -1;
 
-    if (connect_socket (ctx) < 0)
-        goto done;
     if (!(rpc = flux_rpcf (ctx->h, "cmb.unsub", FLUX_NODEID_ANY, 0,
                            "{ s:s }", "topic", topic))
                 || flux_rpc_get (rpc, NULL) < 0)
@@ -190,87 +167,14 @@ done:
     return rc;
 }
 
-static int op_getopt (void *impl, const char *option, void *val, size_t size)
-{
-    shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    int rc = -1;
-
-    if (option && !strcmp (option, FLUX_OPT_ZEROMQ_CONTEXT)) {
-        if (size != sizeof (ctx->zctx)) {
-            errno = EINVAL;
-            goto done;
-        }
-        memcpy (val, &ctx->zctx, size);
-    } else {
-        errno = EINVAL;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-static int op_setopt (void *impl, const char *option,
-                      const void *val, size_t size)
-{
-    shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    size_t val_size;
-    int rc = -1;
-
-    if (option && !strcmp (option, FLUX_OPT_ZEROMQ_CONTEXT)) {
-        val_size = sizeof (ctx->zctx);
-        if (size != val_size) {
-            errno = EINVAL;
-            goto done;
-        }
-        memcpy (&ctx->zctx, &val, val_size);
-        if (connect_socket (ctx) < 0)
-            goto done;
-    } else {
-        errno = EINVAL;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 static void op_fini (void *impl)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    if (ctx->sock)
-        zsocket_destroy (ctx->zctx, ctx->sock);
-    if (ctx->uuid)
-        free (ctx->uuid);
-    if (ctx->uri)
-        free (ctx->uri);
+    zsock_destroy (&ctx->sock);
+    free (ctx->uuid);
     ctx->magic = ~MODHANDLE_MAGIC;
     free (ctx);
-}
-
-/* We have to defer connection until the zctx is available to us.
- * This function is idempotent.
- */
-static int connect_socket (shmem_ctx_t *ctx)
-{
-    if (!ctx->sock) {
-        if (!ctx->zctx) {
-            errno = EINVAL;
-            return -1;
-        }
-        if (!(ctx->sock = zsocket_new (ctx->zctx, ZMQ_PAIR)))
-            return -1;
-        zsocket_set_hwm (ctx->sock, 0);
-        if (zsocket_connect (ctx->sock, "%s", ctx->uri) < 0) {
-            zsocket_destroy (ctx->zctx, ctx->sock);
-            ctx->sock = NULL;
-            return -1;
-        }
-    }
-    return 0;
 }
 
 flux_t *connector_init (const char *path, int flags)
@@ -289,20 +193,20 @@ flux_t *connector_init (const char *path, int flags)
         errno = EINVAL;
         goto error;
     }
-    if (!(ctx = malloc (sizeof (*ctx)))) {
+    if (!(ctx = calloc (1, sizeof (*ctx)))) {
         errno = ENOMEM;
         goto error;
     }
-    memset (ctx, 0, sizeof (*ctx));
     ctx->magic = MODHANDLE_MAGIC;
     if (!(ctx->uuid = strdup (path))) {
         errno = ENOMEM;
         goto error;
     }
-    if (asprintf (&ctx->uri, "inproc://%s", ctx->uuid) < 0) {
-        errno = ENOMEM;
+    if (!(ctx->sock = zsock_new_pair (NULL)))
         goto error;
-    }
+    zsock_set_unbounded (ctx->sock);
+    if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+        goto error;
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
     return ctx->h;
@@ -320,8 +224,8 @@ static const struct flux_handle_ops handle_ops = {
     .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
-    .getopt = op_getopt,
-    .setopt = op_setopt,
+    .getopt = NULL,
+    .setopt = NULL,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,
     .impl_destroy = op_fini,

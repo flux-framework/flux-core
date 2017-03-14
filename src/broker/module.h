@@ -13,7 +13,6 @@ typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
 modhash_t *modhash_create (void);
 void modhash_destroy (modhash_t *mh);
 
-void modhash_set_zctx (modhash_t *mh, zctx_t *zctx);
 void modhash_set_rank (modhash_t *mh, uint32_t rank);
 void modhash_set_flux (modhash_t *mh, flux_t *h);
 void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb);
