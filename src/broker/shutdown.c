@@ -31,7 +31,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 #include "shutdown.h"
 
@@ -152,19 +151,15 @@ void shutdown_disarm (shutdown_t *s)
 flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
                               const char *fmt, va_list ap)
 {
-    flux_msg_t *msg;
-    json_object *out = Jnew ();
     char reason[REASON_MAX];
 
     vsnprintf (reason, sizeof (reason), fmt, ap);
 
-    Jadd_str (out, "reason", reason);
-    Jadd_double (out, "grace", grace);
-    Jadd_int (out, "rank", rank);
-    Jadd_int (out, "exitcode", exitcode);
-    msg = flux_event_encode ("shutdown", Jtostr (out));
-    Jput (out);
-    return msg;
+    return flux_event_encodef ("shutdown", "{ s:s s:f s:i s:i }",
+                               "reason", reason,
+                               "grace", grace,
+                               "rank", rank,
+                               "exitcode", exitcode);
 }
 
 flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
@@ -183,23 +178,18 @@ flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
 int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
                      int *rank, char *reason, int reason_len)
 {
-    const char *json_str, *s;
-    json_object *in = NULL;
+    const char *s;
     int rc = -1;
 
-    if (flux_event_decode (msg, NULL, &json_str) < 0
-                || !(in = Jfromstr (json_str))
-                || !Jget_str (in, "reason", &s)
-                || !Jget_double (in, "grace", grace)
-                || !Jget_int (in, "rank", rank)
-                || !Jget_int (in, "exitcode", exitcode)) {
-        errno = EPROTO;
+    if (flux_event_decodef (msg, NULL, "{ s:s s:F s:i s:i}",
+                            "reason", &s,
+                            "grace", grace,
+                            "rank", rank,
+                            "exitcode", exitcode) < 0)
         goto done;
-    }
     snprintf (reason, reason_len, "%s", s);
     rc = 0;
 done:
-    Jput (in);
     return rc;
 }
 
