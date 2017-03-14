@@ -635,15 +635,14 @@ static int send_state_event (flux_t *h, job_state_t st, int64_t j)
     char *topic = NULL;
     int rc = -1;
 
-    if ((asprintf (&json, "{\"lwj\":%"PRId64"}", j) < 0)
-        || (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0)) {
+    if (asprintf (&topic, "jsc.state.%s", jsc_job_num2state (st)) < 0) {
         errno = ENOMEM;
         flux_log_error (h, "create state change event: %s",
                         jsc_job_num2state (st));
         goto done;
     }
-    if ((msg = flux_event_encode (topic, json)) == NULL) {
-        flux_log_error (h, "flux_event_encode");
+    if ((msg = flux_event_encodef (topic, "{ s:I }", "lwj", j)) == NULL) {
+        flux_log_error (h, "flux_event_encodef");
         goto done;
     }
     if (flux_send (h, msg, 0) < 0)
@@ -978,9 +977,7 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     int64_t jobid = -1;
-    json_object *o = NULL;
     const char *topic = NULL;
-    const char *json_str = NULL;
     const char *state = NULL;
     const char *kvs_path = NULL;
     int len = 12;
@@ -988,14 +985,12 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
 
-    if (flux_event_decode (msg, NULL, &json_str) < 0
-            || !(o = Jfromstr (json_str))
-            || !Jget_int64 (o, "lwj", &jobid)) {
+    if (flux_event_decodef (msg, NULL, "{ s:I }", "lwj", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
 
-    if (Jget_str (o, "kvs_path", &kvs_path)) {
+    if (!flux_event_decodef (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
         if (jscctx_add_jobid_path (getctx (h), jobid, kvs_path) < 0)
             flux_log_error (h, "jscctx_add_jobid_path");
     }
