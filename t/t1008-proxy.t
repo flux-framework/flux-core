@@ -86,6 +86,11 @@ test_expect_success 'ssh:// can handle nontrivial message load' '
 	  flux kvs dir -R >dir.out
 '
 
+test_expect_success 'ssh:// can work with events' '
+	FLUX_URI=ssh://localhost/$TEST_JOBID FLUX_SSH=$TEST_SSH \
+	  flux event sub --count=1 hb
+'
+
 test_expect_success 'ssh:// with bad query option fails in flux_open()' '
 	FLUX_URI=ssh://localhost/$TEST_JOBID?badarg=bar FLUX_SSH=$TEST_SSH \
 	  flux getattr size 2>badarg.out; test $? -ne 0 &&
