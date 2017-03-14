@@ -30,12 +30,11 @@ comms modules; and _reparent_, which allows overlay networks to be
 rewired on the fly.
 
 flux-core also includes the following services implemented as
-comms modules: _kvs_, a distributed key-value store;  _live_,
-a service that monitors overlay network health and can rewire around
-failed broker instances; _modctl_, a distributed module control service;
-_barrier_, a MPI-like barrier implementation; _api_, a routing service
-for clients connecting to a broker instance via a UNIX domain socket;
-and _wreck_ a remote execution service.
+comms modules: _kvs_, a distributed key-value store;  _modctl_, a
+distributed module control service; _barrier_, a MPI-like barrier
+implementation; _api_, a routing service for clients connecting to a
+broker instance via a UNIX domain socket; and _wreck_ a remote
+execution service.
 
 A number of utilities are provided for accessing these services,
 accessible via the `flux` command front-end (see below),
