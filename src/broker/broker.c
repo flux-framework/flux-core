@@ -685,6 +685,7 @@ int main (int argc, char *argv[])
     /* Unregister builtin services
      */
     attr_unregister_handlers ();
+    content_cache_destroy (ctx.cache);
 
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
@@ -705,7 +706,6 @@ int main (int argc, char *argv[])
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
-    content_cache_destroy (ctx.cache);
     runlevel_destroy (ctx.runlevel);
 
     return 0;
