@@ -386,7 +386,7 @@ int main (int argc, char *argv[])
 
     /* Set up the flux reactor.
      */
-    if (!(ctx.reactor = flux_reactor_create (SIGCHLD)))
+    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
 
     /* Set up flux handle.
