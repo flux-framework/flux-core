@@ -173,7 +173,6 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static void broker_block_signals (void);
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
@@ -261,6 +260,9 @@ int main (int argc, char *argv[])
     int security_set = 0;
     int e;
     char *endptr;
+    sigset_t old_sigmask;
+    struct sigaction old_sigact_int;
+    struct sigaction old_sigact_term;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -374,7 +376,16 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_open enclosing instance");
     }
 
-    broker_block_signals ();
+    /* Block all signals, saving old mask and actions for SIGINT, SIGTERM.
+     */
+    sigset_t sigmask;
+    sigfillset (&sigmask);
+    if (sigprocmask (SIG_SETMASK, &sigmask, &old_sigmask) < 0)
+        log_err_exit ("sigprocmask");
+    if (sigaction (SIGINT, NULL, &old_sigact_int) < 0)
+        log_err_exit ("sigaction");
+    if (sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
+        log_err_exit ("sigaction");
 
     /* Initailize zeromq context
      */
@@ -672,6 +683,15 @@ int main (int argc, char *argv[])
         log_err ("flux_reactor_run");
     if (ctx.verbose)
         log_msg ("exited event loop");
+
+    /* Restore default sigmask and actions for SIGINT, SIGTERM
+     */
+    if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0)
+        log_err_exit ("sigprocmask");
+    if (sigaction (SIGINT, &old_sigact_int, NULL) < 0)
+        log_err_exit ("sigaction");
+    if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
+        log_err_exit ("sigaction");
 
     /* remove heartbeat timer, if any
      */
@@ -1331,15 +1351,6 @@ next:
     }
     module_start_all (ctx->modhash);
     free (cpy);
-}
-
-static void broker_block_signals (void)
-{
-    sigset_t sigmask;
-    sigemptyset(&sigmask);
-    sigfillset(&sigmask);
-    if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
-        log_err_exit ("sigprocmask");
 }
 
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
