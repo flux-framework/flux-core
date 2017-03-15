@@ -54,9 +54,11 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
     if (!(t->h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
 
-    t->rpc = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0);
-    if (!t->rpc || (flux_rpc_get (t->rpc, &json_str) < 0))
+    if (!(t->rpc = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0)))
         log_err_exit ("flux_rpc");
+
+    if (flux_rpc_get (t->rpc, &json_str) < 0)
+        log_err_exit ("flux_rpc_get");
 
     if (!(t->o = Jfromstr (json_str)) || !Jget_str (t->o, "topology", &t->topo))
         log_msg_exit ("failed to parse json topology");
