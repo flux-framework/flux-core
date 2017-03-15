@@ -109,7 +109,7 @@ int main (int argc, char *argv[])
     errno = 0;
     ok (flux_response_decode_raw (msg, NULL, &d, &l) < 0
         && errno == 42 && d == NULL && l == 0,
-        "flux_response_decode fails with encoded errnum");
+        "flux_response_decode_raw fails with encoded errnum");
     flux_msg_destroy (msg);
 
     done_testing();
