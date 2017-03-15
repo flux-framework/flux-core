@@ -38,7 +38,6 @@
 struct hwloc_topo {
     flux_t *h;
     flux_rpc_t *rpc;
-    json_object *o;
     const char *topo;
 };
 
@@ -48,7 +47,6 @@ struct hwloc_topo {
  */
 static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
 {
-    const char *json_str;
     struct hwloc_topo *t = xzmalloc (sizeof (*t));
 
     if (!(t->h = builtin_get_flux_handle (p)))
@@ -57,21 +55,17 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
     if (!(t->rpc = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0)))
         log_err_exit ("flux_rpc");
 
-    if (flux_rpc_get (t->rpc, &json_str) < 0)
-        log_err_exit ("flux_rpc_get");
-
-    if (!(t->o = Jfromstr (json_str)) || !Jget_str (t->o, "topology", &t->topo))
-        log_msg_exit ("failed to parse json topology");
+    if (flux_rpc_getf (t->rpc, "{ s:s }", "topology", &t->topo) < 0)
+        log_err_exit ("flux_rpc_getf");
 
     return (t);
 }
 
 /*
- * Free parsed JSON object and RPC for hwloc toplogy
+ * Free RPC for hwloc toplogy
  */
 static void hwloc_topo_destroy (struct hwloc_topo *t)
 {
-    json_object_put (t->o);
     flux_rpc_destroy (t->rpc);
     flux_close (t->h);
     free (t);
