@@ -1351,75 +1351,59 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *in = NULL;
-    json_object *out = Jnew ();
     int rootseq;
     wait_t *wait = NULL;
-    int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "rootseq", &rootseq)) {
-        errno = EPROTO;
-        goto done;
-    }
+    if (flux_request_decodef (msg, NULL, "{ s:i }",
+                              "rootseq", &rootseq) < 0)
+        goto error;
     if (ctx->rootseq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
-            goto done;
+            goto error;
         wait_addqueue (ctx->watchlist, wait);
-        goto done; /* stall */
+        return; /* stall */
     }
-    Jadd_int (out, "rootseq", ctx->rootseq);
-    Jadd_str (out, "rootdir", ctx->rootdir);
-    rc = 0;
-done:
-    if (!wait) {
-        if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                                  rc < 0 ? NULL : Jtostr (out)) < 0)
-            flux_log_error (h, "%s", __FUNCTION__);
-    }
-    Jput (in);
-    Jput (out);
+    if (flux_respondf (h, msg, "{ s:i s:s }",
+                       "rootseq", ctx->rootseq,
+                       "rootdir", ctx->rootdir) < 0)
+        goto error;
+    return;
+
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s", __FUNCTION__);
 }
 
 static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    json_object *out = NULL;
-    int rc = -1;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
-    if (!(out = kp_rgetroot_enc (ctx->rootseq, ctx->rootdir)))
-        goto done;
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
+        goto error;
+    if (flux_respondf (h, msg, "{ s:i s:s }",
+                       "rootseq", ctx->rootseq,
+                       "rootdir", ctx->rootdir) < 0)
+        goto error;
+    return;
+
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (out);
 }
 
 static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
 {
     flux_rpc_t *rpc;
-    const char *json_str;
-    json_object *out = NULL;
     const char *ref;
     int rc = -1;
 
     if (!(rpc = flux_rpc (ctx->h, "kvs.getroot", NULL,
                                              FLUX_NODEID_UPSTREAM, 0)))
         goto done;
-    if (flux_rpc_get (rpc, &json_str) < 0)
-        goto done;
-    if (!(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_rgetroot_dec (out, rootseq, &ref) < 0)
+    if (flux_rpc_getf (rpc, "{ s:i s:s }",
+                       "rootseq", rootseq,
+                       "rootdir", &ref) < 0)
         goto done;
     if (strlen (ref) > sizeof (href_t) - 1) {
         errno = EPROTO;
@@ -1428,7 +1412,6 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
     memcpy (rootdir, ref, sizeof (href_t));
     rc = 0;
 done:
-    Jput (out);
     flux_rpc_destroy (rpc);
     return rc;
 }

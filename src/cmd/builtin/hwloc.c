@@ -234,35 +234,35 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
         log_err_exit ("kvs_commit");
 }
 
-static json_object *hwloc_reload_json_create (const char *walk_topology)
+static bool hwloc_reload_bool_value (const char *walk_topology)
 {
-    json_object *o = Jnew ();
     bool v = true;
-
-    if (walk_topology == NULL)
-        return (o);
 
     if (strcmp (walk_topology, "no") == 0
         || strcmp (walk_topology, "0") == 0
         || strcmp (walk_topology, "false") == 0)
         v = false;
-    Jadd_bool (o, "walk_topology", v);
-    return (o);
+    return (v);
 }
-
 
 static void request_hwloc_reload (flux_t *h, const char *nodeset,
                                   const char *walk_topology)
 {
     flux_rpc_t *rpc;
-    json_object *o = NULL;
-    const char *json_str = NULL;
 
-    if ((o = hwloc_reload_json_create (walk_topology)))
-        json_str = Jtostr (o);
-    if (!(rpc = flux_rpc_multi (h, "resource-hwloc.reload", json_str,
-                                                        nodeset, 0)))
-        log_err_exit ("flux_rpc_multi");
+    if (!walk_topology) {
+        if (!(rpc = flux_rpcf_multi (h, "resource-hwloc.reload",
+                                     nodeset, 0, "{}")))
+            log_err_exit ("flux_rpcf_multi");
+    }
+    else {
+        bool v = hwloc_reload_bool_value (walk_topology);
+
+        if (!(rpc = flux_rpcf_multi (h, "resource-hwloc.reload", nodeset, 0,
+                                     "{ s:b }", "walk_topology", v)))
+            log_err_exit ("flux_rpcf_multi");
+    }
+
     do {
         uint32_t nodeid = FLUX_NODEID_ANY;
         if (flux_rpc_get (rpc, NULL) < 0
@@ -274,7 +274,6 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
         }
     } while (flux_rpc_next (rpc) == 0);
     flux_rpc_destroy (rpc);
-    Jput (o);
 }
 
 static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])

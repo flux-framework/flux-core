@@ -1519,24 +1519,17 @@ static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    json_object *in = NULL;
     const char *uri;
-    const char *json_str;
     bool recycled = false;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{ s:s }", "uri", &uri) < 0)
         goto error;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "uri", &uri)) {
-        errno = EPROTO;
-        goto error;
-    }
     if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
         goto error;
     flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
                                                                   : "new");
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (in);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
@@ -1546,20 +1539,16 @@ error:
 static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
-    json_object *in = NULL;
     const char *s = NULL;
-    const char *json_str;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{}") < 0)
         goto error;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "msg", &s))
+    if (flux_request_decodef (msg, NULL, "{ s:s }", "msg", &s) < 0)
         s = "no reason";
     log_msg_exit ("PANIC: %s", s ? s : "no reason");
     /*NOTREACHED*/
-    Jput (in);
     return;
 error:
-    Jput (in);
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
@@ -1592,17 +1581,11 @@ static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *json_str;
     char *uuid = NULL;
-    json_object *in = NULL;
     const char *topic;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
-        errno = EPROTO;
-        goto error;
-    }
     if (flux_msg_get_route_first (msg, &uuid) < 0)
         goto error;
     if (!uuid) {
@@ -1614,30 +1597,22 @@ static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (uuid);
-    Jput (in);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (uuid);
-    Jput (in);
 }
 
 static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    const char *json_str;
     char *uuid = NULL;
-    json_object *in = NULL;
     const char *topic;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
-    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
-        errno = EPROTO;
-        goto error;
-    }
     if (flux_msg_get_route_first (msg, &uuid) < 0)
         goto error;
     if (!uuid) {
@@ -1649,13 +1624,11 @@ static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (uuid);
-    Jput (in);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (uuid);
-    Jput (in);
 }
 
 static int route_to_handle (const flux_msg_t *msg, void *arg)

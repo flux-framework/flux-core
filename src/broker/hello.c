@@ -30,7 +30,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
 
 #include "hello.h"
@@ -217,19 +216,16 @@ static void join_request (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     hello_t *hello = arg;
-    const char *json_str;
     int count, batch;
-    json_object *in = NULL;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        log_err_exit ("hello: flux_request_decode");
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "count", &count)
-                                    || !Jget_int (in, "batch", &batch)
-                                    || batch != 0 || count <= 0)
+    if (flux_request_decodef (msg, NULL, "{ s:i s:i }",
+                              "count", &count,
+                              "batch", &batch) < 0)
+        log_err_exit ("hello: flux_request_decodef");
+    if (batch != 0 || count <= 0)
         log_msg_exit ("hello: error decoding join request");
     if (flux_reduce_append (hello->reduce, (void *)(uintptr_t)count, batch) < 0)
         log_err_exit ("hello: flux_reduce_append");
-    Jput (in);
 }
 
 /* Reduction ops
@@ -281,18 +277,16 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
     flux_rpc_t *rpc;
     hello_t *hello = arg;
     int count = (uintptr_t)flux_reduce_pop (r);
-    json_object *in = Jnew ();
 
     assert (batch == 0);
     assert (count > 0);
 
-    Jadd_int (in, "count", count);
-    Jadd_int (in, "batch", batch);
-    if (!(rpc = flux_rpc (hello->h, "hello.join", Jtostr (in),
-                          FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
-        log_err_exit ("hello: flux_rpc");
+    if (!(rpc = flux_rpcf (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
+                           FLUX_RPC_NORESPONSE, "{ s:i s:i }",
+                           "count", count,
+                           "batch", batch)))
+        log_err_exit ("hello: flux_rpcf");
     flux_rpc_destroy (rpc);
-    Jput (in);
 }
 
 /* How many original items does this item represent after reduction?

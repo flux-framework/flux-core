@@ -1339,24 +1339,17 @@ done:
 int kvs_get_version (flux_t *h, int *versionp)
 {
     flux_rpc_t *rpc;
-    const char *json_str;
-    json_object *out = NULL;
     int version;
     int rc = -1;
 
     if (!(rpc = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, &json_str) < 0)
+    if (flux_rpc_getf (rpc, "{ s:i }", "rootseq", &version) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str)) || !Jget_int (out, "rootseq", &version)) {
-        errno = EPROTO;
-        goto done;
-    }
     if (versionp)
         *versionp = version;
     rc = 0;
 done:
-    Jput (out);
     flux_rpc_destroy (rpc);
     return rc;
 }
@@ -1365,11 +1358,10 @@ int kvs_wait_version (flux_t *h, int version)
 {
     flux_rpc_t *rpc;
     const char *json_str;
-    json_object *in = Jnew ();
     int ret = -1;
 
-    Jadd_int (in, "rootseq", version);
-    if (!(rpc = flux_rpc (h, "kvs.sync", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (!(rpc = flux_rpcf (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
+                           "rootseq", version)))
         goto done;
     if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
@@ -1377,7 +1369,6 @@ int kvs_wait_version (flux_t *h, int version)
      */
     ret = 0;
 done:
-    Jput (in);
     flux_rpc_destroy (rpc);
     return ret;
 }

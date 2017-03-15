@@ -28,8 +28,8 @@
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
 
@@ -553,62 +553,45 @@ static void clear_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
-    const char *json_str;
     int seq;
-    json_object *in = NULL;
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{ s:i }", "seq", &seq) < 0)
         goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)) {
-        errno = EPROTO;
-        goto done;
-    }
     logbuf_clear (logbuf, seq);
     rc = 0;
 done:
     flux_respond (h, msg, rc < 0 ? errno : 0, NULL);
-    Jput (in);
 }
 
 static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
-    const char *json_str;
     const char *buf;
     int len;
-    int seq;
-    json_object *in = NULL;
-    json_object *out = NULL;
-    bool follow;
-    int rc = -1;
+    int seq, follow;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "seq", &seq)
-                                    || !Jget_bool (in, "follow", &follow)) {
-        errno = EPROTO;
-        goto done;
-    }
+    if (flux_request_decodef (msg, NULL, "{ s:i s:b }",
+                              "seq", &seq,
+                              "follow", &follow) < 0)
+        goto error;
     if (logbuf_get (logbuf, seq, &seq, &buf, &len) < 0) {
         if (follow && errno == ENOENT) {
             if (logbuf_sleepon (logbuf, dmesg_request_cb, h, w, msg, arg) < 0)
-                goto done;
-            goto done_noreply;
+                goto error;
+            return; /* no reply */
         }
-        goto done;
+        goto error;
     }
-    out = Jnew ();
-    Jadd_int (out, "seq", seq);
-    Jadd_str_len (out, "buf", buf, len);
-    rc = 0;
-done:
-    flux_respond (h, msg, rc < 0 ? errno : 0,
-                          rc < 0 ? NULL : Jtostr (out));
-done_noreply:
-    Jput (in);
-    Jput (out);
+    if (flux_respondf (h, msg, "{ s:i s:s# }",
+                       "seq", seq,
+                       "buf", buf, len) < 0)
+        goto error;
+    return;
+
+error:
+    flux_respond (h, msg, errno, NULL);
 }
 
 static int cmp_sender (flux_msg_t *msg, const char *uuid)

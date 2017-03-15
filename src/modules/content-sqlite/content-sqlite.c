@@ -33,7 +33,6 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libminilzo/minilzo.h"
@@ -391,21 +390,19 @@ done:
 int register_backing_store (flux_t *h, bool value, const char *name)
 {
     flux_rpc_t *rpc;
-    json_object *in = Jnew ();
     int saved_errno = 0;
     int rc = -1;
 
-    Jadd_bool (in, "backing", value);
-    Jadd_str (in, "name", name);
-    if (!(rpc = flux_rpc (h, "content.backing", Jtostr (in),
-                            FLUX_NODEID_ANY, 0)))
+    if (!(rpc = flux_rpcf (h, "content.backing", FLUX_NODEID_ANY, 0,
+                           "{ s:b s:s }",
+                           "backing", value,
+                           "name", name)))
         goto done;
     if (flux_rpc_get (rpc, NULL) < 0)
         goto done;
     rc = 0;
 done:
     saved_errno = errno;
-    Jput (in);
     flux_rpc_destroy (rpc);
     errno = saved_errno;
     return rc;

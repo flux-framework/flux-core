@@ -23,28 +23,23 @@
 \*****************************************************************************/
 #include "builtin.h"
 
-#include "src/common/libutil/shortjson.h"
-
 static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
     flux_rpc_t *rpc;
-    json_object *in = Jnew ();
 
     if (optparse_option_index (p) != ac - 1) {
         optparse_print_usage (p);
         exit (1);
     }
-    Jadd_str (in, "filename", av[ac - 1]);
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "heaptrace.start", Jtostr (in),
-                          FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (h, "heaptrace.start", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "filename", av[ac - 1]))
             || flux_rpc_get (rpc, NULL) < 0)
         log_err_exit ("heaptrace.start");
     flux_rpc_destroy (rpc);
     flux_close (h);
-    Jput (in);
     return (0);
 }
 
@@ -71,22 +66,19 @@ static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
     flux_rpc_t *rpc;
-    json_object *in = Jnew ();
 
     if (optparse_option_index (p) != ac - 1) {
         optparse_print_usage (p);
         exit (1);
     }
-    Jadd_str (in, "reason", av[ac - 1]);
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "heaptrace.dump", Jtostr (in),
-                          FLUX_NODEID_ANY, 0))
+    if (!(rpc = flux_rpcf (h, "heaptrace.dump", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "reason", av[ac - 1]))
             || flux_rpc_get (rpc, NULL) < 0)
         log_err_exit ("heaptrace.dump");
     flux_rpc_destroy (rpc);
     flux_close (h);
-    Jput (in);
     return (0);
 }
 
