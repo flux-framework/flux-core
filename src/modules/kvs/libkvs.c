@@ -695,7 +695,7 @@ static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     if (flux_msg_get_matchtag (msg, &matchtag) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str))) {
+    if (!json_str || !(out = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -750,7 +750,7 @@ static int watch_rpc (flux_t *h, const char *key, json_object **val,
         goto done;
     if (flux_response_decode (response_msg, NULL, &json_str) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str))) {
+    if (!json_str || !(out = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }

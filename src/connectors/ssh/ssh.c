@@ -344,7 +344,6 @@ static int test_broker_connection (ssh_ctx_t *c)
     flux_msg_t *in = NULL;
     flux_msg_t *out = NULL;
     struct flux_match match = FLUX_MATCH_RESPONSE;
-    const char *json_str;
     int rc = -1;
 
     if (!(in = flux_request_encode ("cmb.ping", "{}")))
@@ -354,7 +353,7 @@ static int test_broker_connection (ssh_ctx_t *c)
     match.topic_glob = "cmb.ping";
     if (!(out = flux_recv (c->h, match, 0)))
         goto done;
-    if (flux_response_decode (out, NULL, &json_str) < 0)
+    if (flux_response_decode (out, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:

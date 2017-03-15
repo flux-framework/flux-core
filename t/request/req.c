@@ -283,8 +283,10 @@ void ping_response_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: flux_response_decode", __FUNCTION__);
         goto done;
     }
-    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "seq", &seq)
-                                   || !Jget_str (o, "route", &route)) {
+    if (!json_str
+        || !(o = Jfromstr (json_str))
+        || !Jget_int (o, "seq", &seq)
+        || !Jget_str (o, "route", &route)) {
         errno = EPROTO;
         flux_log_error (h, "%s: payload", __FUNCTION__);
         goto done;

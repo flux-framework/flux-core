@@ -227,7 +227,9 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
             log_err_exit ("%s", __FUNCTION__);
         if (flux_response_decode (msg, NULL, &json_str) < 0)
             log_msg_exit ("%s: decode %d", __FUNCTION__, i);
-        if (!(out = Jfromstr (json_str)) || !Jget_int (out, "seq", &seq))
+        if (!json_str
+            || !(out = Jfromstr (json_str))
+            || !Jget_int (out, "seq", &seq))
             log_msg_exit ("%s: decode %d payload", __FUNCTION__, i);
         if (seq != i)
             log_msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
@@ -270,7 +272,9 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
             log_err_exit ("%s", __FUNCTION__);
         if (flux_response_decode (msg, NULL, &json_str) < 0)
             log_msg_exit ("%s: decode", __FUNCTION__);
-        if (!(out = Jfromstr (json_str)) || !Jget_int (out, "seq", &seq))
+        if (!json_str
+            || !(out = Jfromstr (json_str))
+            || !Jget_int (out, "seq", &seq))
             log_msg_exit ("%s: decode - payload", __FUNCTION__);
         Jput (out);
         if (seq >= defer_start && seq < defer_start + defer_count && !popped) {

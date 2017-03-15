@@ -234,8 +234,12 @@ static void exec_handler (flux_t *h, flux_msg_handler_t *w,
     const char *type;
     json_object *resp = NULL;
 
-    if ((flux_response_decode (msg, &topic, &json_str) < 0)
-        || !(resp = Jfromstr (json_str))) {
+    if (flux_response_decode (msg, &topic, &json_str) < 0) {
+        cron_task_rexec_failed (t, errno);
+        flux_log_error (h, "cron_task: exec_handler");
+    }
+    else if (!json_str || !(resp = Jfromstr (json_str))) {
+        errno = EPROTO;
         cron_task_rexec_failed (t, errno);
         flux_log_error (h, "cron_task: exec_handler");
     }
