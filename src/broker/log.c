@@ -225,7 +225,6 @@ void logbuf_destroy (logbuf_t *logbuf)
 {
     if (logbuf) {
         assert (logbuf->magic == LOGBUF_MAGIC);
-        logbuf->magic = ~LOGBUF_MAGIC;
         if (logbuf->buf) {
             logbuf_trim (logbuf, 0);
             zlist_destroy (&logbuf->buf);

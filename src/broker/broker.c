@@ -173,7 +173,6 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static void broker_block_signals (void);
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
@@ -196,9 +195,13 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
+static void sigalrm_cb (int signum);
+
 static void init_attrs (broker_ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
+
+static int exit_rc = 0;
 
 #define OPTIONS "+vqM:X:k:s:g:EIS:"
 static const struct option longopts[] = {
@@ -249,7 +252,6 @@ static int setup_profiling (const char *program, int rank)
     return (0);
 }
 
-
 int main (int argc, char *argv[])
 {
     int c;
@@ -259,6 +261,9 @@ int main (int argc, char *argv[])
     int security_set = 0;
     int e;
     char *endptr;
+    sigset_t old_sigmask;
+    struct sigaction old_sigact_int;
+    struct sigaction old_sigact_term;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -372,7 +377,16 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_open enclosing instance");
     }
 
-    broker_block_signals ();
+    /* Block all signals, saving old mask and actions for SIGINT, SIGTERM.
+     */
+    sigset_t sigmask;
+    sigfillset (&sigmask);
+    if (sigprocmask (SIG_SETMASK, &sigmask, &old_sigmask) < 0)
+        log_err_exit ("sigprocmask");
+    if (sigaction (SIGINT, NULL, &old_sigact_int) < 0)
+        log_err_exit ("sigaction");
+    if (sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
+        log_err_exit ("sigaction");
 
     /* Initailize zeromq context
      */
@@ -384,7 +398,7 @@ int main (int argc, char *argv[])
 
     /* Set up the flux reactor.
      */
-    if (!(ctx.reactor = flux_reactor_create (SIGCHLD)))
+    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
 
     /* Set up flux handle.
@@ -671,20 +685,39 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         log_msg ("exited event loop");
 
+    /* Restore default sigmask and actions for SIGINT, SIGTERM
+     */
+    if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0)
+        log_err_exit ("sigprocmask");
+    if (sigaction (SIGINT, &old_sigact_int, NULL) < 0)
+        log_err_exit ("sigaction");
+    if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
+        log_err_exit ("sigaction");
+    /* Install SIGALRM handler and set timer in case we get stuck.
+     */
+    struct sigaction sigact_alrm = {
+        .sa_handler = sigalrm_cb,
+        .sa_flags = 0,
+    };
+    if (sigaction (SIGALRM, &sigact_alrm, NULL) < 0)
+        log_err_exit ("sigaction");
+    alarm (1); // 1s to tear down
+
     /* remove heartbeat timer, if any
      */
     heartbeat_stop (ctx.heartbeat);
 
     /* Unload modules.
-     * FIXME: this will hang in pthread_join unless modules have been stopped.
      */
     if (ctx.verbose)
         log_msg ("unloading modules");
+    module_stop_all (ctx.modhash);
     modhash_destroy (ctx.modhash);
 
     /* Unregister builtin services
      */
     attr_unregister_handlers ();
+    content_cache_destroy (ctx.cache);
 
     broker_unhandle_signals (sigwatchers);
     zlist_destroy (&sigwatchers);
@@ -705,10 +738,9 @@ int main (int argc, char *argv[])
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
-    content_cache_destroy (ctx.cache);
     runlevel_destroy (ctx.runlevel);
 
-    return 0;
+    return exit_rc;
 }
 
 struct attrmap {
@@ -792,13 +824,23 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
+/* Signal handler teardown timeout.
+ */
+static void sigalrm_cb (int signum)
+{
+    exit (exit_rc);
+}
+
 /* Currently 'expired' is always true.
  */
 static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (expired)
-        exit (ctx->rank == 0 ? shutdown_get_rc (s) : 0);
+    if (expired) {
+        if (ctx->rank == 0)
+            exit_rc = shutdown_get_rc (s);
+        flux_reactor_stop (flux_get_reactor (ctx->h));
+    }
 }
 
 static void update_proctitle (broker_ctx_t *ctx)
@@ -1326,15 +1368,6 @@ next:
     }
     module_start_all (ctx->modhash);
     free (cpy);
-}
-
-static void broker_block_signals (void)
-{
-    sigset_t sigmask;
-    sigemptyset(&sigmask);
-    sigfillset(&sigmask);
-    if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
-        log_err_exit ("sigprocmask");
 }
 
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
