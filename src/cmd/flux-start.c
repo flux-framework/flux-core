@@ -43,7 +43,7 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libsubprocess/subprocess.h"
 
-#define DEFAULT_KILLER_TIMEOUT 1.0
+#define DEFAULT_KILLER_TIMEOUT 2.0
 
 static struct {
     double killer_timeout;
