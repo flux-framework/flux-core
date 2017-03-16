@@ -184,6 +184,10 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     }
     Jput (o);
     o = NULL;
+    if (!json_str) {
+        flux_log (h, LOG_ERR, "flux_rpc (job.kvspath): empty payload");
+        goto out;
+    }
     if (!(o = Jfromstr (json_str))) {
         flux_log_error (h, "flux_rpc (job.kvspath): failed to parse json");
         goto out;

@@ -274,7 +274,7 @@ static int getobj (flux_t *h, json_object *rootdir, const char *key,
         goto done;
     if (flux_rpc_get (rpc, &json_str) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str))) {
+    if (!json_str || !(out = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -1357,16 +1357,15 @@ done:
 int kvs_wait_version (flux_t *h, int version)
 {
     flux_rpc_t *rpc;
-    const char *json_str;
     int ret = -1;
 
     if (!(rpc = flux_rpcf (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
                            "rootseq", version)))
         goto done;
-    if (flux_rpc_get (rpc, &json_str) < 0)
-        goto done;
-    /* N.B. response contains (rootseq, rootdir) but we don't use it.
+    /* N.B. response contains (rootseq, rootdir) but we don't need it.
      */
+    if (flux_rpc_get (rpc, NULL) < 0)
+        goto done;
     ret = 0;
 done:
     flux_rpc_destroy (rpc);

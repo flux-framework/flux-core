@@ -43,6 +43,10 @@ char *flux_lspeer (flux_t *h, int rank)
         goto done;
     if (flux_rpc_get (r, &json_str) < 0)
         goto done;
+    if (!json_str) {
+        errno = EPROTO;
+        goto done;
+    }
     ret = xstrdup (json_str);
 done:
     flux_rpc_destroy (r);

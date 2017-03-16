@@ -305,7 +305,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     int fail_errno_last = 0;
     do {
         if (flux_rpc_get_nodeid (r, &nodeid) < 0
-                || flux_rpc_get (r, &json_str) < 0) {
+                || flux_rpc_get (r, NULL) < 0) {
             fail_errno_last = errno;
             fail_nodeid_last = nodeid;
             fail_count++;

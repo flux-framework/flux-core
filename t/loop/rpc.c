@@ -143,18 +143,18 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_get fails with EPROTO");
     flux_rpc_destroy (r);
 
-    /* cause local EPROTO (user incorrectly expects payload) */
+    /* receive NULL payload on empty response */
     ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with empty payload works");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     errno = 0;
-    ok (flux_rpc_get (r, &json_str) < 0
-        && errno == EPROTO,
-        "flux_rpc_get fails with EPROTO");
+    ok (flux_rpc_get (r, &json_str) == 0
+        && json_str == NULL,
+        "flux_rpc_get gets NULL payload on empty response");
     flux_rpc_destroy (r);
 
-    /* cause local EPROTO (user incorrectly expects empty payload) */
+    /* flux_rpc_get is ok if user doesn't desire response payload */
     errno = 0;
     o = Jnew ();
     Jadd_int (o, "foo", 42);
@@ -164,9 +164,8 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     errno = 0;
-    ok (flux_rpc_get (r, NULL) < 0
-        && errno == EPROTO,
-        "flux_rpc_get fails with EPROTO");
+    ok (flux_rpc_get (r, NULL) == 0,
+        "flux_rpc_get is ok if user doesn't desire response payload");
     flux_rpc_destroy (r);
     Jput (o);
 
