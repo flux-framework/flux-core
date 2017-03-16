@@ -195,6 +195,8 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
+static void sigalrm_cb (int signum);
+
 static void init_attrs (broker_ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
@@ -249,7 +251,6 @@ static int setup_profiling (const char *program, int rank)
 #endif
     return (0);
 }
-
 
 int main (int argc, char *argv[])
 {
@@ -692,6 +693,15 @@ int main (int argc, char *argv[])
         log_err_exit ("sigaction");
     if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
         log_err_exit ("sigaction");
+    /* Install SIGALRM handler and set timer in case we get stuck.
+     */
+    struct sigaction sigact_alrm = {
+        .sa_handler = sigalrm_cb,
+        .sa_flags = 0,
+    };
+    if (sigaction (SIGALRM, &sigact_alrm, NULL) < 0)
+        log_err_exit ("sigaction");
+    alarm (1); // 1s to tear down
 
     /* remove heartbeat timer, if any
      */
@@ -812,6 +822,13 @@ static void hello_update_cb (hello_t *hello, void *arg)
         flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (incomplete) %.1fs",
                   hello_get_count (hello), ctx->size, hello_get_time (hello));
     }
+}
+
+/* Signal handler teardown timeout.
+ */
+static void sigalrm_cb (int signum)
+{
+    exit (exit_rc);
 }
 
 /* Currently 'expired' is always true.
