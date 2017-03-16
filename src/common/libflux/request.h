@@ -8,9 +8,8 @@
 
 /* Decode a request message with optional json payload.
  * If topic is non-NULL, assign the request topic string.
- * If json_str is non-NULL, assign the payload.  This argument indicates whether
- * payload is expected and it is an EPROTO error if expectations are not met.
- * Returns 0 on success, or -1 on failure with errno set.
+ * If json_str is non-NULL, assign the payload or set to NULL if none
+ * exists.  Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_request_decode (const flux_msg_t *msg, const char **topic,
                          const char **json_str);
