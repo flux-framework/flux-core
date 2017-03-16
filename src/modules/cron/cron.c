@@ -667,6 +667,11 @@ static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
 
+    if (!json_str) {
+        saved_errno = EPROTO;
+        goto done;
+    }
+
     if (!(e = cron_entry_create (ctx, json_str))) {
         saved_errno = errno;
         goto done;

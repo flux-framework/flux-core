@@ -70,6 +70,10 @@ void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
         errnum = errno;
         goto done;
     }
+    if (!json_str) {
+        errnum = EPROTO;
+        goto done;
+    }
 done:
     (void)flux_respond (h, msg, errnum, json_str);
 }
@@ -80,9 +84,14 @@ void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
+    const char *json_str;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
         errnum = errno;
+        goto done;
+    }
+    if (json_str) {
+        errnum = EPROTO;
         goto done;
     }
     hello_count++;

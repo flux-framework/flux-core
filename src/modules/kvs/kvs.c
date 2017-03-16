@@ -905,7 +905,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto done;
-    if (!(in = Jfromstr (json_str))) {
+    if (!json_str || !(in = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -979,7 +979,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto done;
-    if (!(in = Jfromstr (json_str))) {
+    if (!json_str || !(in = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -1056,7 +1056,7 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
         goto done;
     if (strcmp (sender, p->sender) != 0)
         goto done;
-    if (!(o = Jfromstr (json_str)))
+    if (!json_str || !(o = Jfromstr (json_str)))
         goto done;
     if (kp_twatch_dec (o, &key, &val, &flags) <  0)
         goto done;
@@ -1081,7 +1081,7 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto done;
-    if (!(in = Jfromstr (json_str))) {
+    if (!json_str || !(in = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -1243,8 +1243,9 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "%s request decode", __FUNCTION__);
         goto done;
     }
-    if (!(in = Jfromstr (json_str))
-                    || kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
+    if (!json_str
+        || !(in = Jfromstr (json_str))
+        || kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
         flux_log_error (h, "%s payload decode", __FUNCTION__);
         goto done;
@@ -1296,7 +1297,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
-    if (!(in = Jfromstr (json_str))) {
+    if (!json_str || !(in = Jfromstr (json_str))) {
         errno = EPROTO;
         goto error;
     }

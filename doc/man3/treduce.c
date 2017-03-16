@@ -83,6 +83,7 @@ void forward_cb (flux_t *h, flux_msg_handler_t *w,
     char *item;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0
+            || !json_str
             || !(in = Jfromstr (json_str))
             || !Jget_int (in, "batchnum", &batchnum)
             || !Jget_str (in, "nodeset", &nodeset_str))

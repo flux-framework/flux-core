@@ -1438,6 +1438,10 @@ static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
+    if (!json_str) {
+        errno = EPROTO;
+        goto error;
+    }
     if (flux_rmmod_json_decode (json_str, &name) < 0)
         goto error;
     if (!(p = module_lookup_byname (ctx->modhash, name))) {
@@ -1473,6 +1477,10 @@ static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
+    if (!json_str) {
+        errno = EPROTO;
+        goto error;
+    }
     if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
         goto error;
     if (!(name = flux_modname (path))) {
