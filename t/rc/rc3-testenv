@@ -1,0 +1,3 @@
+#!/bin/bash -e
+
+# t0014-runlevel.t loads rc1-testenv so we need corresponding rc3-testenv

@@ -90,7 +90,10 @@ EXTRA_DIST= \
 	$(T) \
 	rc/rc1-kvs \
 	rc/rc1-wreck \
-	rc/rc1-testenv
+	rc/rc1-testenv \
+	rc/rc3-kvs \
+	rc/rc3-wreck \
+	rc/rc3-testenv
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output

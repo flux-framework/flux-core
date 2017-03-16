@@ -57,8 +57,9 @@ test_under_flux() {
         export FLUX_RC3_PATH=""
     elif test "$personality" != "full"; then
         export FLUX_RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
-        export FLUX_RC3_PATH=""
-        test -x $FLUX_RC1_PATH || error "$FLUX_RC1_PATH"
+        export FLUX_RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
+        test -x $FLUX_RC1_PATH || error "cannot execute $FLUX_RC1_PATH"
+        test -x $FLUX_RC3_PATH || error "cannot execute $FLUX_RC3_PATH"
     else
         unset FLUX_RC1_PATH
         unset FLUX_RC3_PATH

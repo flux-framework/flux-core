@@ -1,0 +1,9 @@
+#!/bin/bash -e
+
+flux module remove -r all job
+flux module remove -r all aggregator
+flux module remove -r all barrier
+
+flux module remove -r all -x 0 kvs
+flux module remove -r 0 kvs
+flux module remove -r 0  content-sqlite
