@@ -658,12 +658,12 @@ static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
     cron_ctx_t *ctx = arg;
     const char *json_str;
     json_object *out = NULL;
-    int saved_errno;
+    int saved_errno = EPROTO;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
         flux_log_error (h, "cron request decode");
-        saved_errno = EPROTO;
+        saved_errno = errno;
         goto done;
     }
 
