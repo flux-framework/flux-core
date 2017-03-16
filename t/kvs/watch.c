@@ -36,7 +36,6 @@
 #include <flux/core.h>
 #include <pthread.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
@@ -417,22 +416,15 @@ static int simulwatch_cb (const char *key, int val, void *arg, int errnum)
 int get_watch_stats (flux_t *h, int *count)
 {
     flux_rpc_t *rpc;
-    const char *json_str;
-    json_object *o = NULL;
     int rc = -1;
 
     if (!(rpc = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, &json_str) < 0)
+    if (flux_rpc_getf (rpc, "{ s:i }", "#watchers", count) < 0)
         goto done;
-    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "#watchers", count)) {
-        errno = EPROTO;
-        goto done;
-    }
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
-    Jput (o);
     return rc;
 }
 
