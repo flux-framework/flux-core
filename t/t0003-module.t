@@ -14,6 +14,8 @@ invalid_rank() {
 	echo $((${SIZE} + 1))
 }
 
+MODULEBASIC=${FLUX_BUILD_DIR}/t/module/basic
+
 test_expect_success 'module: load test module' '
 	flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
@@ -34,6 +36,28 @@ test_expect_success 'module: unload test module' '
 
 test_expect_success 'module: lsmod does not show test module' '
 	! flux module list | grep parent
+'
+
+test_expect_success 'module API: load test module' '
+	${MODULEBASIC} load \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+'
+
+test_expect_success 'module API: lsmod shows test module' '
+	${MODULEBASIC} list | grep parent
+'
+
+test_expect_success 'module API: cannot load the same module twice' '
+        test_must_fail ${MODULEBASIC} load \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+'
+
+test_expect_success 'module API: unload test module' '
+	${MODULEBASIC} remove parent
+'
+
+test_expect_success 'module API: lsmod does not show test module' '
+	! ${MODULEBASIC} list | grep parent
 '
 
 test_expect_success 'module: load test module (all ranks)' '
