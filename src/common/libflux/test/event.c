@@ -28,8 +28,8 @@ int main (int argc, char *argv[])
     ok (flux_event_decode (msg, NULL, NULL) == 0,
         "flux_event_decode topic is optional");
     errno = 0;
-    ok (flux_event_decode (msg, NULL, &s) < 0 && errno == EPROTO,
-        "flux_event_decode returns EPROTO when expected payload is missing");
+    ok (flux_event_decode (msg, NULL, &s) == 0 && s == NULL,
+        "flux_event_decode returns s = NULL when expected payload is missing");
     flux_msg_destroy(msg);
 
     /* with payload */
@@ -41,8 +41,8 @@ int main (int argc, char *argv[])
         && s != NULL && !strcmp (s, json_str),
         "flux_event_decode returns encoded payload");
     errno = 0;
-    ok (flux_event_decode (msg, NULL, NULL) < 0 && errno == EPROTO,
-        "flux_event_decode returns EPROTO when payload is unexpected");
+    ok (flux_event_decode (msg, NULL, NULL) == 0,
+        "flux_event_decode works with payload but don't want the payload");
     flux_msg_destroy (msg);
 
     /* formatted payload */

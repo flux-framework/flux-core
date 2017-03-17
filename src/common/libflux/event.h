@@ -8,9 +8,8 @@
 
 /* Decode an event message.
  * If topic is non-NULL, assign the event topic string.
- * If json_str is non-NULL, assign the payload.  json_str indicates whether
- * payload is expected and it is an EPROTO error if they don't match.
- * Returns 0 on success, or -1 on failure with errno set.
+ * If json_str is non-NULL, assign the payload or set to NULL if none
+ * exists.  Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_event_decode (const flux_msg_t *msg, const char **topic,
                        const char **json_str);
