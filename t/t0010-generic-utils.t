@@ -25,13 +25,6 @@ test_expect_success 'event: can subscribe' '
 	flux event sub --count=1 hb >output_event_sub &&
 	grep "^hb" output_event_sub
 '
-# for now we just ensure snoop basically works
-test_expect_success 'snoop: produces output (XXX needs fixing)' '
-	flux snoop -c 1 --verbose >output_snoop 2>&1 &
-	test_expect_code 0 wait &&
-	test -s output_snoop &&
-	head output_snoop | grep "^flux-snoop: connecting to"
-'
 
 test_expect_success 'version: reports an expected string' '
         set -x

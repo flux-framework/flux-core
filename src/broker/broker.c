@@ -65,7 +65,6 @@
 #include "heartbeat.h"
 #include "module.h"
 #include "overlay.h"
-#include "snoop.h"
 #include "service.h"
 #include "hello.h"
 #include "shutdown.h"
@@ -111,7 +110,6 @@ typedef struct {
     /* Sockets.
      */
     overlay_t *overlay;
-    snoop_t *snoop;
 
     /* Session parameters
      */
@@ -194,7 +192,6 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 
-static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
 static void init_attrs (broker_ctx_t *ctx);
@@ -275,7 +272,6 @@ int main (int argc, char *argv[])
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
     ctx.overlay = overlay_create ();
-    ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
     ctx.tbon.k = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
@@ -498,10 +494,7 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (attr_add_active (ctx.attrs, "snoop-uri",
-                                FLUX_ATTRFLAG_IMMUTABLE,
-                                attr_get_snoop, NULL, ctx.snoop) < 0
-            || attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
+    if (attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active (ctx.attrs, "tbon-request-uri",
                                 FLUX_ATTRFLAG_IMMUTABLE,
@@ -615,16 +608,11 @@ int main (int argc, char *argv[])
     if (overlay_connect (ctx.overlay) < 0)
         log_err_exit ("overlay_connect");
 
-    /* Set up snoop socket
-     */
-    snoop_set_zctx (ctx.snoop, ctx.zctx);
-    snoop_set_sec (ctx.snoop, ctx.sec);
     {
         const char *rundir;
         if (attr_get (ctx.attrs, "broker.rundir", &rundir, NULL) < 0) {
             log_msg_exit ("broker.rundir attribute is not set");
         }
-        snoop_set_uri (ctx.snoop, "ipc://%s/snoop", rundir, ctx.rank);
     }
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
@@ -732,7 +720,6 @@ int main (int argc, char *argv[])
     zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
-    snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
@@ -1433,13 +1420,6 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
     }
 }
 
-static int attr_get_snoop (const char *name, const char **val, void *arg)
-{
-    snoop_t *snoop = arg;
-    *val = snoop_get_uri (snoop);
-    return 0;
-}
-
 static int attr_get_overlay (const char *name, const char **val, void *arg)
 {
     overlay_t *overlay = arg;
@@ -1762,7 +1742,6 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
     overlay_checkin_child (ctx->overlay, uuid);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
-            (void)snoop_sendmsg (ctx->snoop, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
             (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
@@ -2196,8 +2175,6 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     if (flux_msg_set_rolemask (cpy, rolemask) < 0)
         goto done;
-
-    (void)snoop_sendmsg (ctx->snoop, cpy);
 
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:

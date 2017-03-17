@@ -67,7 +67,6 @@ fluxcmd_PROGRAMS = \
 	flux-ping \
 	flux-keygen \
 	flux-logger \
-	flux-snoop \
 	flux-event \
 	flux-module \
 	flux-comms \
