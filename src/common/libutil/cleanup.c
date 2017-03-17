@@ -106,7 +106,7 @@ void cleanup_file (const struct cleaner *c)
 
 static pid_t cleaner_pid = 0;
 static zlist_t *cleanup_list = NULL;
-static void cleanup (void)
+void cleanup_run (void)
 {
     struct cleaner *c;
     pthread_mutex_lock(&mutex);
@@ -139,7 +139,7 @@ void cleanup_push (cleaner_fun_f *fun, void * arg)
         }
         cleanup_list = zlist_new();
         cleaner_pid = getpid();
-        atexit(cleanup);
+        atexit (cleanup_run);
     }
     struct cleaner * c = calloc(sizeof(struct cleaner), 1);
     c->fun = fun;
