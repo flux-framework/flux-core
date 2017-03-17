@@ -420,7 +420,6 @@ int main (int argc, char *argv[])
     if (flux_sec_comms_init (ctx.sec) < 0)
         log_msg_exit ("flux_sec_comms_init: %s", flux_sec_errstr (ctx.sec));
 
-    overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
     overlay_set_flux (ctx.overlay, ctx.h);
 

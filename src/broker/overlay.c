@@ -39,13 +39,12 @@
 #include "overlay.h"
 
 struct endpoint {
-    void *zs;
+    zsock_t *zs;
     char *uri;
     flux_watcher_t *w;
 };
 
 struct overlay_struct {
-    zctx_t *zctx;
     flux_sec_t *sec;
     flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
@@ -86,11 +85,9 @@ static void heartbeat_handler (flux_t *h, flux_msg_handler_t *w,
 static void endpoint_destroy (struct endpoint *ep)
 {
     if (ep) {
-        if (ep->uri)
-            free (ep->uri);
-        if (ep->w)
-            flux_watcher_destroy (ep->w);
-        /* N.B. ep->zp will be cleaned up with zctx_t destroy */
+        free (ep->uri);
+        flux_watcher_destroy (ep->w);
+        zsock_destroy (&ep->zs);
         free (ep);
     }
 }
@@ -144,11 +141,6 @@ overlay_t *overlay_create (void)
     if (!(ov->children = zhash_new ()))
         oom ();
     return ov;
-}
-
-void overlay_set_zctx (overlay_t *ov, zctx_t *zctx)
-{
-    ov->zctx = zctx;
 }
 
 void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
@@ -470,16 +462,15 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static int bind_child (overlay_t *ov, struct endpoint *ep)
 {
-    if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_ROUTER)))
-        log_err_exit ("zsocket_new");
+    if (!(ep->zs = zsock_new_router (NULL)))
+        log_err_exit ("zsock_new_router");
     if (flux_sec_ssockinit (ov->sec, ep->zs) < 0)
         log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
-    zsocket_set_hwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
+    if (zsock_bind (ep->zs, "%s", ep->uri) < 0)
         log_err_exit ("%s", ep->uri);
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
         free (ep->uri);
-        ep->uri = zsocket_last_endpoint (ep->zs);
+        ep->uri = zsock_last_endpoint (ep->zs);
     }
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
                                            ep->zs, FLUX_POLLIN, child_cb, ov)))
@@ -490,16 +481,15 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
 
 static int bind_event_pub (overlay_t *ov, struct endpoint *ep)
 {
-    if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_PUB)))
-        log_err_exit ("zsocket_new");
+    if (!(ep->zs = zsock_new_pub (NULL)))
+        log_err_exit ("zsock_new_pub");
     if (flux_sec_ssockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
         log_msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ov->sec));
-    zsocket_set_sndhwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
+    if (zsock_bind (ep->zs, "%s", ep->uri) < 0)
         log_err_exit ("%s: %s", __FUNCTION__, ep->uri);
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
         free (ep->uri);
-        ep->uri = zsocket_last_endpoint (ep->zs);
+        ep->uri = zsock_last_endpoint (ep->zs);
     }
     return 0;
 }
@@ -515,14 +505,13 @@ static void event_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static int connect_event_sub (overlay_t *ov, struct endpoint *ep)
 {
-    if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_SUB)))
-        log_err_exit ("zsocket_new");
+    if (!(ep->zs = zsock_new_sub (NULL, NULL)))
+        log_err_exit ("zsock_new_sub");
     if (flux_sec_csockinit (ov->sec, ep->zs) < 0) /* no-op for epgm */
         log_msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ov->sec));
-    zsocket_set_rcvhwm (ep->zs, 0);
-    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
+    if (zsock_connect (ep->zs, "%s", ep->uri) < 0)
         log_err_exit ("%s", ep->uri);
-    zsocket_set_subscribe (ep->zs, "");
+    zsock_set_subscribe (ep->zs, "");
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
                                            ep->zs, FLUX_POLLIN, event_cb, ov)))
         log_err_exit ("flux_zmq_watcher_create");
@@ -543,7 +532,7 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
 {
     int savederr;
 
-    if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_DEALER)))
+    if (!(ep->zs = zsock_new_dealer (NULL)))
         goto error;
     if (flux_sec_csockinit (ov->sec, ep->zs) < 0) {
         savederr = errno;
@@ -551,9 +540,8 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
         errno = savederr;
         goto error;
     }
-    zsocket_set_hwm (ep->zs, 0);
-    zsocket_set_identity (ep->zs, ov->rankstr);
-    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
+    zsock_set_identity (ep->zs, ov->rankstr);
+    if (zsock_connect (ep->zs, "%s", ep->uri) < 0)
         goto error;
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
                                            ep->zs, FLUX_POLLIN, parent_cb, ov)))
@@ -563,8 +551,7 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
 error:
     if (ep->zs) {
         savederr = errno;
-        zsocket_destroy (ov->zctx, ep->zs);
-        ep->zs = NULL;
+        zsock_destroy (&ep->zs);
         errno = savederr;
     }
     return -1;
@@ -575,8 +562,8 @@ int overlay_connect (overlay_t *ov)
     int rc = -1;
     struct endpoint *ep;
 
-    if (!ov->zctx || !ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY
-                  || !ov->parent_cb || !ov->event_cb) {
+    if (!ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY
+                 || !ov->parent_cb || !ov->event_cb) {
         errno = EINVAL;
         goto done;
     }
@@ -596,8 +583,7 @@ int overlay_bind (overlay_t *ov)
 {
     int rc = -1;
 
-    if (!ov->zctx || !ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY
-                  || !ov->child_cb) {
+    if (!ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY || !ov->child_cb) {
         errno = EINVAL;
         goto done;
     }
