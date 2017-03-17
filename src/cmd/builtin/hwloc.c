@@ -31,8 +31,8 @@
 #include <signal.h>
 #include <assert.h>
 #include <argz.h>
+#include <inttypes.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/sds.h"
 
 struct hwloc_topo {
