@@ -51,7 +51,7 @@
 #endif
 
 static const char *uri = "inproc://tmunge";
-static void *cs;
+static zsock_t *cs;
 int secflags = FLUX_SEC_TYPE_MUNGE;
 
 void *thread (void *arg)
@@ -69,12 +69,11 @@ void *thread (void *arg)
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
     if (!(msg = flux_event_encode ("foo.topic", "{\"foo\":42}")))
-        oom ();
+        log_err_exit ("C: flux_event_encode");
     if ((n = flux_msg_frames (msg)) != 4)
         log_err_exit ("C: expected 4 frames, got %d", n);
     if (flux_msg_sendzsock_munge (cs, msg, sec) < 0)
         log_err_exit ("C: flux_msg_sendzsock_munge");
-
     flux_msg_destroy (msg);
     flux_sec_destroy (sec);
 
@@ -84,13 +83,12 @@ void *thread (void *arg)
 int main (int argc, char *argv[])
 {
     int rc;
-    void *zs;
+    zsock_t *zs;
     pthread_t tid;
     pthread_attr_t attr;
     flux_msg_t *msg;
     flux_sec_t *sec;
     int n;
-    zctx_t *zctx;
 
     log_init (basename (argv[0]));
 
@@ -113,18 +111,11 @@ int main (int argc, char *argv[])
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
 
-    if (!(zctx = zctx_new ()))
-        log_err_exit ("S: zctx_new");
-    if (!(zs = zsocket_new (zctx, ZMQ_SUB)))
-        log_err_exit ("S: zsocket_new");
-    if (zsocket_bind (zs, "%s", uri) < 0)
-        log_err_exit ("S: zsocket_bind");
-    zsocket_set_subscribe (zs, "");
+    if (!(zs = zsock_new_sub (uri, "")))
+        log_err_exit ("S: zsock_new_sub");
 
-    if (!(cs = zsocket_new (zctx, ZMQ_PUB)))
-        log_err_exit ("S: zsocket_new");
-    if (zsocket_connect (cs, "%s", uri) < 0)
-        log_err_exit ("S: zsocket_connect");
+    if (!(cs = zsock_new_pub (uri)))
+        log_err_exit ("S: zsock_new_pub");
 
     if ((rc = pthread_attr_init (&attr)))
         log_errn (rc, "S: pthread_attr_init");
@@ -144,8 +135,9 @@ int main (int argc, char *argv[])
      */
     if ((rc = pthread_join (tid, NULL)))
         log_errn (rc, "S: pthread_join");
-    zctx_destroy (&zctx); /* destroys sockets too */
 
+    zsock_destroy (&zs);
+    zsock_destroy (&cs);
     flux_sec_destroy (sec);
 
     log_fini ();
