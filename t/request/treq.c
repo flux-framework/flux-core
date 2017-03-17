@@ -234,6 +234,7 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
         Jput (out);
         flux_msg_destroy (msg);
     }
+    Jput (in);
 }
 
 /* This test is to make sure that deferred responses are handled in order.
@@ -291,6 +292,7 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
         flux_msg_destroy (msg);
     } while (myseq < count);
     zlist_destroy (&defer);
+    Jput (in);
 }
 
 static int count_hops (const char *s)

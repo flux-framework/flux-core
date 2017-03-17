@@ -29,7 +29,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <flux/core.h>
-#include <jansson.h>
 
 #include "content.h"
 

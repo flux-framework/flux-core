@@ -68,12 +68,14 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (s);
     free (route);
+    Jput (inout);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (s);
     free (route);
+    Jput (inout);
 }
 
 static void ping_finalize (void *arg)
