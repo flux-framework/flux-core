@@ -1430,7 +1430,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
         goto done;
     }
-    if (!(out = Jfromstr (json_str))) {
+    if (!json_str || !(out = Jfromstr (json_str))) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s: json_decode", __FUNCTION__);
         goto done;
@@ -1480,7 +1480,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
         goto done;
     }
-    if (!(out = Jfromstr (json_str))) {
+    if (!json_str || !(out = Jfromstr (json_str))) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s: json decode", __FUNCTION__);
         goto done;
