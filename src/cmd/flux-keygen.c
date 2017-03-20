@@ -52,8 +52,8 @@ int main (int argc, char *argv[])
 {
     int ch;
     flux_sec_t *sec;
+    int typemask = FLUX_SEC_TYPE_CURVE;
     bool force = false;
-    bool plain = false;
     const char *secdir = getenv ("FLUX_SEC_DIRECTORY");
 
     log_init ("flux-keygen");
@@ -67,7 +67,8 @@ int main (int argc, char *argv[])
                 force = true;
                 break;
             case 'p': /* --plain */
-                plain = true;
+                typemask |= FLUX_SEC_TYPE_PLAIN;
+                typemask &= ~FLUX_SEC_TYPE_CURVE;
                 break;
             case 'd': /* --secdir */
                 secdir = optarg;
@@ -80,12 +81,8 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
-     if (!(sec = flux_sec_create ()))
+     if (!(sec = flux_sec_create (typemask, secdir)))
         log_err_exit ("flux_sec_create");
-    if (secdir)
-        flux_sec_set_directory (sec, secdir);
-    if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)
-        log_msg_exit ("PLAIN security is not available");
     if (flux_sec_keygen (sec, force, true) < 0)
         log_msg_exit ("%s", flux_sec_errstr (sec));
     flux_sec_destroy (sec);

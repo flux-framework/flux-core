@@ -52,7 +52,7 @@
 
 static const char *uri = "inproc://tmunge";
 static zsock_t *cs;
-int secflags = FLUX_SEC_TYPE_MUNGE;
+int sec_typemask = FLUX_SEC_TYPE_MUNGE;
 
 void *thread (void *arg)
 {
@@ -60,12 +60,8 @@ void *thread (void *arg)
     flux_sec_t *sec;
     int n;
 
-    if (!(sec = flux_sec_create ()))
+    if (!(sec = flux_sec_create (sec_typemask, NULL)))
         log_err_exit ("C: flux_sec_create");
-    if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
-        log_err_exit ("C: flux_sec_disable ALL");
-    if (flux_sec_enable (sec, secflags) < 0)
-        log_err_exit ("C: flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
     if (!(msg = flux_event_encode ("foo.topic", "{\"foo\":42}")))
@@ -98,16 +94,12 @@ int main (int argc, char *argv[])
     }
     if (argc == 2) {
         if (!strcmp (argv[1], "--fake"))
-            secflags |= FLUX_SEC_TYPE_FAKEMUNGE;
+            sec_typemask |= FLUX_SEC_TYPE_FAKEMUNGE;
         else
             log_msg_exit ("unknown option %s", argv[1]);
     }
-    if (!(sec = flux_sec_create ()))
+    if (!(sec = flux_sec_create (sec_typemask, NULL)))
         log_err_exit ("flux_sec_create");
-    if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
-        log_err_exit ("flux_sec_disable ALL");
-    if (flux_sec_enable (sec, secflags) < 0)
-        log_err_exit ("flux_sec_enable MUNGE");
     if (flux_sec_munge_init (sec) < 0)
         log_err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
 

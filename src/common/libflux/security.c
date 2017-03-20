@@ -125,56 +125,38 @@ void flux_sec_destroy (flux_sec_t *c)
     free (c);
 }
 
-flux_sec_t *flux_sec_create (void)
+flux_sec_t *flux_sec_create (int typemask, const char *confdir)
 {
-    flux_sec_t *c = xzmalloc (sizeof (*c));
+    flux_sec_t *c = calloc (1, sizeof (*c));
 
+    if ((typemask & FLUX_SEC_TYPE_CURVE) && (typemask & FLUX_SEC_TYPE_PLAIN)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!c) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (confdir) {
+        if (!(c->conf_dir = strdup (confdir))) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
     c->uid = getuid ();
     c->gid = getgid ();
-    c->typemask = FLUX_SEC_TYPE_MUNGE | FLUX_SEC_TYPE_CURVE;
+    c->typemask = typemask;
     return c;
-}
-
-static int validate_type (int tm)
-{
-    if ((tm & FLUX_SEC_TYPE_CURVE) && (tm & FLUX_SEC_TYPE_PLAIN))
-        goto einval; /* both can't be enabled */
-    return 0;
-einval:
-    errno = EINVAL;
-    return -1;
-}
-
-void flux_sec_set_directory (flux_sec_t *c, const char *confdir)
-{
-    if (c->conf_dir)
+error:
+    if (c)
         free (c->conf_dir);
-    c->conf_dir = xstrdup (confdir);
+    free (c);
+    return NULL;
 }
 
 const char *flux_sec_get_directory (flux_sec_t *c)
 {
     return c->conf_dir;
-}
-
-int flux_sec_disable (flux_sec_t *c, int tm)
-{
-    int rc;
-    c->typemask &= ~tm;
-    rc = validate_type (c->typemask);
-    return rc;
-}
-
-int flux_sec_enable (flux_sec_t *c, int tm)
-{
-    int rc;
-    if ((tm & (FLUX_SEC_TYPE_CURVE))) /* plain/curve are like radio buttons */
-        c->typemask &= ~(int)FLUX_SEC_TYPE_PLAIN;
-    else if ((tm & (FLUX_SEC_TYPE_PLAIN)))
-        c->typemask &= ~(int)FLUX_SEC_TYPE_CURVE;
-    c->typemask |= tm;
-    rc = validate_type (c->typemask);
-    return rc;
 }
 
 bool flux_sec_type_enabled (flux_sec_t *c, int tm)

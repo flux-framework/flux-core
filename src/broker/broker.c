@@ -249,8 +249,7 @@ int main (int argc, char *argv[])
     int c;
     broker_ctx_t ctx;
     zlist_t *sigwatchers;
-    int security_clr = 0;
-    int security_set = 0;
+    int sec_typemask = FLUX_SEC_TYPE_CURVE | FLUX_SEC_TYPE_MUNGE;
     int e;
     char *endptr;
     sigset_t old_sigmask;
@@ -290,14 +289,17 @@ int main (int argc, char *argv[])
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 's':   /* --security=MODE */
-                if (!strcmp (optarg, "none"))
-                    security_clr = FLUX_SEC_TYPE_ALL;
-                else if (!strcmp (optarg, "plain"))
-                    security_set |= FLUX_SEC_TYPE_PLAIN;
-                else if (!strcmp (optarg, "curve"))
-                    security_set |= FLUX_SEC_TYPE_CURVE;
-                else
-                    log_msg_exit ("--security argument must be none|plain|curve");
+                if (!strcmp (optarg, "none")) {
+                    sec_typemask = 0;
+                } else if (!strcmp (optarg, "plain")) {
+                    sec_typemask |= FLUX_SEC_TYPE_PLAIN;
+                    sec_typemask &= ~FLUX_SEC_TYPE_CURVE;
+                } else if (!strcmp (optarg, "curve")) {
+                    sec_typemask |= FLUX_SEC_TYPE_CURVE;
+                    sec_typemask &= ~FLUX_SEC_TYPE_PLAIN;
+                } else {
+                    log_msg_exit ("--security arg must be none|plain|curve");
+                }
                 break;
             case 'v':   /* --verbose */
                 ctx.verbose = true;
@@ -409,16 +411,11 @@ int main (int argc, char *argv[])
 
     /* Initialize security context.
      */
-    if (!(ctx.sec = flux_sec_create ()))
-        log_err_exit ("flux_sec_create");
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
         log_err_exit ("getattr security.keydir");
-    flux_sec_set_directory (ctx.sec, keydir);
-    if (security_clr && flux_sec_disable (ctx.sec, security_clr) < 0)
-        log_err_exit ("flux_sec_disable");
-    if (security_set && flux_sec_enable (ctx.sec, security_set) < 0)
-        log_err_exit ("flux_sec_enable");
+    if (!(ctx.sec = flux_sec_create (sec_typemask, keydir)))
+        log_err_exit ("flux_sec_create");
     if (flux_sec_zauth_init (ctx.sec, ctx.zctx, "flux") < 0)
         log_msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
     if (flux_sec_munge_init (ctx.sec) < 0)
