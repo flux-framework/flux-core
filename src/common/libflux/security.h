@@ -3,11 +3,7 @@
 
 #include <stdbool.h>
 
-#define DEFAULT_ZAP_DOMAIN      "flux"
-
 typedef struct flux_sec_struct flux_sec_t;
-
-struct _zctx_t;
 
 enum {
     FLUX_SEC_TYPE_PLAIN = 1,
@@ -34,11 +30,9 @@ const char *flux_sec_get_directory (flux_sec_t *c);
  */
 int flux_sec_keygen (flux_sec_t *c, bool force, bool verbose);
 
-/* Initialize ZAUTH (PLAIN or CURVE) and MUNGE security.
- * Calling these when relevant security modes are disabled is a no-op.
+/* Initialize security context for communication.
  */
-int flux_sec_zauth_init (flux_sec_t *c, struct _zctx_t *zctx, const char *domain);
-int flux_sec_munge_init (flux_sec_t *c);
+int flux_sec_comms_init (flux_sec_t *c);
 
 /* Enable client or server mode ZAUTH security on a zmq socket.
  * Calling these when relevant security modes are disabled is a no-op.

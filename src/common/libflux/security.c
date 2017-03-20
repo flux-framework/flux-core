@@ -44,15 +44,11 @@
 #include "src/common/libutil/base64.h"
 
 
-#if ZMQ_VERSION_MAJOR < 4
-#error CURVE was introduced in zeromq v4
-#endif
+#define FLUX_ZAP_DOMAIN "flux"
 
 struct flux_sec_struct {
-    zctx_t *zctx;
-    char *domain;
+    zactor_t *auth;
     int typemask;
-    zauth_t *zauth;
     zcert_t *srv_cert;
     zcert_t *cli_cert;
     munge_ctx_t mctx;
@@ -102,27 +98,19 @@ static void seterrstr (flux_sec_t *c, const char *fmt, ...)
 
 void flux_sec_destroy (flux_sec_t *c)
 {
-    if (c->domain)
-        free (c->domain);
-    if (c->conf_dir)
+    if (c) {
         free (c->conf_dir);
-    if (c->curve_dir)
         free (c->curve_dir);
-    if (c->passwd_file)
         free (c->passwd_file);
-    if (c->cli_cert)
         zcert_destroy (&c->cli_cert);
-    if (c->srv_cert)
         zcert_destroy (&c->srv_cert);
-    if (c->zauth)
-        zauth_destroy (&c->zauth);
-    if (c->mctx)
-        munge_ctx_destroy (c->mctx);
-    if (c->errstr)
+        if (c->mctx)
+            munge_ctx_destroy (c->mctx);
         free (c->errstr);
-    if (c->confstr)
         free (c->confstr);
-    free (c);
+        zactor_destroy (&c->auth);
+        free (c);
+    }
 }
 
 flux_sec_t *flux_sec_create (int typemask, const char *confdir)
@@ -186,69 +174,81 @@ done:
     return rc;
 }
 
-int flux_sec_zauth_init (flux_sec_t *c, zctx_t *zctx, const char *domain)
+int flux_sec_comms_init (flux_sec_t *c)
 {
-    int rc = -1;
-    if (checksecdirs (c, false) < 0)
-        goto done;
-    c->zctx = zctx;
-    c->domain = xstrdup (domain ? domain : DEFAULT_ZAP_DOMAIN) ;
-    if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
-        if (!(c->zauth = zauth_new (c->zctx)))
-            goto done;
-        //zauth_set_verbose (c->zauth, true);
-        if (!(c->cli_cert = getcurve (c, "client")))
-            goto done;
-        if (!(c->srv_cert = getcurve (c, "server")))
-            goto done;
-        zauth_configure_curve (c->zauth, "*", c->curve_dir);
-    } else if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
-        if (!(c->zauth = zauth_new (c->zctx)))
-            goto done;
-        //zauth_set_verbose (c->zauth, true); // displays passwords on stdout!
-        zauth_configure_plain (c->zauth, "*", c->passwd_file);
-    }
-    rc = 0;
-done:
-    return rc;
-}
+    int verbose = 0;
 
-int flux_sec_munge_init (flux_sec_t *c)
-{
-    int rc = -1;
-    if ((c->typemask & FLUX_SEC_TYPE_MUNGE)
-                            && !(c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
+    if (c->mctx == NULL && (c->typemask & FLUX_SEC_TYPE_MUNGE)
+                        && !(c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
         munge_err_t e;
-        if (!(c->mctx = munge_ctx_create ()))
-            oom ();
+        if (!(c->mctx = munge_ctx_create ())) {
+            seterrstr (c, "munge_ctx_create: %s", flux_strerror (errno));
+            goto error;
+        }
         e = munge_ctx_set (c->mctx, MUNGE_OPT_UID_RESTRICTION, c->uid);
         if (e != EMUNGE_SUCCESS) {
             seterrstr (c, "munge_ctx_set: %s", munge_strerror (e));
             errno = EINVAL;
-            goto done;
+            goto error;
         }
     }
-    rc = 0;
-done:
-    return rc;
+    if (c->auth == NULL && ((c->typemask & FLUX_SEC_TYPE_CURVE)
+                        || (c->typemask & FLUX_SEC_TYPE_PLAIN))) {
+        if (checksecdirs (c, false) < 0)
+            goto error;
+        if (!(c->auth = zactor_new (zauth, NULL))) {
+            seterrstr (c, "zactor_new (zauth): %s", flux_strerror (errno));
+            goto error;
+        }
+        if (verbose) {
+            if (zstr_sendx (c->auth, "VERBOSE", NULL) < 0)
+                goto error;
+            if (zsock_wait (c->auth) < 0)
+                goto error;
+        }
+        if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
+            if (!zsys_has_curve ()) {
+                seterrstr (c, "libczmq was not built with CURVE support!");
+                errno = EINVAL;
+                goto error;
+            }
+            if (!(c->cli_cert = getcurve (c, "client")))
+                goto error;
+            if (!(c->srv_cert = getcurve (c, "server")))
+                goto error;
+            if (zstr_sendx (c->auth, "CURVE", CURVE_ALLOW_ANY, NULL) < 0)
+                goto error;
+            if (zsock_wait (c->auth) < 0)
+                goto error;
+        }
+        if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
+            if (zstr_sendx (c->auth, "PLAIN", c->passwd_file, NULL) < 0)
+                goto error;
+            if (zsock_wait (c->auth) < 0)
+                goto error;
+        }
+    }
+    return 0;
+error:
+    return -1;
 }
 
 int flux_sec_csockinit (flux_sec_t *c, void *sock)
 {
     int rc = -1;
+
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
-        zsocket_set_zap_domain (sock, c->domain);
+        zsock_set_zap_domain (sock, FLUX_ZAP_DOMAIN);
         zcert_apply (c->cli_cert, sock);
-        zsocket_set_curve_serverkey (sock, zcert_public_txt (c->srv_cert));
+        zsock_set_curve_serverkey (sock, zcert_public_txt (c->srv_cert));
     } else if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
         char *passwd = NULL;
         if (!(passwd = getpasswd (c, "client"))) {
             seterrstr (c, "client not found in %s", c->passwd_file);
             goto done;
         }
-        zsocket_set_plain_username (sock, "client");
-        //zsocket_set_plain_password (sock, "treefrog"); // hah hah
-        zsocket_set_plain_password (sock, passwd);
+        zsock_set_plain_username (sock, "client");
+        zsock_set_plain_password (sock, passwd);
         free (passwd);
     }
     rc = 0;
@@ -259,11 +259,11 @@ done:
 int flux_sec_ssockinit (flux_sec_t *c, void *sock)
 {
     if ((c->typemask & (FLUX_SEC_TYPE_CURVE))) {
-        zsocket_set_zap_domain (sock, DEFAULT_ZAP_DOMAIN);
+        zsock_set_zap_domain (sock, FLUX_ZAP_DOMAIN);
         zcert_apply (c->srv_cert, sock);
-        zsocket_set_curve_server (sock, 1);
+        zsock_set_curve_server (sock, 1);
     } else if ((c->typemask & (FLUX_SEC_TYPE_PLAIN))) {
-        zsocket_set_plain_server (sock, 1);
+        zsock_set_plain_server (sock, 1);
     }
     return 0;
 }
@@ -425,34 +425,46 @@ done:
 
 static zcert_t *getcurve (flux_sec_t *c, const char *role)
 {
-    char *path = NULL;;
+    char s[PATH_MAX];
     zcert_t *cert = NULL;
 
-    if (asprintf (&path, "%s/%s", c->curve_dir, role) < 0)
-        oom ();
-    if (!(cert = zcert_load (path)))
-        seterrstr (c, "zcert_load %s: %s", path, flux_strerror (errno));
-    free (path);
+    if (snprintf (s, sizeof (s), "%s/%s", c->curve_dir, role) >= sizeof (s)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(cert = zcert_load (s)))
+        seterrstr (c, "zcert_load %s: %s", s, flux_strerror (errno));
     return cert;
+error:
+    return NULL;
 }
 
 static char *getpasswd (flux_sec_t *c, const char *user)
 {
-    zhash_t *passwds;
-    char *passwd = NULL;
+    zhash_t *passwds = NULL;
+    const char *pass;
+    char *s = NULL;
 
-    if (!(passwds = zhash_new ()))
-        oom ();
+    if (!(passwds = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     zhash_autofree (passwds);
     if (zhash_load (passwds, c->passwd_file) < 0)
-        goto done;
-    if (!(passwd = zhash_lookup (passwds, user)))
-        goto done;
-    passwd = xstrdup (passwd);
-done:
-    if (passwds)
-        zhash_destroy (&passwds);
-    return passwd;
+        goto error;
+    if (!(pass = zhash_lookup (passwds, user))) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (!(s = strdup (pass))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zhash_destroy (&passwds);
+    return s;
+error:
+    zhash_destroy (&passwds);
+    return NULL;
 }
 
 static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose)

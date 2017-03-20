@@ -93,7 +93,6 @@ struct tbon_param {
 typedef struct {
     /* 0MQ
      */
-    zctx_t *zctx;               /* zeromq context (MT-safe) */
     flux_sec_t *sec;             /* security context (MT-safe) */
 
     /* Reactor
@@ -383,12 +382,14 @@ int main (int argc, char *argv[])
 
     /* Initailize zeromq context
      */
+    if (!zsys_init ())
+        log_err_exit ("zsys_init");
     zsys_set_logstream (stderr);
+    zsys_set_logident ("flux-broker");
     zsys_handler_set (NULL);
-    ctx.zctx = zctx_new ();
-    if (!ctx.zctx)
-        log_err_exit ("zctx_new");
-    zctx_set_linger (ctx.zctx, 5);
+    zsys_set_linger (5);
+    zsys_set_rcvhwm (0);
+    zsys_set_sndhwm (0);
 
     /* Set up the flux reactor.
      */
@@ -416,10 +417,8 @@ int main (int argc, char *argv[])
         log_err_exit ("getattr security.keydir");
     if (!(ctx.sec = flux_sec_create (sec_typemask, keydir)))
         log_err_exit ("flux_sec_create");
-    if (flux_sec_zauth_init (ctx.sec, ctx.zctx, "flux") < 0)
-        log_msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
-    if (flux_sec_munge_init (ctx.sec) < 0)
-        log_msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
+    if (flux_sec_comms_init (ctx.sec) < 0)
+        log_msg_exit ("flux_sec_comms_init: %s", flux_sec_errstr (ctx.sec));
 
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
@@ -709,7 +708,6 @@ int main (int argc, char *argv[])
         flux_close (ctx.enclosing_h);
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
-    zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     svchash_destroy (ctx.services);

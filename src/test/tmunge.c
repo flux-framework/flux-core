@@ -62,8 +62,8 @@ void *thread (void *arg)
 
     if (!(sec = flux_sec_create (sec_typemask, NULL)))
         log_err_exit ("C: flux_sec_create");
-    if (flux_sec_munge_init (sec) < 0)
-        log_err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
+    if (flux_sec_comms_init (sec) < 0)
+        log_err_exit ("C: flux_sec_comms_init: %s", flux_sec_errstr (sec));
     if (!(msg = flux_event_encode ("foo.topic", "{\"foo\":42}")))
         log_err_exit ("C: flux_event_encode");
     if ((n = flux_msg_frames (msg)) != 4)
@@ -100,8 +100,8 @@ int main (int argc, char *argv[])
     }
     if (!(sec = flux_sec_create (sec_typemask, NULL)))
         log_err_exit ("flux_sec_create");
-    if (flux_sec_munge_init (sec) < 0)
-        log_err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
+    if (flux_sec_comms_init (sec) < 0)
+        log_err_exit ("flux_sec_comms_init: %s", flux_sec_errstr (sec));
 
     if (!(zs = zsock_new_sub (uri, "")))
         log_err_exit ("S: zsock_new_sub");
