@@ -78,11 +78,6 @@
 #include "ping.h"
 #include "rusage.h"
 
-#ifndef ZMQ_IMMEDIATE
-#define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
-#define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
-#endif
-
 typedef enum {
     ERROR_MODE_RESPOND,
     ERROR_MODE_RETURN,
