@@ -97,7 +97,7 @@ int main (int argc, char *argv[])
             usage ();
         char *peers;
         if (!(peers = flux_lspeer (h, rank)))
-            log_err_exit ("flux_peer");
+            log_err_exit ("flux_lspeer");
         printf ("%s\n", peers);
         free (peers);
     } else if (!strcmp (cmd, "panic")) {

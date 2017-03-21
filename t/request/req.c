@@ -69,7 +69,7 @@ void count_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     Jadd_int (o, "count", zlist_size (ctx->clog_requests));
     if (flux_respond (h, msg, 0, Jtostr (o)) < 0)
-        flux_log_error (h, "%s: flux_json_respond", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     Jput (o);
 }
 

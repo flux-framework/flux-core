@@ -168,6 +168,7 @@ check_PROGRAMS = \
 	kvs/commit \
 	kvs/commitmerge \
 	kvs/basic \
+	module/basic \
 	request/treq
 
 check_LTLIBRARIES = \
@@ -325,6 +326,11 @@ module_child_la_SOURCES = module/child.c
 module_child_la_CPPFLAGS = $(test_cppflags)
 module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_child_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+module_basic_SOURCES = module/basic.c
+module_basic_CPPFLAGS = $(test_cppflags)
+module_basic_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_coproc_la_SOURCES = request/coproc.c
