@@ -389,6 +389,10 @@ int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
         goto done;
     if (flux_rpc_get (r, &json_str) < 0)
         goto done;
+    if (!json_str) {
+        errno = EPROTO;
+        goto done;
+    }
     if (!(mods = flux_lsmod_json_decode (json_str)))
         goto done;
     if ((len = flux_modlist_count (mods)) == -1)

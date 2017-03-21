@@ -49,6 +49,10 @@ void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
         errnum = errno;
         goto done;
     }
+    if (!json_str) {
+        errnum = EPROTO;
+        goto done;
+    }
 done:
     (void)flux_respond (h, msg, errnum, json_str);
 }
@@ -74,18 +78,40 @@ void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
+    const char *json_str;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
         errnum = errno;
+        goto done;
+    }
+    if (json_str) {
+        errnum = EPROTO;
         goto done;
     }
 done:
     (void)flux_respond (h, msg, errnum, NULL);
 }
 
+void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
+                        const flux_msg_t *msg, void *arg)
+{
+    int errnum = 0;
+
+    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+        errnum = errno;
+        goto done;
+    }
+ done:
+    if (errnum)
+        (void)flux_respond (h, msg, errnum, NULL);
+    else
+        (void)flux_respondf (h, msg, "{}");
+}
+
 void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
+    json_object *o;
     const char *json_str;
     flux_rpc_t *r;
 
@@ -126,6 +152,32 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_get fails with EPROTO");
     flux_rpc_destroy (r);
 
+    /* receive NULL payload on empty response */
+    ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+        "flux_rpc with empty payload works");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_get (r, &json_str) == 0
+        && json_str == NULL,
+        "flux_rpc_get gets NULL payload on empty response");
+    flux_rpc_destroy (r);
+
+    /* flux_rpc_get is ok if user doesn't desire response payload */
+    errno = 0;
+    o = Jnew ();
+    Jadd_int (o, "foo", 42);
+    json_str = Jtostr (o);
+    ok ((r = flux_rpc (h, "rpctest.echo", json_str, FLUX_NODEID_ANY, 0)) != NULL,
+        "flux_rpc with payload works");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_get (r, NULL) == 0,
+        "flux_rpc_get is ok if user doesn't desire response payload");
+    flux_rpc_destroy (r);
+    Jput (o);
+
     /* working with-payload RPC */
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
@@ -165,6 +217,41 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "and service returned incremented value");
     flux_rpc_destroy (r);
 
+    /* cause remote EPROTO (unexpected payload) - will be picked up in _getf() */
+    ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
+                        "{ s:i }", "foo", 42)) != NULL,
+        "flux_rpcf with payload when none is expected works, at first");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_getf (r, "{}") < 0
+        && errno == EPROTO,
+        "flux_rpc_getf fails with EPROTO");
+    flux_rpc_destroy (r);
+
+    /* cause local EPROTO (user incorrectly expects payload) */
+    ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
+        "flux_rpcf with empty payload works");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_getf (r, "{ s:i }", "foo", &i) < 0
+        && errno == EPROTO,
+        "flux_rpc_getf fails with EPROTO");
+    flux_rpc_destroy (r);
+
+    /* cause local EPROTO (user incorrectly expects empty payload) */
+    errno = 0;
+    ok ((r = flux_rpcf (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
+        "flux_rpcf with payload works");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_getf (r, "{ ! }") < 0
+        && errno == EPROTO,
+        "flux_rpc_getf fails with EPROTO");
+    flux_rpc_destroy (r);
+
     flux_reactor_stop (flux_get_reactor (h));
 }
 
@@ -199,6 +286,7 @@ static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",           rpctest_incr_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",         rpcftest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho",        rpctest_rawecho_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},

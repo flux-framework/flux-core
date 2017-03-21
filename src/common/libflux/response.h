@@ -9,11 +9,11 @@
 
 /* Decode a response message, with optional json payload.
  * If topic is non-NULL, assign the response topic string.
- * If json_str is non-NULL, assign the payload.  This argument indicates whether
- * payload is expected and it is an EPROTO error if expectations are not met.
- * If response includes a nonzero errnum, errno is set to the errnum value
- * and -1 is returned with no assignments to topic or json_str.
- * Returns 0 on success, or -1 on failure with errno set.
+ * If json_str is non-NULL, assign the payload if one exists or set to
+ * NULL is none exists.  If response includes a nonzero errnum, errno
+ * is set to the errnum value and -1 is returned with no assignments
+ * to topic or json_str.  Returns 0 on success, or -1 on failure with
+ * errno set.
  */
 int flux_response_decode (const flux_msg_t *msg, const char **topic,
                           const char **json_str);

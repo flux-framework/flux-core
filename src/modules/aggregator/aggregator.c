@@ -475,7 +475,7 @@ static void push_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "push: request decode");
         goto done;
     }
-    if (!(in = Jfromstr (json_str))) {
+    if (!json_str || !(in = Jfromstr (json_str))) {
         saved_errno = EPROTO;
         flux_log_error (h, "push: json decode");
         goto done;

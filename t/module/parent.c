@@ -126,6 +126,10 @@ static void insmod_request_cb (flux_t *h, flux_msg_handler_t *w,
         saved_errno = errno;
         goto done;
     }
+    if (!json_str) {
+        saved_errno = EPROTO;
+        goto done;
+    }
     if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0) {
         saved_errno = errno;
         goto done;
@@ -154,6 +158,10 @@ static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
         saved_errno = errno;
+        goto done;
+    }
+    if (!json_str) {
+        saved_errno = EPROTO;
         goto done;
     }
     if (flux_rmmod_json_decode (json_str, &name) < 0) {

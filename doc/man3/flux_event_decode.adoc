@@ -36,10 +36,9 @@ DESCRIPTION
 _topic_, if non-NULL, will be set the message's topic string. The storage
 for this string belongs to _msg_ and should not be freed.
 
-_json_str_, if non-NULL, will be set to the message's JSON payload. The
-storage for this string belongs to _msg_ and should not be freed.
-If non-NULL, decoding fails if the message doesn't have a JSON payload.
-If NULL, decoding fails if the message does have a JSON payload.
+_json_str_, if non-NULL, will be set to the message's JSON payload. If
+no payload exists, _json_str_ is set to NULL.  The storage for this
+string belongs to _msg_ and should not be freed.
 
 `flux_event_decodef()` decodes a Flux event message with a JSON payload as
 above, parsing the payload using variable arguments with a format string

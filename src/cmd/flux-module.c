@@ -486,7 +486,7 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
 
 int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
 {
-    flux_modlist_t *modlist;
+    flux_modlist_t *modlist = NULL;
     mod_t *m;
     int i, len;
     const char *name, *digest;
@@ -494,6 +494,10 @@ int lsmod_merge_result (uint32_t nodeid, const char *json_str, zhash_t *mods)
     int status;
     int rc = -1;
 
+    if (!json_str) {
+        errno = EPROTO;
+        goto done;
+    }
     if (!(modlist = flux_lsmod_json_decode (json_str)))
         goto done;
     if ((len = flux_modlist_count (modlist)) == -1)
@@ -655,6 +659,8 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", topic);
         if (flux_rpc_get (r, &json_str) < 0)
             log_err_exit ("%s", topic);
+        if (!json_str)
+            log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
     } else {
         topic = xasprintf ("%s.stats.get", service);
@@ -662,6 +668,8 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", topic);
         if (flux_rpc_get (r, &json_str) < 0)
             log_err_exit ("%s", topic);
+        if (!json_str)
+            log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
     }
     free (topic);

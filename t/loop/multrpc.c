@@ -70,6 +70,10 @@ void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
         errnum = errno;
         goto done;
     }
+    if (!json_str) {
+        errnum = EPROTO;
+        goto done;
+    }
 done:
     (void)flux_respond (h, msg, errnum, json_str);
 }
@@ -80,9 +84,14 @@ void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
+    const char *json_str;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
         errnum = errno;
+        goto done;
+    }
+    if (json_str) {
+        errnum = EPROTO;
         goto done;
     }
     hello_count++;
@@ -93,12 +102,18 @@ done:
 void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
-    if (flux_request_decodef (msg, NULL, "{}") < 0) {
+    int errnum = 0;
+
+    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+        errnum = errno;
         goto done;
     }
     hello_count++;
 done:
-    (void)flux_respondf (h, msg, "{}");
+    if (errnum)
+        (void)flux_respond (h, msg, errnum, NULL);
+    else
+        (void)flux_respondf (h, msg, "{}");
 }
 
 /* then test - add nodeid to 'then_ns' */
@@ -299,7 +314,7 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     int fail_errno_last = 0;
     do {
         if (flux_rpc_get_nodeid (r, &nodeid) < 0
-                || flux_rpc_get (r, &json_str) < 0) {
+                || flux_rpc_get (r, NULL) < 0) {
             fail_errno_last = errno;
             fail_nodeid_last = nodeid;
             fail_count++;
@@ -403,6 +418,18 @@ void rpcftest_begin_cb (flux_t *h, flux_msg_handler_t *w,
         "flux_rpc_getf works");
     ok (hello_count == old_count + 1,
         "rpc was called once");
+    flux_rpc_destroy (r);
+
+    /* cause remote EPROTO (unexpected payload) - picked up in _getf() */
+    ok ((r = flux_rpcf_multi (h, "rpcftest.hello", "all", 0,
+                              "{ s:i }", "foo", 42)) != NULL,
+        "flux_rpcf_multi [0] with unexpected payload works, at first");
+    ok (flux_rpc_check (r) == false,
+        "flux_rpc_check says get would block");
+    errno = 0;
+    ok (flux_rpc_getf (r, "{}") < 0
+        && errno == EPROTO,
+        "flux_rpc_getf fails with EPROTO");
     flux_rpc_destroy (r);
 
     /* fake that we have a larger session */

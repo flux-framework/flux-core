@@ -137,8 +137,10 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto out;
     }
 
-    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid) &&
-        Jget_obj (request, "stdin", &o)) {
+    if (json_str
+        && (request = Jfromstr (json_str))
+        && Jget_int (request, "pid", &pid)
+        && Jget_obj (request, "stdin", &o)) {
         int len;
         void *data = NULL;
         bool eof;
@@ -229,7 +231,8 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto out_free;
 
-    if (!(request = Jfromstr (json_str))
+    if (!json_str
+        || !(request = Jfromstr (json_str))
         || !json_object_object_get_ex (request, "cmdline", &o)
         || o == NULL
         || (json_object_get_type (o) != json_type_array)) {

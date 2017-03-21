@@ -66,13 +66,11 @@ and the flux_rpc_t returned by `flux_rpc()` may be immediately destroyed.
 `flux_rpc_get()` blocks until a matching response is received, then
 decodes the result.  For asynchronous response handling, see flux_rpc_then(3).
 
-_json_out_, if non-NULL, is assigned a string containing valid serialized
-JSON from the response payload.  It is a protocol error if a payload that is
-expected (signified by a non-NULL _json_out_) does not arrive;
-similarly, it is a protocol error if an unexpected payload (signified
-by a NULL _json_out_) arrives.  The storage associated with _json_out_
-belongs to the flux_rpc_t object and is invalidated when that object is
-destroyed.
+_json_out_, if non-NULL, is assigned a string containing valid
+serialized JSON from the response payload.  If no payload exists,
+_json_out_ is set to NULL.  The storage associated with _json_out_
+belongs to the flux_rpc_t object and is invalidated when that object
+is destroyed.
 
 `flux_rpc_destroy()` destroys a completed `flux_rpc_t`, invalidating 
 payload as described above, and freeing the RPC matchtag.  Destroying

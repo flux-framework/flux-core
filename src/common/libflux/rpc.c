@@ -266,6 +266,10 @@ static int flux_rpc_vgetf (flux_rpc_t *rpc, const char *fmt, va_list ap)
         goto done;
     if (flux_response_decode (rpc->rx_msg, NULL, &json_str) < 0)
         goto done;
+    if (!json_str) {
+        errno = EPROTO;
+        goto done;
+    }
     if (flux_msg_vget_jsonf (rpc->rx_msg, fmt, ap) < 0)
         goto done;
     rc = 0;

@@ -35,8 +35,8 @@ int main (int argc, char *argv[])
     ok (flux_request_decode (msg, NULL, NULL) == 0,
         "flux_request_decode topic is optional");
     errno = 0;
-    ok (flux_request_decode (msg, NULL, &s) < 0 && errno == EPROTO,
-        "flux_request_decode returns EPROTO when expected payload is missing");
+    ok (flux_request_decode (msg, NULL, &s) == 0 && s == NULL,
+        "flux_request_decode returns s = NULL when expected payload is missing");
     flux_msg_destroy(msg);
 
     /* with JSON payload */
@@ -54,8 +54,8 @@ int main (int argc, char *argv[])
         "flux_request_decodef returns encoded payload");
 
     errno = 0;
-    ok (flux_request_decode (msg, NULL, NULL) < 0 && errno == EPROTO,
-        "flux_request_decode returns EPROTO when payload is unexpected");
+    ok (flux_request_decode (msg, NULL, NULL) == 0,
+        "flux_request_decode works with payload but don't want the payload");
     flux_msg_destroy(msg);
 
     /* without payload (raw) */

@@ -66,10 +66,6 @@ int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **j
         goto done;
     if (flux_msg_get_json (msg, &js) < 0)
         goto done;
-    if ((json_str && !js) || (!json_str && js)) {
-        errno = EPROTO;
-        goto done;
-    }
     if (topic)
         *topic = ts;
     if (json_str)

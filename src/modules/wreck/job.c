@@ -251,13 +251,12 @@ out:
 static bool ping_sched (flux_t *h)
 {
     bool retval = false;
-    const char *s;
     flux_rpc_t *rpc;
     if (!(rpc = flux_rpcf (h, "sched.ping", 0, 0, "{s:i}", "seq", 0))) {
         flux_log_error (h, "ping_sched");
         goto out;
     }
-    if (flux_rpc_get (rpc, &s) >= 0)
+    if (flux_rpc_get (rpc, NULL) >= 0)
         retval = true;
 out:
     flux_rpc_destroy (rpc);

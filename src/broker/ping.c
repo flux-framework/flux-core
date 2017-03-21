@@ -49,7 +49,7 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (flux_msg_get_userid (msg, &userid) < 0)
         goto error;
-    if (!(inout = Jfromstr (json_str))) {
+    if (!json_str || !(inout = Jfromstr (json_str))) {
         errno = EPROTO;
         goto error;
     }

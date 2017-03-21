@@ -119,8 +119,10 @@ void sink_request_cb (flux_t *h, flux_msg_handler_t *w,
         saved_errno = errno;
         goto done;
     }
-    if (!(o = Jfromstr (json_str)) || !Jget_double (o, "pi", &d)
-                                   || d != 3.14) {
+    if (!json_str
+        || !(o = Jfromstr (json_str))
+        || !Jget_double (o, "pi", &d)
+        || d != 3.14) {
         saved_errno = errno = EPROTO;
         goto done;
     }
@@ -159,7 +161,9 @@ void nsrc_request_cb (flux_t *h, flux_msg_handler_t *w,
         saved_errno = errno;
         goto done;
     }
-    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "count", &count)) {
+    if (!json_str
+        || !(o = Jfromstr (json_str))
+        || !Jget_int (o, "count", &count)) {
         saved_errno = errno = EPROTO;
         goto done;
     }
@@ -202,6 +206,10 @@ void echo_request_cb (flux_t *h, flux_msg_handler_t *w,
         saved_errno = errno;
         goto done;
     }
+    if (!json_str) {
+        saved_errno = EPROTO;
+        goto done;
+    }
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
@@ -228,8 +236,10 @@ void xping_request_cb (flux_t *h, flux_msg_handler_t *w,
         saved_errno = errno;
         goto error;
     }
-    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "rank", &rank)
-                                   || !Jget_str (o, "service", &service)) {
+    if (!json_str
+        || !(o = Jfromstr (json_str))
+        || !Jget_int (o, "rank", &rank)
+        || !Jget_str (o, "service", &service)) {
         saved_errno = errno = EPROTO;
         goto error;
     }
@@ -283,8 +293,10 @@ void ping_response_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: flux_response_decode", __FUNCTION__);
         goto done;
     }
-    if (!(o = Jfromstr (json_str)) || !Jget_int (o, "seq", &seq)
-                                   || !Jget_str (o, "route", &route)) {
+    if (!json_str
+        || !(o = Jfromstr (json_str))
+        || !Jget_int (o, "seq", &seq)
+        || !Jget_str (o, "route", &route)) {
         errno = EPROTO;
         flux_log_error (h, "%s: payload", __FUNCTION__);
         goto done;
