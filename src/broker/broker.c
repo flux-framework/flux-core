@@ -78,6 +78,9 @@
 #include "ping.h"
 #include "rusage.h"
 
+/* Generally accepted max, although some go higher (IE is 2083) */
+#define ENDPOINT_MAX 2048
+
 typedef enum {
     ERROR_MODE_RESPOND,
     ERROR_MODE_RETURN,
@@ -183,6 +186,8 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
+
+static char *calc_endpoint (const char *endpoint);
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 
@@ -758,6 +763,17 @@ static void init_attrs_from_environment (attr_t *attrs)
     }
 }
 
+static void init_attrs_overlay (broker_ctx_t *ctx)
+{
+    char *tbonendpoint = "tbon.endpoint";
+
+    if (attr_add (ctx->attrs,
+                  tbonendpoint,
+                  "tcp://%h:*",
+                  0) < 0)
+        log_err_exit ("attr_add %s", tbonendpoint);
+}
+
 static void init_attrs_broker_pid (broker_ctx_t *ctx)
 {
     char *attrname = "broker.pid";
@@ -780,6 +796,7 @@ static void init_attrs (broker_ctx_t *ctx)
 
     /* Initialize other miscellaneous attrs
      */
+    init_attrs_overlay (ctx);
     init_attrs_broker_pid (ctx);
 }
 
@@ -1012,6 +1029,65 @@ done:
     return rc;
 }
 
+/* Given a string with possible format specifiers, return string that is
+ * fully expanded.
+ *
+ * Possible format specifiers:
+ * - %h - IP address of current hostname
+ *
+ * Caller is responsible for freeing memory of returned value.
+ */
+static char * calc_endpoint (const char *endpoint)
+{
+    char ipaddr[HOST_NAME_MAX + 1];
+    char *ptr, *buf, *rv = NULL;
+    bool percent_flag = false;
+    unsigned int len = 0;
+
+    buf = xzmalloc (ENDPOINT_MAX + 1);
+
+    ptr = (char *)endpoint;
+    while (*ptr) {
+        if (percent_flag) {
+            if (*ptr == 'h') {
+                ipaddr_getprimary (ipaddr, sizeof (ipaddr));
+                if ((len + strlen (ipaddr)) > ENDPOINT_MAX) {
+                    log_msg ("ipaddr overflow max endpoint length");
+                    goto done;
+                }
+                strcat (buf, ipaddr);
+                len += strlen (ipaddr);
+            }
+            else if (*ptr == '%')
+                buf[len++] = '%';
+            else {
+                buf[len++] = '%';
+                buf[len++] = *ptr;
+            }
+            percent_flag = false;
+        }
+        else {
+            if (*ptr == '%')
+                percent_flag = true;
+            else
+                buf[len++] = *ptr;
+        }
+
+        if (len >= ENDPOINT_MAX) {
+            log_msg ("overflow max endpoint length");
+            goto done;
+        }
+
+        ptr++;
+    }
+
+    rv = buf;
+done:
+    if (!rv)
+        free (buf);
+    return (rv);
+}
+
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 {
     const char *rundir;
@@ -1085,7 +1161,22 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         cleanup_push_string (cleanup_file, reqfile);
         free (reqfile);
     } else {
-        overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
+        const char *attrtbonendpoint;
+        char *tbonendpoint;
+
+        if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
+            log_err ("tbon.endpoint is not set");
+            goto done;
+        }
+
+        if (!(tbonendpoint = calc_endpoint (attrtbonendpoint))) {
+            log_msg ("calc_endpoint error");
+            goto done;
+        }
+
+        overlay_set_child (ctx->overlay, tbonendpoint);
+
+        free (tbonendpoint);
     }
 
     /* Set up epgm relay if multiple ranks are being spawned per node,
