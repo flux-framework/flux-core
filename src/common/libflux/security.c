@@ -273,18 +273,21 @@ static int checksecdir (flux_sec_t *c, const char *path, bool create)
     struct stat sb;
     int rc = -1;
 
-    if (create && mkdir (path, 0700) < 0) {
-        if (errno != EEXIST) {
-            seterrstr (c, "mkdir %s: %s", path, strerror (errno));
-            goto done;
-        }
-    }
+stat_again:
     if (lstat (path, &sb) < 0) {
         if (errno == ENOENT) {
-            seterrstr (c, "The directory '%s' does not exist. Have you run `flux keygen`?", path);
-        }else{
+            if (create) {
+                if (mkdir (path, 0700) < 0) {
+                    seterrstr (c, "mkdir %s: %s", path, strerror (errno));
+                    goto done;
+                }
+                create = false;
+                goto stat_again;
+            } else {
+                seterrstr (c, "The directory '%s' does not exist.  Have you run \"flux keygen\"?", path);
+            }
+        } else
             seterrstr (c, "lstat %s: %s", path, strerror (errno));
-        }
         goto done;
     }
     if (!S_ISDIR (sb.st_mode)) {
