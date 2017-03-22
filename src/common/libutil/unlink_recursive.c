@@ -38,10 +38,6 @@
 #include <czmq.h>
 #include "unlink_recursive.h"
 
-#ifndef O_PATH
-#define O_PATH 0 /* O_PATH is too new for CentOS 6 - see issue #646 */
-#endif
-
 static int unlinkat_recursive (int fd)
 {
     DIR *dir;
@@ -57,7 +53,7 @@ static int unlinkat_recursive (int fd)
             if (fstatat (fd, d->d_name, &sb, AT_SYMLINK_NOFOLLOW) < 0)
                 continue;
             if (S_ISDIR (sb.st_mode)) {
-                if ((cfd = openat (fd, d->d_name, O_PATH | O_DIRECTORY)) < 0)
+                if ((cfd = openat (fd, d->d_name, O_DIRECTORY)) < 0)
                     continue;
                 count += unlinkat_recursive (cfd);
                 if (unlinkat (fd, d->d_name, AT_REMOVEDIR) == 0)
