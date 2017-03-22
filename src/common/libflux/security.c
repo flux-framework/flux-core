@@ -317,18 +317,26 @@ static int checksecdirs (flux_sec_t *c, bool create)
         errno = EINVAL;
         return -1;
     }
-    if (!c->curve_dir) {
-        if (asprintf (&c->curve_dir, "%s/curve", c->conf_dir) < 0)
-            oom ();
-    }
-    if (!c->passwd_file) {
-        if (asprintf (&c->passwd_file, "%s/passwd", c->conf_dir) < 0)
-            oom ();
-    }
     if (checksecdir (c, c->conf_dir, create) < 0)
         return -1;
-    if (checksecdir (c, c->curve_dir, create) < 0)
-        return -1;
+    if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
+        if (!c->curve_dir) {
+            if (asprintf (&c->curve_dir, "%s/curve", c->conf_dir) < 0) {
+                errno = ENOMEM;
+                return -1;
+            }
+        }
+        if (checksecdir (c, c->curve_dir, create) < 0)
+            return -1;
+    }
+    if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
+        if (!c->passwd_file) {
+            if (asprintf (&c->passwd_file, "%s/passwd", c->conf_dir) < 0) {
+                errno = ENOMEM;
+                return -1;
+            }
+        }
+    }
     return 0;
 }
 
