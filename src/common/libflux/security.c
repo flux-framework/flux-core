@@ -492,6 +492,7 @@ static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose)
         (void)unlink (c->passwd_file);
     if (stat (c->passwd_file, &sb) == 0) {
         seterrstr (c, "%s exists, try --force", c->passwd_file);
+        errno = EEXIST;
         goto done;
     }
     if (!(passwds = zhash_new ()))
