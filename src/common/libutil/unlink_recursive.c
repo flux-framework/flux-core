@@ -42,12 +42,13 @@
 #define O_PATH 0 /* O_PATH is too new for CentOS 6 - see issue #646 */
 #endif
 
-static void unlinkat_recursive (int fd)
+static int unlinkat_recursive (int fd)
 {
     DIR *dir;
     struct dirent *d, entry;
     struct stat sb;
     int cfd;
+    int count = 0;
 
     if ((dir = fdopendir (fd))) {
         while (readdir_r (dir, &entry, &d) == 0 && d != NULL) {
@@ -58,22 +59,29 @@ static void unlinkat_recursive (int fd)
             if (S_ISDIR (sb.st_mode)) {
                 if ((cfd = openat (fd, d->d_name, O_PATH | O_DIRECTORY)) < 0)
                     continue;
-                unlinkat_recursive (cfd);
-                (void)unlinkat (fd, d->d_name, AT_REMOVEDIR);
-            } else
-                (void)unlinkat (fd, d->d_name, 0);
+                count += unlinkat_recursive (cfd);
+                if (unlinkat (fd, d->d_name, AT_REMOVEDIR) == 0)
+                    count++;
+            } else {
+                if (unlinkat (fd, d->d_name, 0) == 0)
+                    count++;
+            }
         }
         closedir (dir);
     }
+    return count;
 }
 
-void unlink_recursive (const char *dirpath)
+int unlink_recursive (const char *dirpath)
 {
+    int count = 0;
     DIR *dir = opendir (dirpath);
     if (dir) {
-        unlinkat_recursive (dirfd (dir));
-        (void)rmdir (dirpath);
+        count += unlinkat_recursive (dirfd (dir));
+        if (rmdir (dirpath) == 0)
+            count++;
     }
+    return count;
 }
 
 /*
