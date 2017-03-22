@@ -48,6 +48,8 @@ libutil_la_SOURCES = \
 	msglist.h \
 	cleanup.c \
 	cleanup.h \
+	unlink_recursive.c \
+	unlink_recursive.h \
 	sds.c \
 	sds.h \
 	sdsalloc.h \
