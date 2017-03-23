@@ -472,6 +472,26 @@ static void topo_request_cb (flux_t *h,
         flux_log (h, LOG_ERR, "error hwloc_topology_export_xmlbuffer");
         goto done;
     }
+
+    /* hwloc_topology_export_xmlbuffer() can be inconsistent on
+     * whether or not the buffer includes the NUL char or not.
+     * Obviously, we don't want to pass in string to jansson that may
+     * not be NUL terminated.
+     *
+     * We could use string with len argument (i.e. 's#').  However,
+     * jansson library may be inconsistent on whether len should
+     * contain NUL char.
+     *
+     * So we modify len argument to based on first non-NUL char at end
+     * of string.
+     */
+    while (buflen) {
+        if (buffer[buflen - 1] == '\0')
+            buflen--;
+        else
+            break;
+    }
+
     if (count < size) {
         flux_log (h, LOG_ERR, "only got %d out of %d ranks aggregated",
                 count, size);
