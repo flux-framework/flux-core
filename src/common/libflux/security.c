@@ -63,9 +63,9 @@ struct flux_sec_struct {
 
 static int checksecdirs (flux_sec_t *c, bool create);
 static zcert_t *getcurve (flux_sec_t *c, const char *role);
-static int gencurve (flux_sec_t *c, const char *role, bool force, bool verbose);
+static int gencurve (flux_sec_t *c, const char *role);
 static char *getpasswd (flux_sec_t *c, const char *user);
-static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose);
+static int genpasswd (flux_sec_t *c, const char *user);
 
 const char *flux_sec_errstr (flux_sec_t *c)
 {
@@ -154,19 +154,19 @@ bool flux_sec_type_enabled (flux_sec_t *c, int tm)
     return ret;
 }
 
-int flux_sec_keygen (flux_sec_t *c, bool force, bool verbose)
+int flux_sec_keygen (flux_sec_t *c)
 {
     int rc = -1;
     if (checksecdirs (c, true) < 0)
         goto done;
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
-        if (gencurve (c, "client", force, verbose) < 0)
+        if (gencurve (c, "client") < 0)
             goto done;
-        if (gencurve (c, "server", force, verbose) < 0)
+        if (gencurve (c, "server") < 0)
             goto done;
     }
     if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
-        if (genpasswd (c, "client", force, verbose) < 0)
+        if (genpasswd (c, "client") < 0)
             goto done;
     }
     rc = 0;
@@ -176,8 +176,6 @@ done:
 
 int flux_sec_comms_init (flux_sec_t *c)
 {
-    int verbose = 0;
-
     if (c->mctx == NULL && (c->typemask & FLUX_SEC_TYPE_MUNGE)
                         && !(c->typemask & FLUX_SEC_FAKEMUNGE)) {
         munge_err_t e;
@@ -200,7 +198,7 @@ int flux_sec_comms_init (flux_sec_t *c)
             seterrstr (c, "zactor_new (zauth): %s", flux_strerror (errno));
             goto error;
         }
-        if (verbose) {
+        if ((c->typemask & FLUX_SEC_VERBOSE)) {
             if (zstr_sendx (c->auth, "VERBOSE", NULL) < 0)
                 goto error;
             if (zsock_wait (c->auth) < 0)
@@ -383,7 +381,7 @@ static zcert_t *zcert_curve_new (flux_sec_t *c)
     return new;
 }
 
-static int gencurve (flux_sec_t *c, const char *role, bool force, bool verbose)
+static int gencurve (flux_sec_t *c, const char *role)
 {
     char *path = NULL, *priv = NULL;;
     zcert_t *cert = NULL;
@@ -395,7 +393,7 @@ static int gencurve (flux_sec_t *c, const char *role, bool force, bool verbose)
         oom ();
     if (asprintf (&priv, "%s/%s_private", c->curve_dir, role) < 0)
         oom ();
-    if (force) {
+    if ((c->typemask & FLUX_SEC_KEYGEN_FORCE)) {
         (void)unlink (path);
         (void)unlink (priv);
     }
@@ -415,7 +413,7 @@ static int gencurve (flux_sec_t *c, const char *role, bool force, bool verbose)
 
     zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
     zcert_set_meta (cert, "role", (char *)role);
-    if (verbose) {
+    if ((c->typemask & FLUX_SEC_VERBOSE)) {
         printf ("Saving %s\n", path);
         printf ("Saving %s\n", priv);
     }
@@ -478,7 +476,7 @@ error:
     return NULL;
 }
 
-static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose)
+static int genpasswd (flux_sec_t *c, const char *user)
 {
     struct stat sb;
     zhash_t *passwds = NULL;
@@ -488,7 +486,7 @@ static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose)
 
     if (!(uuid = zuuid_new ()))
         oom ();
-    if (force)
+    if ((c->typemask & FLUX_SEC_KEYGEN_FORCE))
         (void)unlink (c->passwd_file);
     if (stat (c->passwd_file, &sb) == 0) {
         seterrstr (c, "%s exists, try --force", c->passwd_file);
@@ -498,7 +496,7 @@ static int genpasswd (flux_sec_t *c, const char *user, bool force, bool verbose)
     if (!(passwds = zhash_new ()))
         oom ();
     zhash_update (passwds, user, (char *)zuuid_str (uuid));
-    if (verbose)
+    if ((c->typemask & FLUX_SEC_VERBOSE))
         printf ("Saving %s\n", c->passwd_file);
     old_mask = umask (077);
     rc = zhash_save (passwds, c->passwd_file);

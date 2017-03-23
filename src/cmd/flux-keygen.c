@@ -52,8 +52,7 @@ int main (int argc, char *argv[])
 {
     int ch;
     flux_sec_t *sec;
-    int typemask = FLUX_SEC_TYPE_CURVE;
-    bool force = false;
+    int typemask = FLUX_SEC_TYPE_CURVE | FLUX_SEC_VERBOSE;
     const char *secdir = getenv ("FLUX_SEC_DIRECTORY");
 
     log_init ("flux-keygen");
@@ -64,7 +63,7 @@ int main (int argc, char *argv[])
                 usage ();
                 break;
             case 'f': /* --force */
-                force = true;
+                typemask |= FLUX_SEC_KEYGEN_FORCE;
                 break;
             case 'p': /* --plain */
                 typemask |= FLUX_SEC_TYPE_PLAIN;
@@ -83,7 +82,7 @@ int main (int argc, char *argv[])
 
      if (!(sec = flux_sec_create (typemask, secdir)))
         log_err_exit ("flux_sec_create");
-    if (flux_sec_keygen (sec, force, true) < 0)
+    if (flux_sec_keygen (sec) < 0)
         log_msg_exit ("%s", flux_sec_errstr (sec));
     flux_sec_destroy (sec);
 

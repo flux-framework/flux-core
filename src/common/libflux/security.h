@@ -13,6 +13,8 @@ enum {
 
     /* flags */
     FLUX_SEC_FAKEMUNGE = 0x10, // testing only
+    FLUX_SEC_VERBOSE = 0x20,
+    FLUX_SEC_KEYGEN_FORCE = 0x40,
 };
 
 /* Create a security context.
@@ -31,7 +33,7 @@ const char *flux_sec_get_directory (flux_sec_t *c);
 
 /* Generate key material for configured security modes, if applicable.
  */
-int flux_sec_keygen (flux_sec_t *c, bool force, bool verbose);
+int flux_sec_keygen (flux_sec_t *c);
 
 /* Initialize security context for communication.
  */
