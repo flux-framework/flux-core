@@ -214,7 +214,10 @@ int flux_sec_comms_init (flux_sec_t *c)
                 goto error;
             if (!(c->srv_cert = getcurve (c, "server")))
                 goto error;
-            if (zstr_sendx (c->auth, "CURVE", CURVE_ALLOW_ANY, NULL) < 0)
+            /* Authorize only the clients with certs in $confdir/curve
+             * (server must find public key of new client here)
+             */
+            if (zstr_sendx (c->auth, "CURVE", c->curve_dir, NULL) < 0)
                 goto error;
             if (zsock_wait (c->auth) < 0)
                 goto error;
