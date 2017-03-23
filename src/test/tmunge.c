@@ -94,7 +94,7 @@ int main (int argc, char *argv[])
     }
     if (argc == 2) {
         if (!strcmp (argv[1], "--fake"))
-            sec_typemask |= FLUX_SEC_TYPE_FAKEMUNGE;
+            sec_typemask |= FLUX_SEC_FAKEMUNGE;
         else
             log_msg_exit ("unknown option %s", argv[1]);
     }

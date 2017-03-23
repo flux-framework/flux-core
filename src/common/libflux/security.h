@@ -6,10 +6,13 @@
 typedef struct flux_sec_struct flux_sec_t;
 
 enum {
+    /* enabled security modes */
     FLUX_SEC_TYPE_PLAIN = 1,
     FLUX_SEC_TYPE_CURVE = 2,
     FLUX_SEC_TYPE_MUNGE = 4,
-    FLUX_SEC_TYPE_FAKEMUNGE = 8, // testing only
+
+    /* flags */
+    FLUX_SEC_FAKEMUNGE = 0x10, // testing only
 };
 
 /* Create a security context.

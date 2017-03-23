@@ -179,7 +179,7 @@ int flux_sec_comms_init (flux_sec_t *c)
     int verbose = 0;
 
     if (c->mctx == NULL && (c->typemask & FLUX_SEC_TYPE_MUNGE)
-                        && !(c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
+                        && !(c->typemask & FLUX_SEC_FAKEMUNGE)) {
         munge_err_t e;
         if (!(c->mctx = munge_ctx_create ())) {
             seterrstr (c, "munge_ctx_create: %s", flux_strerror (errno));
@@ -528,7 +528,7 @@ int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
         errno = EINVAL;
         return -1;
     }
-    if ((c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
+    if ((c->typemask & FLUX_SEC_FAKEMUNGE)) {
         int dlen = base64_encode_length (insize);
         void *dst = xzmalloc (dlen);
         base64_encode_block (dst, &dlen, inbuf, insize);
@@ -559,7 +559,7 @@ int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
         errno = EINVAL;
         return -1;
     }
-    if ((c->typemask & FLUX_SEC_TYPE_FAKEMUNGE)) {
+    if ((c->typemask & FLUX_SEC_FAKEMUNGE)) {
         int dlen = base64_decode_length (insize);
         void *dst = xzmalloc (dlen);
         if (base64_decode_block (dst, &dlen, inbuf, insize) < 0) {
