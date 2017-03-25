@@ -415,7 +415,7 @@ static int gencurve (flux_sec_t *c, const char *role)
         goto done; /* error message set in zcert_curve_new() */
 
     zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
-    zcert_set_meta (cert, "role", (char *)role);
+    zcert_set_meta (cert, "role", "%s", role);
     if ((c->typemask & FLUX_SEC_VERBOSE)) {
         printf ("Saving %s\n", path);
         printf ("Saving %s\n", priv);
