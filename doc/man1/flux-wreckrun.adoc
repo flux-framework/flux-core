@@ -146,7 +146,7 @@ via commas. Currently available options include:
 
 'no-aggregate-task-exit'::
         Do not use aggregator for task exit messages.  This option
-        will result in each task's exit status being commited
+        will result in each task's exit status being committed
         separately into the kvs.
 
 'no-pmi-server'::

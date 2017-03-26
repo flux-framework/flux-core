@@ -14,7 +14,10 @@ if ! test -r $dict; then
    echo Dictionary $dict not found >&2
    exit 1
 fi
-
+if egrep -q '^[[:space:]]*$' $dict; then
+   echo Dictionary $dict contains blank line >&2
+   exit 1
+fi
 if test  -z "$ASPELL"; then
    echo "1..$# # skip because aspell is not installed"
    exit 0

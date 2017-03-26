@@ -84,7 +84,7 @@ RETURN VALUE
 `flux_rpc_t` on success, or NULL on failure with errno set appropriately.
 
 `flux_content_load_get()` and `flux_content_store_get()`
-return 0 on success, or -1 on failure wtih errno set appropriately.
+return 0 on success, or -1 on failure with errno set appropriately.
 
 
 ERRORS
