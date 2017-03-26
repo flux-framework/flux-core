@@ -16,7 +16,10 @@ https://github.com/zeromq/czmq/archive/v3.0.2.tar.gz \
 http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
 http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz \
 http://www.digip.org/jansson/releases/jansson-2.9.tar.gz \
-http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz"
+http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz \
+https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz \
+https://ftp.gnu.org/gnu/automake/automake-1.15.tar.gz \
+https://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz"
 
 declare -A extra_configure_opts=(\
 ["mpich-3.1.4"]="--disable-fortran --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
