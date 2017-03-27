@@ -86,12 +86,10 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name);
 /* Start module thread.
  */
 int module_start (module_t *p);
-int module_start_all (modhash_t *mh);
 
 /* Stop module thread by sending a shutdown request.
  */
 int module_stop (module_t *p);
-int module_stop_all (modhash_t *mh);
 
 /* Prepare an 'lsmod' response payload.
  */

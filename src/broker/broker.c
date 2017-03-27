@@ -711,7 +711,6 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         log_msg ("unloading modules");
-    module_stop_all (ctx.modhash);
     modhash_destroy (ctx.modhash);
 
     /* Unregister builtin services
