@@ -102,7 +102,7 @@ print_env () {
     echo "export CPPFLAGS=-I${prefix}/include"
     echo "export LDFLAGS=-L${prefix}/lib"
     echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig:${prefix}/share/pkgconfig"
-    echo "export PATH=${PATH}:${HOME}/.local/bin:${HOME}/local/usr/bin:${HOME}/local/bin"
+    echo "export PATH=${HOME}/.local/bin:${HOME}/local/usr/bin:${prefix}/bin:${PATH}"
     luarocks path --bin
 }
 
