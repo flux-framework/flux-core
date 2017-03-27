@@ -84,8 +84,6 @@
 #define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
 #endif
 
-const char *default_modules = "connector-local";
-
 typedef enum {
     ERROR_MODE_RESPOND,
     ERROR_MODE_RETURN,
@@ -178,7 +176,11 @@ static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (broker_ctx_t *ctx);
 
-static void load_modules (broker_ctx_t *ctx, const char *default_modules);
+static int load_module_byname (broker_ctx_t *ctx, const char *name,
+                               const char *argz, size_t argz_len,
+                               const flux_msg_t *request);
+static int unload_module_byname (broker_ctx_t *ctx, const char *name,
+                                 const flux_msg_t *request, bool async);
 
 static void update_proctitle (broker_ctx_t *ctx);
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
@@ -646,15 +648,22 @@ int main (int argc, char *argv[])
 
     broker_add_services (&ctx);
 
-    /* Load default modules
+    /* Initialize comms module infrastructure.
      */
     if (ctx.verbose)
-        log_msg ("loading default modules");
+        log_msg ("initializing modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    load_modules (&ctx, default_modules);
+    /* Load the local connector module.
+     * Other modules will be loaded in rc1 using flux module,
+     * which uses the local connector.
+     */
+    if (ctx.verbose)
+        log_msg ("loading connector-local");
+    if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0)
+        log_err_exit ("load_module connector-local");
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -710,7 +719,11 @@ int main (int argc, char *argv[])
     /* Unload modules.
      */
     if (ctx.verbose)
-        log_msg ("unloading modules");
+        log_msg ("unloading connector-local");
+    if (unload_module_byname (&ctx, "connector-local", NULL, false) < 0)
+        log_err ("unload connector-local");
+    if (ctx.verbose)
+        log_msg ("finalizing modules");
     modhash_destroy (ctx.modhash);
 
     /* Unregister builtin services
@@ -1320,53 +1333,97 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
-/* Load command line/default comms modules.  If module name contains
- * one or more '/' characters, it refers to a .so path.
- */
-static void load_modules (broker_ctx_t *ctx, const char *default_modules)
+static int load_module_bypath (broker_ctx_t *ctx, const char *path,
+                               const char *argz, size_t argz_len,
+                               const flux_msg_t *request)
 {
-    char *cpy = xstrdup (default_modules);
-    char *s, *saveptr = NULL, *a1 = cpy;
+    module_t *p = NULL;
+    char *name, *arg;
+
+    if (!(name = flux_modname (path))) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (!(p = module_add (ctx->modhash, path)))
+        goto error;
+    if (!svc_add (ctx->services, module_get_name (p),
+                                 module_get_service (p), mod_svc_cb, p)) {
+        errno = EEXIST;
+        goto error;
+    }
+    arg = argz_next (argz, argz_len, NULL);
+    while (arg) {
+        module_add_arg (p, arg);
+        arg = argz_next (argz, argz_len, arg);
+    }
+    module_set_poller_cb (p, module_cb, ctx);
+    module_set_status_cb (p, module_status_cb, ctx);
+    if (request && module_push_insmod (p, request) < 0) // response deferred
+        goto error;
+    if (module_start (p) < 0)
+        goto error;
+    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
+    free (name);
+    return 0;
+error:
+    if (p)
+        module_remove (ctx->modhash, p);
+    free (name);
+    return -1;
+}
+
+static int load_module_byname (broker_ctx_t *ctx, const char *name,
+                               const char *argz, size_t argz_len,
+                               const flux_msg_t *request)
+{
     const char *modpath;
+    char *path;
+
+    if (attr_get (ctx->attrs, "conf.module_path", &modpath, NULL) < 0) {
+        log_msg ("conf.module_path is not set");
+        return -1;
+    }
+    if (!(path = flux_modfind (modpath, name))) {
+        log_msg ("%s: not found in module search path", name);
+        return -1;
+    }
+    if (load_module_bypath (ctx, path, argz, argz_len, request) < 0) {
+        free (path);
+        return -1;
+    }
+    free (path);
+    return 0;
+}
+
+/* If 'async' is true, service de-registration and module
+ * destruction (including join) are deferred until module keepalive
+ * status indicates module main() has exited (via module_status_cb).
+ * This allows modules with distributed shutdown to talk to each
+ * other while they shut down, and also does not block the reactor
+ * from handling other events.  If 'async' is false, do all that
+ * teardown synchronously here.
+ */
+static int unload_module_byname (broker_ctx_t *ctx, const char *name,
+                                 const flux_msg_t *request, bool async)
+{
     module_t *p;
 
-    if (attr_get (ctx->attrs, "conf.module_path", &modpath, NULL) < 0)
-        log_err_exit ("conf.module_path is not set");
-
-    while ((s = strtok_r (a1, ",", &saveptr))) {
-        char *name = NULL;
-        char *path = NULL;
-        char *sp;
-        if ((sp = strchr (s, '['))) {
-            if (!nodeset_member (sp, ctx->rank))
-                goto next;
-            *sp = '\0';
-        }
-        if (strchr (s, '/')) {
-            if (!(name = flux_modname (s)))
-                log_msg_exit ("%s", dlerror ());
-            path = s;
-        } else {
-            if (!(path = flux_modfind (modpath, s)))
-                log_msg_exit ("%s: not found in module search path", s);
-            name = s;
-        }
-        if (!(p = module_add (ctx->modhash, path)))
-            log_err_exit ("%s: module_add %s", name, path);
-        if (!svc_add (ctx->services, module_get_name (p),
-                                     module_get_service (p), mod_svc_cb, p))
-            log_msg_exit ("could not register service %s", module_get_name (p));
-        module_set_poller_cb (p, module_cb, ctx);
-        module_set_status_cb (p, module_status_cb, ctx);
-next:
-        if (name != s)
-            free (name);
-        if (path != s)
-            free (path);
-        a1 = NULL;
+    if (!(p = module_lookup_byname (ctx->modhash, name))) {
+        errno = ENOENT;
+        return -1;
     }
-    module_start_all (ctx->modhash);
-    free (cpy);
+    if (module_stop (p) < 0)
+        return -1;
+    if (async) {
+        if (request && module_push_rmmod (p, request) < 0)
+            return -1;
+    } else {
+        assert (request == NULL);
+        svc_remove (ctx->services, module_get_name (p));
+        module_remove (ctx->modhash, p);
+    }
+    flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
+    return 0;
 }
 
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
@@ -1433,7 +1490,6 @@ static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
     broker_ctx_t *ctx = arg;
     const char *json_str;
     char *name = NULL;
-    module_t *p;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
@@ -1443,18 +1499,8 @@ static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (flux_rmmod_json_decode (json_str, &name) < 0)
         goto error;
-    if (!(p = module_lookup_byname (ctx->modhash, name))) {
-        errno = ENOENT;
+    if (unload_module_byname (ctx, name, msg, true) < 0)
         goto error;
-    }
-    /* N.B. can't remove 'service' entry here as distributed
-     * module shutdown may require inter-rank module communication.
-     */
-    if (module_stop (p) < 0)
-        goto error;
-    if (module_push_rmmod (p, msg) < 0) // response deferred
-        goto error;
-    flux_log (h, LOG_DEBUG, "rmmod %s", name);
     free (name);
     return;
 error:
@@ -1468,11 +1514,9 @@ static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
 {
     broker_ctx_t *ctx = arg;
     const char *json_str;
-    char *name = NULL;
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
-    module_t *p = NULL;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
@@ -1482,39 +1526,14 @@ static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
         goto error;
-    if (!(name = flux_modname (path))) {
-        errno = ENOENT;
+    if (load_module_bypath (ctx, path, argz, argz_len, msg) < 0)
         goto error;
-    }
-    if (!(p = module_add (ctx->modhash, path)))
-        goto error;
-    if (!svc_add (ctx->services, module_get_name (p),
-                                 module_get_service (p), mod_svc_cb, p)) {
-        errno = EEXIST;
-        goto error;
-    }
-    arg = argz_next (argz, argz_len, NULL);
-    while (arg) {
-        module_add_arg (p, arg);
-        arg = argz_next (argz, argz_len, arg);
-    }
-    module_set_poller_cb (p, module_cb, ctx);
-    module_set_status_cb (p, module_status_cb, ctx);
-    if (module_push_insmod (p, msg) < 0) // response deferred
-        goto error;
-    if (module_start (p) < 0)
-        goto error;
-    flux_log (h, LOG_DEBUG, "insmod %s", name);
-    free (name);
     free (path);
     free (argz);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (p)
-        module_remove (ctx->modhash, p);
-    free (name);
     free (path);
     free (argz);
 }
