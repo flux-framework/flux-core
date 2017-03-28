@@ -203,5 +203,9 @@ test_expect_success 'exercise batching of asynchronous flush to backing store' '
 	test $OLD_COUNT -le $NEW_COUNT
 '
 
+test_expect_success 'remove content-sqlite module on rank 0' '
+	flux module remove --rank 0 content-sqlite
+'
+
 
 test_done

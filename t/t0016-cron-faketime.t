@@ -152,4 +152,7 @@ test_expect_success 'relative flux-cron at works' '
     cron_entry_check ${id} stats.count 1 &&
     cron_entry_check ${id} stopped true
 '
+test_expect_success 'remove cron module' '
+    flux module remove cron
+'
 test_done
