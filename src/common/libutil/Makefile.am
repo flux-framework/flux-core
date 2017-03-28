@@ -48,6 +48,8 @@ libutil_la_SOURCES = \
 	msglist.h \
 	cleanup.c \
 	cleanup.h \
+	unlink_recursive.c \
+	unlink_recursive.h \
 	sds.c \
 	sds.h \
 	sdsalloc.h \
@@ -94,6 +96,8 @@ TESTS = test_nodeset.t \
 	test_stdlog.t \
 	test_veb.t \
 	test_lru_cache.t \
+	test_unlink.t \
+	test_cleanup.t \
 	test_blobref.t
 
 test_ldadd = \
@@ -178,3 +182,11 @@ test_lru_cache_t_LDADD = $(test_ldadd)
 test_blobref_t_SOURCES = test/blobref.c
 test_blobref_t_CPPFLAGS = $(test_cppflags) $(JANSSON_CFLAGS)
 test_blobref_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
+
+test_unlink_t_SOURCES = test/unlink.c
+test_unlink_t_CPPFLAGS = $(test_cppflags) $(JANSSON_CFLAGS)
+test_unlink_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
+
+test_cleanup_t_SOURCES = test/cleanup.c
+test_cleanup_t_CPPFLAGS = $(test_cppflags) $(JANSSON_CFLAGS)
+test_cleanup_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
