@@ -257,4 +257,7 @@ test_expect_success 'flux cron sync can set epsilon' '
     flux cron sync --epsilon=42s cron.sync2 &&
     flux cron sync | grep 42.000s
 '
+test_expect_success 'flux module remove cron' '
+    flux module remove cron
+'
 test_done

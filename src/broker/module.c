@@ -50,6 +50,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/iterators.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -327,15 +328,17 @@ done:
 static void module_destroy (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
-    int errnum;
+    int e;
+    void *res;
 
     if (p->t) {
-        errnum = pthread_join (p->t, NULL);
-        if (errnum)
-            log_errn_exit (errnum, "pthread_join");
+        if ((e = pthread_join (p->t, &res)) != 0)
+            log_errn_exit (e, "pthread_cancel");
+        if (res == PTHREAD_CANCELED)
+            log_msg ("%s was not cleanly shutdown", p->name);
     }
 
-    assert (p->h == NULL);
+    flux_close (p->h); // in case thread was cancelled
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
@@ -344,12 +347,9 @@ static void module_destroy (module_t *p)
     dlclose (p->dso);
     zuuid_destroy (&p->uuid);
     free (p->digest);
-    if (p->argz)
-        free (p->argz);
-    if (p->name)
-        free (p->name);
-    if (p->service)
-        free (p->service);
+    free (p->argz);
+    free (p->name);
+    free (p->service);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))
@@ -607,7 +607,17 @@ modhash_t *modhash_create (void)
 
 void modhash_destroy (modhash_t *mh)
 {
+    const char *uuid;
+    module_t *p;
+    int e;
+
     if (mh) {
+        FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
+            if (p->t) {
+                if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH)
+                    log_errn (e, "pthread_cancel");
+            }
+        }
         zhash_destroy (&mh->zh_byuuid);
         free (mh);
     }
@@ -660,50 +670,6 @@ flux_modlist_t *module_get_modlist (modhash_t *mh)
 done:
     zlist_destroy (&uuids);
     return mods;
-}
-
-int module_start_all (modhash_t *mh)
-{
-    zlist_t *uuids;
-    char *uuid;
-    int rc = -1;
-
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (module_start (p) < 0)
-            goto done;
-        uuid = zlist_next (uuids);
-    }
-    rc = 0;
-done:
-    zlist_destroy (&uuids);
-    return rc;
-}
-
-int module_stop_all (modhash_t *mh)
-{
-    zlist_t *uuids;
-    char *uuid;
-    int rc = -1;
-
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        oom ();
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (module_stop (p) < 0)
-            goto done;
-        uuid = zlist_next (uuids);
-    }
-    rc = 0;
-done:
-    zlist_destroy (&uuids);
-    return rc;
 }
 
 module_t *module_lookup_byname (modhash_t *mh, const char *name)

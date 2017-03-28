@@ -49,4 +49,9 @@ test_expect_success 'barrier: succeeds with name=NULL inside SLURM step' '
 	flux exec ${tbarrier} --nprocs ${SIZE}
 '
 
+test_expect_success 'barrier: remove barrier module' '
+	flux module remove -r all barrier
+'
+
+
 test_done

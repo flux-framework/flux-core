@@ -122,4 +122,8 @@ test_expect_success 'hwloc: HostName is populated in by_rank' '
     test x"$HW_HOST" = x"$REAL_HOST"
 '
 
+test_expect_success 'hwloc: remove hwloc module' '
+    flux module remove -r all resource-hwloc
+'
+
 test_done
