@@ -67,7 +67,7 @@ test_under_flux() {
 
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
-      exec flux start --size=${size} ${quiet} "sh $0 ${flags}"
+      exec flux start --bootstrap=selfpmi --size=${size} ${quiet} "sh $0 ${flags}"
 }
 
 mock_bootstrap_instance() {
