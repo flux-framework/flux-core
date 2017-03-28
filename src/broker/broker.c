@@ -556,13 +556,13 @@ int main (int argc, char *argv[])
      */
     if (ctx.shutdown_grace == 0) {
         if (ctx.size < 16)
-            ctx.shutdown_grace = 0.5;
-        else if (ctx.size < 128)
             ctx.shutdown_grace = 1;
-        else if (ctx.size < 1024)
+        else if (ctx.size < 128)
             ctx.shutdown_grace = 2;
+        else if (ctx.size < 1024)
+            ctx.shutdown_grace = 4;
         else
-            ctx.shutdown_grace = 5;
+            ctx.shutdown_grace = 10;
     }
 
     if (ctx.verbose) {
