@@ -327,10 +327,10 @@ static void module_destroy (module_t *p)
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
         if (res == PTHREAD_CANCELED)
-            log_msg ("%s was not cleanly shutdown", p->name);
+            log_msg ("module '%s' was not cleanly shutdown", p->name);
     }
 
-    flux_close (p->h); // in case thread was cancelled
+    flux_close (p->h); // in case thread was canceled
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
