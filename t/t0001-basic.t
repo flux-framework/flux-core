@@ -139,6 +139,22 @@ test_expect_success 'broker broker.pid attribute is readable' '
 test_expect_success 'broker broker.pid attribute is immutable' '
 	test_must_fail flux start -o,--setattr=broker.pid=1234 flux getattr broker.pid
 '
+test_expect_success 'broker --verbose option works' '
+	flux start -o,-v /bin/true
+'
+test_expect_success 'broker --shutdown-grace option works' '
+	flux start -o,--shutdown-grace=0.1 /bin/true
+'
+test_expect_success 'broker --heartrate option works' '
+	flux start -o,--heartrate=0.1,--shutdown-grace=0.1 /bin/true
+'
+test_expect_success 'broker --k-ary option works' '
+	flux start -s4 -o,--k-ary=1,--shutdown-grace=0.1 /bin/true &&
+	flux start -s4 -o,--k-ary=2,--shutdown-grace=0.1 /bin/true &&
+	flux start -s4 -o,--k-ary=3,--shutdown-grace=0.1 /bin/true &&
+	flux start -s4 -o,--k-ary=4,--shutdown-grace=0.1 /bin/true
+'
+
 test_expect_success 'flux-help command list can be extended' '
 	mkdir help.d &&
 	cat <<-EOF  > help.d/test.json &&
