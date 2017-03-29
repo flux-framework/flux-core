@@ -69,17 +69,18 @@ error:
 
 static void test_zmq (flux_reactor_t *reactor)
 {
-    zctx_t *zctx;
-    void *zs[2];
+    zsock_t *zs[2];
     flux_watcher_t *r, *w;
+    const char *uri = "inproc://test_zmq";
 
-    ok ((zctx = zctx_new ()) != NULL,
-        "zmq: created zmq context");
-    zs[0] = zsocket_new (zctx, ZMQ_PAIR);
-    zs[1] = zsocket_new (zctx, ZMQ_PAIR);
+    zsys_set_logstream (stderr);
+    zsys_handler_set (NULL);
+
+    zs[0] = zsock_new_pair (NULL);
+    zs[1] = zsock_new_pair (NULL);
     ok (zs[0] && zs[1]
-        && zsocket_bind (zs[0], "inproc://test_zmq") == 0
-        && zsocket_connect (zs[1], "inproc://test_zmq") == 0,
+        && zsock_bind (zs[0], "%s", uri) == 0
+        && zsock_connect (zs[1], "%s", uri) == 0,
         "zmq: connected ZMQ_PAIR sockets over inproc");
     r = flux_zmq_watcher_create (reactor, zs[0], FLUX_POLLIN, zmqreader, NULL);
     w = flux_zmq_watcher_create (reactor, zs[1], FLUX_POLLOUT, zmqwriter, NULL);
@@ -94,9 +95,10 @@ static void test_zmq (flux_reactor_t *reactor)
     flux_watcher_destroy (r);
     flux_watcher_destroy (w);
 
-    zsocket_destroy (zctx, zs[0]);
-    zsocket_destroy (zctx, zs[1]);
-    zctx_destroy (&zctx);
+    zsock_destroy (&zs[0]);
+    zsock_destroy (&zs[1]);
+
+    zsys_shutdown ();
 }
 
 static const size_t fdwriter_bufsize = 10*1024*1024;

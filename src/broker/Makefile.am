@@ -20,8 +20,6 @@ flux_broker_SOURCES = \
 	overlay.c \
 	heartbeat.h \
 	heartbeat.c \
-	snoop.h \
-	snoop.c \
 	service.h \
 	service.c \
 	hello.h \
@@ -61,8 +59,7 @@ endif
 
 flux_broker_LDFLAGS = ${broker_ldflags}
 
-TESTS = test_snoop.t \
-	test_shutdown.t \
+TESTS = test_shutdown.t \
 	test_heartbeat.t \
 	test_hello.t \
 	test_attr.t
@@ -82,10 +79,6 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_snoop_t_SOURCES = test/snoop.c snoop.c
-test_snoop_t_CPPFLAGS = $(test_cppflags)
-test_snoop_t_LDADD = $(test_ldadd)
 
 test_shutdown_t_SOURCES = test/shutdown.c shutdown.c
 test_shutdown_t_CPPFLAGS = $(test_cppflags)

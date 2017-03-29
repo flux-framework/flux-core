@@ -37,6 +37,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/iterators.h"
 
 const double barrier_reduction_timeout_sec = 0.001;
 
@@ -180,21 +181,6 @@ done:
     flux_rpc_destroy (rpc);
 }
 
-/* We have held onto our count long enough.  Send it upstream.
- */
-
-static int timeout_reduction (const char *key, void *item, void *arg)
-{
-    barrier_ctx_t *ctx = arg;
-    barrier_t *b = item;
-
-    if (b->count > 0) {
-        send_enter_request (ctx, b);
-        b->count = 0;
-    }
-    return 0;
-}
-
 /* Barrier entry happens in two ways:
  * - client calling flux_barrier ()
  * - downstream barrier plugin sending count upstream.
@@ -260,38 +246,23 @@ done:
  * participating in.
  */
 
-static int disconnect (const char *key, void *item, void *arg)
-{
-    barrier_t *b = item;
-    barrier_ctx_t *ctx = b->ctx;
-    char *sender = arg;
-
-    if (zhash_lookup (b->clients, sender)) {
-        if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
-            flux_log_error (ctx->h, "exit_event_send");
-    }
-    return 0;
-}
-
 static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     barrier_ctx_t *ctx = arg;
     char *sender;
+    const char *key;
+    barrier_t *b;
 
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    zhash_foreach (ctx->barriers, disconnect, sender);
+    FOREACH_ZHASH (ctx->barriers, key, b) {
+        if (zhash_lookup (b->clients, sender)) {
+            if (exit_event_send (h, b->name, ECONNABORTED) < 0)
+                flux_log_error (h, "exit_event_send");
+        }
+    }
     free (sender);
-}
-
-static int send_enter_response (const char *key, void *item, void *arg)
-{
-    flux_msg_t *msg = item;
-    barrier_t *b = arg;
-
-    flux_respond (b->ctx->h, msg, b->errnum, NULL);
-    return 0;
 }
 
 static int exit_event_send (flux_t *h, const char *name, int errnum)
@@ -318,6 +289,8 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *w,
     barrier_t *b;
     const char *name;
     int errnum;
+    const char *key;
+    flux_msg_t *req;
 
     if (flux_event_decodef (msg, NULL, "{s:s s:i !}",
                             "name", &name,
@@ -327,7 +300,10 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if ((b = zhash_lookup (ctx->barriers, name))) {
         b->errnum = errnum;
-        zhash_foreach (b->clients, send_enter_response, b);
+        FOREACH_ZHASH (b->clients, key, req) {
+            if (flux_respond (h, req, b->errnum, NULL) < 0)
+                flux_log_error (h, "%s: sending enter response", __FUNCTION__);
+        }
         zhash_delete (ctx->barriers, name);
     }
 }
@@ -336,11 +312,18 @@ static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
 {
     barrier_ctx_t *ctx = arg;
+    const char *key;
+    barrier_t *b;
 
     assert (ctx->rank != 0);
     ctx->timer_armed = false; /* one shot */
 
-    zhash_foreach (ctx->barriers, timeout_reduction, ctx);
+    FOREACH_ZHASH (ctx->barriers, key, b) {
+        if (b->count > 0) {
+            send_enter_request (ctx, b);
+            b->count = 0;
+        }
+    }
 }
 
 static struct flux_msg_handler_spec htab[] = {

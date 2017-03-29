@@ -534,17 +534,15 @@ void check_sendfd (void)
 
 void check_sendzsock (void)
 {
-    zctx_t *zctx;
-    void *zsock[2] = { NULL, NULL };
+    zsock_t *zsock[2] = { NULL, NULL };
     flux_msg_t *msg, *msg2;
     const char *topic;
     int type;
     const char *uri = "inproc://test";
 
-    ok ((zctx = zctx_new ()) && (zsock[0] = zsocket_new (zctx, ZMQ_PAIR))
-                             && (zsock[1] = zsocket_new (zctx, ZMQ_PAIR))
-                             && zsocket_bind (zsock[0], "%s", uri) == 0
-                             && zsocket_connect (zsock[1], "%s", uri) == 0,
+    ok ((zsock[0] = zsock_new_pair (NULL)) != NULL
+                    && zsock_bind (zsock[0], "%s", uri) == 0
+                    && (zsock[1] = zsock_new_pair (uri)) != NULL,
         "got inproc socket pair");
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
@@ -574,9 +572,10 @@ void check_sendzsock (void)
             && flux_msg_has_payload (msg2) == false,
         "try2: decoded message looks like what was sent");
     flux_msg_destroy (msg2);
-
     flux_msg_destroy (msg);
-    zctx_destroy (&zctx);
+
+    zsock_destroy (&zsock[0]);
+    zsock_destroy (&zsock[1]);
 }
 
 int main (int argc, char *argv[])

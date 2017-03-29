@@ -7,7 +7,6 @@ MAN1_FILES_PRIMARY = \
 	flux-kvs.1 \
 	flux-keygen.1 \
 	flux-logger.1 \
-	flux-snoop.1 \
 	flux-ping.1 \
 	flux-submit.1 \
 	flux-wreckrun.1 \

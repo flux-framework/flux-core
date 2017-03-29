@@ -61,7 +61,6 @@
 struct module_struct {
     int magic;
 
-    zctx_t *zctx;
     uint32_t rank;
     flux_t *broker_h;
     flux_watcher_t *broker_w;
@@ -69,7 +68,7 @@ struct module_struct {
     int lastseen;
     heartbeat_t *heartbeat;
 
-    void *sock;             /* broker end of PAIR socket */
+    zsock_t *sock;          /* broker end of PAIR socket */
     uint32_t userid;        /* creds of connection */
     uint32_t rolemask;
 
@@ -101,7 +100,6 @@ struct module_struct {
 
 struct modhash_struct {
     zhash_t *zh_byuuid;
-    zctx_t *zctx;
     uint32_t rank;
     flux_t *broker_h;
     heartbeat_t *heartbeat;
@@ -131,18 +129,12 @@ static void *module_thread (void *arg)
     int mod_main_errno = 0;
     flux_msg_t *msg;
 
-    assert (p->zctx);
-
     setup_module_profiling (p);
 
     /* Connect to broker socket, enable logging, register built-in services
      */
     if (!(p->h = flux_open (uri, 0)))
         log_err_exit ("flux_open %s", uri);
-    if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT,
-                      p->zctx, sizeof (p->zctx)) < 0)
-        log_err_exit ("flux_opt_set ZEROMQ_CONTEXT");
-
     rankstr = xasprintf ("%"PRIu32, p->rank);
     if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("%s: error faking rank attribute", p->name);
@@ -335,14 +327,14 @@ static void module_destroy (module_t *p)
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
         if (res == PTHREAD_CANCELED)
-            log_msg ("%s was not cleanly shutdown", p->name);
+            log_msg ("module '%s' was not cleanly shutdown", p->name);
     }
 
-    flux_close (p->h); // in case thread was cancelled
+    flux_close (p->h); // in case thread was canceled
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
-    zsocket_destroy (p->zctx, p->sock);
+    zsock_destroy (&p->sock);
 
     dlclose (p->dso);
     zuuid_destroy (&p->uuid);
@@ -560,16 +552,14 @@ module_t *module_add (modhash_t *mh, const char *path)
         oom ();
 
     p->rank = mh->rank;
-    p->zctx = mh->zctx;
     p->broker_h = mh->broker_h;
     p->heartbeat = mh->heartbeat;
 
     /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zsocket_new (p->zctx, ZMQ_PAIR)))
-        log_err_exit ("zsocket_new");
-    zsocket_set_hwm (p->sock, 0);
-    if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
+    if (!(p->sock = zsock_new_pair (NULL)))
+        log_err_exit ("zsock_new_pair");
+    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
         log_err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
     if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
                                                  p->sock, FLUX_POLLIN,
@@ -621,11 +611,6 @@ void modhash_destroy (modhash_t *mh)
         zhash_destroy (&mh->zh_byuuid);
         free (mh);
     }
-}
-
-void modhash_set_zctx (modhash_t *mh, zctx_t *zctx)
-{
-    mh->zctx = zctx;
 }
 
 void modhash_set_rank (modhash_t *mh, uint32_t rank)

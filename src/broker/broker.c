@@ -65,7 +65,6 @@
 #include "heartbeat.h"
 #include "module.h"
 #include "overlay.h"
-#include "snoop.h"
 #include "service.h"
 #include "hello.h"
 #include "shutdown.h"
@@ -78,11 +77,6 @@
 #include "exec.h"
 #include "ping.h"
 #include "rusage.h"
-
-#ifndef ZMQ_IMMEDIATE
-#define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
-#define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
-#endif
 
 typedef enum {
     ERROR_MODE_RESPOND,
@@ -99,7 +93,6 @@ struct tbon_param {
 typedef struct {
     /* 0MQ
      */
-    zctx_t *zctx;               /* zeromq context (MT-safe) */
     flux_sec_t *sec;             /* security context (MT-safe) */
 
     /* Reactor
@@ -111,7 +104,6 @@ typedef struct {
     /* Sockets.
      */
     overlay_t *overlay;
-    snoop_t *snoop;
 
     /* Session parameters
      */
@@ -194,7 +186,6 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 
-static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
 
 static void init_attrs (broker_ctx_t *ctx);
@@ -257,8 +248,7 @@ int main (int argc, char *argv[])
     int c;
     broker_ctx_t ctx;
     zlist_t *sigwatchers;
-    int security_clr = 0;
-    int security_set = 0;
+    int sec_typemask = FLUX_SEC_TYPE_CURVE | FLUX_SEC_TYPE_MUNGE;
     int e;
     char *endptr;
     sigset_t old_sigmask;
@@ -275,7 +265,6 @@ int main (int argc, char *argv[])
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
     ctx.overlay = overlay_create ();
-    ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
     ctx.tbon.k = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
@@ -299,14 +288,17 @@ int main (int argc, char *argv[])
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 's':   /* --security=MODE */
-                if (!strcmp (optarg, "none"))
-                    security_clr = FLUX_SEC_TYPE_ALL;
-                else if (!strcmp (optarg, "plain"))
-                    security_set |= FLUX_SEC_TYPE_PLAIN;
-                else if (!strcmp (optarg, "curve"))
-                    security_set |= FLUX_SEC_TYPE_CURVE;
-                else
-                    log_msg_exit ("--security argument must be none|plain|curve");
+                if (!strcmp (optarg, "none")) {
+                    sec_typemask = 0;
+                } else if (!strcmp (optarg, "plain")) {
+                    sec_typemask |= FLUX_SEC_TYPE_PLAIN;
+                    sec_typemask &= ~FLUX_SEC_TYPE_CURVE;
+                } else if (!strcmp (optarg, "curve")) {
+                    sec_typemask |= FLUX_SEC_TYPE_CURVE;
+                    sec_typemask &= ~FLUX_SEC_TYPE_PLAIN;
+                } else {
+                    log_msg_exit ("--security arg must be none|plain|curve");
+                }
                 break;
             case 'v':   /* --verbose */
                 ctx.verbose = true;
@@ -390,11 +382,14 @@ int main (int argc, char *argv[])
 
     /* Initailize zeromq context
      */
+    if (!zsys_init ())
+        log_err_exit ("zsys_init");
+    zsys_set_logstream (stderr);
+    zsys_set_logident ("flux-broker");
     zsys_handler_set (NULL);
-    ctx.zctx = zctx_new ();
-    if (!ctx.zctx)
-        log_err_exit ("zctx_new");
-    zctx_set_linger (ctx.zctx, 5);
+    zsys_set_linger (5);
+    zsys_set_rcvhwm (0);
+    zsys_set_sndhwm (0);
 
     /* Set up the flux reactor.
      */
@@ -417,22 +412,14 @@ int main (int argc, char *argv[])
 
     /* Initialize security context.
      */
-    if (!(ctx.sec = flux_sec_create ()))
-        log_err_exit ("flux_sec_create");
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
         log_err_exit ("getattr security.keydir");
-    flux_sec_set_directory (ctx.sec, keydir);
-    if (security_clr && flux_sec_disable (ctx.sec, security_clr) < 0)
-        log_err_exit ("flux_sec_disable");
-    if (security_set && flux_sec_enable (ctx.sec, security_set) < 0)
-        log_err_exit ("flux_sec_enable");
-    if (flux_sec_zauth_init (ctx.sec, ctx.zctx, "flux") < 0)
-        log_msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
-    if (flux_sec_munge_init (ctx.sec) < 0)
-        log_msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
+    if (!(ctx.sec = flux_sec_create (sec_typemask, keydir)))
+        log_err_exit ("flux_sec_create");
+    if (flux_sec_comms_init (ctx.sec) < 0)
+        log_msg_exit ("flux_sec_comms_init: %s", flux_sec_errstr (ctx.sec));
 
-    overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
     overlay_set_flux (ctx.overlay, ctx.h);
 
@@ -497,10 +484,7 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (attr_add_active (ctx.attrs, "snoop-uri",
-                                FLUX_ATTRFLAG_IMMUTABLE,
-                                attr_get_snoop, NULL, ctx.snoop) < 0
-            || attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
+    if (attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active (ctx.attrs, "tbon-request-uri",
                                 FLUX_ATTRFLAG_IMMUTABLE,
@@ -614,16 +598,11 @@ int main (int argc, char *argv[])
     if (overlay_connect (ctx.overlay) < 0)
         log_err_exit ("overlay_connect");
 
-    /* Set up snoop socket
-     */
-    snoop_set_zctx (ctx.snoop, ctx.zctx);
-    snoop_set_sec (ctx.snoop, ctx.sec);
     {
         const char *rundir;
         if (attr_get (ctx.attrs, "broker.rundir", &rundir, NULL) < 0) {
             log_msg_exit ("broker.rundir attribute is not set");
         }
-        snoop_set_uri (ctx.snoop, "ipc://%s/snoop", rundir, ctx.rank);
     }
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
@@ -650,7 +629,6 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         log_msg ("initializing modules");
-    modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
@@ -729,10 +707,8 @@ int main (int argc, char *argv[])
         flux_close (ctx.enclosing_h);
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
-    zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
-    snoop_destroy (ctx.snoop);
     svchash_destroy (ctx.services);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
@@ -1433,13 +1409,6 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
     }
 }
 
-static int attr_get_snoop (const char *name, const char **val, void *arg)
-{
-    snoop_t *snoop = arg;
-    *val = snoop_get_uri (snoop);
-    return 0;
-}
-
 static int attr_get_overlay (const char *name, const char **val, void *arg)
 {
     overlay_t *overlay = arg;
@@ -1762,7 +1731,6 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
     overlay_checkin_child (ctx->overlay, uuid);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
-            (void)snoop_sendmsg (ctx->snoop, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
             (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
@@ -2196,8 +2164,6 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     if (flux_msg_set_rolemask (cpy, rolemask) < 0)
         goto done;
-
-    (void)snoop_sendmsg (ctx->snoop, cpy);
 
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:

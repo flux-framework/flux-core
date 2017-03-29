@@ -10,7 +10,6 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 check_PROGRAMS = \
-	tasyncsock \
 	tmunge \
 	tbarrier
 
