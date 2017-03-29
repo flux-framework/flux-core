@@ -1,3 +1,58 @@
+flux-core version 0.7.0 - 2017-04-01
+------------------------------------
+
+#### Fixes
+
+ * Improve reliability of module unloading (#1017)
+ * Update autotools for `make dist` to support newer arches (#1016)
+ * Fix corner cases in resource-hwloc module (#1012)
+ * Ensure destructors are called during broker shutdown (#1005)
+ * `flux-logger(1)` and `flux_log(3)` can return error (#1000)
+ * Fix balancing of Caliper hooks in RPC calls (#991)
+ * Fix missed errors in subscribe/unsubscribe on local connector (#994)
+ * sanitize log entries before they enter circular buffer (#959)
+ * Do not send wreck.state.complete event before job archival (#955) 
+ * Update embedded libev to 4.24 (#944)
+ * Propagate argument quoting properly in `flux-start` and `flux-broker` (#931)
+ * Fixes and improvements in liboptparse (#922, #927, #929)
+ * Tighten up PMI implementation for OpenMPI (#926)
+
+#### New Features
+
+ * Allow user other than instance owner to connect to an instance (#980)
+ * Systemd support, default run directory and URI for system instance
+   (#992, #995)
+ * New `--bootstrap` option to `flux-start` (#990)
+ * New `KVS_NO_MERGE` flag in kvs commit and fence operations (#982)
+ * Add `broker.pid` to broker attributes (#954)
+ * `flux start` only execs broker if `--size` is not specified (#951)
+ * Add pkg-config package for Flux PMI (#921)
+
+#### Cleanup
+
+ * Remove live module (#1003)
+ * Remove flux-up and flux-topo (#960)
+ * Transition away from deprecated czmq classes (#1013)
+ * Re-architect and improve many internal and cmd rpc functions (#1002, #1009)
+ * Other major and minor cleanup (#919, #928, #941, #940, #942, #954, #969,
+    #976, #981, #978, #986, #990, #1001, #1008)
+ * Remove `cmb.` prefix from broker services (#947)
+
+#### Testing
+
+ * Expand and improve unit and system tests for greater code coverage
+   (#937, #942, #979, #985, #991, #1004, #1011, #1013, #1014)
+ * Fix documentation spellcheck (#1015)
+ * Add dependency on "all" to top-level `make check` (#970)
+ * Add flake8/pylint checks (#816)
+
+#### Documentation
+
+ * Improve flux_reactor_create documentation (#970)
+ * Update flux_msg_cmp(3) and flux_recv(3) to match flux_match changes (#946)
+ * Update flux-submit(1) and flux-wreckrun(1) manpages (#945)
+
+
 flux-core version 0.6.0 - 2016-11-29
 ------------------------------------
 
