@@ -121,6 +121,10 @@ test_expect_success 'tbon.endpoint can be set and %h works' '
 	ATTR_VAL=`flux start -o,--setattr=tbon.endpoint='tcp://%h:*' flux getattr tbon.endpoint` &&
         echo $ATTR_VAL | grep "^tcp"
 '
+test_expect_success 'tbon.endpoint with %B works' '
+	ATTR_VAL=`flux start -o,--setattr=tbon.endpoint='ipc://%B/req' flux getattr tbon.endpoint` &&
+        echo $ATTR_VAL | grep "^ipc"
+'
 test_expect_success 'tbon.endpoint fails on bad endpoint' '
 	! flux start -o,--setattr=tbon.endpoint='foo://bar' flux getattr tbon.endpoint
 '

@@ -187,7 +187,7 @@ static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
-static char *calc_endpoint (const char *endpoint);
+static char *calc_endpoint (broker_ctx_t *ctx, const char *endpoint);
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 
@@ -1034,15 +1034,17 @@ done:
  *
  * Possible format specifiers:
  * - %h - IP address of current hostname
+ * - %B - value of attribute broker.rundir
  *
  * Caller is responsible for freeing memory of returned value.
  */
-static char * calc_endpoint (const char *endpoint)
+static char * calc_endpoint (broker_ctx_t *ctx, const char *endpoint)
 {
     char ipaddr[HOST_NAME_MAX + 1];
     char *ptr, *buf, *rv = NULL;
     bool percent_flag = false;
     unsigned int len = 0;
+    const char *rundir;
 
     buf = xzmalloc (ENDPOINT_MAX + 1);
 
@@ -1057,6 +1059,18 @@ static char * calc_endpoint (const char *endpoint)
                 }
                 strcat (buf, ipaddr);
                 len += strlen (ipaddr);
+            }
+            else if (*ptr == 'B') {
+                if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
+                    log_msg ("broker.rundir attribute is not set");
+                    goto done;
+                }
+                if ((len + strlen (rundir)) > ENDPOINT_MAX) {
+                    log_msg ("broker.rundir overflow max endpoint length");
+                    goto done;
+                }
+                strcat (buf, rundir);
+                len += strlen (rundir);
             }
             else if (*ptr == '%')
                 buf[len++] = '%';
@@ -1104,6 +1118,10 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     char *val = NULL;
     int e, rc = -1;
     struct timespec start_time;
+    const char *attrtbonendpoint;
+    char *tbonendpoint = NULL;
+    char *sharedtbonendpoint = NULL;
+    char *reqfile = NULL;
 
     monotime (&start_time);
 
@@ -1156,28 +1174,29 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     /* Set TBON request addr.  We will need any wildcards expanded below.
      */
     if (ctx->shared_ipc_namespace) {
-        char *reqfile = xasprintf ("%s/req", rundir);
-        overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
+        reqfile = xasprintf ("%s/req", rundir);
+        sharedtbonendpoint = xasprintf ("ipc://%s", reqfile);
+        if (attr_set (ctx->attrs,
+                      "tbon.endpoint",
+                      sharedtbonendpoint,
+                      true) < 0) {
+            log_err ("setting tbon.endpoint attribute");
+            goto done;
+        }
         cleanup_push_string (cleanup_file, reqfile);
-        free (reqfile);
-    } else {
-        const char *attrtbonendpoint;
-        char *tbonendpoint;
-
-        if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
-            log_err ("tbon.endpoint is not set");
-            goto done;
-        }
-
-        if (!(tbonendpoint = calc_endpoint (attrtbonendpoint))) {
-            log_msg ("calc_endpoint error");
-            goto done;
-        }
-
-        overlay_set_child (ctx->overlay, tbonendpoint);
-
-        free (tbonendpoint);
     }
+
+    if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
+        log_err ("tbon.endpoint is not set");
+        goto done;
+    }
+
+    if (!(tbonendpoint = calc_endpoint (ctx, attrtbonendpoint))) {
+        log_msg ("calc_endpoint error");
+        goto done;
+    }
+
+    overlay_set_child (ctx->overlay, tbonendpoint);
 
     /* Set up epgm relay if multiple ranks are being spawned per node,
      * as indicated by "clique ranks".  FIXME: if epgm is used but
@@ -1355,6 +1374,12 @@ done:
         free (key);
     if (val)
         free (val);
+    if (reqfile)
+        free (reqfile);
+    if (tbonendpoint)
+        free (tbonendpoint);
+    if (sharedtbonendpoint)
+        free (sharedtbonendpoint);
     if (rc != 0)
         errno = EPROTO;
     return rc;
