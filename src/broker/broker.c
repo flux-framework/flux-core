@@ -766,12 +766,19 @@ static void init_attrs_from_environment (attr_t *attrs)
 static void init_attrs_overlay (broker_ctx_t *ctx)
 {
     char *tbonendpoint = "tbon.endpoint";
+    char *mcastendpoint = "mcast.endpoint";
 
     if (attr_add (ctx->attrs,
                   tbonendpoint,
                   "tcp://%h:*",
                   0) < 0)
         log_err_exit ("attr_add %s", tbonendpoint);
+
+    if (attr_add (ctx->attrs,
+                  mcastendpoint,
+                  "tbon",
+                  0) < 0)
+        log_err_exit ("attr_add %s", mcastendpoint);
 }
 
 static void init_attrs_broker_pid (broker_ctx_t *ctx)
@@ -1044,7 +1051,8 @@ static char * calc_endpoint (broker_ctx_t *ctx, const char *endpoint)
     char *ptr, *buf, *rv = NULL;
     bool percent_flag = false;
     unsigned int len = 0;
-    const char *rundir;
+    const char *rundir, *sid;
+    char *endptr;
 
     buf = xzmalloc (ENDPOINT_MAX + 1);
 
@@ -1109,7 +1117,6 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     int relay_rank = -1, parent_rank;
     int clique_size;
     int *clique_ranks = NULL;
-    char ipaddr[HOST_NAME_MAX + 1];
     const char *child_uri, *relay_uri;
     int kvsname_len, key_len, val_len;
     char *id = NULL;
@@ -1120,8 +1127,12 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     struct timespec start_time;
     const char *attrtbonendpoint;
     char *tbonendpoint = NULL;
+    const char *attrmcastendpoint;
+    char *mcastendpoint = NULL;
     char *sharedtbonendpoint = NULL;
+    char *sharedmcastendpoint = NULL;
     char *reqfile = NULL;
+    char *eventfile = NULL;
 
     monotime (&start_time);
 
@@ -1129,10 +1140,6 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         log_msg ("PMI_Init: %s", pmi_strerror (e));
         goto done;
     }
-
-    if (ctx->enable_epgm || !ctx->shared_ipc_namespace)
-        ipaddr_getprimary (ipaddr, sizeof (ipaddr));
-
 
     /* Get rank, size, appnum
      */
@@ -1186,6 +1193,25 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         cleanup_push_string (cleanup_file, reqfile);
     }
 
+    /* Set EPGM endpoint if requested by user */
+    if (ctx->enable_epgm) {
+        char *mstr;
+        if (ctx->shared_ipc_namespace) {
+            eventfile = xasprintf ("%s/event", rundir);
+            sharedmcastendpoint = xasprintf ("ipc://%s", eventfile);
+            mstr = sharedmcastendpoint;
+        }
+        else
+            mstr = "epgm://%h;239.192.1.1:5000";
+
+        if (attr_set (ctx->attrs, "mcast.endpoint", mstr, true) < 0) {
+            log_err ("setting mcast.endpoint attribute");
+            goto done;
+        }
+        if (eventfile && ctx->rank == 0)
+            cleanup_push_string (cleanup_file, eventfile);
+    }
+
     if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
         log_err ("tbon.endpoint is not set");
         goto done;
@@ -1198,12 +1224,23 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 
     overlay_set_child (ctx->overlay, tbonendpoint);
 
-    /* Set up epgm relay if multiple ranks are being spawned per node,
-     * as indicated by "clique ranks".  FIXME: if epgm is used but
+    if (attr_get (ctx->attrs, "mcast.endpoint", &attrmcastendpoint, NULL) < 0) {
+        log_err ("mcast.endpoint is not set");
+        goto done;
+    }
+
+    if (!(mcastendpoint = calc_endpoint (ctx, attrmcastendpoint))) {
+        log_msg ("calc_endpoint error");
+        goto done;
+    }
+
+    /* Set up multicast (e.g. epgm) relay if multiple ranks are being
+     * spawned per node, as indicated by "clique ranks".  FIXME: if
      * pmi_get_clique_ranks() is not implemented, this fails.  Find an
-     * alternate method to determine if ranks are co-located on a node.
+     * alternate method to determine if ranks are co-located on a
+     * node.
      */
-    if (ctx->enable_epgm) {
+    if (strcasecmp (mcastendpoint, "tbon")) {
         if ((e = PMI_Get_clique_size (&clique_size)) != PMI_SUCCESS) {
             log_msg ("PMI_get_clique_size: %s", pmi_strerror (e));
             goto done;
@@ -1276,9 +1313,11 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         }
     }
 
-    /* Write the uri of the epgm relay under the rank (if any).
+    /* Write the uri of the multicast (e.g. epgm) relay under the rank
+     * (if any).
      */
-    if (ctx->enable_epgm && (relay_uri = overlay_get_relay (ctx->overlay))) {
+    if (strcasecmp (mcastendpoint, "tbon")
+        && (relay_uri = overlay_get_relay (ctx->overlay))) {
         if (snprintf (key, key_len, "cmbd.%d.relay", rank) >= key_len) {
             log_msg ("pmi key string overflow");
             goto done;
@@ -1320,18 +1359,19 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     }
 
     /* Event distribution (four configurations):
-     * 1) epgm enabled, one broker per node
+     * 1) multicast enabled, one broker per node
      *    All brokers subscribe to the same epgm address.
-     * 2) epgm enabled, mutiple brokers per node
-     *    The lowest rank in each clique will subscribe to the epgm:// socket
-     *    and relay events to an ipc:// socket for the other ranks in the
-     *    clique.  This is necessary due to limitation of epgm.
-     * 3) epgm disabled, all brokers concentrated on one node
-     *    Rank 0 publishes to a ipc:// socket, other ranks subscribe
-     * 4) epgm disabled brokers distributed across nodes
+     * 2) multicast enabled, mutiple brokers per node The lowest rank
+     *    in each clique will subscribe to the multicast
+     *    (e.g. epgm://) socket and relay events to an ipc:// socket
+     *    for the other ranks in the clique.  This is necessary due to
+     *    limitation of epgm.
+     * 3) multicast disabled, all brokers concentrated on one node
+     *    Rank 0 publishes to a ipc:// socket, other ranks subscribe (set earlier via mcast.endpoint)
+     * 4) multicast disabled brokers distributed across nodes
      *    No dedicated event overlay,.  Events are distributed over the TBON.
      */
-    if (ctx->enable_epgm) {
+    if (strcasecmp (mcastendpoint, "tbon")) {
         if (relay_rank >= 0 && rank != relay_rank) {
             if (snprintf (key, key_len, "cmbd.%d.relay", relay_rank)
                                                                 >= key_len) {
@@ -1344,17 +1384,8 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
                 goto done;
             }
             overlay_set_event (ctx->overlay, "%s", val);
-        } else {
-            int port = 5000 + appnum % 1024;
-            overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d",
-                               ipaddr, port);
-        }
-    } else if (ctx->shared_ipc_namespace) {
-        char *eventfile = xasprintf ("%s/event", rundir);
-        overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
-        if (ctx->rank == 0)
-            cleanup_push_string (cleanup_file, eventfile);
-        free (eventfile);
+        } else
+            overlay_set_event (ctx->overlay, mcastendpoint);
     }
     if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
         log_msg ("PMI_Barrier: %s", pmi_strerror (e));
@@ -1376,10 +1407,16 @@ done:
         free (val);
     if (reqfile)
         free (reqfile);
+    if (eventfile)
+        free (eventfile);
     if (tbonendpoint)
         free (tbonendpoint);
+    if (mcastendpoint)
+        free (mcastendpoint);
     if (sharedtbonendpoint)
         free (sharedtbonendpoint);
+    if (sharedmcastendpoint)
+        free (sharedmcastendpoint);
     if (rc != 0)
         errno = EPROTO;
     return rc;

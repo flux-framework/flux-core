@@ -71,6 +71,12 @@ host and is useful when configuring an IP endpoint.  Format specifier
 It is useful when configuring an IPC endpoint.  Defaults to
 "tcp://%h:*".
 
+mcast.endpoint::
+The endpoint for multicast events to be distributed over.  The same
+format specifiers can be used as tbon.endpoint.  Special case string
+"tbon" can be used to specify that events should instead by
+distributed over the tree based overlay network.  Defaults to "tbon".
+
 SOCKET ATTRIBUTES
 -----------------
 

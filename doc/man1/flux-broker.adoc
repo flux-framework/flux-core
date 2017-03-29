@@ -74,14 +74,15 @@ Set the security mode.  The mode may be 'none', 'plain', or 'curve'
 
 *-E, --enable-epgm*::
 Enable EPGM, a reliable multicast protocol, for event distribution.
-Without this option, the tree-based overlay network distributes events.
-On large sessions, EPGM should improve scalability and reduce system jitter,
-however it requires that network switches support multicast and currently
-uses a naive algorithm to select a unique multicast port for the session.
-This algorithm should be safe for instances launched directly by the
+This option effectively sets the attribute mcast.endpoint to
+'epgm://%h;239.192.1.1:5000'.  Without this option, the tree-based
+overlay network distributes events.  On large sessions, EPGM should
+improve scalability and reduce system jitter, however it requires that
+network switches support multicast and currently uses a naive
+algorithm to select a unique multicast port for the session.  This
+algorithm should be safe for instances launched directly by the
 "native" resource manager, but not yet for instances launched by those
-instances.   The first network interface associated with the hostname is
-used, and the multicast address is hardwired to 239.192.1.1.
+instances.
 
 *-I, --shared-ipc-namespace*::
 Enable the use of ipc:// sockets for the tree-based overlay network
