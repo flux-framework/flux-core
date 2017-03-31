@@ -62,7 +62,16 @@ _verr (int errnum, const char *fmt, va_list ap)
 {
     char *msg = NULL;
     char buf[128];
-    const char *s = zmq_strerror (errnum);
+    const char *s;
+
+    /* zeromq-4.2.1 reports EHOSTUNREACH as "Host unreachable",
+     * but "No route to host" is canonical on Linux and we have some
+     * tests that depend on it, so remap here.
+     */
+    if (errnum == EHOSTUNREACH)
+        s = "No route to host";
+    else
+        s = zmq_strerror (errnum);
 
     if (!prog)
         log_init (NULL);
