@@ -96,6 +96,12 @@ void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg)
 
 const char *flux_strerror (int errnum)
 {
+    /* zeromq-4.2.1 reports EHOSTUNREACH as "Host unreachable",
+     * but "No route to host" is canonical on Linux and we have some
+     * tests that depend on it, so remap here.
+     */
+    if (errnum == EHOSTUNREACH)
+        return "No route to host";
     return zmq_strerror (errnum);
 }
 
