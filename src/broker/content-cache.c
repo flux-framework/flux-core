@@ -450,7 +450,7 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
 done:
     if (respond_requests_raw (&e->store_requests, cache->h,
                                         rc < 0 ? saved_errno : 0,
-                                        e->blobref, strlen (blobref) + 1) < 0)
+                                        e->blobref, strlen (e->blobref) + 1) < 0)
         flux_log_error (cache->h, "%s: error responding to store requests",
                         __FUNCTION__);
     flux_rpc_destroy (rpc);
