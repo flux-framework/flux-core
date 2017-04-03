@@ -149,6 +149,19 @@ struct prog_ctx {
 
 int prog_ctx_remove_completion_ref (struct prog_ctx *ctx, const char *fmt, ...);
 int prog_ctx_add_completion_ref (struct prog_ctx *ctx, const char *fmt, ...);
+static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+static void wlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, ...)
+    __attribute__ ((format (printf, 3, 4)));
+static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
+    __attribute__ ((format (printf, 3, 4)));
+static int wlog_err (struct prog_ctx *ctx, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+static void wlog_debug (struct prog_ctx *ctx, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+
 
 void *lsd_nomem_error (const char *file, int line, char *msg)
 {
@@ -180,15 +193,13 @@ static flux_t *prog_ctx_flux_handle (struct prog_ctx *ctx)
     return (t->f);
 }
 
-static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...);
-
 static int archive_lwj (struct prog_ctx *ctx)
 {
     char *to = ctx->kvspath;
     char *link = NULL;
     int rc = -1;
 
-    wlog_msg (ctx, "archiving lwj %lu", ctx->id);
+    wlog_msg (ctx, "archiving lwj %" PRIi64, ctx->id);
 
     if (asprintf (&link, "lwj-complete.%d.%"PRId64, ctx->epoch, ctx->id) < 0) {
         flux_log_error (ctx->flux, "archive_lwj: asprintf");
@@ -247,8 +258,10 @@ static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
     va_start (ap, format);
     if ((ctx != NULL) && ((c = prog_ctx_flux_handle (ctx)) != NULL))
         flux_vlog (c, LOG_EMERG, format, ap);
-    else
+    else {
         vfprintf (stderr, format, ap);
+        putc ('\n', stderr);
+    }
     va_end (ap);
 
     /* Copy error to kvs if we're not in task context:
@@ -390,7 +403,7 @@ static void wreck_pmi_line (struct task_info *t, const char *line)
     struct prog_ctx *ctx = t->ctx;
     int rc;
     if ((rc = pmi_simple_server_request (ctx->pmi, line, t)) < 0)
-        wlog_fatal (ctx, 1, "pmi_simple_server_request: %s\n",
+        wlog_fatal (ctx, 1, "pmi_simple_server_request: %s",
                     strerror (errno));
     if (rc == 1)
         wreck_pmi_close (t);
@@ -965,7 +978,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
             wlog_fatal (ctx, 1, "Failed to get resources for this node");
     }
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
-            ctx->nprocs = 1;
+        ctx->nprocs = 1;
 
     if (ctx->nprocs <= 0) {
         wlog_fatal (ctx, 0,
@@ -976,7 +989,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     for (i = 0; i < ctx->nprocs; i++)
         ctx->task[i] = task_info_create (ctx, i);
 
-    wlog_msg (ctx, "lwj %ld: node%d: nprocs=%d, nnodes=%d, cmdline=%s",
+    wlog_msg (ctx, "lwj %" PRIi64 ": node%d: nprocs=%d, nnodes=%d, cmdline=%s",
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
                    json_object_to_json_string (v));
     free (json_str);
@@ -1645,7 +1658,7 @@ static int l_wreck_log_msg (lua_State *L)
         return (2); /* error on stack from l_format_args */
     if (!(msg = lua_tostring (L, 2)))
         return lua_pusherror (L, "required arg to log_msg missing");
-    wlog_msg (ctx, msg);
+    wlog_msg (ctx, "%s", msg);
     return (0);
 }
 
@@ -1657,7 +1670,7 @@ static int wreck_log_error (lua_State *L, int fatal)
         return (2); /* error on stack from l_format_args */
     if (!(s = lua_tostring (L, 2)))
         return lua_pusherror (L, "required arg to die missing");
-    wlog_error_kvs (ctx, fatal, s);
+    wlog_error_kvs (ctx, fatal, "%s", s);
     return (0);
 }
 
@@ -2095,7 +2108,7 @@ void ev_cb (flux_t *f, flux_msg_handler_t *mw,
         int sig = 9;
         if (json_object_object_get_ex (o, "signal", &ox))
             sig = json_object_get_int (ox);
-        wlog_msg (ctx, "Killing jobid %lu with signal %d", ctx->id, sig);
+        wlog_msg (ctx, "Killing jobid %" PRIi64 " with signal %d", ctx->id, sig);
         prog_ctx_signal (ctx, sig);
     }
     json_object_put (o);
@@ -2303,7 +2316,7 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
     char *end;
 
     if (!optparse_getopt (p, "kvs-path", &kvspath))
-        wlog_fatal (ctx, 1, "Required arg --kvs-path missing\n");
+        wlog_fatal (ctx, 1, "Required arg --kvs-path missing");
     ctx->kvspath = strdup (kvspath);
 
     if (!optparse_getopt (p, "lwj-id", &id)) {

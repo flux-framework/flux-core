@@ -36,7 +36,7 @@
 
 #include "cpuset-str.h"
 
-#define MAX_LUAINT (0xfffffffffffff0)
+#define MAX_LUAINT ((1ULL<<(8*(sizeof(lua_Integer)-1)))-0x10)
 
 static cpu_set_t * l_cpu_set_alloc (lua_State *L)
 {

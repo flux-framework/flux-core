@@ -203,7 +203,7 @@ static int handle_query_req (flux_t *h, int64_t j, const char *k, const char *n)
         return -1;
     }
     jcb = Jfromstr (jcbstr);
-    fprintf (ctx->op, "Job Control Block: attribute %s for job %ld\n", k, j);
+    fprintf (ctx->op, "Job Control Block: attribute %s for job %"PRIi64"\n", k, j);
     fprintf (ctx->op, "%s\n", jcb == NULL ? jcbstr :
         json_object_to_json_string_ext (jcb, JSON_C_TO_STRING_PRETTY));
     Jput (jcb);
