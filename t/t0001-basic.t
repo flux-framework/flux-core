@@ -267,5 +267,9 @@ test_expect_success 'scripts/waitfile works after 1s' '
 	p=$! &&
 	wait $p
 '
+# test for issue #1025
+test_expect_success 'instance can stop cleanly with subscribers (#1025)' '
+	flux start ${BUG1006} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub hb &"
+'
 
 test_done
