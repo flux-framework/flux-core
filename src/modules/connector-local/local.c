@@ -45,6 +45,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/iterators.h"
 
 enum {
     DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
@@ -963,6 +964,13 @@ done:
     if (ctx->listen_fd >= 0) {
         if (close (ctx->listen_fd) < 0)
             flux_log_error (h, "close listen_fd");
+    }
+    if (ctx->subscriptions) { // issue #1025
+        const char *topic;
+        subscription_t *sub;
+        FOREACH_ZHASH (ctx->subscriptions, topic, sub) {
+            sub->unsubscribe = NULL;
+        }
     }
     if (ctx->clients) {
         client_t *c;
