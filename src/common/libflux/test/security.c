@@ -98,13 +98,16 @@ void test_keygen (void)
     flux_sec_destroy (sec);
 
     /* Nonexistent confdir.
+     *
+     * errno has multiple possibilities depending on system, EACCES,
+     * EROFS, EPERM, etc.  Simply check for failure and errno != 0.
      */
     sec = flux_sec_create (0, "/noexist");
     if (!sec)
         BAIL_OUT ("flux_sec_create failed");
     errno = 0;
-    ok (flux_sec_keygen (sec) < 0 && errno == EACCES,
-            "flux_sec_keygen fails with EACCES if confdir does not exist");
+    ok (flux_sec_keygen (sec) < 0 && errno != 0,
+            "flux_sec_keygen fails with errno != 0 if confdir does not exist");
     flux_sec_destroy (sec);
 
     /* Same with FORCE flag.
@@ -113,8 +116,8 @@ void test_keygen (void)
     if (!sec)
         BAIL_OUT ("flux_sec_create failed");
     errno = 0;
-    ok (flux_sec_keygen (sec) < 0 && errno == EACCES,
-            "flux_sec_keygen (force) fails with EACCES if confdir does not exist");
+    ok (flux_sec_keygen (sec) < 0 && errno != 0,
+            "flux_sec_keygen (force) fails with errno != 0 if confdir does not exist");
     flux_sec_destroy (sec);
 
     /* No security modes selected.
