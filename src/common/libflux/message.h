@@ -25,6 +25,7 @@ enum {
     FLUX_MSGFLAG_JSON       = 0x04,	/* message payload is JSON */
     FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
+    FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
 };
 
 struct flux_match {
@@ -129,6 +130,13 @@ void flux_msg_iobuf_clean (struct flux_msg_iobuf *iobuf);
  */
 int flux_msg_set_type (flux_msg_t *msg, int type);
 int flux_msg_get_type (const flux_msg_t *msg, int *type);
+
+/* Get/set privacy flag.
+ * Broker will not route a private message to connections not
+ * authenticated as message sender or with instance owner role.
+ */
+int flux_msg_set_private (flux_msg_t *msg);
+bool flux_msg_is_private (const flux_msg_t *msg);
 
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.
