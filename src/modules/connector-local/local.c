@@ -747,6 +747,21 @@ error:
     flux_msg_destroy (msg);
 }
 
+/* Determine if message can be routed to client.
+ * If message is private, then limit access to instance owner and sender.
+ */
+static bool allowed_message (client_t *c, const flux_msg_t *msg)
+{
+    uint32_t userid;
+    if ((c->rolemask & FLUX_ROLE_OWNER))
+        return true;
+    if (!flux_msg_is_private (msg))
+        return true;
+    if (flux_msg_get_userid (msg, &userid) == 0 && userid == c->userid)
+        return true;
+    return false;
+}
+
 /* Received response message from broker.
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
@@ -777,7 +792,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *w,
     c = zlist_first (ctx->clients);
     while (c) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (client_send_nocopy (c, &cpy) < 0) { /* FIXME handle errors */
+            if (client_send_nocopy (c, &cpy) < 0 && allowed_message (c, msg)) {
                 int type = FLUX_MSGTYPE_ANY;
                 const char *topic = "unknown";
                 (void)flux_msg_get_type (msg, &type);
@@ -813,7 +828,7 @@ static void event_cb (flux_t *h, flux_msg_handler_t *w,
     }
     c = zlist_first (ctx->clients);
     while (c) {
-        if (client_is_subscribed (c, topic)) {
+        if (client_is_subscribed (c, topic) && allowed_message (c, msg)) {
             if (client_send (c, msg) < 0) { /* FIXME handle errors */
                 int type = FLUX_MSGTYPE_ANY;
                 const char *topic = "unknown";
