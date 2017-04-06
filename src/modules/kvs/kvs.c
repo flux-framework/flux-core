@@ -1454,6 +1454,8 @@ static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum)
         goto done;
     if (!(msg = flux_event_encode ("kvs.error", Jtostr (in))))
         goto done;
+    if (flux_msg_set_private (msg) < 0)
+        goto done;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
     rc = 0;
@@ -1527,6 +1529,8 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_object *names)
     if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
         goto done;
     if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
+        goto done;
+    if (flux_msg_set_private (msg) < 0)
         goto done;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
