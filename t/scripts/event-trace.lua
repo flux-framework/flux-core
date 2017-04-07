@@ -10,7 +10,7 @@ if not s or not exitevent then
 Usage: %s TOPIC EXIT-EVENT COMMAND
 
 Subscribe to events matching TOPIC and run COMMAND once subscribe
-is gauranteed to be active on the flux broker. If EXIT-EVENT is
+is guaranteed to be active on the flux broker. If EXIT-EVENT is
 not an empty string, then exit the process once an event exactly
 matching EXIT-EVENT is received.
 ]], arg[0])
@@ -24,17 +24,13 @@ end
 
 local f,err = flux.new()
 f:subscribe (s)
-f:sendevent (s .. ".test")
+os.execute (cmd .. " &")
 local mh, err = f:msghandler {
     pattern = s..".*",
     msgtypes = { flux.MSGTYPE_EVENT },
     
     handler = function (f, msg, mh)
-        if msg.tag == s..".test" then
-            os.execute (cmd .. " &")
-        else
-            print (msg.tag)
-        end
+        print (msg.tag)
 	if exitevent ~= "" and msg.tag == exitevent then
             mh:remove ()
 	end
