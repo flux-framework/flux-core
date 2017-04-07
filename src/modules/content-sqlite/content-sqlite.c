@@ -500,10 +500,10 @@ done:
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "content-backing.load",         load_cb },
-    { FLUX_MSGTYPE_REQUEST,     "content-backing.store",        store_cb },
-    { FLUX_MSGTYPE_REQUEST,     "content-sqlite.shutdown", shutdown_cb },
-    { FLUX_MSGTYPE_EVENT,       "shutdown",             broker_shutdown_cb},
+    { FLUX_MSGTYPE_REQUEST,     "content-backing.load",         load_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "content-backing.store",        store_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "content-sqlite.shutdown", shutdown_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,       "shutdown",             broker_shutdown_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

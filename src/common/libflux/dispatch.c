@@ -804,6 +804,7 @@ int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
         tab[i].w = flux_msg_handler_create (h, match, tab[i].cb, arg);
         if (!tab[i].w)
             goto error;
+        flux_msg_handler_allow_rolemask (tab[i].w, tab[i].rolemask);
         flux_msg_handler_start (tab[i].w);
     }
     return 0;

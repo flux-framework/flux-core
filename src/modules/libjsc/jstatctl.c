@@ -1021,8 +1021,8 @@ done:
  *                                                                            *
  ******************************************************************************/
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb},
-    { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb},
+    { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb, 0, NULL },
       FLUX_MSGHANDLER_TABLE_END
 };
 

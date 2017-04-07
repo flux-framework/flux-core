@@ -870,12 +870,12 @@ static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
 /**************************************************************************/
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "cron.create",   cron_create_handler  },
-    { FLUX_MSGTYPE_REQUEST,     "cron.delete",   cron_delete_handler  },
-    { FLUX_MSGTYPE_REQUEST,     "cron.list",     cron_ls_handler },
-    { FLUX_MSGTYPE_REQUEST,     "cron.stop",     cron_stop_handler },
-    { FLUX_MSGTYPE_REQUEST,     "cron.start",    cron_start_handler },
-    { FLUX_MSGTYPE_REQUEST,     "cron.sync",     cron_sync_handler },
+    { FLUX_MSGTYPE_REQUEST,     "cron.create",   cron_create_handler, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "cron.delete",   cron_delete_handler, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "cron.list",     cron_ls_handler, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "cron.stop",     cron_stop_handler, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "cron.start",    cron_start_handler, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "cron.sync",     cron_sync_handler, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

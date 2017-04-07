@@ -383,17 +383,17 @@ error:
 }
 
 struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "req.null",              null_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.echo",              echo_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.err",               err_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.src",               src_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.nsrc",              nsrc_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.xping",             xping_request_cb },
-    { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "req.count",             count_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.null",              null_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.echo",              echo_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.err",               err_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.src",               src_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.nsrc",              nsrc_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.xping",             xping_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "req.count",             count_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

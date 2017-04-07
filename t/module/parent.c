@@ -213,9 +213,9 @@ done:
 }
 
 struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "parent.insmod",         insmod_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "parent.rmmod",          rmmod_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "parent.lsmod",          lsmod_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "parent.insmod",         insmod_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "parent.rmmod",          rmmod_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "parent.lsmod",          lsmod_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

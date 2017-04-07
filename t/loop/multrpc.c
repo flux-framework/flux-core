@@ -546,13 +546,13 @@ void rpcftest_begin_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpcftest.begin",         rpcftest_begin_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",         rpcftest_hello_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpcftest.nodeid",        rpcftest_nodeid_cb},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.begin",         rpcftest_begin_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",         rpcftest_hello_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.nodeid",        rpcftest_nodeid_cb, 0, NULL},
     FLUX_MSGHANDLER_TABLE_END,
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);

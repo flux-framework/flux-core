@@ -283,14 +283,14 @@ static void fatal_err (const char *message, void *arg)
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",           rpctest_incr_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",         rpcftest_hello_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho",        rpctest_rawecho_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.thenbug",        rpctest_thenbug_cb},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",           rpctest_incr_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",         rpcftest_hello_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho",        rpctest_rawecho_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.thenbug",        rpctest_thenbug_cb, 0, NULL},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -574,11 +574,11 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 struct flux_msg_handler_spec mtab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb },
-    { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb },
+    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END
 };
 

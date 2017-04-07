@@ -397,10 +397,10 @@ static void ps_request_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.exec",           exec_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "cmb.exec.signal",    signal_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "cmb.exec.write",     write_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "cmb.processes",      ps_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "cmb.exec",           exec_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.exec.signal",    signal_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.exec.write",     write_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.processes",      ps_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

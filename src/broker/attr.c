@@ -394,9 +394,9 @@ error:
  **/
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
