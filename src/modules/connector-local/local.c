@@ -50,6 +50,7 @@
 enum {
     DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
     DEBUG_USERDB_ONESHOT = 2,   /* force userdb lookup of instance owner */
+    DEBUG_OWNERDROP_ONESHOT = 4,/* drop OWNER role to USER on next connection */
 };
 
 
@@ -223,8 +224,15 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
     flux_log (h, LOG_INFO, "%s: uid=%d pid=%d allowed rolemask=0x%x",
               __FUNCTION__, ucred.uid, ucred.pid, lookup_rolemask);
 success_nolog:
-    *userid = ucred.uid;
-    *rolemask = lookup_rolemask;
+    if (debug_flags && (*debug_flags & DEBUG_OWNERDROP_ONESHOT)
+                    && (lookup_rolemask & FLUX_ROLE_OWNER)) {
+        *rolemask = FLUX_ROLE_USER;
+        *userid = FLUX_USERID_UNKNOWN;
+        *debug_flags &= ~DEBUG_OWNERDROP_ONESHOT;
+    } else {
+        *userid = ucred.uid;
+        *rolemask = lookup_rolemask;
+    }
     return 0;
 error:
     return -1;
