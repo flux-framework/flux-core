@@ -254,10 +254,10 @@ static client_t * client_create (mod_local_ctx_t *ctx, int fd)
                                                          &c->rolemask) < 0)
         goto error;
     if (!(c->inw = flux_fd_watcher_create (ctx->reactor, fd, FLUX_POLLIN,
-                                           client_read_cb, c)) != 0)
+                                           client_read_cb, c)))
         goto error;
     if (!(c->outw = flux_fd_watcher_create (ctx->reactor, fd, FLUX_POLLOUT,
-                                            client_write_cb, c)) != 0)
+                                            client_write_cb, c)))
         goto error;
     flux_watcher_start (c->inw);
     flux_msg_iobuf_init (&c->inbuf);
