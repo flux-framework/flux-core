@@ -193,6 +193,7 @@ dist_check_DATA = \
 
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
+	scripts/event-trace-bypass.lua \
 	scripts/kvs-watch-until.lua \
 	scripts/kvs-get-ex.lua \
 	scripts/cpus-allowed.lua \
