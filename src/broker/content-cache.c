@@ -848,8 +848,8 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *w,
  */
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request, FLUX_ROLE_USER, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request, FLUX_ROLE_USER, NULL },
     { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0, NULL },
