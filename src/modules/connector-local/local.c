@@ -927,8 +927,8 @@ error_close:
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     NULL, event_cb,    0, NULL },
-    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,     NULL, event_cb,    FLUX_ROLE_ALL, NULL },
+    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, FLUX_ROLE_ALL, NULL },
     FLUX_MSGHANDLER_TABLE_END
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
