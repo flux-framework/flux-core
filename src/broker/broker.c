@@ -137,7 +137,6 @@ typedef struct {
     struct tbon_param tbon;
     /* Bootstrap
      */
-    bool enable_epgm;
     bool shared_ipc_namespace;
     hello_t *hello;
     flux_t *enclosing_h;
@@ -208,7 +207,6 @@ static const struct option longopts[] = {
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
     {"shutdown-grace",  required_argument,  0, 'g'},
-    {"enable-epgm",     no_argument,        0, 'E'},
     {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
@@ -225,7 +223,6 @@ static void usage (void)
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 " -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
@@ -334,9 +331,6 @@ int main (int argc, char *argv[])
                     log_err_exit ("shutdown-grace '%s'", optarg);
                 if (ctx.shutdown_grace < 0)
                     usage ();
-                break;
-            case 'E': /* --enable-epgm */
-                ctx.enable_epgm = true;
                 break;
             case 'I': /* --shared-ipc-namespace */
                 ctx.shared_ipc_namespace = true;
@@ -1051,8 +1045,7 @@ static char * calc_endpoint (broker_ctx_t *ctx, const char *endpoint)
     char *ptr, *buf, *rv = NULL;
     bool percent_flag = false;
     unsigned int len = 0;
-    const char *rundir, *sid;
-    char *endptr;
+    const char *rundir;
 
     buf = xzmalloc (ENDPOINT_MAX + 1);
 
@@ -1130,9 +1123,7 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     const char *attrmcastendpoint;
     char *mcastendpoint = NULL;
     char *sharedtbonendpoint = NULL;
-    char *sharedmcastendpoint = NULL;
     char *reqfile = NULL;
-    char *eventfile = NULL;
 
     monotime (&start_time);
 
@@ -1191,25 +1182,6 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
             goto done;
         }
         cleanup_push_string (cleanup_file, reqfile);
-    }
-
-    /* Set EPGM endpoint if requested by user */
-    if (ctx->enable_epgm) {
-        char *mstr;
-        if (ctx->shared_ipc_namespace) {
-            eventfile = xasprintf ("%s/event", rundir);
-            sharedmcastendpoint = xasprintf ("ipc://%s", eventfile);
-            mstr = sharedmcastendpoint;
-        }
-        else
-            mstr = "epgm://%h;239.192.1.1:5000";
-
-        if (attr_set (ctx->attrs, "mcast.endpoint", mstr, true) < 0) {
-            log_err ("setting mcast.endpoint attribute");
-            goto done;
-        }
-        if (eventfile && ctx->rank == 0)
-            cleanup_push_string (cleanup_file, eventfile);
     }
 
     if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
@@ -1407,16 +1379,12 @@ done:
         free (val);
     if (reqfile)
         free (reqfile);
-    if (eventfile)
-        free (eventfile);
     if (tbonendpoint)
         free (tbonendpoint);
     if (mcastendpoint)
         free (mcastendpoint);
     if (sharedtbonendpoint)
         free (sharedtbonendpoint);
-    if (sharedmcastendpoint)
-        free (sharedmcastendpoint);
     if (rc != 0)
         errno = EPROTO;
     return rc;
