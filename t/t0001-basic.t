@@ -92,7 +92,7 @@ test_expect_success 'test_under_flux works' '
 	mkdir -p test-under-flux && (
 		cd test-under-flux &&
 		cat >.test.t <<-EOF &&
-		#!$SHELL_PATH
+		#!/bin/sh
 		pwd
 		test_description="test_under_flux (in sub sharness)"
 		. "\$SHARNESS_TEST_SRCDIR"/sharness.sh
