@@ -33,7 +33,7 @@ AC_DEFUN([RRA_WITH_SYSTEMD_UNITDIR],
     [AS_HELP_STRING([--with-systemdsystemunitdir=DIR],
         [Directory for systemd service files])],
     [],
-    [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
+    [with_systemdsystemunitdir=\${prefix}$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
  AS_IF([test x"$with_systemdsystemunitdir" != xno],
     [AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])])
  AM_CONDITIONAL([HAVE_SYSTEMD],
