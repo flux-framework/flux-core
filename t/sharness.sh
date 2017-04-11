@@ -60,6 +60,8 @@ LF='
 
 while test "$#" -ne 0; do
 	case "$1" in
+	--logfile)
+		logfile=t; shift;;
 	-d|--d|--de|--deb|--debu|--debug)
 		debug=t; shift ;;
 	-i|--i|--im|--imm|--imme|--immed|--immedi|--immedia|--immediat|--immediate)
@@ -148,6 +150,9 @@ exec 5>&1
 exec 6<&0
 if test "$verbose" = "t"; then
 	exec 4>&2 3>&1
+elif test "$logfile" = "t"; then
+	logfile=$(basename $0 .t).output
+	exec 4>${logfile} 3>&4
 else
 	exec 4>/dev/null 3>/dev/null
 fi
@@ -265,11 +270,14 @@ test_have_prereq() {
 test_ok_() {
 	test_success=$(($test_success + 1))
 	say_color "pass" "ok $test_count - $@"
+	test -n "$logfile" && say >&3 "ok $test_count - $@"
+	test -n "$logfile" && printf "%s\n" "$*" >&3
 }
 
 test_failure_() {
 	test_failure=$(($test_failure + 1))
 	say_color error "not ok $test_count - $1"
+	test -n "$logfile" && say >&3 "not ok $test_count - $1"
 	shift
 	echo "$@" | sed -e 's/^/#	/'
 	test "$immediate" = "" || { EXIT_OK=t; exit 1; }
@@ -278,11 +286,13 @@ test_failure_() {
 test_known_broken_ok_() {
 	test_fixed=$(($test_fixed + 1))
 	say_color error "ok $test_count - $@ # TODO known breakage vanished"
+	test -n "$logfile" && say >&3 "ok $test_count - $@ # TODO known breakage vanished"
 }
 
 test_known_broken_failure_() {
 	test_broken=$(($test_broken + 1))
 	say_color warn "not ok $test_count - $@ # TODO known breakage"
+	test -n "$logfile" && say >&3 "not ok $test_count - $@ # TODO known breakage"
 }
 
 # Public: Execute commands in debug mode.
@@ -718,9 +728,11 @@ test_done() {
 
 	if test "$test_fixed" != 0; then
 		say_color error "# $test_fixed known breakage(s) vanished; please update test(s)"
+		test -n "$logfile" && say >&3 "# $test_fixed known breakage(s) vanished"
 	fi
 	if test "$test_broken" != 0; then
 		say_color warn "# still have $test_broken known breakage(s)"
+		test -n "$logfile" && say >&3 "# still have $test_broken known breakage(s)"
 	fi
 	if test "$test_broken" != 0 || test "$test_fixed" != 0; then
 		test_remaining=$(( $test_count - $test_broken - $test_fixed ))
@@ -740,20 +752,29 @@ test_done() {
 
 		if test $test_remaining -gt 0; then
 			say_color pass "# passed all $msg"
+			test -n "$logfile" && say >&3 "# passed all $msg"
 		fi
 		say "1..$test_count$skip_all"
+		test -n "$logfile" && say >&3 "1..$test_count$skip_all"
 
 		test_eval_ "$final_cleanup"
 
 		test -d "$remove_trash" &&
 		cd "$(dirname "$remove_trash")" &&
 		rm -rf "$(basename "$remove_trash")"
+		test -n "$logfile" &&
+		  test -f "$logfile" &&
+		  rm -f "${logfile}"
 
 		exit 0 ;;
 
 	*)
 		say_color error "# failed $test_failure among $msg"
 		say "1..$test_count"
+		if test -n "$logfile"; then
+			say >&3 "# failed $test_failure among $msg"
+			say >&3 "1..$test_count"
+		fi
 
 		exit 1 ;;
 
