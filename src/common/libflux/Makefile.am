@@ -25,7 +25,7 @@ installed_conf_cppflags = \
 	-DINSTALLED_WREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\" \
 	-DINSTALLED_CMDHELP_PATTERN=\"${datadir}/flux/help.d/*.json\" \
 	-DINSTALLED_NO_DOCS_PATH=\"${datadir}/flux/.nodocs\" \
-	-DINSTALLED_RUNDIR=\"${localstatedir}/run/flux\"
+	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\"
 
 intree_conf_cppflags = \
 	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules\" \
