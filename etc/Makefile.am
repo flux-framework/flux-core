@@ -1,5 +1,5 @@
 #if HAVE_SYSTEMD
-systemdsystemunit_SCRIPTS = flux.service
+systemdsystemunit_DATA = flux.service
 #endif
 
 noinst_DATA = \
