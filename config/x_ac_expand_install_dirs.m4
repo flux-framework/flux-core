@@ -64,6 +64,11 @@ AC_DEFUN([X_AC_EXPAND_INSTALL_DIRS], [
     [Expansion of the "localstatedir" installation directory.])
   AC_SUBST([X_LOCALSTATEDIR])
 
+  adl_RECURSIVE_EVAL(["$runstatedir"], [X_RUNSTATEDIR])
+  AC_DEFINE_UNQUOTED([X_RUNSTATEDIR], ["$X_RUNSTATEDIR"],
+    [Expansion of the "runstatedir" installation directory.])
+  AC_SUBST([X_RUNSTATEDIR])
+
   adl_RECURSIVE_EVAL(["$libdir"], [X_LIBDIR])
   AC_DEFINE_UNQUOTED([X_LIBDIR], ["$X_LIBDIR"],
     [Expansion of the "libdir" installation directory.])
