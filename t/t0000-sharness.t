@@ -19,7 +19,7 @@
 
 test_description='Test Sharness itself'
 
-. ./sharness.sh
+. `dirname $0`/sharness.sh
 
 ret="$?"
 
