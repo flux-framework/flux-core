@@ -7,6 +7,12 @@ User=flux
 Group=flux
 RuntimeDirectory=flux
 RuntimeDirectoryMode=0755
+#
+# Delegate cgroup control to user flux, so that systemd doesn't reset
+#  cgroups for flux initiated processes, and to allow (some) cgroup
+#  manipulation as user flux.
+#
+Delegate=yes
 
 [Install]
 WantedBy=multi-user.target
