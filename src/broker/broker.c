@@ -137,7 +137,6 @@ typedef struct {
     struct tbon_param tbon;
     /* Bootstrap
      */
-    bool shared_ipc_namespace;
     hello_t *hello;
     flux_t *enclosing_h;
     runlevel_t *runlevel;
@@ -207,7 +206,6 @@ static const struct option longopts[] = {
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
     {"shutdown-grace",  required_argument,  0, 'g'},
-    {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
@@ -223,7 +221,6 @@ static void usage (void)
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
     exit (1);
@@ -331,9 +328,6 @@ int main (int argc, char *argv[])
                     log_err_exit ("shutdown-grace '%s'", optarg);
                 if (ctx.shutdown_grace < 0)
                     usage ();
-                break;
-            case 'I': /* --shared-ipc-namespace */
-                ctx.shared_ipc_namespace = true;
                 break;
             case 'S': { /* --setattr ATTR=VAL */
                 char *val, *attr = xstrdup (optarg);
@@ -1105,7 +1099,6 @@ done:
 
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 {
-    const char *rundir;
     int spawned, size, rank, appnum;
     int relay_rank = -1, parent_rank;
     int clique_size;
@@ -1122,8 +1115,6 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     char *tbonendpoint = NULL;
     const char *attrmcastendpoint;
     char *mcastendpoint = NULL;
-    char *sharedtbonendpoint = NULL;
-    char *reqfile = NULL;
 
     monotime (&start_time);
 
@@ -1164,25 +1155,9 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         log_err ("could not initialize rundir");
         goto done;
     }
-    if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
-        log_msg ("broker.rundir attribute is not set");
-        goto done;
-    }
 
-    /* Set TBON request addr.  We will need any wildcards expanded below.
+    /* Set TBON endpoint and mcast endpoint based on user settings
      */
-    if (ctx->shared_ipc_namespace) {
-        reqfile = xasprintf ("%s/req", rundir);
-        sharedtbonendpoint = xasprintf ("ipc://%s", reqfile);
-        if (attr_set (ctx->attrs,
-                      "tbon.endpoint",
-                      sharedtbonendpoint,
-                      true) < 0) {
-            log_err ("setting tbon.endpoint attribute");
-            goto done;
-        }
-        cleanup_push_string (cleanup_file, reqfile);
-    }
 
     if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
         log_err ("tbon.endpoint is not set");
@@ -1229,7 +1204,15 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/relay", rundir);
+                const char *rundir;
+                char *relayfile = NULL;
+
+                if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
+                    log_msg ("broker.rundir attribute is not set");
+                    goto done;
+                }
+
+                relayfile = xasprintf ("%s/relay", rundir);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
@@ -1377,14 +1360,10 @@ done:
         free (key);
     if (val)
         free (val);
-    if (reqfile)
-        free (reqfile);
     if (tbonendpoint)
         free (tbonendpoint);
     if (mcastendpoint)
         free (mcastendpoint);
-    if (sharedtbonendpoint)
-        free (sharedtbonendpoint);
     if (rc != 0)
         errno = EPROTO;
     return rc;

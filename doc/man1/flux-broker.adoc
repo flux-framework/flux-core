@@ -72,12 +72,6 @@ The default is to search install paths.
 Set the security mode.  The mode may be 'none', 'plain', or 'curve'
 (default: curve).  See flux-keygen(1) for more information.
 
-*-I, --shared-ipc-namespace*::
-Enable the use of ipc:// sockets for the tree-based overlay network
-and event distribution.  This option effectively sets the attribute
-tbon.endpoint to 'ipc://%B/req'.  If broker.rundir is not set, one is
-created based on a common $TMPDIR namespace.
-
 *-g, --shutdown-grace*='SECS'::
 Specify the shutdown grace period, in seconds (default: guess based
 on session size).
