@@ -264,7 +264,7 @@ test_have_prereq() {
 
 test_ok_() {
 	test_success=$(($test_success + 1))
-	say_color "" "ok $test_count - $@"
+	say_color "pass" "ok $test_count - $@"
 }
 
 test_failure_() {
