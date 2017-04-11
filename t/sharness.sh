@@ -704,7 +704,7 @@ test_done() {
 	if test -z "$HARNESS_ACTIVE"; then
 		test_results_dir="$SHARNESS_TEST_DIRECTORY/test-results"
 		mkdir -p "$test_results_dir"
-		test_results_path="$test_results_dir/$this_test.$$.counts"
+		test_results_path="$test_results_dir/${SHARNESS_TEST_NAME}.$$.counts"
 
 		cat >>"$test_results_path" <<-EOF
 		total $test_count
@@ -781,8 +781,11 @@ export PATH SHARNESS_BUILD_DIRECTORY
 SHARNESS_TEST_FILE="$0"
 export SHARNESS_TEST_FILE
 
+SHARNESS_TEST_NAME=${SHARNESS_TEST_FILE##*/}
+SHARNESS_TEST_NAME=${SHARNESS_TEST_NAME%.${SHARNESS_TEST_EXTENSION}}
+
 # Prepare test area.
-SHARNESS_TRASH_DIRECTORY="trash directory.$(basename "$SHARNESS_TEST_FILE" ".$SHARNESS_TEST_EXTENSION")"
+SHARNESS_TRASH_DIRECTORY="trash directory.$SHARNESS_TEST_NAME"
 test -n "$root" && SHARNESS_TRASH_DIRECTORY="$root/$SHARNESS_TRASH_DIRECTORY"
 case "$SHARNESS_TRASH_DIRECTORY" in
 /*) ;; # absolute path is good
@@ -831,10 +834,8 @@ mkdir -p "$SHARNESS_TRASH_DIRECTORY" || exit 1
 # in subprocesses like git equals our $PWD (for pathname comparisons).
 cd -P "$SHARNESS_TRASH_DIRECTORY" || exit 1
 
-this_test=${SHARNESS_TEST_FILE##*/}
-this_test=${this_test%.$SHARNESS_TEST_EXTENSION}
 for skp in $SKIP_TESTS; do
-	case "$this_test" in
+	case "$SHARNESS_TEST_NAME" in
 	$skp)
 		say_color info >&3 "skipping test $this_test altogether"
 		skip_all="skip all tests in $this_test"
