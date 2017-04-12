@@ -12,7 +12,7 @@ flux module load -r all resource-hwloc & pids="$pids $!"
 flux module load -r all job
 flux module load -r 0 cron sync=hb
 
-flux module load -r 0 userdb
+flux module load -r 0 userdb ${FLUX_USERDB_OPTIONS}
 
 wait $pids
 
