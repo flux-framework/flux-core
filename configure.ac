@@ -7,6 +7,12 @@ AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])
 AC_CONFIG_SRCDIR([NEWS])
 AC_CANONICAL_SYSTEM
+##
+# If runstatedir not explicitly set on command line, use '/run' as default
+##
+if test "$runstatedir" = '${localstatedir}/run'; then
+   AC_SUBST([runstatedir],[/run])
+fi
 X_AC_EXPAND_INSTALL_DIRS
 
 ##
@@ -78,7 +84,6 @@ AX_COMPILE_CHECK_SIZEOF(long)
 AX_COMPILE_CHECK_SIZEOF(long long)
 AX_COMPILE_CHECK_SIZEOF(uintptr_t, [#include <stdint.h>])
 AX_COMPILE_CHECK_SIZEOF(size_t, [#include <stdint.h>])
-
 
 ##
 # Checks for library functions
