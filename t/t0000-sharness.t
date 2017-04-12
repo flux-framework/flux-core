@@ -21,6 +21,12 @@ test_description='Test Sharness itself'
 
 . `dirname $0`/sharness.sh
 
+ret="$?"
+
+test_expect_success 'sourcing sharness succeeds' '
+	test "$ret" = 0
+'
+
 test_expect_success 'success is reported like this' '
 	:
 '
@@ -28,13 +34,23 @@ test_expect_failure 'pretend we have a known breakage' '
 	false
 '
 
+test_terminal () {
+	perl "$SHARNESS_TEST_DIRECTORY"/test-terminal.perl "$@"
+}
+
+# If test_terminal works, then set a PERL_AND_TTY prereq for future tests:
+# (PERL and TTY prereqs may later be split if needed separately)
+test_terminal sh -c "test -t 1 && test -t 2" && test_set_prereq PERL_AND_TTY
+
 run_sub_test_lib_test () {
 	name="$1" descr="$2" # stdin is the body of the test code
+	prefix="$3"          # optionally run sub-test under command
+	opt="$4"             # optionally call the script with extra option(s)
 	mkdir "$name" &&
 	(
 		cd "$name" &&
 		cat >".$name.t" <<-EOF &&
-		#!$SHELL_PATH
+		#!/bin/sh
 
 		test_description='$descr (run in sub sharness)
 
@@ -48,7 +64,7 @@ run_sub_test_lib_test () {
 		cat >>".$name.t" &&
 		chmod +x ".$name.t" &&
 		export SHARNESS_TEST_SRCDIR &&
-		./".$name.t" >out 2>err
+		$prefix ./".$name.t" $opt --chain-lint >out 2>err
 	)
 }
 
@@ -275,7 +291,7 @@ test_expect_success 'tests clean up even on failures' "
 	EOF
 "
 
-test_expect_success 'cleanup functions run at the end of the test' "
+test_expect_success 'cleanup functions tun at the end of the test' "
 	run_sub_test_lib_test cleanup-function 'Empty test with cleanup function' <<-\\EOF &&
 	cleanup 'echo cleanup-function-called >&5'
 	test_done
@@ -285,6 +301,172 @@ test_expect_success 'cleanup functions run at the end of the test' "
 	cleanup-function-called
 	EOF
 "
+
+test_expect_success 'We detect broken && chains' "
+	test_must_fail run_sub_test_lib_test \
+		broken-chain 'Broken && chain' <<-\\EOF
+	test_expect_success 'Cannot fail' '
+		true
+		true
+	'
+	test_done
+	EOF
+"
+
+test_expect_success 'tests can be run from an alternate directory' '
+	# Act as if we have an installation of sharness in current dir:
+	ln -sf $SHARNESS_TEST_SRCDIR/sharness.sh . &&
+	export working_path="$(pwd)" &&
+	cat >test.t <<-EOF &&
+	test_description="test run of script from alternate dir"
+	. \$(dirname \$0)/sharness.sh
+	test_expect_success "success" "
+		true
+	"
+	test_expect_success "trash dir is subdir of working path" "
+		test \"\$(cd .. && pwd)\" = \"\$working_path/test-rundir\"
+	"
+	test_done
+	EOF
+        (
+          # unset SHARNESS variables before sub-test
+	  unset SHARNESS_TEST_DIRECTORY SHARNESS_TEST_SRCDIR &&
+	  # unset HARNESS_ACTIVE so we get a test-results dir
+	  unset HARNESS_ACTIVE &&
+	  chmod +x test.t &&
+	  mkdir test-rundir &&
+	  cd test-rundir &&
+	  ../test.t >output 2>err &&
+	  cat >expected <<-EOF &&
+	ok 1 - success
+	ok 2 - trash dir is subdir of working path
+	# passed all 2 test(s)
+	1..2
+	EOF
+	  test_cmp expected output &&
+	  test -d test-results
+	)
+'
+
+test_expect_success 'SHARNESS_ORIG_TERM propagated to sub-sharness' "
+	(
+	  export TERM=foo &&
+	  unset SHARNESS_ORIG_TERM &&
+	  run_sub_test_lib_test orig-term 'check original term' <<-\\EOF
+	test_expect_success 'SHARNESS_ORIG_TERM is foo' '
+		test \"x\$SHARNESS_ORIG_TERM\" = \"xfoo\" '
+	test_done
+	EOF
+	)
+"
+
+[ -z "$color" ] || test_set_prereq COLOR
+test_expect_success COLOR,PERL_AND_TTY 'sub-sharness still has color' "
+	run_sub_test_lib_test \
+	  test-color \
+	  'sub-sharness color check' \
+	  test_terminal <<-\\EOF
+	test_expect_success 'color is enabled' '[ -n \"\$color\" ]'
+	test_done
+	EOF
+"
+
+test_expect_success 'EXPENSIVE prereq not activated by default' "
+	run_sub_test_lib_test no-long 'long test' <<-\\EOF &&
+	test_expect_success 'passing test' 'true'
+	test_expect_success EXPENSIVE 'passing suposedly long test' 'true'
+	test_done
+	EOF
+	check_sub_test_lib_test no-long <<-\\EOF
+	> ok 1 - passing test
+	> ok 2 # skip passing suposedly long test (missing EXPENSIVE)
+	> # passed all 2 test(s)
+	> 1..2
+	EOF
+"
+
+test_expect_success 'EXPENSIVE prereq is activated by --long' "
+	run_sub_test_lib_test long 'long test' '' '--long' <<-\\EOF &&
+	test_expect_success 'passing test' 'true'
+	test_expect_success EXPENSIVE 'passing suposedly long test' 'true'
+	test_done
+	EOF
+	check_sub_test_lib_test long <<-\\EOF
+	> ok 1 - passing test
+	> ok 2 - passing suposedly long test
+	> # passed all 2 test(s)
+	> 1..2
+	EOF
+"
+
+test_expect_success 'loading sharness extensions works' '
+	# Act as if we have a new installation of sharness
+	# under `extensions` directory. Then create
+	# a sharness.d/ directory with a test extension function:
+	mkdir extensions &&
+	(
+		cd extensions &&
+		mkdir sharness.d &&
+		cat >sharness.d/test.sh <<-EOF &&
+		this_is_a_test() {
+			return 0
+		}
+		EOF
+		ln -sf $SHARNESS_TEST_SRCDIR/sharness.sh . &&
+		cat >test-extension.t <<-\EOF &&
+		test_description="test sharness extensions"
+		. ./sharness.sh
+		test_expect_success "extension function is present" "
+			this_is_a_test
+		"
+		test_done
+		EOF
+		unset SHARNESS_TEST_DIRECTORY SHARNESS_TEST_SRCDIR &&
+		chmod +x ./test-extension.t &&
+		./test-extension.t >out 2>err &&
+		cat >expected <<-\EOF &&
+		ok 1 - extension function is present
+		# passed all 1 test(s)
+		1..1
+		EOF
+		test_cmp expected out
+	)
+'
+
+test_expect_success 'empty sharness.d directory does not cause failure' '
+	# Act as if we have a new installation of sharness
+	# under `extensions` directory. Then create
+	# an empty sharness.d/ directory
+	mkdir nil-extensions &&
+	(
+		cd nil-extensions &&
+		mkdir sharness.d  &&
+		ln -sf $SHARNESS_TEST_SRCDIR/sharness.sh . &&
+		cat >test.t <<-\EOF &&
+		test_description="sharness works"
+		. ./sharness.sh
+		test_expect_success "test success" "
+			/bin/true
+		"
+		test_done
+		EOF
+		unset SHARNESS_TEST_DIRECTORY SHARNESS_TEST_SRCDIR &&
+		chmod +x ./test.t &&
+		./test.t >out 2>err &&
+		cat >expected <<-\EOF &&
+		ok 1 - test success
+		# passed all 1 test(s)
+		1..1
+		EOF
+		test_cmp expected out
+	)
+'
+
+test_expect_success INTERACTIVE 'Interactive tests work' '
+    echo -n "Please type yes and hit enter " &&
+    read -r var &&
+    test "$var" = "yes"
+'
 
 test_done
 

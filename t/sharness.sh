@@ -18,33 +18,39 @@
 # along with this program.  If not, see http://www.gnu.org/licenses/ .
 
 # Public: Current version of Sharness.
-SHARNESS_VERSION="0.3.0"
+SHARNESS_VERSION="1.0.0"
 export SHARNESS_VERSION
 
 # Public: The file extension for tests.  By default, it is set to "t".
 : ${SHARNESS_TEST_EXTENSION:=t}
 export SHARNESS_TEST_EXTENSION
 
-# Keep the original TERM for say_color
-ORIGINAL_TERM=$TERM
+#  Reset TERM to original terminal if found, otherwise save orignal TERM
+[ "x" = "x$SHARNESS_ORIG_TERM" ] &&
+		SHARNESS_ORIG_TERM="$TERM" ||
+		TERM="$SHARNESS_ORIG_TERM"
+# Public: The unsanitized TERM under which sharness is originally run
+export SHARNESS_ORIG_TERM
+
+# Export SHELL_PATH
+: ${SHELL_PATH:=$SHELL}
+export SHELL_PATH
 
 # For repeatability, reset the environment to a known state.
+# TERM is sanitized below, after saving color control sequences.
 LANG=C
 LC_ALL=C
 PAGER=cat
 TZ=UTC
-TERM=dumb
 EDITOR=:
-export LANG LC_ALL PAGER TZ TERM EDITOR
+export LANG LC_ALL PAGER TZ EDITOR
 unset VISUAL CDPATH GREP_OPTIONS
 
 # Line feed
 LF='
 '
 
-[ "x$ORIGINAL_TERM" != "xdumb" ] && (
-		TERM=$ORIGINAL_TERM &&
-		export TERM &&
+[ "x$TERM" != "xdumb" ] && (
 		[ -t 1 ] &&
 		tput bold >/dev/null 2>&1 &&
 		tput setaf 1 >/dev/null 2>&1 &&
@@ -54,14 +60,16 @@ LF='
 
 while test "$#" -ne 0; do
 	case "$1" in
-        --logfile)
-                logfile=t; shift;;
+	--logfile)
+		logfile=t; shift;;
 	-d|--d|--de|--deb|--debu|--debug)
 		debug=t; shift ;;
 	-i|--i|--im|--imm|--imme|--immed|--immedi|--immedia|--immediat|--immediate)
 		immediate=t; shift ;;
 	-l|--l|--lo|--lon|--long|--long-|--long-t|--long-te|--long-tes|--long-test|--long-tests)
 		TEST_LONG=t; export TEST_LONG; shift ;;
+	--in|--int|--inte|--inter|--intera|--interac|--interact|--interacti|--interactiv|--interactive|--interactive-|--interactive-t|--interactive-te|--interactive-tes|--interactive-test|--interactive-tests):
+		TEST_INTERACTIVE=t; export TEST_INTERACTIVE; verbose=t; shift ;;
 	-h|--h|--he|--hel|--help)
 		help=t; shift ;;
 	-v|--v|--ve|--ver|--verb|--verbo|--verbos|--verbose)
@@ -70,6 +78,10 @@ while test "$#" -ne 0; do
 		# Ignore --quiet under a TAP::Harness. Saying how many tests
 		# passed without the ok/not ok details is always an error.
 		test -z "$HARNESS_ACTIVE" && quiet=t; shift ;;
+	--chain-lint)
+		chain_lint=t; shift ;;
+	--no-chain-lint)
+		chain_lint=; shift ;;
 	--no-color)
 		color=; shift ;;
 	--root=*)
@@ -81,29 +93,30 @@ while test "$#" -ne 0; do
 done
 
 if test -n "$color"; then
+	# Save the color control sequences now rather than run tput
+	# each time say_color() is called.  This is done for two
+	# reasons:
+	#   * TERM will be changed to dumb
+	#   * HOME will be changed to a temporary directory and tput
+	#     might need to read ~/.terminfo from the original HOME
+	#     directory to get the control sequences
+	# Note:  This approach assumes the control sequences don't end
+	# in a newline for any terminal of interest (command
+	# substitutions strip trailing newlines).  Given that most
+	# (all?) terminals in common use are related to ECMA-48, this
+	# shouldn't be a problem.
+	say_color_error=$(tput bold; tput setaf 1) # bold red
+	say_color_skip=$(tput setaf 4) # blue
+	say_color_warn=$(tput setaf 3) # brown/yellow
+	say_color_pass=$(tput setaf 2) # green
+	say_color_info=$(tput setaf 6) # cyan
+	say_color_reset=$(tput sgr0)
+	say_color_="" # no formatting for normal text
 	say_color() {
-		(
-		TERM=$ORIGINAL_TERM
-		export TERM
-		case "$1" in
-		error)
-			tput bold; tput setaf 1;; # bold red
-		skip)
-			tput setaf 4;; # blue
-		warn)
-			tput setaf 3;; # brown/yellow
-		pass)
-			tput setaf 2;; # green
-		info)
-			tput setaf 6;; # cyan
-		*)
-			test -n "$quiet" && return;;
-		esac
+		test -z "$1" && test -n "$quiet" && return
+		eval "say_color_color=\$say_color_$1"
 		shift
-		printf "%s" "$*"
-		tput sgr0
-		echo
-		)
+		printf "%s\\n" "$say_color_color$*$say_color_reset"
 	}
 else
 	say_color() {
@@ -112,6 +125,9 @@ else
 		printf "%s\n" "$*"
 	}
 fi
+
+TERM=dumb
+export TERM
 
 error() {
 	say_color error "error: $*"
@@ -135,8 +151,8 @@ exec 6<&0
 if test "$verbose" = "t"; then
 	exec 4>&2 3>&1
 elif test "$logfile" = "t"; then
-        logfile=$(basename $0 .t).output
-        exec 4>${logfile} 3>&4
+	logfile=$(basename $0 .t).output
+	exec 4>${logfile} 3>&4
 else
 	exec 4>/dev/null 3>/dev/null
 fi
@@ -297,10 +313,29 @@ test_debug() {
 	test "$debug" = "" || eval "$1"
 }
 
+# Public: Stop execution and start a shell.
+#
+# This is useful for debugging tests and only makes sense together with "-v".
+# Be sure to remove all invocations of this command before submitting.
+test_pause() {
+	if test "$verbose" = t; then
+		"$SHELL_PATH" <&6 >&3 2>&4
+	else
+		error >&5 "test_pause requires --verbose"
+	fi
+}
+
 test_eval_() {
 	# This is a separate function because some tests use
 	# "return" to end a test_expect_success block early.
-	eval </dev/null >&3 2>&4 "$*"
+	case ",$test_prereq," in
+	*,INTERACTIVE,*)
+		eval "$*"
+		;;
+	*)
+		eval </dev/null >&3 2>&4 "$*"
+		;;
+	esac
 }
 
 test_run_() {
@@ -308,6 +343,13 @@ test_run_() {
 	expecting_failure=$2
 	test_eval_ "$1"
 	eval_ret=$?
+
+	if test "$chain_lint" = "t"; then
+		test_eval_ "(exit 117) && $1"
+		if test "$?" != 117; then
+			error "bug in the test script: broken &&-chain: $1"
+		fi
+	fi
 
 	if test -z "$immediate" || test $eval_ret = 0 || test -n "$expecting_failure"; then
 		test_eval_ "$test_cleanup"
@@ -561,6 +603,49 @@ test_cmp() {
 	${TEST_CMP:-diff -u} "$@"
 }
 
+# Public: portably print a sequence of numbers.
+#
+# seq is not in POSIX and GNU seq might not be available everywhere,
+# so it is nice to have a seq implementation, even a very simple one.
+#
+# $1 - Starting number.
+# $2 - Ending number.
+#
+# Examples
+#
+#   test_expect_success 'foo works 10 times' '
+#       for i in $(test_seq 1 10)
+#       do
+#           foo || return
+#       done
+#   '
+#
+# Returns 0 if all the specified numbers can be displayed.
+test_seq() {
+	i="$1"
+	j="$2"
+	while test "$i" -le "$j"
+	do
+		echo "$i" || return
+		i=$(expr "$i" + 1)
+	done
+}
+
+# Public: Check if the file expected to be empty is indeed empty, and barfs
+# otherwise.
+#
+# $1 - File to check for emptyness.
+#
+# Returns 0 if file is empty, 1 otherwise.
+test_must_be_empty() {
+	if test -s "$1"
+	then
+		echo "'$1' is not empty, it contains:"
+		cat "$1"
+		return 1
+	fi
+}
+
 # Public: Schedule cleanup commands to be run unconditionally at the end of a
 # test.
 #
@@ -677,7 +762,6 @@ test_done() {
 		test -d "$remove_trash" &&
 		cd "$(dirname "$remove_trash")" &&
 		rm -rf "$(basename "$remove_trash")"
-
 		test -n "$logfile" &&
 		  test -f "$logfile" &&
 		  rm -f "${logfile}"
@@ -702,11 +786,11 @@ test_done() {
 : ${SHARNESS_TEST_DIRECTORY:=$(pwd)}
 export SHARNESS_TEST_DIRECTORY
 
-#
 # Public: Source directory of test code and sharness library.
-#  This directory may be different from the directory in which tests are
-#  being run.
-: ${SHARNESS_TEST_SRCDIR:=$(cd `dirname $0` && pwd)}
+# This directory may be different from the directory in which tests are
+# being run.
+: ${SHARNESS_TEST_SRCDIR:=$(cd $(dirname $0) && pwd)}
+export SHARNESS_TEST_SRCDIR
 
 # Public: Build directory that will be added to PATH. By default, it is set to
 # the parent directory of SHARNESS_TEST_DIRECTORY.
@@ -722,14 +806,14 @@ SHARNESS_TEST_NAME=${SHARNESS_TEST_FILE##*/}
 SHARNESS_TEST_NAME=${SHARNESS_TEST_NAME%.${SHARNESS_TEST_EXTENSION}}
 
 # Prepare test area.
-test_dir="trash-directory.$SHARNESS_TEST_NAME"
-test -n "$root" && test_dir="$root/$test_dir"
-case "$test_dir" in
-/*) SHARNESS_TRASH_DIRECTORY="$test_dir" ;;
- *) SHARNESS_TRASH_DIRECTORY="$SHARNESS_TEST_DIRECTORY/$test_dir" ;;
+SHARNESS_TRASH_DIRECTORY="trash-directory.$SHARNESS_TEST_NAME"
+test -n "$root" && SHARNESS_TRASH_DIRECTORY="$root/$SHARNESS_TRASH_DIRECTORY"
+case "$SHARNESS_TRASH_DIRECTORY" in
+/*) ;; # absolute path is good
+ *) SHARNESS_TRASH_DIRECTORY="$SHARNESS_TEST_DIRECTORY/$SHARNESS_TRASH_DIRECTORY" ;;
 esac
 test "$debug" = "t" || remove_trash="$SHARNESS_TRASH_DIRECTORY"
-rm -rf "$test_dir" || {
+rm -rf "$SHARNESS_TRASH_DIRECTORY" || {
 	EXIT_OK=t
 	echo >&5 "FATAL: Cannot prepare test area"
 	exit 1
@@ -739,14 +823,21 @@ rm -rf "$test_dir" || {
 #
 #  Load any extensions in $srcdir/sharness.d/*.sh
 #
-if test -d "${SHARNESS_TEST_SRCDIR}/sharness.d"; then
-	for file in "${SHARNESS_TEST_SRCDIR}"/sharness.d/*.sh; do
-		if test -n "$debug"; then
-			echo 2>&1 "Attempting to load ${file}"
+if test -d "${SHARNESS_TEST_SRCDIR}/sharness.d"
+then
+	for file in "${SHARNESS_TEST_SRCDIR}"/sharness.d/*.sh
+	do
+		# Ensure glob was not an empty match:
+		test -e "${file}" || break
+
+		if test -n "$debug"
+		then
+			echo >&5 "sharness: loading extensions from ${file}"
 		fi
-		. ${file}
-		if test $? != 0; then
-			echo 2>&1 "sharness: Error loading ${file}. Aborting."
+		. "${file}"
+		if test $? != 0
+		then
+			echo >&5 "sharness: Error loading ${file}. Aborting."
 			exit 1
 		fi
 	done
@@ -759,10 +850,10 @@ export SHARNESS_TRASH_DIRECTORY
 HOME="$SHARNESS_TRASH_DIRECTORY"
 export HOME
 
-mkdir -p "$test_dir" || exit 1
+mkdir -p "$SHARNESS_TRASH_DIRECTORY" || exit 1
 # Use -P to resolve symlinks in our working directory so that the cwd
 # in subprocesses like git equals our $PWD (for pathname comparisons).
-cd -P "$test_dir" || exit 1
+cd -P "$SHARNESS_TRASH_DIRECTORY" || exit 1
 
 for skp in $SKIP_TESTS; do
 	case "$SHARNESS_TEST_NAME" in
@@ -772,5 +863,11 @@ for skp in $SKIP_TESTS; do
 		test_done
 	esac
 done
+
+test -n "$TEST_LONG" && test_set_prereq EXPENSIVE
+test -n "$TEST_INTERACTIVE" && test_set_prereq INTERACTIVE
+
+# Make sure this script ends with code 0
+:
 
 # vi: set ts=4 sw=4 noet :
