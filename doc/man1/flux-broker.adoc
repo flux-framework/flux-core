@@ -72,22 +72,6 @@ The default is to search install paths.
 Set the security mode.  The mode may be 'none', 'plain', or 'curve'
 (default: curve).  See flux-keygen(1) for more information.
 
-*-E, --enable-epgm*::
-Enable EPGM, a reliable multicast protocol, for event distribution.
-Without this option, the tree-based overlay network distributes events.
-On large sessions, EPGM should improve scalability and reduce system jitter,
-however it requires that network switches support multicast and currently
-uses a naive algorithm to select a unique multicast port for the session.
-This algorithm should be safe for instances launched directly by the
-"native" resource manager, but not yet for instances launched by those
-instances.   The first network interface associated with the hostname is
-used, and the multicast address is hardwired to 239.192.1.1.
-
-*-I, --shared-ipc-namespace*::
-Enable the use of ipc:// sockets for the tree-based overlay network
-and event distribution.  This may be set if all ranks of a comms
-session share a common $TMPDIR namespace.
-
 *-g, --shutdown-grace*='SECS'::
 Specify the shutdown grace period, in seconds (default: guess based
 on session size).

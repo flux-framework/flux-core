@@ -113,6 +113,31 @@ test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes'
 	ATTR_VAL=`flux start ${BUG1006} -o,--setattr=foo-test=42 flux getattr foo-test` &&
 	test $ATTR_VAL -eq 42
 '
+test_expect_success 'tbon.endpoint can be read' '
+	ATTR_VAL=`flux start flux getattr tbon.endpoint` &&
+        echo $ATTR_VAL | grep "^tcp"
+'
+test_expect_success 'tbon.endpoint can be set and %h works' '
+	ATTR_VAL=`flux start -o,--setattr=tbon.endpoint='tcp://%h:*' flux getattr tbon.endpoint` &&
+        echo $ATTR_VAL | grep "^tcp"
+'
+test_expect_success 'tbon.endpoint with %B works' '
+	ATTR_VAL=`flux start -o,--setattr=tbon.endpoint='ipc://%B/req' flux getattr tbon.endpoint` &&
+        echo $ATTR_VAL | grep "^ipc"
+'
+test_expect_success 'tbon.endpoint fails on bad endpoint' '
+	! flux start -o,--setattr=tbon.endpoint='foo://bar' flux getattr tbon.endpoint
+'
+test_expect_success 'mcast.endpoint can be read' '
+	ATTR_VAL=`flux start flux getattr mcast.endpoint` &&
+        echo $ATTR_VAL | grep "^tbon$"
+'
+test_expect_success 'mcast.endpoint works with ipc endpoints' '
+	flux start -o,--setattr=tbon.endpoint='ipc://%B/req' -o,--setattr=mcast.endpoint='ipc://%B/event' flux getattr mcast.endpoint
+'
+test_expect_success 'mcast.endpoint fails on bad endpoint' '
+	! flux start -o,--setattr=mcast.endpoint='foo://bar' flux getattr mcast.endpoint
+'
 test_expect_success 'broker.rundir override works' '
 	RUNDIR=`mktemp -d` &&
 	DIR=`flux start ${BUG1006} -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&

@@ -78,6 +78,9 @@
 #include "ping.h"
 #include "rusage.h"
 
+/* Generally accepted max, although some go higher (IE is 2083) */
+#define ENDPOINT_MAX 2048
+
 typedef enum {
     ERROR_MODE_RESPOND,
     ERROR_MODE_RETURN,
@@ -134,8 +137,6 @@ typedef struct {
     struct tbon_param tbon;
     /* Bootstrap
      */
-    bool enable_epgm;
-    bool shared_ipc_namespace;
     hello_t *hello;
     flux_t *enclosing_h;
     runlevel_t *runlevel;
@@ -184,6 +185,8 @@ static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
+static char *calc_endpoint (broker_ctx_t *ctx, const char *endpoint);
+
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec);
 
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -203,8 +206,6 @@ static const struct option longopts[] = {
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
     {"shutdown-grace",  required_argument,  0, 'g'},
-    {"enable-epgm",     no_argument,        0, 'E'},
-    {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"setattr",         required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
@@ -220,8 +221,6 @@ static void usage (void)
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
-" -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
-" -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 );
     exit (1);
@@ -329,12 +328,6 @@ int main (int argc, char *argv[])
                     log_err_exit ("shutdown-grace '%s'", optarg);
                 if (ctx.shutdown_grace < 0)
                     usage ();
-                break;
-            case 'E': /* --enable-epgm */
-                ctx.enable_epgm = true;
-                break;
-            case 'I': /* --shared-ipc-namespace */
-                ctx.shared_ipc_namespace = true;
                 break;
             case 'S': { /* --setattr ATTR=VAL */
                 char *val, *attr = xstrdup (optarg);
@@ -758,6 +751,24 @@ static void init_attrs_from_environment (attr_t *attrs)
     }
 }
 
+static void init_attrs_overlay (broker_ctx_t *ctx)
+{
+    char *tbonendpoint = "tbon.endpoint";
+    char *mcastendpoint = "mcast.endpoint";
+
+    if (attr_add (ctx->attrs,
+                  tbonendpoint,
+                  "tcp://%h:*",
+                  0) < 0)
+        log_err_exit ("attr_add %s", tbonendpoint);
+
+    if (attr_add (ctx->attrs,
+                  mcastendpoint,
+                  "tbon",
+                  0) < 0)
+        log_err_exit ("attr_add %s", mcastendpoint);
+}
+
 static void init_attrs_broker_pid (broker_ctx_t *ctx)
 {
     char *attrname = "broker.pid";
@@ -780,6 +791,7 @@ static void init_attrs (broker_ctx_t *ctx)
 
     /* Initialize other miscellaneous attrs
      */
+    init_attrs_overlay (ctx);
     init_attrs_broker_pid (ctx);
 }
 
@@ -1012,14 +1024,85 @@ done:
     return rc;
 }
 
+/* Given a string with possible format specifiers, return string that is
+ * fully expanded.
+ *
+ * Possible format specifiers:
+ * - %h - IP address of current hostname
+ * - %B - value of attribute broker.rundir
+ *
+ * Caller is responsible for freeing memory of returned value.
+ */
+static char * calc_endpoint (broker_ctx_t *ctx, const char *endpoint)
+{
+    char ipaddr[HOST_NAME_MAX + 1];
+    char *ptr, *buf, *rv = NULL;
+    bool percent_flag = false;
+    unsigned int len = 0;
+    const char *rundir;
+
+    buf = xzmalloc (ENDPOINT_MAX + 1);
+
+    ptr = (char *)endpoint;
+    while (*ptr) {
+        if (percent_flag) {
+            if (*ptr == 'h') {
+                ipaddr_getprimary (ipaddr, sizeof (ipaddr));
+                if ((len + strlen (ipaddr)) > ENDPOINT_MAX) {
+                    log_msg ("ipaddr overflow max endpoint length");
+                    goto done;
+                }
+                strcat (buf, ipaddr);
+                len += strlen (ipaddr);
+            }
+            else if (*ptr == 'B') {
+                if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
+                    log_msg ("broker.rundir attribute is not set");
+                    goto done;
+                }
+                if ((len + strlen (rundir)) > ENDPOINT_MAX) {
+                    log_msg ("broker.rundir overflow max endpoint length");
+                    goto done;
+                }
+                strcat (buf, rundir);
+                len += strlen (rundir);
+            }
+            else if (*ptr == '%')
+                buf[len++] = '%';
+            else {
+                buf[len++] = '%';
+                buf[len++] = *ptr;
+            }
+            percent_flag = false;
+        }
+        else {
+            if (*ptr == '%')
+                percent_flag = true;
+            else
+                buf[len++] = *ptr;
+        }
+
+        if (len >= ENDPOINT_MAX) {
+            log_msg ("overflow max endpoint length");
+            goto done;
+        }
+
+        ptr++;
+    }
+
+    rv = buf;
+done:
+    if (!rv)
+        free (buf);
+    return (rv);
+}
+
 static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 {
-    const char *rundir;
     int spawned, size, rank, appnum;
     int relay_rank = -1, parent_rank;
     int clique_size;
     int *clique_ranks = NULL;
-    char ipaddr[HOST_NAME_MAX + 1];
     const char *child_uri, *relay_uri;
     int kvsname_len, key_len, val_len;
     char *id = NULL;
@@ -1028,6 +1111,10 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     char *val = NULL;
     int e, rc = -1;
     struct timespec start_time;
+    const char *attrtbonendpoint;
+    char *tbonendpoint = NULL;
+    const char *attrmcastendpoint;
+    char *mcastendpoint = NULL;
 
     monotime (&start_time);
 
@@ -1035,10 +1122,6 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         log_msg ("PMI_Init: %s", pmi_strerror (e));
         goto done;
     }
-
-    if (ctx->enable_epgm || !ctx->shared_ipc_namespace)
-        ipaddr_getprimary (ipaddr, sizeof (ipaddr));
-
 
     /* Get rank, size, appnum
      */
@@ -1072,28 +1155,39 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         log_err ("could not initialize rundir");
         goto done;
     }
-    if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
-        log_msg ("broker.rundir attribute is not set");
+
+    /* Set TBON endpoint and mcast endpoint based on user settings
+     */
+
+    if (attr_get (ctx->attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
+        log_err ("tbon.endpoint is not set");
         goto done;
     }
 
-    /* Set TBON request addr.  We will need any wildcards expanded below.
-     */
-    if (ctx->shared_ipc_namespace) {
-        char *reqfile = xasprintf ("%s/req", rundir);
-        overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
-        cleanup_push_string (cleanup_file, reqfile);
-        free (reqfile);
-    } else {
-        overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
+    if (!(tbonendpoint = calc_endpoint (ctx, attrtbonendpoint))) {
+        log_msg ("calc_endpoint error");
+        goto done;
     }
 
-    /* Set up epgm relay if multiple ranks are being spawned per node,
-     * as indicated by "clique ranks".  FIXME: if epgm is used but
+    overlay_set_child (ctx->overlay, tbonendpoint);
+
+    if (attr_get (ctx->attrs, "mcast.endpoint", &attrmcastendpoint, NULL) < 0) {
+        log_err ("mcast.endpoint is not set");
+        goto done;
+    }
+
+    if (!(mcastendpoint = calc_endpoint (ctx, attrmcastendpoint))) {
+        log_msg ("calc_endpoint error");
+        goto done;
+    }
+
+    /* Set up multicast (e.g. epgm) relay if multiple ranks are being
+     * spawned per node, as indicated by "clique ranks".  FIXME: if
      * pmi_get_clique_ranks() is not implemented, this fails.  Find an
-     * alternate method to determine if ranks are co-located on a node.
+     * alternate method to determine if ranks are co-located on a
+     * node.
      */
-    if (ctx->enable_epgm) {
+    if (strcasecmp (mcastendpoint, "tbon")) {
         if ((e = PMI_Get_clique_size (&clique_size)) != PMI_SUCCESS) {
             log_msg ("PMI_get_clique_size: %s", pmi_strerror (e));
             goto done;
@@ -1110,7 +1204,15 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
             if (relay_rank >= 0 && ctx->rank == relay_rank) {
-                char *relayfile = xasprintf ("%s/relay", rundir);
+                const char *rundir;
+                char *relayfile = NULL;
+
+                if (attr_get (ctx->attrs, "broker.rundir", &rundir, NULL) < 0) {
+                    log_msg ("broker.rundir attribute is not set");
+                    goto done;
+                }
+
+                relayfile = xasprintf ("%s/relay", rundir);
                 overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
                 cleanup_push_string (cleanup_file, relayfile);
                 free (relayfile);
@@ -1166,9 +1268,11 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         }
     }
 
-    /* Write the uri of the epgm relay under the rank (if any).
+    /* Write the uri of the multicast (e.g. epgm) relay under the rank
+     * (if any).
      */
-    if (ctx->enable_epgm && (relay_uri = overlay_get_relay (ctx->overlay))) {
+    if (strcasecmp (mcastendpoint, "tbon")
+        && (relay_uri = overlay_get_relay (ctx->overlay))) {
         if (snprintf (key, key_len, "cmbd.%d.relay", rank) >= key_len) {
             log_msg ("pmi key string overflow");
             goto done;
@@ -1210,18 +1314,19 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
     }
 
     /* Event distribution (four configurations):
-     * 1) epgm enabled, one broker per node
+     * 1) multicast enabled, one broker per node
      *    All brokers subscribe to the same epgm address.
-     * 2) epgm enabled, mutiple brokers per node
-     *    The lowest rank in each clique will subscribe to the epgm:// socket
-     *    and relay events to an ipc:// socket for the other ranks in the
-     *    clique.  This is necessary due to limitation of epgm.
-     * 3) epgm disabled, all brokers concentrated on one node
-     *    Rank 0 publishes to a ipc:// socket, other ranks subscribe
-     * 4) epgm disabled brokers distributed across nodes
+     * 2) multicast enabled, mutiple brokers per node The lowest rank
+     *    in each clique will subscribe to the multicast
+     *    (e.g. epgm://) socket and relay events to an ipc:// socket
+     *    for the other ranks in the clique.  This is necessary due to
+     *    limitation of epgm.
+     * 3) multicast disabled, all brokers concentrated on one node
+     *    Rank 0 publishes to a ipc:// socket, other ranks subscribe (set earlier via mcast.endpoint)
+     * 4) multicast disabled brokers distributed across nodes
      *    No dedicated event overlay,.  Events are distributed over the TBON.
      */
-    if (ctx->enable_epgm) {
+    if (strcasecmp (mcastendpoint, "tbon")) {
         if (relay_rank >= 0 && rank != relay_rank) {
             if (snprintf (key, key_len, "cmbd.%d.relay", relay_rank)
                                                                 >= key_len) {
@@ -1234,17 +1339,8 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
                 goto done;
             }
             overlay_set_event (ctx->overlay, "%s", val);
-        } else {
-            int port = 5000 + appnum % 1024;
-            overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d",
-                               ipaddr, port);
-        }
-    } else if (ctx->shared_ipc_namespace) {
-        char *eventfile = xasprintf ("%s/event", rundir);
-        overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
-        if (ctx->rank == 0)
-            cleanup_push_string (cleanup_file, eventfile);
-        free (eventfile);
+        } else
+            overlay_set_event (ctx->overlay, mcastendpoint);
     }
     if ((e = PMI_Barrier ()) != PMI_SUCCESS) {
         log_msg ("PMI_Barrier: %s", pmi_strerror (e));
@@ -1264,6 +1360,10 @@ done:
         free (key);
     if (val)
         free (val);
+    if (tbonendpoint)
+        free (tbonendpoint);
+    if (mcastendpoint)
+        free (mcastendpoint);
     if (rc != 0)
         errno = EPROTO;
     return rc;
