@@ -55,8 +55,24 @@ test_expect_success 'hwloc: each rank reloads a non-overlapping set of a node ' 
     flux hwloc reload $exclu2
 '
 
+#  Keep this test after 'reload exclu2' above so we're processing
+#   know topology xml from reload.
+#
+test_expect_success 'hwloc: flux-hwloc info reports expected resources' '
+    cat <<-EOF > hwloc-info.expected1 &&
+	2 Machines, 16 Cores, 16 PUs
+	EOF
+    flux hwloc info > hwloc-info.out1 &&
+    test_cmp hwloc-info.expected1 hwloc-info.out1
+'
+
 test_expect_success 'hwloc: every rank reloads the same xml of a node' '
-    flux hwloc reload $shared2
+    flux hwloc reload $shared2 &&
+    cat <<-EOF > hwloc-info.expected2 &&
+	2 Machines, 32 Cores, 32 PUs
+	EOF
+    flux hwloc info > hwloc-info.out2 &&
+    test_cmp hwloc-info.expected2 hwloc-info.out2
 '
 
 test_expect_success 'hwloc: only one rank reloads an xml file' '
