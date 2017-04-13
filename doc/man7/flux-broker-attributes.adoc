@@ -88,6 +88,14 @@ tbon-request-uri::
 The URI of the ZeroMQ endpoint this rank is bound to in the tree
 based overlay network.
 
+event-uri::
+The URI of the ZeroMQ endpoint this rank is bound to for multicast
+messaging.
+
+event-relay-uri::
+The URI of the ZeroMQ endpoint this rank is bound to for relay of
+multicast messages if multiple ranks are spawned per node.
+
 snoop-uri::
 The URI of the ZeroMQ endpoint that flux-snoop(1) should connect
 to in order to receive copies of messages passing through the broker.
