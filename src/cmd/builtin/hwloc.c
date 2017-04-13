@@ -33,6 +33,8 @@
 #include <argz.h>
 #include <inttypes.h>
 
+#include <hwloc.h>
+
 #include "src/common/libutil/sds.h"
 
 struct hwloc_topo {
@@ -204,6 +206,30 @@ static int cmd_topology (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int cmd_info (optparse_t *p, int ac, char *av[])
+{
+    struct hwloc_topo *t = hwloc_topo_create (p);
+    hwloc_topology_t topo;
+
+    if (hwloc_topology_init (&topo) < 0)
+        log_msg_exit ("hwloc_topology_init");
+    if (hwloc_topology_set_xmlbuffer (topo, t->topo, strlen (t->topo)) < 0)
+        log_msg_exit ("hwloc_topology_set_xmlbuffer");
+    if (hwloc_topology_load (topo) < 0)
+        log_msg_exit ("hwloc_topology_load");
+
+    int ncores = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_CORE);
+    int npu    = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
+    int nnodes = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_MACHINE);
+
+    printf ("%d Machine%s, %d Cores, %d PUs\n",
+            nnodes, nnodes > 1 ? "s" : "", ncores, npu);
+
+    hwloc_topology_destroy (topo);
+    hwloc_topo_destroy (t);
+    return (0);
+}
+
 static void config_hwloc_paths (flux_t *h, const char *dirpath)
 {
     uint32_t size, rank;
@@ -336,6 +362,13 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       cmd_topology,
       0,
       NULL,
+    },
+    { "info",
+      NULL,
+      "Short-form dump of instance resources",
+      cmd_info,
+      0,
+      NULL
     },
     OPTPARSE_SUBCMD_END,
 };
