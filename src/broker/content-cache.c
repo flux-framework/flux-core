@@ -848,13 +848,13 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *w,
  */
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request },
-    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request },
-    { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request},
-    { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request },
-    { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request },
-    { FLUX_MSGTYPE_REQUEST, "content.flush",     content_flush_request },
-    { FLUX_MSGTYPE_EVENT,   "hb",                heartbeat_event },
+    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request, FLUX_ROLE_USER, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request, FLUX_ROLE_USER, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "content.flush",     content_flush_request, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "hb",                heartbeat_event, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -863,7 +863,7 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
     cache->h = h;
 
     if (flux_msg_handler_addvec (h, handlers, cache) < 0)
-	return -1;
+        return -1;
     if (flux_get_rank (h, &cache->rank) < 0)
         return -1;
     if (flux_event_subscribe (h, "hb") < 0)
@@ -960,12 +960,11 @@ void content_cache_destroy (content_cache_t *cache)
 
 content_cache_t *content_cache_create (void)
 {
-    content_cache_t *cache = malloc (sizeof (*cache));
+    content_cache_t *cache = calloc (1, sizeof (*cache));
     if (!cache) {
         errno = ENOMEM;
         return NULL;
     }
-    memset (cache, 0, sizeof (*cache));
     if (!(cache->entries = zhash_new ())) {
         content_cache_destroy (cache);
         errno = ENOMEM;

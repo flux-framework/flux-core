@@ -42,8 +42,8 @@ void hi_request_cb (flux_t *h, flux_msg_handler_t *w,
 
 
 struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "coproc.stuck",           stuck_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "coproc.hi",              hi_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "coproc.stuck",           stuck_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "coproc.hi",              hi_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);

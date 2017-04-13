@@ -112,9 +112,9 @@ error:
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.start",  start_cb },
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.dump",   dump_cb },
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.stop",   stop_cb },
+    { FLUX_MSGTYPE_REQUEST, "heaptrace.start",  start_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "heaptrace.dump",   dump_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "heaptrace.stop",   stop_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

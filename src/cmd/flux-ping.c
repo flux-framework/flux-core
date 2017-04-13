@@ -211,8 +211,10 @@ int main (int argc, char *argv[])
     flux_watcher_t *tw = NULL;
     nodeset_t *ns = NULL;
     optparse_t *opts;
-    struct ping_ctx ctx = {0};
+    struct ping_ctx ctx;
     int optindex;
+
+    memset (&ctx, 0, sizeof (ctx));
 
     log_init ("flux-ping");
 

@@ -251,7 +251,8 @@ metric_summary (kap_config_t *kc,
 {
     double t = 0.0f;
     double b = 0.0f;
-    VAC_t results = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    VAC_t results = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     reduce_results (m, &results);
 

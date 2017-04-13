@@ -124,7 +124,7 @@ int hello_register_attrs (hello_t *hello, attr_t *attrs)
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "hello.join",     join_request },
+    { FLUX_MSGTYPE_REQUEST, "hello.join",     join_request, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

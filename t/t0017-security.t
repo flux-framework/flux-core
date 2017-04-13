@@ -154,4 +154,173 @@ test_expect_success 'flux dmesg not allowed for non-owner' '
 	grep -q "Operation not permitted" dmesg.err
 '
 
+# Note these rules:
+# - the dispatcher default policy is to suppress messages that do
+#   not have FLUX_ROLE_OWNER (does not apply to direct flux_recv)
+# - the local connector only forwards "private" messages if the connection
+#   has FLUX_ROLE_OWNER or connection has userid matching message sender
+# Note special test hooks:
+# - the local connector allows client to set arbitrary rolemask/userid
+#   if connection was authenticated with FLUX_ROLE_OWNER
+# - the DEBUG_OWNERDROP_ONESHOT(4) bit forces the next OWNER connection
+#   to set connection's rolemask=FLUX_ROLE_USER, userid=FLUX_USERID_UNKNOWN
+
+# event-trace.lua registers a reactor handler thus uses the dispatcher, while
+# event-trace-bypass.lua calls f:recv_event() bypasses the dispatcher policy.
+
+test_expect_success 'connector delivers owner event to owner connection' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		test test.end \
+                "flux event pub test.a; \
+                 flux event pub test.end" >ev00.out &&
+	grep -q test.a ev00.out
+'
+
+test_expect_success 'dispatcher delivers owner event to owner connection' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		test test.end \
+                "flux event pub test.a; \
+                 flux event pub test.end" >ev0.out &&
+	grep -q test.a ev0.out
+'
+
+test_expect_success 'connector delivers guest event to owner connection' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		test test.end \
+                "FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev1.out &&
+	grep -q test.a ev1.out
+'
+
+test_expect_success 'dispatcher suppresses guest event to owner connection' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		test test.end \
+                "FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev2.out &&
+	! grep -q test.a ev2.out
+'
+
+test_expect_success 'connector delivers owner event to guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		test test.end \
+                 "FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.a; \
+                  FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev3.out &&
+	grep -q test.a ev3.out
+'
+
+test_expect_success 'dispatcher delivers owner event to guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		test test.end \
+                "FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev4.out &&
+	grep -q test.a ev4.out
+'
+
+test_expect_success 'connector delivers guest event to other guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		test test.end \
+		"FLUX_HANDLE_USERID=42 \
+                 FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev5.out &&
+	grep -q test.a ev5.out
+'
+
+test_expect_success 'dispatcher suppresses guest event to other guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		test test.end \
+		"FLUX_HANDLE_USERID=42 \
+                 FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev6.out &&
+	! grep -q test.a ev6.out
+'
+
+test_expect_success 'connector delivers guest event to same guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		test test.end \
+		"FLUX_HANDLE_USERID=4294967295 \
+                 FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev7.out &&
+	grep -q test.a ev7.out
+'
+
+test_expect_success 'dispatcher suppresses guest event to same guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		test test.end \
+		"FLUX_HANDLE_USERID=4294967295 \
+                 FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
+                 FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev8.out &&
+	! grep -q test.a ev8.out
+'
+
+# kvs.setroot is a "private" event
+
+test_expect_success 'loaded kvs module' '
+	flux module load kvs
+'
+
+test_expect_success 'connector delivers kvs.setroot event to owner connection' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		kvs kvs.test.end \
+                "flux event pub kvs.test.a; \
+                 flux kvs put ev9=42; \
+                 flux event pub kvs.test.end" >ev9.out &&
+	grep -q kvs.setroot ev9.out
+'
+
+test_expect_success 'dispatcher delivers kvs.setroot event to owner connection' '
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+		kvs kvs.test.end \
+                "flux event pub kvs.test.a; \
+                 flux kvs put ev10=42; \
+                 flux event pub kvs.test.end" >ev10.out &&
+	grep -q kvs.setroot ev10.out
+'
+
+test_expect_success 'connector suppresses kvs.setroot event to guest connection' '
+	flux module debug --set 4 connector-local &&
+	run_timeout 5 \
+	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
+		kvs kvs.test.end \
+                "flux event pub kvs.test.a; \
+                 flux kvs put ev11=42; \
+                 flux event pub kvs.test.end" >ev11.out &&
+	! grep -q kvs.setroot ev11.out
+'
+
+test_expect_success 'unloaded kvs module' '
+	flux module remove kvs
+'
+
+test_expect_success 'flux content flush not allowed for guest user' '
+	! FLUX_HANDLE_ROLEMASK=0x2 flux content flush 2>content.flush.err &&
+	grep -q "Operation not permitted" content.flush.err
+'
+
+test_expect_success 'flux content load/store allowed for guest user' '
+	echo Hello >content.store.value &&
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux content store <content.store.value >content.store.ref &&
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux content load $(cat content.store.ref) >content.load.value &&
+	test_cmp content.store.value content.load.value
+'
+
 test_done

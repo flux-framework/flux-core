@@ -522,8 +522,8 @@ done:
 
 
 static struct flux_msg_handler_spec htab[] = {
-    //{ FLUX_MSGTYPE_EVENT,      "hb",               hb_cb },
-    { FLUX_MSGTYPE_REQUEST,   "aggregator.push",  push_cb },
+    //{ FLUX_MSGTYPE_EVENT,      "hb",               hb_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,   "aggregator.push",  push_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

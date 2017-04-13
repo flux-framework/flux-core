@@ -731,7 +731,7 @@ static struct attrmap attrmap[] = {
     { "FLUX_SEC_DIRECTORY",     "security.keydir",          1 },
 
     { "FLUX_URI",               "parent-uri",               0 },
-    { NULL, NULL },
+    { NULL, NULL, 0 },
 };
 
 static void init_attrs_from_environment (attr_t *attrs)
@@ -1750,16 +1750,16 @@ static int route_to_handle (const flux_msg_t *msg, void *arg)
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb,       },
-    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb,      },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb,       },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb,      },
-    { FLUX_MSGTYPE_REQUEST, "cmb.reparent",   cmb_reparent_cb,    },
-    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb,       },
-    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb,  },
-    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb,  },
-    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb,         },
-    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb,       },
+    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.reparent",   cmb_reparent_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

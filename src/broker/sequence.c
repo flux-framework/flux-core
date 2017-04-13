@@ -232,7 +232,7 @@ done:
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "seq.*",     sequence_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "seq.*",     sequence_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

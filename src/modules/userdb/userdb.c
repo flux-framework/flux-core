@@ -351,11 +351,11 @@ static void disconnect (flux_t *h, flux_msg_handler_t *w,
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "userdb.lookup", lookup},
-    { FLUX_MSGTYPE_REQUEST,  "userdb.addrole", addrole },
-    { FLUX_MSGTYPE_REQUEST,  "userdb.delrole", delrole },
-    { FLUX_MSGTYPE_REQUEST,  "userdb.getnext", getnext},
-    { FLUX_MSGTYPE_REQUEST,  "userdb.disconnect", disconnect},
+    { FLUX_MSGTYPE_REQUEST,  "userdb.lookup", lookup, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.addrole", addrole, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.delrole", delrole, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.getnext", getnext, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.disconnect", disconnect, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

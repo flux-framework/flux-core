@@ -37,7 +37,7 @@ PKG_PROG_PKG_CONFIG
 AC_PROG_CC_C99
 AM_PROG_CC_C_O
 if test "$GCC" = yes; then
-  GCCWARN="-Wall -Werror -Wno-strict-aliasing -Wno-error=deprecated-declarations"
+  GCCWARN="-Wall -Werror -Werror=missing-field-initializers -Wno-strict-aliasing -Wno-error=deprecated-declarations"
   AC_SUBST([GCCWARN])
 fi
 X_AC_ENABLE_SANITIZER

@@ -1454,6 +1454,8 @@ static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum)
         goto done;
     if (!(msg = flux_event_encode ("kvs.error", Jtostr (in))))
         goto done;
+    if (flux_msg_set_private (msg) < 0)
+        goto done;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
     rc = 0;
@@ -1527,6 +1529,8 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_object *names)
     if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
         goto done;
     if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
+        goto done;
+    if (flux_msg_set_private (msg) < 0)
         goto done;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
@@ -1628,22 +1632,22 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",        stats_get_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",      stats_clear_request_cb },
-    { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",      stats_clear_event_cb },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",          setroot_event_cb },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error",            error_event_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_request_cb },
-    { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",        dropcache_event_cb },
-    { FLUX_MSGTYPE_EVENT,   "hb",                   heartbeat_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.disconnect",       disconnect_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",          unwatch_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",            fence_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence",       relayfence_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",        stats_get_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",      stats_clear_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",      stats_clear_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",          setroot_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.error",            error_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",        dropcache_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "hb",                   heartbeat_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.disconnect",       disconnect_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",          unwatch_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.fence",            fence_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence",       relayfence_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

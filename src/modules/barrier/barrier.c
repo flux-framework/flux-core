@@ -327,9 +327,9 @@ static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "barrier.enter",       enter_request_cb },
-    { FLUX_MSGTYPE_REQUEST,     "barrier.disconnect",  disconnect_request_cb },
-    { FLUX_MSGTYPE_EVENT,       "barrier.exit",        exit_event_cb },
+    { FLUX_MSGTYPE_REQUEST,     "barrier.enter",       enter_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,     "barrier.disconnect",  disconnect_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,       "barrier.exit",        exit_event_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

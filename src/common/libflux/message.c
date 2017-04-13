@@ -400,6 +400,25 @@ static int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
     return 0;
 }
 
+int flux_msg_set_private (flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return -1;
+    if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_PRIVATE) < 0)
+        return -1;
+    return 0;
+}
+
+bool flux_msg_is_private (const flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return true;
+    return (flags & FLUX_MSGFLAG_PRIVATE) ? true : false;
+}
+
+
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
     zframe_t *zf = zmsg_last (msg->zmsg);

@@ -104,8 +104,8 @@ void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     "hb",              heartbeat_cb },
-    { FLUX_MSGTYPE_REQUEST,   "treduce.forward", forward_cb },
+    { FLUX_MSGTYPE_EVENT,     "hb",              heartbeat_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST,   "treduce.forward", forward_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

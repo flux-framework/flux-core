@@ -50,6 +50,7 @@
 enum {
     DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
     DEBUG_USERDB_ONESHOT = 2,   /* force userdb lookup of instance owner */
+    DEBUG_OWNERDROP_ONESHOT = 4,/* drop OWNER role to USER on next connection */
 };
 
 
@@ -223,8 +224,15 @@ static int client_authenticate (int fd, flux_t *h, uint32_t instance_owner,
     flux_log (h, LOG_INFO, "%s: uid=%d pid=%d allowed rolemask=0x%x",
               __FUNCTION__, ucred.uid, ucred.pid, lookup_rolemask);
 success_nolog:
-    *userid = ucred.uid;
-    *rolemask = lookup_rolemask;
+    if (debug_flags && (*debug_flags & DEBUG_OWNERDROP_ONESHOT)
+                    && (lookup_rolemask & FLUX_ROLE_OWNER)) {
+        *rolemask = FLUX_ROLE_USER;
+        *userid = FLUX_USERID_UNKNOWN;
+        *debug_flags &= ~DEBUG_OWNERDROP_ONESHOT;
+    } else {
+        *userid = ucred.uid;
+        *rolemask = lookup_rolemask;
+    }
     return 0;
 error:
     return -1;
@@ -747,6 +755,21 @@ error:
     flux_msg_destroy (msg);
 }
 
+/* Determine if message can be routed to client.
+ * If message is private, then limit access to instance owner and sender.
+ */
+static bool allowed_message (client_t *c, const flux_msg_t *msg)
+{
+    uint32_t userid;
+    if ((c->rolemask & FLUX_ROLE_OWNER))
+        return true;
+    if (!flux_msg_is_private (msg))
+        return true;
+    if (flux_msg_get_userid (msg, &userid) == 0 && userid == c->userid)
+        return true;
+    return false;
+}
+
 /* Received response message from broker.
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
@@ -777,7 +800,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *w,
     c = zlist_first (ctx->clients);
     while (c) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (client_send_nocopy (c, &cpy) < 0) { /* FIXME handle errors */
+            if (client_send_nocopy (c, &cpy) < 0 && allowed_message (c, msg)) {
                 int type = FLUX_MSGTYPE_ANY;
                 const char *topic = "unknown";
                 (void)flux_msg_get_type (msg, &type);
@@ -813,7 +836,7 @@ static void event_cb (flux_t *h, flux_msg_handler_t *w,
     }
     c = zlist_first (ctx->clients);
     while (c) {
-        if (client_is_subscribed (c, topic)) {
+        if (client_is_subscribed (c, topic) && allowed_message (c, msg)) {
             if (client_send (c, msg) < 0) { /* FIXME handle errors */
                 int type = FLUX_MSGTYPE_ANY;
                 const char *topic = "unknown";
@@ -904,8 +927,8 @@ error_close:
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     NULL,          event_cb },
-    { FLUX_MSGTYPE_RESPONSE,  NULL,          response_cb },
+    { FLUX_MSGTYPE_EVENT,     NULL, event_cb,    FLUX_ROLE_ALL, NULL },
+    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, FLUX_ROLE_ALL, NULL },
     FLUX_MSGHANDLER_TABLE_END
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
