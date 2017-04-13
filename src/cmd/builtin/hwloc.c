@@ -180,8 +180,12 @@ static int cmd_lstopo (optparse_t *p, int ac, char *av[])
 
     status = exec_lstopo (p, ac, av, hwloc_topo_topology (t));
     if (status) {
-        if (WIFEXITED (status) && WEXITSTATUS (status) != ENOENT)
-            log_msg_exit ("lstopo: Exited with %d", WEXITSTATUS (status));
+        if (WIFEXITED (status)) {
+            if (WEXITSTATUS (status) == ENOENT)
+                log_msg_exit ("Unable to find an lstopo variant to execute.");
+            else
+                log_msg_exit ("lstopo: Exited with %d", WEXITSTATUS (status));
+        }
         if (WIFSIGNALED (status) && WTERMSIG (status) != SIGPIPE)
             log_msg_exit ("lstopo: %s%s", strsignal (WTERMSIG (status)),
                       WCOREDUMP (status) ? " (core dumped)" : "");
