@@ -12,6 +12,8 @@ flux-hwloc - Control/query resource-hwloc service
 
 SYNOPSIS
 --------
+*flux* *hwloc* *info* ['OPTIONS']
+
 *flux* *hwloc* *lstopo* ['lstopo-OPTIONS']
 
 *flux* *hwloc* *reload* ['OPTIONS'] ['DIR']
@@ -33,6 +35,11 @@ COMMANDS
 
 *flux hwloc* requires a 'COMMAND' argument. The supported commands
 are
+
+*info*::
+Dump a short-form summary of the total number of Machines, Cores,
+and Processing Units (PUs) available across all flux-brokers
+in the current instance.
 
 *lstopo*::
 Run `lstopo(1)` against the full hardware hierarchy configured in the
