@@ -526,9 +526,14 @@ static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb, 0, NULL},
-    {FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb, 0, NULL},
-    FLUX_MSGHANDLER_TABLE_END};
+    { FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb,
+       0, NULL
+    },
+    { FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb,
+       FLUX_ROLE_USER, NULL
+    },
+    FLUX_MSGHANDLER_TABLE_END
+};
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
