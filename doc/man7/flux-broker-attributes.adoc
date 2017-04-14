@@ -80,17 +80,13 @@ distributed over the tree based overlay network.  Defaults to "tbon".
 SOCKET ATTRIBUTES
 -----------------
 
-tbon-parent-uri::
+tbon.parent-endpoint::
 The URI of the ZeroMQ endpoint this rank is connected to in the tree
 based overlay network.  This attribute will not be set on rank zero.
 
-tbon-request-uri::
-The URI of the ZeroMQ endpoint this rank is bound to in the tree
-based overlay network.
-
-snoop-uri::
-The URI of the ZeroMQ endpoint that flux-snoop(1) should connect
-to in order to receive copies of messages passing through the broker.
+mcast.relay-endpoint::
+The URI of the ZeroMQ endpoint this rank is bound to for relay of
+multicast messages if multiple ranks are spawned per node.
 
 local-uri::
 The Flux URI that should be passed to flux_open(1) to establish

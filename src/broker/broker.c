@@ -477,15 +477,9 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
+    if (attr_add_active (ctx.attrs, "tbon.parent-endpoint", 0,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "tbon-request-uri",
-                                FLUX_ATTRFLAG_IMMUTABLE,
-                                attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "event-uri",
-                                FLUX_ATTRFLAG_IMMUTABLE,
-                                attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "event-relay-uri",
+            || attr_add_active (ctx.attrs, "mcast.relay-endpoint",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active_uint32 (ctx.attrs, "rank", &ctx.rank,
@@ -1169,6 +1163,11 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
         goto done;
     }
 
+    if (attr_set (ctx->attrs, "tbon.endpoint", tbonendpoint, true) < 0) {
+        log_err ("tbon.endpoint could not be set");
+        goto done;
+    }
+
     overlay_set_child (ctx->overlay, tbonendpoint);
 
     if (attr_get (ctx->attrs, "mcast.endpoint", &attrmcastendpoint, NULL) < 0) {
@@ -1178,6 +1177,11 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
 
     if (!(mcastendpoint = calc_endpoint (ctx, attrmcastendpoint))) {
         log_msg ("calc_endpoint error");
+        goto done;
+    }
+
+    if (attr_set (ctx->attrs, "mcast.endpoint", mcastendpoint, true) < 0) {
+        log_err ("mcast.endpoint could not be set");
         goto done;
     }
 
@@ -1514,13 +1518,9 @@ static int attr_get_overlay (const char *name, const char **val, void *arg)
     overlay_t *overlay = arg;
     int rc = -1;
 
-    if (!strcmp (name, "tbon-parent-uri"))
+    if (!strcmp (name, "tbon.parent-endpoint"))
         *val = overlay_get_parent (overlay);
-    else if (!strcmp (name, "tbon-request-uri"))
-        *val = overlay_get_child (overlay);
-    else if (!strcmp (name, "event-uri"))
-        *val = overlay_get_event (overlay);
-    else if (!strcmp (name, "event-relay-uri"))
+    else if (!strcmp (name, "mcast.relay-endpoint"))
         *val = overlay_get_relay (overlay);
     else {
         errno = ENOENT;
