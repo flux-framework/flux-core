@@ -477,9 +477,9 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
+    if (attr_add_active (ctx.attrs, "tbon.parent-endpoint", 0,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "event-relay-uri",
+            || attr_add_active (ctx.attrs, "mcast.relay-endpoint",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active_uint32 (ctx.attrs, "rank", &ctx.rank,
@@ -1518,9 +1518,9 @@ static int attr_get_overlay (const char *name, const char **val, void *arg)
     overlay_t *overlay = arg;
     int rc = -1;
 
-    if (!strcmp (name, "tbon-parent-uri"))
+    if (!strcmp (name, "tbon.parent-endpoint"))
         *val = overlay_get_parent (overlay);
-    else if (!strcmp (name, "event-relay-uri"))
+    else if (!strcmp (name, "mcast.relay-endpoint"))
         *val = overlay_get_relay (overlay);
     else {
         errno = ENOENT;

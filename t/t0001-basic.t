@@ -130,6 +130,13 @@ test_expect_success 'tbon.endpoint with %B works' '
 test_expect_success 'tbon.endpoint fails on bad endpoint' '
 	! flux start -o,--setattr=tbon.endpoint='foo://bar' flux getattr tbon.endpoint
 '
+test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
+       ! flux start flux getattr tbon.parent-endpoint
+'
+test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
+       NUM=`flux start --size 4 flux wreckrun -N4 flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
+       test $NUM -eq 3
+'
 test_expect_success 'mcast.endpoint can be read' '
 	ATTR_VAL=`flux start flux getattr mcast.endpoint` &&
         echo $ATTR_VAL | grep "^tbon$"
@@ -141,6 +148,9 @@ test_expect_success 'mcast.endpoint works with ipc endpoints' '
 '
 test_expect_success 'mcast.endpoint fails on bad endpoint' '
 	! flux start -o,--setattr=mcast.endpoint='foo://bar' flux getattr mcast.endpoint
+'
+test_expect_success 'mcast.relay-endpoint not set by default' '
+       ! flux start flux getattr mcast.relay-endpoint
 '
 test_expect_success 'broker.rundir override works' '
 	RUNDIR=`mktemp -d` &&

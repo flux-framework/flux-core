@@ -80,11 +80,11 @@ distributed over the tree based overlay network.  Defaults to "tbon".
 SOCKET ATTRIBUTES
 -----------------
 
-tbon-parent-uri::
+tbon.parent-endpoint::
 The URI of the ZeroMQ endpoint this rank is connected to in the tree
 based overlay network.  This attribute will not be set on rank zero.
 
-event-relay-uri::
+mcast.relay-endpoint::
 The URI of the ZeroMQ endpoint this rank is bound to for relay of
 multicast messages if multiple ranks are spawned per node.
 
