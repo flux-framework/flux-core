@@ -96,10 +96,6 @@ event-relay-uri::
 The URI of the ZeroMQ endpoint this rank is bound to for relay of
 multicast messages if multiple ranks are spawned per node.
 
-snoop-uri::
-The URI of the ZeroMQ endpoint that flux-snoop(1) should connect
-to in order to receive copies of messages passing through the broker.
-
 local-uri::
 The Flux URI that should be passed to flux_open(1) to establish
 a connection to the local broker rank.
