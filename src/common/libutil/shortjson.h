@@ -77,6 +77,17 @@ Jadd_double (json_object *o, const char *name, double d)
     json_object_object_add (o, (char *)name, n);
 }
 
+/* Add integer to JSON.
+ */
+static __inline__ void
+Jadd_int64 (JSON o, const char *name, int64_t ip)
+{
+    JSON n = json_object_new_int64 (ip);
+    if (!n)
+      oom ();
+    json_object_object_add (o, (char*)name, n);
+}
+
 /* Add string to JSON (caller retains ownership of original).
  */
 static __inline__ void
