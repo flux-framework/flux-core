@@ -70,6 +70,9 @@
 static void
 select_modify (EV_P_ int fd, int oev, int nev)
 {
+  int check_ev_read = 1;
+  int check_ev_write = 1;
+
   if (oev == nev)
     return;
 
@@ -88,20 +91,24 @@ select_modify (EV_P_ int fd, int oev, int nev)
      * which eventually leads to overflows). Need to call it only on changes.
      */
     #if EV_SELECT_IS_WINSOCKET
-    if ((oev ^ nev) & EV_READ)
+    check_ev_read = ((oev ^ nev) & EV_READ);
     #endif
+    if(check_ev_read){
       if (nev & EV_READ)
         FD_SET (handle, (fd_set *)vec_ri);
       else
         FD_CLR (handle, (fd_set *)vec_ri);
+    }
 
     #if EV_SELECT_IS_WINSOCKET
-    if ((oev ^ nev) & EV_WRITE)
+    check_ev_write = ((oev ^ nev) & EV_WRITE);
     #endif
+    if(check_ev_write){
       if (nev & EV_WRITE)
         FD_SET (handle, (fd_set *)vec_wi);
       else
         FD_CLR (handle, (fd_set *)vec_wi);
+    }
 
 #else
 
@@ -313,4 +320,3 @@ select_destroy (EV_P)
   ev_free (vec_eo);
   #endif
 }
-
