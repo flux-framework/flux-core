@@ -14,6 +14,7 @@ shopt -u nullglob
 
 if PERSISTDIR=$(flux getattr persist-directory 2>/dev/null); then
     flux wreck ls >${PERSISTDIR}/joblog 2>/dev/null || :
+    flux kvs-getroot >${PERSISTDIR}/kvsroot 2>/dev/null || :
 fi
 
 flux module remove -r 0 userdb

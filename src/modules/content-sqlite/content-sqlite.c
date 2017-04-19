@@ -40,7 +40,7 @@
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
 
-const char *sql_create_table = "CREATE TABLE objects("
+const char *sql_create_table = "CREATE TABLE if not exists objects("
                                "  hash CHAR(20) PRIMARY KEY,"
                                "  size INT,"
                                "  object BLOB"
@@ -170,7 +170,7 @@ static sqlite_ctx_t *getctx (flux_t *h)
             cleanup = true;
         }
         ctx->dbdir = xasprintf ("%s/content", dir);
-        if (mkdir (ctx->dbdir, 0755) < 0) {
+        if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
             saved_errno = errno;
             flux_log_error (h, "mkdir %s", ctx->dbdir);
             goto error;

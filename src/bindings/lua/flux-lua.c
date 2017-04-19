@@ -549,22 +549,25 @@ static int l_flux_rpc (lua_State *L)
     json_object *resp = NULL;
     int nodeid;
 
-    if (lua_value_to_json (L, 3, &o) < 0)
-        return lua_pusherror (L, "JSON conversion error");
-
+    if (lua_gettop (L) >= 3) {
+        if (lua_value_to_json (L, 3, &o) < 0)
+            return lua_pusherror (L, "JSON conversion error");
+    }
     if (lua_gettop (L) > 3)
         nodeid = lua_tonumber (L, 4);
     else
         nodeid = FLUX_NODEID_ANY;
 
-    if (tag == NULL || o == NULL)
+    if (tag == NULL)
         return lua_pusherror (L, "Invalid args");
 
     if (flux_json_rpc (f, nodeid, tag, o, &resp) < 0) {
-        json_object_put (o);
+        if (o)
+            json_object_put (o);
         return lua_pusherror (L, (char *)flux_strerror (errno));
     }
-    json_object_put (o);
+    if (o)
+        json_object_put (o);
     json_object_to_lua (L, resp);
     json_object_put (resp);
     return (1);
