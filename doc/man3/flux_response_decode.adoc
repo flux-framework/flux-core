@@ -1,0 +1,75 @@
+flux_response_decode(3)
+=======================
+:doctype: manpage
+
+
+NAME
+----
+flux_response_decode, flux_response_decode_raw - decode a Flux response message
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ int flux_response_decode (const flux_msg_t *msg,
+                           const char **topic,
+                           const char **json_str);
+
+ int flux_response_decode_raw (const flux_msg_t *msg,
+                               const char **topic,
+                               void *data, int *len);
+
+DESCRIPTION
+-----------
+
+`flux_response_decode()` decodes a response message _msg_.
+
+_topic_, if non-NULL, will be set to the message's topic string. The
+storage for this string belongs to _msg_ and should not be freed.
+
+_json_str_, if non-NULL, will be set to the message's JSON payload.
+If no payload exists, _json_str_ is set to NULL.  The storage for this
+string belongs to _msg_ and should not be freed.
+
+`flux_response_decode_raw()` decodes a response message with a raw payload,
+setting _data_ and _len_ to the payload data and length. The storage for
+the raw payload belongs to _msg_ and should not be freed.
+
+
+RETURN VALUE
+------------
+
+These functions return 0 on success.  On error, -1 is returned, and
+errno is set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+The _msg_ argument was NULL.
+
+EPROTO::
+Message decoding failed, such as due to incorrect message type,
+missing topic string, etc..
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_request_encode(3), flux_rpc(3)

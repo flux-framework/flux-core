@@ -1,0 +1,66 @@
+flux_request_encode(3)
+======================
+:doctype: manpage
+
+
+NAME
+----
+flux_request_encode, flux_request_encode_raw - encode a Flux request message
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_msg_t *flux_request_encode (const char *topic,
+                                  const char *json_str);
+
+ flux_msg_t *flux_request_encode_raw (const char *topic,
+                                      void *data, int *len);
+
+DESCRIPTION
+-----------
+
+`flux_request_encode()` encodes a request message with topic string
+_topic_ and optional JSON payload _json_str_.  The newly constructed
+message that is returned must be destroyed with `flux_msg_destroy()`.
+
+`flux_request_encode_raw()` encodes a request message with topic
+string _topic_.  If _data_ is non-NULL assign the raw payload.
+
+
+RETURN VALUE
+------------
+
+These functions return a message on success.  On error, NULL is
+returned, and errno is set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+The _topic_ argument was NULL or _json_str_ is not a json object.
+
+ENOMEM::
+Memory was unavailable.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_response_decode(3), flux_rpc(3)
