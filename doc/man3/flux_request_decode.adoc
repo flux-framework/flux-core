@@ -63,8 +63,8 @@ EINVAL::
 The _msg_ argument was NULL.
 
 EPROTO::
-Message decoding failed, such as due to missing or unexpected payload,
-incorrect message type, missing topic string, etc..
+Message decoding failed, such as due to incorrect message type,
+missing topic string, etc..
 
 
 AUTHOR

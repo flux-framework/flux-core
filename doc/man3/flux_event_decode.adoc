@@ -33,7 +33,7 @@ DESCRIPTION
 
 `flux_event_decode()` decodes a Flux event message _msg_.
 
-_topic_, if non-NULL, will be set the message's topic string. The storage
+_topic_, if non-NULL, will be set to the message's topic string. The storage
 for this string belongs to _msg_ and should not be freed.
 
 _json_str_, if non-NULL, will be set to the message's JSON payload. If
@@ -83,8 +83,8 @@ ENOMEM::
 Memory was unavailable.
 
 EPROTO::
-Message decoding failed, such as due to missing or unexpected payload,
-incorrect message type, missing topic string, etc..
+Message decoding failed, such as due to incorrect message type,
+missing topic string, etc..
 
 
 AUTHOR
