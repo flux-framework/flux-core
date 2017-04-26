@@ -607,7 +607,7 @@ int main (int argc, char *argv[])
         log_err_exit ("exec_initialize");
     if (ping_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("ping_initialize");
-    if (rusage_initialize (ctx.h) < 0)
+    if (rusage_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("rusage_initialize");
 
     broker_add_services (&ctx);

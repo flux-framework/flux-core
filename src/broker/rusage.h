@@ -3,7 +3,7 @@
 
 #include <flux/core.h>
 
-int rusage_initialize (flux_t *h);
+int rusage_initialize (flux_t *h, const char *service);
 
 #endif /* BROKER_RUSAGE_H */
 

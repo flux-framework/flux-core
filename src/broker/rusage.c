@@ -25,8 +25,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <time.h>
+#include <sys/resource.h>
 #include <flux/core.h>
-#include <src/common/libutil/getrusage_json.h>
 #include <src/common/libutil/shortjson.h>
 #include "rusage.h"
 
@@ -34,6 +35,35 @@ struct rusage_context {
     flux_msg_handler_t *w;
 };
 
+static int getrusage_json (int who, json_object **op)
+{
+    struct rusage ru;
+    json_object *o;
+
+    if (getrusage (who, &ru) < 0)
+        return -1;
+    o = Jnew ();
+    Jadd_double (o, "utime",
+            (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec);
+    Jadd_double (o, "stime",
+            (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec);
+    Jadd_int64 (o, "maxrss",        ru.ru_maxrss);
+    Jadd_int64 (o, "ixrss",         ru.ru_ixrss);
+    Jadd_int64 (o, "idrss",         ru.ru_idrss);
+    Jadd_int64 (o, "isrss",         ru.ru_isrss);
+    Jadd_int64 (o, "minflt",        ru.ru_minflt);
+    Jadd_int64 (o, "majflt",        ru.ru_majflt);
+    Jadd_int64 (o, "nswap",         ru.ru_nswap);
+    Jadd_int64 (o, "inblock",       ru.ru_inblock);
+    Jadd_int64 (o, "oublock",       ru.ru_oublock);
+    Jadd_int64 (o, "msgsnd",        ru.ru_msgsnd);
+    Jadd_int64 (o, "msgrcv",        ru.ru_msgrcv);
+    Jadd_int64 (o, "nsignals",      ru.ru_nsignals);
+    Jadd_int64 (o, "nvcsw",         ru.ru_nvcsw);
+    Jadd_int64 (o, "nivcsw",        ru.ru_nivcsw);
+    *op = o;
+    return 0;
+}
 
 static void rusage_request_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg)
@@ -59,7 +89,7 @@ static void rusage_finalize (void *arg)
     free (r);
 }
 
-int rusage_initialize (flux_t *h)
+int rusage_initialize (flux_t *h, const char *service)
 {
     struct flux_match match = FLUX_MATCH_ANY;
     struct rusage_context *r = calloc (1, sizeof (*r));
@@ -68,7 +98,10 @@ int rusage_initialize (flux_t *h)
         goto error;
     }
     match.typemask = FLUX_MSGTYPE_REQUEST;
-    match.topic_glob = "cmb.rusage";
+    if (asprintf (&match.topic_glob, "%s.rusage", service) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (!(r->w = flux_msg_handler_create (h, match, rusage_request_cb, r)))
         goto error;
     flux_msg_handler_start (r->w);
@@ -76,6 +109,7 @@ int rusage_initialize (flux_t *h)
     return 0;
 error:
     if (r) {
+        free (match.topic_glob);
         flux_msg_handler_stop (r->w);
         flux_msg_handler_destroy (r->w);
         free (r);

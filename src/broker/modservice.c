@@ -44,12 +44,12 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/getrusage_json.h"
 #include "src/common/libutil/xzmalloc.h"
 
 #include "module.h"
 #include "modservice.h"
 #include "ping.h"
+#include "rusage.h"
 
 typedef struct {
     flux_t *h;
@@ -117,22 +117,6 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
     flux_clr_msgcounters (h);
     if (flux_respond (h, msg, 0, NULL) < 0)
         FLUX_LOG_ERROR (h);
-}
-
-static void rusage_cb (flux_t *h, flux_msg_handler_t *w,
-                       const flux_msg_t *msg, void *arg)
-{
-    json_object *out = NULL;
-    int rc = -1;
-
-    if (getrusage_json (RUSAGE_THREAD, &out) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
-        FLUX_LOG_ERROR (h);
-    Jput (out);
 }
 
 static void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
@@ -244,11 +228,12 @@ void modservice_register (flux_t *h, module_t *p)
     register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER);
     register_request (ctx, "stats.get", stats_get_cb, FLUX_ROLE_ALL);
     register_request (ctx, "stats.clear", stats_clear_request_cb, FLUX_ROLE_OWNER);
-    register_request (ctx, "rusage", rusage_cb, FLUX_ROLE_ALL);
     register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER);
 
     if (ping_initialize (h, module_get_name (ctx->p)) < 0)
         log_err_exit ("ping_initialize");
+    if (rusage_initialize (h, module_get_name (ctx->p)) < 0)
+        log_err_exit ("rusage_initialize");
 
     register_event   (ctx, "stats.clear", stats_clear_event_cb);
 
