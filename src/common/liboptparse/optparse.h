@@ -56,6 +56,7 @@ typedef enum {
     OPTPARSE_PRINT_SUBCMDS,/* Print all subcommands in --help (default = T  */
     OPTPARSE_SUBCMD_NOOPTS,/* Don't parse options for this subcommand       */
     OPTPARSE_SUBCMD_HIDE,  /* Don't output this subcmd in --help output     */
+    OPTPARSE_POSIXLY_CORRECT, /* Set POSIXLY_CORRECT value                  */
 } optparse_item_t;
 
 /*

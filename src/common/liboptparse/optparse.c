@@ -68,6 +68,7 @@ struct opt_parser {
     unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
     unsigned int   hidden:1;        /* If subcmd, skip in --help output     */
+    unsigned int   posixly_correct:1; /* Value of GNU getopt posixly correct*/
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -698,6 +699,7 @@ optparse_t *optparse_create (const char *prog)
     p->left_margin = 2;
     p->option_width = 25;
     p->option_index = -1;
+    p->posixly_correct = 1;
 
     /*
      *  Register -h, --help
@@ -1049,6 +1051,10 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
         n = va_arg (vargs, int);
         p->hidden = n;
         break;
+    case OPTPARSE_POSIXLY_CORRECT:
+        n = va_arg (vargs, int);
+        p->posixly_correct = n;
+        break;
     default:
         e = OPTPARSE_BAD_ARG;
     }
@@ -1268,7 +1274,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     memset (&d, 0, sizeof (d));
 
-    while ((c = getopt_long_r (argc, argv, optstring, optz, &li, &d, 1)) >= 0) {
+    while ((c = getopt_long_r (argc, argv, optstring, optz,
+                               &li, &d, p->posixly_correct)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == '?') {
