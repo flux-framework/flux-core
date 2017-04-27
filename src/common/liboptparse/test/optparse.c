@@ -1055,6 +1055,20 @@ void test_non_option_arguments (void)
     ok (optparse_getopt (p, "test", NULL) == 0,
         "didn't process --test=foo (expected 0 got %d)",
         optparse_getopt (p, "test", NULL));
+
+    /* Test OPTPARSE_POSIXLY_CORRECT */
+    optparse_reset (p);
+    e = optparse_set (p, OPTPARSE_POSIXLY_CORRECT, 0);
+    ok (optparse_parse_args (p, ac, av4) != -1,
+        "!posixly_correct: optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 2,
+        "!posixly_correct: argv elements are permuted");
+    is (av4[1], "--test=foo",
+        "!posixly_correct: argv[1] is now --test=foo");
+    is (av4[2], "1234",
+        "!posixly_correct: argv[2] is now non-option arg (1234)");
+
     optparse_destroy (p);
 }
 
@@ -1062,7 +1076,7 @@ void test_non_option_arguments (void)
 int main (int argc, char *argv[])
 {
 
-    plan (241);
+    plan (245);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
@@ -1075,7 +1089,7 @@ int main (int argc, char *argv[])
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
     test_reset (); /* 9 tests */
-    test_non_option_arguments (); /* 9 tests */
+    test_non_option_arguments (); /* 13 tests */
 
     done_testing ();
     return (0);
