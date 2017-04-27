@@ -39,7 +39,6 @@
 #include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/base64_json.h"
 #include "src/modules/libkz/kz.h"
 #include "src/common/libsubprocess/zio.h"
 
@@ -1153,6 +1152,8 @@ static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
     int t;
     struct l_flux_ref *iow = arg;
     lua_State *L = iow->L;
+    uint8_t *pp = NULL;
+    int len;
 
     assert (L != NULL);
     lua_settop (L, 0); /* XXX: Reset lua stack so we don't overflow */
@@ -1167,17 +1168,11 @@ static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
-
-    if (json_str && (o = json_tokener_parse (json_str))) {
-        int len;
-        uint8_t *pp = NULL;
-        base64_json_decode (Jobj_get (o, "data"), &pp, &len);
-        if (pp && len > 0) {
-            json_object *s = json_object_new_string ((char *)pp);
-            json_object_object_add (o, "data", s);
-        }
-        if (pp)
-            free (pp);
+    if ((len = zio_json_decode (json_str, (void**)&pp, NULL)) >= 0) {
+        o = Jfromstr (json_str);
+        if (len > 0)
+            Jadd_str (o, "data", (const char *)pp);
+        free (pp);
         json_object_to_lua (L, o);
     }
 
