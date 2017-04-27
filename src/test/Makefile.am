@@ -20,10 +20,6 @@ noinst_SCRIPTS = \
 	valgrind-workload.sh \
 	relnotes.sh
 
-if HAVE_MPI
-SUBDIRS = kap
-endif
-
 LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
 	$(top_builddir)/src/common/libflux-internal.la \
