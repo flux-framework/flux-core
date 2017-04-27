@@ -1110,11 +1110,10 @@ void *optparse_get_data (optparse_t *p, const char *s)
 
 static char * optstring_create ()
 {
-    char *optstring = malloc (2);
+    char *optstring = malloc (1);
     if (optstring == NULL)
         return (NULL);
-    optstring[0] = '+';
-    optstring[1] = '\0';
+    optstring[0] = '\0';
     return (optstring);
 }
 
@@ -1248,10 +1247,10 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
  */
 static int getopt_long_r (int argc, char *const *argv, const char *options,
                 const struct option *long_options, int *opt_index,
-                struct _getopt_data *d)
+                struct _getopt_data *d, int posixly_correct)
 {
   return _getopt_internal_r (argc, argv, options, long_options, opt_index,
-                             0, d, 0);
+                             0, d, posixly_correct);
 }
 
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
@@ -1269,7 +1268,7 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     memset (&d, 0, sizeof (d));
 
-    while ((c = getopt_long_r (argc, argv, optstring, optz, &li, &d)) >= 0) {
+    while ((c = getopt_long_r (argc, argv, optstring, optz, &li, &d, 1)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == '?') {
