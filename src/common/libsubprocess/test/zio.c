@@ -102,6 +102,61 @@ int close_writer (zio_t *z, void *arg)
     return 0;
 }
 
+void test_encode (void)
+{
+    int rlen;
+    char *r;
+    char p[] = "abcdefghijklmnop";
+    char q[] = "";
+    bool eof;
+
+    char *json = zio_json_encode (p, strlen (p), false);
+    if (!json)
+        BAIL_OUT ("zio_json_encode failed");
+    ok (json != NULL,
+        "zio_json_encode works");
+    diag ("%s", json);
+    r = NULL;
+    eof = true;
+    rlen = zio_json_decode (json, (void **)&r, &eof);
+    ok (rlen == strlen (p) && r != NULL && strcmp (r, p) == 0 && eof == false,
+        "zio_json_decode worked");
+    free (r);
+
+    eof = true;
+    rlen = zio_json_decode (json, NULL, &eof);
+    ok (rlen == 0 && eof == false,
+        "zio_json_decode worked with NULL data return arg");
+
+    free (json);
+
+    json = zio_json_encode (q, strlen (q), true);
+    if (!json)
+        BAIL_OUT ("zio_json_encode failed");
+    ok (json != NULL,
+        "zio_json_encode works on zero length data");
+    diag ("%s", json);
+    r = NULL;
+    eof = false;
+    rlen = zio_json_decode (json, (void **)&r, &eof);
+    ok (rlen == strlen (q) && r != NULL && strcmp (r, q) == 0 && eof == true,
+        "zio_json_decode worked");
+    free (r);
+
+    free (json);
+
+    json = zio_json_encode (NULL, 0, true);
+    if (!json)
+        BAIL_OUT ("zio_json_encode failed");
+    ok (json != NULL,
+        "zio_json_encode works on NULL data");
+    diag ("%s", json);
+    rlen = zio_json_decode (json, (void **)&r, NULL);
+    ok (rlen == 0 && r != NULL && strcmp (r, q) == 0,
+        "zio_json_decode returned empty string");
+    free (r);
+}
+
 int main (int argc, char **argv)
 {
     zio_t *zio;
@@ -115,6 +170,8 @@ int main (int argc, char **argv)
     memset (&c, 0, sizeof (c));
 
     plan (NO_PLAN);
+
+    test_encode ();
 
     ok ((r = flux_reactor_create (0)) != NULL,
         "flux reactor created");
