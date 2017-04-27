@@ -170,17 +170,6 @@ Jget_obj (json_object *o, const char *name, json_object **op)
     return (n != NULL);
 }
 
-/* Get boolean from JSON.
- */
-static __inline__ bool
-Jget_bool (json_object *o, const char *name, bool *bp)
-{
-    json_object *n = Jobj_get (o, name);
-    if (n && bp)
-        *bp = json_object_get_boolean (n);
-    return (n != NULL);
-}
-
 /* Create new JSON array.
  */
 static __inline__ json_object *
