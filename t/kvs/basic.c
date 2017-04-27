@@ -33,7 +33,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/base64_json.h"
+#include "src/common/libutil/base64.h"
 #include "src/common/libutil/readall.h"
 
 
@@ -468,21 +468,27 @@ void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
             log_err_exit ("%s", file);
         (void)close (fd);
     }
+    int s_len = base64_encode_length (len);
+    char *s_buf = xzmalloc (s_len);
+    if (base64_encode_block (s_buf, &s_len, buf, len) < 0)
+        log_err_exit ("base64_encode_block error");
     o = Jnew ();
-    json_object_object_add (o, "data", base64_json_encode (buf, len));
+    Jadd_str (o, "data", s_buf);
     if (kvs_put (h, key, Jtostr (o)) < 0)
         log_err_exit ("%s", key);
     if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     Jput (o);
     free (buf);
+    free (s_buf);
 }
 
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
 {
     char *file, *key;
-    int fd, len;
+    int fd, len, s_len;
     uint8_t *buf;
+    const char *s_buf;
     json_object *o;
     char *json_str;
 
@@ -494,8 +500,13 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
         log_err_exit ("%s", key);
     if (!(o = Jfromstr (json_str)))
         log_msg_exit ("%s: invalid JSON", key);
-    if (base64_json_decode (Jobj_get (o, "data"), &buf, &len) < 0)
-        log_err_exit ("%s: decode error", key);
+    if (!Jget_str (o, "data", &s_buf))
+        log_msg_exit ("%s: JSON decode error", key);
+    s_len = strlen (s_buf);
+    len = base64_decode_length (s_len);
+    buf = xzmalloc (len);
+    if (base64_decode_block (buf, &len, s_buf, s_len) < 0)
+        log_err_exit ("%s: base64 decode error", key);
     if (!strcmp (file, "-")) {
         if (write_all (STDOUT_FILENO, buf, len) < 0)
             log_err_exit ("stdout");
