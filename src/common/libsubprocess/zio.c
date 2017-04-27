@@ -28,13 +28,13 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
+#include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/liblsd/cbuf.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/base64_json.h"
+#include "src/common/libutil/base64.h"
 
 #include "zio.h"
 
@@ -977,56 +977,83 @@ int zio_dst_fd (zio_t *zio)
 
 int zio_json_decode (const char *json_str, void **pp, bool *eofp)
 {
-    int len, rc = -1;
-    json_object *o = NULL;
+    json_t *o = NULL;
+    const char *s_data;
+    int s_len, len = 0;
+    void *data = NULL;
+    int eof = 0;
 
-    if (json_str && (o = json_tokener_parse (json_str))) {
-        if (Jget_bool (o, "eof", eofp))
-            rc = 0;
-        else
-            *eofp = false;
-        if (base64_json_decode (Jobj_get (o, "data"),
-                                (uint8_t **) pp, &len) == 0)
-            rc = len;
+    if (!json_str || !(o = json_loads (json_str, 0, NULL))
+                  || json_unpack (o, "{s:b s:s}", "eof", &eof,
+                                                  "data", &s_data) < 0) {
+        errno = EPROTO;
+        goto error;
     }
-    if (o)
-        json_object_put (o);
-    return rc;
+    if (pp) {
+        s_len = strlen (s_data);
+        len = base64_decode_length (s_len);
+        data = calloc (1, len);
+        if (!data) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (base64_decode_block (data, &len, s_data, s_len) < 0) {
+            errno = EPROTO;
+            goto error;
+        }
+        *pp = data;
+    }
+    if (eofp) {
+        *eofp = eof;
+    }
+    json_decref (o);
+    return len;
+error:
+    json_decref (o);
+    free (data);
+    return -1;
 }
 
-char *zio_json_encode (void *p, int len, bool eof)
+char *zio_json_encode (void *data, int len, bool eof)
 {
-    json_object *o;
     char *json_str = NULL;
+    char *s_data = NULL;
+    json_t *o = NULL;
+    int s_len;
 
-    if (!(o = json_object_new_object ())) {
+    s_len = base64_encode_length (len);
+    s_data = calloc (1, s_len);
+    if (!s_data) {
         errno = ENOMEM;
-        goto done;
+        goto error;
     }
-    if (len && p)
-        json_object_object_add (o, "data",
-                                base64_json_encode ((uint8_t *) p, len));
-    if (eof)
-        Jadd_bool (o, "eof", 1);
-    if (!(json_str = strdup (json_object_to_json_string (o)))) {
+    if (base64_encode_block (s_data, &s_len, data, len) < 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(o = json_pack ("{s:b s:s}", "eof", eof, "data", s_data))) {
         errno = ENOMEM;
-        goto done;
+        goto error;
     }
-done:
-    if (o)
-        json_object_put (o);
-    return (json_str);
+    if (!(json_str = json_dumps (o, 0))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    free (s_data);
+    json_decref (o);
+    return json_str;
+error:
+    free (s_data);
+    json_decref (o);
+    return NULL;
 }
 
 bool zio_json_eof (const char *json_str)
 {
-    bool eof = false;
-    json_object *o;
+    bool eof;
 
-    if ((o = json_tokener_parse (json_str)))
-        (void)Jget_bool (o, "eof", &eof);
-    if (o)
-        json_object_put (o);
+    if (zio_json_decode (json_str, NULL, &eof) < 0)
+        return false;
     return eof;
 }
 
