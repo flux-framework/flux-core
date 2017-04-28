@@ -33,7 +33,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/base64_json.h"
 #include "src/common/libutil/readall.h"
 
 int cmd_get (optparse_t *p, int argc, char **argv);

@@ -287,7 +287,6 @@ AC_CONFIG_FILES( \
   src/modules/pymod/Makefile \
   src/modules/userdb/Makefile \
   src/test/Makefile \
-  src/test/kap/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
   etc/flux-pmi.pc \

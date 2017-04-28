@@ -19,10 +19,6 @@ libutil_la_SOURCES = \
 	log.h \
 	xzmalloc.c \
 	xzmalloc.h \
-	base64_json.c \
-	base64_json.h \
-	getrusage_json.c \
-	getrusage_json.h \
 	monotime.c \
 	monotime.h \
 	setenvf.c \
@@ -85,7 +81,6 @@ TESTS = test_nodeset.t \
 	test_ev.t \
 	test_coproc.t \
 	test_base64.t \
-	test_encode.t \
 	test_msglist.t \
 	test_sha1.t \
 	test_sha256.t \
@@ -134,10 +129,6 @@ test_coproc_t_LDADD = $(test_ldadd)
 test_base64_t_SOURCES = test/base64_test.c
 test_base64_t_CPPFLAGS = $(test_cppflags)
 test_base64_t_LDADD = $(test_ldadd)
-
-test_encode_t_SOURCES = test/encode.c
-test_encode_t_CPPFLAGS = $(test_cppflags)
-test_encode_t_LDADD = $(test_ldadd)
 
 test_msglist_t_SOURCES = test/msglist.c
 test_msglist_t_CPPFLAGS = $(test_cppflags)

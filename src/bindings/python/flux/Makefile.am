@@ -97,7 +97,6 @@ fluxpy_PYTHON=\
 	      constants.py\
 	      jsc.py\
 	      kz.py\
-	      command_helpers.py\
 	      sec.py
 
 .PHONY: lib-copy clean-local-check
