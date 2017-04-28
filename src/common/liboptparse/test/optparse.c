@@ -994,10 +994,75 @@ void test_reset (void)
     optparse_destroy (p);
 }
 
+/*
+ *  Test for posixly-correct behavior of stopping at first non-option argument.
+ */
+void test_non_option_arguments (void)
+{
+    optparse_err_t e;
+    struct optparse_option opts [] = {
+        { .name = "test",
+          .key  = 't',
+          .has_arg = 1,
+          .arginfo = "S",
+          .usage = "test option"
+        },
+        OPTPARSE_TABLE_END,
+    };
+    optparse_t *p = optparse_create ("non-option-arg");
+    char *av[] = { "non-option-arg", "--test=foo", "--", "baz", NULL };
+    int ac = sizeof (av) / sizeof (*av) - 1;
+    int optindex;
+
+    ok (p != NULL, "optparse_create");
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    ok (optparse_parse_args (p, ac, av) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 3, "post parse optindex points after '--'");
+
+    optparse_reset (p);
+    char *av2[] = { "non-option-arg", "foo", "bar", NULL };
+    ac = sizeof (av2) / sizeof (*av2) - 1;
+    ok (optparse_parse_args (p, ac, av2) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 1, "argv with no options, optindex is 1");
+
+#if 0
+    // XXX: Can't stop processing at arguments that *look* like an option,
+    //  as this is detected as "unknown option" error. Possibly a flag could
+    //  be added to optparse object to better handle this case? As of now
+    //  there's no need however.
+    //
+    optparse_reset (p);
+    char *av3[] = { "non-option-arg", "-1234", NULL };
+    ac = sizeof (av3) / sizeof (*av3) - 1;
+    ok (optparse_parse_args (p, ac, av3) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 1,
+        "argv with non-option arg starting with '-', optindex should be 1");
+#endif
+
+    optparse_reset (p);
+    char *av4[] = { "non-option-arg", "1234", "--test=foo", NULL };
+    ac = sizeof (av4) / sizeof (*av4) - 1;
+    ok (optparse_parse_args (p, ac, av4) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 1,
+        "argv stops processing at non-option even with real options follow");
+    ok (optparse_getopt (p, "test", NULL) == 0,
+        "didn't process --test=foo (expected 0 got %d)",
+        optparse_getopt (p, "test", NULL));
+    optparse_destroy (p);
+}
+
+
 int main (int argc, char *argv[])
 {
 
-    plan (232);
+    plan (241);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
@@ -1010,6 +1075,7 @@ int main (int argc, char *argv[])
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
     test_reset (); /* 9 tests */
+    test_non_option_arguments (); /* 9 tests */
 
     done_testing ();
     return (0);
