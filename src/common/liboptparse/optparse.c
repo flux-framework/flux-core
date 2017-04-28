@@ -1372,5 +1372,53 @@ int optparse_option_index (optparse_t *p)
 }
 
 /*
+ *  Reset one optparse_t object -- set option_index to zero and
+ *   reset and free option arguments, etc.
+ */
+static void optparse_reset_one (optparse_t *p)
+{
+    struct option_info *o;
+    ListIterator i;
+
+    if (!p)
+        return;
+
+    p->option_index = -1;
+
+    if (!p->option_list || !list_count (p->option_list))
+        return;
+
+    i = list_iterator_create (p->option_list);
+    while ((o = list_next (i))) {
+        if (o->isdoc)
+            continue;
+        o->found = 0;
+        if (o->optargs) {
+            list_destroy (o->optargs);
+            o->optargs = NULL;
+        }
+        o->optarg = NULL;
+    }
+    list_iterator_destroy (i);
+    return;
+}
+
+void optparse_reset (optparse_t *p)
+{
+    zlist_t *cmds = subcmd_list_sorted (p);
+
+    if ((cmds = subcmd_list_sorted (p))) {
+        const char *cmd = zlist_first (cmds);
+        while (cmd) {
+            optparse_t *o = zhash_lookup (p->subcommands, cmd);
+            optparse_reset_one (o);
+            cmd = zlist_next (cmds);
+        }
+        zlist_destroy (&cmds);
+    }
+    optparse_reset_one (p);
+}
+
+/*
  * vi: ts=4 sw=4 expandtab
  */

@@ -198,6 +198,13 @@ optparse_err_t optparse_reg_subcommands (optparse_t *p,
 void optparse_destroy (optparse_t *p);
 
 /*
+ *   Reset option processing for optparse object [p]. Forget all previous
+ *    options processed and their arguments. Useful to restart option
+ *    processing or parse a new argument vector.
+ */
+void optparse_reset (optparse_t *p);
+
+/*
  *   Register the option [o] with the program options object [p].
  *
  *   Returns OPTPARSE_SUCCESS if the option was successfully registered
