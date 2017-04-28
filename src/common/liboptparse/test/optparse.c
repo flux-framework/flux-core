@@ -926,10 +926,78 @@ void test_corner_case (void)
     optparse_destroy (p);
 }
 
+void test_reset (void)
+{
+    optparse_err_t e;
+    int called = 0;
+    int n;
+    optparse_t *p, *q;
+
+    p = optparse_create ("test");
+
+    ok (p != NULL, "optparse_create");
+    q = optparse_add_subcommand (p, "one", subcmd_one);
+    ok (q != NULL, "optparse_add_subcommand (subcmd_one)");
+    optparse_set_data (q, "called", &called);
+    ok (optparse_get_data (q, "called") == &called, "optparse_set_data ()");
+
+    // Add option to command
+    e = optparse_add_option (p, &(struct optparse_option) {
+          .name = "test", .key = 't', .has_arg = 1,
+          .arginfo = "N",
+          .usage = "Test option with numeric argument N",
+        });
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option to command");
+
+    // Add option to subcommand
+    e = optparse_add_option (q, &(struct optparse_option) {
+          .name = "test-opt", .key = 't', .has_arg = 1,
+          .arginfo = "N",
+          .usage = "Test option with numeric argument N",
+        });
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option to subcommand");
+
+    ok (optparse_option_index (p) == -1, "option index is -1");
+    ok (optparse_option_index (q) == -1, "subcmd: option index is -1");
+
+    char *av[] = { "test", "-t", "2", "one", "--test-opt=5", NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    n = optparse_parse_args (p, ac, av);
+    ok (n == 3, "optparse_parse_args() expected 3 got %d", n);
+    n = optparse_run_subcommand (p, ac, av);
+    ok (n >= 0, "optparse_run_subcommand() got %d", n);
+    ok (called == 1, "optparse_run_subcommand: called subcmd_one()");
+
+    n = optparse_option_index (p);
+    ok (n == 3, "option index for p: expected 3 got %d", n);
+
+    // option index for subcommand is relative to subcommand as argv0:
+    n = optparse_option_index (q);
+    ok (n == 2, "option index for q: expected 2 got %d", n);
+
+    ok (optparse_getopt (p, "test", NULL) == 1, "got --test option");
+    ok (optparse_getopt (q, "test-opt", NULL) == 1, "got --test-opt in subcmd");
+
+    optparse_reset (p);
+
+    n = optparse_option_index (p);
+    ok (n == -1, "after reset: option index for p: expected -1 got %d", n);
+    n = optparse_option_index (q);
+    ok (n == -1, "after reset: option index for q: expected -1 got %d", n);
+
+    ok (optparse_getopt (p, "test", NULL) == 0,
+        "after reset: optparse_getopt returns 0");
+    ok (optparse_getopt (q, "test-opt", NULL) == 0,
+        "after reset: optparse_getopt returns 0 for subcmd");
+
+    optparse_destroy (p);
+}
+
 int main (int argc, char *argv[])
 {
 
-    plan (212);
+    plan (232);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
@@ -941,6 +1009,7 @@ int main (int argc, char *argv[])
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
+    test_reset (); /* 9 tests */
 
     done_testing ();
     return (0);
