@@ -58,11 +58,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-cron \
 	flux-aggregate
 
-if HAVE_PYTHON
-dist_fluxcmd_SCRIPTS+= \
- flux-list-instances
-endif
-
 fluxcmd_PROGRAMS = \
 	flux-ping \
 	flux-keygen \
