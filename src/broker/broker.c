@@ -50,11 +50,11 @@
 #endif
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/ipaddr.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
