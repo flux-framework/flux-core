@@ -47,7 +47,7 @@ void overlay_checkin_child (overlay_t *ov, const char *uuid);
 
 /* Encode cmb.lspeer response payload.
  */
-json_object *overlay_lspeer_encode (overlay_t *ov);
+char *overlay_lspeer_encode (overlay_t *ov);
 
 /* The event socket is SUB for ranks > 0, and PUB for rank 0.
  * Internally, all events are routed to rank 0 before being published.

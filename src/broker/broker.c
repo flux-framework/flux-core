@@ -1618,11 +1618,16 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    char *out;
 
-    json_object *out = overlay_lspeer_encode (ctx->overlay);
-    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+    if (!(out = overlay_lspeer_encode (ctx->overlay))) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        return;
+    }
+    if (flux_respond (h, msg, 0, out) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (out);
+    free (out);
 }
 
 static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,
