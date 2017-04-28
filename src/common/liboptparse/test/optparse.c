@@ -926,10 +926,157 @@ void test_corner_case (void)
     optparse_destroy (p);
 }
 
+void test_reset (void)
+{
+    optparse_err_t e;
+    int called = 0;
+    int n;
+    optparse_t *p, *q;
+
+    p = optparse_create ("test");
+
+    ok (p != NULL, "optparse_create");
+    q = optparse_add_subcommand (p, "one", subcmd_one);
+    ok (q != NULL, "optparse_add_subcommand (subcmd_one)");
+    optparse_set_data (q, "called", &called);
+    ok (optparse_get_data (q, "called") == &called, "optparse_set_data ()");
+
+    // Add option to command
+    e = optparse_add_option (p, &(struct optparse_option) {
+          .name = "test", .key = 't', .has_arg = 1,
+          .arginfo = "N",
+          .usage = "Test option with numeric argument N",
+        });
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option to command");
+
+    // Add option to subcommand
+    e = optparse_add_option (q, &(struct optparse_option) {
+          .name = "test-opt", .key = 't', .has_arg = 1,
+          .arginfo = "N",
+          .usage = "Test option with numeric argument N",
+        });
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option to subcommand");
+
+    ok (optparse_option_index (p) == -1, "option index is -1");
+    ok (optparse_option_index (q) == -1, "subcmd: option index is -1");
+
+    char *av[] = { "test", "-t", "2", "one", "--test-opt=5", NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    n = optparse_parse_args (p, ac, av);
+    ok (n == 3, "optparse_parse_args() expected 3 got %d", n);
+    n = optparse_run_subcommand (p, ac, av);
+    ok (n >= 0, "optparse_run_subcommand() got %d", n);
+    ok (called == 1, "optparse_run_subcommand: called subcmd_one()");
+
+    n = optparse_option_index (p);
+    ok (n == 3, "option index for p: expected 3 got %d", n);
+
+    // option index for subcommand is relative to subcommand as argv0:
+    n = optparse_option_index (q);
+    ok (n == 2, "option index for q: expected 2 got %d", n);
+
+    ok (optparse_getopt (p, "test", NULL) == 1, "got --test option");
+    ok (optparse_getopt (q, "test-opt", NULL) == 1, "got --test-opt in subcmd");
+
+    optparse_reset (p);
+
+    n = optparse_option_index (p);
+    ok (n == -1, "after reset: option index for p: expected -1 got %d", n);
+    n = optparse_option_index (q);
+    ok (n == -1, "after reset: option index for q: expected -1 got %d", n);
+
+    ok (optparse_getopt (p, "test", NULL) == 0,
+        "after reset: optparse_getopt returns 0");
+    ok (optparse_getopt (q, "test-opt", NULL) == 0,
+        "after reset: optparse_getopt returns 0 for subcmd");
+
+    optparse_destroy (p);
+}
+
+/*
+ *  Test for posixly-correct behavior of stopping at first non-option argument.
+ */
+void test_non_option_arguments (void)
+{
+    optparse_err_t e;
+    struct optparse_option opts [] = {
+        { .name = "test",
+          .key  = 't',
+          .has_arg = 1,
+          .arginfo = "S",
+          .usage = "test option"
+        },
+        OPTPARSE_TABLE_END,
+    };
+    optparse_t *p = optparse_create ("non-option-arg");
+    char *av[] = { "non-option-arg", "--test=foo", "--", "baz", NULL };
+    int ac = sizeof (av) / sizeof (*av) - 1;
+    int optindex;
+
+    ok (p != NULL, "optparse_create");
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    ok (optparse_parse_args (p, ac, av) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 3, "post parse optindex points after '--'");
+
+    optparse_reset (p);
+    char *av2[] = { "non-option-arg", "foo", "bar", NULL };
+    ac = sizeof (av2) / sizeof (*av2) - 1;
+    ok (optparse_parse_args (p, ac, av2) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 1, "argv with no options, optindex is 1");
+
+#if 0
+    // XXX: Can't stop processing at arguments that *look* like an option,
+    //  as this is detected as "unknown option" error. Possibly a flag could
+    //  be added to optparse object to better handle this case? As of now
+    //  there's no need however.
+    //
+    optparse_reset (p);
+    char *av3[] = { "non-option-arg", "-1234", NULL };
+    ac = sizeof (av3) / sizeof (*av3) - 1;
+    ok (optparse_parse_args (p, ac, av3) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 1,
+        "argv with non-option arg starting with '-', optindex should be 1");
+#endif
+
+    optparse_reset (p);
+    char *av4[] = { "non-option-arg", "1234", "--test=foo", NULL };
+    ac = sizeof (av4) / sizeof (*av4) - 1;
+    ok (optparse_parse_args (p, ac, av4) != -1, "optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 1,
+        "argv stops processing at non-option even with real options follow");
+    ok (optparse_getopt (p, "test", NULL) == 0,
+        "didn't process --test=foo (expected 0 got %d)",
+        optparse_getopt (p, "test", NULL));
+
+    /* Test OPTPARSE_POSIXLY_CORRECT */
+    optparse_reset (p);
+    e = optparse_set (p, OPTPARSE_POSIXLY_CORRECT, 0);
+    ok (optparse_parse_args (p, ac, av4) != -1,
+        "!posixly_correct: optparse_parse_args");
+    optindex = optparse_option_index (p);
+    ok (optindex == 2,
+        "!posixly_correct: argv elements are permuted");
+    is (av4[1], "--test=foo",
+        "!posixly_correct: argv[1] is now --test=foo");
+    is (av4[2], "1234",
+        "!posixly_correct: argv[2] is now non-option arg (1234)");
+
+    optparse_destroy (p);
+}
+
+
 int main (int argc, char *argv[])
 {
 
-    plan (212);
+    plan (245);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
@@ -941,6 +1088,8 @@ int main (int argc, char *argv[])
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
+    test_reset (); /* 9 tests */
+    test_non_option_arguments (); /* 13 tests */
 
     done_testing ();
     return (0);

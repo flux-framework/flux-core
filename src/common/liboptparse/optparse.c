@@ -68,6 +68,7 @@ struct opt_parser {
     unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
     unsigned int   hidden:1;        /* If subcmd, skip in --help output     */
+    unsigned int   posixly_correct:1; /* Value of GNU getopt posixly correct*/
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -698,6 +699,7 @@ optparse_t *optparse_create (const char *prog)
     p->left_margin = 2;
     p->option_width = 25;
     p->option_index = -1;
+    p->posixly_correct = 1;
 
     /*
      *  Register -h, --help
@@ -1049,6 +1051,10 @@ optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
         n = va_arg (vargs, int);
         p->hidden = n;
         break;
+    case OPTPARSE_POSIXLY_CORRECT:
+        n = va_arg (vargs, int);
+        p->posixly_correct = n;
+        break;
     default:
         e = OPTPARSE_BAD_ARG;
     }
@@ -1110,11 +1116,10 @@ void *optparse_get_data (optparse_t *p, const char *s)
 
 static char * optstring_create ()
 {
-    char *optstring = malloc (2);
+    char *optstring = malloc (1);
     if (optstring == NULL)
         return (NULL);
-    optstring[0] = '+';
-    optstring[1] = '\0';
+    optstring[0] = '\0';
     return (optstring);
 }
 
@@ -1248,10 +1253,10 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
  */
 static int getopt_long_r (int argc, char *const *argv, const char *options,
                 const struct option *long_options, int *opt_index,
-                struct _getopt_data *d)
+                struct _getopt_data *d, int posixly_correct)
 {
   return _getopt_internal_r (argc, argv, options, long_options, opt_index,
-                             0, d, 0);
+                             0, d, posixly_correct);
 }
 
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
@@ -1269,7 +1274,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     memset (&d, 0, sizeof (d));
 
-    while ((c = getopt_long_r (argc, argv, optstring, optz, &li, &d)) >= 0) {
+    while ((c = getopt_long_r (argc, argv, optstring, optz,
+                               &li, &d, p->posixly_correct)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == '?') {
@@ -1369,6 +1375,54 @@ int optparse_fatal_usage (optparse_t *p, int code, const char *fmt, ...)
 int optparse_option_index (optparse_t *p)
 {
     return (p->option_index);
+}
+
+/*
+ *  Reset one optparse_t object -- set option_index to zero and
+ *   reset and free option arguments, etc.
+ */
+static void optparse_reset_one (optparse_t *p)
+{
+    struct option_info *o;
+    ListIterator i;
+
+    if (!p)
+        return;
+
+    p->option_index = -1;
+
+    if (!p->option_list || !list_count (p->option_list))
+        return;
+
+    i = list_iterator_create (p->option_list);
+    while ((o = list_next (i))) {
+        if (o->isdoc)
+            continue;
+        o->found = 0;
+        if (o->optargs) {
+            list_destroy (o->optargs);
+            o->optargs = NULL;
+        }
+        o->optarg = NULL;
+    }
+    list_iterator_destroy (i);
+    return;
+}
+
+void optparse_reset (optparse_t *p)
+{
+    zlist_t *cmds = subcmd_list_sorted (p);
+
+    if ((cmds = subcmd_list_sorted (p))) {
+        const char *cmd = zlist_first (cmds);
+        while (cmd) {
+            optparse_t *o = zhash_lookup (p->subcommands, cmd);
+            optparse_reset_one (o);
+            cmd = zlist_next (cmds);
+        }
+        zlist_destroy (&cmds);
+    }
+    optparse_reset_one (p);
 }
 
 /*

@@ -56,6 +56,7 @@ typedef enum {
     OPTPARSE_PRINT_SUBCMDS,/* Print all subcommands in --help (default = T  */
     OPTPARSE_SUBCMD_NOOPTS,/* Don't parse options for this subcommand       */
     OPTPARSE_SUBCMD_HIDE,  /* Don't output this subcmd in --help output     */
+    OPTPARSE_POSIXLY_CORRECT, /* Set POSIXLY_CORRECT value                  */
 } optparse_item_t;
 
 /*
@@ -196,6 +197,13 @@ optparse_err_t optparse_reg_subcommands (optparse_t *p,
  *   Destroy program options handle [p].
  */
 void optparse_destroy (optparse_t *p);
+
+/*
+ *   Reset option processing for optparse object [p]. Forget all previous
+ *    options processed and their arguments. Useful to restart option
+ *    processing or parse a new argument vector.
+ */
+void optparse_reset (optparse_t *p);
 
 /*
  *   Register the option [o] with the program options object [p].

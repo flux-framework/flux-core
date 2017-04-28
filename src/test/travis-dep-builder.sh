@@ -51,7 +51,7 @@ declare -A extra_cmake_opts=(\
 pips="\
 cffi==1.1 \
 coverage \
-pylint
+pylint==1.5.6
 "
 
 #
