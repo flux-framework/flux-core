@@ -234,6 +234,13 @@ int blobref_validate (const char *blobref)
     return 0;
 }
 
+int blobref_validate_hashtype (const char *name)
+{
+    if (name == NULL || !lookup_blobhash (name))
+        return -1;
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
