@@ -113,26 +113,50 @@ done:
     return (0);
 }
 
-static int subprocess_io_cb (struct subprocess *p, const char *json_str)
+static char *prepare_io_payload (exec_t *x, const char *json_str)
 {
-    exec_t *x = subprocess_get_context (p, "exec_ctx");
-    flux_msg_t *orig = subprocess_get_context (p, "msg");
     json_object *o = NULL;
-    int rc = -1;
-
-    assert (x != NULL);
-    assert (orig != NULL);
+    char *s;
 
     if (!(o = Jfromstr (json_str))) {
         errno = EPROTO;
-        goto done;
+        goto error;
     }
     /* Add this rank */
     Jadd_int (o, "rank", x->rank);
-    rc = flux_respond (x->h, orig, 0, Jtostr (o));
+    if (!(s = strdup (Jtostr (o)))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    return s;
+error:
+    json_object_put (o);
+    return NULL;
+}
+
+/* Handler for child stdio (registered with libsubprocess).
+ * Respond to user with zio-formatted data, tacking on the rank.
+ * using orig. request message stashed in subprocess context.
+ */
+static int child_io_cb (struct subprocess *p, const char *json_str)
+{
+    exec_t *x = subprocess_get_context (p, "exec_ctx");
+    flux_msg_t *msg = subprocess_get_context (p, "msg");
+    char *s;
+
+    assert (x != NULL);
+    assert (msg != NULL);
+
+    if (!(s = prepare_io_payload (x, json_str))) {
+        if (flux_respond (x->h, msg, errno, NULL) < 0)
+            flux_log_error (x->h, "%s: flux_respond", __FUNCTION__);
+        goto done;
+    }
+    if (flux_respond (x->h, msg, 0, s) < 0)
+        flux_log_error (x->h, "%s: flux_respond", __FUNCTION__);
 done:
-    Jput (o);
-    return (rc);
+    free (s);
+    return (0); // return value is not checked in libsubprocess
 }
 
 static struct subprocess *
@@ -305,7 +329,7 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
     copy = flux_msg_copy (msg, true);
     subprocess_set_context (p, "msg", (void *) copy);
 
-    subprocess_set_io_callback (p, subprocess_io_cb);
+    subprocess_set_io_callback (p, child_io_cb);
 
     if (subprocess_fork (p) < 0) {
         /*
