@@ -60,30 +60,56 @@ subprocess_json_resp (exec_t *x, struct subprocess *p)
     return (resp);
 }
 
-static int child_exit_handler (struct subprocess *p)
+static char *prepare_exit_payload (exec_t *x, struct subprocess *p)
 {
     int n;
-    exec_t *x = subprocess_get_context (p, "exec_ctx");
-    flux_msg_t *msg = (flux_msg_t *) subprocess_get_context (p, "msg");
-    json_object *resp;
+    json_object *resp = Jnew ();
+    char *s;
 
-    assert (x != NULL);
-    assert (msg != NULL);
-
-    resp = subprocess_json_resp (x, p);
+    Jadd_int (resp, "rank", x->rank);
+    Jadd_int (resp, "pid", subprocess_pid (p));
+    Jadd_str (resp, "state", subprocess_state_string (p));
     Jadd_int (resp, "status", subprocess_exit_status (p));
     Jadd_int (resp, "code", subprocess_exit_code (p));
     if ((n = subprocess_signaled (p)))
         Jadd_int (resp, "signal", n);
     if ((n = subprocess_exec_error (p)))
         Jadd_int (resp, "exec_errno", n);
-
-    flux_respond (x->h, msg, 0, Jtostr (resp));
-    flux_msg_destroy (msg);
+    if (!(s = strdup (Jtostr (resp)))) {
+        errno = ENOMEM;
+        goto error;
+    }
     json_object_put (resp);
+    return s;
+error:
+    json_object_put (resp);
+    return NULL;
+}
 
+/* Handler for child exit (registered with libsubprocess).
+ * Respond to user with exit status, etc.
+ * using orig. request message stashed in subprocess context.
+ */
+static int child_exit_handler (struct subprocess *p)
+{
+    exec_t *x = subprocess_get_context (p, "exec_ctx");
+    flux_msg_t *msg = (flux_msg_t *) subprocess_get_context (p, "msg");
+    char *s = NULL;
+
+    assert (x != NULL);
+    assert (msg != NULL);
+
+    if (!(s = prepare_exit_payload (x, p))) {
+        if (flux_respond (x->h, msg, errno, NULL) < 0)
+            flux_log_error (x->h, "%s: flux_respond", __FUNCTION__);
+        goto done;
+    }
+    if (flux_respond (x->h, msg, 0, s) < 0)
+        flux_log_error (x->h, "%s: flux_respond", __FUNCTION__);
+done:
+    free (s);
+    flux_msg_destroy (msg);
     subprocess_destroy (p);
-
     return (0);
 }
 
