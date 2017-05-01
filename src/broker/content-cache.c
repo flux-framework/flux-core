@@ -72,7 +72,7 @@ struct content_cache {
     flux_t *enclosing_h;
     uint32_t rank;
     zhash_t *entries;
-    uint8_t backing:1;              /* 'content-backing' service available */
+    uint8_t backing:1;              /* 'content.backing' service available */
     char *backing_name;
     char *hash_name;
     zlist_t *flush_requests;
@@ -262,7 +262,7 @@ static void remove_entry (content_cache_t *cache, struct cache_entry *e)
  * If a cache entry is already present and valid, response is immediate.
  * Otherwise request is queued on the invalid cache entry, and a new
  * request is sent to the next level of TBON, or on rank 0, to the
- * content-backing service.  At most a single request is sent per cache entry.
+ * content.backing service.  At most a single request is sent per cache entry.
  * Once the response is received, identical responses are sent to all
  * parked requests, and cache entry is made valid or removed if there was
  * an error such as ENOENT.
@@ -410,10 +410,10 @@ done:
  * responded to at each level.
  *
  * Dirty cache is write-back for rank 0, that is;  the response is immediate
- * even though the entry may be dirty with respect to a 'content-backing'
+ * even though the entry may be dirty with respect to a 'content.backing'
  * service.  This allows the cache to be updated at memory speeds,
  * while holding the invariant that after a store RPC returns, the entry may
- * be loaded from any rank.  The optional content-backing service can
+ * be loaded from any rank.  The optional content.backing service can
  * offload rank 0 hash entries at a slower pace.
  */
 
@@ -579,12 +579,12 @@ done:
 }
 
 /* Backing store is enabled/disabled by modules that provide the
- * 'content-backing' service.  At module load time, the backing module
+ * 'content.backing' service.  At module load time, the backing module
  * informs the content service of its availability, and entries are
  * asynchronously duplicated on the backing store and made eligible for
  * dropping from the rank 0 cache.
  *
- * At module unload time, Backing store is disabled and content-backing
+ * At module unload time, Backing store is disabled and content.backing
  * synchronously transfers content back to the cache.  This allows the
  * module providing the backing store to be replaced early at runtime,
  * before the amount of content exceeds the cache's ability to hold it.
@@ -881,11 +881,11 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
     content_cache_t *cache = arg;
     static char s[32];
 
-    if (!strcmp (name, "content-hash"))
+    if (!strcmp (name, "content.hash"))
         *val = cache->hash_name;
-    else if (!strcmp (name, "content-backing"))
+    else if (!strcmp (name, "content.backing"))
         *val = cache->backing_name;
-    else if (!strcmp (name, "content-acct-entries")) {
+    else if (!strcmp (name, "content.acct-entries")) {
         snprintf (s, sizeof (s), "%zd", zhash_size (cache->entries));
         *val = s;
     } else
@@ -897,47 +897,47 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
 {
     /* Purge tunables
      */
-    if (attr_add_active_uint32 (attr, "content-purge-target-entries",
+    if (attr_add_active_uint32 (attr, "content.purge-target-entries",
                 &cache->purge_target_entries, 0) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-purge-target-size",
+    if (attr_add_active_uint32 (attr, "content.purge-target-size",
                 &cache->purge_target_size, 0) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-purge-old-entry",
+    if (attr_add_active_uint32 (attr, "content.purge-old-entry",
                 &cache->purge_old_entry, 0) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-purge-large-entry",
+    if (attr_add_active_uint32 (attr, "content.purge-large-entry",
                 &cache->purge_large_entry, 0) < 0)
         return -1;
     /* Accounting numbers
      */
-    if (attr_add_active_uint32 (attr, "content-acct-size",
+    if (attr_add_active_uint32 (attr, "content.acct-size",
                 &cache->acct_size, FLUX_ATTRFLAG_READONLY) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-acct-dirty",
+    if (attr_add_active_uint32 (attr, "content.acct-dirty",
                 &cache->acct_dirty, FLUX_ATTRFLAG_READONLY) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-acct-valid",
+    if (attr_add_active_uint32 (attr, "content.acct-valid",
                 &cache->acct_valid, FLUX_ATTRFLAG_READONLY) < 0)
         return -1;
-    if (attr_add_active (attr, "content-acct-entries", FLUX_ATTRFLAG_READONLY,
+    if (attr_add_active (attr, "content.acct-entries", FLUX_ATTRFLAG_READONLY,
                 content_cache_getattr, NULL, cache) < 0)
         return -1;
     /* Misc
      */
-    if (attr_add_active_uint32 (attr, "content-flush-batch-limit",
+    if (attr_add_active_uint32 (attr, "content.flush-batch-limit",
                 &cache->flush_batch_limit, 0) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-blob-size-limit",
+    if (attr_add_active_uint32 (attr, "content.blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_active (attr, "content-hash", FLUX_ATTRFLAG_IMMUTABLE,
+    if (attr_add_active (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE,
                 content_cache_getattr, NULL, cache) < 0)
         return -1;
-    if (attr_add_active (attr, "content-backing",FLUX_ATTRFLAG_READONLY,
+    if (attr_add_active (attr, "content.backing",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
-    if (attr_add_active_uint32 (attr, "content-flush-batch-count",
+    if (attr_add_active_uint32 (attr, "content.flush-batch-count",
                 &cache->flush_batch_count, 0) < 0)
         return -1;
     return 0;

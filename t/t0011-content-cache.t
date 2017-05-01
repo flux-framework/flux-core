@@ -15,8 +15,8 @@ echo "# $0: flux session size will be ${SIZE}"
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 
-MAXBLOB=`flux getattr content-blob-size-limit`
-HASHFUN=`flux getattr content-hash`
+MAXBLOB=`flux getattr content.blob-size-limit`
+HASHFUN=`flux getattr content.hash`
 
 test_expect_success 'store 100 blobs on rank 0' '
         for i in `seq 0 99`; do echo test$i | \

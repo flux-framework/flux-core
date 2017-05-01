@@ -149,14 +149,14 @@ static sqlite_ctx_t *getctx (flux_t *h)
         ctx->lzo_buf = xzmalloc (lzo_buf_chunksize);
         ctx->lzo_bufsize = lzo_buf_chunksize;
         ctx->h = h;
-        if (!(ctx->hashfun = flux_attr_get (h, "content-hash", &flags))) {
+        if (!(ctx->hashfun = flux_attr_get (h, "content.hash", &flags))) {
             saved_errno = errno;
-            flux_log_error (h, "content-hash");
+            flux_log_error (h, "content.hash");
             goto error;
         }
-        if (!(tmp = flux_attr_get (h, "content-blob-size-limit", NULL))) {
+        if (!(tmp = flux_attr_get (h, "content.blob-size-limit", NULL))) {
             saved_errno = errno;
-            flux_log_error (h, "content-blob-size-limit");
+            flux_log_error (h, "content.blob-size-limit");
             goto error;
         }
         ctx->blob_size_limit = strtoul (tmp, NULL, 10);
