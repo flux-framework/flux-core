@@ -235,15 +235,15 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
     exec_t *x = arg;
     int pid;
     int errnum = EPROTO;
-    int signum;
+    int signum = SIGTERM;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{ s:i }", "pid", &pid) < 0) {
+    if (flux_request_decodef (msg, NULL, "{s:i s?:i}",
+                              "pid", &pid,
+                              "signum", &signum) < 0) {
         errnum = errno;
         goto out;
     }
-    if (flux_request_decodef (msg, NULL, "{ s:i }", "signum", &signum) < 0)
-        signum = SIGTERM;
     p = subprocess_manager_first (x->sm);
     while (p) {
         if (pid == subprocess_pid (p)) {
