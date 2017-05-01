@@ -87,7 +87,7 @@ typedef struct {
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
     int commit_merge;
-    char *hash_name;
+    const char *hash_name;
 } kvs_ctx_t;
 
 typedef struct {
@@ -164,7 +164,10 @@ static kvs_ctx_t *getctx (flux_t *h)
             flux_watcher_start (ctx->check_w);
         }
         ctx->commit_merge = 1;
-        ctx->hash_name = "sha1";
+        if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
+            flux_log_error (h, "content.hash");
+            goto error;
+        }
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
