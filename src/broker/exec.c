@@ -43,7 +43,7 @@ typedef struct {
     flux_t *h;
     struct subprocess_manager *sm;
     uint32_t rank;
-    attr_t *attrs;
+    const char *local_uri;
 } exec_t;
 
 static json_object *
@@ -223,10 +223,6 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
     struct subprocess *p;
     flux_msg_t *copy;
     int i, argc;
-    const char *local_uri;
-
-    if (attr_get (x->attrs, "local-uri", &local_uri, NULL) < 0)
-        log_err_exit ("%s: local_uri is not set", __FUNCTION__);
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto out_free;
@@ -269,7 +265,7 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
     /*
      *  Override key FLUX environment variables in env array
      */
-    subprocess_setenv (p, "FLUX_URI", local_uri, 1);
+    subprocess_setenv (p, "FLUX_URI", x->local_uri, 1);
 
     if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
         const char *dir = json_object_get_string (o);
@@ -422,7 +418,10 @@ int exec_initialize (flux_t *h, struct subprocess_manager *sm,
     x->h = h;
     x->sm = sm;
     x->rank = rank;
-    x->attrs = attrs;
+    if (attr_get (attrs, "local-uri", &x->local_uri, NULL) < 0) {
+        free (x);
+        return -1;
+    }
     if (flux_msg_handler_addvec (h, handlers, x) < 0) {
         free (x);
         return -1;
