@@ -29,12 +29,12 @@
 #include <signal.h>
 #include <unistd.h>
 #include <assert.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 #include "attr.h"
 #include "exec.h"
@@ -49,26 +49,43 @@ typedef struct {
 static char *prepare_exit_payload (exec_t *x, struct subprocess *p)
 {
     int n;
-    json_object *resp = Jnew ();
+    json_t *resp;
     char *s;
 
-    Jadd_int (resp, "rank", x->rank);
-    Jadd_int (resp, "pid", subprocess_pid (p));
-    Jadd_str (resp, "state", subprocess_state_string (p));
-    Jadd_int (resp, "status", subprocess_exit_status (p));
-    Jadd_int (resp, "code", subprocess_exit_code (p));
-    if ((n = subprocess_signaled (p)))
-        Jadd_int (resp, "signal", n);
-    if ((n = subprocess_exec_error (p)))
-        Jadd_int (resp, "exec_errno", n);
-    if (!(s = strdup (Jtostr (resp)))) {
+    if (!(resp = json_pack ("{s:i s:i s:s s:i s:i}",
+                            "rank", x->rank,
+                            "pid", subprocess_pid (p),
+                            "state", subprocess_state_string (p),
+                            "status", subprocess_exit_status (p),
+                            "code", subprocess_exit_code (p)))) {
         errno = ENOMEM;
         goto error;
     }
-    json_object_put (resp);
+    if ((n = subprocess_signaled (p))) {
+        json_t *o = json_integer (n);
+        if (!o || json_object_set_new (resp, "signal", o) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
+
+    }
+    if ((n = subprocess_exec_error (p))) {
+        json_t *o = json_integer (n);
+        if (!o || json_object_set_new (resp, "exec_errno", o) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    if (!(s = json_dumps (resp, 0))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_decref (resp);
     return s;
 error:
-    json_object_put (resp);
+    json_decref (resp);
     return NULL;
 }
 
@@ -101,22 +118,28 @@ done:
 
 static char *prepare_io_payload (exec_t *x, const char *json_str)
 {
-    json_object *o = NULL;
+    json_t *resp;
+    json_t *o;
     char *s;
 
-    if (!(o = Jfromstr (json_str))) {
+    if (!(resp = json_loads (json_str, 0, NULL))) {
         errno = EPROTO;
         goto error;
     }
-    /* Add this rank */
-    Jadd_int (o, "rank", x->rank);
-    if (!(s = strdup (Jtostr (o)))) {
+    if (!(o = json_integer (x->rank))
+            || json_object_set_new (resp, "rank", o) < 0) {
+        json_decref (o);
         errno = ENOMEM;
         goto error;
     }
+    if (!(s = json_dumps (resp, 0))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_decref (resp);
     return s;
 error:
-    json_object_put (o);
+    json_decref (resp);
     return NULL;
 }
 
@@ -183,36 +206,33 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     exec_t *x = arg;
-    json_object *request = NULL;
-    json_object *o = NULL;
-    const char *json_str;
+    json_t *o;
+    char *s = NULL;
     int pid;
     int errnum = 0;
     struct subprocess *p;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
+    if (flux_request_decodef (msg, NULL, "{s:i s:o}", "pid", &pid,
+                                                      "stdin", &o) < 0) {
         errnum = errno;
-        goto out;
-    }
-    if (!json_str
-        || !(request = Jfromstr (json_str))
-        || !Jget_int (request, "pid", &pid)
-        || !Jget_obj (request, "stdin", &o)) {
-        errnum = EPROTO;
         goto out;
     }
     if (!(p = subprocess_get_pid (x->sm, pid))) {
         errnum = ENOENT;
         goto out;
     }
-    if (write_to_child (p, Jtostr (o)) < 0) {
+    if (!(s = json_dumps (o, 0))) {
+        errnum = EPROTO;
+        goto out;
+    }
+    if (write_to_child (p, s) < 0) {
         errnum = errno;
         goto out;
     }
 out:
+    free (s);
     if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
         flux_log_error (h, "write_request_cb: flux_respondf");
-    json_object_put (request);
 }
 
 static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -254,8 +274,8 @@ static int do_setpgrp (struct subprocess *p)
 
 
 static int prepare_subprocess (exec_t *x,
-                               json_object *args,
-                               json_object *env,
+                               json_t *args,
+                               json_t *env,
                                const char *cwd,
                                const flux_msg_t *msg,
                                struct subprocess **pp)
@@ -263,6 +283,9 @@ static int prepare_subprocess (exec_t *x,
     struct subprocess *p;
     const char *s;
     flux_msg_t *copy = NULL;
+    const char *key;
+    size_t index;
+    json_t *o;
 
     if (!(p = subprocess_create (x->sm)))
         goto error;
@@ -282,28 +305,23 @@ static int prepare_subprocess (exec_t *x,
     subprocess_set_context (p, "exec_ctx", x);
     /* Command and arguments
      */
-    if (args) {
-        int i, argc = json_object_array_length (args);
-        for (i = 0; i < argc; i++) {
-            json_object *o = json_object_array_get_idx (args, i);
-            if (!(s = json_object_get_string (o))) {
-                errno = EPROTO;
-                goto error;
-            }
-            if (subprocess_argv_append (p, s) < 0)
-                goto error;
+    json_array_foreach (args, index, o) {
+        if (!(s = json_string_value (o))) {
+            errno = EPROTO;
+            goto error;
         }
+        if (subprocess_argv_append (p, s) < 0)
+            goto error;
     }
     /* Environment
      */
     if (env) {
-        json_object_iter iter;
-        json_object_object_foreachC (env, iter) {
-            if (!(s = json_object_get_string (iter.val))) {
+        json_object_foreach (env, key, o) {
+            if (!(s = json_string_value (o))) {
                 errno = EPROTO;
                 goto error;
             }
-            if (subprocess_setenv (p, iter.key, s, 1) < 0)
+            if (subprocess_setenv (p, key, s, 1) < 0)
                 goto error;
         }
     }
@@ -332,38 +350,16 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     exec_t *x = arg;
-    json_object *args;
-    json_object *env = NULL;
+    json_t *args;
+    json_t *env = NULL;
     const char *cwd = NULL;
-    const char *json_str;
     struct subprocess *p;
-    json_object *request = NULL;
-    json_object *o;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
+    if (flux_request_decodef (msg, NULL, "{s:o s?:o s?:s}",
+                              "cmdline", &args,
+                              "env", &env,
+                              "cwd", &cwd) < 0)
         goto error;
-    if (!json_str
-        || !(request = Jfromstr (json_str))
-        || !json_object_object_get_ex (request, "cmdline", &args)
-        || args == NULL
-        || json_object_get_type (args) != json_type_array
-        || json_object_array_length (args) < 1) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (json_object_object_get_ex (request, "env", &env)) {
-        if (!env || json_object_get_type (env) != json_type_object) {
-            errno = EPROTO;
-            goto error;
-        }
-    }
-    if (json_object_object_get_ex (request, "cwd", &o)) {
-        if (!o || json_object_get_type (o) != json_type_string) {
-            errno = EPROTO;
-            goto error;
-        }
-        cwd = json_object_get_string (o);
-    }
     if (prepare_subprocess (x, args, env, cwd, msg, &p) < 0)
         goto error;
 
@@ -388,12 +384,10 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
                            "state", subprocess_state_string (p)) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
-    json_object_put (request);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    json_object_put (request);
 }
 
 static char *subprocess_sender (struct subprocess *p)
@@ -429,31 +423,56 @@ int exec_terminate_subprocesses_by_uuid (flux_t *h, const char *id)
     return (0);
 }
 
-static json_object *subprocess_json_info (struct subprocess *p)
+static json_t *subprocess_json_info (struct subprocess *p)
 {
     int i;
     char buf [MAXPATHLEN];
     const char *cwd;
     char *sender = NULL;
-    json_object *o = Jnew ();
-    json_object *a = Jnew_ar ();
+    json_t *info = NULL;
+    json_t *args = NULL;
 
-    Jadd_int (o, "pid", subprocess_pid (p));
-    for (i = 0; i < subprocess_get_argc (p); i++) {
-        Jadd_ar_str (a, subprocess_get_arg (p, i));
+    if ((cwd = subprocess_get_cwd (p)) == NULL) {
+        if (!(cwd = getcwd (buf, MAXPATHLEN-1)))
+            goto error;
     }
-    /*  Avoid shortjson here so we don't take
-     *   unnecessary reference to 'a'
-     */
-    json_object_object_add (o, "cmdline", a);
-    if ((cwd = subprocess_get_cwd (p)) == NULL)
-        cwd = getcwd (buf, MAXPATHLEN-1);
-    Jadd_str (o, "cwd", cwd);
+    if (!(args = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    for (i = 0; i < subprocess_get_argc (p); i++) {
+        json_t *o;
+        if (!(o = json_string (subprocess_get_arg (p, i)))
+               || json_array_append_new (args, o) < 0) {
+            json_decref (o);
+            json_decref (args);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    if (!(info = json_pack ("{s:i s:s s:o}",
+                            "pid", subprocess_pid (p),
+                            "cwd", cwd,
+                            "cmdline", args))) {
+        json_decref (args);
+        errno = ENOMEM;
+        goto error;
+    }
     if ((sender = subprocess_sender (p))) {
-        Jadd_str (o, "sender", sender);
+        json_t *o;
+        if (!(o = json_string (sender))
+               || json_object_set_new (info, "sender", o) < 0) {
+            json_decref (o);
+            free (sender);
+            errno = ENOMEM;
+            goto error;
+        }
         free (sender);
     }
-    return (o);
+    return (info);
+error:
+    json_decref (info);
+    return NULL;
 }
 
 static void ps_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -461,24 +480,31 @@ static void ps_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     struct subprocess *p;
     exec_t *x = arg;
-    json_object *out = Jnew ();
-    json_object *procs = Jnew_ar ();
+    json_t *procs;
 
-    Jadd_int (out, "rank", x->rank);
-
+    if (!(procs = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     p = subprocess_manager_first (x->sm);
     while (p) {
-        json_object *o = subprocess_json_info (p);
-        /* Avoid shortjson here so we don't take an unnecessary
-         *  reference to 'o'.
-         */
-        json_object_array_add (procs, o);
+        json_t *o;
+        if (!(o = subprocess_json_info (p))
+                || json_array_append_new (procs, o) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
         p = subprocess_manager_next (x->sm);
     }
-    json_object_object_add (out, "procs", procs);
-    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+    if (flux_respondf (h, msg, "{s:i s:o}", "rank", x->rank,
+                                            "procs", procs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (out);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    json_decref (procs);
 }
 
 static struct flux_msg_handler_spec handlers[] = {
