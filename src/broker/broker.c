@@ -50,11 +50,11 @@
 #endif
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/ipaddr.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
@@ -1618,11 +1618,16 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    char *out;
 
-    json_object *out = overlay_lspeer_encode (ctx->overlay);
-    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+    if (!(out = overlay_lspeer_encode (ctx->overlay))) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        return;
+    }
+    if (flux_respond (h, msg, 0, out) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    Jput (out);
+    free (out);
 }
 
 static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,

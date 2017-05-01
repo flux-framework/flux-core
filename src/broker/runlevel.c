@@ -29,12 +29,13 @@
 #include <unistd.h>
 #include <assert.h>
 #include <argz.h>
+#include <inttypes.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/monotime.h"
 
 #include "runlevel.h"
@@ -253,7 +254,7 @@ static int subprocess_cb (struct subprocess *p)
 static int subprocess_io_cb (struct subprocess *p, const char *json_str)
 {
     runlevel_t *r;
-    json_object *o = NULL;
+    json_t *o = NULL;
     const char *name;
     int len;
     bool eof;
@@ -265,7 +266,11 @@ static int subprocess_io_cb (struct subprocess *p, const char *json_str)
 
     if (!r->io_cb)
         goto done;
-    if (!(o = Jfromstr (json_str)) || !Jget_str (o, "name", &name))
+    /* N.B. libsubprocess tacks "name" etc. onto zio-encoded JSON output
+     */
+    if (!(o = json_loads (json_str, 0, NULL)))
+        goto done;
+    if (json_unpack (o, "{s:s}", "name", &name) < 0)
         goto done;
     len = zio_json_decode (json_str, (void **)&s, &eof);
     if (len <= 0 || !s || !*s || s[len] != '\0')
@@ -275,11 +280,9 @@ static int subprocess_io_cb (struct subprocess *p, const char *json_str)
     while ((line = argz_next (argz, argz_len, line)) && *line)
         r->io_cb (r, name, line, r->io_cb_arg);
 done:
-    if (s)
-        free (s);
-    if (argz)
-        free (argz);
-    Jput (o);
+    free (s);
+    free (argz);
+    json_decref (o);
     return 0;
 }
 

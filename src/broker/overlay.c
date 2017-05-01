@@ -29,10 +29,11 @@
 #include <czmq.h>
 #include <flux/core.h>
 #include <inttypes.h>
+#include <jansson.h>
 
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/iterators.h"
 
 #include "heartbeat.h"
@@ -174,19 +175,32 @@ void overlay_set_idle_warning (overlay_t *ov, int heartbeats)
     ov->idle_warning = heartbeats;
 }
 
-json_object *overlay_lspeer_encode (overlay_t *ov)
+char *overlay_lspeer_encode (overlay_t *ov)
 {
-    json_object *out = Jnew ();
+    json_t *o = NULL;
+    json_t *child_o;
     const char *uuid;
     child_t *child;
+    char *json_str;
 
+    if (!(o = json_object ()))
+        goto nomem;
     FOREACH_ZHASH (ov->children, uuid, child) {
-        json_object *o = Jnew ();
-        Jadd_int (o, "idle", ov->epoch - child->lastseen);
-        Jadd_obj (out, uuid, o); /* takes ref on 'o' */
-        Jput (o);
+        if (!(child_o = json_pack ("{s:i}", "idle",
+                                   ov->epoch - child->lastseen)))
+            goto nomem;
+        if (json_object_set_new (o, uuid, child_o) < 0) {
+            json_decref (child_o);
+            goto nomem;
+        }
     }
-    return out;
+    if (!(json_str = json_dumps (o, 0)))
+        goto nomem;
+    return json_str;
+nomem:
+    json_decref (o);
+    errno = ENOMEM;
+    return NULL;
 }
 
 void overlay_log_idle_children (overlay_t *ov)

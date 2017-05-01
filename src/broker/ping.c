@@ -25,22 +25,53 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
-#include <src/common/libutil/shortjson.h>
 #include "ping.h"
 
 struct ping_context {
     flux_msg_handler_t *w;
 };
 
+static char *make_json_response_payload (const char *request_payload,
+                                         const char *route,
+                                         uint32_t userid, uint32_t rolemask)
+{
+    json_t *o = NULL;
+    json_t *add = NULL;
+    char *result = NULL;
+
+    if (!request_payload || !(o = json_loads (request_payload, 0, NULL))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (!(add = json_pack ("{s:s s:i s:i}", "route", route,
+                                            "userid", userid,
+                                            "rolemask", rolemask))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (json_object_update (o, add) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (!(result = json_dumps (o, 0))) {
+        errno = ENOMEM;
+        goto done;
+    }
+done:
+    json_decref (o);
+    json_decref (add);
+    return result;
+}
+
 static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
-    //struct ping_context *p = arg;
-    json_object *inout = NULL;
     const char *json_str;
-    char *s = NULL;
-    char *route = NULL;
+    char *route_str = NULL;
+    char *full_route_str = NULL;
+    char *resp_str = NULL;
     uint32_t rank, userid, rolemask;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
@@ -49,33 +80,30 @@ static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (flux_msg_get_userid (msg, &userid) < 0)
         goto error;
-    if (!json_str || !(inout = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (!(s = flux_msg_get_route_string (msg)))
+    if (!(route_str = flux_msg_get_route_string (msg)))
         goto error;
     if (flux_get_rank (h, &rank) < 0)
         goto error;
-    if (asprintf (&route, "%s!%u", s, rank) < 0) {
+    if (asprintf (&full_route_str, "%s!%u", route_str, rank) < 0) {
         errno = ENOMEM;
         goto error;
     }
-    Jadd_str (inout, "route", route);
-    Jadd_int (inout, "userid", userid);
-    Jadd_int (inout, "rolemask", rolemask);
-    if (flux_respond (h, msg, 0, Jtostr (inout)) < 0)
+    if (!(resp_str = make_json_response_payload (json_str, full_route_str,
+                                                 userid, rolemask))) {
+        goto error;
+    }
+    if (flux_respond (h, msg, 0, resp_str) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (s);
-    free (route);
-    Jput (inout);
+    free (route_str);
+    free (full_route_str);
+    free (resp_str);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (s);
-    free (route);
-    Jput (inout);
+    free (route_str);
+    free (full_route_str);
+    free (resp_str);
 }
 
 static void ping_finalize (void *arg)
