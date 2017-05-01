@@ -172,6 +172,27 @@ subprocess_get_pid (struct subprocess_manager *sm, int pid)
     return (NULL);
 }
 
+static int write_to_child (struct subprocess *p, const char *s)
+{
+    int len;
+    void *data = NULL;
+    bool eof;
+    int rc = -1;
+
+    /* XXX: We use zio_json_decode() here for convenience. Probably
+     *  this should be bubbled up as a subprocess IO json spec with
+     *  encode/decode functions.
+     */
+     if ((len = zio_json_decode (s, &data, &eof)) < 0)
+        goto done;
+    if (subprocess_write (p, data, len, eof) < 0)
+        goto done;
+    rc = 0;
+done:
+    free (data);
+    return rc;
+}
+
 static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
@@ -180,46 +201,32 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *o = NULL;
     const char *json_str;
     int pid;
-    int errnum = EPROTO;
+    int errnum = 0;
+    struct subprocess *p;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0) {
         errnum = errno;
         goto out;
     }
-
-    if (json_str
-        && (request = Jfromstr (json_str))
-        && Jget_int (request, "pid", &pid)
-        && Jget_obj (request, "stdin", &o)) {
-        int len;
-        void *data = NULL;
-        bool eof;
-        struct subprocess *p;
-
-        /* XXX: We use zio_json_decode() here for convenience. Probably
-         *  this should be bubbled up as a subprocess IO json spec with
-         *  encode/decode functions.
-         */
-        if ((len = zio_json_decode (Jtostr (o), &data, &eof)) < 0)
-            goto out;
-        if (!(p = subprocess_get_pid (x->sm, pid))) {
-            errnum = ENOENT;
-            free (data);
-            goto out;
-        }
-        if (subprocess_write (p, data, len, eof) < 0) {
-            errnum = errno;
-            free (data);
-            goto out;
-        }
-        free (data);
-        errnum = 0;
+    if (!json_str
+        || !(request = Jfromstr (json_str))
+        || !Jget_int (request, "pid", &pid)
+        || !Jget_obj (request, "stdin", &o)) {
+        errnum = EPROTO;
+        goto out;
+    }
+    if (!(p = subprocess_get_pid (x->sm, pid))) {
+        errnum = ENOENT;
+        goto out;
+    }
+    if (write_to_child (p, Jtostr (o)) < 0) {
+        errnum = errno;
+        goto out;
     }
 out:
     if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
         flux_log_error (h, "write_request_cb: flux_respondf");
-    if (request)
-        json_object_put (request);
+    json_object_put (request);
 }
 
 static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
