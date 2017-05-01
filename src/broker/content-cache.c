@@ -33,6 +33,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/log.h"
 
 #include "attr.h"
 #include "content-cache.h"
@@ -74,7 +75,7 @@ struct content_cache {
     zhash_t *entries;
     uint8_t backing:1;              /* 'content.backing' service available */
     char *backing_name;
-    char *hash_name;
+    char hash_name[BLOBREF_MAX_STRING_SIZE];
     zlist_t *flush_requests;
     int epoch;
 
@@ -876,6 +877,22 @@ void content_cache_set_enclosing_flux (content_cache_t *cache, flux_t *h)
     cache->enclosing_h = h;
 }
 
+static int content_cache_setattr (const char *name, const char *val, void *arg)
+{
+
+    content_cache_t *cache = arg;
+    if (!strcmp (name, "content.hash")) {
+        if (blobref_validate_hashtype (val) < 0)
+            goto invalid;
+        strcpy (cache->hash_name, val);
+    } else
+        goto invalid;
+    return 0;
+invalid:
+    errno = EINVAL;
+    return -1;
+}
+
 static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
     content_cache_t *cache = arg;
@@ -931,15 +948,19 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     if (attr_add_active_uint32 (attr, "content.blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_active (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE,
-                content_cache_getattr, NULL, cache) < 0)
-        return -1;
     if (attr_add_active (attr, "content.backing",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content.flush-batch-count",
                 &cache->flush_batch_count, 0) < 0)
         return -1;
+    /* content-hash can be set on the command line
+     */
+    if (attr_add_active (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE,
+                         content_cache_getattr,
+                         content_cache_setattr, cache) < 0)
+        return -1;
+
     return 0;
 }
 
@@ -977,7 +998,7 @@ content_cache_t *content_cache_create (void)
     cache->purge_target_size = default_cache_purge_target_size;
     cache->purge_old_entry = default_cache_purge_old_entry;
     cache->purge_large_entry = default_cache_purge_large_entry;
-    cache->hash_name = "sha1";
+    strcpy (cache->hash_name, "sha1");
     return cache;
 }
 
