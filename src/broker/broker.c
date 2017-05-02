@@ -80,6 +80,7 @@
 #include "exec.h"
 #include "ping.h"
 #include "rusage.h"
+#include "namespace.h"
 
 /* Generally accepted max, although some go higher (IE is 2083) */
 #define ENDPOINT_MAX 2048
@@ -614,6 +615,9 @@ int main (int argc, char *argv[])
         log_err_exit ("ping_initialize");
     if (rusage_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("rusage_initialize");
+    if (namespace_initialize (ctx.h) < 0)
+        log_err_exit ("namespace_initialize");
+
 
     broker_add_services (&ctx);
 
@@ -1772,6 +1776,7 @@ static struct internal_service services[] = {
     { "hello",              NULL },
     { "attr",               NULL },
     { "heaptrace",          NULL },
+    { "ns",                 NULL },
     { NULL, NULL, },
 };
 
