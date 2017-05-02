@@ -134,50 +134,50 @@ in the ring buffer.
 
 CONTENT ATTRIBUTES
 ------------------
-content-acct-dirty::
+content.acct-dirty::
 The number of dirty cache entries on this rank.
 
-content-acct-entries::
+content.acct-entries::
 The total number of cache entries on this rank.
 
-content-acct-size::
+content.acct-size::
 The estimated total size in bytes consumed by cache entries on
 this rank, excluding overhead.
 
-content-acct-valid::
+content.acct-valid::
 The number of valid cache entries on this rank.
 
-content-backing::
+content.backing::
 The selected backing store, if any.  This attribute is only
 set on rank 0 where the content backing store is active.
 
-content-blob-size-limit::
+content.blob-size-limit::
 The maximum size of a blob, the basic unit of content storage.
 
-content-flush-batch-count::
+content.flush-batch-count::
 The current number of outstanding store requests, either to the
 backing store (rank 0) or upstream (rank > 0).
 
-content-flush-batch-limit::
+content.flush-batch-limit::
 The maximum number of outstanding store requests that will be
 initiated when handling a flush or backing store load operation.
 
-content-hash::
+content.hash::
 The selected hash algorithm, default sha1.
 
-content-purge-large-entry::
+content.purge-large-entry::
 When the cache size footprint needs to be reduced, first consider
 purging entries of this size or greater.
 
-content-purge-old-entry::
+content.purge-old-entry::
 When the cache size footprint needs to be reduced, only consider
 purging entries that are older than this number of heartbeats.
 
-content-purge-target-entries::
+content.purge-target-entries::
 If possible, the cache size purged periodically so that the total
 number of entries stays at or below this value.
 
-content-purge-target-size::
+content.purge-target-size::
 If possible, the cache size purged periodically so that the total
 size of the cache stays at or below this value.
 

@@ -53,7 +53,7 @@ if available (see below).
 BACKING STORE
 -------------
 The rank 0 cache retains all content until a module providing
-the "content-backing" service is loaded which can offload content
+the "content.backing" service is loaded which can offload content
 to some other place.  The *content-sqlite* module provides this
 service, and is loaded by default.
 
@@ -79,21 +79,21 @@ CACHE EXPIRATION
 The parameters affecting local cache expiration may be tuned with
 flux-setattr(1):
 
-*content-purge-target-entries*::
+*content.purge-target-entries*::
 The cache is purged to bring the number of cache entries less than
 or equal to this value
 (default 1048576).
 
-*content-purge-target-size*::
+*content.purge-target-size*::
 The cache is purged to bring the sum of the size of cached blobs less
 than or equal to this value
 (default 16777216)
 
-*content-purge-old-entry*::
+*content.purge-old-entry*::
 Only entries that have not been accessed in *old-entry* heartbeat epochs
 are eligible for purge (default 5).
 
-*content-purge-large-entry*::
+*content.purge-large-entry*::
 Only entries with blob size greater than or equal to *large-entry* are
 purged to reach the size target (default 256).
 
@@ -106,16 +106,16 @@ CACHE ACCOUNTING
 ----------------
 Some accounting info for the local cache can be viewed with flux-getattr(1):
 
-*content-acct-entries*::
+*content.acct-entries*::
 The total number of cache entries.
 
-*content-acct-size*::
+*content.acct-size*::
 The sum of the size of cached blobs.
 
-*content-acct-dirty*::
+*content.acct-dirty*::
 The number of dirty cache entries.
 
-*content-acct-valid*::
+*content.acct-valid*::
 The number of valid cache entries.
 
 

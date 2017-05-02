@@ -32,6 +32,11 @@ int blobref_hash (const char *hashtype,
  */
 int blobref_validate (const char *blobref);
 
+/* Check the validity of hash type (by name)
+ */
+int blobref_validate_hashtype (const char *name);
+
+
 #endif /* _UTIL_BLOBREF_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

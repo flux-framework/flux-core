@@ -15,8 +15,8 @@ echo "# $0: flux session size will be ${SIZE}"
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 
-MAXBLOB=`flux getattr content-blob-size-limit`
-HASHFUN=`flux getattr content-hash`
+MAXBLOB=`flux getattr content.blob-size-limit`
+HASHFUN=`flux getattr content.hash`
 
 
 store_junk() {
@@ -82,7 +82,7 @@ test_expect_success 'load 1m blob bypassing cache' '
 '
 
 # Verify same blobs on all ranks
-# forcing content to fault in from the content-backing service
+# forcing content to fault in from the content.backing service
 
 test_expect_success 'load and verify 64b blob on all ranks' '
         HASHSTR=`cat 64.0.hash` &&
@@ -184,7 +184,7 @@ test_expect_success 'load 1m blob bypassing cache' '
 '
 
 test_expect_success 'exercise batching of synchronous flush to backing store' '
-	flux setattr content-flush-batch-limit 5 &&
+	flux setattr content.flush-batch-limit 5 &&
         store_junk loadunload 200 &&
     	flux content flush &&
 	NDIRTY=`flux module stats --type int --parse dirty content` &&

@@ -123,6 +123,16 @@ int main(int argc, char** argv)
         pp++;
     }
 
+    /* blobref_validate_hashtype */
+    ok (blobref_validate_hashtype ("sha1") == 0,
+        "blobref_validate_hashtype sha1 is valid");
+    ok (blobref_validate_hashtype ("sha256") == 0,
+        "blobref_validate_hashtype sha256 is valid");
+    ok (blobref_validate_hashtype ("nerf") == -1,
+        "blobref_validate_hashtype nerf is invalid");
+    ok (blobref_validate_hashtype (NULL) == -1,
+        "blobref_validate_hashtype NULL is invalid");
+
     done_testing();
 }
 
