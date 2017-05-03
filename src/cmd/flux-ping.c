@@ -102,7 +102,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     int64_t sec, nsec;
     struct timespec t0;
     int seq;
-    struct ping_data *pdata = flux_rpc_aux_get (rpc);
+    struct ping_data *pdata = flux_rpc_aux_get (rpc, "ping");
     tstat_t *tstat = pdata->tstat;
     uint32_t rolemask, userid;
 
@@ -181,7 +181,8 @@ void send_ping (struct ping_ctx *ctx)
                            "pad", ctx->pad);
     if (!rpc)
         log_err_exit ("flux_rpcf_multi");
-    flux_rpc_aux_set (rpc, pdata, ping_data_free);
+    if (flux_rpc_aux_set (rpc, "ping", pdata, ping_data_free) < 0)
+        log_err_exit ("flux_rpc_aux_set");
     if (flux_rpc_then (rpc, ping_continuation, ctx) < 0)
         log_err_exit ("flux_rpc_then");
 
