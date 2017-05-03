@@ -82,8 +82,6 @@ int flux_rpc_next (flux_rpc_t *rpc);
 
 /* Helper functions for extending flux_rpc_t.
  */
-const char *flux_rpc_type_get (flux_rpc_t *rpc);
-void flux_rpc_type_set (flux_rpc_t *rpc, const char *type);
 void *flux_rpc_aux_get (flux_rpc_t *rpc, const char *name);
 int flux_rpc_aux_set (flux_rpc_t *rpc, const char *name,
                       void *aux, flux_free_f destroy);

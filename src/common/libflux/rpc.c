@@ -61,7 +61,6 @@ struct flux_rpc_struct {
     int rx_expected;
     zhash_t *aux;
     flux_free_f aux_destroy;
-    const char *type;
     int usecount;
 };
 
@@ -591,17 +590,6 @@ done:
     va_end (ap);
     flux_msg_destroy (msg);
     return rc;
-}
-
-const char *flux_rpc_type_get (flux_rpc_t *rpc)
-{
-    return rpc->type;
-}
-
-void flux_rpc_type_set (flux_rpc_t *rpc, const char *type)
-{
-    assert (rpc->magic == RPC_MAGIC);
-    rpc->type = type;
 }
 
 void *flux_rpc_aux_get (flux_rpc_t *rpc, const char *name)
