@@ -56,6 +56,7 @@ struct flux_msg {
     int magic;
     zmsg_t *zmsg;
     json_t *json;
+    zhash_t *aux;
 };
 
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
@@ -262,9 +263,41 @@ void flux_msg_destroy (flux_msg_t *msg)
         json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
         msg->magic =~ FLUX_MSG_MAGIC;
+        zhash_destroy (&msg->aux);
         free (msg);
         errno = saved_errno;
     }
+}
+
+/* N.B. const attribute of msg argument is defeated internally to
+ * allow msg to be "annotated" for convenience.
+ * The message content is otherwise unchanged.
+ */
+int flux_msg_aux_set (const flux_msg_t *const_msg, const char *name,
+                      void *aux, flux_free_f destroy)
+{
+    flux_msg_t *msg = (flux_msg_t *)const_msg;
+    if (!msg->aux)
+        msg->aux = zhash_new ();
+    if (!msg->aux) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_delete (msg->aux, name);
+    if (zhash_insert (msg->aux, name, aux) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_freefn (msg->aux, name, destroy);
+    return 0;
+}
+
+void *flux_msg_aux_get (const flux_msg_t *msg, const char *name)
+{
+    if (!msg->aux)
+        return NULL;
+    return zhash_lookup (msg->aux, name);
+
 }
 
 size_t flux_msg_encode_size (const flux_msg_t *msg)
