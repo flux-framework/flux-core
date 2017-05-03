@@ -749,7 +749,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
         if (Jget_str (dirent, "LINKVAL", &link)) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (ctx, root, link, &dirent, wait, false, depth))
+            if (!walk (ctx, root, link, &dirent, wait, flags, depth))
                 goto stall;
             if (!dirent)
                 goto error;
