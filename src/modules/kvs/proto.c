@@ -242,50 +242,6 @@ done:
     return rc;
 }
 
-/* kvs.setroot (event)
- */
-
-json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
-			      json_object *root, json_object *names)
-{
-    json_object *o = NULL;
-    int n;
-
-    if (!rootdir || !names || !Jget_ar_len (names, &n) || n < 1) {
-        errno = EINVAL;
-        goto done;
-    }
-    o = Jnew ();
-    Jadd_int (o, "rootseq", rootseq);
-    Jadd_str (o, "rootdir", rootdir);
-    Jadd_obj (o, "names", names);         /* takes a ref */
-    if (root)
-        Jadd_obj (o, "rootdirval", root); /* takes a ref */
-done:
-    return o;
-}
-
-int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
-                     json_object **root, json_object **names)
-{
-    int rc = -1;
-
-    if (!o || !rootseq || !rootdir || !root || !names) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!Jget_int (o, "rootseq", rootseq) || !Jget_str (o, "rootdir", rootdir)
-                                          || !Jget_obj (o, "names", names)) {
-        errno = EPROTO;
-        goto done;
-    }
-    *root = NULL;
-    (void)Jget_obj (o, "rootdirval", root);
-    rc = 0;
-done:
-    return rc;
-}
-
 /* kvs.error (event)
  */
 

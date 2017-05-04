@@ -268,41 +268,41 @@ test_expect_success 'dispatcher suppresses guest event to same guest connection'
 	! grep -q test.a ev8.out
 '
 
-# kvs.setroot is a "private" event
+# ns.allcommit.kvs is a "private" event
 
 test_expect_success 'loaded kvs module' '
 	flux module load kvs
 '
 
-test_expect_success 'connector delivers kvs.setroot event to owner connection' '
+test_expect_success 'connector delivers ns.allcommit.kvs event to owner connection' '
 	run_timeout 5 \
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
-		kvs kvs.test.end \
-                "flux event pub kvs.test.a; \
+		ns ns.test.end \
+                "flux event pub ns.test.a; \
                  flux kvs put ev9=42; \
-                 flux event pub kvs.test.end" >ev9.out &&
-	grep -q kvs.setroot ev9.out
+                 flux event pub ns.test.end" >ev9.out &&
+	grep -q ns.allcommit.kvs ev9.out
 '
 
-test_expect_success 'dispatcher delivers kvs.setroot event to owner connection' '
+test_expect_success 'dispatcher delivers ns.allcommit.kvs event to owner connection' '
 	run_timeout 5 \
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
-		kvs kvs.test.end \
-                "flux event pub kvs.test.a; \
+		ns ns.test.end \
+                "flux event pub ns.test.a; \
                  flux kvs put ev10=42; \
-                 flux event pub kvs.test.end" >ev10.out &&
-	grep -q kvs.setroot ev10.out
+                 flux event pub ns.test.end" >ev10.out &&
+	grep -q ns.allcommit.kvs ev10.out
 '
 
-test_expect_success 'connector suppresses kvs.setroot event to guest connection' '
+test_expect_success 'connector suppresses ns.allcommit.kvs event to guest connection' '
 	flux module debug --set 4 connector-local &&
 	run_timeout 5 \
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
-		kvs kvs.test.end \
-                "flux event pub kvs.test.a; \
+		ns ns.test.end \
+                "flux event pub ns.test.a; \
                  flux kvs put ev11=42; \
-                 flux event pub kvs.test.end" >ev11.out &&
-	! grep -q kvs.setroot ev11.out
+                 flux event pub ns.test.end" >ev11.out &&
+	! grep -q ns.allcommit.kvs ev11.out
 '
 
 test_expect_success 'unloaded kvs module' '

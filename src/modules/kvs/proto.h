@@ -44,13 +44,6 @@ json_object *kp_tfence_enc (const char *name, int nprocs, int flags,
 int kp_tfence_dec (json_object *o, const char **name, int *nprocs,
                    int *flags, json_object **ops);
 
-/* kvs.setroot (event)
- */
-json_object *kp_tsetroot_enc (int rootseq, const char *rootdir,
-                              json_object *root, json_object *names);
-int kp_tsetroot_dec (json_object *o, int *rootseq, const char **rootdir,
-                     json_object **root, json_object **names);
-
 /* kvs.error (event)
  */
 json_object *kp_terror_enc (json_object *names, int errnum);
