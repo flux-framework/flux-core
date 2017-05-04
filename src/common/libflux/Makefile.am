@@ -48,6 +48,7 @@ intree_conf_cppflags = \
 
 fluxcoreinclude_HEADERS = \
 	flux.h \
+	types.h \
 	handle.h \
 	connector.h \
 	reactor.h \

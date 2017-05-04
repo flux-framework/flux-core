@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "types.h"
 #include "message.h"
 
 typedef struct flux_handle_struct flux_t;
@@ -95,11 +96,10 @@ void flux_fatal_error (flux_t *h, const char *fun, const char *msg);
 bool flux_fatality (flux_t *h);
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
- * handle by name.  The flux_free_f, if non-NULL, will be called
+ * handle by name.  The destructor, if non-NULL, will be called
  * to destroy this state when the handle is destroyed.
  * Key names used internally by flux-core are prefixed with "flux::".
  */
-typedef void (*flux_free_f)(void *arg);
 void *flux_aux_get (flux_t *h, const char *name);
 void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy);
 
