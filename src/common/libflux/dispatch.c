@@ -361,7 +361,7 @@ static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
                         && flux_msg_get_matchtag (msg, &matchtag) == 0
                         && matchtag != FLUX_MATCHTAG_NONE) {
-                (void)flux_respond (w->d->h, msg, EPERM, NULL);
+            (void)flux_respond (w->d->h, msg, EPERM, NULL);
         }
         return;
     }
