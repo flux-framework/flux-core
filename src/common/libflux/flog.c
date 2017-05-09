@@ -197,7 +197,7 @@ void flux_log_verror (flux_t *h, const char *fmt, va_list ap)
     if (vasprintf (&s, fmt, ap) < 0)
         flux_log (h, LOG_ERR, "Failed to log `%s`: Out of memory", fmt);
     else
-        flux_log (h, LOG_ERR, "%s: %s", s, flux_strerror (errno));
+        flux_log (h, LOG_ERR, "%s: %s", s, flux_strerror (saved_errno));
     free (s);
     errno = saved_errno;
 }
