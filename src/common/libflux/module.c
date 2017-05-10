@@ -35,7 +35,6 @@
 #include "message.h"
 #include "rpc.h"
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
 
@@ -49,11 +48,12 @@ static char *mod_service (const char *modname)
 {
     char *service = NULL;
     if (strchr (modname, '.')) {
-        service = xstrdup (modname);
-        char *p = strrchr (service, '.');
-        *p = '\0';
+        if ((service = strdup (modname))) {
+            char *p = strrchr (service, '.');
+            *p = '\0';
+        }
     } else
-        service = xstrdup ("cmb");
+        service = strdup ("cmb");
     return service;
 }
 
@@ -87,8 +87,8 @@ int flux_insmod_json_decode (const char *json_str,
             goto done;
         }
     }
-    if (pathp)
-        *pathp = xstrdup (path);
+    if (pathp && !(*pathp = strdup (path)))
+        goto done;
     rc = 0;
 done:
     json_decref (o);
@@ -135,8 +135,8 @@ int flux_rmmod_json_decode (const char *json_str, char **name)
         errno = EPROTO;
         goto done;
     }
-    if (name)
-        *name = xstrdup (s);
+    if (name && !(*name = strdup (s)))
+        goto done;
     rc = 0;
 done:
     json_decref (o);
@@ -244,8 +244,10 @@ char *flux_lsmod_json_encode (flux_modlist_t *mods)
 
 flux_modlist_t *flux_lsmod_json_decode (const char *json_str)
 {
-    flux_modlist_t *mods = xzmalloc (sizeof (*mods));
+    flux_modlist_t *mods = calloc (1, sizeof (*mods));
     json_error_t error;
+    if (!mods)
+        return NULL;
     if (!(mods->o = json_loads (json_str, 0, &error))) {
         free (mods);
         errno = EPROTO;
@@ -262,9 +264,12 @@ char *flux_modname(const char *path)
 
     dlerror ();
     if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | RTLD_DEEPBIND))) {
+        int errnum = EINVAL;
         if ((np = dlsym (dso, "mod_name")) && *np)
-            name = xstrdup (*np);
+            if (!(name = strdup (*np)))
+                errnum = ENOMEM;
         dlclose (dso);
+        errno = errnum;
         return name;
     }
     // Another reporting method may be warranted here, but when a dynamic
@@ -310,10 +315,12 @@ int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
 {
     flux_rpc_t *r = NULL;
     char *service = mod_service (name);
-    char *topic = xasprintf ("%s.rmmod", service);
+    char *topic = NULL;
     char *json_str = NULL;
     int rc = -1;
 
+    if (!service || asprintf (&topic, "%s.rmmod", service) < 0)
+        goto done;
     if (!(json_str = flux_rmmod_json_encode (name)))
         goto done;
     if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
@@ -335,12 +342,14 @@ int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg)
 {
     flux_rpc_t *r = NULL;
-    char *topic = xasprintf ("%s.lsmod", service ? service : "cmb");
+    char *topic = NULL;
     flux_modlist_t *mods = NULL;
     const char *json_str;
     int rc = -1;
     int i, len;
 
+    if (asprintf (&topic, "%s.lsmod", service ? service : "cmb") < 0)
+        goto done;
     if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
         goto done;
     if (flux_rpc_get (r, &json_str) < 0)
@@ -382,11 +391,11 @@ int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
     char *json_str = NULL;
     int rc = -1;
 
-    if (!(name = flux_modname (path))) {
+    if (!(name = flux_modname (path)) || !(service = mod_service (name)))
         goto done;
-    }
-    service = mod_service (name);
-    topic = xasprintf ("%s.insmod", service);
+
+    if (asprintf (&topic, "%s.insmod", service) < 0)
+        goto done;
 
     json_str = flux_insmod_json_encode (path, argc, argv);
     if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
