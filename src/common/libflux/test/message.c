@@ -578,6 +578,30 @@ void check_sendzsock (void)
     zsock_destroy (&zsock[1]);
 }
 
+void *myfree_arg = NULL;
+void myfree (void *arg)
+{
+    myfree_arg = arg;
+}
+
+void check_aux (void)
+{
+    flux_msg_t *msg;
+    char *test_data = "Hello";
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_aux_set (msg, "test", test_data, myfree) == 0,
+        "hang aux data member on message with destructor");
+    ok (flux_msg_aux_get (msg, "incorrect") == NULL,
+        "flux_msg_aux_get for unknown key returns NULL");
+    ok (flux_msg_aux_get (msg, "test") == test_data,
+        "flux_msg_aux_get aux data memeber key returns orig pointer");
+    flux_msg_destroy (msg);
+    ok (myfree_arg == test_data,
+        "destroyed message and aux destructor was called");
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -590,6 +614,7 @@ int main (int argc, char *argv[])
     check_payload_json_formatted ();
     check_matchtag ();
     check_security ();
+    check_aux ();
 
     check_cmp ();
 
