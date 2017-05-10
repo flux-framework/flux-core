@@ -1299,20 +1299,41 @@ done:
     return rc;
 }
 
-/* FIXME: this function copies payload and then deletes it if 'payload'
- * is false, when the point was to avoid the overhead of copying it in
- * the first place.
- */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
 {
-    assert (msg->magic == FLUX_MSG_MAGIC);
-    flux_msg_t *cpy = calloc (1, sizeof (*cpy));
-    if (!cpy)
+    flux_msg_t *cpy = NULL;
+    zframe_t *zf;
+    int count;
+    uint8_t flags;
+    bool skip_payload = false;
+
+    if (msg->magic != FLUX_MSG_MAGIC) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        goto error;
+    if (!payload && (flags & FLUX_MSGFLAG_PAYLOAD)) {
+        flags &= ~(FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
+        skip_payload = true;
+    }
+    if (!(cpy = calloc (1, sizeof (*cpy))))
         goto nomem;
     cpy->magic = FLUX_MSG_MAGIC;
-    if (!(cpy->zmsg = zmsg_dup (msg->zmsg)))
+    if (!(cpy->zmsg = zmsg_new ()))
         goto nomem;
-    if (!payload && flux_msg_set_payload (cpy, 0, NULL, 0) < 0)
+
+    count = 0;
+    zf = zmsg_first (msg->zmsg);
+    while (zf) {
+        if (!skip_payload || count != zmsg_size (msg->zmsg) - 2) {
+            if (zmsg_addmem (cpy->zmsg, zframe_data (zf), zframe_size (zf)) < 0)
+                goto nomem;
+        }
+        zf = zmsg_next (msg->zmsg);
+        count++;
+    }
+    if (flux_msg_set_flags (cpy, flags) < 0)
         goto error;
     return cpy;
 nomem:
