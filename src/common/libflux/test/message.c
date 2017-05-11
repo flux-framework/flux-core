@@ -602,6 +602,60 @@ void check_aux (void)
         "destroyed message and aux destructor was called");
 }
 
+void check_copy (void)
+{
+    flux_msg_t *msg, *cpy;
+    int type;
+    const char *topic;
+    int cpylen, flags;
+    char buf[] = "xxxxxxxxxxxxxxxxxx";
+    char *cpybuf;
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
+        "created no-payload keepalive");
+    ok ((cpy = flux_msg_copy (msg, true)) != NULL,
+        "flux_msg_copy works");
+    flux_msg_destroy (msg);
+    type = -1;
+    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_KEEPALIVE
+             && !flux_msg_has_payload (cpy)
+             && flux_msg_get_route_count (cpy) < 0
+             && flux_msg_get_topic (cpy, &topic) < 0,
+        "copy is keepalive: no routes, topic, or payload");
+    flux_msg_destroy (cpy);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created request");
+    ok (flux_msg_enable_route (msg) == 0,
+        "added route delim");
+    ok (flux_msg_set_topic (msg, "foo") == 0,
+        "set topic string");
+    ok (flux_msg_set_payload (msg, 0, buf, sizeof (buf)) == 0,
+        "added payload");
+    ok ((cpy = flux_msg_copy (msg, true)) != NULL,
+        "flux_msg_copy works");
+    type = -1;
+    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
+             && flux_msg_has_payload (cpy)
+             && flux_msg_get_payload (cpy, &flags, &cpybuf, &cpylen) == 0
+             && cpylen == sizeof (buf) && memcmp (cpybuf, buf, cpylen) == 0
+             && flux_msg_get_route_count (cpy) == 0
+             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+        "copy is request: w/route delim, topic, and payload");
+    flux_msg_destroy (cpy);
+
+    ok ((cpy = flux_msg_copy (msg, false)) != NULL,
+        "flux_msg_copy works (payload=false)");
+    type = -1;
+    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
+             && !flux_msg_has_payload (cpy)
+             && flux_msg_get_route_count (cpy) == 0
+             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+        "copy is request: w/route delim, topic, and no payload");
+    flux_msg_destroy (cpy);
+    flux_msg_destroy (msg);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -615,6 +669,7 @@ int main (int argc, char *argv[])
     check_matchtag ();
     check_security ();
     check_aux ();
+    check_copy ();
 
     check_cmp ();
 
