@@ -765,7 +765,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                       __FUNCTION__, path, name, Jtostr (dirent));
         } else if ((Jget_str (dirent, "FILEREF", NULL)
                  || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
-            errno = ENOTDIR;
+            /* don't return ENOENT or ENOTDIR, error to be determined by caller */
             goto error;
         } else {
             log_msg_exit ("%s: unknown dirent type: path=%s name=%s: dirent=%s ",
