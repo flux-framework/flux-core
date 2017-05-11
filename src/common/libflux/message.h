@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include "types.h"
 #include "security.h"
 
 typedef struct flux_msg flux_msg_t;
@@ -68,6 +69,13 @@ struct flux_msg_iobuf {
  */
 flux_msg_t *flux_msg_create (int type);
 void flux_msg_destroy (flux_msg_t *msg);
+
+/* Access auxiliary data members in Flux message.
+ * These are for convenience only - they are not sent over the wire.
+ */
+int flux_msg_aux_set (const flux_msg_t *msg, const char *name,
+                      void *aux, flux_free_f destroy);
+void *flux_msg_aux_get (const flux_msg_t *msg, const char *name);
 
 /* Duplicate msg, omitting payload if 'payload' is false.
  */
@@ -298,11 +306,6 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  * Caller must free the returned string.
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
-
-/* Return true if route stack contains a frame matching 's'
- */
-bool flux_msg_has_route (const flux_msg_t *msg, const char *s);
-
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

@@ -189,7 +189,7 @@ static void content_load_completion (flux_rpc_t *rpc, void *arg)
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    blobref = flux_rpc_aux_get (rpc);
+    blobref = flux_rpc_aux_get (rpc, "ref");
     if (!(o = json_tokener_parse_ex (ctx->tok, (char *)data, size))) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s", __FUNCTION__);
@@ -217,7 +217,8 @@ static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now
     if (!(rpc = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
         goto error;
-    flux_rpc_aux_set (rpc, xstrdup (ref), free);
+    if (flux_rpc_aux_set (rpc, "ref", xstrdup (ref), free) < 0)
+        goto error;
     if (now) {
         content_load_completion (rpc, ctx);
     } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0) {

@@ -56,6 +56,7 @@ struct flux_msg {
     int magic;
     zmsg_t *zmsg;
     json_t *json;
+    zhash_t *aux;
 };
 
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
@@ -262,9 +263,41 @@ void flux_msg_destroy (flux_msg_t *msg)
         json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
         msg->magic =~ FLUX_MSG_MAGIC;
+        zhash_destroy (&msg->aux);
         free (msg);
         errno = saved_errno;
     }
+}
+
+/* N.B. const attribute of msg argument is defeated internally to
+ * allow msg to be "annotated" for convenience.
+ * The message content is otherwise unchanged.
+ */
+int flux_msg_aux_set (const flux_msg_t *const_msg, const char *name,
+                      void *aux, flux_free_f destroy)
+{
+    flux_msg_t *msg = (flux_msg_t *)const_msg;
+    if (!msg->aux)
+        msg->aux = zhash_new ();
+    if (!msg->aux) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_delete (msg->aux, name);
+    if (zhash_insert (msg->aux, name, aux) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_freefn (msg->aux, name, destroy);
+    return 0;
+}
+
+void *flux_msg_aux_get (const flux_msg_t *msg, const char *name)
+{
+    if (!msg->aux)
+        return NULL;
+    return zhash_lookup (msg->aux, name);
+
 }
 
 size_t flux_msg_encode_size (const flux_msg_t *msg)
@@ -834,19 +867,6 @@ int flux_msg_get_route_count (const flux_msg_t *msg)
     return count;
 }
 
-bool flux_msg_has_route (const flux_msg_t *msg, const char *s)
-{
-    zframe_t *zf;
-
-    zf = zmsg_first (msg->zmsg);
-    while (zf && zframe_size (zf) > 0) {
-        if (zframe_streq (zf, s))
-            return true;
-        zf = zmsg_next (msg->zmsg);
-    }
-    return false;
-}
-
 /* Get sum of size in bytes of route frames
  */
 static int flux_msg_get_route_size (const flux_msg_t *msg)
@@ -1266,20 +1286,41 @@ done:
     return rc;
 }
 
-/* FIXME: this function copies payload and then deletes it if 'payload'
- * is false, when the point was to avoid the overhead of copying it in
- * the first place.
- */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
 {
-    assert (msg->magic == FLUX_MSG_MAGIC);
-    flux_msg_t *cpy = calloc (1, sizeof (*cpy));
-    if (!cpy)
+    flux_msg_t *cpy = NULL;
+    zframe_t *zf;
+    int count;
+    uint8_t flags;
+    bool skip_payload = false;
+
+    if (msg->magic != FLUX_MSG_MAGIC) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        goto error;
+    if (!payload && (flags & FLUX_MSGFLAG_PAYLOAD)) {
+        flags &= ~(FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
+        skip_payload = true;
+    }
+    if (!(cpy = calloc (1, sizeof (*cpy))))
         goto nomem;
     cpy->magic = FLUX_MSG_MAGIC;
-    if (!(cpy->zmsg = zmsg_dup (msg->zmsg)))
+    if (!(cpy->zmsg = zmsg_new ()))
         goto nomem;
-    if (!payload && flux_msg_set_payload (cpy, 0, NULL, 0) < 0)
+
+    count = 0;
+    zf = zmsg_first (msg->zmsg);
+    while (zf) {
+        if (!skip_payload || count != zmsg_size (msg->zmsg) - 2) {
+            if (zmsg_addmem (cpy->zmsg, zframe_data (zf), zframe_size (zf)) < 0)
+                goto nomem;
+        }
+        zf = zmsg_next (msg->zmsg);
+        count++;
+    }
+    if (flux_msg_set_flags (cpy, flags) < 0)
         goto error;
     return cpy;
 nomem:

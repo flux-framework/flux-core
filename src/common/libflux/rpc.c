@@ -33,6 +33,7 @@
 #include <sys/syscall.h>
 #endif
 #include <jansson.h>
+#include <czmq.h>
 
 #include "request.h"
 #include "response.h"
@@ -58,9 +59,8 @@ struct flux_rpc_struct {
     int rx_errnum;
     int rx_count;
     int rx_expected;
-    void *aux;
+    zhash_t *aux;
     flux_free_f aux_destroy;
-    const char *type;
     int usecount;
 };
 
@@ -88,8 +88,7 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
                 flux_matchtag_free (rpc->h, rpc->m.matchtag);
         }
         flux_msg_destroy (rpc->rx_msg);
-        if (rpc->aux && rpc->aux_destroy)
-            rpc->aux_destroy (rpc->aux);
+        zhash_destroy (&rpc->aux);
         rpc->magic =~ RPC_MAGIC;
         free (rpc);
     }
@@ -593,30 +592,31 @@ done:
     return rc;
 }
 
-const char *flux_rpc_type_get (flux_rpc_t *rpc)
-{
-    return rpc->type;
-}
-
-void flux_rpc_type_set (flux_rpc_t *rpc, const char *type)
+void *flux_rpc_aux_get (flux_rpc_t *rpc, const char *name)
 {
     assert (rpc->magic == RPC_MAGIC);
-    rpc->type = type;
+    if (!rpc->aux)
+        return NULL;
+    return zhash_lookup (rpc->aux, name);
 }
 
-void *flux_rpc_aux_get (flux_rpc_t *rpc)
+int flux_rpc_aux_set (flux_rpc_t *rpc, const char *name,
+                      void *aux, flux_free_f destroy)
 {
     assert (rpc->magic == RPC_MAGIC);
-    return rpc->aux;
-}
-
-void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy)
-{
-    assert (rpc->magic == RPC_MAGIC);
-    if (rpc->aux && rpc->aux_destroy)
-        rpc->aux_destroy (rpc->aux);
-    rpc->aux = aux;
-    rpc->aux_destroy = destroy;
+    if (!rpc->aux)
+        rpc->aux = zhash_new ();
+    if (!rpc->aux) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_delete (rpc->aux, name);
+    if (zhash_insert (rpc->aux, name, aux) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zhash_freefn (rpc->aux, name, destroy);
+    return 0;
 }
 
 /*

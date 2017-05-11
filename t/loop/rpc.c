@@ -108,26 +108,41 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
         (void)flux_respondf (h, msg, "{}");
 }
 
+void *auxfree_arg = NULL;
+void auxfree (void *arg)
+{
+    auxfree_arg = arg;
+}
+
 void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     json_object *o;
     const char *json_str;
     flux_rpc_t *r;
+    char *aux_data = "Hello";
 
     errno = 0;
     ok (!(r = flux_rpc (h, NULL, NULL, FLUX_NODEID_ANY, 0))
         && errno == EINVAL,
         "flux_rpc with NULL topic fails with EINVAL");
 
-    /* working no-payload RPC */
+    /* working no-payload RPC (with aux data) */
     ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with no payload when none is expected works");
+    ok (flux_rpc_aux_set (r, "test", aux_data, auxfree) == 0,
+        "flux_rpc_aux_set works");
+    ok (flux_rpc_aux_get (r, "wrong") == NULL,
+        "flux_rpc_aux_get on wrong key returns NULL");
+    ok (flux_rpc_aux_get (r, "test") == aux_data,
+        "flux_rpc_aux_get on right key returns orig pointer");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works");
     flux_rpc_destroy (r);
+    ok (auxfree_arg == aux_data,
+        "destroyed rpc and aux destructor was called with correct arg");
 
     /* cause remote EPROTO (unexpected payload) - will be picked up in _get() */
     ok ((r = flux_rpc (h, "rpctest.hello", "{}", FLUX_NODEID_ANY, 0)) != NULL,

@@ -272,7 +272,7 @@ static void remove_entry (content_cache_t *cache, struct cache_entry *e)
 static void cache_load_continuation (flux_rpc_t *rpc, void *arg)
 {
     content_cache_t *cache = arg;
-    struct cache_entry *e = flux_rpc_aux_get (rpc);
+    struct cache_entry *e = flux_rpc_aux_get (rpc, "entry");
     void *data = NULL;
     int len = 0;
     int saved_errno;
@@ -329,7 +329,10 @@ static int cache_load (content_cache_t *cache, struct cache_entry *e)
             flux_log_error (cache->h, "%s: RPC", __FUNCTION__);
         goto done;
     }
-    flux_rpc_aux_set (rpc, e, NULL);
+    if (flux_rpc_aux_set (rpc, "entry", e, NULL) < 0) {
+        flux_log_error (cache->h, "content load flux_rpc_aux_set");
+        goto done;
+    }
     if (flux_rpc_then (rpc, cache_load_continuation, cache) < 0) {
         saved_errno = errno;
         flux_log_error (cache->h, "content load");
@@ -421,7 +424,7 @@ done:
 static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
 {
     content_cache_t *cache = arg;
-    struct cache_entry *e = flux_rpc_aux_get (rpc);
+    struct cache_entry *e = flux_rpc_aux_get (rpc, "entry");
     const char *blobref;
     int saved_errno = 0;
     int rc = -1;
@@ -491,7 +494,10 @@ static int cache_store (content_cache_t *cache, struct cache_entry *e)
         flux_log_error (cache->h, "content store");
         goto done;
     }
-    flux_rpc_aux_set (rpc, e, NULL);
+    if (flux_rpc_aux_set (rpc, "entry", e, NULL) < 0) {
+        flux_log_error (cache->h, "content store: flux_rpc_aux_set");
+        goto done;
+    }
     if (flux_rpc_then (rpc, cache_store_continuation, cache) < 0) {
         saved_errno = errno;
         flux_log_error (cache->h, "content store");

@@ -1,6 +1,7 @@
 #ifndef _FLUX_CORE_FLUX_H
 #define _FLUX_CORE_FLUX_H
 
+#include "types.h"
 #include "handle.h"
 #include "reactor.h"
 #include "dispatch.h"

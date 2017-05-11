@@ -3,6 +3,7 @@
 #endif
 #include <czmq.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
@@ -135,6 +136,7 @@ void check_payload_json (void)
     /* RFC 3 - json payload must be an object
      * Encoding should return EINVAL.
      */
+/* XXX */
     errno = 0;
     ok (flux_msg_set_json (msg, "[1,2,3]") < 0 && errno == EINVAL,
        "flux_msg_set_json array fails with EINVAL");
@@ -578,6 +580,131 @@ void check_sendzsock (void)
     zsock_destroy (&zsock[1]);
 }
 
+void *myfree_arg = NULL;
+void myfree (void *arg)
+{
+    myfree_arg = arg;
+}
+
+void check_aux (void)
+{
+    flux_msg_t *msg;
+    char *test_data = "Hello";
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_aux_set (msg, "test", test_data, myfree) == 0,
+        "hang aux data member on message with destructor");
+    ok (flux_msg_aux_get (msg, "incorrect") == NULL,
+        "flux_msg_aux_get for unknown key returns NULL");
+    ok (flux_msg_aux_get (msg, "test") == test_data,
+        "flux_msg_aux_get aux data memeber key returns orig pointer");
+    flux_msg_destroy (msg);
+    ok (myfree_arg == test_data,
+        "destroyed message and aux destructor was called");
+}
+
+void check_copy (void)
+{
+    flux_msg_t *msg, *cpy;
+    int type;
+    const char *topic;
+    int cpylen, flags;
+    char buf[] = "xxxxxxxxxxxxxxxxxx";
+    char *cpybuf;
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
+        "created no-payload keepalive");
+    ok ((cpy = flux_msg_copy (msg, true)) != NULL,
+        "flux_msg_copy works");
+    flux_msg_destroy (msg);
+    type = -1;
+    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_KEEPALIVE
+             && !flux_msg_has_payload (cpy)
+             && flux_msg_get_route_count (cpy) < 0
+             && flux_msg_get_topic (cpy, &topic) < 0,
+        "copy is keepalive: no routes, topic, or payload");
+    flux_msg_destroy (cpy);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created request");
+    ok (flux_msg_enable_route (msg) == 0,
+        "added route delim");
+    ok (flux_msg_set_topic (msg, "foo") == 0,
+        "set topic string");
+    ok (flux_msg_set_payload (msg, 0, buf, sizeof (buf)) == 0,
+        "added payload");
+    ok ((cpy = flux_msg_copy (msg, true)) != NULL,
+        "flux_msg_copy works");
+    type = -1;
+    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
+             && flux_msg_has_payload (cpy)
+             && flux_msg_get_payload (cpy, &flags, &cpybuf, &cpylen) == 0
+             && cpylen == sizeof (buf) && memcmp (cpybuf, buf, cpylen) == 0
+             && flux_msg_get_route_count (cpy) == 0
+             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+        "copy is request: w/route delim, topic, and payload");
+    flux_msg_destroy (cpy);
+
+    ok ((cpy = flux_msg_copy (msg, false)) != NULL,
+        "flux_msg_copy works (payload=false)");
+    type = -1;
+    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
+             && !flux_msg_has_payload (cpy)
+             && flux_msg_get_route_count (cpy) == 0
+             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+        "copy is request: w/route delim, topic, and no payload");
+    flux_msg_destroy (cpy);
+    flux_msg_destroy (msg);
+}
+
+void check_print (void)
+{
+    flux_msg_t *msg;
+    char buf[] = "xxxxxxxx";
+    FILE *f = fopen ("/dev/null", "w");
+    if (!f)
+        BAIL_OUT ("cannot open /dev/null for writing");
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
+        "created test message");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on keepalive");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL,
+        "created test message");
+    ok (flux_msg_set_topic (msg, "foo.bar") == 0,
+        "set topic string");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on event with topic");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_set_topic (msg, "foo.bar") == 0,
+        "set topic string");
+    ok (flux_msg_enable_route (msg) == 0,
+        "enabled routing");
+    ok (flux_msg_push_route (msg, "id1") == 0,
+        "added one route");
+    ok (flux_msg_set_payload (msg, 0, buf, strlen (buf)) == 0,
+        "added payload");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on fully loaded request");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
+        "created test message");
+    ok (flux_msg_enable_route (msg) == 0,
+        "enabled routing");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on response with empty route stack");
+    flux_msg_destroy (msg);
+
+    fclose (f);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -590,12 +717,16 @@ int main (int argc, char *argv[])
     check_payload_json_formatted ();
     check_matchtag ();
     check_security ();
+    check_aux ();
+    check_copy ();
 
     check_cmp ();
 
     check_encode ();
     check_sendfd ();
     check_sendzsock ();
+
+    //check_print ();
 
     done_testing();
     return (0);
