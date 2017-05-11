@@ -307,11 +307,6 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
 
-/* Return true if route stack contains a frame matching 's'
- */
-bool flux_msg_has_route (const flux_msg_t *msg, const char *s);
-
-
 #endif /* !_FLUX_CORE_MESSAGE_H */
 
 /*
