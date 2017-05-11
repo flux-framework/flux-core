@@ -731,7 +731,8 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
 /* Get dirent containing requested key.
  */
 static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
-                  json_object **direntp, wait_t *wait, int flags, int depth)
+                  json_object **direntp, wait_t *wait, int flags, int depth,
+                  int *ep)
 {
     char *cpy = xstrdup (path);
     char *next, *name = cpy;
@@ -739,6 +740,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
     const char *link;
     json_object *dirent = NULL;
     json_object *dir = root;
+    int errnum = 0;
 
     depth++;
 
@@ -748,10 +750,16 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
         if (!json_object_object_get_ex (dir, name, &dirent))
             goto error;
         if (Jget_str (dirent, "LINKVAL", &link)) {
-            if (depth == SYMLINK_CYCLE_LIMIT)
-                goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (ctx, root, link, &dirent, wait, flags, depth))
+            if (depth == SYMLINK_CYCLE_LIMIT) {
+                errnum = ELOOP;
+                goto error;
+            }
+            if (!walk (ctx, root, link, &dirent, wait, flags, depth, ep))
                 goto stall;
+            if (*ep != 0) {
+                errnum = *ep;
+                goto error;
+            }
             if (!dirent)
                 goto error;
         }
@@ -777,16 +785,24 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
     if (json_object_object_get_ex (dir, name, &dirent) &&
         Jget_str (dirent, "LINKVAL", &link)) {
         if (!(flags & KVS_PROTO_READLINK) && !(flags & KVS_PROTO_TREEOBJ)) {
-            if (depth == SYMLINK_CYCLE_LIMIT)
-                goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (ctx, root, link, &dirent, wait, flags, depth))
+            if (depth == SYMLINK_CYCLE_LIMIT) {
+                errnum = ELOOP;
+                goto error;
+            }
+            if (!walk (ctx, root, link, &dirent, wait, flags, depth, ep))
                 goto stall;
+            if (*ep != 0) {
+                errnum = *ep;
+                goto error;
+            }
         }
     }
     free (cpy);
     *direntp = dirent;
     return true;
 error:
+    if (errnum != 0)
+        *ep = errnum;
     free (cpy);
     *direntp = NULL;
     return true;
@@ -800,6 +816,7 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
                     json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
+    int walk_errnum = 0;
     int errnum = 0;
 
     assert (root != NULL);
@@ -815,8 +832,12 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
             val = json_object_get (root);
         }
     } else {
-        if (!walk (ctx, root, name, &dirent, wait, flags, 0))
+        if (!walk (ctx, root, name, &dirent, wait, flags, 0, &walk_errnum))
             goto stall;
+        if (walk_errnum != 0) {
+            errnum = walk_errnum;
+            goto done;
+        }
         if (!dirent) {
             //errnum = ENOENT;
             goto done; /* a NULL response is not necessarily an error */
