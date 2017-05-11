@@ -107,10 +107,10 @@ typedef struct {
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
 static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
-void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg);
-void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg);
+static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
+                            int revents, void *arg);
+static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                             int revents, void *arg);
 
 static void freectx (void *arg)
 {
@@ -593,8 +593,8 @@ stall:
     return;
 }
 
-void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
+                            int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     fence_t *f;
@@ -619,7 +619,7 @@ void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
  * If we were to merge commit #1 and commit #3, A=2 would be set after
  * A=3.
  */
-void commit_merge_all (kvs_ctx_t *ctx)
+static void commit_merge_all (kvs_ctx_t *ctx)
 {
     fence_t *f = zlist_first (ctx->ready);
 
@@ -660,8 +660,8 @@ void commit_merge_all (kvs_ctx_t *ctx)
     }
 }
 
-void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                             int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     fence_t *f;
@@ -749,7 +749,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
         if (Jget_str (dirent, "LINKVAL", &link)) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (ctx, root, link, &dirent, wait, false, depth))
+            if (!walk (ctx, root, link, &dirent, wait, flags, depth))
                 goto stall;
             if (!dirent)
                 goto error;
@@ -758,7 +758,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
             if (!load (ctx, ref, wait, &dir))
                 goto stall;
 
-        } else if (json_object_object_get_ex (dirent, "DIRVAL", &dir)) {
+        } else if (json_object_object_get_ex (dirent, "DIRVAL", NULL)) {
             /* N.B. in current code, directories are never stored by value */
             log_msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
                       __FUNCTION__, path, name, Jtostr (dirent));
