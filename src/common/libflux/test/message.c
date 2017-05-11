@@ -3,6 +3,7 @@
 #endif
 #include <czmq.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
@@ -135,6 +136,7 @@ void check_payload_json (void)
     /* RFC 3 - json payload must be an object
      * Encoding should return EINVAL.
      */
+/* XXX */
     errno = 0;
     ok (flux_msg_set_json (msg, "[1,2,3]") < 0 && errno == EINVAL,
        "flux_msg_set_json array fails with EINVAL");
@@ -656,6 +658,53 @@ void check_copy (void)
     flux_msg_destroy (msg);
 }
 
+void check_print (void)
+{
+    flux_msg_t *msg;
+    char buf[] = "xxxxxxxx";
+    FILE *f = fopen ("/dev/null", "w");
+    if (!f)
+        BAIL_OUT ("cannot open /dev/null for writing");
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
+        "created test message");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on keepalive");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL,
+        "created test message");
+    ok (flux_msg_set_topic (msg, "foo.bar") == 0,
+        "set topic string");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on event with topic");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_set_topic (msg, "foo.bar") == 0,
+        "set topic string");
+    ok (flux_msg_enable_route (msg) == 0,
+        "enabled routing");
+    ok (flux_msg_push_route (msg, "id1") == 0,
+        "added one route");
+    ok (flux_msg_set_payload (msg, 0, buf, strlen (buf)) == 0,
+        "added payload");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on fully loaded request");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
+        "created test message");
+    ok (flux_msg_enable_route (msg) == 0,
+        "enabled routing");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on response with empty route stack");
+    flux_msg_destroy (msg);
+
+    fclose (f);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -676,6 +725,8 @@ int main (int argc, char *argv[])
     check_encode ();
     check_sendfd ();
     check_sendzsock ();
+
+    //check_print ();
 
     done_testing();
     return (0);
