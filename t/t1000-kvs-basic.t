@@ -525,6 +525,32 @@ test_expect_success 'kvs: symlink: readlink works on non-dangling link' '
 	test "$OUTPUT" = "$TEST.a.b.c"
 '
 
+# Check for limit on link depth
+
+test_expect_success 'kvs: symlink: error on link depth' '
+	${KVSBASIC} unlink $TEST &&
+        ${KVSBASIC} put $TEST.a=1 &&
+	${KVSBASIC} link $TEST.a $TEST.b &&
+	${KVSBASIC} link $TEST.b $TEST.c &&
+	${KVSBASIC} link $TEST.c $TEST.d &&
+	${KVSBASIC} link $TEST.d $TEST.e &&
+	${KVSBASIC} link $TEST.e $TEST.f &&
+	${KVSBASIC} link $TEST.f $TEST.g &&
+	${KVSBASIC} link $TEST.g $TEST.h &&
+	${KVSBASIC} link $TEST.h $TEST.i &&
+	${KVSBASIC} link $TEST.i $TEST.j &&
+	${KVSBASIC} link $TEST.j $TEST.k &&
+	${KVSBASIC} link $TEST.k $TEST.l &&
+        test_must_fail ${KVSBASIC} get $TEST.l
+'
+
+test_expect_success 'kvs: symlink: error on link depth, loop' '
+	${KVSBASIC} unlink $TEST &&
+	${KVSBASIC} link $TEST.link1 $TEST.link2 &&
+	${KVSBASIC} link $TEST.link2 $TEST.link1 &&
+        test_must_fail ${KVSBASIC} get $TEST.link1
+'
+
 # test synchronization based on commit sequence no.
 
 test_expect_success 'kvs: put on rank 0, exists on all ranks' '
