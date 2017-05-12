@@ -748,6 +748,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
     while ((next = strchr (name, '.'))) {
         *next++ = '\0';
         if (!json_object_object_get_ex (dir, name, &dirent))
+            /* not necessarily ENOENT, let caller decide */
             goto error;
         if (Jget_str (dirent, "LINKVAL", &link)) {
             if (depth == SYMLINK_CYCLE_LIMIT) {
@@ -761,6 +762,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                 goto error;
             }
             if (!dirent)
+                /* not necessarily ENOENT, let caller decide */
                 goto error;
         }
         if (Jget_str (dirent, "DIRREF", &ref)) {
