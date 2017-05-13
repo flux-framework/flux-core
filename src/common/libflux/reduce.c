@@ -33,10 +33,6 @@
 #include "info.h"
 #include "attr.h"
 
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
-
-
 struct flux_reduce_struct {
     struct flux_reduce_ops ops;
     void *arg;
@@ -81,7 +77,9 @@ flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
         errno = EINVAL;
         return NULL;
     }
-    flux_reduce_t *r = xzmalloc (sizeof (*r));
+    flux_reduce_t *r = calloc (1, sizeof (*r));
+    if (!r)
+        return NULL;
     r->h = h;
     if (!(r->reactor = flux_get_reactor (h))) {
         flux_reduce_destroy (r);
@@ -97,8 +95,10 @@ flux_reduce_t *flux_reduce_create (flux_t *h, struct flux_reduce_ops ops,
     r->arg = arg;
     r->flags = flags;
     r->timeout = timeout;
-    if (!(r->items = zlist_new ()))
-        oom ();
+    if (!(r->items = zlist_new ())) {
+        flux_reduce_destroy (r);
+        return NULL;
+    }
     if ((flags & FLUX_REDUCE_TIMEDFLUSH)) {
         if (!(r->timer = flux_timer_watcher_create (r->reactor, 0., 0.,
                                                     timer_cb, r))) {
