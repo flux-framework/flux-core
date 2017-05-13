@@ -73,7 +73,9 @@ libutil_la_SOURCES = \
 	stdlog.c \
 	oom.h \
 	lru_cache.h \
-	lru_cache.c
+	lru_cache.c \
+	dirwalk.h \
+	dirwalk.c
 
 EXTRA_DIST = veb_mach.c
 
