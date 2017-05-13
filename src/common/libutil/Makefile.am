@@ -95,7 +95,8 @@ TESTS = test_nodeset.t \
 	test_lru_cache.t \
 	test_unlink.t \
 	test_cleanup.t \
-	test_blobref.t
+	test_blobref.t \
+	test_dirwalk.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -183,3 +184,7 @@ test_unlink_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
 test_cleanup_t_SOURCES = test/cleanup.c
 test_cleanup_t_CPPFLAGS = $(test_cppflags) $(JANSSON_CFLAGS)
 test_cleanup_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
+
+test_dirwalk_t_SOURCES = test/dirwalk.c
+test_dirwalk_t_CPPFLAGS = $(test_cppflags)
+test_dirwalk_t_LDADD = $(test_ldadd)
