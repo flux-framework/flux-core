@@ -49,6 +49,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/msglist.h"
+#include "src/common/libutil/dirwalk.h"
 
 #if HAVE_CALIPER
 struct profiling_context {
@@ -189,68 +190,14 @@ static void profiling_msg_snapshot (flux_t *h,
 
 #endif
 
-static char *find_file_r (const char *name, const char *dirpath)
-{
-    DIR *dir;
-    struct dirent entry, *dent;
-    char *filepath = NULL;
-    struct stat sb;
-    char path[PATH_MAX];
-    size_t len = sizeof (path);
-
-    if (!(dir = opendir (dirpath)))
-        goto error;
-    while (!filepath) {
-        if ((errno = readdir_r (dir, &entry, &dent)) != 0)
-            goto error;
-        if (dent == NULL) {
-            errno = ENOENT;
-            goto error;
-        }
-        if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
-            continue;
-        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len)
-            continue;
-        if (stat (path, &sb) == 0) {
-            if (S_ISDIR (sb.st_mode)) {
-                filepath = find_file_r (name, path);
-            } else if (!strcmp (dent->d_name, name)) {
-                if (!(filepath = realpath (path, NULL)))
-                    goto error;
-            }
-        }
-    }
-    closedir (dir);
-    return filepath;
-error:
-    if (dir) {
-        int saved_errno = errno;
-        closedir (dir);
-        errno = saved_errno;
-    }
-    return NULL;
-}
-
 static char *find_file (const char *name, const char *searchpath)
 {
-    char *cpy = strdup (searchpath);
-    char *dirpath, *saveptr = NULL, *a1 = cpy;
-    char *path = NULL;
-
-    if (!cpy) {
-        errno = ENOMEM;
+    char *path;
+    zlist_t *l;
+    if (!(l = dirwalk_find (searchpath, DIRWALK_REALPATH, name, 1, NULL, NULL)))
         return NULL;
-    }
-    while ((dirpath = strtok_r (a1, ":", &saveptr))) {
-        if ((path = find_file_r (name, dirpath)))
-            break;
-        a1 = NULL;
-    }
-    if (cpy) {
-        int saved_errno = errno;
-        free (cpy);
-        errno = saved_errno;
-    }
+    path = zlist_pop (l);
+    zlist_destroy (&l);
     return path;
 }
 
