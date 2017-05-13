@@ -37,47 +37,20 @@
 
 #include <czmq.h>
 #include "unlink_recursive.h"
+#include "dirwalk.h"
 
-static int unlinkat_recursive (int fd)
+
+static int unlinker (dirwalk_t *d, void *arg)
 {
-    DIR *dir;
-    struct dirent *d, entry;
-    struct stat sb;
-    int cfd;
-    int count = 0;
-
-    if ((dir = fdopendir (fd))) {
-        while (readdir_r (dir, &entry, &d) == 0 && d != NULL) {
-            if (!strcmp (d->d_name, ".") || !strcmp (d->d_name, ".."))
-                continue;
-            if (fstatat (fd, d->d_name, &sb, AT_SYMLINK_NOFOLLOW) < 0)
-                continue;
-            if (S_ISDIR (sb.st_mode)) {
-                if ((cfd = openat (fd, d->d_name, O_DIRECTORY)) < 0)
-                    continue;
-                count += unlinkat_recursive (cfd);
-                if (unlinkat (fd, d->d_name, AT_REMOVEDIR) == 0)
-                    count++;
-            } else {
-                if (unlinkat (fd, d->d_name, 0) == 0)
-                    count++;
-            }
-        }
-        closedir (dir);
-    }
-    return count;
+    if (unlinkat (dirwalk_dirfd (d), dirwalk_name (d),
+                  dirwalk_isdir (d) ? AT_REMOVEDIR : 0) < 0)
+        dirwalk_stop (d, errno);
+    return (0);
 }
 
 int unlink_recursive (const char *dirpath)
 {
-    int count = 0;
-    DIR *dir = opendir (dirpath);
-    if (dir) {
-        count += unlinkat_recursive (dirfd (dir));
-        if (rmdir (dirpath) == 0)
-            count++;
-    }
-    return count;
+    return dirwalk (dirpath, DIRWALK_DEPTH, unlinker, NULL);
 }
 
 /*
