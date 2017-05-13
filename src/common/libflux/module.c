@@ -37,7 +37,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
+#include "src/common/libutil/dirwalk.h"
 
 struct flux_modlist_struct {
     json_t *o;
@@ -285,69 +285,25 @@ static int flux_modname_cmp(const char *path, const char *name)
     return rc;
 }
 
-#ifndef MAX
-#define MAX(a,b)    ((a)>(b)?(a):(b))
-#endif
-
 /* helper for flux_modfind() */
-static int strcmpend (const char *s1, const char *s2)
+static int mod_find_f (dirwalk_t *d, void *arg)
 {
-    int skip = MAX (strlen (s1) - strlen (s2), 0);
-    return strcmp (s1 + skip, s2);
-}
-
-/* helper for flux_modfind() */
-static char *modfind (const char *dirpath, const char *modname)
-{
-    DIR *dir;
-    struct dirent entry, *dent;
-    char *modpath = NULL;
-    struct stat sb;
-    char path[PATH_MAX];
-    size_t len = sizeof (path);
-
-    if (!(dir = opendir (dirpath)))
-        goto done;
-    while (!modpath) {
-        if ((errno = readdir_r (dir, &entry, &dent)) > 0 || dent == NULL)
-            break;
-        if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
-            continue;
-        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len) {
-            errno = EINVAL;
-            break;
-        }
-        if (stat (path, &sb) == 0) {
-            if (S_ISDIR (sb.st_mode))
-                modpath = modfind (path, modname);
-            else if (!strcmpend (path, ".so")) {
-                if (!flux_modname_cmp (path, modname))
-                    if (!(modpath = realpath (path, NULL)))
-                        oom ();
-
-            }
-        }
-    }
-    closedir (dir);
-done:
-    return modpath;
+    const char *name = arg;
+    return (flux_modname_cmp (dirwalk_path (d), name) == 0);
 }
 
 char *flux_modfind (const char *searchpath, const char *modname)
 {
-    char *cpy = xstrdup (searchpath);
-    char *dirpath, *saveptr = NULL, *a1 = cpy;
-    char *modpath = NULL;
-
-    while ((dirpath = strtok_r (a1, ":", &saveptr))) {
-        if ((modpath = modfind (dirpath, modname)))
-            break;
-        a1 = NULL;
+    char *result = NULL;
+    zlist_t *l = dirwalk_find (searchpath, 0, "*.so", 1,
+                               mod_find_f, (void *) modname);
+    if (l) {
+        result = zlist_pop (l);
+        zlist_destroy (&l);
     }
-    free (cpy);
-    if (!modpath)
+    if (!result)
         errno = ENOENT;
-    return modpath;
+    return result;
 }
 
 int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
