@@ -29,11 +29,9 @@
 #include "reparent.h"
 #include "rpc.h"
 
-#include "src/common/libutil/xzmalloc.h"
-
-
 char *flux_lspeer (flux_t *h, int rank)
 {
+    int saved_errno;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     flux_rpc_t *r = NULL;
     const char *json_str;
@@ -47,9 +45,11 @@ char *flux_lspeer (flux_t *h, int rank)
         errno = EPROTO;
         goto done;
     }
-    ret = xstrdup (json_str);
+    ret = strdup (json_str);
 done:
+    saved_errno = errno;
     flux_rpc_destroy (r);
+    errno = saved_errno;
     return ret;
 }
 
