@@ -145,7 +145,7 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
 
     if (!ctx) {
         errno = ENOMEM;
-        return -1;
+        goto fatal;
     }
 
     if ((level & FLUX_LOG_CHECK)) {
@@ -172,10 +172,13 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
         if (log_rpc (h, ctx->buf, len, rpc_flags) < 0)
-            return -1;
+            goto fatal;
     }
     errno = saved_errno;
     return 0;
+fatal:
+    FLUX_FATAL (h);
+    return -1;
 }
 
 int flux_log (flux_t *h, int lev, const char *fmt, ...)
