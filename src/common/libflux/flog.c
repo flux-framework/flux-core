@@ -195,13 +195,10 @@ int flux_log (flux_t *h, int lev, const char *fmt, ...)
 void flux_log_verror (flux_t *h, const char *fmt, va_list ap)
 {
     int saved_errno = errno;
-    char *s = NULL;
+    char buf[FLUX_MAX_LOGBUF + 1];
 
-    if (vasprintf (&s, fmt, ap) < 0)
-        flux_log (h, LOG_ERR, "Failed to log `%s`: Out of memory", fmt);
-    else
-        flux_log (h, LOG_ERR, "%s: %s", s, flux_strerror (saved_errno));
-    free (s);
+    (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+    flux_log (h, LOG_ERR, "%s: %s", buf, flux_strerror (saved_errno));
     errno = saved_errno;
 }
 
