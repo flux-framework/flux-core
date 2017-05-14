@@ -63,7 +63,6 @@ fluxcoreinclude_HEADERS = \
 	panic.h \
 	event.h \
 	module.h \
-	reparent.h \
 	info.h \
 	attr.h \
 	flog.h \
@@ -90,7 +89,6 @@ libflux_la_SOURCES = \
 	panic.c \
 	event.c \
 	module.c \
-	reparent.c \
 	conf.c \
 	tagpool.h \
 	tagpool.c \
