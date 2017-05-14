@@ -492,25 +492,6 @@ struct f_periodic {
     flux_reschedule_f    reschedule_cb;
 };
 
-static struct f_periodic * f_periodic_alloc ()
-{
-    struct f_periodic *fp = calloc (1, sizeof (*fp));
-    if (!fp)
-        return NULL;
-    fp->w = NULL;
-    fp->reschedule_cb = NULL;
-
-    // Pointer from ev_periodic->data back to ourself:
-    //  required for libev callbacks.
-    fp->evp.data = fp;
-    return (fp);
-}
-
-static void f_periodic_free (struct f_periodic *fp)
-{
-    free (fp);
-}
-
 static void periodic_start (void *impl, flux_watcher_t *w)
 {
     struct f_periodic *fp = w->impl;
@@ -525,13 +506,6 @@ static void periodic_stop (void *impl, flux_watcher_t *w)
     ev_periodic_stop (w->r->loop, &fp->evp);
 }
 
-static void periodic_destroy (void *impl, flux_watcher_t *w)
-{
-    assert (w->signature == PERIODIC_SIG);
-    if (impl)
-        f_periodic_free (impl);
-}
-
 static void periodic_cb (struct ev_loop *loop, ev_periodic *pw, int revents)
 {
     struct f_periodic *fp = pw->data;
@@ -539,7 +513,6 @@ static void periodic_cb (struct ev_loop *loop, ev_periodic *pw, int revents)
     if (w->fn)
         fp->w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
-
 
 static ev_tstamp periodic_reschedule_cb (ev_periodic *pw, ev_tstamp now)
 {
@@ -572,22 +545,21 @@ flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
     struct watcher_ops ops = {
         .start = periodic_start,
         .stop = periodic_stop,
-        .destroy = periodic_destroy,
+        .destroy = NULL,
     };
     flux_watcher_t *w;
-    struct f_periodic *fp = f_periodic_alloc ();
-    if (!fp)
+    struct f_periodic *fp;
+
+    if (!(w = flux_watcher_create (r, &fp, sizeof (*fp), ops, PERIODIC_SIG, cb, arg))) {
+        free (fp);
         return NULL;
+    }
+    fp->evp.data = fp;
+    fp->w = w;
     fp->reschedule_cb = reschedule_cb;
 
     ev_periodic_init (&fp->evp, periodic_cb, offset, interval,
                       reschedule_cb ? periodic_reschedule_cb : NULL);
-    if (!(w = flux_watcher_create (r, NULL, 0, ops, PERIODIC_SIG, cb, arg))) {
-        free (fp);
-        return NULL;
-    }
-    w->impl = fp;
-    fp->w = w;
 
     return w;
 }
