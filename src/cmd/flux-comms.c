@@ -48,10 +48,33 @@ void usage (void)
     fprintf (stderr,
 "Usage: flux-comms [-r N] idle\n"
 "       flux-comms        info\n"
-"       flux-comms [-r N] reparent new-uri\n"
 "       flux-comms [-r N] panic [msg ...]\n"
 );
     exit (1);
+}
+
+static char *flux_lspeer (flux_t *h, int rank)
+{
+    int saved_errno;
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
+    flux_rpc_t *r = NULL;
+    const char *json_str;
+    char *ret = NULL;
+
+    if (!(r = flux_rpc (h, "cmb.lspeer", NULL, nodeid, 0)))
+        goto done;
+    if (flux_rpc_get (r, &json_str) < 0)
+        goto done;
+    if (!json_str) {
+        errno = EPROTO;
+        goto done;
+    }
+    ret = strdup (json_str);
+done:
+    saved_errno = errno;
+    flux_rpc_destroy (r);
+    errno = saved_errno;
+    return ret;
 }
 
 int main (int argc, char *argv[])
@@ -87,12 +110,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!strcmp (cmd, "reparent")) {
-        if (optind != argc - 1)
-            usage ();
-        if (flux_reparent (h, rank, argv[optind]) < 0)
-            log_err_exit ("flux_reparent");
-    } else if (!strcmp (cmd, "idle")) {
+    if (!strcmp (cmd, "idle")) {
         if (optind != argc)
             usage ();
         char *peers;

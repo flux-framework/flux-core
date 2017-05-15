@@ -55,8 +55,7 @@ struct overlay_struct {
     uint32_t rank;
     char rankstr[16];
 
-    zlist_t *parents;           /* DEALER - requests to parent */
-                                /*  (reparent pushes new parent on head) */
+    struct endpoint *parent;    /* DEALER - requests to parent */
     overlay_cb_f parent_cb;
     void *parent_arg;
     int parent_lastsent;
@@ -100,30 +99,14 @@ static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
     return ep;
 }
 
-static struct endpoint *endpoint_create (const char *fmt, ...)
-{
-    struct endpoint *ep;
-    va_list ap;
-    va_start (ap, fmt);
-    ep = endpoint_vcreate (fmt, ap);
-    va_end (ap);
-    return ep;
-}
-
 void overlay_destroy (overlay_t *ov)
 {
-    struct endpoint *ep;
-
     if (ov) {
-        if (ov->parents) {
-            while ((ep = zlist_pop (ov->parents)))
-                endpoint_destroy (ep);
-            zlist_destroy (&ov->parents);
-        }
         if (ov->heartbeat)
             flux_msg_handler_destroy (ov->heartbeat);
         if (ov->h)
             (void)flux_event_unsubscribe (ov->h, "hb");
+        endpoint_destroy (ov->parent);
         endpoint_destroy (ov->child);
         endpoint_destroy (ov->event);
         endpoint_destroy (ov->relay);
@@ -135,8 +118,6 @@ void overlay_destroy (overlay_t *ov)
 overlay_t *overlay_create (void)
 {
     overlay_t *ov = xzmalloc (sizeof (*ov));
-    if (!(ov->parents = zlist_new ()))
-        oom ();
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
     if (!(ov->children = zhash_new ()))
@@ -237,36 +218,32 @@ void overlay_checkin_child (overlay_t *ov, const char *uuid)
     child->lastseen = ov->epoch;
 }
 
-void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
+void overlay_set_parent (overlay_t *ov, const char *fmt, ...)
 {
+    if (ov->parent)
+        endpoint_destroy (ov->parent);
     va_list ap;
     va_start (ap, fmt);
-    struct endpoint *ep = endpoint_vcreate (fmt, ap);
+    ov->parent = endpoint_vcreate (fmt, ap);
     va_end (ap);
-    if (zlist_push (ov->parents, ep) < 0)
-        oom ();
 }
 
 const char *overlay_get_parent (overlay_t *ov)
 {
-    struct endpoint *ep = zlist_first (ov->parents);
-    if (!ep) {
-        errno = ENOENT;
+    if (!ov->parent)
         return NULL;
-    }
-    return ep->uri;
+    return ov->parent->uri;
 }
 
 int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg)
 {
-    struct endpoint *ep = zlist_first (ov->parents);
     int rc = -1;
 
-    if (!ep || !ep->zs) {
+    if (!ov->parent || !ov->parent->zs) {
         errno = EHOSTUNREACH;
         goto done;
     }
-    rc = flux_msg_sendzsock (ep->zs, msg);
+    rc = flux_msg_sendzsock (ov->parent->zs, msg);
     if (rc == 0)
         ov->parent_lastsent = ov->epoch;
 done:
@@ -275,18 +252,17 @@ done:
 
 static int overlay_keepalive_parent (overlay_t *ov)
 {
-    struct endpoint *ep = zlist_first (ov->parents);
     int idle = ov->epoch - ov->parent_lastsent;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!ep || !ep->zs || idle <= 1)
+    if (!ov->parent || !ov->parent->zs || idle <= 1)
         return 0;
     if (!(msg = flux_keepalive_encode (0, 0)))
         goto done;
     if (flux_msg_enable_route (msg) < 0)
         goto done;
-    rc = flux_msg_sendzsock (ep->zs, msg);
+    rc = flux_msg_sendzsock (ov->parent->zs, msg);
 done:
     flux_msg_destroy (msg);
     return rc;
@@ -574,7 +550,6 @@ error:
 int overlay_connect (overlay_t *ov)
 {
     int rc = -1;
-    struct endpoint *ep;
 
     if (!ov->sec || !ov->h || ov->rank == FLUX_NODEID_ANY
                  || !ov->parent_cb || !ov->event_cb) {
@@ -583,10 +558,9 @@ int overlay_connect (overlay_t *ov)
     }
     if (ov->event && !ov->event->zs && ov->rank > 0)
         connect_event_sub (ov, ov->event);
-
-    if ((ep = zlist_first (ov->parents))) {
-        if (connect_parent (ov, ep) < 0)
-            log_err_exit ("%s", ep->uri);
+    if (ov->parent && !ov->parent->zs) {
+        if (connect_parent (ov, ov->parent) < 0)
+            log_err_exit ("%s", ov->parent->uri);
     }
     rc = 0;
 done:
@@ -613,42 +587,6 @@ int overlay_bind (overlay_t *ov)
     rc = 0;
 done:
     return rc;
-}
-
-/* Establish connection with a new parent and begin using it for all
- * upstream requests.  Leave old parent(s) wired in to reactor to make
- * it possible to transition off a healthy node without losing replies.
- */
-int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled)
-{
-    struct endpoint *ep;
-    bool old = false;
-
-    if (uri == NULL || !strstr (uri, "://")) {
-        errno = EINVAL;
-        return -1;
-    }
-    ep = zlist_first (ov->parents);
-    while (ep) {
-        if (!strcmp (ep->uri, uri))
-            break;
-        ep = zlist_next (ov->parents);
-    }
-    if (ep) {
-        zlist_remove (ov->parents, ep);
-        old = true;
-    } else {
-        ep = endpoint_create ("%s", uri);
-        if (connect_parent (ov, ep) < 0) {
-            endpoint_destroy (ep);
-            return -1;
-        }
-    }
-    if (zlist_push (ov->parents, ep) < 0)
-        oom ();
-    if (recycled)
-        *recycled = old;
-    return 0;
 }
 
 /*

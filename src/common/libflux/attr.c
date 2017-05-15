@@ -33,9 +33,6 @@
 #include "attr.h"
 #include "rpc.h"
 
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
-
 typedef struct {
     zhash_t *hash;
     zlist_t *names;
@@ -55,17 +52,25 @@ static void freectx (void *arg)
     free (ctx);
 }
 
+static attr_ctx_t *attr_ctx_new (flux_t *h)
+{
+    attr_ctx_t *ctx = calloc (1, sizeof (*ctx));
+    if (!ctx || !(ctx->hash = zhash_new ())) {
+        free (ctx);
+        /* Ensure errno set properly, in case zhash_new doesn't do it */
+        errno = ENOMEM;
+        return NULL;
+    }
+    ctx->h = h;
+    flux_aux_set (h, "flux::attr", ctx, freectx);
+    return ctx;
+}
+
 static attr_ctx_t *getctx (flux_t *h)
 {
     attr_ctx_t *ctx = flux_aux_get (h, "flux::attr");
-
-    if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->hash = zhash_new ()))
-            oom ();
-        ctx->h = h;
-        flux_aux_set (h, "flux::attr", ctx, freectx);
-    }
+    if (!ctx)
+        ctx = attr_ctx_new (h);
     return ctx;
 }
 
@@ -78,8 +83,12 @@ static void attr_destroy (void *arg)
 
 static attr_t *attr_create (const char *val, int flags)
 {
-    attr_t *attr = xzmalloc (sizeof (*attr));
-    attr->val = xstrdup (val);
+    attr_t *attr = calloc (1, sizeof (*attr));
+    if (!attr || !(attr->val = strdup (val))) {
+        free (attr);
+        errno = ENOMEM;
+        return NULL;
+    }
     attr->flags = flags;
     return attr;
 }
@@ -97,7 +106,8 @@ static int attr_get_rpc (attr_ctx_t *ctx, const char *name, attr_t **attrp)
         goto done;
     if (flux_rpc_getf (r, "{s:s, s:i}", "value", &val, "flags", &flags) < 0)
         goto done;
-    attr = attr_create (val, flags);
+    if (!(attr = attr_create (val, flags)))
+        goto done;
     zhash_update (ctx->hash, name, attr);
     zhash_freefn (ctx->hash, name, attr_destroy);
     *attrp = attr;
@@ -127,7 +137,8 @@ static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
     if (flux_rpc_get (r, NULL) < 0)
         goto done;
     if (val) {
-        attr = attr_create (val, 0);
+        if (!(attr = attr_create (val, 0)))
+            goto done;
         zhash_update (ctx->hash, name, attr);
         zhash_freefn (ctx->hash, name, attr_destroy);
     } else
@@ -163,15 +174,17 @@ static int attr_list_rpc (attr_ctx_t *ctx)
         goto done;
     zlist_destroy (&ctx->names);
     if (!(ctx->names = zlist_new ()))
-        oom ();
+        goto done;
     json_array_foreach (array, index, value) {
         const char *name = json_string_value (value);
         if (!name) {
             errno = EPROTO;
             goto done;
         }
-        if (zlist_append (ctx->names, xstrdup (name)) < 0)
-            oom ();
+        if (zlist_append (ctx->names, strdup (name)) < 0) {
+            errno = ENOMEM;
+            goto done;
+        }
     }
     zlist_sort (ctx->names, (zlist_compare_fn *)attr_strcmp);
     rc = 0;
@@ -185,6 +198,9 @@ const char *flux_attr_get (flux_t *h, const char *name, int *flags)
     attr_ctx_t *ctx = getctx (h);
     attr_t *attr;
 
+    if (!ctx)
+        return NULL;
+
     if (!(attr = zhash_lookup (ctx->hash, name))
                         || !(attr->flags & FLUX_ATTRFLAG_IMMUTABLE))
         if (attr_get_rpc (ctx, name, &attr) < 0)
@@ -197,8 +213,7 @@ const char *flux_attr_get (flux_t *h, const char *name, int *flags)
 int flux_attr_set (flux_t *h, const char *name, const char *val)
 {
     attr_ctx_t *ctx = getctx (h);
-
-    if (attr_set_rpc (ctx, name, val) < 0)
+    if (!ctx || attr_set_rpc (ctx, name, val) < 0)
         return -1;
     return 0;
 }
@@ -207,6 +222,10 @@ int flux_attr_fake (flux_t *h, const char *name, const char *val, int flags)
 {
     attr_ctx_t *ctx = getctx (h);
     attr_t *attr = attr_create (val, flags);
+
+    if (!ctx || !attr)
+        return -1;
+    
     zhash_update (ctx->hash, name, attr);
     zhash_freefn (ctx->hash, name, attr_destroy);
     return 0;
@@ -216,7 +235,7 @@ const char *flux_attr_first (flux_t *h)
 {
     attr_ctx_t *ctx = getctx (h);
 
-    if (attr_list_rpc (ctx) < 0)
+    if (!ctx || (attr_list_rpc (ctx) < 0))
         return NULL;
     return ctx->names ? zlist_first (ctx->names) : NULL;
 }

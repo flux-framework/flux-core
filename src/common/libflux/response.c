@@ -30,7 +30,6 @@
 #include "response.h"
 #include "message.h"
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
 static int response_decode (const flux_msg_t *msg, const char **topic)

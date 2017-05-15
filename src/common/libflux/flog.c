@@ -41,7 +41,6 @@
 #include "message.h"
 #include "rpc.h"
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
 
@@ -59,39 +58,50 @@ static void freectx (void *arg)
     free (ctx);
 }
 
-static logctx_t *getctx (flux_t *h)
+static logctx_t *logctx_new (flux_t *h)
 {
-    logctx_t *ctx = (logctx_t *)flux_aux_get (h, "flux::log");
+    logctx_t *ctx;
     extern char *__progname;
     // or glib-ism: program_invocation_short_name
 
-    if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
-        snprintf (ctx->procid, sizeof (ctx->procid), "%d", getpid ());
-        snprintf (ctx->appname, sizeof (ctx->appname), "%s", __progname);
-        flux_aux_set (h, "flux::log", ctx, freectx);
-    }
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    snprintf (ctx->procid, sizeof (ctx->procid), "%d", getpid ());
+    snprintf (ctx->appname, sizeof (ctx->appname), "%s", __progname);
+    flux_aux_set (h, "flux::log", ctx, freectx);
+    return ctx;
+}
+
+static logctx_t *getctx (flux_t *h)
+{
+    logctx_t *ctx = (logctx_t *)flux_aux_get (h, "flux::log");
+    if (!ctx)
+        ctx = logctx_new (h);
     return ctx;
 }
 
 void flux_log_set_appname (flux_t *h, const char *s)
 {
     logctx_t *ctx = getctx (h);
-    snprintf (ctx->appname, sizeof (ctx->appname), "%s", s);
+    if (ctx)
+        snprintf (ctx->appname, sizeof (ctx->appname), "%s", s);
 }
 
 void flux_log_set_procid (flux_t *h, const char *s)
 {
     logctx_t *ctx = getctx (h);
-    snprintf (ctx->procid, sizeof (ctx->procid), "%s", s);
+    if (ctx)
+        snprintf (ctx->procid, sizeof (ctx->procid), "%s", s);
 }
 
 
 void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg)
 {
     logctx_t *ctx = getctx (h);
-    ctx->cb = fun;
-    ctx->cb_arg = arg;
+    if (ctx) {
+        ctx->cb = fun;
+        ctx->cb_arg = arg;
+    }
 }
 
 const char *flux_strerror (int errnum)
@@ -133,6 +143,11 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     struct stdlog_header hdr;
     int rpc_flags = FLUX_RPC_NORESPONSE;
 
+    if (!ctx) {
+        errno = ENOMEM;
+        goto fatal;
+    }
+
     if ((level & FLUX_LOG_CHECK)) {
         rpc_flags &= ~FLUX_RPC_NORESPONSE;
         level &= ~FLUX_LOG_CHECK;
@@ -157,10 +172,13 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
         ctx->cb (ctx->buf, len, ctx->cb_arg);
     } else {
         if (log_rpc (h, ctx->buf, len, rpc_flags) < 0)
-            return -1;
+            goto fatal;
     }
     errno = saved_errno;
     return 0;
+fatal:
+    FLUX_FATAL (h);
+    return -1;
 }
 
 int flux_log (flux_t *h, int lev, const char *fmt, ...)
@@ -177,10 +195,10 @@ int flux_log (flux_t *h, int lev, const char *fmt, ...)
 void flux_log_verror (flux_t *h, const char *fmt, va_list ap)
 {
     int saved_errno = errno;
-    char *s = xvasprintf (fmt, ap);
+    char buf[FLUX_MAX_LOGBUF + 1];
 
-    flux_log (h, LOG_ERR, "%s: %s", s, flux_strerror (errno));
-    free (s);
+    (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+    flux_log (h, LOG_ERR, "%s: %s", buf, flux_strerror (saved_errno));
     errno = saved_errno;
 }
 

@@ -295,7 +295,7 @@ static void test_timer (flux_reactor_t *reactor)
         ok (rc == 0 && oneshot_runs == 1 && elapsed >= t[i],
             "timer: reactor ran %.3fs oneshot at >= time (%.3fs)", t[i], elapsed);
     }
-
+    flux_watcher_destroy (w);
 }
 
 
@@ -649,6 +649,7 @@ static void test_stat (flux_reactor_t *reactor)
 
     flux_watcher_destroy (w);
     flux_watcher_destroy (tw);
+    free (ctx.path);
 }
 
 static void reactor_destroy_early (void)

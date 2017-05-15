@@ -1314,7 +1314,7 @@ static int boot_pmi (broker_ctx_t *ctx, double *elapsed_sec)
             log_msg ("pmi_kvs_get: %s", pmi_strerror (e));
             goto done;
         }
-        overlay_push_parent (ctx->overlay, "%s", val);
+        overlay_set_parent (ctx->overlay, "%s", val);
     }
 
     /* Event distribution (four configurations):
@@ -1630,27 +1630,6 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
     free (out);
 }
 
-static void cmb_reparent_cb (flux_t *h, flux_msg_handler_t *w,
-                             const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    const char *uri;
-    bool recycled = false;
-
-    if (flux_request_decodef (msg, NULL, "{ s:s }", "uri", &uri) < 0)
-        goto error;
-    if (overlay_reparent (ctx->overlay, uri, &recycled) < 0)
-        goto error;
-    flux_log (ctx->h, LOG_CRIT, "reparent %s (%s)", uri, recycled ? "restored"
-                                                                  : "new");
-    if (flux_respond (h, msg, 0, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-}
-
 static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
@@ -1759,7 +1738,6 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.reparent",   cmb_reparent_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0, NULL },

@@ -16,7 +16,6 @@
 #include "panic.h"
 #include "event.h"
 #include "module.h"
-#include "reparent.h"
 #include "info.h"
 #include "attr.h"
 #include "flog.h"

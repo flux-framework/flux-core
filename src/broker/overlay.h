@@ -15,12 +15,8 @@ void overlay_set_flux (overlay_t *ov, flux_t *h);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
- * Internally there is a stack of parent URI's, with top as primary.
- * When we reparent (e.g. for failover), a new current parent is selected
- * and moved to the top.  Old parent sockets are not closed; they may
- * still trigger the parent callback, but only the primary is used for sends.
  */
-void overlay_push_parent (overlay_t *ov, const char *fmt, ...);
+void overlay_set_parent (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_parent (overlay_t *ov);
 void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
 int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg);
