@@ -158,11 +158,12 @@ int check_zlist_order (zlist_t *l, const char *base, char *expected[])
             BAIL_OUT ("asprintf");
 
         result = strcmp (exp, dir);
-        free (exp);
         if (result != 0) {
-            diag ("check_zlist: %d: expected %s got %s", i, expected[i], dir);
+            diag ("check_zlist: %d: expected %s got %s", i, exp, dir);
+            free (exp);
             return 0;
         }
+        free (exp);
         i++;
         dir = zlist_next (l);
     }
