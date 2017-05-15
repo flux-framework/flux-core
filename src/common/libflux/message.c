@@ -1229,6 +1229,7 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
             goto done;
     } else if ((flags & FLUX_MSGFLAG_TOPIC) && !topic) { /* case 3: del topic */
         zmsg_remove (msg->zmsg, zf);
+        zframe_destroy (&zf);
         flags &= ~(uint8_t)FLUX_MSGFLAG_TOPIC;
         if (flux_msg_set_flags (msg, flags) < 0)
             goto done;
