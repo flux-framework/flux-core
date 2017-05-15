@@ -115,6 +115,7 @@ TESTS = test_module.t \
 	test_event.t \
 	test_tagpool.t \
 	test_security.t \
+	test_future.t \
 	test_reactor.t
 
 test_ldadd = \
@@ -172,3 +173,7 @@ test_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
 test_security_t_SOURCES = test/security.c
 test_security_t_CPPFLAGS = $(test_cppflags)
 test_security_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_future_t_SOURCES = test/future.c
+test_future_t_CPPFLAGS = $(test_cppflags)
+test_future_t_LDADD = $(test_ldadd) $(LIBDL)
