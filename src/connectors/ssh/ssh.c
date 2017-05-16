@@ -407,7 +407,7 @@ error:
     if (c) {
         int saved_errno = errno;
         if (c->h)
-            flux_handle_destroy (&c->h); /* calls op_fini */
+            flux_handle_destroy (c->h); /* calls op_fini */
         else
             op_fini (c);
         errno = saved_errno;

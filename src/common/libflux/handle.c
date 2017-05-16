@@ -289,7 +289,8 @@ flux_t *flux_open (const char *uri, int flags)
         uint32_t userid = strtoul (s, NULL, 10);
         if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid,
                                                       sizeof (userid)) < 0) {
-            flux_handle_destroy (&h);
+            flux_handle_destroy (h);
+            h = NULL;
             goto done;
         }
     }
@@ -297,7 +298,8 @@ flux_t *flux_open (const char *uri, int flags)
         uint32_t rolemask = strtoul (s, NULL, 0);
         if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask,
                                                     sizeof (rolemask)) < 0) {
-            flux_handle_destroy (&h);
+            flux_handle_destroy (h);
+            h = NULL;
             goto done;
         }
     }
@@ -310,7 +312,7 @@ done:
 void flux_close (flux_t *h)
 {
     int saved_errno = errno;
-    flux_handle_destroy (&h);
+    flux_handle_destroy (h);
     errno = saved_errno;
 }
 
@@ -334,29 +336,24 @@ flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int f
     h->pollfd = -1;
     return h;
 nomem:
-    flux_handle_destroy (&h);
+    flux_handle_destroy (h);
     errno = ENOMEM;
     return NULL;
 }
 
-void flux_handle_destroy (flux_t **hp)
+void flux_handle_destroy (flux_t *h)
 {
-    if (hp) {
-        flux_t *h = *hp;
-
-        if (h && --h->usecount == 0) {
-            zhash_destroy (&h->aux);
-            if (h->ops->impl_destroy)
-                h->ops->impl_destroy (h->impl);
-            tagpool_destroy (h->tagpool);
-            if (h->dso)
-                dlclose (h->dso);
-            msglist_destroy (h->queue);
-            if (h->pollfd >= 0)
-                (void)close (h->pollfd);
-            free (h);
-        }
-        *hp = NULL;
+    if (h && --h->usecount == 0) {
+        zhash_destroy (&h->aux);
+        if (h->ops->impl_destroy)
+            h->ops->impl_destroy (h->impl);
+        tagpool_destroy (h->tagpool);
+        if (h->dso)
+            dlclose (h->dso);
+        msglist_destroy (h->queue);
+        if (h->pollfd >= 0)
+            (void)close (h->pollfd);
+        free (h);
     }
 }
 

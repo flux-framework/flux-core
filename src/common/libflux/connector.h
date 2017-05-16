@@ -29,7 +29,7 @@ struct flux_handle_ops {
 };
 
 flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
-void flux_handle_destroy (flux_t **hp);
+void flux_handle_destroy (flux_t *hp);
 
 #endif /* !_FLUX_CORE_CONNECTOR_H */
 
