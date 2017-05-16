@@ -158,11 +158,12 @@ int check_zlist_order (zlist_t *l, const char *base, char *expected[])
             BAIL_OUT ("asprintf");
 
         result = strcmp (exp, dir);
-        free (exp);
         if (result != 0) {
-            diag ("check_zlist: %d: expected %s got %s", i, expected[i], dir);
+            diag ("check_zlist: %d: expected %s got %s", i, exp, dir);
+            free (exp);
             return 0;
         }
+        free (exp);
         i++;
         dir = zlist_next (l);
     }
@@ -181,7 +182,7 @@ static int d_unlinkat (dirwalk_t *d, void *arg)
 
 int main(int argc, char** argv)
 {
-    char *s, *tmp = NULL, *tmp2 = NULL;
+    char *s, *rpath, *tmp = NULL, *tmp2 = NULL;
     int n;
 
     plan (NO_PLAN);
@@ -292,9 +293,12 @@ int main(int argc, char** argv)
     l = dirwalk_find (tmp, flags, "*", 0, find_dir, NULL);
     ok (l && zlist_size (l) >  0, "dirwalk works with DIRWALK_REALPATH");
 
-    ok (l && check_zlist_order (l, tmp, expect_breadth),
+    /* tmp base for comparison must also be realpath-ed */
+    rpath = realpath (tmp, NULL);
+    ok (l && check_zlist_order (l, rpath, expect_breadth),
         "breadth-first visited directories with DIRWALK_REALPATH works");
     zlist_destroy (&l);
+    free (rpath);
 
     if (chdir (cwd) < 0)
         BAIL_OUT ("chdir (%s)", cwd);
