@@ -1437,7 +1437,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
         errno = EPROTO;
         goto done;
     }
-    memcpy (rootdir, ref, sizeof (href_t));
+    strcpy (rootdir, ref);
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
