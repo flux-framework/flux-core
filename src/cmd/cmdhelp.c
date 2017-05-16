@@ -154,6 +154,7 @@ static int command_list_read (zhash_t *h, const char *path)
             //zlist_set_destructor (zl, (czmq_destructor *) cmdhelp_destroy);
             zhash_insert (h, s, (void *) zl);
             zhash_freefn (h, s, (zhash_free_fn *) cmd_list_destroy);
+            free (s);
         }
         zlist_append (zl, cmdhelp_create (command, description));
     }
