@@ -230,10 +230,10 @@ error:
     return -1;
 }
 
+/* Return true if load successful, false if stalling */
 static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
-    bool stall = false;
 
     /* Create an incomplete hash entry if none found.
      */
@@ -249,12 +249,12 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **
      */
     if (!cache_entry_get_valid (hp)) {
         cache_entry_wait_valid (hp, wait);
-        stall = true;
+        return false;
     }
 
-    if (!stall && op)
+    if (op)
         *op = cache_entry_get_json (hp);
-    return !stall;
+    return true;
 }
 
 static int content_store_get (flux_rpc_t *rpc, void *arg)
