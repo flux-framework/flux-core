@@ -359,7 +359,8 @@ done:
 static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
 {
     if (rootseq == 0 || rootseq > ctx->rootseq) {
-        memcpy (ctx->rootdir, rootdir, sizeof (href_t));
+        assert (strlen (rootdir) < sizeof (href_t));
+        strcpy (ctx->rootdir, rootdir);
         ctx->rootseq = rootseq;
         wait_runqueue (ctx->watchlist);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
@@ -1437,7 +1438,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
         errno = EPROTO;
         goto done;
     }
-    memcpy (rootdir, ref, sizeof (href_t));
+    strcpy (rootdir, ref);
     rc = 0;
 done:
     flux_rpc_destroy (rpc);
