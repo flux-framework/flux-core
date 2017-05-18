@@ -25,7 +25,9 @@ kvs_la_SOURCES = \
 	json_dirent.c \
 	json_dirent.h \
 	json_util.h \
-	json_util.c
+	json_util.c \
+	lookup.h \
+	lookup.c
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \

@@ -49,12 +49,9 @@
 #include "cache.h"
 #include "json_dirent.h"
 #include "json_util.h"
+#include "lookup.h"
 
 typedef char href_t[BLOBREF_MAX_STRING_SIZE];
-
-/* Break cycles in symlink references.
- */
-#define SYMLINK_CYCLE_LIMIT 10
 
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
@@ -717,210 +714,6 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
     cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age);
 }
 
-/* Get dirent containing requested key.
- */
-static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
-                  json_object **direntp, int flags, int depth,
-                  const char **missing_ref, int *ep)
-{
-    char *cpy = xstrdup (path);
-    char *next, *name = cpy;
-    const char *ref;
-    const char *link;
-    json_object *dirent = NULL;
-    json_object *dir = root;
-    int errnum = 0;
-
-    depth++;
-
-    /* walk directories */
-    while ((next = strchr (name, '.'))) {
-        *next++ = '\0';
-        if (!json_object_object_get_ex (dir, name, &dirent))
-            /* not necessarily ENOENT, let caller decide */
-            goto error;
-        if (Jget_str (dirent, "LINKVAL", &link)) {
-            if (depth == SYMLINK_CYCLE_LIMIT) {
-                errnum = ELOOP;
-                goto error;
-            }
-            if (!walk (ctx, root, link, &dirent, flags, depth, missing_ref, ep))
-                goto stall;
-            if (*ep != 0) {
-                errnum = *ep;
-                goto error;
-            }
-            if (!dirent)
-                /* not necessarily ENOENT, let caller decide */
-                goto error;
-        }
-
-        /* Check for errors in dirent before looking up reference.
-         * Note that reference to lookup is determined in final
-         * error check.
-         */
-
-        if (json_object_object_get_ex (dirent, "DIRVAL", NULL)) {
-            /* N.B. in current code, directories are never stored by value */
-            log_msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
-                          __FUNCTION__, path, name, Jtostr (dirent));
-        } else if ((Jget_str (dirent, "FILEREF", NULL)
-                    || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
-            /* don't return ENOENT or ENOTDIR, error to be determined
-             * by caller */
-            goto error;
-        } else if (!Jget_str (dirent, "DIRREF", &ref)) {
-            log_msg_exit ("%s: unknown dirent type: path=%s name=%s: dirent=%s ",
-                          __FUNCTION__, path, name, Jtostr (dirent));
-        }
-
-        if (!(dir = cache_lookup_and_get_json (ctx->cache,
-                                               ref,
-                                               ctx->epoch))) {
-            *missing_ref = ref;
-            goto stall;
-        }
-
-        name = next;
-    }
-    /* now terminal path component */
-    if (json_object_object_get_ex (dir, name, &dirent) &&
-        Jget_str (dirent, "LINKVAL", &link)) {
-        if (!(flags & KVS_PROTO_READLINK) && !(flags & KVS_PROTO_TREEOBJ)) {
-            if (depth == SYMLINK_CYCLE_LIMIT) {
-                errnum = ELOOP;
-                goto error;
-            }
-            if (!walk (ctx, root, link, &dirent, flags, depth, missing_ref, ep))
-                goto stall;
-            if (*ep != 0) {
-                errnum = *ep;
-                goto error;
-            }
-        }
-    }
-    free (cpy);
-    *direntp = dirent;
-    return true;
-error:
-    if (errnum != 0)
-        *ep = errnum;
-    free (cpy);
-    *direntp = NULL;
-    return true;
-stall:
-    free (cpy);
-    return false;
-}
-
-static bool lookup (kvs_ctx_t *ctx, json_object *root,
-                    int flags, const char *name,
-                    json_object **valp, const char **missing_ref, int *ep)
-{
-    json_object *vp, *dirent, *val = NULL;
-    int walk_errnum = 0;
-    int errnum = 0;
-
-    assert (root != NULL);
-
-    if (!strcmp (name, ".")) { /* special case root */
-        if ((flags & KVS_PROTO_TREEOBJ)) {
-            val = dirent_create ("DIRREF", ctx->rootdir);
-        } else {
-            if (!(flags & KVS_PROTO_READDIR)) {
-                errnum = EISDIR;
-                goto done;
-            }
-            val = json_object_get (root);
-        }
-    } else {
-        if (!walk (ctx, root, name, &dirent, flags, 0,
-                   missing_ref, &walk_errnum))
-            goto stall;
-        if (walk_errnum != 0) {
-            errnum = walk_errnum;
-            goto done;
-        }
-        if (!dirent) {
-            //errnum = ENOENT;
-            goto done; /* a NULL response is not necessarily an error */
-        }
-        if ((flags & KVS_PROTO_TREEOBJ)) {
-            val = json_object_get (dirent);
-            goto done;
-        }
-        if (json_object_object_get_ex (dirent, "DIRREF", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
-                errnum = EINVAL;
-                goto done;
-            }
-            if (!(flags & KVS_PROTO_READDIR)) {
-                errnum = EISDIR;
-                goto done;
-            }
-            if (!(val = cache_lookup_and_get_json (ctx->cache,
-                                                   json_object_get_string (vp),
-                                                   ctx->epoch))) {
-                *missing_ref = json_object_get_string (vp);
-                goto stall;
-            }
-            val = json_object_copydir (val);
-        } else if (json_object_object_get_ex (dirent, "FILEREF", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
-                errnum = EINVAL;
-                goto done;
-            }
-            if ((flags & KVS_PROTO_READDIR)) {
-                errnum = ENOTDIR;
-                goto done;
-            }
-            if (!(val = cache_lookup_and_get_json (ctx->cache,
-                                                   json_object_get_string (vp),
-                                                   ctx->epoch))) {
-                *missing_ref = json_object_get_string (vp);
-                goto stall;
-            }
-            val = json_object_get (val);
-        } else if (json_object_object_get_ex (dirent, "DIRVAL", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
-                errnum = EINVAL;
-                goto done;
-            }
-            if (!(flags & KVS_PROTO_READDIR)) {
-                errnum = EISDIR;
-                goto done;
-            }
-            val = json_object_copydir (vp);
-        } else if (json_object_object_get_ex (dirent, "FILEVAL", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
-                errnum = EINVAL;
-                goto done;
-            }
-            if ((flags & KVS_PROTO_READDIR)) {
-                errnum = ENOTDIR;
-                goto done;
-            }
-            val = json_object_get (vp);
-        } else if (json_object_object_get_ex (dirent, "LINKVAL", &vp)) {
-            if (!(flags & KVS_PROTO_READLINK) || (flags & KVS_PROTO_READDIR)) {
-                errnum = EPROTO;
-                goto done;
-            }
-            val = json_object_get (vp);
-        } else
-            log_msg_exit ("%s: corrupt dirent: %s", __FUNCTION__,
-                          Jtostr (dirent));
-    }
-    /* val now contains the requested object (copied) */
-done:
-    *valp = val;
-    if (errnum != 0)
-        *ep = errnum;
-    return true;
-stall:
-    return false;
-}
-
 static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
@@ -963,7 +756,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (!load (ctx, root_ref, wait, &root))
         goto stall;
-    if (!lookup (ctx, root, flags, key, &val, &missing_ref, &lookup_errnum)) {
+    if (!lookup (ctx->cache, ctx->epoch, root, ctx->rootdir, key, flags,
+                 &val, &missing_ref, &lookup_errnum)) {
         assert (missing_ref);
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
@@ -1023,7 +817,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     if (!load (ctx, ctx->rootdir, wait, &root))
         goto stall;
-    if (!lookup (ctx, root, flags, key, &val, &missing_ref, &lookup_errnum)) {
+    if (!lookup (ctx->cache, ctx->epoch, root, ctx->rootdir, key, flags,
+                 &val, &missing_ref, &lookup_errnum)) {
         assert (missing_ref);
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
