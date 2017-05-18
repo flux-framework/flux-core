@@ -69,75 +69,84 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
     json_object *dir = root;
     int errnum = 0;
 
-    depth++;
-
     /* walk directories */
-    while ((next = strchr (name, '.'))) {
-        *next++ = '\0';
-        if (!json_object_object_get_ex (dir, name, &dirent))
-            /* not necessarily ENOENT, let caller decide */
-            goto error;
-        if (Jget_str (dirent, "LINKVAL", &link)) {
-            if (depth == SYMLINK_CYCLE_LIMIT) {
-                errnum = ELOOP;
-                goto error;
-            }
-            if (!walk (cache, current_epoch, root, link, flags, depth,
-                       &dirent, missing_ref, ep))
-                goto stall;
-            if (*ep != 0) {
-                errnum = *ep;
-                goto error;
-            }
-            if (!dirent)
+    while (name) {
+        if ((next = strchr (name, '.')))
+            *next++ = '\0';
+
+        if (next) {
+            if (!json_object_object_get_ex (dir, name, &dirent))
                 /* not necessarily ENOENT, let caller decide */
                 goto error;
-        }
-
-        /* Check for errors in dirent before looking up reference.
-         * Note that reference to lookup is determined in final
-         * error check.
-         */
-
-        if (json_object_object_get_ex (dirent, "DIRVAL", NULL)) {
-            /* N.B. in current code, directories are never stored by value */
-            log_msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
-                          __FUNCTION__, path, name, Jtostr (dirent));
-        } else if ((Jget_str (dirent, "FILEREF", NULL)
-                    || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
-            /* don't return ENOENT or ENOTDIR, error to be determined
-             * by caller */
-            goto error;
-        } else if (!Jget_str (dirent, "DIRREF", &ref)) {
-            log_msg_exit ("%s: unknown dirent type: path=%s name=%s: dirent=%s ",
-                          __FUNCTION__, path, name, Jtostr (dirent));
-        }
-
-        if (!(dir = cache_lookup_and_get_json (cache,
-                                               ref,
-                                               current_epoch))) {
-            *missing_ref = ref;
-            goto stall;
-        }
-
-        name = next;
-    }
-    /* now terminal path component */
-    if (json_object_object_get_ex (dir, name, &dirent) &&
-        Jget_str (dirent, "LINKVAL", &link)) {
-        if (!(flags & KVS_PROTO_READLINK) && !(flags & KVS_PROTO_TREEOBJ)) {
-            if (depth == SYMLINK_CYCLE_LIMIT) {
-                errnum = ELOOP;
-                goto error;
+            if (Jget_str (dirent, "LINKVAL", &link)) {
+                if (depth == SYMLINK_CYCLE_LIMIT) {
+                    errnum = ELOOP;
+                    goto error;
+                }
+                if (!walk (cache, current_epoch, root, link, flags,
+                           depth + 1, &dirent, missing_ref, ep))
+                    goto stall;
+                if (*ep != 0) {
+                    errnum = *ep;
+                    goto error;
+                }
+                if (!dirent)
+                    /* not necessarily ENOENT, let caller decide */
+                    goto error;
             }
-            if (!walk (cache, current_epoch, root, link, flags, depth,
-                       &dirent, missing_ref, ep))
+
+            /* Check for errors in dirent before looking up reference.
+             * Note that reference to lookup is determined in final
+             * error check.
+             */
+
+            if (json_object_object_get_ex (dirent, "DIRVAL", NULL)) {
+                /* N.B. in current code, directories are never stored
+                 * by value */
+                log_msg_exit ("%s: unexpected DIRVAL: "
+                              "path=%s name=%s: dirent=%s ",
+                              __FUNCTION__, path, name, Jtostr (dirent));
+            } else if ((Jget_str (dirent, "FILEREF", NULL)
+                        || json_object_object_get_ex (dirent,
+                                                      "FILEVAL",
+                                                      NULL))) {
+                /* don't return ENOENT or ENOTDIR, error to be
+                 * determined by caller */
+                goto error;
+            } else if (!Jget_str (dirent, "DIRREF", &ref)) {
+                log_msg_exit ("%s: unknown dirent type: "
+                              "path=%s name=%s: dirent=%s ",
+                              __FUNCTION__, path, name, Jtostr (dirent));
+            }
+
+            if (!(dir = cache_lookup_and_get_json (cache,
+                                                   ref,
+                                                   current_epoch))) {
+                *missing_ref = ref;
                 goto stall;
-            if (*ep != 0) {
-                errnum = *ep;
-                goto error;
             }
         }
+        else {
+            /* now terminal path component */
+            if (json_object_object_get_ex (dir, name, &dirent) &&
+                Jget_str (dirent, "LINKVAL", &link)) {
+                if (!(flags & KVS_PROTO_READLINK)
+                    && !(flags & KVS_PROTO_TREEOBJ)) {
+                    if (depth == SYMLINK_CYCLE_LIMIT) {
+                        errnum = ELOOP;
+                        goto error;
+                    }
+                    if (!walk (cache, current_epoch, root, link, flags,
+                               depth + 1, &dirent, missing_ref, ep))
+                        goto stall;
+                    if (*ep != 0) {
+                        errnum = *ep;
+                        goto error;
+                    }
+                }
+            }
+        }
+        name = next;
     }
     free (cpy);
     *direntp = dirent;
