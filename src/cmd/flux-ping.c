@@ -95,18 +95,18 @@ void ping_data_free (void *ctx)
 
 /* Handle responses
  */
-void ping_continuation (flux_rpc_t *rpc, void *arg)
+void ping_continuation (flux_mrpc_t *mrpc, void *arg)
 {
     struct ping_ctx *ctx = arg;
     const char *route, *pad;
     int64_t sec, nsec;
     struct timespec t0;
     int seq;
-    struct ping_data *pdata = flux_rpc_aux_get (rpc, "ping");
+    struct ping_data *pdata = flux_mrpc_aux_get (mrpc, "ping");
     tstat_t *tstat = pdata->tstat;
     uint32_t rolemask, userid;
 
-    if (flux_rpc_getf (rpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
+    if (flux_mrpc_getf (mrpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
                        "seq", &seq,
                        "time.tv_sec", &sec,
                        "time.tv_nsec", &nsec,
@@ -134,7 +134,7 @@ void ping_continuation (flux_rpc_t *rpc, void *arg)
     pdata->rpc_count++;
 
 done:
-    if (flux_rpc_next (rpc) < 0) {
+    if (flux_mrpc_next (mrpc) < 0) {
         if (pdata->rpc_count) {
             if (ctx->rank_count > 1) {
                 printf ("%s!%s pad=%zu seq=%d time=(%0.3f:%0.3f:%0.3f) ms "
@@ -156,14 +156,14 @@ done:
                         tstat_mean (tstat), pdata->route);
             }
         }
-        flux_rpc_destroy (rpc);
+        flux_mrpc_destroy (mrpc);
     }
 }
 
 void send_ping (struct ping_ctx *ctx)
 {
     struct timespec t0;
-    flux_rpc_t *rpc;
+    flux_mrpc_t *mrpc;
     struct ping_data *pdata = xzmalloc (sizeof (*pdata));
 
     pdata->tstat = xzmalloc (sizeof (*(pdata->tstat)));
@@ -173,18 +173,18 @@ void send_ping (struct ping_ctx *ctx)
 
     monotime (&t0);
 
-    rpc = flux_rpcf_multi (ctx->h, ctx->topic, ctx->rank, 0,
+    mrpc = flux_mrpcf (ctx->h, ctx->topic, ctx->rank, 0,
                            "{s:i s:I s:I s:s}",
                            "seq", ctx->send_count,
                            "time.tv_sec", (uint64_t)t0.tv_sec,
                            "time.tv_nsec", (uint64_t)t0.tv_nsec,
                            "pad", ctx->pad);
-    if (!rpc)
-        log_err_exit ("flux_rpcf_multi");
-    if (flux_rpc_aux_set (rpc, "ping", pdata, ping_data_free) < 0)
-        log_err_exit ("flux_rpc_aux_set");
-    if (flux_rpc_then (rpc, ping_continuation, ctx) < 0)
-        log_err_exit ("flux_rpc_then");
+    if (!mrpc)
+        log_err_exit ("flux_mrpcf");
+    if (flux_mrpc_aux_set (mrpc, "ping", pdata, ping_data_free) < 0)
+        log_err_exit ("flux_mrpc_aux_set");
+    if (flux_mrpc_then (mrpc, ping_continuation, ctx) < 0)
+        log_err_exit ("flux_mrpc_then");
 
     ctx->send_count++;
 }
