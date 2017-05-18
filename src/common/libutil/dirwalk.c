@@ -57,7 +57,7 @@ struct dirwalk {
     int errnum;
 };
 
-void direntry_destroy (struct direntry *e)
+static void direntry_destroy (struct direntry *e)
 {
     if (e) {
         if (e->close_dirfd)
@@ -73,7 +73,8 @@ void direntry_destroy (struct direntry *e)
  *  Create a direntry under parent dirfd `fd` and path `dir`, from
  *   directory entry `dent`.
  */
-struct direntry *direntry_create (int fd, const char *dir, struct dirent *dent)
+static struct direntry *direntry_create (int fd, const char *dir,
+                                         struct dirent *dent)
 {
     struct direntry *e = calloc (1, sizeof (*e));
     if (!e)
@@ -121,7 +122,7 @@ out_err:
     return NULL;
 }
 
-void dirwalk_destroy (dirwalk_t *d)
+static void dirwalk_destroy (dirwalk_t *d)
 {
     if (d) {
         if (d->current)
@@ -137,7 +138,7 @@ void dirwalk_destroy (dirwalk_t *d)
 }
 
 
-dirwalk_t *dirwalk_create ()
+static dirwalk_t *dirwalk_create ()
 {
     dirwalk_t *d = calloc (1, sizeof (*d));
     if (!d || !(d->dirstack = zlist_new ())) {
@@ -147,7 +148,7 @@ dirwalk_t *dirwalk_create ()
     return (d);
 }
 
-int dirwalk_set_flags (dirwalk_t *d, int flags)
+static int dirwalk_set_flags (dirwalk_t *d, int flags)
 {
     int old = d->flags;
     d->flags = flags;
@@ -208,7 +209,7 @@ static void dirwalk_visit (dirwalk_t *d, dirwalk_filter_f fn, void *arg)
 /*
  *  Continue traversal of d->current, which must be a directory
  */
-int dirwalk_traverse (dirwalk_t *d, dirwalk_filter_f fn, void *arg)
+static int dirwalk_traverse (dirwalk_t *d, dirwalk_filter_f fn, void *arg)
 {
     int fd;
     const char *path;
