@@ -42,13 +42,6 @@ bool flux_rpc_check (flux_rpc_t *rpc);
  */
 int flux_rpc_get (flux_rpc_t *rpc, const char **json_str);
 
-/* Wait for response if necessary, then decode nodeid request was sent to.
- * This function succedes even if the RPC service is returning an error.
- * It fails if something goes wrong reading or decoding the response message.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_rpc_get_nodeid (flux_rpc_t *rpc, uint32_t *nodeid);
-
 /* Wait for a response if necessary, then decode it.
  * Any returned 'data' payload is valid until the rpc is destroyed.
  * Returns 0 on success, or -1 on failure with errno set.

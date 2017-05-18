@@ -288,25 +288,6 @@ int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...)
     return rc;
 }
 
-int flux_rpc_get_nodeid (flux_rpc_t *rpc, uint32_t *nodeid)
-{
-    int rc = -1;
-    uint32_t tag;
-
-    assert (rpc->magic == RPC_MAGIC);
-    if (rpc_get (rpc) < 0)
-        goto done;
-    if (flux_msg_get_matchtag (rpc->rx_msg, &tag) < 0)
-        goto done;
-    if ((tag & FLUX_MATCHTAG_GROUP_MASK) > 0)
-        *nodeid = tag & ~FLUX_MATCHTAG_GROUP_MASK;
-    else
-        *nodeid = rpc->nodeid;
-    rc = 0;
-done:
-    return rc;
-}
-
 /* Internal callback for matching response.
  */
 static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
