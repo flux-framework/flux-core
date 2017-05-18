@@ -197,15 +197,13 @@ static int aggregate_forward (flux_t *h, struct aggregate *ag)
 {
     int rc = 0;
     flux_rpc_t *rpc;
-    uint32_t nodeid = FLUX_NODEID_UPSTREAM;
     json_object *o = aggregate_tojson (ag);
     flux_log (h, LOG_INFO, "forward: %s: count=%d total=%d\n",
                  ag->key, ag->count, ag->total);
     if (!(rpc = flux_rpc (h, "aggregator.push", Jtostr (o),
                              FLUX_NODEID_UPSTREAM, 0)) ||
-        (flux_rpc_get_nodeid (rpc, &nodeid) < 0) ||
         (flux_rpc_get (rpc, NULL) < 0)) {
-        flux_log_error (h, "flux_rpc (from=%d): aggregator.push", nodeid);
+        flux_log_error (h, "flux_rpc: aggregator.push");
         rc = -1;
     }
     Jput (o);
