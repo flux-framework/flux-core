@@ -74,15 +74,24 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
         if ((next = strchr (name, '.')))
             *next++ = '\0';
 
-        if (next) {
-            if (!json_object_object_get_ex (dir, name, &dirent))
-                /* not necessarily ENOENT, let caller decide */
-                goto error;
-            if (Jget_str (dirent, "LINKVAL", &link)) {
+        if (!json_object_object_get_ex (dir, name, &dirent))
+            /* not necessarily ENOENT, let caller decide */
+            goto error;
+
+        if (Jget_str (dirent, "LINKVAL", &link)) {
+
+            /* Follow link if in middle of path or if end of path,
+             * flags say we can follow it
+             */
+            if (next
+                || (!(flags & KVS_PROTO_READLINK)
+                    && !(flags & KVS_PROTO_TREEOBJ))) {
+
                 if (depth == SYMLINK_CYCLE_LIMIT) {
                     errnum = ELOOP;
                     goto error;
                 }
+
                 if (!walk (cache, current_epoch, root, link, flags,
                            depth + 1, &dirent, missing_ref, ep))
                     goto stall;
@@ -94,7 +103,9 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                     /* not necessarily ENOENT, let caller decide */
                     goto error;
             }
+        }
 
+        if (next) {
             /* Check for errors in dirent before looking up reference.
              * Note that reference to lookup is determined in final
              * error check.
@@ -124,26 +135,6 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                                                    current_epoch))) {
                 *missing_ref = ref;
                 goto stall;
-            }
-        }
-        else {
-            /* now terminal path component */
-            if (json_object_object_get_ex (dir, name, &dirent) &&
-                Jget_str (dirent, "LINKVAL", &link)) {
-                if (!(flags & KVS_PROTO_READLINK)
-                    && !(flags & KVS_PROTO_TREEOBJ)) {
-                    if (depth == SYMLINK_CYCLE_LIMIT) {
-                        errnum = ELOOP;
-                        goto error;
-                    }
-                    if (!walk (cache, current_epoch, root, link, flags,
-                               depth + 1, &dirent, missing_ref, ep))
-                        goto stall;
-                    if (*ep != 0) {
-                        errnum = *ep;
-                        goto error;
-                    }
-                }
             }
         }
         name = next;
