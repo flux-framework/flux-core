@@ -240,8 +240,16 @@ int main(int argc, char** argv)
     /*  dirwalk_find tests:
      */
 
+    /* Not a directory returns an error */
+    zlist_t *l = dirwalk_find ("/etc/passwd", 0, "*", 1, NULL, 0);
+    ok (l == NULL && errno == ENOTDIR, "dirwalk_find on file returns ENOTDIR");
+
+    l = dirwalk_find ("/blah:/bloop", 0, "*", 1, NULL, 0);
+    ok (l && zlist_size (l) == 0, "dirwalk_find on nonexistent dirs works");
+    zlist_destroy (&l);
+
     /* Find first file matching "foo" */
-    zlist_t *l = dirwalk_find (tmp, 0, "foo", 1, NULL, 0);
+    l = dirwalk_find (tmp, 0, "foo", 1, NULL, 0);
     ok (l != NULL, "dirwalk_find");
     ok (l && zlist_size (l) == 1, "dirwalk_find stopped at 1 result");
     ok (strcmp (basename (zlist_first (l)), "foo") == 0,
