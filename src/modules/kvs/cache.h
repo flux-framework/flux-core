@@ -46,6 +46,15 @@ void cache_destroy (struct cache *cache);
 struct cache_entry *cache_lookup (struct cache *cache,
                                   const char *ref, int current_epoch);
 
+/* Look up a cache entry and get json of cache entry only if entry
+ * contains valid json.  This is a convenience function that is
+ * effectively successful if calls to cache_lookup() and
+ * cache_entry_get_json() are both successful.
+ */
+json_object *cache_lookup_and_get_json (struct cache *cache,
+                                        const char *ref,
+                                        int current_epoch);
+
 /* Insert an entry in the cache by blobref 'ref'.
  * Ownership of the cache entry is transferred to the cache.
  */

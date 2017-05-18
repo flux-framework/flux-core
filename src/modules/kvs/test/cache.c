@@ -22,6 +22,7 @@ int main (int argc, char *argv[])
     struct cache_entry *e1, *e2, *e3, *e4;
     json_object *o1;
     json_object *o2;
+    json_object *o3;
     wait_t *w;
     int count, i;
 
@@ -105,8 +106,12 @@ int main (int argc, char *argv[])
         "cache contains 1 entry after insert");
     ok (cache_lookup (cache, "yyy1", 0) == NULL,
         "cache_lookup of wrong hash fails");
+    ok (cache_lookup_and_get_json (cache, "yyy1", 0) == NULL,
+        "cache_lookup_and_get_json of wrong hash fails");
     ok ((e2 = cache_lookup (cache, "xxx1", 42)) != NULL,
         "cache_lookup of correct hash works (last use=42)");
+    ok (cache_lookup_and_get_json (cache, "xxx1", 0) == NULL,
+        "cache_lookup_and_get_json of correct hash, but non valid entry fails");
     ok (cache_entry_get_json (e2) == NULL,
         "no json object found");
     ok (cache_count_entries (cache) == 1,
@@ -135,6 +140,11 @@ int main (int argc, char *argv[])
     i = 0;
     ok ((o2 = cache_entry_get_json (e4)) != NULL
         && Jget_int (o2, "foo", &i) == true && i == 42,
+        "expected json object found");
+    ok ((o3 = cache_lookup_and_get_json (cache, "xxx2", 0)) != NULL,
+        "cache_lookup_and_get_json of correct hash and valid entry works");
+    i = 0;
+    ok (Jget_int (o3, "foo", &i) == true && i == 42,
         "expected json object found");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
