@@ -60,6 +60,7 @@ fluxcoreinclude_HEADERS = \
 	keepalive.h \
 	response.h \
 	rpc.h \
+	mrpc.h \
 	panic.h \
 	event.h \
 	module.h \
@@ -86,6 +87,7 @@ libflux_la_SOURCES = \
 	request.c \
 	response.c \
 	rpc.c \
+	mrpc.c \
 	panic.c \
 	event.c \
 	module.c \
