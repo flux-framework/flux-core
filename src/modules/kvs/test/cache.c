@@ -19,7 +19,7 @@ void wait_cb (void *arg)
 int main (int argc, char *argv[])
 {
     struct cache *cache;
-    struct cache_entry *e1, *e2;
+    struct cache_entry *e1, *e2, *e3, *e4;
     json_object *o1;
     json_object *o2;
     wait_t *w;
@@ -96,9 +96,9 @@ int main (int argc, char *argv[])
         "cache_create works");
     ok (cache_count_entries (cache) == 0,
         "cache contains 0 entries");
-    o1 = Jnew ();
-    Jadd_int (o1, "foo", 42);
-    ok ((e1 = cache_entry_create (o1)) != NULL,
+
+    /* first test w/ entry w/o json object */
+    ok ((e1 = cache_entry_create (NULL)) != NULL,
         "cache_entry_create works");
     cache_insert (cache, "xxx1", e1);
     ok (cache_count_entries (cache) == 1,
@@ -107,20 +107,46 @@ int main (int argc, char *argv[])
         "cache_lookup of wrong hash fails");
     ok ((e2 = cache_lookup (cache, "xxx1", 42)) != NULL,
         "cache_lookup of correct hash works (last use=42)");
-    i = 0;
-    ok ((o2 = cache_entry_get_json (e2)) != NULL
-        && Jget_int (o2, "foo", &i) == true && i == 42,
-        "expected json object found");
+    ok (cache_entry_get_json (e2) == NULL,
+        "no json object found");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
     ok (cache_expire_entries (cache, 43, 1) == 0,
-        "cache_expire_entries now=43 thresh=1 expired 0");
+        "cache_expire_entries now=43 thresh=1 expired 0 b/c entry invalid");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
+    ok (cache_expire_entries (cache, 44, 1) == 0,
+        "cache_expire_entries now=44 thresh=1 expired 0");
+    ok (cache_count_entries (cache) == 1,
+        "cache contains 1 entry");
+
+    /* second test w/ entry with json object */
+    o1 = Jnew ();
+    Jadd_int (o1, "foo", 42);
+    ok ((e3 = cache_entry_create (o1)) != NULL,
+        "cache_entry_create works");
+    cache_insert (cache, "xxx2", e3);
+    ok (cache_count_entries (cache) == 2,
+        "cache contains 2 entries after insert");
+    ok (cache_lookup (cache, "yyy2", 0) == NULL,
+        "cache_lookup of wrong hash fails");
+    ok ((e4 = cache_lookup (cache, "xxx2", 42)) != NULL,
+        "cache_lookup of correct hash works (last use=42)");
+    i = 0;
+    ok ((o2 = cache_entry_get_json (e4)) != NULL
+        && Jget_int (o2, "foo", &i) == true && i == 42,
+        "expected json object found");
+    ok (cache_count_entries (cache) == 2,
+        "cache contains 2 entries");
+    ok (cache_expire_entries (cache, 43, 1) == 0,
+        "cache_expire_entries now=43 thresh=1 expired 0");
+    ok (cache_count_entries (cache) == 2,
+        "cache contains 2 entries");
     ok (cache_expire_entries (cache, 44, 1) == 1,
         "cache_expire_entries now=44 thresh=1 expired 1");
-    ok (cache_count_entries (cache) == 0,
-        "cache contains 0 entries");
+    ok (cache_count_entries (cache) == 1,
+        "cache contains 1 entry");
+
     cache_destroy (cache);
 
     done_testing ();
