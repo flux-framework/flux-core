@@ -53,7 +53,6 @@ typedef struct {
     int depth;
     char *path_copy;            /* for internal parsing, do not use */
     json_object *dirent;
-    json_object *dir;
     zlist_t *pathcomps;
 } walk_level_t;
 
@@ -101,15 +100,15 @@ static void walk_level_destroy (void *data)
     }
 }
 
-static walk_level_t *walk_level_create (const char *path, json_object *root,
+static walk_level_t *walk_level_create (const char *path,
+                                        json_object *root_dirent,
                                         int depth)
 {
     walk_level_t *wl = xzmalloc (sizeof (*wl));
 
     wl->path_copy = xstrdup (path);
     wl->depth = depth;
-    wl->dirent = NULL;
-    wl->dir = root;
+    wl->dirent = root_dirent;
     if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl)))
         goto error;
 
@@ -121,11 +120,11 @@ static walk_level_t *walk_level_create (const char *path, json_object *root,
 }
 
 static walk_level_t *walk_levels_push (zlist_t *levels, const char *path,
-                                       json_object *root, int depth)
+                                       json_object *root_dirent, int depth)
 {
     walk_level_t *wl;
 
-    if (!(wl = walk_level_create (path, root, depth)))
+    if (!(wl = walk_level_create (path, root_dirent, depth)))
         return NULL;
 
     if (zlist_push (levels, wl) < 0)
@@ -144,12 +143,13 @@ static walk_level_t *walk_levels_push (zlist_t *levels, const char *path,
  * in load ref, which caller should then use to load missing reference
  * into KVS cache.
  */
-static bool walk (struct cache *cache, int current_epoch, json_object *root,
-                  const char *path, int flags,
+static bool walk (struct cache *cache, int current_epoch,
+                  json_object *root_dirent, const char *path, int flags,
                   json_object **direntp, const char **missing_ref, int *ep)
 {
     const char *ref;
     const char *link;
+    json_object *dir;
     zlist_t *levels = NULL;
     walk_level_t *wl = NULL;
     char *pathcomp;
@@ -161,7 +161,7 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
     }
 
     /* first depth is level 0 */
-    if (!(wl = walk_levels_push (levels, path, root, 0))) {
+    if (!(wl = walk_levels_push (levels, path, root_dirent, 0))) {
         errnum = errno;
         goto error;
     }
@@ -169,9 +169,46 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
     /* walk directories */
     while ((pathcomp = zlist_head (wl->pathcomps))) {
 
-        if (!json_object_object_get_ex (wl->dir, pathcomp, &wl->dirent))
+        /* Check for errors in dirent before looking up reference.
+         * Note that reference to lookup is determined in final
+         * error check.
+         */
+
+        if (json_object_object_get_ex (wl->dirent, "DIRVAL", NULL)) {
+            /* N.B. in current code, directories are never stored
+             * by value */
+            log_msg_exit ("%s: unexpected DIRVAL: "
+                          "path=%s pathcomp=%s: wl->dirent=%s ",
+                          __FUNCTION__, path, pathcomp,
+                          Jtostr (wl->dirent));
+        } else if ((Jget_str (wl->dirent, "FILEREF", NULL)
+                    || json_object_object_get_ex (wl->dirent,
+                                                  "FILEVAL",
+                                                  NULL))) {
+            /* don't return ENOENT or ENOTDIR, error to be
+             * determined by caller */
+            goto error;
+        } else if (!Jget_str (wl->dirent, "DIRREF", &ref)) {
+            log_msg_exit ("%s: unknown dirent type: "
+                          "path=%s pathcomp=%s: wl->dirent=%s ",
+                          __FUNCTION__, path, pathcomp,
+                          Jtostr (wl->dirent));
+        }
+
+        /* Get directory reference of path component */
+
+        if (!(dir = cache_lookup_and_get_json (cache,
+                                               ref,
+                                               current_epoch))) {
+            *missing_ref = ref;
+            goto stall;
+        }
+
+        if (!json_object_object_get_ex (dir, pathcomp, &wl->dirent))
             /* not necessarily ENOENT, let caller decide */
             goto error;
+
+        /* Resolve dirent if it is a link */
 
         if (Jget_str (wl->dirent, "LINKVAL", &link)) {
 
@@ -190,48 +227,13 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                 /* "recursively" determine link dirent */
                 if (!(wl = walk_levels_push (levels,
                                              link,
-                                             root,
+                                             root_dirent,
                                              wl->depth + 1))) {
                     errnum = errno;
                     goto error;
                 }
 
                 continue;
-            }
-        }
-
-        if (!last_pathcomp (wl->pathcomps, pathcomp)) {
-            /* Check for errors in dirent before looking up reference.
-             * Note that reference to lookup is determined in final
-             * error check.
-             */
-
-            if (json_object_object_get_ex (wl->dirent, "DIRVAL", NULL)) {
-                /* N.B. in current code, directories are never stored
-                 * by value */
-                log_msg_exit ("%s: unexpected DIRVAL: "
-                              "path=%s pathcomp=%s: wl->dirent=%s ",
-                              __FUNCTION__, path, pathcomp,
-                              Jtostr (wl->dirent));
-            } else if ((Jget_str (wl->dirent, "FILEREF", NULL)
-                        || json_object_object_get_ex (wl->dirent,
-                                                      "FILEVAL",
-                                                      NULL))) {
-                /* don't return ENOENT or ENOTDIR, error to be
-                 * determined by caller */
-                goto error;
-            } else if (!Jget_str (wl->dirent, "DIRREF", &ref)) {
-                log_msg_exit ("%s: unknown dirent type: "
-                              "path=%s pathcomp=%s: wl->dirent=%s ",
-                              __FUNCTION__, path, pathcomp,
-                              Jtostr (wl->dirent));
-            }
-
-            if (!(wl->dir = cache_lookup_and_get_json (cache,
-                                                       ref,
-                                                       current_epoch))) {
-                *missing_ref = ref;
-                goto stall;
             }
         }
 
@@ -255,47 +257,6 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                 /* Set new current level */
                 wl = wl_tmp;
                 pathcomp = pathcomp_tmp;
-
-                /* If link was in middle of path, process the
-                 * dirent entry before continuing on */
-                if (!last_pathcomp (wl->pathcomps, pathcomp)) {
-                    /* Check for errors in dirent before looking up reference.
-                     * Note that reference to lookup is determined in final
-                     * error check.
-                     */
-
-                    if (json_object_object_get_ex (wl->dirent,
-                                                   "DIRVAL",
-                                                   NULL)) {
-                        /* N.B. in current code, directories are
-                         * never stored by value */
-                        log_msg_exit ("%s: unexpected DIRVAL: "
-                                      "path=%s pathcomp=%s: "
-                                      "wl->dirent=%s ",
-                                      __FUNCTION__, path, pathcomp,
-                                      Jtostr (wl->dirent));
-                    } else if ((Jget_str (wl->dirent, "FILEREF", NULL)
-                                || json_object_object_get_ex (wl->dirent,
-                                                              "FILEVAL",
-                                                              NULL))) {
-                        /* don't return ENOENT or ENOTDIR, error to be
-                         * determined by caller */
-                        goto error;
-                    } else if (!Jget_str (wl->dirent, "DIRREF", &ref)) {
-                        log_msg_exit ("%s: unknown dirent type: "
-                                      "path=%s pathcomp=%s: "
-                                      "wl->dirent=%s ",
-                                      __FUNCTION__, path, pathcomp,
-                                      Jtostr (wl->dirent));
-                    }
-
-                    if (!(wl->dir = cache_lookup_and_get_json (cache,
-                                                               ref,
-                                                               current_epoch))) {
-                        *missing_ref = ref;
-                        goto stall;
-                    }
-                }
             } while (wl->depth && last_pathcomp (wl->pathcomps, pathcomp));
         }
 
@@ -316,8 +277,8 @@ stall:
 }
 
 bool lookup (struct cache *cache, int current_epoch, json_object *root,
-             const char *rootdir, const char *path, int flags, 
-             json_object **valp, const char **missing_ref, int *ep)
+             json_object *root_dirent, const char *rootdir, const char *path,
+             int flags, json_object **valp, const char **missing_ref, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
     int walk_errnum = 0;
@@ -334,7 +295,7 @@ bool lookup (struct cache *cache, int current_epoch, json_object *root,
             val = json_object_get (root);
         }
     } else {
-        if (!walk (cache, current_epoch, root, path, flags,
+        if (!walk (cache, current_epoch, root_dirent, path, flags,
                    &dirent, missing_ref, &walk_errnum))
             goto stall;
         if (walk_errnum != 0) {

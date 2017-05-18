@@ -10,8 +10,8 @@
  * reference into KVS cache via rpc or otherwise.
  */
 bool lookup (struct cache *cache, int current_epoch, json_object *root,
-             const char *rootdir, const char *path, int flags,
-             json_object **valp, const char **missing_ref, int *ep);
+             json_object *root_dirent, const char *rootdir, const char *path,
+             int flags, json_object **valp, const char **missing_ref, int *ep);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

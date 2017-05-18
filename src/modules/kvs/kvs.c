@@ -756,8 +756,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (!load (ctx, root_ref, wait, &root))
         goto stall;
-    if (!lookup (ctx->cache, ctx->epoch, root, ctx->rootdir, key, flags,
-                 &val, &missing_ref, &lookup_errnum)) {
+    if (!lookup (ctx->cache, ctx->epoch, root, root_dirent, ctx->rootdir, key,
+                 flags, &val, &missing_ref, &lookup_errnum)) {
         assert (missing_ref);
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
@@ -796,6 +796,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *oval;
     json_object *val = NULL;
     json_object *root = NULL;
+    json_object *root_dirent = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
@@ -817,8 +818,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     if (!load (ctx, ctx->rootdir, wait, &root))
         goto stall;
-    if (!lookup (ctx->cache, ctx->epoch, root, ctx->rootdir, key, flags,
-                 &val, &missing_ref, &lookup_errnum)) {
+    root_dirent = dirent_create ("DIRREF", ctx->rootdir);
+    if (!lookup (ctx->cache, ctx->epoch, root, root_dirent, ctx->rootdir, key,
+                 flags, &val, &missing_ref, &lookup_errnum)) {
         assert (missing_ref);
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
@@ -864,6 +866,7 @@ stall:
     Jput (in2);
     Jput (out);
     flux_msg_destroy (cpy);
+    Jput (root_dirent);
 }
 
 typedef struct {
