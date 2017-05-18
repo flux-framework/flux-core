@@ -180,6 +180,19 @@ static int d_unlinkat (dirwalk_t *d, void *arg)
     return 0;
 }
 
+static int make_a_link (const char *targetbase, const char *target,
+                        const char *linkbase, const char *linkname)
+{
+    int rc = -1;
+    char *l = NULL, *t = NULL;
+    if ((asprintf (&l, "%s/%s", linkbase, linkname) >= 0)
+     && (asprintf (&t, "%s/%s", targetbase, target) >= 0))
+        rc = symlink (t, l);
+    free (l);
+    free (t);
+    return rc;
+}
+
 int main(int argc, char** argv)
 {
     char *s, *rpath, *tmp = NULL, *tmp2 = NULL;
@@ -220,6 +233,9 @@ int main(int argc, char** argv)
 
     if (vcreat ("%s/bar/foo", tmp2) < 0)
         BAIL_OUT ("vcreat");
+
+    if (make_a_link (tmp, "a/b", tmp2, "link") < 0)
+        BAIL_OUT ("make_a_link");
 
     /*  dirwalk_find tests:
      */
@@ -319,9 +335,9 @@ int main(int argc, char** argv)
     n = dirwalk (tmp, DIRWALK_DEPTH, d_unlinkat, NULL);
     ok (n == 7, "dirwalk recursive unlink works");
 
-   /* Cleanup */
+    /* Cleanup */
     n = dirwalk (tmp2, DIRWALK_DEPTH, d_unlinkat, NULL);
-    ok (n == 3, "dirwalk recursive unlink works");
+    ok (n == 4, "dirwalk recursive unlink works");
 
     ok (access (tmp, F_OK) < 0 && errno == ENOENT, "tmp working dir removed");
     ok (access (tmp2, F_OK) < 0 && errno == ENOENT, "tmp2 working dir removed");
