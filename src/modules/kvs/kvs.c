@@ -720,8 +720,8 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
 /* Get dirent containing requested key.
  */
 static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
-                  json_object **direntp, wait_t *wait, int flags, int depth,
-                  int *ep)
+                  json_object **direntp, int flags, int depth,
+                  const char **missing_ref, int *ep)
 {
     char *cpy = xstrdup (path);
     char *next, *name = cpy;
@@ -744,7 +744,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                 errnum = ELOOP;
                 goto error;
             }
-            if (!walk (ctx, root, link, &dirent, wait, flags, depth, ep))
+            if (!walk (ctx, root, link, &dirent, flags, depth, missing_ref, ep))
                 goto stall;
             if (*ep != 0) {
                 errnum = *ep;
@@ -774,8 +774,12 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                           __FUNCTION__, path, name, Jtostr (dirent));
         }
 
-        if (!load (ctx, ref, wait, &dir))
+        if (!(dir = cache_lookup_and_get_json (ctx->cache,
+                                               ref,
+                                               ctx->epoch))) {
+            *missing_ref = ref;
             goto stall;
+        }
 
         name = next;
     }
@@ -787,7 +791,7 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                 errnum = ELOOP;
                 goto error;
             }
-            if (!walk (ctx, root, link, &dirent, wait, flags, depth, ep))
+            if (!walk (ctx, root, link, &dirent, flags, depth, missing_ref, ep))
                 goto stall;
             if (*ep != 0) {
                 errnum = *ep;
@@ -809,9 +813,9 @@ stall:
     return false;
 }
 
-static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
+static bool lookup (kvs_ctx_t *ctx, json_object *root,
                     int flags, const char *name,
-                    json_object **valp, int *ep)
+                    json_object **valp, const char **missing_ref, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
     int walk_errnum = 0;
@@ -830,7 +834,8 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
             val = json_object_get (root);
         }
     } else {
-        if (!walk (ctx, root, name, &dirent, wait, flags, 0, &walk_errnum))
+        if (!walk (ctx, root, name, &dirent, flags, 0,
+                   missing_ref, &walk_errnum))
             goto stall;
         if (walk_errnum != 0) {
             errnum = walk_errnum;
@@ -853,8 +858,12 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = EISDIR;
                 goto done;
             }
-            if (!load (ctx, json_object_get_string (vp), wait, &val))
+            if (!(val = cache_lookup_and_get_json (ctx->cache,
+                                                   json_object_get_string (vp),
+                                                   ctx->epoch))) {
+                *missing_ref = json_object_get_string (vp);
                 goto stall;
+            }
             val = json_object_copydir (val);
         } else if (json_object_object_get_ex (dirent, "FILEREF", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
@@ -865,8 +874,12 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = ENOTDIR;
                 goto done;
             }
-            if (!load (ctx, json_object_get_string (vp), wait, &val))
+            if (!(val = cache_lookup_and_get_json (ctx->cache,
+                                                   json_object_get_string (vp),
+                                                   ctx->epoch))) {
+                *missing_ref = json_object_get_string (vp);
                 goto stall;
+            }
             val = json_object_get (val);
         } else if (json_object_object_get_ex (dirent, "DIRVAL", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
@@ -922,6 +935,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *root_dirent = NULL;
     json_object *tmp_dirent = NULL;
     const char *root_ref = ctx->rootdir;
+    const char *missing_ref = NULL;
     wait_t *wait = NULL;
     int lookup_errnum = 0;
     int rc = -1;
@@ -949,8 +963,12 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (!load (ctx, root_ref, wait, &root))
         goto stall;
-    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
+    if (!lookup (ctx, root, flags, key, &val, &missing_ref, &lookup_errnum)) {
+        assert (missing_ref);
+        if (load (ctx, missing_ref, wait, NULL))
+            log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
+    }
     if (lookup_errnum != 0) {
         errno = lookup_errnum;
         goto done;
@@ -988,6 +1006,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *key;
     int flags;
     int lookup_errnum = 0;
+    const char *missing_ref = NULL;
     wait_t *wait = NULL;
     wait_t *watcher = NULL;
     int rc = -1;
@@ -1004,8 +1023,12 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     if (!load (ctx, ctx->rootdir, wait, &root))
         goto stall;
-    if (!lookup (ctx, root, wait, flags, key, &val, &lookup_errnum))
+    if (!lookup (ctx, root, flags, key, &val, &missing_ref, &lookup_errnum)) {
+        assert (missing_ref);
+        if (load (ctx, missing_ref, wait, NULL))
+            log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
+    }
     if (lookup_errnum) {
         errno = lookup_errnum;
         goto done;
