@@ -120,6 +120,21 @@ static walk_level_t *walk_level_create (const char *path, json_object *root,
     return NULL;
 }
 
+static walk_level_t *walk_levels_push (zlist_t *levels, const char *path,
+                                       json_object *root, int depth)
+{
+    walk_level_t *wl;
+
+    if (!(wl = walk_level_create (path, root, depth)))
+        return NULL;
+
+    if (zlist_push (levels, wl) < 0)
+        oom ();
+    zlist_freefn (levels, wl, walk_level_destroy, false);
+
+    return wl;
+}
+
 /* Get dirent of the requested path starting at the given root.
  *
  * Return true on success or error, error code is returned in ep and
@@ -130,16 +145,23 @@ static walk_level_t *walk_level_create (const char *path, json_object *root,
  * into KVS cache.
  */
 static bool walk (struct cache *cache, int current_epoch, json_object *root,
-                  const char *path, int flags, int depth,
+                  const char *path, int flags,
                   json_object **direntp, const char **missing_ref, int *ep)
 {
     const char *ref;
     const char *link;
+    zlist_t *levels = NULL;
     walk_level_t *wl = NULL;
     char *pathcomp;
     int errnum = 0;
 
-    if (!(wl = walk_level_create (path, root, depth))) {
+    if (!(levels = zlist_new ())) {
+        errnum = ENOMEM;
+        goto error;
+    }
+
+    /* first depth is level 0 */
+    if (!(wl = walk_levels_push (levels, path, root, 0))) {
         errnum = errno;
         goto error;
     }
@@ -160,21 +182,21 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                 || (!(flags & KVS_PROTO_READLINK)
                     && !(flags & KVS_PROTO_TREEOBJ))) {
 
-                if (depth == SYMLINK_CYCLE_LIMIT) {
+                if (wl->depth == SYMLINK_CYCLE_LIMIT) {
                     errnum = ELOOP;
                     goto error;
                 }
 
-                if (!walk (cache, current_epoch, root, link, flags,
-                           depth + 1, &wl->dirent, missing_ref, ep))
-                    goto stall;
-                if (*ep != 0) {
-                    errnum = *ep;
+                /* "recursively" determine link dirent */
+                if (!(wl = walk_levels_push (levels,
+                                             link,
+                                             root,
+                                             wl->depth + 1))) {
+                    errnum = errno;
                     goto error;
                 }
-                if (!wl->dirent)
-                    /* not necessarily ENOENT, let caller decide */
-                    goto error;
+
+                continue;
             }
         }
 
@@ -213,19 +235,83 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
             }
         }
 
+        if (last_pathcomp (wl->pathcomps, pathcomp)
+            && wl->depth) {
+            /* Unwind "recursive" step */
+            do {
+                walk_level_t *wl_tmp;
+                char *pathcomp_tmp;
+
+                /* Take current level off the top of the stack */
+                zlist_pop (levels);
+
+                wl_tmp = zlist_head (levels);
+                pathcomp_tmp = zlist_head (wl_tmp->pathcomps);
+
+                wl_tmp->dirent = wl->dirent;
+
+                walk_level_destroy (wl);
+
+                /* Set new current level */
+                wl = wl_tmp;
+                pathcomp = pathcomp_tmp;
+
+                /* If link was in middle of path, process the
+                 * dirent entry before continuing on */
+                if (!last_pathcomp (wl->pathcomps, pathcomp)) {
+                    /* Check for errors in dirent before looking up reference.
+                     * Note that reference to lookup is determined in final
+                     * error check.
+                     */
+
+                    if (json_object_object_get_ex (wl->dirent,
+                                                   "DIRVAL",
+                                                   NULL)) {
+                        /* N.B. in current code, directories are
+                         * never stored by value */
+                        log_msg_exit ("%s: unexpected DIRVAL: "
+                                      "path=%s pathcomp=%s: "
+                                      "wl->dirent=%s ",
+                                      __FUNCTION__, path, pathcomp,
+                                      Jtostr (wl->dirent));
+                    } else if ((Jget_str (wl->dirent, "FILEREF", NULL)
+                                || json_object_object_get_ex (wl->dirent,
+                                                              "FILEVAL",
+                                                              NULL))) {
+                        /* don't return ENOENT or ENOTDIR, error to be
+                         * determined by caller */
+                        goto error;
+                    } else if (!Jget_str (wl->dirent, "DIRREF", &ref)) {
+                        log_msg_exit ("%s: unknown dirent type: "
+                                      "path=%s pathcomp=%s: "
+                                      "wl->dirent=%s ",
+                                      __FUNCTION__, path, pathcomp,
+                                      Jtostr (wl->dirent));
+                    }
+
+                    if (!(wl->dir = cache_lookup_and_get_json (cache,
+                                                               ref,
+                                                               current_epoch))) {
+                        *missing_ref = ref;
+                        goto stall;
+                    }
+                }
+            } while (wl->depth && last_pathcomp (wl->pathcomps, pathcomp));
+        }
+
         zlist_remove (wl->pathcomps, pathcomp);
     }
     *direntp = wl->dirent;
-    walk_level_destroy (wl);
+    zlist_destroy (&levels);
     return true;
 error:
     if (errnum != 0)
         *ep = errnum;
     *direntp = NULL;
-    walk_level_destroy (wl);
+    zlist_destroy (&levels);
     return true;
 stall:
-    walk_level_destroy (wl);
+    zlist_destroy (&levels);
     return false;
 }
 
@@ -248,7 +334,7 @@ bool lookup (struct cache *cache, int current_epoch, json_object *root,
             val = json_object_get (root);
         }
     } else {
-        if (!walk (cache, current_epoch, root, path, flags, 0,
+        if (!walk (cache, current_epoch, root, path, flags,
                    &dirent, missing_ref, &walk_errnum))
             goto stall;
         if (walk_errnum != 0) {
