@@ -48,6 +48,7 @@
 #include "proto.h"
 #include "cache.h"
 #include "json_dirent.h"
+#include "json_util.h"
 
 typedef char href_t[BLOBREF_MAX_STRING_SIZE];
 
@@ -367,20 +368,6 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
     }
 }
 
-static json_object *copydir (json_object *dir)
-{
-    json_object *cpy;
-    json_object_iter iter;
-
-    if (!(cpy = json_object_new_object ()))
-        oom ();
-    json_object_object_foreachC (dir, iter) {
-        json_object_get (iter.val);
-        json_object_object_add (cpy, iter.key, iter.val);
-    }
-    return cpy;
-}
-
 /* Store DIRVAL objects, converting them to DIRREFs.
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
@@ -455,7 +442,8 @@ static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
         } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
             if (!load (ctx, json_object_get_string (o), wait, &subdir))
                 goto success; /* stall */
-            subdir = copydir (subdir);/* do not corrupt store by modify orig. */
+            /* do not corrupt store by modify orig. */
+            subdir = json_object_copydir (subdir);
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
         } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
@@ -515,7 +503,7 @@ static void commit_apply_fence (fence_t *f)
         json_object *rootdir;
         if (!load (ctx, ctx->rootdir, wait, &rootdir))
             goto stall;
-        f->rootcpy = copydir (rootdir);
+        f->rootcpy = json_object_copydir (rootdir);
     }
 
     /* Apply each op (e.g. key = val) in sequence to the root copy.
@@ -867,7 +855,7 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
             }
             if (!load (ctx, json_object_get_string (vp), wait, &val))
                 goto stall;
-            val = copydir (val);
+            val = json_object_copydir (val);
         } else if (json_object_object_get_ex (dirent, "FILEREF", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
@@ -889,7 +877,7 @@ static bool lookup (kvs_ctx_t *ctx, json_object *root, wait_t *wait,
                 errnum = EISDIR;
                 goto done;
             }
-            val = copydir (vp);
+            val = json_object_copydir (vp);
         } else if (json_object_object_get_ex (dirent, "FILEVAL", &vp)) {
             if ((flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
@@ -985,14 +973,6 @@ stall:
     Jput (tmp_dirent);
 }
 
-static bool compare_json (json_object *o1, json_object *o2)
-{
-    const char *s1 = json_object_to_json_string (o1);
-    const char *s2 = json_object_to_json_string (o2);
-
-    return !strcmp (s1, s2);
-}
-
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
@@ -1032,7 +1012,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if ((flags & KVS_PROTO_FIRST) || !compare_json (val, oval)) {
+    if ((flags & KVS_PROTO_FIRST) || !json_compare (val, oval)) {
         if (!(out = kp_rwatch_enc (Jget (val))))
             goto done;
     }
