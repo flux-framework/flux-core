@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/blobref.h"
@@ -48,6 +49,45 @@
  */
 #define SYMLINK_CYCLE_LIMIT 10
 
+static bool last_pathcomp (zlist_t *pathcomps, const void *data)
+{
+    return (zlist_tail (pathcomps) == data);
+}
+
+/* Create list of path components, i.e. in path "a.b.c", create list
+ * of "a", "b", and "c".
+ */
+static zlist_t *walk_pathcomps_zlist_create (const char *path)
+{
+    char *next, *current, *tmp, *full_path = NULL;
+    zlist_t *pathcomps = NULL;
+
+    if (!(pathcomps = zlist_new ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    current = full_path = xstrdup (path);
+    while ((next = strchr (current, '.'))) {
+        *next++ = '\0';
+
+        tmp = xstrdup (current);
+        if (zlist_append (pathcomps, tmp) < 0)
+            oom ();
+        zlist_freefn (pathcomps, tmp, free, true);
+
+        current = next;
+    }
+
+    tmp = xstrdup (current);
+    if (zlist_append (pathcomps, tmp) < 0)
+        oom ();
+    zlist_freefn (pathcomps, tmp, free, true);
+
+    free (full_path);
+    return pathcomps;
+}
+
 /* Get dirent of the requested path starting at the given root.
  *
  * Return true on success or error, error code is returned in ep and
@@ -61,20 +101,23 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                   const char *path, int flags, int depth,
                   json_object **direntp, const char **missing_ref, int *ep)
 {
-    char *cpy = xstrdup (path);
-    char *next, *name = cpy;
     const char *ref;
     const char *link;
     json_object *dirent = NULL;
     json_object *dir = root;
+    zlist_t *pathcomps = NULL;
+    char *pathcomp;
     int errnum = 0;
 
-    /* walk directories */
-    while (name) {
-        if ((next = strchr (name, '.')))
-            *next++ = '\0';
+    if (!(pathcomps = walk_pathcomps_zlist_create (path))) {
+        errnum = errno;
+        goto error;
+    }
 
-        if (!json_object_object_get_ex (dir, name, &dirent))
+    /* walk directories */
+    while ((pathcomp = zlist_head (pathcomps))) {
+
+        if (!json_object_object_get_ex (dir, pathcomp, &dirent))
             /* not necessarily ENOENT, let caller decide */
             goto error;
 
@@ -83,7 +126,7 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
             /* Follow link if in middle of path or if end of path,
              * flags say we can follow it
              */
-            if (next
+            if (!last_pathcomp (pathcomps, pathcomp)
                 || (!(flags & KVS_PROTO_READLINK)
                     && !(flags & KVS_PROTO_TREEOBJ))) {
 
@@ -105,7 +148,7 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
             }
         }
 
-        if (next) {
+        if (!last_pathcomp (pathcomps, pathcomp)) {
             /* Check for errors in dirent before looking up reference.
              * Note that reference to lookup is determined in final
              * error check.
@@ -115,8 +158,8 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                 /* N.B. in current code, directories are never stored
                  * by value */
                 log_msg_exit ("%s: unexpected DIRVAL: "
-                              "path=%s name=%s: dirent=%s ",
-                              __FUNCTION__, path, name, Jtostr (dirent));
+                              "path=%s pathcomp=%s: dirent=%s ",
+                              __FUNCTION__, path, pathcomp, Jtostr (dirent));
             } else if ((Jget_str (dirent, "FILEREF", NULL)
                         || json_object_object_get_ex (dirent,
                                                       "FILEVAL",
@@ -126,8 +169,8 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                 goto error;
             } else if (!Jget_str (dirent, "DIRREF", &ref)) {
                 log_msg_exit ("%s: unknown dirent type: "
-                              "path=%s name=%s: dirent=%s ",
-                              __FUNCTION__, path, name, Jtostr (dirent));
+                              "path=%s pathcomp=%s: dirent=%s ",
+                              __FUNCTION__, path, pathcomp, Jtostr (dirent));
             }
 
             if (!(dir = cache_lookup_and_get_json (cache,
@@ -137,19 +180,20 @@ static bool walk (struct cache *cache, int current_epoch, json_object *root,
                 goto stall;
             }
         }
-        name = next;
+
+        zlist_remove (pathcomps, pathcomp);
     }
-    free (cpy);
+    zlist_destroy (&pathcomps);
     *direntp = dirent;
     return true;
 error:
     if (errnum != 0)
         *ep = errnum;
-    free (cpy);
+    zlist_destroy (&pathcomps);
     *direntp = NULL;
     return true;
 stall:
-    free (cpy);
+    zlist_destroy (&pathcomps);
     return false;
 }
 
