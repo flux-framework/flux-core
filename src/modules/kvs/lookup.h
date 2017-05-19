@@ -5,7 +5,6 @@ struct lookup {
     struct cache *cache;
     int current_epoch;
 
-    json_object *root_dirent;
     char *root_dir;
     char *root_ref;
     char *root_ref_copy;
@@ -17,6 +16,9 @@ struct lookup {
     json_object *val;           /* value of lookup */
     const char *missing_ref;    /* on stall, missing ref to load */
     int errnum;                 /* errnum if error */
+
+    /* API internal */
+    json_object *root_dirent;
 };
 
 typedef struct lookup lookup_t;
@@ -26,7 +28,6 @@ typedef struct lookup lookup_t;
  */
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
-                         json_object *root_dirent,
                          const char *root_dir,
                          const char *root_ref,
                          const char *path,

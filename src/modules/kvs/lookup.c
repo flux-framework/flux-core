@@ -278,7 +278,6 @@ stall:
 
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
-                         json_object *root_dirent,
                          const char *root_dir,
                          const char *root_ref,
                          const char *path,
@@ -286,7 +285,7 @@ lookup_t *lookup_create (struct cache *cache,
 {
     lookup_t *lh = NULL;
 
-    if (!cache || !root_dirent || !root_dir || !path) {
+    if (!cache || !root_dir || !path) {
         errno = EINVAL;
         return NULL;
     }
@@ -295,7 +294,6 @@ lookup_t *lookup_create (struct cache *cache,
 
     lh->cache = cache;
     lh->current_epoch = current_epoch;
-    lh->root_dirent = root_dirent;
     /* must duplicate these strings, user may not keep pointer
      * alive */
     lh->root_dir = xstrdup (root_dir);
@@ -314,6 +312,8 @@ lookup_t *lookup_create (struct cache *cache,
     lh->missing_ref = NULL;
     lh->errnum = 0;
 
+    lh->root_dirent = dirent_create ("DIRREF", lh->root_ref);
+
     return lh;
 }
 
@@ -323,6 +323,7 @@ void lookup_destroy (lookup_t *lh)
         free (lh->root_dir);
         free (lh->root_ref_copy);
         free (lh->path);
+        Jput (lh->root_dirent);
         free (lh);
     }
 }

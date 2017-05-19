@@ -747,13 +747,10 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
             errno = EINVAL;
             goto done;
         }
-    } else {
-        root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
     }
 
     if (!(lh = lookup_create (ctx->cache,
                               ctx->epoch,
-                              root_dirent,
                               ctx->rootdir,
                               root_ref,
                               key,
@@ -781,8 +778,14 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         errno = ENOENT;
         goto done;
     }
+
+    if (!root_dirent) {
+        root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
+    }
+
     if (!(out = kp_rget_enc (Jget (root_dirent), lh->val)))
         goto done;
+
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0,
@@ -805,7 +808,6 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *in2 = NULL;
     json_object *out = NULL;
     json_object *oval;
-    json_object *root_dirent = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
@@ -822,11 +824,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
         goto done;
-    root_dirent = dirent_create ("DIRREF", ctx->rootdir);
 
     if (!(lh = lookup_create (ctx->cache,
                               ctx->epoch,
-                              root_dirent,
                               ctx->rootdir,
                               NULL,
                               key,
@@ -887,7 +887,6 @@ stall:
     Jput (in2);
     Jput (out);
     flux_msg_destroy (cpy);
-    Jput (root_dirent);
     if (lh)
         Jput (lh->val);
     lookup_destroy (lh);
