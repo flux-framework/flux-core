@@ -56,8 +56,7 @@ struct flux_rpc_struct {
     flux_msg_handler_t *w;
     flux_msg_t *rx_msg;
     int rx_errnum;
-    int rx_count;
-    int rx_expected;
+    int flags;
     zhash_t *aux;
     flux_free_f aux_destroy;
     int usecount;
@@ -83,7 +82,7 @@ static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
              * if the rpc was not completed.  Lacking a proper cancellation
              * protocol, we simply leak them.  See issue #212.
              */
-            if (rpc->rx_count >= rpc->rx_expected)
+            if (rpc->rx_msg)
                 flux_matchtag_free (rpc->h, rpc->m.matchtag);
         }
         flux_msg_destroy (rpc->rx_msg);
@@ -100,7 +99,7 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
     errno = saved_errno;
 }
 
-static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
+static flux_rpc_t *rpc_create (flux_t *h, int flags)
 {
     flux_rpc_t *rpc;
 
@@ -109,7 +108,8 @@ static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
         return NULL;
     }
     rpc->magic = RPC_MAGIC;
-    if (rx_expected == 0) {
+    rpc->flags = flags;
+    if ((flags & FLUX_RPC_NORESPONSE)) {
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
     } else {
         rpc->m.matchtag = flux_matchtag_alloc (h, 0);
@@ -118,7 +118,6 @@ static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
             return NULL;
         }
     }
-    rpc->rx_expected = rx_expected;
     rpc->m.typemask = FLUX_MSGTYPE_RESPONSE;
     rpc->h = h;
     rpc->usecount = 1;
@@ -197,8 +196,6 @@ static int rpc_get (flux_rpc_t *rpc)
 
         if (!rpc->rx_msg)
             goto done;
-
-        rpc->rx_count++;
     }
     rc = 0;
 done:
@@ -277,10 +274,9 @@ static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
     flux_rpc_usecount_incr (rpc);
     if (!(rpc->rx_msg = flux_msg_copy (msg, true)))
         goto done;
-    rpc->rx_count++;
     rpc->then_cb (rpc, rpc->then_arg);
 done:
-    if (rpc->rx_count >= rpc->rx_expected || flux_fatality (rpc->h))
+    if (rpc->rx_msg || flux_fatality (rpc->h))
         flux_msg_handler_stop (rpc->w);
     flux_rpc_usecount_decr (rpc);
 }
@@ -290,23 +286,20 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
     int rc = -1;
 
     assert (rpc->magic == RPC_MAGIC);
-    if (rpc->rx_count >= rpc->rx_expected) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (cb && !rpc->then_cb) {
+    if (cb) {
         if (!rpc->w) {
             if (!(rpc->w = flux_msg_handler_create (rpc->h, rpc->m,
                                                     rpc_cb, rpc)))
                 goto done;
         }
         flux_msg_handler_start (rpc->w);
-        if (rpc->rx_msg || rpc->rx_errnum) {
-            if (rpc->rx_msg)
-                if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
-                    goto done;
+        if (rpc->rx_msg) {
+            if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
+                goto done;
+            flux_msg_destroy (rpc->rx_msg);
+            rpc->rx_msg = NULL;
         }
-    } else if (!cb && rpc->then_cb) {
+    } else {
         flux_msg_handler_stop (rpc->w);
     }
     rpc->then_cb = cb;
@@ -322,11 +315,9 @@ static flux_rpc_t *rpc_request (flux_t *h,
                                 flux_msg_t *msg)
 {
     flux_rpc_t *rpc;
-    int rv, rx_expected = 1;
+    int rv;
 
-    if ((flags & FLUX_RPC_NORESPONSE))
-        rx_expected = 0;
-    if (!(rpc = rpc_create (h, rx_expected)))
+    if (!(rpc = rpc_create (h, flags)))
         goto error;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
