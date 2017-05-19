@@ -19,6 +19,8 @@ struct lookup {
 
     /* API internal */
     json_object *root_dirent;
+    zlist_t *levels;
+    json_object *wdirent;       /* result after walk() */
 };
 
 typedef struct lookup lookup_t;
