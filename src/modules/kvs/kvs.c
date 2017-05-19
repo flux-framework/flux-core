@@ -724,6 +724,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *out = NULL;
     int flags;
     const char *key;
+    json_object *val = NULL;
     json_object *root_dirent = NULL;
     json_object *tmp_dirent = NULL;
     lookup_t *lh = NULL;
@@ -758,7 +759,10 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
 
     if (!lookup (lh)) {
-        assert (lh->missing_ref);
+        const char *missing_ref;
+
+        missing_ref = lookup_get_missing_ref (lh);
+        assert (missing_ref);
 
         if (!(wait = wait_create_msg_handler (h,
                                               w,
@@ -766,15 +770,15 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                                               get_request_cb,
                                               arg)))
             goto done;
-        if (load (ctx, lh->missing_ref, wait, NULL))
+        if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
     }
-    if (lh->errnum != 0) {
-        errno = lh->errnum;
+    if (lookup_get_errnum (lh) != 0) {
+        errno = lookup_get_errnum (lh);
         goto done;
     }
-    if (lh->val == NULL) {
+    if ((val = lookup_get_value (lh)) == NULL) {
         errno = ENOENT;
         goto done;
     }
@@ -783,7 +787,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
     }
 
-    if (!(out = kp_rget_enc (Jget (root_dirent), lh->val)))
+    /* ownership of val passed to 'out' */
+    if (!(out = kp_rget_enc (Jget (root_dirent), val)))
         goto done;
 
     rc = 0;
@@ -808,6 +813,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *in2 = NULL;
     json_object *out = NULL;
     json_object *oval;
+    json_object *val = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
@@ -834,7 +840,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
 
     if (!lookup (lh)) {
-        assert (lh->missing_ref);
+        const char *missing_ref;
+
+        missing_ref = lookup_get_missing_ref (lh);
+        assert (missing_ref);
 
         if (!(wait = wait_create_msg_handler (h,
                                               w,
@@ -842,18 +851,19 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                               watch_request_cb,
                                               arg)))
             goto done;
-        if (load (ctx, lh->missing_ref, wait, NULL))
+        if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
     }
-    if (lh->errnum) {
-        errno = lh->errnum;
+    if (lookup_get_errnum (lh) != 0) {
+        errno = lookup_get_errnum (lh);
         goto done;
     }
+    val = lookup_get_value (lh);
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if ((flags & KVS_PROTO_FIRST) || !json_compare (lh->val, oval)) {
-        if (!(out = kp_rwatch_enc (Jget (lh->val))))
+    if ((flags & KVS_PROTO_FIRST) || !json_compare (val, oval)) {
+        if (!(out = kp_rwatch_enc (Jget (val))))
             goto done;
     }
     /* No reply sent or this is a multi-response watch request.
@@ -864,7 +874,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (!(cpy = flux_msg_copy (msg, false)))
             goto done;
         if (!(in2 = kp_twatch_enc (key,
-                                   Jget (lh->val),
+                                   Jget (val),
                                    flags & ~KVS_PROTO_FIRST)))
             goto done;
         if (flux_msg_set_json (cpy, Jtostr (in2)) < 0)
@@ -887,8 +897,7 @@ stall:
     Jput (in2);
     Jput (out);
     flux_msg_destroy (cpy);
-    if (lh)
-        Jput (lh->val);
+    Jput (val);
     lookup_destroy (lh);
 }
 
