@@ -49,6 +49,7 @@
 #include "cache.h"
 #include "json_dirent.h"
 #include "json_util.h"
+
 #include "lookup.h"
 
 typedef char href_t[BLOBREF_MAX_STRING_SIZE];
@@ -723,13 +724,11 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *out = NULL;
     int flags;
     const char *key;
-    json_object *val;
     json_object *root_dirent = NULL;
     json_object *tmp_dirent = NULL;
-    const char *root_ref = ctx->rootdir;
-    const char *missing_ref = NULL;
+    lookup_t *lh = NULL;
+    const char *root_ref = NULL;
     wait_t *wait = NULL;
-    int lookup_errnum = 0;
     int rc = -1;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
@@ -751,25 +750,38 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     } else {
         root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
     }
-    if (!lookup (ctx->cache, ctx->epoch, root_dirent, ctx->rootdir, root_ref,
-                 key, flags, &val, &missing_ref, &lookup_errnum)) {
-        assert (missing_ref);
 
-        if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
+    if (!(lh = lookup_create (ctx->cache,
+                              ctx->epoch,
+                              root_dirent,
+                              ctx->rootdir,
+                              root_ref,
+                              key,
+                              flags)))
+        goto done;
+
+    if (!lookup (lh)) {
+        assert (lh->missing_ref);
+
+        if (!(wait = wait_create_msg_handler (h,
+                                              w,
+                                              msg,
+                                              get_request_cb,
+                                              arg)))
             goto done;
-        if (load (ctx, missing_ref, wait, NULL))
+        if (load (ctx, lh->missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
     }
-    if (lookup_errnum != 0) {
-        errno = lookup_errnum;
+    if (lh->errnum != 0) {
+        errno = lh->errnum;
         goto done;
     }
-    if (val == NULL) {
+    if (lh->val == NULL) {
         errno = ENOENT;
         goto done;
     }
-    if (!(out = kp_rget_enc (Jget (root_dirent), val)))
+    if (!(out = kp_rget_enc (Jget (root_dirent), lh->val)))
         goto done;
     rc = 0;
 done:
@@ -781,6 +793,7 @@ stall:
     Jput (in);
     Jput (out);
     Jput (tmp_dirent);
+    lookup_destroy (lh);
 }
 
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -792,13 +805,11 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *in2 = NULL;
     json_object *out = NULL;
     json_object *oval;
-    json_object *val = NULL;
     json_object *root_dirent = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
-    int lookup_errnum = 0;
-    const char *missing_ref = NULL;
+    lookup_t *lh = NULL;
     wait_t *wait = NULL;
     wait_t *watcher = NULL;
     int rc = -1;
@@ -812,24 +823,37 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
         goto done;
     root_dirent = dirent_create ("DIRREF", ctx->rootdir);
-    if (!lookup (ctx->cache, ctx->epoch, root_dirent, ctx->rootdir, ctx->rootdir,
-                 key, flags, &val, &missing_ref, &lookup_errnum)) {
-        assert (missing_ref);
 
-        if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, arg)))
+    if (!(lh = lookup_create (ctx->cache,
+                              ctx->epoch,
+                              root_dirent,
+                              ctx->rootdir,
+                              NULL,
+                              key,
+                              flags)))
+        goto done;
+
+    if (!lookup (lh)) {
+        assert (lh->missing_ref);
+
+        if (!(wait = wait_create_msg_handler (h,
+                                              w,
+                                              msg,
+                                              watch_request_cb,
+                                              arg)))
             goto done;
-        if (load (ctx, missing_ref, wait, NULL))
+        if (load (ctx, lh->missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
     }
-    if (lookup_errnum) {
-        errno = lookup_errnum;
+    if (lh->errnum) {
+        errno = lh->errnum;
         goto done;
     }
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if ((flags & KVS_PROTO_FIRST) || !json_compare (val, oval)) {
-        if (!(out = kp_rwatch_enc (Jget (val))))
+    if ((flags & KVS_PROTO_FIRST) || !json_compare (lh->val, oval)) {
+        if (!(out = kp_rwatch_enc (Jget (lh->val))))
             goto done;
     }
     /* No reply sent or this is a multi-response watch request.
@@ -839,7 +863,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (!out || !(flags & KVS_PROTO_ONCE)) {
         if (!(cpy = flux_msg_copy (msg, false)))
             goto done;
-        if (!(in2 = kp_twatch_enc (key, Jget (val), flags & ~KVS_PROTO_FIRST)))
+        if (!(in2 = kp_twatch_enc (key,
+                                   Jget (lh->val),
+                                   flags & ~KVS_PROTO_FIRST)))
             goto done;
         if (flux_msg_set_json (cpy, Jtostr (in2)) < 0)
             goto done;
@@ -857,12 +883,14 @@ done:
     }
     wait_destroy (wait);
 stall:
-    Jput (val);
     Jput (in);
     Jput (in2);
     Jput (out);
     flux_msg_destroy (cpy);
     Jput (root_dirent);
+    if (lh)
+        Jput (lh->val);
+    lookup_destroy (lh);
 }
 
 typedef struct {

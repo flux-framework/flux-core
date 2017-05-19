@@ -45,6 +45,8 @@
 #include "json_dirent.h"
 #include "json_util.h"
 
+#include "lookup.h"
+
 /* Break cycles in symlink references.
  */
 #define SYMLINK_CYCLE_LIMIT 10
@@ -143,9 +145,7 @@ static walk_level_t *walk_levels_push (zlist_t *levels, const char *path,
  * in load ref, which caller should then use to load missing reference
  * into KVS cache.
  */
-static bool walk (struct cache *cache, int current_epoch,
-                  json_object *root_dirent, const char *path, int flags,
-                  json_object **direntp, const char **missing_ref, int *ep)
+static bool walk (lookup_t *lh, json_object **direntp, int *ep)
 {
     const char *ref;
     const char *link;
@@ -161,7 +161,7 @@ static bool walk (struct cache *cache, int current_epoch,
     }
 
     /* first depth is level 0 */
-    if (!(wl = walk_levels_push (levels, path, root_dirent, 0))) {
+    if (!(wl = walk_levels_push (levels, lh->path, lh->root_dirent, 0))) {
         errnum = errno;
         goto error;
     }
@@ -178,8 +178,8 @@ static bool walk (struct cache *cache, int current_epoch,
             /* N.B. in current code, directories are never stored
              * by value */
             log_msg_exit ("%s: unexpected DIRVAL: "
-                          "path=%s pathcomp=%s: wl->dirent=%s ",
-                          __FUNCTION__, path, pathcomp,
+                          "lh->path=%s pathcomp=%s: wl->dirent=%s ",
+                          __FUNCTION__, lh->path, pathcomp,
                           Jtostr (wl->dirent));
         } else if ((Jget_str (wl->dirent, "FILEREF", NULL)
                     || json_object_object_get_ex (wl->dirent,
@@ -190,17 +190,17 @@ static bool walk (struct cache *cache, int current_epoch,
             goto error;
         } else if (!Jget_str (wl->dirent, "DIRREF", &ref)) {
             log_msg_exit ("%s: unknown dirent type: "
-                          "path=%s pathcomp=%s: wl->dirent=%s ",
-                          __FUNCTION__, path, pathcomp,
+                          "lh->path=%s pathcomp=%s: wl->dirent=%s ",
+                          __FUNCTION__, lh->path, pathcomp,
                           Jtostr (wl->dirent));
         }
 
         /* Get directory reference of path component */
 
-        if (!(dir = cache_lookup_and_get_json (cache,
+        if (!(dir = cache_lookup_and_get_json (lh->cache,
                                                ref,
-                                               current_epoch))) {
-            *missing_ref = ref;
+                                               lh->current_epoch))) {
+            lh->missing_ref = ref;
             goto stall;
         }
 
@@ -216,8 +216,8 @@ static bool walk (struct cache *cache, int current_epoch,
              * flags say we can follow it
              */
             if (!last_pathcomp (wl->pathcomps, pathcomp)
-                || (!(flags & KVS_PROTO_READLINK)
-                    && !(flags & KVS_PROTO_TREEOBJ))) {
+                || (!(lh->flags & KVS_PROTO_READLINK)
+                    && !(lh->flags & KVS_PROTO_TREEOBJ))) {
 
                 if (wl->depth == SYMLINK_CYCLE_LIMIT) {
                     errnum = ELOOP;
@@ -227,7 +227,7 @@ static bool walk (struct cache *cache, int current_epoch,
                 /* "recursively" determine link dirent */
                 if (!(wl = walk_levels_push (levels,
                                              link,
-                                             root_dirent,
+                                             lh->root_dirent,
                                              wl->depth + 1))) {
                     errnum = errno;
                     goto error;
@@ -276,33 +276,86 @@ stall:
     return false;
 }
 
-bool lookup (struct cache *cache, int current_epoch, json_object *root_dirent,
-             const char *rootdir, const char *root_ref, const char *path,
-             int flags, json_object **valp, const char **missing_ref, int *ep)
+lookup_t *lookup_create (struct cache *cache,
+                         int current_epoch,
+                         json_object *root_dirent,
+                         const char *root_dir,
+                         const char *root_ref,
+                         const char *path,
+                         int flags)
+{
+    lookup_t *lh = NULL;
+
+    if (!cache || !root_dirent || !root_dir || !path) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    lh = xzmalloc (sizeof (*lh));
+
+    lh->cache = cache;
+    lh->current_epoch = current_epoch;
+    lh->root_dirent = root_dirent;
+    /* must duplicate these strings, user may not keep pointer
+     * alive */
+    lh->root_dir = xstrdup (root_dir);
+    if (root_ref) {
+        lh->root_ref_copy = xstrdup (root_ref);
+        lh->root_ref = lh->root_ref_copy;
+    }
+    else {
+        lh->root_ref_copy = NULL;
+        lh->root_ref = lh->root_dir;
+    }
+    lh->path = xstrdup (path);
+    lh->flags = flags;
+
+    lh->val = NULL;
+    lh->missing_ref = NULL;
+    lh->errnum = 0;
+
+    return lh;
+}
+
+void lookup_destroy (lookup_t *lh)
+{
+    if (lh) {
+        free (lh->root_dir);
+        free (lh->root_ref_copy);
+        free (lh->path);
+        free (lh);
+    }
+}
+
+bool lookup (lookup_t *lh)
 {
     json_object *vp, *dirent, *val = NULL;
     int walk_errnum = 0;
     int errnum = 0;
 
-    if (!strcmp (path, ".")) { /* special case root */
-        if ((flags & KVS_PROTO_TREEOBJ)) {
-            val = dirent_create ("DIRREF", (char *)rootdir);
+    if (!lh) {
+        errno = EINVAL;
+        return true;
+    }
+
+    if (!strcmp (lh->path, ".")) { /* special case root */
+        if ((lh->flags & KVS_PROTO_TREEOBJ)) {
+            val = dirent_create ("DIRREF", (char *)lh->root_dir);
         } else {
-            if (!(flags & KVS_PROTO_READDIR)) {
+            if (!(lh->flags & KVS_PROTO_READDIR)) {
                 errnum = EISDIR;
                 goto done;
             }
-            if (!(val = cache_lookup_and_get_json (cache,
-                                                   root_ref,
-                                                   current_epoch))) {
-                *missing_ref = root_ref;
+            if (!(val = cache_lookup_and_get_json (lh->cache,
+                                                   lh->root_ref,
+                                                   lh->current_epoch))) {
+                lh->missing_ref = lh->root_ref;
                 goto stall;
             }
             val = json_object_get (val);
         }
     } else {
-        if (!walk (cache, current_epoch, root_dirent, path, flags,
-                   &dirent, missing_ref, &walk_errnum))
+        if (!walk (lh, &dirent, &walk_errnum))
             goto stall;
         if (walk_errnum != 0) {
             errnum = walk_errnum;
@@ -312,64 +365,65 @@ bool lookup (struct cache *cache, int current_epoch, json_object *root_dirent,
             //errnum = ENOENT;
             goto done; /* a NULL response is not necessarily an error */
         }
-        if ((flags & KVS_PROTO_TREEOBJ)) {
+        if ((lh->flags & KVS_PROTO_TREEOBJ)) {
             val = json_object_get (dirent);
             goto done;
         }
         if (json_object_object_get_ex (dirent, "DIRREF", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
+            if ((lh->flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
                 goto done;
             }
-            if (!(flags & KVS_PROTO_READDIR)) {
+            if (!(lh->flags & KVS_PROTO_READDIR)) {
                 errnum = EISDIR;
                 goto done;
             }
-            if (!(val = cache_lookup_and_get_json (cache,
+            if (!(val = cache_lookup_and_get_json (lh->cache,
                                                    json_object_get_string (vp),
-                                                   current_epoch))) {
-                *missing_ref = json_object_get_string (vp);
+                                                   lh->current_epoch))) {
+                lh->missing_ref = json_object_get_string (vp);
                 goto stall;
             }
             val = json_object_copydir (val);
         } else if (json_object_object_get_ex (dirent, "FILEREF", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
+            if ((lh->flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
                 goto done;
             }
-            if ((flags & KVS_PROTO_READDIR)) {
+            if ((lh->flags & KVS_PROTO_READDIR)) {
                 errnum = ENOTDIR;
                 goto done;
             }
-            if (!(val = cache_lookup_and_get_json (cache,
+            if (!(val = cache_lookup_and_get_json (lh->cache,
                                                    json_object_get_string (vp),
-                                                   current_epoch))) {
-                *missing_ref = json_object_get_string (vp);
+                                                   lh->current_epoch))) {
+                lh->missing_ref = json_object_get_string (vp);
                 goto stall;
             }
             val = json_object_get (val);
         } else if (json_object_object_get_ex (dirent, "DIRVAL", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
+            if ((lh->flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
                 goto done;
             }
-            if (!(flags & KVS_PROTO_READDIR)) {
+            if (!(lh->flags & KVS_PROTO_READDIR)) {
                 errnum = EISDIR;
                 goto done;
             }
             val = json_object_copydir (vp);
         } else if (json_object_object_get_ex (dirent, "FILEVAL", &vp)) {
-            if ((flags & KVS_PROTO_READLINK)) {
+            if ((lh->flags & KVS_PROTO_READLINK)) {
                 errnum = EINVAL;
                 goto done;
             }
-            if ((flags & KVS_PROTO_READDIR)) {
+            if ((lh->flags & KVS_PROTO_READDIR)) {
                 errnum = ENOTDIR;
                 goto done;
             }
             val = json_object_get (vp);
         } else if (json_object_object_get_ex (dirent, "LINKVAL", &vp)) {
-            if (!(flags & KVS_PROTO_READLINK) || (flags & KVS_PROTO_READDIR)) {
+            if (!(lh->flags & KVS_PROTO_READLINK)
+                || (lh->flags & KVS_PROTO_READDIR)) {
                 errnum = EPROTO;
                 goto done;
             }
@@ -380,9 +434,9 @@ bool lookup (struct cache *cache, int current_epoch, json_object *root_dirent,
     }
     /* val now contains the requested object (copied) */
 done:
-    *valp = val;
+    lh->val = val;
     if (errnum != 0)
-        *ep = errnum;
+        lh->errnum = errnum;
     return true;
 stall:
     return false;
