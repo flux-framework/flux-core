@@ -21,6 +21,13 @@ struct lookup {
     json_object *root_dirent;
     zlist_t *levels;
     json_object *wdirent;       /* result after walk() */
+    enum {
+        LOOKUP_STATE_INIT,
+        LOOKUP_STATE_CHECK_ROOT,
+        LOOKUP_STATE_WALK,
+        LOOKUP_STATE_VALUE,
+        LOOKUP_STATE_FINISHED,
+    } state;
 };
 
 typedef struct lookup lookup_t;

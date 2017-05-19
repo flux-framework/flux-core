@@ -308,6 +308,7 @@ lookup_t *lookup_create (struct cache *cache,
         goto cleanup;
 
     lh->wdirent = NULL;
+    lh->state = LOOKUP_STATE_INIT;
 
     return lh;
 
@@ -338,106 +339,127 @@ bool lookup (lookup_t *lh)
         return true;
     }
 
-    /* special case root */
-    if (!strcmp (lh->path, ".")) {
-        if ((lh->flags & KVS_PROTO_TREEOBJ)) {
-            lh->val = dirent_create ("DIRREF", (char *)lh->root_dir);
-        } else {
-            if (!(lh->flags & KVS_PROTO_READDIR)) {
-                lh->errnum = EISDIR;
+    switch (lh->state) {
+        case LOOKUP_STATE_INIT:
+        case LOOKUP_STATE_CHECK_ROOT:
+            /* special case root */
+            if (!strcmp (lh->path, ".")) {
+                if ((lh->flags & KVS_PROTO_TREEOBJ)) {
+                    lh->val = dirent_create ("DIRREF", (char *)lh->root_dir);
+                } else {
+                    if (!(lh->flags & KVS_PROTO_READDIR)) {
+                        lh->errnum = EISDIR;
+                        goto done;
+                    }
+                    valtmp = cache_lookup_and_get_json (lh->cache,
+                                                        lh->root_ref,
+                                                        lh->current_epoch);
+                    if (!valtmp) {
+                        lh->state = LOOKUP_STATE_CHECK_ROOT;
+                        lh->missing_ref = lh->root_ref;
+                        goto stall;
+                    }
+                    lh->val = json_object_get (valtmp);
+                }
                 goto done;
             }
-            if (!(valtmp = cache_lookup_and_get_json (lh->cache,
-                                                      lh->root_ref,
-                                                      lh->current_epoch))) {
-                lh->missing_ref = lh->root_ref;
-                goto stall;
-            }
-            lh->val = json_object_get (valtmp);
-        }
-        goto done;
-    } else {
-        if (!walk (lh))
-            goto stall;
-        if (lh->errnum != 0)
-            goto done;
-        if (!lh->wdirent) {
-            //lh->errnum = ENOENT;
-            goto done; /* a NULL response is not necessarily an error */
-        }
 
-        if ((lh->flags & KVS_PROTO_TREEOBJ)) {
-            lh->val = json_object_get (lh->wdirent);
-            goto done;
-        }
+            lh->state = LOOKUP_STATE_WALK;
+            /* fallthrough */
+        case LOOKUP_STATE_WALK:
+            if (!walk (lh))
+                goto stall;
+            if (lh->errnum != 0)
+                goto done;
+            if (!lh->wdirent) {
+                //lh->errnum = ENOENT;
+                goto done; /* a NULL response is not necessarily an error */
+            }
 
-        if (json_object_object_get_ex (lh->wdirent, "DIRREF", &vp)) {
-            if ((lh->flags & KVS_PROTO_READLINK)) {
-                lh->errnum = EINVAL;
+            lh->state = LOOKUP_STATE_VALUE;
+            /* fallthrough */
+        case LOOKUP_STATE_VALUE:
+            if ((lh->flags & KVS_PROTO_TREEOBJ)) {
+                lh->val = json_object_get (lh->wdirent);
                 goto done;
             }
-            if (!(lh->flags & KVS_PROTO_READDIR)) {
-                lh->errnum = EISDIR;
-                goto done;
-            }
-            reftmp = json_object_get_string (vp);
-            if (!(valtmp = cache_lookup_and_get_json (lh->cache,
-                                                      reftmp,
-                                                      lh->current_epoch))) {
-                lh->missing_ref = reftmp;
-                goto stall;
-            }
-            lh->val = json_object_copydir (valtmp);
-        } else if (json_object_object_get_ex (lh->wdirent, "FILEREF", &vp)) {
-            if ((lh->flags & KVS_PROTO_READLINK)) {
-                lh->errnum = EINVAL;
-                goto done;
-            }
-            if ((lh->flags & KVS_PROTO_READDIR)) {
-                lh->errnum = ENOTDIR;
-                goto done;
-            }
-            reftmp = json_object_get_string (vp);
-            if (!(valtmp = cache_lookup_and_get_json (lh->cache,
-                                                      reftmp,
-                                                      lh->current_epoch))) {
-                lh->missing_ref = reftmp;
-                goto stall;
-            }
-            lh->val = json_object_get (valtmp);
-        } else if (json_object_object_get_ex (lh->wdirent, "DIRVAL", &vp)) {
-            if ((lh->flags & KVS_PROTO_READLINK)) {
-                lh->errnum = EINVAL;
-                goto done;
-            }
-            if (!(lh->flags & KVS_PROTO_READDIR)) {
-                lh->errnum = EISDIR;
-                goto done;
-            }
-            lh->val = json_object_copydir (vp);
-        } else if (json_object_object_get_ex (lh->wdirent, "FILEVAL", &vp)) {
-            if ((lh->flags & KVS_PROTO_READLINK)) {
-                lh->errnum = EINVAL;
-                goto done;
-            }
-            if ((lh->flags & KVS_PROTO_READDIR)) {
-                lh->errnum = ENOTDIR;
-                goto done;
-            }
-            lh->val = json_object_get (vp);
-        } else if (json_object_object_get_ex (lh->wdirent, "LINKVAL", &vp)) {
-            if (!(lh->flags & KVS_PROTO_READLINK)
-                || (lh->flags & KVS_PROTO_READDIR)) {
-                lh->errnum = EPROTO;
-                goto done;
-            }
-            lh->val = json_object_get (vp);
-        } else
-            log_msg_exit ("%s: corrupt dirent: %s", __FUNCTION__,
-                          Jtostr (lh->wdirent));
-        /* val now contains the requested object (copied) */
+
+            if (json_object_object_get_ex (lh->wdirent, "DIRREF", &vp)) {
+                if ((lh->flags & KVS_PROTO_READLINK)) {
+                    lh->errnum = EINVAL;
+                    goto done;
+                }
+                if (!(lh->flags & KVS_PROTO_READDIR)) {
+                    lh->errnum = EISDIR;
+                    goto done;
+                }
+                reftmp = json_object_get_string (vp);
+                valtmp = cache_lookup_and_get_json (lh->cache,
+                                                    reftmp,
+                                                    lh->current_epoch);
+                if (!valtmp) {
+                    lh->missing_ref = reftmp;
+                    goto stall;
+                }
+                lh->val = json_object_copydir (valtmp);
+            } else if (json_object_object_get_ex (lh->wdirent, "FILEREF", &vp)) {
+                if ((lh->flags & KVS_PROTO_READLINK)) {
+                    lh->errnum = EINVAL;
+                    goto done;
+                }
+                if ((lh->flags & KVS_PROTO_READDIR)) {
+                    lh->errnum = ENOTDIR;
+                    goto done;
+                }
+                reftmp = json_object_get_string (vp);
+                valtmp = cache_lookup_and_get_json (lh->cache,
+                                                    reftmp,
+                                                    lh->current_epoch);
+                if (!valtmp) {
+                    lh->missing_ref = reftmp;
+                    goto stall;
+                }
+                lh->val = json_object_get (valtmp);
+            } else if (json_object_object_get_ex (lh->wdirent, "DIRVAL", &vp)) {
+                if ((lh->flags & KVS_PROTO_READLINK)) {
+                    lh->errnum = EINVAL;
+                    goto done;
+                }
+                if (!(lh->flags & KVS_PROTO_READDIR)) {
+                    lh->errnum = EISDIR;
+                    goto done;
+                }
+                lh->val = json_object_copydir (vp);
+            } else if (json_object_object_get_ex (lh->wdirent, "FILEVAL", &vp)) {
+                if ((lh->flags & KVS_PROTO_READLINK)) {
+                    lh->errnum = EINVAL;
+                    goto done;
+                }
+                if ((lh->flags & KVS_PROTO_READDIR)) {
+                    lh->errnum = ENOTDIR;
+                    goto done;
+                }
+                lh->val = json_object_get (vp);
+            } else if (json_object_object_get_ex (lh->wdirent, "LINKVAL", &vp)) {
+                if (!(lh->flags & KVS_PROTO_READLINK)
+                    || (lh->flags & KVS_PROTO_READDIR)) {
+                    lh->errnum = EPROTO;
+                    goto done;
+                }
+                lh->val = json_object_get (vp);
+            } else
+                log_msg_exit ("%s: corrupt dirent: %s", __FUNCTION__,
+                              Jtostr (lh->wdirent));
+            /* val now contains the requested object (copied) */
+            break;
+        case LOOKUP_STATE_FINISHED:
+            break;
+        default:
+            log_msg_exit ("%s: invalid state %d", __FUNCTION__, lh->state);
     }
+
 done:
+    lh->state = LOOKUP_STATE_FINISHED;
     return true;
 stall:
     return false;
