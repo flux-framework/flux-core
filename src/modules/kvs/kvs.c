@@ -724,7 +724,6 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     int flags;
     const char *key;
     json_object *val;
-    json_object *root = NULL;
     json_object *root_dirent = NULL;
     json_object *tmp_dirent = NULL;
     const char *root_ref = ctx->rootdir;
@@ -741,8 +740,6 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
         goto done;
-    if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
-        goto done;
     /* If root dirent was specified, lookup corresponding 'root' directory.
      * Otherwise, use the current root.
      */
@@ -754,11 +751,12 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     } else {
         root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
     }
-    if (!load (ctx, root_ref, wait, &root))
-        goto stall;
-    if (!lookup (ctx->cache, ctx->epoch, root, root_dirent, ctx->rootdir, key,
-                 flags, &val, &missing_ref, &lookup_errnum)) {
+    if (!lookup (ctx->cache, ctx->epoch, root_dirent, ctx->rootdir, root_ref,
+                 key, flags, &val, &missing_ref, &lookup_errnum)) {
         assert (missing_ref);
+
+        if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, arg)))
+            goto done;
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;
@@ -795,7 +793,6 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *out = NULL;
     json_object *oval;
     json_object *val = NULL;
-    json_object *root = NULL;
     json_object *root_dirent = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
@@ -814,14 +811,13 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
         goto done;
-    if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, arg)))
-        goto done;
-    if (!load (ctx, ctx->rootdir, wait, &root))
-        goto stall;
     root_dirent = dirent_create ("DIRREF", ctx->rootdir);
-    if (!lookup (ctx->cache, ctx->epoch, root, root_dirent, ctx->rootdir, key,
-                 flags, &val, &missing_ref, &lookup_errnum)) {
+    if (!lookup (ctx->cache, ctx->epoch, root_dirent, ctx->rootdir, ctx->rootdir,
+                 key, flags, &val, &missing_ref, &lookup_errnum)) {
         assert (missing_ref);
+
+        if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, arg)))
+            goto done;
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
         goto stall;

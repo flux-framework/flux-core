@@ -276,8 +276,8 @@ stall:
     return false;
 }
 
-bool lookup (struct cache *cache, int current_epoch, json_object *root,
-             json_object *root_dirent, const char *rootdir, const char *path,
+bool lookup (struct cache *cache, int current_epoch, json_object *root_dirent,
+             const char *rootdir, const char *root_ref, const char *path,
              int flags, json_object **valp, const char **missing_ref, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
@@ -292,7 +292,13 @@ bool lookup (struct cache *cache, int current_epoch, json_object *root,
                 errnum = EISDIR;
                 goto done;
             }
-            val = json_object_get (root);
+            if (!(val = cache_lookup_and_get_json (cache,
+                                                   root_ref,
+                                                   current_epoch))) {
+                *missing_ref = root_ref;
+                goto stall;
+            }
+            val = json_object_get (val);
         }
     } else {
         if (!walk (cache, current_epoch, root_dirent, path, flags,

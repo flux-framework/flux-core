@@ -9,8 +9,8 @@
  * reference in missing_ref, which caller should then use to load missing
  * reference into KVS cache via rpc or otherwise.
  */
-bool lookup (struct cache *cache, int current_epoch, json_object *root,
-             json_object *root_dirent, const char *rootdir, const char *path,
+bool lookup (struct cache *cache, int current_epoch, json_object *root_dirent,
+             const char *rootdir, const char *root_ref, const char *path,
              int flags, json_object **valp, const char **missing_ref, int *ep);
 
 /*
