@@ -54,7 +54,6 @@ struct flux_rpc_struct {
     flux_then_f then_cb;
     void *then_arg;
     flux_msg_handler_t *w;
-    uint32_t nodeid;
     flux_msg_t *rx_msg;
     int rx_errnum;
     int rx_count;
@@ -104,7 +103,6 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
 static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
 {
     flux_rpc_t *rpc;
-    int flags = 0;
 
     if (!(rpc = calloc (1, sizeof (*rpc)))) {
         errno = ENOMEM;
@@ -114,9 +112,7 @@ static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
     if (rx_expected == 0) {
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
     } else {
-        if (rx_expected != 1)
-            flags |= FLUX_MATCHTAG_GROUP;
-        rpc->m.matchtag = flux_matchtag_alloc (h, flags);
+        rpc->m.matchtag = flux_matchtag_alloc (h, 0);
         if (rpc->m.matchtag == FLUX_MATCHTAG_NONE) {
             flux_rpc_destroy (rpc);
             return NULL;
@@ -126,7 +122,6 @@ static flux_rpc_t *rpc_create (flux_t *h, int rx_expected)
     rpc->m.typemask = FLUX_MSGTYPE_RESPONSE;
     rpc->h = h;
     rpc->usecount = 1;
-    rpc->nodeid = FLUX_NODEID_ANY;
     return rpc;
 }
 
@@ -135,25 +130,8 @@ static int rpc_request_prepare (flux_rpc_t *rpc, flux_msg_t *msg,
 {
     int flags = 0;
     int rc = -1;
-    uint32_t matchtag = rpc->m.matchtag & ~FLUX_MATCHTAG_GROUP_MASK;
-    uint32_t matchgrp = rpc->m.matchtag & FLUX_MATCHTAG_GROUP_MASK;
 
-    /* So that flux_rpc_get_nodeid() can get nodeid from a response:
-     * For group rpc, use the lower matchtag bits to stash the nodeid
-     * in the request, and it will come back in the response.
-     * For singleton rpc, stash destination nodeid in rpc->nodeid.
-     * TODO-scalability: If nodeids exceed 1<<20, we may need to use a seq#
-     * in lower matchtag bits and stash a mapping array inthe rpc object.
-     */
-    if (matchgrp > 0) {
-        if ((nodeid & FLUX_MATCHTAG_GROUP_MASK) != 0) {
-            errno = ERANGE;
-            goto done;
-        }
-        matchtag = matchgrp | nodeid;
-    } else
-        rpc->nodeid = nodeid;
-    if (flux_msg_set_matchtag (msg, matchtag) < 0)
+    if (flux_msg_set_matchtag (msg, rpc->m.matchtag) < 0)
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
