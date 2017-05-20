@@ -52,6 +52,8 @@
 
 #include "lookup.h"
 
+#define KVS_MAGIC 0xdeadbeef
+
 typedef char href_t[BLOBREF_MAX_STRING_SIZE];
 
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
@@ -70,6 +72,7 @@ typedef struct {
 } stats_t;
 
 typedef struct {
+    int magic;
     struct cache *cache;    /* blobref => cache_entry */
     href_t rootdir;         /* current root blobref */
     int rootseq;            /* current root version (for ordering) */
@@ -136,6 +139,7 @@ static kvs_ctx_t *getctx (flux_t *h)
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
+        ctx->magic = KVS_MAGIC;
         if (!(r = flux_get_reactor (h)))
             goto error;
         ctx->cache = cache_create ();
@@ -718,7 +722,7 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
 static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
-    kvs_ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = NULL;
     const char *json_str;
     json_object *in = NULL;
     json_object *out = NULL;
@@ -732,31 +736,45 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     wait_t *wait = NULL;
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!json_str || !(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
-        goto done;
-    /* If root dirent was specified, lookup corresponding 'root' directory.
-     * Otherwise, use the current root.
-     */
-    if (root_dirent) {
-        if (!Jget_str (root_dirent, "DIRREF", &root_ref)) {
-            errno = EINVAL;
+    /* if bad lh, then first time rpc and not a replay */
+    if (lookup_validate (arg) == false) {
+        ctx = arg;
+
+        if (flux_request_decode (msg, NULL, &json_str) < 0)
+            goto done;
+        if (!json_str || !(in = Jfromstr (json_str))) {
+            errno = EPROTO;
             goto done;
         }
-    }
+        if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
+            goto done;
+        /* If root dirent was specified, lookup corresponding 'root' directory.
+         * Otherwise, use the current root.
+         */
+        if (root_dirent) {
+            if (!Jget_str (root_dirent, "DIRREF", &root_ref)) {
+                errno = EINVAL;
+                goto done;
+            }
+        }
 
-    if (!(lh = lookup_create (ctx->cache,
-                              ctx->epoch,
-                              ctx->rootdir,
-                              root_ref,
-                              key,
-                              flags)))
-        goto done;
+        if (!(lh = lookup_create (ctx->cache,
+                                  ctx->epoch,
+                                  ctx->rootdir,
+                                  root_ref,
+                                  key,
+                                  flags)))
+            goto done;
+
+        assert (lookup_set_aux_data (lh, ctx) == 0);
+    }
+    else {
+        lh = arg;
+
+        assert ((ctx = lookup_get_aux_data (lh)));
+
+        assert (lookup_set_current_epoch (lh, ctx->epoch) == 0);
+    }
 
     if (!lookup (lh)) {
         const char *missing_ref;
@@ -764,11 +782,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         missing_ref = lookup_get_missing_ref (lh);
         assert (missing_ref);
 
-        if (!(wait = wait_create_msg_handler (h,
-                                              w,
-                                              msg,
-                                              get_request_cb,
-                                              arg)))
+        if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, lh)))
             goto done;
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
@@ -784,7 +798,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
 
     if (!root_dirent) {
-        root_dirent = tmp_dirent = dirent_create ("DIRREF", ctx->rootdir);
+        tmp_dirent = dirent_create ("DIRREF", (char *)lookup_get_root_ref (lh));
+        root_dirent = tmp_dirent;
     }
 
     /* ownership of val passed to 'out' */
@@ -797,22 +812,22 @@ done:
                               rc < 0 ? NULL : Jtostr (out)) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
     wait_destroy (wait);
+    lookup_destroy (lh);
 stall:
     Jput (in);
     Jput (out);
     Jput (tmp_dirent);
-    lookup_destroy (lh);
 }
 
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
-    kvs_ctx_t *ctx = arg;
+    kvs_ctx_t *ctx = NULL;
     const char *json_str;
     json_object *in = NULL;
     json_object *in2 = NULL;
     json_object *out = NULL;
-    json_object *oval;
+    json_object *oval = NULL;
     json_object *val = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
@@ -820,24 +835,41 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     lookup_t *lh = NULL;
     wait_t *wait = NULL;
     wait_t *watcher = NULL;
+    bool isreplay = false;
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!json_str || !(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
-        goto done;
+    /* if bad lh, then first time rpc and not a replay */
+    if (lookup_validate (arg) == false) {
+        ctx = arg;
 
-    if (!(lh = lookup_create (ctx->cache,
-                              ctx->epoch,
-                              ctx->rootdir,
-                              NULL,
-                              key,
-                              flags)))
-        goto done;
+        if (flux_request_decode (msg, NULL, &json_str) < 0)
+            goto done;
+        if (!json_str || !(in = Jfromstr (json_str))) {
+            errno = EPROTO;
+            goto done;
+        }
+        if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
+            goto done;
+
+        if (!(lh = lookup_create (ctx->cache,
+                                  ctx->epoch,
+                                  ctx->rootdir,
+                                  NULL,
+                                  key,
+                                  flags)))
+            goto done;
+
+        assert (lookup_set_aux_data (lh, ctx) == 0);
+    }
+    else {
+        lh = arg;
+
+        assert ((ctx = lookup_get_aux_data (lh)));
+
+        assert (lookup_set_current_epoch (lh, ctx->epoch) == 0);
+
+        isreplay = true;
+    }
 
     if (!lookup (lh)) {
         const char *missing_ref;
@@ -845,11 +877,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         missing_ref = lookup_get_missing_ref (lh);
         assert (missing_ref);
 
-        if (!(wait = wait_create_msg_handler (h,
-                                              w,
-                                              msg,
-                                              watch_request_cb,
-                                              arg)))
+        if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, lh)))
             goto done;
         if (load (ctx, missing_ref, wait, NULL))
             log_msg_exit ("%s: failure in load logic", __FUNCTION__);
@@ -860,6 +888,19 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
     val = lookup_get_value (lh);
+
+    /* we didn't initialize these values on a replay, get them */
+    if (isreplay) {
+        if (flux_request_decode (msg, NULL, &json_str) < 0)
+            goto done;
+        if (!json_str || !(in = Jfromstr (json_str))) {
+            errno = EPROTO;
+            goto done;
+        }
+        if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
+            goto done;
+    }
+
     /* Value changed or this is the initial request, so prepare a reply.
      */
     if ((flags & KVS_PROTO_FIRST) || !json_compare (val, oval)) {
@@ -880,7 +921,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (flux_msg_set_json (cpy, Jtostr (in2)) < 0)
             goto done;
         if (!(watcher = wait_create_msg_handler (h, w, cpy,
-                                                 watch_request_cb, arg)))
+                                                 watch_request_cb, ctx)))
             goto done;
         wait_addqueue (ctx->watchlist, watcher);
     }
@@ -892,13 +933,13 @@ done:
             flux_log_error (h, "%s", __FUNCTION__);
     }
     wait_destroy (wait);
+    lookup_destroy (lh);
 stall:
     Jput (in);
     Jput (in2);
     Jput (out);
     flux_msg_destroy (cpy);
     Jput (val);
-    lookup_destroy (lh);
 }
 
 typedef struct {
