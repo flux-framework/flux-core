@@ -195,40 +195,37 @@ static bool walk (lookup_t *lh)
     /* walk directories */
     while ((pathcomp = zlist_head (wl->pathcomps))) {
 
-        /* Check for errors in dirent before looking up reference.
-         * Note that reference to lookup is determined in final
-         * error check.
-         */
+        /* Get directory of dirent */
 
-        if (json_object_object_get_ex (wl->dirent, "DIRVAL", NULL)) {
-            /* N.B. in current code, directories are never stored
-             * by value */
-            log_msg_exit ("%s: unexpected DIRVAL: "
-                          "lh->path=%s pathcomp=%s: wl->dirent=%s ",
-                          __FUNCTION__, lh->path, pathcomp,
-                          Jtostr (wl->dirent));
-        } else if ((Jget_str (wl->dirent, "FILEREF", NULL)
-                    || json_object_object_get_ex (wl->dirent,
-                                                  "FILEVAL",
-                                                  NULL))) {
-            /* don't return ENOENT or ENOTDIR, error to be
-             * determined by caller */
-            goto error;
-        } else if (!Jget_str (wl->dirent, "DIRREF", &ref)) {
-            log_msg_exit ("%s: unknown dirent type: "
-                          "lh->path=%s pathcomp=%s: wl->dirent=%s ",
-                          __FUNCTION__, lh->path, pathcomp,
-                          Jtostr (wl->dirent));
+        if (Jget_str (wl->dirent, "DIRREF", &ref)) {
+
+            if (!(dir = cache_lookup_and_get_json (lh->cache,
+                                                   ref,
+                                                   lh->current_epoch))) {
+                lh->missing_ref = ref;
+                goto stall;
+            }
+        } else {
+            /* Unexpected dirent type */
+            if ((Jget_str (wl->dirent, "FILEREF", NULL)
+                 || json_object_object_get_ex (wl->dirent,
+                                               "FILEVAL",
+                                               NULL))) {
+                /* don't return ENOENT or ENOTDIR, error to be
+                 * determined by caller */
+                goto error;
+            }
+            else {
+                log_msg ("%s: unknown/unexpected dirent type: "
+                         "lh->path=%s pathcomp=%s: wl->dirent=%s ",
+                         __FUNCTION__, lh->path, pathcomp,
+                         Jtostr (wl->dirent));
+                lh->errnum = EPERM;
+                goto error;
+            }
         }
 
-        /* Get directory reference of path component */
-
-        if (!(dir = cache_lookup_and_get_json (lh->cache,
-                                               ref,
-                                               lh->current_epoch))) {
-            lh->missing_ref = ref;
-            goto stall;
-        }
+        /* Get directory reference of path component from directory */
 
         if (!json_object_object_get_ex (dir, pathcomp, &wl->dirent))
             /* not necessarily ENOENT, let caller decide */
@@ -589,15 +586,22 @@ bool lookup (lookup_t *lh)
                 }
                 lh->val = json_object_get (vp);
             } else if (json_object_object_get_ex (lh->wdirent, "LINKVAL", &vp)) {
-                if (!(lh->flags & KVS_PROTO_READLINK)
-                    || (lh->flags & KVS_PROTO_READDIR)) {
+                /* this should be "impossible" */
+                if (!(lh->flags & KVS_PROTO_READLINK)) {
                     lh->errnum = EPROTO;
                     goto done;
                 }
+                if (lh->flags & KVS_PROTO_READDIR) {
+                    lh->errnum = ENOTDIR;
+                    goto done;
+                }
                 lh->val = json_object_get (vp);
-            } else
-                log_msg_exit ("%s: corrupt dirent: %s", __FUNCTION__,
-                              Jtostr (lh->wdirent));
+            } else {
+                log_msg ("%s: corrupt dirent: %s", __FUNCTION__,
+                         Jtostr (lh->wdirent));
+                lh->errnum = EPERM;
+                goto done;
+            }
             /* val now contains the requested object (copied) */
             break;
         case LOOKUP_STATE_FINISHED:
