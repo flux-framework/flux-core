@@ -766,22 +766,29 @@ static bool walk (kvs_ctx_t *ctx, json_object *root, const char *path,
                 /* not necessarily ENOENT, let caller decide */
                 goto error;
         }
-        if (Jget_str (dirent, "DIRREF", &ref)) {
-            if (!load (ctx, ref, wait, &dir))
-                goto stall;
 
-        } else if (json_object_object_get_ex (dirent, "DIRVAL", NULL)) {
+        /* Check for errors in dirent before looking up reference.
+         * Note that reference to lookup is determined in final
+         * error check.
+         */
+
+        if (json_object_object_get_ex (dirent, "DIRVAL", NULL)) {
             /* N.B. in current code, directories are never stored by value */
             log_msg_exit ("%s: unexpected DIRVAL: path=%s name=%s: dirent=%s ",
-                      __FUNCTION__, path, name, Jtostr (dirent));
+                          __FUNCTION__, path, name, Jtostr (dirent));
         } else if ((Jget_str (dirent, "FILEREF", NULL)
-                 || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
-            /* don't return ENOENT or ENOTDIR, error to be determined by caller */
+                    || json_object_object_get_ex (dirent, "FILEVAL", NULL))) {
+            /* don't return ENOENT or ENOTDIR, error to be determined
+             * by caller */
             goto error;
-        } else {
+        } else if (!Jget_str (dirent, "DIRREF", &ref)) {
             log_msg_exit ("%s: unknown dirent type: path=%s name=%s: dirent=%s ",
-                      __FUNCTION__, path, name, Jtostr (dirent));
+                          __FUNCTION__, path, name, Jtostr (dirent));
         }
+
+        if (!load (ctx, ref, wait, &dir))
+            goto stall;
+
         name = next;
     }
     /* now terminal path component */
