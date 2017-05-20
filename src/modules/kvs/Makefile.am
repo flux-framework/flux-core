@@ -53,13 +53,16 @@ TESTS = \
 	test_waitqueue.t \
 	test_proto.t \
 	test_cache.t \
-	test_dirent.t
+	test_dirent.t \
+	test_lookup.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/cache.o \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/proto.o \
         $(top_builddir)/src/modules/kvs/json_dirent.o \
+        $(top_builddir)/src/modules/kvs/json_util.o \
+        $(top_builddir)/src/modules/kvs/lookup.o \
         $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -91,3 +94,7 @@ test_cache_t_LDADD = $(test_ldadd)
 test_dirent_t_SOURCES = test/dirent.c
 test_dirent_t_CPPFLAGS = $(test_cppflags)
 test_dirent_t_LDADD = $(test_ldadd)
+
+test_lookup_t_SOURCES = test/lookup.c
+test_lookup_t_CPPFLAGS = $(test_cppflags)
+test_lookup_t_LDADD = $(test_ldadd)
