@@ -1025,7 +1025,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     /* Value changed or this is the initial request, so prepare a reply.
      */
-    if ((flags & KVS_PROTO_FIRST) || !compare_json (val, oval) != 0) {
+    if ((flags & KVS_PROTO_FIRST) || !compare_json (val, oval)) {
         if (!(out = kp_rwatch_enc (Jget (val))))
             goto done;
     }
