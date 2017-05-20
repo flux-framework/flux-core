@@ -1,3 +1,6 @@
+#include "src/common/libutil/tstat.h"
+#include "waitqueue.h"
+
 struct cache_entry;
 struct cache;
 
