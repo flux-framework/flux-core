@@ -703,6 +703,7 @@ int main (int argc, char *argv[])
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
     runlevel_destroy (ctx.runlevel);
+    subprocess_manager_destroy (ctx.sm);
 
     return exit_rc;
 }
