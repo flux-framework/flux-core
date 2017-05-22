@@ -51,6 +51,8 @@ static const double dfl_heartrate = 2;
 void heartbeat_destroy (heartbeat_t *hb)
 {
     if (hb) {
+        flux_watcher_destroy (hb->timer);
+        flux_msg_handler_destroy (hb->handler);
         free (hb);
     }
 }
