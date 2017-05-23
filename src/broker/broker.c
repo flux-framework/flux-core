@@ -124,7 +124,6 @@ typedef struct {
     bool verbose;
     bool quiet;
     pid_t pid;
-    char *proctitle;
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
@@ -175,7 +174,7 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
 static int unload_module_byname (broker_ctx_t *ctx, const char *name,
                                  const flux_msg_t *request, bool async);
 
-static void update_proctitle (broker_ctx_t *ctx);
+static void set_proctitle (uint32_t rank);
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *state, void *arg);
 static void runlevel_io_cb (runlevel_t *r, const char *name,
@@ -547,7 +546,7 @@ int main (int argc, char *argv[])
         log_msg ("relay: %s", relay ? relay : "none");
     }
 
-    update_proctitle (&ctx);
+    set_proctitle (ctx.rank);
 
     if (ctx.rank == 0) {
         const char *rc1, *rc3, *pmi, *uri;
@@ -820,15 +819,11 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
     }
 }
 
-static void update_proctitle (broker_ctx_t *ctx)
+static void set_proctitle (uint32_t rank)
 {
-    char *s;
-    if (asprintf (&s, "flux-broker-%"PRIu32, ctx->rank) < 0)
-        oom ();
-    (void)prctl (PR_SET_NAME, s, 0, 0, 0);
-    if (ctx->proctitle)
-        free (ctx->proctitle);
-    ctx->proctitle = s;
+    static char proctitle[32];
+    snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
+    (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.
