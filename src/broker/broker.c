@@ -700,7 +700,12 @@ int main (int argc, char *argv[])
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    zlist_destroy (&ctx.subscriptions);
+    if (ctx.subscriptions) {
+        char *s;
+        while ((s = zlist_pop (ctx.subscriptions)))
+            free (s);
+        zlist_destroy (&ctx.subscriptions);
+    }
     runlevel_destroy (ctx.runlevel);
     subprocess_manager_destroy (ctx.sm);
 
@@ -2286,6 +2291,7 @@ static int broker_unsubscribe (void *impl, const char *topic)
     while (s) {
         if (!strcmp (s, topic)) {
             zlist_remove (ctx->subscriptions, s);
+            free (s);
             break;
         }
         s = zlist_next (ctx->subscriptions);
