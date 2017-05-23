@@ -197,7 +197,6 @@ static int libev_to_events (int events)
  **/
 
 static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
-                                            void *impl,
                                             size_t impl_size,
                                             struct watcher_ops ops,
                                             int signature,
@@ -213,9 +212,14 @@ static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
     w->fn = fun;
     w->arg = arg;
     reactor_usecount_incr (r);
-    if (impl)
-        *(void **)impl = w->impl;
     return w;
+}
+
+static void * flux_watcher_impl (flux_watcher_t *w)
+{
+    if (w)
+        return w->impl;
+    return NULL;
 }
 
 void flux_watcher_start (flux_watcher_t *w)
@@ -309,8 +313,9 @@ flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
     ev_flux *fw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &fw, sizeof (*fw), ops, HANDLE_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*fw), ops, HANDLE_SIG, cb, arg)))
         return NULL;
+    fw = flux_watcher_impl (w);
     ev_flux_init (fw, handle_cb, h, events_to_libev (events) & ~EV_ERROR);
     fw->data = w;
 
@@ -360,8 +365,9 @@ flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r, int fd, int events,
     ev_io *iow;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &iow, sizeof (*iow), ops, FD_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*iow), ops, FD_SIG, cb, arg)))
         return NULL;
+    iow = flux_watcher_impl (w);
     ev_io_init (iow, fd_cb, fd, events_to_libev (events) & ~EV_ERROR);
     iow->data = w;
 
@@ -412,8 +418,9 @@ flux_watcher_t *flux_zmq_watcher_create (flux_reactor_t *r,
     ev_zmq *zw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &zw, sizeof (*zw), ops, ZMQ_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*zw), ops, ZMQ_SIG, cb, arg)))
         return NULL;
+    zw = flux_watcher_impl (w);
     ev_zmq_init (zw, zmq_cb, zsock, events_to_libev (events) & ~EV_ERROR);
     zw->data = w;
 
@@ -467,8 +474,9 @@ flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
     ev_timer *tw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &tw, sizeof (*tw), ops, TIMER_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*tw), ops, TIMER_SIG, cb, arg)))
         return NULL;
+    tw = flux_watcher_impl (w);
     ev_timer_init (tw, timer_cb, after, repeat);
     tw->data = w;
 
@@ -549,11 +557,11 @@ flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
     };
     flux_watcher_t *w;
     struct f_periodic *fp;
+    size_t size = sizeof (*fp);
 
-    if (!(w = flux_watcher_create (r, &fp, sizeof (*fp), ops, PERIODIC_SIG, cb, arg))) {
-        free (fp);
+    if (!(w = flux_watcher_create (r, size, ops, PERIODIC_SIG, cb, arg)))
         return NULL;
-    }
+    fp = flux_watcher_impl (w);
     fp->evp.data = fp;
     fp->w = w;
     fp->reschedule_cb = reschedule_cb;
@@ -627,8 +635,9 @@ flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
     ev_prepare *pw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &pw, sizeof (*pw), ops, PREPARE_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*pw), ops, PREPARE_SIG, cb, arg)))
         return NULL;
+    pw = flux_watcher_impl (w);
     ev_prepare_init (pw, prepare_cb);
     pw->data = w;
 
@@ -671,8 +680,9 @@ flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
     ev_check *cw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &cw, sizeof (*cw), ops, CHECK_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*cw), ops, CHECK_SIG, cb, arg)))
         return NULL;
+    cw = flux_watcher_impl (w);
     ev_check_init (cw, check_cb);
     cw->data = w;
 
@@ -715,8 +725,9 @@ flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
     ev_idle *iw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, &iw, sizeof (*iw), ops, IDLE_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*iw), ops, IDLE_SIG, cb, arg)))
         return NULL;
+    iw = flux_watcher_impl (w);
     ev_idle_init (iw, idle_cb);
     iw->data = w;
 
@@ -764,8 +775,9 @@ flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
         errno = EINVAL;
         return NULL;
     }
-    if (!(w = flux_watcher_create (r, &cw, sizeof (*cw), ops, CHILD_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*cw), ops, CHILD_SIG, cb, arg)))
         return NULL;
+    cw = flux_watcher_impl (w);
     ev_child_init (cw, child_cb, pid, trace ? 1 : 0);
     cw->data = w;
 
@@ -822,8 +834,9 @@ flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r, int signum,
     flux_watcher_t *w;
     ev_signal *sw;
 
-    if (!(w = flux_watcher_create (r, &sw, sizeof (*sw), ops, SIGNAL_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*sw), ops, SIGNAL_SIG, cb, arg)))
         return NULL;
+    sw = flux_watcher_impl (w);
     ev_signal_init (sw, signal_cb, signum);
     sw->data = w;
 
@@ -874,8 +887,9 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
     flux_watcher_t *w;
     ev_stat *sw;
 
-    if (!(w = flux_watcher_create (r, &sw, sizeof (*sw), ops, STAT_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*sw), ops, STAT_SIG, cb, arg)))
         return NULL;
+    sw = flux_watcher_impl (w);
     ev_stat_init (sw, stat_cb, path, interval);
     sw->data = w;
 
