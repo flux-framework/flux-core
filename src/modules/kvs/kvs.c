@@ -138,7 +138,10 @@ static kvs_ctx_t *getctx (flux_t *h)
     flux_reactor_t *r;
 
     if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx = calloc (1, sizeof (*ctx)))) {
+            errno = ENOMEM;
+            goto error;
+        }
         ctx->magic = KVS_MAGIC;
         if (!(r = flux_get_reactor (h)))
             goto error;
