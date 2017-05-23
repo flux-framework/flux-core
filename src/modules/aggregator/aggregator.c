@@ -544,6 +544,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 done_delvec:
     flux_msg_handler_delvec (htab);
 done:
+    aggregator_destroy (ctx);
     return rc;
 }
 
