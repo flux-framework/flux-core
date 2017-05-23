@@ -72,7 +72,7 @@ static int64_t * seq_create (seqhash_t *s, const char *name)
         return (NULL);
     }
     v = seq_new ();
-    rc = zhash_insert (s->vhash, xstrdup (name), v);
+    rc = zhash_insert (s->vhash, name, v);
     assert (rc >= 0);
     zhash_freefn (s->vhash, name, free);
     return (v);
