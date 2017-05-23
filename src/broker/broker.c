@@ -2266,9 +2266,17 @@ done:
 static int broker_subscribe (void *impl, const char *topic)
 {
     broker_ctx_t *ctx = impl;
-    if (zlist_append (ctx->subscriptions, xstrdup (topic)))
-        oom();
+    char *cpy = NULL;
+
+    if (!(cpy = strdup (topic)))
+        goto nomem;
+    if (zlist_append (ctx->subscriptions, cpy) < 0)
+        goto nomem;
     return 0;
+nomem:
+    free (cpy);
+    errno = ENOMEM;
+    return -1;
 }
 
 static int broker_unsubscribe (void *impl, const char *topic)
