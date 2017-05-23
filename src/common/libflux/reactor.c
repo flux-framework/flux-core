@@ -45,17 +45,11 @@ struct flux_reactor {
     int usecount;
 };
 
-struct watcher_ops {
-    void (*start)(void *impl, flux_watcher_t *w);
-    void (*stop)(void *impl, flux_watcher_t *w);
-    void (*destroy)(void *impl, flux_watcher_t *w);
-};
-
 struct flux_watcher {
     flux_reactor_t *r;
     flux_watcher_f fn;
     void *arg;
-    struct watcher_ops *ops;
+    struct flux_watcher_ops *ops;
     void *impl;
 };
 
@@ -195,10 +189,10 @@ static int libev_to_events (int events)
  ** Watchers
  **/
 
-static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
-                                            size_t impl_size,
-                                            struct watcher_ops *ops,
-                                            flux_watcher_f fun, void *arg)
+flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
+                                     size_t impl_size,
+                                     struct flux_watcher_ops *ops,
+                                     flux_watcher_f fun, void *arg)
 {
     struct flux_watcher *w = calloc (1, sizeof (*w) + impl_size);
     if (!w)
@@ -212,14 +206,14 @@ static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
     return w;
 }
 
-static void * flux_watcher_impl (flux_watcher_t *w)
+void * flux_watcher_impl (flux_watcher_t *w)
 {
     if (w)
         return w->impl;
     return NULL;
 }
 
-static struct watcher_ops * flux_watcher_ops (flux_watcher_t *w)
+struct flux_watcher_ops * flux_watcher_ops (flux_watcher_t *w)
 {
     if (w)
         return w->ops;
@@ -300,7 +294,7 @@ static void handle_cb (struct ev_loop *loop, ev_flux *fw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops handle_watcher = {
+static struct flux_watcher_ops handle_watcher = {
     .start = handle_start,
     .stop = handle_stop,
     .destroy = NULL,
@@ -348,7 +342,7 @@ static void fd_cb (struct ev_loop *loop, ev_io *iow, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops fd_watcher = {
+static struct flux_watcher_ops fd_watcher = {
     .start = fd_start,
     .stop = fd_stop,
     .destroy = NULL
@@ -396,7 +390,7 @@ static void zmq_cb (struct ev_loop *loop, ev_zmq *pw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops zmq_watcher  = {
+static struct flux_watcher_ops zmq_watcher  = {
     .start = zmq_start,
     .stop = zmq_stop,
     .destroy = NULL,
@@ -448,7 +442,7 @@ static void timer_cb (struct ev_loop *loop, ev_timer *tw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops timer_watcher = {
+static struct flux_watcher_ops timer_watcher = {
     .start = timer_start,
     .stop = timer_stop,
     .destroy = NULL,
@@ -527,7 +521,7 @@ static ev_tstamp periodic_reschedule_cb (ev_periodic *pw, ev_tstamp now)
     return rc;
 }
 
-static struct watcher_ops periodic_watcher = {
+static struct flux_watcher_ops periodic_watcher = {
     .start = periodic_start,
     .stop = periodic_stop,
     .destroy = NULL,
@@ -605,7 +599,7 @@ static void prepare_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops prepare_watcher = {
+static struct flux_watcher_ops prepare_watcher = {
     .start = prepare_start,
     .stop = prepare_stop,
     .destroy = NULL,
@@ -646,7 +640,7 @@ static void check_cb (struct ev_loop *loop, ev_check *cw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops check_watcher = {
+static struct flux_watcher_ops check_watcher = {
     .start = check_start,
     .stop = check_stop,
     .destroy = NULL,
@@ -687,7 +681,7 @@ static void idle_cb (struct ev_loop *loop, ev_idle *iw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops idle_watcher = {
+static struct flux_watcher_ops idle_watcher = {
     .start = idle_start,
     .stop = idle_stop,
     .destroy = NULL,
@@ -728,7 +722,7 @@ static void child_cb (struct ev_loop *loop, ev_child *cw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops child_watcher = {
+static struct flux_watcher_ops child_watcher = {
     .start = child_start,
     .stop = child_stop,
     .destroy = NULL,
@@ -795,7 +789,7 @@ static void signal_cb (struct ev_loop *loop, ev_signal *sw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops signal_watcher = {
+static struct flux_watcher_ops signal_watcher = {
     .start = signal_start,
     .stop = signal_stop,
     .destroy = NULL,
@@ -846,7 +840,7 @@ static void stat_cb (struct ev_loop *loop, ev_stat *sw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-static struct watcher_ops stat_watcher = {
+static struct flux_watcher_ops stat_watcher = {
     .start = stat_start,
     .stop = stat_stop,
     .destroy = NULL,
