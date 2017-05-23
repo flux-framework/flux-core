@@ -343,7 +343,8 @@ int main (int argc, char *argv[])
         }
     }
     if (optind < argc) {
-        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &ctx.init_shell_cmd_len)) != 0)
+        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd,
+                                             &ctx.init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
     }
 
@@ -707,6 +708,7 @@ int main (int argc, char *argv[])
         zlist_destroy (&ctx.subscriptions);
     }
     runlevel_destroy (ctx.runlevel);
+    free (ctx.init_shell_cmd);
     subprocess_manager_destroy (ctx.sm);
 
     return exit_rc;
