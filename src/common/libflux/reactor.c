@@ -55,8 +55,7 @@ struct flux_watcher {
     flux_reactor_t *r;
     flux_watcher_f fn;
     void *arg;
-    int signature;
-    struct watcher_ops ops;
+    struct watcher_ops *ops;
     void *impl;
 };
 
@@ -198,8 +197,7 @@ static int libev_to_events (int events)
 
 static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
                                             size_t impl_size,
-                                            struct watcher_ops ops,
-                                            int signature,
+                                            struct watcher_ops *ops,
                                             flux_watcher_f fun, void *arg)
 {
     struct flux_watcher *w = calloc (1, sizeof (*w) + impl_size);
@@ -207,7 +205,6 @@ static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
         return NULL;
     w->r = r;
     w->ops = ops;
-    w->signature = signature;
     w->impl = (char *)w + sizeof (*w);
     w->fn = fun;
     w->arg = arg;
@@ -222,29 +219,36 @@ static void * flux_watcher_impl (flux_watcher_t *w)
     return NULL;
 }
 
+static struct watcher_ops * flux_watcher_ops (flux_watcher_t *w)
+{
+    if (w)
+        return w->ops;
+    return NULL;
+}
+
 void flux_watcher_start (flux_watcher_t *w)
 {
     if (w) {
-        if (w->ops.start)
-            w->ops.start (w->impl, w);
+        if (w->ops->start)
+            w->ops->start (w->impl, w);
     }
 }
 
 void flux_watcher_stop (flux_watcher_t *w)
 {
     if (w) {
-        if (w->ops.stop)
-            w->ops.stop (w->impl, w);
+        if (w->ops->stop)
+            w->ops->stop (w->impl, w);
     }
 }
 
 void flux_watcher_destroy (flux_watcher_t *w)
 {
     if (w) {
-        if (w->ops.stop)
-            w->ops.stop (w->impl, w);
-        if (w->ops.destroy)
-            w->ops.destroy (w->impl, w);
+        if (w->ops->stop)
+            w->ops->stop (w->impl, w);
+        if (w->ops->destroy)
+            w->ops->destroy (w->impl, w);
         if (w->r)
             reactor_usecount_decr (w->r);
         free (w);
@@ -279,41 +283,36 @@ static void watcher_stop_safe (flux_watcher_t *w)
 /* flux_t handle
  */
 
-#define HANDLE_SIG 1006
-
 static void handle_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == HANDLE_SIG);
     ev_flux_start (w->r->loop, (ev_flux *)impl);
 }
 
 static void handle_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == HANDLE_SIG);
     ev_flux_stop (w->r->loop, (ev_flux *)impl);
 }
 
 static void handle_cb (struct ev_loop *loop, ev_flux *fw, int revents)
 {
     struct flux_watcher *w = fw->data;
-    assert (w->signature == HANDLE_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
+
+static struct watcher_ops handle_watcher = {
+    .start = handle_start,
+    .stop = handle_stop,
+    .destroy = NULL,
+};
 
 flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
                                             flux_t *h, int events,
                                             flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = handle_start,
-        .stop = handle_stop,
-        .destroy = NULL,
-    };
     ev_flux *fw;
     flux_watcher_t *w;
-
-    if (!(w = flux_watcher_create (r, sizeof (*fw), ops, HANDLE_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*fw), &handle_watcher, cb, arg)))
         return NULL;
     fw = flux_watcher_impl (w);
     ev_flux_init (fw, handle_cb, h, events_to_libev (events) & ~EV_ERROR);
@@ -324,7 +323,7 @@ flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
 
 flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
 {
-    assert (w->signature == HANDLE_SIG);
+    assert (flux_watcher_ops (w) == &handle_watcher);
     ev_flux *fw = w->impl;
     return fw->h;
 }
@@ -332,40 +331,36 @@ flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
 /* file descriptors
  */
 
-#define FD_SIG 1005
-
 static void fd_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == FD_SIG);
     ev_io_start (w->r->loop, (ev_io *)impl);
 }
 
 static void fd_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == FD_SIG);
     ev_io_stop (w->r->loop, (ev_io *)impl);
 }
 
 static void fd_cb (struct ev_loop *loop, ev_io *iow, int revents)
 {
     struct flux_watcher *w = iow->data;
-    assert (w->signature == FD_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+static struct watcher_ops fd_watcher = {
+    .start = fd_start,
+    .stop = fd_stop,
+    .destroy = NULL
+};
+
 flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r, int fd, int events,
                                         flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = fd_start,
-        .stop = fd_stop,
-        .destroy = NULL,
-    };
     ev_io *iow;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*iow), ops, FD_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*iow), &fd_watcher, cb, arg)))
         return NULL;
     iow = flux_watcher_impl (w);
     ev_io_init (iow, fd_cb, fd, events_to_libev (events) & ~EV_ERROR);
@@ -376,7 +371,7 @@ flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r, int fd, int events,
 
 int flux_fd_watcher_get_fd (flux_watcher_t *w)
 {
-    assert (w->signature == FD_SIG);
+    assert (flux_watcher_ops (w) == &fd_watcher);
     ev_io *iow = w->impl;
     return iow->fd;
 }
@@ -384,41 +379,37 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w)
 /* 0MQ sockets
  */
 
-#define ZMQ_SIG 1004
-
 static void zmq_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == ZMQ_SIG);
     ev_zmq_start (w->r->loop, (ev_zmq *)impl);
 }
 
 static void zmq_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == ZMQ_SIG);
     ev_zmq_stop (w->r->loop, (ev_zmq *)impl);
 }
 
 static void zmq_cb (struct ev_loop *loop, ev_zmq *pw, int revents)
 {
     struct flux_watcher *w = pw->data;
-    assert (w->signature == ZMQ_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
+
+static struct watcher_ops zmq_watcher  = {
+    .start = zmq_start,
+    .stop = zmq_stop,
+    .destroy = NULL,
+};
 
 flux_watcher_t *flux_zmq_watcher_create (flux_reactor_t *r,
                                          void *zsock, int events,
                                          flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = zmq_start,
-        .stop = zmq_stop,
-        .destroy = NULL,
-    };
     ev_zmq *zw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*zw), ops, ZMQ_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*zw), &zmq_watcher, cb, arg)))
         return NULL;
     zw = flux_watcher_impl (w);
     ev_zmq_init (zw, zmq_cb, zsock, events_to_libev (events) & ~EV_ERROR);
@@ -429,7 +420,10 @@ flux_watcher_t *flux_zmq_watcher_create (flux_reactor_t *r,
 
 void *flux_zmq_watcher_get_zsock (flux_watcher_t *w)
 {
-    assert (w->signature == ZMQ_SIG);
+    if (flux_watcher_ops (w) != &zmq_watcher) {
+        errno = EINVAL;
+        return NULL;
+    }
     ev_zmq *zw = w->impl;
     return zw->zsock;
 }
@@ -437,17 +431,13 @@ void *flux_zmq_watcher_get_zsock (flux_watcher_t *w)
 /* Timer
  */
 
-#define TIMER_SIG 1003
-
 static void timer_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == TIMER_SIG);
     ev_timer_start (w->r->loop, (ev_timer *)impl);
 }
 
 static void timer_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == TIMER_SIG);
     ev_timer_stop (w->r->loop, (ev_timer *)impl);
 }
 
@@ -458,23 +448,23 @@ static void timer_cb (struct ev_loop *loop, ev_timer *tw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+static struct watcher_ops timer_watcher = {
+    .start = timer_start,
+    .stop = timer_stop,
+    .destroy = NULL,
+};
+
 flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
                                            double after, double repeat,
                                            flux_watcher_f cb, void *arg)
 {
+    ev_timer *tw;
+    flux_watcher_t *w;
     if (after < 0 || repeat < 0) {
         errno = EINVAL;
         return NULL;
     }
-    struct watcher_ops ops = {
-        .start = timer_start,
-        .stop = timer_stop,
-        .destroy = NULL,
-    };
-    ev_timer *tw;
-    flux_watcher_t *w;
-
-    if (!(w = flux_watcher_create (r, sizeof (*tw), ops, TIMER_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*tw), &timer_watcher, cb, arg)))
         return NULL;
     tw = flux_watcher_impl (w);
     ev_timer_init (tw, timer_cb, after, repeat);
@@ -485,15 +475,13 @@ flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
 
 void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat)
 {
-    assert (w->signature == TIMER_SIG);
+    assert (flux_watcher_ops (w) == &timer_watcher);
     ev_timer *tw = w->impl;
     ev_timer_set (tw, after, repeat);
 }
 
 /* Periodic
  */
-#define PERIODIC_SIG 1007
-
 struct f_periodic {
     struct flux_watcher *w;
     ev_periodic          evp;
@@ -503,14 +491,12 @@ struct f_periodic {
 static void periodic_start (void *impl, flux_watcher_t *w)
 {
     struct f_periodic *fp = w->impl;
-    assert (w->signature == PERIODIC_SIG);
     ev_periodic_start (w->r->loop, &fp->evp);
 }
 
 static void periodic_stop (void *impl, flux_watcher_t *w)
 {
     struct f_periodic *fp = w->impl;
-    assert (w->signature == PERIODIC_SIG);
     ev_periodic_stop (w->r->loop, &fp->evp);
 }
 
@@ -541,25 +527,25 @@ static ev_tstamp periodic_reschedule_cb (ev_periodic *pw, ev_tstamp now)
     return rc;
 }
 
+static struct watcher_ops periodic_watcher = {
+    .start = periodic_start,
+    .stop = periodic_stop,
+    .destroy = NULL,
+};
+
 flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
                                               double offset, double interval,
                                               flux_reschedule_f reschedule_cb,
                                               flux_watcher_f cb, void *arg)
 {
+    flux_watcher_t *w;
+    struct f_periodic *fp;
+    size_t size = sizeof (*fp);
     if (offset < 0 || interval < 0) {
         errno = EINVAL;
         return NULL;
     }
-    struct watcher_ops ops = {
-        .start = periodic_start,
-        .stop = periodic_stop,
-        .destroy = NULL,
-    };
-    flux_watcher_t *w;
-    struct f_periodic *fp;
-    size_t size = sizeof (*fp);
-
-    if (!(w = flux_watcher_create (r, size, ops, PERIODIC_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, size, &periodic_watcher, cb, arg)))
         return NULL;
     fp = flux_watcher_impl (w);
     fp->evp.data = fp;
@@ -578,7 +564,7 @@ void flux_periodic_watcher_reset (flux_watcher_t *w,
 {
     struct f_periodic *fp = w->impl;
     struct ev_loop *loop = w->r->loop;
-    assert (w->signature == PERIODIC_SIG);
+    assert (flux_watcher_ops (w) == &periodic_watcher);
     fp->reschedule_cb = reschedule_cb;
     ev_periodic_set (&fp->evp, next, interval,
                      reschedule_cb ? periodic_reschedule_cb : NULL);
@@ -587,11 +573,11 @@ void flux_periodic_watcher_reset (flux_watcher_t *w,
 
 double flux_watcher_next_wakeup (flux_watcher_t *w)
 {
-    if (w->signature == PERIODIC_SIG) {
+    if (flux_watcher_ops (w) == &periodic_watcher) {
         struct f_periodic *fp = w->impl;
         return ((double) ev_periodic_at (&fp->evp));
     }
-    else if (w->signature == TIMER_SIG) {
+    else if (flux_watcher_ops (w) == &timer_watcher) {
         ev_timer *tw = w->impl;
         struct ev_loop *loop = w->r->loop;
         return ((double) (ev_now (loop) +  ev_timer_remaining (loop, tw)));
@@ -602,40 +588,36 @@ double flux_watcher_next_wakeup (flux_watcher_t *w)
 
 /* Prepare
  */
-#define PREPARE_SIG 1002
-
 static void prepare_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == PREPARE_SIG);
     ev_prepare_start (w->r->loop, (ev_prepare *)impl);
 }
 
 static void prepare_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == PREPARE_SIG);
     ev_prepare_stop (w->r->loop, (ev_prepare *)impl);
 }
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
 {
     struct flux_watcher *w = pw->data;
-    assert (w->signature == PREPARE_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+static struct watcher_ops prepare_watcher = {
+    .start = prepare_start,
+    .stop = prepare_stop,
+    .destroy = NULL,
+};
+
 flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
                                              flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = prepare_start,
-        .stop = prepare_stop,
-        .destroy = NULL,
-    };
     ev_prepare *pw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*pw), ops, PREPARE_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*pw), &prepare_watcher, cb, arg)))
         return NULL;
     pw = flux_watcher_impl (w);
     ev_prepare_init (pw, prepare_cb);
@@ -647,40 +629,36 @@ flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
 /* Check
  */
 
-#define CHECK_SIG 1001
-
 static void check_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == CHECK_SIG);
     ev_check_start (w->r->loop, (ev_check *)impl);
 }
 
 static void check_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == CHECK_SIG);
     ev_check_stop (w->r->loop, (ev_check *)impl);
 }
 
 static void check_cb (struct ev_loop *loop, ev_check *cw, int revents)
 {
     struct flux_watcher *w = cw->data;
-    assert (w->signature == CHECK_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+static struct watcher_ops check_watcher = {
+    .start = check_start,
+    .stop = check_stop,
+    .destroy = NULL,
+};
+
 flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
                                            flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = check_start,
-        .stop = check_stop,
-        .destroy = NULL,
-    };
     ev_check *cw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*cw), ops, CHECK_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*cw), &check_watcher, cb, arg)))
         return NULL;
     cw = flux_watcher_impl (w);
     ev_check_init (cw, check_cb);
@@ -692,40 +670,36 @@ flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
 /* Idle
  */
 
-#define IDLE_SIG 1000
-
 static void idle_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == IDLE_SIG);
     ev_idle_start (w->r->loop, (ev_idle *)impl);
 }
 
 static void idle_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == IDLE_SIG);
     ev_idle_stop (w->r->loop, (ev_idle *)impl);
 }
 
 static void idle_cb (struct ev_loop *loop, ev_idle *iw, int revents)
 {
     struct flux_watcher *w = iw->data;
-    assert (w->signature == IDLE_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+static struct watcher_ops idle_watcher = {
+    .start = idle_start,
+    .stop = idle_stop,
+    .destroy = NULL,
+};
+
 flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
                                           flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = idle_start,
-        .stop = idle_stop,
-        .destroy = NULL,
-    };
     ev_idle *iw;
     flux_watcher_t *w;
 
-    if (!(w = flux_watcher_create (r, sizeof (*iw), ops, IDLE_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*iw), &idle_watcher, cb, arg)))
         return NULL;
     iw = flux_watcher_impl (w);
     ev_idle_init (iw, idle_cb);
@@ -737,37 +711,34 @@ flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
 /* Child
  */
 
-#define CHILD_SIG 999
-
 static void child_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == CHILD_SIG);
     ev_child_start (w->r->loop, (ev_child *)impl);
 }
 
 static void child_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == CHILD_SIG);
     ev_child_stop (w->r->loop, (ev_child *)impl);
 }
 
 static void child_cb (struct ev_loop *loop, ev_child *cw, int revents)
 {
     struct flux_watcher *w = cw->data;
-    assert (w->signature == CHILD_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
+
+static struct watcher_ops child_watcher = {
+    .start = child_start,
+    .stop = child_stop,
+    .destroy = NULL,
+};
+
 
 flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
                                            int pid, bool trace,
                                            flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = child_start,
-        .stop = child_stop,
-        .destroy = NULL,
-    };
     flux_watcher_t *w;
     ev_child *cw;
 
@@ -775,7 +746,7 @@ flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
         errno = EINVAL;
         return NULL;
     }
-    if (!(w = flux_watcher_create (r, sizeof (*cw), ops, CHILD_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*cw), &child_watcher, cb, arg)))
         return NULL;
     cw = flux_watcher_impl (w);
     ev_child_init (cw, child_cb, pid, trace ? 1 : 0);
@@ -786,14 +757,20 @@ flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
 
 int flux_child_watcher_get_rpid (flux_watcher_t *w)
 {
-    assert (w->signature == CHILD_SIG);
+    if (flux_watcher_ops (w) != &child_watcher) {
+        errno = EINVAL;
+        return -1;
+    }
     ev_child *cw = w->impl;
     return cw->rpid;
 }
 
 int flux_child_watcher_get_rstatus (flux_watcher_t *w)
 {
-    assert (w->signature == CHILD_SIG);
+    if (flux_watcher_ops (w) != &child_watcher) {
+        errno = EINVAL;
+        return -1;
+    }
     ev_child *cw = w->impl;
     return cw->rstatus;
 }
@@ -801,40 +778,36 @@ int flux_child_watcher_get_rstatus (flux_watcher_t *w)
 /* Signal
  */
 
-#define SIGNAL_SIG 998
-
 static void signal_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == SIGNAL_SIG);
     ev_signal_start (w->r->loop, (ev_signal *)impl);
 }
 
 static void signal_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == SIGNAL_SIG);
     ev_signal_stop (w->r->loop, (ev_signal *)impl);
 }
 
 static void signal_cb (struct ev_loop *loop, ev_signal *sw, int revents)
 {
     struct flux_watcher *w = sw->data;
-    assert (w->signature == SIGNAL_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
+static struct watcher_ops signal_watcher = {
+    .start = signal_start,
+    .stop = signal_stop,
+    .destroy = NULL,
+};
+
 flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r, int signum,
                                             flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = signal_start,
-        .stop = signal_stop,
-        .destroy = NULL,
-    };
     flux_watcher_t *w;
     ev_signal *sw;
 
-    if (!(w = flux_watcher_create (r, sizeof (*sw), ops, SIGNAL_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*sw), &signal_watcher, cb, arg)))
         return NULL;
     sw = flux_watcher_impl (w);
     ev_signal_init (sw, signal_cb, signum);
@@ -845,7 +818,10 @@ flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r, int signum,
 
 int flux_signal_watcher_get_signum (flux_watcher_t *w)
 {
-    assert (w->signature == SIGNAL_SIG);
+    if (flux_watcher_ops (w) != &signal_watcher) {
+        errno = EINVAL;
+        return (-1);
+    }
     ev_signal *sw = w->impl;
     return sw->signum;
 }
@@ -853,41 +829,37 @@ int flux_signal_watcher_get_signum (flux_watcher_t *w)
 /* Stat
  */
 
-#define STAT_SIG 997
-
 static void stat_start (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == STAT_SIG);
     ev_stat_start (w->r->loop, (ev_stat *)impl);
 }
 
 static void stat_stop (void *impl, flux_watcher_t *w)
 {
-    assert (w->signature == STAT_SIG);
     ev_stat_stop (w->r->loop, (ev_stat *)impl);
 }
 
 static void stat_cb (struct ev_loop *loop, ev_stat *sw, int revents)
 {
     struct flux_watcher *w = sw->data;
-    assert (w->signature == STAT_SIG);
     if (w->fn)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
+
+static struct watcher_ops stat_watcher = {
+    .start = stat_start,
+    .stop = stat_stop,
+    .destroy = NULL,
+};
 
 flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
                                           const char *path, double interval,
                                           flux_watcher_f cb, void *arg)
 {
-    struct watcher_ops ops = {
-        .start = stat_start,
-        .stop = stat_stop,
-        .destroy = NULL,
-    };
     flux_watcher_t *w;
     ev_stat *sw;
 
-    if (!(w = flux_watcher_create (r, sizeof (*sw), ops, STAT_SIG, cb, arg)))
+    if (!(w = flux_watcher_create (r, sizeof (*sw), &stat_watcher, cb, arg)))
         return NULL;
     sw = flux_watcher_impl (w);
     ev_stat_init (sw, stat_cb, path, interval);
@@ -899,8 +871,8 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
 void flux_stat_watcher_get_rstat (flux_watcher_t *w,
                                   struct stat *stat, struct stat *prev)
 {
-    assert (w->signature == STAT_SIG);
     ev_stat *sw = w->impl;
+    assert (flux_watcher_ops (w) == &stat_watcher);
     if (stat)
         *stat = sw->attr;
     if (prev)
