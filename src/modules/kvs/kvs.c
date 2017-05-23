@@ -1578,19 +1578,20 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 int mod_main (flux_t *h, int argc, char **argv)
 {
     kvs_ctx_t *ctx = getctx (h);
+    int rc = -1;
 
     if (!ctx) {
         flux_log_error (h, "error creating KVS context");
-        return -1;
+        goto done;
     }
     process_args (ctx, argc, argv);
     if (flux_event_subscribe (h, "hb") < 0) {
         flux_log_error (h, "flux_event_subscribe");
-        return -1;
+        goto done;
     }
     if (flux_event_subscribe (h, "kvs.") < 0) {
         flux_log_error (h, "flux_event_subscribe");
-        return -1;
+        goto done;
     }
     if (ctx->rank == 0) {
         json_object *rootdir = Jnew ();
@@ -1598,7 +1599,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
         if (store (ctx, rootdir, href, NULL) < 0) {
             flux_log_error (h, "storing root object");
-            return -1;
+            goto done;
         }
         setroot (ctx, href, 0);
     } else {
@@ -1606,20 +1607,23 @@ int mod_main (flux_t *h, int argc, char **argv)
         int rootseq;
         if (getroot_rpc (ctx, &rootseq, href) < 0) {
             flux_log_error (h, "getroot");
-            return -1;
+            goto done;
         }
         setroot (ctx, href, rootseq);
     }
     if (flux_msg_handler_addvec (h, handlers, ctx) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
-        return -1;
+        goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        return -1;
+        goto done_delvec;
     }
+    rc = 0;
+done_delvec:
     flux_msg_handler_delvec (handlers);
-    return 0;
+done:
+    return rc;
 }
 
 MOD_NAME ("kvs");
