@@ -199,12 +199,12 @@ static void content_load_completion (flux_rpc_t *rpc, void *arg)
         json_tokener_reset (ctx->tok);
         goto done;
     }
-    if ((hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
-        cache_entry_set_json (hp, o);
-    else {
-        hp = cache_entry_create (o);
-        cache_insert (ctx->cache, blobref, hp);
-    }
+    /* cache entry must have be created earlier.
+     * cache_expire_entries() could not have removed it b/c it is not
+     * yet valid.
+     */
+    assert ((hp = cache_lookup (ctx->cache, blobref, ctx->epoch)));
+    cache_entry_set_json (hp, o);
 done:
     flux_rpc_destroy (rpc);
 }
