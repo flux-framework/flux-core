@@ -158,6 +158,14 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
     return hp;
 }
 
+json_object *cache_lookup_and_get_json (struct cache *cache,
+                                        const char *ref,
+                                        int current_epoch)
+{
+    struct cache_entry *hp = cache_lookup (cache, ref, current_epoch);
+    return cache_entry_get_valid (hp) ? cache_entry_get_json (hp) : NULL;
+}
+
 void cache_insert (struct cache *cache, const char *ref, struct cache_entry *hp)
 {
     int rc = zhash_insert (cache->zh, ref, hp);
