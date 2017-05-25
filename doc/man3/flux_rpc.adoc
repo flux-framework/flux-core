@@ -161,7 +161,7 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_rpc_then(3), flux_rpc_multi(3)
+flux_rpc_then(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]

@@ -16,21 +16,15 @@ SYNOPSIS
                            const void *data_in, int length_in,
                            uint32_t nodeid_in, int flags);
 
- int flux_rpc_get_raw (flux_rpc_t *rpc, uint32_t *nodeid_out,
-                       void *data_out, int *length_out);
+ int flux_rpc_get_raw (flux_rpc_t *rpc, void *data_out, int *length_out);
 
 
 DESCRIPTION
 -----------
 
-`flux_rpc_raw()` encodes and sends a request message, comprising the first
-half of a remote procedure call (RPC).  A flux_rpc_t object is returned
-which can be passed to `flux_rpc_get_raw()` to obtain the decoded response
-message, comprising the second half of the RPC.  The flux_rpc_t should
-finally be disposed of using `flux_rpc_destroy()`.
-
-The raw RPC functions may be paired with the JSON RPC functions
-`flux_rpc(3)` and `flux_rpc_get(3)`.  That is, it is valid to send
+`flux_rpc_raw()` and `flux_rpc_get_raw()` are analogs of the JSON RPC
+functions `flux_rpc()` and `flux_rpc_get()` that deal in opaque payloads.
+These functions may be intermixed;  that is, it is valid to send
 a JSON request payload and receive a raw response payload, or the reverse.
 
 _topic_ must be set to a topic string representing the Flux
@@ -67,9 +61,6 @@ they will be sent to NULL and zero, respectively.  Any storage associated
 with _data_out_ belongs to the flux_rpc_t object and is invalidated when
 that object is destroyed.
 
-_nodeid_out_, if non-NULL, is set to the _nodeid_in_ argument given
-to `flux_rpc_raw()`.  This is primarily useful with `flux_rpc_multi(3)`.
-
 
 RETURN VALUE
 ------------
@@ -94,13 +85,6 @@ EPROTO::
 A protocol error was encountered.
 
 
-CAVEATS
--------
-
-Although `flux_rpc_get_raw()` can be used with `flux_rpc_multi()`,
-there is no `flux_rpc_multi_raw()`.
-
-
 AUTHOR
 ------
 This page is maintained by the Flux community.
@@ -118,7 +102,7 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_rpc(3), flux_rpc_then(3), flux_rpc_multi(3)
+flux_rpc(3), flux_rpc_then(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]

@@ -17,17 +17,17 @@
 void send_watch_requests (flux_t *h, const char *key)
 {
     json_object *in;
-    flux_rpc_t *r;
+    flux_mrpc_t *r;
 
     if (!(in = kp_twatch_enc (key, NULL, KVS_PROTO_FIRST)))
         log_err_exit ("kp_twatch_enc");
-    if (!(r = flux_rpc_multi (h, "kvs.watch", Jtostr (in), "all", 0)))
-        log_err_exit ("flux_rpc_multi kvs.watch");
+    if (!(r = flux_mrpc (h, "kvs.watch", Jtostr (in), "all", 0)))
+        log_err_exit ("flux_mrpc kvs.watch");
     do {
-        if (flux_rpc_get (r, NULL) < 0)
+        if (flux_mrpc_get (r, NULL) < 0)
             log_err_exit ("kvs.watch");
-    } while (flux_rpc_next (r) == 0);
-    flux_rpc_destroy (r);
+    } while (flux_mrpc_next (r) == 0);
+    flux_mrpc_destroy (r);
     Jput (in);
 }
 
@@ -38,12 +38,12 @@ int count_watchers (flux_t *h)
     json_object *out;
     const char *json_str;
     int n, count = 0;
-    flux_rpc_t *r;
+    flux_mrpc_t *r;
 
-    if (!(r = flux_rpc_multi (h, "kvs.stats.get", NULL, "all", 0)))
-        log_err_exit ("flux_rpc_multi kvs.stats.get");
+    if (!(r = flux_mrpc (h, "kvs.stats.get", NULL, "all", 0)))
+        log_err_exit ("flux_mrpc kvs.stats.get");
     do {
-        if (flux_rpc_get (r, &json_str) < 0)
+        if (flux_mrpc_get (r, &json_str) < 0)
             log_err_exit ("kvs.stats.get");
         if (!json_str
             || !(out = Jfromstr (json_str))
@@ -51,8 +51,8 @@ int count_watchers (flux_t *h)
             log_msg_exit ("error decoding stats payload");
         count += n;
         Jput (out);
-    } while (flux_rpc_next (r) == 0);
-    flux_rpc_destroy (r);
+    } while (flux_mrpc_next (r) == 0);
+    flux_mrpc_destroy (r);
     return count;
 }
 

@@ -274,32 +274,32 @@ static bool hwloc_reload_bool_value (const char *walk_topology)
 static void request_hwloc_reload (flux_t *h, const char *nodeset,
                                   const char *walk_topology)
 {
-    flux_rpc_t *rpc;
+    flux_mrpc_t *mrpc;
 
     if (!walk_topology) {
-        if (!(rpc = flux_rpcf_multi (h, "resource-hwloc.reload",
-                                     nodeset, 0, "{}")))
-            log_err_exit ("flux_rpcf_multi");
+        if (!(mrpc = flux_mrpcf (h, "resource-hwloc.reload",
+                                 nodeset, 0, "{}")))
+            log_err_exit ("flux_mrpcf");
     }
     else {
         bool v = hwloc_reload_bool_value (walk_topology);
 
-        if (!(rpc = flux_rpcf_multi (h, "resource-hwloc.reload", nodeset, 0,
-                                     "{ s:b }", "walk_topology", v)))
-            log_err_exit ("flux_rpcf_multi");
+        if (!(mrpc = flux_mrpcf (h, "resource-hwloc.reload", nodeset, 0,
+                                 "{ s:b }", "walk_topology", v)))
+            log_err_exit ("flux_mrpcf");
     }
 
     do {
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get (rpc, NULL) < 0
-                        || flux_rpc_get_nodeid (rpc, &nodeid)) {
+        if (flux_mrpc_get (mrpc, NULL) < 0
+                        || flux_mrpc_get_nodeid (mrpc, &nodeid)) {
             if (nodeid == FLUX_NODEID_ANY)
-                log_err ("flux_rpc_get");
+                log_err ("flux_mrpc_get");
             else
-                log_err ("rpc(%"PRIu32")", nodeid);
+                log_err ("mrpc(%"PRIu32")", nodeid);
         }
-    } while (flux_rpc_next (rpc) == 0);
-    flux_rpc_destroy (rpc);
+    } while (flux_mrpc_next (mrpc) == 0);
+    flux_mrpc_destroy (mrpc);
 }
 
 static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])

@@ -42,13 +42,6 @@ bool flux_rpc_check (flux_rpc_t *rpc);
  */
 int flux_rpc_get (flux_rpc_t *rpc, const char **json_str);
 
-/* Wait for response if necessary, then decode nodeid request was sent to.
- * This function succedes even if the RPC service is returning an error.
- * It fails if something goes wrong reading or decoding the response message.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_rpc_get_nodeid (flux_rpc_t *rpc, uint32_t *nodeid);
-
 /* Wait for a response if necessary, then decode it.
  * Any returned 'data' payload is valid until the rpc is destroyed.
  * Returns 0 on success, or -1 on failure with errno set.
@@ -61,39 +54,18 @@ int flux_rpc_get_raw (flux_rpc_t *rpc, void *data, int *len);
  */
 int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg);
 
-/* Send an RPC request to 'nodeset' and return a flux_rpc_t object to
- * allow responses to be handled.  "all" is a valid shorthand for all
- * ranks in the comms session.  "any" is a valid shorthand for a
- * single rpc sent to FLUX_NODEID_ANY.  "upstream" is a valid
- * shorthand for a single rpc sent to FLUX_NODEID_UPSTREAM.  On
- * failure return NULL with errno set.
- */
-flux_rpc_t *flux_rpc_multi (flux_t *h, const char *topic, const char *json_str,
-                            const char *nodeset, int flags);
-
-/* Prepares for receipt of next response from flux_rpc_multi().
- * This invalidates previous payload returned by flux_rpc_get().
- * Returns 0 on success, -1 if all responses have been received, e.g.
- *   do {
- *     flux_rpc_get (rpc, ...);
- *   } while (flux_rpc_next (rpc) == 0);
- */
-int flux_rpc_next (flux_rpc_t *rpc);
-
 /* Helper functions for extending flux_rpc_t.
  */
 void *flux_rpc_aux_get (flux_rpc_t *rpc, const char *name);
 int flux_rpc_aux_set (flux_rpc_t *rpc, const char *name,
                       void *aux, flux_free_f destroy);
 
-/* Variants of flux_rpc, flux_rpc_multi, and flux_rpc_get that
+/* Variants of flux_rpc and flux_rpc_get that
  * encode/decode json payloads using jansson pack/unpack format
  * strings.  Returned strings are invalidated by flux_rpc_destroy().
  */
 flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
                        int flags, const char *fmt, ...);
-flux_rpc_t *flux_rpcf_multi (flux_t *h, const char *topic, const char *nodeset,
-                             int flags, const char *fmt, ...);
 int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...);
 
 #endif /* !_FLUX_CORE_RPC_H */

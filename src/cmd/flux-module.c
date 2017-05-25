@@ -304,7 +304,7 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     int n;
     flux_t *h;
     const char *ns;
-    flux_rpc_t *r = NULL;
+    flux_mrpc_t *r = NULL;
 
     if ((n = optparse_option_index (p)) == argc) {
         optparse_print_usage (p);
@@ -321,13 +321,13 @@ int cmd_load (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (parse_nodeset (h, p, &ns) < 0)
         goto done;
-    if (!(r = flux_rpc_multi (h, topic, json_str, ns, 0)))
+    if (!(r = flux_mrpc (h, topic, json_str, ns, 0)))
         log_err_exit ("%s", topic);
     do {
-        if (flux_rpc_get (r, NULL) < 0) {
+        if (flux_mrpc_get (r, NULL) < 0) {
             uint32_t nodeid = FLUX_NODEID_ANY;
             int saved_errno = errno;
-            (void)flux_rpc_get_nodeid (r, &nodeid);
+            (void)flux_mrpc_get_nodeid (r, &nodeid);
             errno = saved_errno;
             if (errno == EEXIST && nodeid != FLUX_NODEID_ANY)
                 log_msg ("%s[%" PRIu32 "]: %s module/service is in use",
@@ -338,9 +338,9 @@ int cmd_load (optparse_t *p, int argc, char **argv)
                 log_err ("%s", topic);
             errors++;
         }
-    } while (flux_rpc_next (r) == 0);
+    } while (flux_mrpc_next (r) == 0);
 done:
-    flux_rpc_destroy (r);
+    flux_mrpc_destroy (r);
     free (topic);
     free (service);
     free (json_str);
@@ -355,7 +355,7 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
     char *modname;
     const char *ns;
     flux_t *h;
-    flux_rpc_t *r = NULL;
+    flux_mrpc_t *r = NULL;
     int n;
 
     if ((n = optparse_option_index (p)) != argc - 1) {
@@ -373,21 +373,21 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (parse_nodeset (h, p, &ns) < 0)
         goto done;
-    if (!(r = flux_rpc_multi (h, topic, json_str, ns, 0)))
+    if (!(r = flux_mrpc (h, topic, json_str, ns, 0)))
         log_err_exit ("%s %s", topic, modname);
     do {
-        if (flux_rpc_get (r, NULL) < 0) {
+        if (flux_mrpc_get (r, NULL) < 0) {
             uint32_t nodeid = FLUX_NODEID_ANY;
             int saved_errno = errno;
-            (void)flux_rpc_get_nodeid (r, &nodeid);
+            (void)flux_mrpc_get_nodeid (r, &nodeid);
             errno = saved_errno;
             log_err ("%s[%d] %s",
                  topic, nodeid == FLUX_NODEID_ANY ? -1 : nodeid,
                  modname);
         }
-    } while (flux_rpc_next (r) == 0);
+    } while (flux_mrpc_next (r) == 0);
 done:
-    flux_rpc_destroy (r);
+    flux_mrpc_destroy (r);
     free (topic);
     free (service);
     free (json_str);
@@ -530,7 +530,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     char *service = "cmb";
     char *topic = NULL;
     const char *ns;
-    flux_rpc_t *r = NULL;
+    flux_mrpc_t *r = NULL;
     flux_t *h;
     int n;
     zhash_t *mods = zhash_new ();
@@ -551,22 +551,22 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     printf ("%-20s %-7s %-7s %4s  %c  %s\n",
             "Module", "Size", "Digest", "Idle", 'S', "Nodeset");
     topic = xasprintf ("%s.lsmod", service);
-    if (!(r = flux_rpc_multi (h, topic, NULL, ns, 0)))
+    if (!(r = flux_mrpc (h, topic, NULL, ns, 0)))
         log_err_exit ("%s", topic);
     do {
         const char *json_str;
         uint32_t nodeid = FLUX_NODEID_ANY;
-        if (flux_rpc_get_nodeid (r, &nodeid) < 0
-                || flux_rpc_get (r, &json_str) < 0
+        if (flux_mrpc_get_nodeid (r, &nodeid) < 0
+                || flux_mrpc_get (r, &json_str) < 0
                 || lsmod_merge_result (nodeid, json_str, mods) < 0) {
             if (nodeid != FLUX_NODEID_ANY)
                 log_err ("%s[%" PRIu32 "]", topic, nodeid);
             else
                 log_err ("%s", topic);
         }
-    } while (flux_rpc_next (r) == 0);
+    } while (flux_mrpc_next (r) == 0);
 done:
-    flux_rpc_destroy (r);
+    flux_mrpc_destroy (r);
     lsmod_map_hash (mods, lsmod_print_cb, NULL);
     zhash_destroy (&mods);
     free (topic);

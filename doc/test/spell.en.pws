@@ -226,11 +226,12 @@ iobuf
 recvfd
 sendfd
 matchtags
-multi
 NORESPONSE
 rpc
 str
 trpc
+tmrpc
+mrpcf
 bool
 mrpc
 topen
