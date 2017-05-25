@@ -48,6 +48,7 @@ addons:
       - ccache
       - apport # for coredumps
       - gdb
+      - valgrind
 
   coverity_scan:
     project:
