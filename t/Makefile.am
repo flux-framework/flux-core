@@ -26,10 +26,10 @@ TESTS = \
 	shmem/backtoback.t \
 	loop/handle.t \
 	loop/reactor.t \
-	loop/rpc.t \
-	loop/multrpc.t \
 	loop/reduce.t \
 	loop/log.t \
+	rpc/rpc.t \
+	rpc/mrpc.t \
 	rolemask/loop.t \
 	t0000-sharness.t \
 	t0001-basic.t \
@@ -160,10 +160,10 @@ check_PROGRAMS = \
 	shmem/backtoback.t \
 	loop/handle.t \
 	loop/reactor.t \
-	loop/rpc.t \
-	loop/multrpc.t \
 	loop/reduce.t \
 	loop/log.t \
+	rpc/rpc.t \
+	rpc/mrpc.t \
 	rolemask/loop.t \
 	kz/kzutil \
 	kvs/torture \
@@ -235,17 +235,17 @@ loop_reactor_t_SOURCES = loop/reactor.c
 loop_reactor_t_CPPFLAGS = $(test_cppflags)
 loop_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
 
-loop_rpc_t_SOURCES = loop/rpc.c
-loop_rpc_t_CPPFLAGS = $(test_cppflags)
-loop_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_multrpc_t_SOURCES = loop/multrpc.c
-loop_multrpc_t_CPPFLAGS = $(test_cppflags)
-loop_multrpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
 loop_reduce_t_SOURCES = loop/reduce.c
 loop_reduce_t_CPPFLAGS = $(test_cppflags)
 loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
+
+rpc_rpc_t_SOURCES = rpc/rpc.c
+rpc_rpc_t_CPPFLAGS = $(test_cppflags)
+rpc_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+rpc_mrpc_t_SOURCES = rpc/mrpc.c
+rpc_mrpc_t_CPPFLAGS = $(test_cppflags)
+rpc_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
 rolemask_loop_t_SOURCES = rolemask/loop.c
 rolemask_loop_t_CPPFLAGS = $(test_cppflags)
