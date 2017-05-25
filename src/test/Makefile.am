@@ -16,8 +16,6 @@ check_PROGRAMS = \
 noinst_SCRIPTS = \
 	soak.sh \
 	soak-workload.sh \
-	valgrind.sh \
-	valgrind-workload.sh \
 	relnotes.sh
 
 LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
@@ -26,4 +24,4 @@ LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
-EXTRA_DIST = valgrind.supp $(noinst_SCRIPTS)
+EXTRA_DIST = $(noinst_SCRIPTS)

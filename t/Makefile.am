@@ -65,6 +65,7 @@ TESTS = \
 	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
+	t5000-valgrind.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -135,6 +136,7 @@ check_SCRIPTS = \
 	t2100-aggregate.t \
 	t3000-mpi-basic.t \
 	t4000-issues-test-driver.t \
+	t5000-valgrind.t \
         issues/t0441-kvs-put-get.sh \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
@@ -191,7 +193,8 @@ dist_check_DATA = \
 	hwloc-data/1N/shared/02-brokers/0.xml \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
-	hwloc-data/1N/nonoverlapping/02-brokers/1.xml
+	hwloc-data/1N/nonoverlapping/02-brokers/1.xml \
+	valgrind/valgrind.supp
 
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
@@ -201,7 +204,8 @@ dist_check_SCRIPTS = \
 	scripts/cpus-allowed.lua \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \
-	scripts/tssh
+	scripts/tssh \
+	valgrind/valgrind-workload.sh
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
