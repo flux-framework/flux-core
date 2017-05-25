@@ -1116,7 +1116,7 @@ void *optparse_get_data (optparse_t *p, const char *s)
 
 static char * optstring_create ()
 {
-    char *optstring = malloc (1);
+    char *optstring = malloc (4);
     if (optstring == NULL)
         return (NULL);
     optstring[0] = '\0';
