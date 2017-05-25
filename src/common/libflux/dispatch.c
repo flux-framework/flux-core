@@ -733,6 +733,15 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
 {
     if (w) {
         assert (w->magic == HANDLER_MAGIC);
+        /* It is assumed safe to immediately destroy handlers on fastpath
+         *  here since they are off the handlers zlist, however destruction
+         *  of normal handlers is delayed until it is safe to remove them
+         *  from the zlist.
+         *
+         * XXX: It may now be safe to remove *all* handlers immediately,
+         *  but this needs to be verified. (Check for safety of zlist item
+         *  removal during traversal)
+         */
         if (!(flux_flags_get (w->d->h) & FLUX_O_COPROC)
                             && w->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && w->match.matchtag != FLUX_MATCHTAG_NONE) {
