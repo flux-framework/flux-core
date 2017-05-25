@@ -738,6 +738,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
                             && w->match.matchtag != FLUX_MATCHTAG_NONE) {
             fastpath_response_unregister (w->d, w->match.matchtag);
             flux_msg_handler_stop (w);
+            dispatch_usecount_decr (w->d);
             free_msg_handler (w);
         } else {
             if (!w->destroyed) {
