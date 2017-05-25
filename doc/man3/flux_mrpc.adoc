@@ -1,0 +1,191 @@
+flux_mrpc(3)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux_mrpc - send a remote procedure call to a Flux service on multiple ranks
+
+
+SYNOPSIS
+--------
+#include <flux/core.h>
+
+flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *json_str,
+                        const char *nodeset, int flags);
+
+flux_mrpc_t *flux_mrpcf (flux_t *h, const char *topic, const char *nodeset,
+                         int flags, const char *fmt, ...);
+
+int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str);
+
+int flux_mrpc_getf (flux_mrpc_t *mrpc, const char *fmt, ...);
+
+int flux_mrpc_get_raw (flux_mrpc_t *mrpc, void *data, int *len);
+
+int flux_mrpc_get_nodeid (flux_mrpc_t *mrpc, uint32_t *nodeid);
+
+int flux_mrpc_next (flux_mrpc_t *mrpc);
+
+bool flux_mrpc_check (flux_mrpc_t *mrpc);
+
+int flux_mrpc_then (flux_mrpc_t *mrpc, flux_mrpc_continuation_f cb, void *arg);
+
+void *flux_mrpc_aux_get (flux_mrpc_t *mrpc, const char *name);
+
+int flux_mrpc_aux_set (flux_mrpc_t *mrpc, const char *name,
+                      void *aux, flux_free_f destroy);
+
+void flux_mrpc_destroy (flux_mrpc_t *mrpc);
+
+DESCRIPTION
+-----------
+
+`flux_mrpc()` encodes and sends a batch of request messages to multiple
+ranks.  A flux_mrpc_t object is returned which can be used with
+`flux_mrpc_get()` and `flux_mrpc_next()` to obtain the decoded responses,
+as they become available.  The flux_rpc_t should finally be disposed of
+using `flux_mrpc_destroy()`.
+
+_topic_ must be set to a topic string representing the Flux
+service that will handle the request.
+
+_json_in_, if non-NULL, must be a string containing valid serialized
+JSON to be attached as payload to the request.  If NULL, the request
+will be sent without a payload.
+
+_nodeset_ is a string containing a bracketed set of ranks, "all" as a
+shorthand for all ranks in the session, or "any" as a shorthand for a
+single RPC to FLUX_NODEID_ANY, or "upstream" as a shorthand for a
+single RPC to FLUX_NODEID_UPSTREAM.  Examples of valid nodeset strings
+are "[0-255]", "[1,2.3]", and "[0,3,5-10]".
+
+_flags_ may be zero or:
+
+FLUX_RPC_NORESPONSE::
+No response is expected.  The request will not be assigned a matchtag,
+and the flux_rpc_t returned by `flux_mrpc()` may be immediately destroyed.
+
+`flux_mrpc_get()` blocks until a matching response is received, then
+decodes the result.  For asynchronous response handling,
+see flux_mrpc_then(3).
+
+`flux_mrpc_next()` invalidates the last-received message and payload
+returned by `flux_mrpc_get()`, and returns 0 if more responses are received.
+Once all responses have been received, `flux_mrpc_next()` returns -1;
+thus it may be used as the conditional on a do-while loop, e.g.
+....
+do {
+    flux_mrpc_get (mrpc, &payload);
+} while (flux_mrpc_next (mrpc) == 0);
+....
+
+`flux_mrpc_get_nodeid()` blocks until a matching response is received, then
+decodes the nodeid in the response message.  If the remote service returned
+a response containing an error, `flux_mrpc_get_nodeid()` will succeed,
+while `flux_mrpc_get()` will fail.  This allows the failing nodeid to
+be determined.
+
+`flux_mrpcf()` is a variant of `flux_mrpc()` that constructs a
+JSON payload based on the provided _fmt_ string and variable arguments.
+The _fmt_ string and variable arguments are passed internally to
+jansson's `json_pack()` function.  See below for details.
+
+`flux_mrpc_check()` and `flux_mrpc_then()` may be used to asynchronously
+complete the second half of a remote procedure call (RPC) that was
+started with one of the `flux_mrpc(3)` variants.
+
+`flux_mrpc_check()` returns true if an RPC response has been received
+and a call to one of the `flux_mrpc_get(3)` variants would not block.
+It returns false if the response has not yet been received.
+
+`flux_mrpc_then()` may be used to register a continuation callback with
+the broker handle's reactor.  The continuation will be called each time
+an RPC response is received.  It should call one of the `flux_mrpc_get(3)`
+variants to obtain the RPC result.
+
+When the RPC is complete, the continuation stops its message handler
+for responses.  The flux_mrpc_t should be destroyed.  It is safe to
+call `flux_mrpc_destroy(3)` from within the continuation callback.
+
+
+include::JSON_PACK.adoc[]
+
+
+RETURN VALUE
+------------
+
+`flux_mrpc()` and `flux_mrpcf()` returns a flux_mrpc_t object
+on success.  On error, NULL is returned, and errno is set
+appropriately.
+
+`flux_mrpc_next()` returns 0 if additional responses are expected, else -1.
+It does not set errno.
+
+`flux_mrpc_get_nodeid()` returns 0 on success;  on failure, it returns -1
+and sets errno appropriately.
+
+`flux_mrpc_then()` returns  zero on success.  On error, -1 is returned,
+and errno is set appropriately.
+
+`flux_mrpc_check()` does not report errors.
+
+
+ERRORS
+------
+
+ENOSYS::
+Handle has no send operation.
+
+EINVAL::
+Some arguments were invalid.
+
+EPROTO::
+A protocol error was encountered.
+
+
+CAVEATS
+-------
+
+In the current implementation of `flux_mrpc()`, all requests are sent
+during the `flux_mrpc()` call.  Since requests are sent without waiting
+for a response, messages may flood the brokers and overlay channels,
+since there is no flow control of requests based on the timing of return
+messages.
+
+
+EXAMPLE
+-------
+
+This example performs an RPC with the broker's "cmb.attrget" service on all
+ranks.  A continuation is registered to process the responses as they arrive.
+The reactor loop terminates once the RPC is completed since the completion
+is its only event handler.
+
+....
+include::tmrpc_then.c[]
+....
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_rpc(3), flux_mrpc_then(3)
+
+https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
+Remote Procedure Call Protocol]

@@ -14,7 +14,7 @@ MAN3_FILES_PRIMARY = \
 	flux_msg_sendfd.3 \
 	flux_rpc.3 \
 	flux_rpc_then.3 \
-	flux_rpc_multi.3 \
+	flux_mrpc.3 \
 	flux_reduce_create.3 \
 	flux_get_rank.3 \
 	flux_attr_get.3 \
@@ -152,9 +152,6 @@ flux_rpc_get.3: flux_rpc.3
 flux_rpc_getf.3: flux_rpc.3
 flux_rpcf.3: flux_rpc.3
 flux_rpc_check.3: flux_rpc_then.3
-flux_rpcf_multi.3: flux_rpc_multi.3
-flux_rpc_next.3: flux_rpc_multi.3
-flux_rpc_get_nodeid.3: flux_rpc_multi.3
 flux_reduce_destroy.3: flux_reduce_create.3
 flux_reduce_append.3: flux_reduce_create.3
 flux_reduce_pop.3: flux_reduce_create.3
@@ -212,7 +209,7 @@ flux_recv.3: trecv.c
 flux_event_subscribe.3: tevent.c
 flux_rpc.3: trpc.c
 flux_rpc_then.3: trpc_then.c
-flux_rpc_multi.3: trpc_then_multi.c
+flux_mrpc.3: tmrpc_then.c
 flux_reduce_create.3: treduce.c
 flux_get_rank.3: tinfo.c
 
@@ -245,7 +242,7 @@ check_PROGRAMS = \
 	tevent \
 	trpc \
 	trpc_then \
-	trpc_then_multi \
+	tmrpc_then \
 	tinfo
 
 check_LTLIBRARIES = \

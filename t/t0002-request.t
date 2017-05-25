@@ -18,8 +18,8 @@ test_expect_success 'flux_rpc_then(3) example runs' '
 	${FLUX_BUILD_DIR}/doc/man3/trpc_then
 '
 
-test_expect_success 'flux_rpc_multi(3) example runs' '
-	${FLUX_BUILD_DIR}/doc/man3/trpc_then_multi
+test_expect_success 'flux_mrpc(3) example runs' '
+	${FLUX_BUILD_DIR}/doc/man3/tmrpc_then
 '
 
 test_expect_success 'request: load req module on rank 0' '
