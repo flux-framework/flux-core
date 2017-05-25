@@ -48,6 +48,9 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+#if HAVE_VALGRIND_VALGRIND_H
+# include <valgrind/valgrind.h>
+#endif
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
@@ -2306,6 +2309,13 @@ static const struct flux_handle_ops broker_handle_ops = {
     .event_subscribe = broker_subscribe,
     .event_unsubscribe = broker_unsubscribe,
 };
+
+
+#if HAVE_VALGRIND_VALGRIND_H
+/* Disable dlclose() during valgrind operation
+ */
+void I_WRAP_SONAME_FNNAME_ZZ(Za,dlclose)(void *dso) {}
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
