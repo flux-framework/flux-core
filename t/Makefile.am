@@ -239,11 +239,11 @@ loop_reduce_t_SOURCES = loop/reduce.c
 loop_reduce_t_CPPFLAGS = $(test_cppflags)
 loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
 
-rpc_rpc_t_SOURCES = rpc/rpc.c
+rpc_rpc_t_SOURCES = rpc/rpc.c rpc/util.h rpc/util.c
 rpc_rpc_t_CPPFLAGS = $(test_cppflags)
 rpc_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
-rpc_mrpc_t_SOURCES = rpc/mrpc.c
+rpc_mrpc_t_SOURCES = rpc/mrpc.c rpc/util.h rpc/util.c
 rpc_mrpc_t_CPPFLAGS = $(test_cppflags)
 rpc_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
