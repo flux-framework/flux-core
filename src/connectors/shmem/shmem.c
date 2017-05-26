@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <czmq.h>
+#include <argz.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #endif
@@ -41,6 +42,8 @@ typedef struct {
     zsock_t *sock;
     char *uuid;
     flux_t *h;
+    char *argz;
+    size_t argz_len;
 } shmem_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
@@ -172,7 +175,7 @@ static void op_fini (void *impl)
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     zsock_destroy (&ctx->sock);
-    free (ctx->uuid);
+    free (ctx->argz);
     ctx->magic = ~MODHANDLE_MAGIC;
     free (ctx);
 }
@@ -189,6 +192,10 @@ flux_t *connector_init (const char *path, int flags)
 #endif
 
     shmem_ctx_t *ctx = NULL;
+    char *item;
+    int e;
+    int bind_socket = 0; // if set, call bind on socket, else connect
+
     if (!path) {
         errno = EINVAL;
         goto error;
@@ -198,15 +205,36 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     }
     ctx->magic = MODHANDLE_MAGIC;
-    if (!(ctx->uuid = strdup (path))) {
-        errno = ENOMEM;
+    if ((e = argz_create_sep (path, '&', &ctx->argz, &ctx->argz_len)) != 0) {
+        errno = e;
         goto error;
+    }
+    ctx->uuid = item = argz_next (ctx->argz, ctx->argz_len, NULL);
+    if (!ctx->uuid) {
+        errno = EINVAL;
+        goto error;
+    }
+    while ((item = argz_next (ctx->argz, ctx->argz_len, item))) {
+        if (!strcmp (item, "bind"))
+            bind_socket = 1;
+        else if (!strcmp (item, "connect"))
+            bind_socket = 0;
+        else {
+            errno = EINVAL;
+            goto error;
+        }
     }
     if (!(ctx->sock = zsock_new_pair (NULL)))
         goto error;
     zsock_set_unbounded (ctx->sock);
-    if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
-        goto error;
+    if (bind_socket) {
+        if (zsock_bind (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+            goto error;
+    }
+    else {
+        if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+            goto error;
+    }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
     return ctx->h;
