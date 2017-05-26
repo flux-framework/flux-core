@@ -23,6 +23,7 @@ uninstall-local:
 	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
 
 TESTS = \
+	shmem/backtoback.t \
 	loop/handle.t \
 	loop/reactor.t \
 	loop/rpc.t \
@@ -156,6 +157,7 @@ check_SCRIPTS = \
 	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
+	shmem/backtoback.t \
 	loop/handle.t \
 	loop/reactor.t \
 	loop/rpc.t \
@@ -216,6 +218,10 @@ test_ldadd = \
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
+
+shmem_backtoback_t_SOURCES = shmem/backtoback.c
+shmem_backtoback_t_CPPFLAGS = $(test_cppflags)
+shmem_backtoback_t_LDADD = $(test_ldadd) $(LIBDL)
 
 loop_handle_t_SOURCES = loop/handle.c
 loop_handle_t_CPPFLAGS = $(test_cppflags)
