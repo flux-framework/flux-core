@@ -1,0 +1,67 @@
+{
+   <socketcall_sendto>
+   Memcheck:Param
+   socketcall.sendto(msg)
+   fun:send
+   ...
+}
+{
+   <socketcall_sendto>
+   Memcheck:Param
+   socketcall.send(msg)
+   fun:send
+   ...
+}
+{
+   <libev_io_start_realloc>
+   Memcheck:Leak
+   fun:malloc
+   fun:realloc
+   fun:ev_realloc
+   fun:fd_change
+   fun:ev_io_start
+   fun:ev_invoke_pending
+   fun:ev_run
+   ...
+}
+{
+   <libltdl_known_leak>
+   Memcheck:Leak
+   fun:malloc
+   fun:lt__malloc
+   fun:lt__zalloc
+   obj:*/libltdl.so.7.3.1
+   fun:lt_dlopenadvise
+   ...
+}
+{
+   <list_node_alloc>
+   Memcheck:Leak
+   fun:malloc
+   fun:list_alloc_aux
+   ...
+   fun:list_node_create
+   ...
+}
+{
+   <ipaddr_getprimary>
+   Memcheck:Leak
+   fun:malloc
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   fun:gaih_inet.constprop.5
+   fun:getaddrinfo
+   fun:ipaddr_getprimary
+   fun:calc_endpoint.isra.8
+   fun:boot_pmi
+   fun:main
+}
+{
+   <libdl_lookup_symbol_x>
+   Memcheck:Addr8
+   fun:do_lookup_x
+   obj:*
+   fun:_dl_lookup_symbol_x
+}

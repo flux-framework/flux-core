@@ -138,7 +138,10 @@ static kvs_ctx_t *getctx (flux_t *h)
     flux_reactor_t *r;
 
     if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx = calloc (1, sizeof (*ctx)))) {
+            errno = ENOMEM;
+            goto error;
+        }
         ctx->magic = KVS_MAGIC;
         if (!(r = flux_get_reactor (h)))
             goto error;
@@ -1541,22 +1544,22 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",        stats_get_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",      stats_clear_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",      stats_clear_event_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",          setroot_event_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error",            error_event_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",        dropcache_event_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "hb",                   heartbeat_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.disconnect",       disconnect_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",          unwatch_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",            fence_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence",       relayfence_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",    setroot_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.error",      error_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",    getroot_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",    unwatch_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.sync",       sync_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.get",        get_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.watch",      watch_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.fence",      fence_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0, NULL },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1575,19 +1578,20 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 int mod_main (flux_t *h, int argc, char **argv)
 {
     kvs_ctx_t *ctx = getctx (h);
+    int rc = -1;
 
     if (!ctx) {
         flux_log_error (h, "error creating KVS context");
-        return -1;
+        goto done;
     }
     process_args (ctx, argc, argv);
     if (flux_event_subscribe (h, "hb") < 0) {
         flux_log_error (h, "flux_event_subscribe");
-        return -1;
+        goto done;
     }
     if (flux_event_subscribe (h, "kvs.") < 0) {
         flux_log_error (h, "flux_event_subscribe");
-        return -1;
+        goto done;
     }
     if (ctx->rank == 0) {
         json_object *rootdir = Jnew ();
@@ -1595,7 +1599,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
         if (store (ctx, rootdir, href, NULL) < 0) {
             flux_log_error (h, "storing root object");
-            return -1;
+            goto done;
         }
         setroot (ctx, href, 0);
     } else {
@@ -1603,20 +1607,23 @@ int mod_main (flux_t *h, int argc, char **argv)
         int rootseq;
         if (getroot_rpc (ctx, &rootseq, href) < 0) {
             flux_log_error (h, "getroot");
-            return -1;
+            goto done;
         }
         setroot (ctx, href, rootseq);
     }
     if (flux_msg_handler_addvec (h, handlers, ctx) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
-        return -1;
+        goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        return -1;
+        goto done_delvec;
     }
+    rc = 0;
+done_delvec:
     flux_msg_handler_delvec (handlers);
-    return 0;
+done:
+    return rc;
 }
 
 MOD_NAME ("kvs");

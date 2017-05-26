@@ -48,6 +48,9 @@
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+#if HAVE_VALGRIND_VALGRIND_H
+# include <valgrind/valgrind.h>
+#endif
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
@@ -124,7 +127,6 @@ typedef struct {
     bool verbose;
     bool quiet;
     pid_t pid;
-    char *proctitle;
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
@@ -175,7 +177,7 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
 static int unload_module_byname (broker_ctx_t *ctx, const char *name,
                                  const flux_msg_t *request, bool async);
 
-static void update_proctitle (broker_ctx_t *ctx);
+static void set_proctitle (uint32_t rank);
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
                          const char *state, void *arg);
 static void runlevel_io_cb (runlevel_t *r, const char *name,
@@ -344,7 +346,8 @@ int main (int argc, char *argv[])
         }
     }
     if (optind < argc) {
-        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &ctx.init_shell_cmd_len)) != 0)
+        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd,
+                                             &ctx.init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
     }
 
@@ -547,7 +550,7 @@ int main (int argc, char *argv[])
         log_msg ("relay: %s", relay ? relay : "none");
     }
 
-    update_proctitle (&ctx);
+    set_proctitle (ctx.rank);
 
     if (ctx.rank == 0) {
         const char *rc1, *rc3, *pmi, *uri;
@@ -701,8 +704,15 @@ int main (int argc, char *argv[])
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    zlist_destroy (&ctx.subscriptions);
+    if (ctx.subscriptions) {
+        char *s;
+        while ((s = zlist_pop (ctx.subscriptions)))
+            free (s);
+        zlist_destroy (&ctx.subscriptions);
+    }
     runlevel_destroy (ctx.runlevel);
+    free (ctx.init_shell_cmd);
+    subprocess_manager_destroy (ctx.sm);
 
     return exit_rc;
 }
@@ -819,15 +829,11 @@ static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
     }
 }
 
-static void update_proctitle (broker_ctx_t *ctx)
+static void set_proctitle (uint32_t rank)
 {
-    char *s;
-    if (asprintf (&s, "flux-broker-%"PRIu32, ctx->rank) < 0)
-        oom ();
-    (void)prctl (PR_SET_NAME, s, 0, 0, 0);
-    if (ctx->proctitle)
-        free (ctx->proctitle);
-    ctx->proctitle = s;
+    static char proctitle[32];
+    snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
+    (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.
@@ -2270,9 +2276,17 @@ done:
 static int broker_subscribe (void *impl, const char *topic)
 {
     broker_ctx_t *ctx = impl;
-    if (zlist_append (ctx->subscriptions, xstrdup (topic)))
-        oom();
+    char *cpy = NULL;
+
+    if (!(cpy = strdup (topic)))
+        goto nomem;
+    if (zlist_append (ctx->subscriptions, cpy) < 0)
+        goto nomem;
     return 0;
+nomem:
+    free (cpy);
+    errno = ENOMEM;
+    return -1;
 }
 
 static int broker_unsubscribe (void *impl, const char *topic)
@@ -2282,6 +2296,7 @@ static int broker_unsubscribe (void *impl, const char *topic)
     while (s) {
         if (!strcmp (s, topic)) {
             zlist_remove (ctx->subscriptions, s);
+            free (s);
             break;
         }
         s = zlist_next (ctx->subscriptions);
@@ -2294,6 +2309,13 @@ static const struct flux_handle_ops broker_handle_ops = {
     .event_subscribe = broker_subscribe,
     .event_unsubscribe = broker_unsubscribe,
 };
+
+
+#if HAVE_VALGRIND_VALGRIND_H
+/* Disable dlclose() during valgrind operation
+ */
+void I_WRAP_SONAME_FNNAME_ZZ(Za,dlclose)(void *dso) {}
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

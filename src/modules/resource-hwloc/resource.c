@@ -407,8 +407,7 @@ static void topo_request_cb (flux_t *h,
     kvsdir_t *kd = NULL;
     char *buffer = NULL;
     int buflen;
-    hwloc_topology_t global;
-    hwloc_topology_init (&global);
+    hwloc_topology_t global = NULL;
     int count = 0;
     uint32_t size;
     int rc = -1;
@@ -430,6 +429,10 @@ static void topo_request_cb (flux_t *h,
         goto done;
     }
 
+    if (hwloc_topology_init (&global) < 0) {
+        flux_log (h, LOG_ERR, "hwloc_topology_init failed");
+        goto done;
+    }
     hwloc_topology_set_custom (global);
 
     kvsitr_t *base_iter = kvsitr_create (kd);
@@ -511,7 +514,8 @@ done:
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
-    hwloc_topology_destroy (global);
+    if (global)
+        hwloc_topology_destroy (global);
 }
 
 static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)

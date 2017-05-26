@@ -48,6 +48,7 @@ addons:
       - ccache
       - apport # for coredumps
       - gdb
+      - valgrind
 
   coverity_scan:
     project:
@@ -116,10 +117,10 @@ after_success:
  - if test "$COVERAGE" = "t" ; then coveralls-lcov flux*-coverage.info; bash <(curl -s https://codecov.io/bash) ; fi
 
 after_failure:
- - cat config.log
  - find . -name t[0-9]*.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - find . -name *.broker.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - src/test/backtrace-all.sh
+ - cat config.log
 
 before_deploy:
   # Get anchor (formatted properly) and base URI for latest tag in NEWS file
