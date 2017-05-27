@@ -44,6 +44,8 @@ typedef struct {
     flux_t *h;
     char *argz;
     size_t argz_len;
+    uint32_t testing_userid;
+    uint32_t testing_rolemask;
 } shmem_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
@@ -74,6 +76,23 @@ static int op_pollfd (void *impl)
     return zsock_fd (ctx->sock);
 }
 
+static int send_testing (shmem_ctx_t *ctx, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy;
+    int rc = -1;
+
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if (flux_msg_set_userid (cpy, ctx->testing_userid) < 0)
+        goto done;
+    if (flux_msg_set_rolemask (cpy, ctx->testing_rolemask) < 0)
+        goto done;
+    rc = flux_msg_sendzsock (ctx->sock, cpy);
+done:
+    flux_msg_destroy (cpy);
+    return rc;
+}
+
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     shmem_ctx_t *ctx = impl;
@@ -93,19 +112,20 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
                 goto done;
             if (flux_msg_push_route (cpy, ctx->uuid) < 0)
                 goto done;
-            if (flux_msg_sendzsock (ctx->sock, cpy) < 0)
-                goto done;
+            msg = cpy;
             break;
         case FLUX_MSGTYPE_RESPONSE:
         case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_msg_sendzsock (ctx->sock, msg) < 0)
-                goto done;
             break;
         default:
             errno = EINVAL;
             goto done;
     }
-    rc = 0;
+    if (ctx->testing_userid != FLUX_USERID_UNKNOWN
+            || ctx->testing_rolemask != FLUX_ROLE_NONE)
+        rc = send_testing (ctx, msg);
+    else
+        rc = flux_msg_sendzsock (ctx->sock, msg);
 done:
     flux_msg_destroy (cpy);
     return rc;
@@ -170,6 +190,38 @@ done:
     return rc;
 }
 
+
+static int op_setopt (void *impl, const char *option,
+                      const void *val, size_t size)
+{
+    shmem_ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    size_t val_size;
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+        val_size = sizeof (ctx->testing_userid);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->testing_userid, val, val_size);
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        val_size = sizeof (ctx->testing_rolemask);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->testing_rolemask, val, val_size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 static void op_fini (void *impl)
 {
     shmem_ctx_t *ctx = impl;
@@ -205,6 +257,8 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     }
     ctx->magic = MODHANDLE_MAGIC;
+    ctx->testing_userid = FLUX_USERID_UNKNOWN;
+    ctx->testing_rolemask = FLUX_ROLE_NONE;
     if ((e = argz_create_sep (path, '&', &ctx->argz, &ctx->argz_len)) != 0) {
         errno = e;
         goto error;
@@ -253,7 +307,7 @@ static const struct flux_handle_ops handle_ops = {
     .send = op_send,
     .recv = op_recv,
     .getopt = NULL,
-    .setopt = NULL,
+    .setopt = op_setopt,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,
     .impl_destroy = op_fini,
