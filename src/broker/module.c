@@ -221,9 +221,20 @@ flux_msg_t *module_recvmsg (module_t *p)
 
     if (!(msg = flux_msg_recvzsock (p->sock)))
         goto error;
-    if (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE) {
-        if (flux_msg_pop_route (msg, NULL) < 0) /* simulate DEALER socket */
-            goto error;
+    if (flux_msg_get_type (msg, &type) < 0)
+        goto error;
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            if (flux_msg_pop_route (msg, NULL) < 0)
+                goto error;
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+        case FLUX_MSGTYPE_EVENT:
+            if (flux_msg_push_route (msg, zuuid_str (p->uuid)) < 0)
+                goto error;
+            break;
+        default:
+            break;
     }
     /* All shmem:// connections to the broker have FLUX_ROLE_OWNER
      * and are "authenticated" as the instance owner.

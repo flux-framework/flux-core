@@ -97,37 +97,13 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_msg_t *cpy = NULL;
-    int type;
-    int rc = -1;
+    int rc;
 
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-        case FLUX_MSGTYPE_EVENT:
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            if (flux_msg_enable_route (cpy) < 0)
-                goto done;
-            if (flux_msg_push_route (cpy, ctx->uuid) < 0)
-                goto done;
-            msg = cpy;
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-        case FLUX_MSGTYPE_KEEPALIVE:
-            break;
-        default:
-            errno = EINVAL;
-            goto done;
-    }
     if (ctx->testing_userid != FLUX_USERID_UNKNOWN
             || ctx->testing_rolemask != FLUX_ROLE_NONE)
         rc = send_testing (ctx, msg);
     else
         rc = flux_msg_sendzsock (ctx->sock, msg);
-done:
-    flux_msg_destroy (cpy);
     return rc;
 }
 
