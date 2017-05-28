@@ -183,8 +183,7 @@ check_PROGRAMS = \
 check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
-	request/req.la \
-	request/coproc.la
+	request/req.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -347,12 +346,6 @@ module_child_la_LIBADD = \
 module_basic_SOURCES = module/basic.c
 module_basic_CPPFLAGS = $(test_cppflags)
 module_basic_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-request_coproc_la_SOURCES = request/coproc.c
-request_coproc_la_CPPFLAGS = $(test_cppflags)
-request_coproc_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-request_coproc_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_req_la_SOURCES = request/req.c

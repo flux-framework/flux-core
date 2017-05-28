@@ -50,7 +50,6 @@ void test_pingself (flux_t *h, uint32_t nodeid);
 void test_pingupstream (flux_t *h, uint32_t nodeid);
 void test_flush (flux_t *h, uint32_t nodeid);
 void test_clog (flux_t *h, uint32_t nodeid);
-void test_coproc (flux_t *h, uint32_t nodeid);
 
 typedef struct {
     const char *name;
@@ -70,7 +69,6 @@ static test_t tests[] = {
     { "pingupstream", &test_pingupstream},
     { "flush", &test_flush},
     { "clog", &test_clog},
-    { "coproc", &test_coproc},
 };
 
 test_t *test_lookup (const char *name)
@@ -92,7 +90,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingupstream | clog | flush | coproc}\n"
+"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingupstream | clog | flush}\n"
 );
     exit (1);
 }
@@ -371,96 +369,6 @@ void test_clog (flux_t *h, uint32_t nodeid)
              || flux_rpc_get (rpc, NULL) < 0)
         log_err_exit ("req.clog");
     flux_rpc_destroy (rpc);
-}
-
-/* Coprocess test: requires 'req' and 'coproc' modules loaded
- * - aux thread: coproc.stuck RPC which hangs internally
- *     (coproc reactor should continue though due to COPROC flag)
- * - main thread: verify coproc.stuck sent req.clog request
- * - main thread: "ping" coproc.hi (must respond!)
- * - main thread: allow clog response via req.flush
- */
-
-void *thd (void *arg)
-{
-    flux_rpc_t *rpc;
-    uint32_t *nodeid = arg;
-    flux_t *h;
-
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    if (!(rpc = flux_rpc (h, "coproc.stuck", NULL, *nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
-        log_err_exit ("coproc.stuck");
-
-    flux_rpc_destroy (rpc);
-    flux_close (h);
-    return NULL;
-}
-
-int req_count (flux_t *h, uint32_t nodeid)
-{
-    flux_rpc_t *rpc;
-    const char *json_str;
-    json_object *out = NULL;
-    int rc = -1;
-    int count;
-
-    if (!(rpc = flux_rpc (h, "req.count", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, &json_str) < 0)
-        goto done;
-    if (!json_str
-        || !(out = Jfromstr (json_str))
-        || !Jget_int (out, "count", &count)) {
-        errno = EPROTO;
-        goto done;
-    }
-    rc = count;
-done:
-    flux_rpc_destroy (rpc);
-    Jput (out);
-    return rc;
-}
-
-void test_coproc (flux_t *h, uint32_t nodeid)
-{
-    pthread_t t;
-    int rc;
-    int count, count0;
-    flux_rpc_t *rpc;
-
-    if ((count0 = req_count (h, nodeid)) < 0)
-        log_err_exit ("req.count");
-
-    if ((rc = pthread_create (&t, NULL, thd, &nodeid)))
-        log_errn_exit (rc, "pthread_create");
-
-    do {
-        //usleep (100*1000); /* 100ms */
-        if ((count = req_count (h, nodeid)) < 0)
-            log_err_exit ("req.count");
-    } while (count - count0 < 1);
-    log_msg ("%d requests are stuck", count - count0);
-
-    if (!(rpc = flux_rpc (h, "coproc.hi", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
-        log_err_exit ("coproc.hi");
-    flux_rpc_destroy (rpc);
-    log_msg ("hi request was answered");
-
-    if (!(rpc = flux_rpc (h, "req.flush", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
-        log_err_exit ("req.flush");
-    flux_rpc_destroy (rpc);
-    if ((count = req_count (h, nodeid)) < 0)
-        log_err_exit ("req.count");
-    if (count != 0)
-        log_msg_exit ("request was not flushed");
-
-    if ((rc = pthread_join (t, NULL)))
-        log_errn_exit (rc, "pthread_join");
-    log_msg ("thread finished");
 }
 
 /*
