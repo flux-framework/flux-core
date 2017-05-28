@@ -82,7 +82,6 @@ struct flux_msg_handler {
     void *arg;
     flux_free_f arg_free;
     uint8_t running:1;
-    uint8_t destroyed:1;
 };
 
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -97,17 +96,13 @@ static void dispatch_usecount_decr (struct dispatch *d)
     flux_msg_handler_t *w;
     if (d && --d->usecount == 0) {
         if (d->handlers) {
-            while ((w = zlist_pop (d->handlers))) {
-                assert (w->destroyed);
+            while ((w = zlist_pop (d->handlers)))
                 free_msg_handler (w);
-            }
             zlist_destroy (&d->handlers);
         }
         if (d->handlers_new) {
-            while ((w = zlist_pop (d->handlers_new))) {
-                assert (w->destroyed);
+            while ((w = zlist_pop (d->handlers_new)))
                 free_msg_handler (w);
-            }
             zlist_destroy (&d->handlers_new);
         }
         flux_watcher_destroy (d->w);
@@ -342,47 +337,6 @@ done:
     return rc;
 }
 
-typedef bool (*item_test_f)(void *item);
-
-static bool item_test_destroyed (void *item)
-{
-    flux_msg_handler_t *w = item;
-    if (w->destroyed)
-        return true;
-    return false;
-}
-
-static int delete_items_zlist (zlist_t *l, item_test_f item_test,
-                               flux_free_f item_destroy)
-{
-    void *item;
-    zlist_t *pending = NULL;
-    int rc = -1;
-
-    FOREACH_ZLIST (l, item) {
-        if (item_test (item)) {
-            if (!pending && !(pending = zlist_new ())) {
-                errno = ENOMEM;
-                goto done;
-            }
-            if (zlist_push (pending, item) < 0) {
-                errno = ENOMEM;
-                goto done;
-            }
-        }
-    }
-    if (pending) {
-        while ((item = zlist_pop (pending))) {
-            zlist_remove (l, item);
-            item_destroy (item);
-        }
-    }
-    rc = 0;
-done:
-    zlist_destroy (&pending);
-    return rc;
-}
-
 static void handle_cb (flux_reactor_t *r,
                        flux_watcher_t *hw,
                        int revents,
@@ -433,17 +387,6 @@ static void handle_cb (flux_reactor_t *r,
 
     if (match < 0)
         goto done;
-    /* Destroy handlers here, making handler destruction
-     * safe to call during handlers list traversal above.
-     */
-    if (delete_items_zlist (d->handlers_new,
-                            item_test_destroyed,
-                            (flux_free_f)free_msg_handler) < 0)
-        goto done;
-    if (delete_items_zlist (d->handlers,
-                            item_test_destroyed,
-                            (flux_free_f)free_msg_handler) < 0)
-        goto done;
     /* Message matched nothing.
      * Respond with ENOSYS if it was a request.
      * Else log it if FLUX_O_TRACE
@@ -475,7 +418,6 @@ void flux_msg_handler_start (flux_msg_handler_t *w)
     struct dispatch *d = w->d;
 
     assert (w->magic == HANDLER_MAGIC);
-    assert (w->destroyed == 0);
     if (w->running == 0) {
         w->running = 1;
         d->running_count++;
@@ -488,7 +430,6 @@ void flux_msg_handler_stop (flux_msg_handler_t *w)
     if (!w)
         return;
     assert (w->magic == HANDLER_MAGIC);
-    assert (w->destroyed == 0);
     if (w->running == 1) {
         struct dispatch *d = w->d;
         w->running = 0;
@@ -530,28 +471,16 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
 {
     if (w) {
         assert (w->magic == HANDLER_MAGIC);
-        /* It is assumed safe to immediately destroy handlers on fastpath
-         *  here since they are off the handlers zlist, however destruction
-         *  of normal handlers is delayed until it is safe to remove them
-         *  from the zlist.
-         *
-         * XXX: It may now be safe to remove *all* handlers immediately,
-         *  but this needs to be verified. (Check for safety of zlist item
-         *  removal during traversal)
-         */
         if (w->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && w->match.matchtag != FLUX_MATCHTAG_NONE) {
             fastpath_response_unregister (w->d, w->match.matchtag);
-            flux_msg_handler_stop (w);
-            dispatch_usecount_decr (w->d);
-            free_msg_handler (w);
         } else {
-            if (!w->destroyed) {
-                flux_msg_handler_stop (w);
-                dispatch_usecount_decr (w->d);
-                w->destroyed = 1;
-            }
+            zlist_remove (w->d->handlers_new, w);
+            zlist_remove (w->d->handlers, w);
         }
+        flux_msg_handler_stop (w);
+        dispatch_usecount_decr (w->d);
+        free_msg_handler (w);
     }
 }
 
