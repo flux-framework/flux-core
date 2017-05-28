@@ -601,16 +601,10 @@ static flux_msg_t *flux_recv_any (flux_t *h, int flags)
     return msg;
 }
 
-/* If this function is called without the NONBLOCK flag from a reactor
- * handler running in coprocess context, the call to flux_sleep_on()
- * will allow the reactor to run until a message matching 'match' arrives.
- * The flux_sleep_on() call will then resume, and the next call to recv()
- * will return the matching message.  If not running in coprocess context,
- * flux_sleep_on() will fail with EINVAL.  In that case, the do loop
- * reading messages and comparing them to match criteria may have to read
- * a few non-matching messages before finding a match.  On return, those
- * non-matching messages have to be requeued in the handle, hence the
- * defer_*() helper calls.
+/* N.B. the do loop below that reads messages and compares them to match
+ * criteria may have to read a few non-matching messages before finding
+ * a match.  On return, those non-matching messages have to be requeued
+ * in the handle, hence the defer_*() helper calls.
  */
 flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
 {
@@ -619,12 +613,6 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     int saved_errno;
 
     flags |= h->flags;
-    if (!(flags & FLUX_O_NONBLOCK) && (flags & FLUX_O_COPROC) &&
-        flux_sleep_on (h, match) < 0) {
-        if (errno != EINVAL)
-            goto fatal;
-        errno = 0;
-    }
     do {
         if (!(msg = flux_recv_any (h, flags))) {
             if (errno != EAGAIN && errno != EWOULDBLOCK)
