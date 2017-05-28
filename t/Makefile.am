@@ -23,12 +23,13 @@ uninstall-local:
 	$(RM) $(DESTDIR)$(luadir)/fluxometer/conf.lua
 
 TESTS = \
+	shmem/backtoback.t \
 	loop/handle.t \
 	loop/reactor.t \
-	loop/rpc.t \
-	loop/multrpc.t \
 	loop/reduce.t \
 	loop/log.t \
+	rpc/rpc.t \
+	rpc/mrpc.t \
 	rolemask/loop.t \
 	t0000-sharness.t \
 	t0001-basic.t \
@@ -156,12 +157,13 @@ check_SCRIPTS = \
 	$(top_builddir)/t/t9990-python-tests.t
 
 check_PROGRAMS = \
+	shmem/backtoback.t \
 	loop/handle.t \
 	loop/reactor.t \
-	loop/rpc.t \
-	loop/multrpc.t \
 	loop/reduce.t \
 	loop/log.t \
+	rpc/rpc.t \
+	rpc/mrpc.t \
 	rolemask/loop.t \
 	kz/kzutil \
 	kvs/torture \
@@ -181,8 +183,7 @@ check_PROGRAMS = \
 check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
-	request/req.la \
-	request/coproc.la
+	request/req.la
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -217,6 +218,10 @@ test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
 
+shmem_backtoback_t_SOURCES = shmem/backtoback.c
+shmem_backtoback_t_CPPFLAGS = $(test_cppflags)
+shmem_backtoback_t_LDADD = $(test_ldadd) $(LIBDL)
+
 loop_handle_t_SOURCES = loop/handle.c
 loop_handle_t_CPPFLAGS = $(test_cppflags)
 loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
@@ -229,17 +234,17 @@ loop_reactor_t_SOURCES = loop/reactor.c
 loop_reactor_t_CPPFLAGS = $(test_cppflags)
 loop_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
 
-loop_rpc_t_SOURCES = loop/rpc.c
-loop_rpc_t_CPPFLAGS = $(test_cppflags)
-loop_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_multrpc_t_SOURCES = loop/multrpc.c
-loop_multrpc_t_CPPFLAGS = $(test_cppflags)
-loop_multrpc_t_LDADD = $(test_ldadd) $(LIBDL)
-
 loop_reduce_t_SOURCES = loop/reduce.c
 loop_reduce_t_CPPFLAGS = $(test_cppflags)
 loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
+
+rpc_rpc_t_SOURCES = rpc/rpc.c rpc/util.h rpc/util.c
+rpc_rpc_t_CPPFLAGS = $(test_cppflags)
+rpc_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+rpc_mrpc_t_SOURCES = rpc/mrpc.c rpc/util.h rpc/util.c
+rpc_mrpc_t_CPPFLAGS = $(test_cppflags)
+rpc_mrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 
 rolemask_loop_t_SOURCES = rolemask/loop.c
 rolemask_loop_t_CPPFLAGS = $(test_cppflags)
@@ -341,12 +346,6 @@ module_child_la_LIBADD = \
 module_basic_SOURCES = module/basic.c
 module_basic_CPPFLAGS = $(test_cppflags)
 module_basic_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-request_coproc_la_SOURCES = request/coproc.c
-request_coproc_la_CPPFLAGS = $(test_cppflags)
-request_coproc_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-request_coproc_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_req_la_SOURCES = request/req.c

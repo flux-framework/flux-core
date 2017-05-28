@@ -53,24 +53,8 @@ Internally, flags are the logical "or" of _flags_ and the flags provided
 to `flux_open()` when the handle was created.
 
 Messages that do not meet _match_ criteria, are requeued with
-`flux_requeue()` for later consumption, unless the caller is in
-coprocess context.  See COPROCESS CONTEXT below.
+`flux_requeue()` for later consumption.
 
-COPROCESS CONTEXT
------------------
-
-Reactor message watcher callbacks are started in coprocess context if
-the FLUX_O_COPROC flag is set in the handle before `flux_reactor_start()`.
-In coprocess context, `flux_recv()` is a _scheduling point_ where other
-message watchers are allowed to run as matching messages arrive.
-
-This mode can be useful in a comms module that implements several
-service methods, which may in turn make requests of other services.
-It preserves a synchronous control flow within the service method,
-without stalling other service methods or the reactor.
-
-Coprocess mode should be considered experimental at this point,
-so use with care.
 
 RETURN VALUE
 ------------

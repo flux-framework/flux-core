@@ -36,8 +36,6 @@ libutil_la_SOURCES = \
 	ev_zmq.h \
 	ev_zlist.c \
 	ev_zlist.h \
-	coproc.c \
-	coproc.h \
 	base64.c \
 	base64.h \
 	msglist.c \
@@ -81,7 +79,6 @@ EXTRA_DIST = veb_mach.c
 
 TESTS = test_nodeset.t \
 	test_ev.t \
-	test_coproc.t \
 	test_base64.t \
 	test_msglist.t \
 	test_sha1.t \
@@ -123,11 +120,6 @@ test_nodeset_t_LDADD = $(test_ldadd)
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)
 test_ev_t_LDADD = $(test_ldadd)
-
-test_coproc_t_SOURCES = test/coproc.c
-test_coproc_t_CPPFLAGS = $(test_cppflags)
-test_coproc_t_CFLAGS = $(AM_CFLAGS) -fno-builtin
-test_coproc_t_LDADD = $(test_ldadd)
 
 test_base64_t_SOURCES = test/base64_test.c
 test_base64_t_CPPFLAGS = $(test_cppflags)

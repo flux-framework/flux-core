@@ -3,6 +3,7 @@
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libtap/tap.h"
+#include "util.h"
 
 /* increment integer and send it back */
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
@@ -89,7 +90,8 @@ void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
 done:
-    (void)flux_respond (h, msg, errnum, NULL);
+    if (flux_respond (h, msg, errnum, NULL) < 0)
+        diag ("%s: flux_respond: %s", __FUNCTION__, flux_strerror (errno));
 }
 
 void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
@@ -108,47 +110,144 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
         (void)flux_respondf (h, msg, "{}");
 }
 
+static struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",    rpctest_incr_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",   rpctest_hello_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",  rpcftest_hello_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",    rpctest_echo_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho", rpctest_rawecho_cb, 0, NULL},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",  rpctest_nodeid_cb, 0, NULL},
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+int test_server (flux_t *h, void *arg)
+{
+    if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
+        diag ("flux_msg_handler_addvec failed");
+        return -1;
+    }
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        diag ("flux_reactor_run failed");
+        return -1;
+    }
+    flux_msg_handler_delvec (htab);
+    return 0;
+}
+
+
 void *auxfree_arg = NULL;
 void auxfree (void *arg)
 {
     auxfree_arg = arg;
 }
 
-void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
-                       const flux_msg_t *msg, void *arg)
+void test_service (flux_t *h)
 {
-    json_object *o;
-    const char *json_str;
     flux_rpc_t *r;
-    char *aux_data = "Hello";
+    flux_msg_t *msg;
+    const char *topic;
+    int count;
+    uint32_t rolemask, userid, matchtag;
+    int rc;
 
     errno = 0;
-    ok (!(r = flux_rpc (h, NULL, NULL, FLUX_NODEID_ANY, 0))
-        && errno == EINVAL,
+    r = flux_rpc (h, NULL, NULL, FLUX_NODEID_ANY, 0);
+    ok (r == NULL && errno == EINVAL,
         "flux_rpc with NULL topic fails with EINVAL");
 
-    /* working no-payload RPC (with aux data) */
+    count = flux_matchtag_avail (h, 0);
+    r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0);
+    ok (r != NULL,
+        "flux_rpc sent request to rpctest.hello service");
+    ok (flux_matchtag_avail (h, 0) == count - 1,
+        "flux_rpc allocated one matchtag");
+    msg = flux_recv (h, FLUX_MATCH_RESPONSE, 0);
+    ok (msg != NULL,
+        "flux_recv matched response");
+    rc = flux_msg_get_topic (msg, &topic);
+    ok (rc == 0 && !strcmp (topic, "rpctest.hello"),
+        "response has expected topic %s", topic);
+    rc = flux_msg_get_matchtag (msg, &matchtag);
+    ok (rc == 0 && matchtag == 1,
+        "response has first matchtag", matchtag);
+    rc = flux_msg_get_userid (msg, &userid);
+    ok (rc == 0 && userid == geteuid (),
+        "response has userid equal to effective uid of test");
+    rc = flux_msg_get_rolemask (msg, &rolemask);
+    ok (rc == 0 && (rolemask & FLUX_ROLE_OWNER) != 0,
+        "response has rolemask including instance owner");
+    errno = 0;
+    rc = flux_msg_get_route_count (msg);
+    ok ((rc == -1 && errno == EINVAL) || (rc == 0),
+        "response has no residual route stack");
+    flux_msg_destroy (msg);
+    flux_rpc_destroy (r);
+    ok (flux_matchtag_avail (h, 0) == count - 1,
+        "flux_rpc_destroy did not free matchtag");
+
+    diag ("completed test with rpc request, flux_recv response");
+}
+
+void test_basic (flux_t *h)
+{
+    flux_rpc_t *r;
+
+    r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0);
+    ok (r != NULL,
+        "flux_rpc sent request to rpctest.hello service");
+
+    int count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
+
+    ok (flux_rpc_get (r, NULL) == 0,
+        "flux_rpc_get works");
+    ok (flux_rpc_check (r) == true,
+        "flux_rpc_check still returns true");
+    ok (flux_rpc_get (r, NULL) == 0,
+        "flux_rpc_get works a second time");
+    flux_rpc_destroy (r);
+
+    diag ("completed synchronous rpc test");
+}
+
+void test_aux (flux_t *h)
+{
+    char *aux_data = "Hello";
+    flux_rpc_t *r;
+
     ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
-        "flux_rpc with no payload when none is expected works");
+        "flux_rpc works");
     ok (flux_rpc_aux_set (r, "test", aux_data, auxfree) == 0,
         "flux_rpc_aux_set works");
     ok (flux_rpc_aux_get (r, "wrong") == NULL,
         "flux_rpc_aux_get on wrong key returns NULL");
     ok (flux_rpc_aux_get (r, "test") == aux_data,
         "flux_rpc_aux_get on right key returns orig pointer");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works");
     flux_rpc_destroy (r);
     ok (auxfree_arg == aux_data,
         "destroyed rpc and aux destructor was called with correct arg");
 
+    diag ("completed aux test");
+}
+
+void test_encoding (flux_t *h)
+{
+    json_object *o;
+    const char *json_str;
+    flux_rpc_t *r;
+    int count;
+
     /* cause remote EPROTO (unexpected payload) - will be picked up in _get() */
     ok ((r = flux_rpc (h, "rpctest.hello", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when none is expected works, at first");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
@@ -159,8 +258,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     errno = 0;
     ok ((r = flux_rpc (h, "rpctest.echo", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with no payload when payload is expected works, at first");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
@@ -170,8 +271,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     /* receive NULL payload on empty response */
     ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with empty payload works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str == NULL,
@@ -185,8 +288,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     json_str = Jtostr (o);
     ok ((r = flux_rpc (h, "rpctest.echo", json_str, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get is ok if user doesn't desire response payload");
@@ -196,8 +301,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     /* working with-payload RPC */
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     json_str = NULL;
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
@@ -210,8 +317,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok ((r = flux_rpc_raw (h, "rpctest.rawecho", data, len,
                           FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc_raw with payload when payload is expected works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     json_str = NULL;
     ok (flux_rpc_get_raw (r, &d, &l) == 0
         && d != NULL && l == len && memcmp (data, d, len) == 0,
@@ -236,8 +345,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
                         "{ s:i }", "foo", 42)) != NULL,
         "flux_rpcf with payload when none is expected works, at first");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_getf (r, "{}") < 0
         && errno == EPROTO,
@@ -247,8 +358,10 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     /* cause local EPROTO (user incorrectly expects payload) */
     ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
         "flux_rpcf with empty payload works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_getf (r, "{ s:i }", "foo", &i) < 0
         && errno == EPROTO,
@@ -259,15 +372,17 @@ void rpctest_begin_cb (flux_t *h, flux_msg_handler_t *w,
     errno = 0;
     ok ((r = flux_rpcf (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
         "flux_rpcf with payload works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
+    count = 0;
+    while (flux_rpc_check (r) == false)
+        count++;
+    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_getf (r, "{ ! }") < 0
         && errno == EPROTO,
         "flux_rpc_getf fails with EPROTO");
     flux_rpc_destroy (r);
 
-    flux_reactor_stop (flux_get_reactor (h));
+    diag ("completed encoding/api test");
 }
 
 static void then_cb (flux_rpc_t *r, void *arg)
@@ -284,75 +399,13 @@ static void then_cb (flux_rpc_t *r, void *arg)
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static flux_rpc_t *thenbug_r = NULL;
-void rpctest_thenbug_cb (flux_t *h, flux_msg_handler_t *w,
-                         const flux_msg_t *msg, void *arg)
+void test_then (flux_t *h)
 {
-    (void)flux_rpc_check (thenbug_r);
-    flux_reactor_stop (flux_get_reactor (h));
-}
-
-static void fatal_err (const char *message, void *arg)
-{
-    BAIL_OUT ("fatal error: %s", message);
-}
-
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",           rpctest_incr_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",         rpcftest_hello_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho",        rpctest_rawecho_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.thenbug",        rpctest_thenbug_cb, 0, NULL},
-    FLUX_MSGHANDLER_TABLE_END,
-};
-
-int main (int argc, char *argv[])
-{
-    flux_msg_t *msg;
-    flux_t *h;
-    flux_reactor_t *reactor;
-
-    plan (NO_PLAN);
-
-    (void)setenv ("FLUX_CONNECTOR_PATH",
-                  flux_conf_get ("connector_path", CONF_FLAG_INTREE), 0);
-    ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
-        "opened loop connector");
-    if (!h)
-        BAIL_OUT ("can't continue without loop handle");
-    flux_fatal_set (h, fatal_err, NULL);
-    ok ((reactor = flux_get_reactor(h)) != NULL,
-       "obtained reactor");
-    if (!h)
-        BAIL_OUT ("can't continue without reactor");
-
-    ok (flux_msg_handler_addvec (h, htab, NULL) == 0,
-        "registered message handlers");
-    /* test continues in rpctest_begin_cb() so that rpc calls
-     * can sleep while we answer them
-     */
-    ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL,
-        "encoded rpctest.begin request OK");
-    ok (flux_send (h, msg, 0) == 0,
-        "sent rpctest.begin request");
-    ok (flux_reactor_run (reactor, 0) == 0,
-        "reactor completed normally");
-    flux_msg_destroy (msg);
-
-    /* test _then:  Slightly tricky.
-     * Send request.  We're not in a coproc ctx here in main(), so there
-     * will be no response, therefore, check will be false.  Register
-     * continuation, start reactor.  Response will be received, continuation
-     * will be invoked. Continuation stops the reactor.
-    */
     flux_rpc_t *r;
+    const char *json_str;
+
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
-    ok (flux_rpc_check (r) == false,
-        "flux_rpc_check says get would block");
     /* reg/unreg _then a couple times for fun */
     ok (flux_rpc_then (r, NULL, 0) == 0,
         "flux_rpc_then with NULL cb works");
@@ -363,39 +416,102 @@ int main (int argc, char *argv[])
     ok (flux_rpc_then (r, then_cb, h) == 0,
         "flux_rpc_then works");
     /* enough of that */
-    ok (flux_reactor_run (reactor, 0) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "reactor completed normally");
     flux_rpc_destroy (r);
 
-    /* Test a _then corner case:
-     * If _check() is called before _then(), a message may have been cached
-     * in the flux_rpc_t.  rpctest_thenbug_cb creates this condition.
-     * Next, _then continuation is installed, but will reactor call it?
-     * This will hang if rpc implementation doesn't return a cached message
-     * back to the handle in _then().  Else, continuation will stop reactor.
+    /* ensure contination is called if "get" called before "then"
      */
-    ok ((thenbug_r = flux_rpc (h, "rpctest.echo", "{}",
-        FLUX_NODEID_ANY, 0)) != NULL,
-        "thenbug: sent echo request");
-    do {
-        if (!(msg = flux_request_encode ("rpctest.thenbug", NULL))
-                  || flux_send (h, msg, 0) < 0
-                  || flux_reactor_run (reactor, 0) < 0) {
-            flux_msg_destroy (msg);
-            break;
-        }
-        flux_msg_destroy (msg);
-    } while (!flux_rpc_check (thenbug_r));
-    ok (true,
-        "thenbug: check says message ready");
-    ok (flux_rpc_then (thenbug_r, then_cb, h) == 0,
-        "thenbug: registered then - hangs on failure");
-    ok (flux_reactor_run (reactor, 0) == 0,
+    ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
+        "flux_rpc with payload when payload is expected works");
+    json_str = NULL;
+    ok (flux_rpc_get (r, &json_str) == 0
+        && json_str && !strcmp (json_str, "{}"),
+        "flux_rpc_get works synchronously and returned expected payload");
+    ok (flux_rpc_then (r, then_cb, h) == 0,
+        "flux_rpc_then works");
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "reactor completed normally");
-    flux_rpc_destroy (thenbug_r);
+    flux_rpc_destroy (r);
 
-    flux_msg_handler_delvec (htab);
+    diag ("completed test of continuations");
+}
+
+/* Bit of code to test the test framework.
+ */
+static int fake_server (flux_t *h, void *arg)
+{
+    flux_msg_t *msg;
+
+    while ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        if (!strcmp (topic, "shutdown"))
+            break;
+    }
+    return 0;
+}
+
+static int fake_server_reactor (flux_t *h, void *arg)
+{
+    return flux_reactor_run (flux_get_reactor (h), 0);
+}
+
+void test_fake_server (void)
+{
+    flux_t *h;
+
+    ok ((h = test_server_create (fake_server, NULL)) != NULL,
+        "test_server_create (recv loop)");
+    ok (test_server_stop (h) == 0,
+        "test_server_stop worked");
     flux_close (h);
+    diag ("completed test with server recv loop");
+
+    ok ((h = test_server_create (fake_server_reactor, NULL)) != NULL,
+        "test_server_create (reactor)");
+    ok ((test_server_stop (h)) == 0,
+        "test_server_stop worked");
+    diag ("completed test with server reactor loop");
+    flux_close (h);
+}
+
+static void fatal_err (const char *message, void *arg)
+{
+    BAIL_OUT ("fatal error: %s", message);
+}
+
+int main (int argc, char *argv[])
+{
+    flux_t *h;
+
+    plan (NO_PLAN);
+
+    zsys_init ();
+    zsys_set_logstream (stderr);
+    zsys_set_logident ("rpc-test");
+    zsys_handler_set (NULL);
+    zsys_set_linger (5); // msec
+
+    test_fake_server ();
+
+    h = test_server_create (test_server, NULL);
+    ok (h != NULL,
+        "created test server thread");
+    if (!h)
+        BAIL_OUT ("can't continue without test server");
+    flux_fatal_set (h, fatal_err, NULL);
+
+    test_service (h);
+    test_basic (h);
+    test_aux (h);
+    test_encoding (h);
+    test_then (h);
+
+    ok (test_server_stop (h) == 0,
+        "stopped test server thread");
+    flux_close (h); // destroys test server
+
     done_testing();
     return (0);
 }

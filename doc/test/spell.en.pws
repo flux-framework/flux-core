@@ -161,8 +161,6 @@ github
 manpage
 printf
 const
-coproc
-coprocesses
 doctype
 nonblock
 recv
@@ -196,7 +194,6 @@ nodeid
 pre
 bsize
 comms
-coprocess
 initializers
 matchtag
 requeued

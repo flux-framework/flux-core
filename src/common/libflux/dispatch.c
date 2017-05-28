@@ -39,7 +39,6 @@
 #include "flog.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/coproc.h"
 #include "src/common/libutil/iterators.h"
 
 /* Fastpath for RPCs:
@@ -83,13 +82,6 @@ struct flux_msg_handler {
     void *arg;
     flux_free_f arg_free;
     uint8_t running:1;
-    uint8_t waiting:1;      /* coproc waiting on wait_match */
-    uint8_t destroyed:1;
-
-    /* coproc */
-    coproc_t *coproc;
-    zlist_t *backlog;
-    struct flux_match wait_match;
 };
 
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -104,17 +96,13 @@ static void dispatch_usecount_decr (struct dispatch *d)
     flux_msg_handler_t *w;
     if (d && --d->usecount == 0) {
         if (d->handlers) {
-            while ((w = zlist_pop (d->handlers))) {
-                assert (w->destroyed);
+            while ((w = zlist_pop (d->handlers)))
                 free_msg_handler (w);
-            }
             zlist_destroy (&d->handlers);
         }
         if (d->handlers_new) {
-            while ((w = zlist_pop (d->handlers_new))) {
-                assert (w->destroyed);
+            while ((w = zlist_pop (d->handlers_new)))
                 free_msg_handler (w);
-            }
             zlist_destroy (&d->handlers_new);
         }
         flux_watcher_destroy (d->w);
@@ -285,72 +273,6 @@ static int copy_match (struct flux_match *dst,
     return 0;
 }
 
-static int backlog_append (flux_msg_handler_t *w, const flux_msg_t *msg)
-{
-    flux_msg_t *cpy;
-    int rc = -1;
-
-    if (!w->backlog && !(w->backlog = zlist_new ())) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if (!(cpy = flux_msg_copy (msg, true))) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if (zlist_append (w->backlog, cpy) < 0) {
-        flux_msg_destroy (cpy);
-        errno = ENOMEM;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-static int backlog_flush (flux_msg_handler_t *w)
-{
-    int errnum = 0;
-    int rc = 0;
-
-    if (w->backlog) {
-        flux_msg_t *msg;
-        while ((msg = zlist_pop (w->backlog))) {
-            if (flux_requeue (w->d->h, msg, FLUX_RQ_TAIL) < 0) {
-                if (errnum < errno) {
-                    errnum = errno;
-                    rc = -1;
-                }
-                flux_msg_destroy (msg);
-            }
-        }
-    }
-    if (errnum > 0)
-        errno = errnum;
-    return rc;
-}
-
-int flux_sleep_on (flux_t *h, struct flux_match match)
-{
-    struct dispatch *d = dispatch_get (h);
-    int rc = -1;
-
-    if (!d)
-        goto done;
-    if (!d->current || !d->current->coproc) {
-        errno = EINVAL;
-        goto done;
-    }
-    flux_msg_handler_t *w = d->current;
-    if (copy_match (&w->wait_match, match) < 0)
-        goto done;
-    w->waiting = 1;
-    if (coproc_yield (w->coproc) < 0)
-        goto done;
-    rc = 0;
-done:
-    return rc;
-}
-
 static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
 {
     uint32_t rolemask, matchtag;
@@ -366,123 +288,6 @@ static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
         return;
     }
     w->fn (w->d->h, w, msg, w->arg);
-}
-
-static int coproc_cb (coproc_t *c, void *arg)
-{
-    flux_msg_handler_t *w = arg;
-    flux_msg_t *msg;
-    int rc = -1;
-
-    if (!(msg = flux_recv (w->d->h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK))) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            rc = 0;
-        goto done;
-    }
-    call_handler (w, msg);
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
-}
-
-static int resume_coproc (flux_msg_handler_t *w)
-{
-    struct dispatch *d = w->d;
-    int coproc_rc, rc = -1;
-
-    d->current = w;
-    if (coproc_resume (w->coproc) < 0)
-        goto done;
-    if (!coproc_returned (w->coproc, &coproc_rc)) {
-        rc = 0;
-        goto done;
-    }
-    if (backlog_flush (w) < 0)
-        goto done;
-    rc = coproc_rc;
-done:
-    d->current = NULL;
-    return rc;
-}
-
-static int start_coproc (flux_msg_handler_t *w)
-{
-    struct dispatch *d = w->d;
-    int coproc_rc, rc = -1;
-
-    d->current = w;
-    if (!w->coproc && !(w->coproc = coproc_create (coproc_cb)))
-        goto done;
-    if (coproc_start (w->coproc, w) < 0)
-        goto done;
-    if (!coproc_returned (w->coproc, &coproc_rc)) {
-        rc = 0;
-        goto done;
-    }
-    if (backlog_flush (w) < 0)
-        goto done;
-    rc = coproc_rc;
-done:
-    d->current = NULL;
-    return rc;
-}
-
-/* Return value of dispatch_message[_coproc] is:
- * -1 error, 0 nomatch, or 1 match
- */
-
-static int dispatch_message_coproc (struct dispatch *d,
-                                    const flux_msg_t *msg, int type)
-{
-    flux_msg_handler_t *w;
-    bool match = false;
-    int rc = -1;
-
-    /* Message matches a coproc that yielded.
-     * Resume, arranging for msg to be returned next by flux_recv().
-     */
-    FOREACH_ZLIST (d->handlers, w) {
-        if (!w->running)
-            continue;
-        if (w->waiting && flux_msg_cmp (msg, w->wait_match)) {
-            if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
-                goto done;
-            w->waiting = 0;
-            if (resume_coproc (w) < 0)
-                goto done;
-            match = true;
-            if (type != FLUX_MSGTYPE_EVENT)
-                break;
-        }
-    }
-    /* Message matches a handler.
-     * If coproc already running, queue message as backlog.
-     * Else start coproc.
-     */
-    if (!match || type == FLUX_MSGTYPE_EVENT) {
-        FOREACH_ZLIST (d->handlers, w) {
-            if (!w->running)
-                continue;
-            if (flux_msg_cmp (msg, w->match)) {
-                if (w->coproc && coproc_started (w->coproc)) {
-                    if (backlog_append (w, msg) < 0)
-                        goto done;
-                } else {
-                    if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
-                        goto done;
-                    if (start_coproc (w) < 0)
-                        goto done;
-                }
-                match = true;
-                if (type != FLUX_MSGTYPE_EVENT)
-                    break;
-            }
-        }
-    }
-    rc = match ? 1 : 0;
-done:
-    return rc;
 }
 
 static int dispatch_message (struct dispatch *d,
@@ -532,47 +337,6 @@ done:
     return rc;
 }
 
-typedef bool (*item_test_f)(void *item);
-
-static bool item_test_destroyed (void *item)
-{
-    flux_msg_handler_t *w = item;
-    if (w->destroyed)
-        return true;
-    return false;
-}
-
-static int delete_items_zlist (zlist_t *l, item_test_f item_test,
-                               flux_free_f item_destroy)
-{
-    void *item;
-    zlist_t *pending = NULL;
-    int rc = -1;
-
-    FOREACH_ZLIST (l, item) {
-        if (item_test (item)) {
-            if (!pending && !(pending = zlist_new ())) {
-                errno = ENOMEM;
-                goto done;
-            }
-            if (zlist_push (pending, item) < 0) {
-                errno = ENOMEM;
-                goto done;
-            }
-        }
-    }
-    if (pending) {
-        while ((item = zlist_pop (pending))) {
-            zlist_remove (l, item);
-            item_destroy (item);
-        }
-    }
-    rc = 0;
-done:
-    zlist_destroy (&pending);
-    return rc;
-}
-
 static void handle_cb (flux_reactor_t *r,
                        flux_watcher_t *hw,
                        int revents,
@@ -611,10 +375,7 @@ static void handle_cb (flux_reactor_t *r,
     cali_end (d->prof_msg_type);
 #endif
 
-    if ((flux_flags_get (d->h) & FLUX_O_COPROC))
-        match = dispatch_message_coproc (d, msg, type);
-    else
-        match = dispatch_message (d, msg, type);
+    match = dispatch_message (d, msg, type);
 
 #if defined(HAVE_CALIPER)
     cali_begin_string (d->prof_msg_type, flux_msg_typestr (type));
@@ -625,17 +386,6 @@ static void handle_cb (flux_reactor_t *r,
 #endif
 
     if (match < 0)
-        goto done;
-    /* Destroy handlers here, making handler destruction
-     * safe to call during handlers list traversal above.
-     */
-    if (delete_items_zlist (d->handlers_new,
-                            item_test_destroyed,
-                            (flux_free_f)free_msg_handler) < 0)
-        goto done;
-    if (delete_items_zlist (d->handlers,
-                            item_test_destroyed,
-                            (flux_free_f)free_msg_handler) < 0)
         goto done;
     /* Message matched nothing.
      * Respond with ENOSYS if it was a request.
@@ -668,7 +418,6 @@ void flux_msg_handler_start (flux_msg_handler_t *w)
     struct dispatch *d = w->d;
 
     assert (w->magic == HANDLER_MAGIC);
-    assert (w->destroyed == 0);
     if (w->running == 0) {
         w->running = 1;
         d->running_count++;
@@ -681,7 +430,6 @@ void flux_msg_handler_stop (flux_msg_handler_t *w)
     if (!w)
         return;
     assert (w->magic == HANDLER_MAGIC);
-    assert (w->destroyed == 0);
     if (w->running == 1) {
         struct dispatch *d = w->d;
         w->running = 0;
@@ -712,16 +460,6 @@ static void free_msg_handler (flux_msg_handler_t *w)
         assert (w->magic == HANDLER_MAGIC);
         if (w->match.topic_glob)
             free (w->match.topic_glob);
-        if (w->coproc)
-            coproc_destroy (w->coproc);
-        if (w->backlog) {
-            flux_msg_t *msg;
-            while ((msg = zlist_pop (w->backlog)))
-                flux_msg_destroy (msg);
-            zlist_destroy (&w->backlog);
-        }
-        if (w->wait_match.topic_glob)
-            free (w->wait_match.topic_glob);
         if (w->arg_free)
             w->arg_free (w->arg);
         w->magic = ~HANDLER_MAGIC;
@@ -733,29 +471,16 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
 {
     if (w) {
         assert (w->magic == HANDLER_MAGIC);
-        /* It is assumed safe to immediately destroy handlers on fastpath
-         *  here since they are off the handlers zlist, however destruction
-         *  of normal handlers is delayed until it is safe to remove them
-         *  from the zlist.
-         *
-         * XXX: It may now be safe to remove *all* handlers immediately,
-         *  but this needs to be verified. (Check for safety of zlist item
-         *  removal during traversal)
-         */
-        if (!(flux_flags_get (w->d->h) & FLUX_O_COPROC)
-                            && w->match.typemask == FLUX_MSGTYPE_RESPONSE
+        if (w->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && w->match.matchtag != FLUX_MATCHTAG_NONE) {
             fastpath_response_unregister (w->d, w->match.matchtag);
-            flux_msg_handler_stop (w);
-            dispatch_usecount_decr (w->d);
-            free_msg_handler (w);
         } else {
-            if (!w->destroyed) {
-                flux_msg_handler_stop (w);
-                dispatch_usecount_decr (w->d);
-                w->destroyed = 1;
-            }
+            zlist_remove (w->d->handlers_new, w);
+            zlist_remove (w->d->handlers, w);
         }
+        flux_msg_handler_stop (w);
+        dispatch_usecount_decr (w->d);
+        free_msg_handler (w);
     }
 }
 
@@ -779,8 +504,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
     w->fn = cb;
     w->arg = arg;
     w->d = d;
-    if (!(flux_flags_get (h) & FLUX_O_COPROC)
-                            && w->match.typemask == FLUX_MSGTYPE_RESPONSE
+    if (w->match.typemask == FLUX_MSGTYPE_RESPONSE
                             && w->match.matchtag != FLUX_MATCHTAG_NONE) {
         if (fastpath_response_register (d, w) < 0) {
             saved_errno = errno;

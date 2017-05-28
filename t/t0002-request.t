@@ -85,21 +85,6 @@ test_expect_success 'request: proxy ping upstream from 1 is 4 hop' '
 	${FLUX_BUILD_DIR}/t/request/treq --rank 1 pingupstream | grep hops=4
 '
 
-# Coproc test
-
-test_expect_success 'request: load coproc module on rank 0' '
-	flux module load --rank=0 \
-		${FLUX_BUILD_DIR}/t/request/.libs/coproc.so
-'
-
-test_expect_success 'request: FLUX_O_COPROC works' '
-	${FLUX_BUILD_DIR}/t/request/treq --rank 0 coproc
-'
-
-test_expect_success 'request: unloaded coproc module on rank 0' '
-	flux module remove --rank=0 coproc
-'
-
 # FIXME: test doesn't handle this and leaves RPC unanswered
 #test_expect_success 'request: proxy ping any from 0 is ENOSYS' '
 #	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingany

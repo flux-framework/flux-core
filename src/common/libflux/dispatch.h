@@ -38,15 +38,6 @@ int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
                              void *arg);
 void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
 
-
-/* Give control back to the reactor until a message matching 'match'
- * is queued in the handle.  This will return -1 with errno = EINVAL
- * if called from a reactor handler that is not running in as a coprocess.
- * Currently only message handlers are started as coprocesses, if the
- * handle has FLUX_O_COPROC set.  This is used internally by flux_recv().
- */
-int flux_sleep_on (flux_t *h, struct flux_match match);
-
 #endif /* !_FLUX_CORE_DISPATCH_H */
 
 /*

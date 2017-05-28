@@ -365,6 +365,9 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_open enclosing instance");
     }
 
+    if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0)
+        log_err_exit ("content cache attributes");
+
     /* Block all signals, saving old mask and actions for SIGINT, SIGTERM.
      */
     sigset_t sigmask;
@@ -499,8 +502,7 @@ int main (int argc, char *argv[])
             || attr_add_active_int (ctx.attrs, "tbon.descendants",
                                 &ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || hello_register_attrs (ctx.hello, ctx.attrs) < 0
-            || content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
+            || hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
         log_err_exit ("configuring attributes");
     }
 

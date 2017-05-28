@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <czmq.h>
+#include <argz.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #endif
@@ -41,6 +42,10 @@ typedef struct {
     zsock_t *sock;
     char *uuid;
     flux_t *h;
+    char *argz;
+    size_t argz_len;
+    uint32_t testing_userid;
+    uint32_t testing_rolemask;
 } shmem_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
@@ -71,40 +76,34 @@ static int op_pollfd (void *impl)
     return zsock_fd (ctx->sock);
 }
 
+static int send_testing (shmem_ctx_t *ctx, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy;
+    int rc = -1;
+
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if (flux_msg_set_userid (cpy, ctx->testing_userid) < 0)
+        goto done;
+    if (flux_msg_set_rolemask (cpy, ctx->testing_rolemask) < 0)
+        goto done;
+    rc = flux_msg_sendzsock (ctx->sock, cpy);
+done:
+    flux_msg_destroy (cpy);
+    return rc;
+}
+
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_msg_t *cpy = NULL;
-    int type;
-    int rc = -1;
+    int rc;
 
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-        case FLUX_MSGTYPE_EVENT:
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            if (flux_msg_enable_route (cpy) < 0)
-                goto done;
-            if (flux_msg_push_route (cpy, ctx->uuid) < 0)
-                goto done;
-            if (flux_msg_sendzsock (ctx->sock, cpy) < 0)
-                goto done;
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_msg_sendzsock (ctx->sock, msg) < 0)
-                goto done;
-            break;
-        default:
-            errno = EINVAL;
-            goto done;
-    }
-    rc = 0;
-done:
-    flux_msg_destroy (cpy);
+    if (ctx->testing_userid != FLUX_USERID_UNKNOWN
+            || ctx->testing_rolemask != FLUX_ROLE_NONE)
+        rc = send_testing (ctx, msg);
+    else
+        rc = flux_msg_sendzsock (ctx->sock, msg);
     return rc;
 }
 
@@ -167,12 +166,44 @@ done:
     return rc;
 }
 
+
+static int op_setopt (void *impl, const char *option,
+                      const void *val, size_t size)
+{
+    shmem_ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    size_t val_size;
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+        val_size = sizeof (ctx->testing_userid);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->testing_userid, val, val_size);
+    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        val_size = sizeof (ctx->testing_rolemask);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->testing_rolemask, val, val_size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 static void op_fini (void *impl)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     zsock_destroy (&ctx->sock);
-    free (ctx->uuid);
+    free (ctx->argz);
     ctx->magic = ~MODHANDLE_MAGIC;
     free (ctx);
 }
@@ -189,6 +220,10 @@ flux_t *connector_init (const char *path, int flags)
 #endif
 
     shmem_ctx_t *ctx = NULL;
+    char *item;
+    int e;
+    int bind_socket = 0; // if set, call bind on socket, else connect
+
     if (!path) {
         errno = EINVAL;
         goto error;
@@ -198,15 +233,38 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     }
     ctx->magic = MODHANDLE_MAGIC;
-    if (!(ctx->uuid = strdup (path))) {
-        errno = ENOMEM;
+    ctx->testing_userid = FLUX_USERID_UNKNOWN;
+    ctx->testing_rolemask = FLUX_ROLE_NONE;
+    if ((e = argz_create_sep (path, '&', &ctx->argz, &ctx->argz_len)) != 0) {
+        errno = e;
         goto error;
+    }
+    ctx->uuid = item = argz_next (ctx->argz, ctx->argz_len, NULL);
+    if (!ctx->uuid) {
+        errno = EINVAL;
+        goto error;
+    }
+    while ((item = argz_next (ctx->argz, ctx->argz_len, item))) {
+        if (!strcmp (item, "bind"))
+            bind_socket = 1;
+        else if (!strcmp (item, "connect"))
+            bind_socket = 0;
+        else {
+            errno = EINVAL;
+            goto error;
+        }
     }
     if (!(ctx->sock = zsock_new_pair (NULL)))
         goto error;
     zsock_set_unbounded (ctx->sock);
-    if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
-        goto error;
+    if (bind_socket) {
+        if (zsock_bind (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+            goto error;
+    }
+    else {
+        if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+            goto error;
+    }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
     return ctx->h;
@@ -225,7 +283,7 @@ static const struct flux_handle_ops handle_ops = {
     .send = op_send,
     .recv = op_recv,
     .getopt = NULL,
-    .setopt = NULL,
+    .setopt = op_setopt,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,
     .impl_destroy = op_fini,

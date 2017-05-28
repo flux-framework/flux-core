@@ -27,7 +27,6 @@ typedef void (*flux_fatal_f)(const char *msg, void *arg);
  */
 enum {
     FLUX_O_TRACE = 1,   /* send message trace to stderr */
-    FLUX_O_COPROC = 2,  /* start reactor callbacks as coprocesses */
     FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
 };
 
