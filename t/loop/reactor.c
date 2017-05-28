@@ -145,10 +145,6 @@ int main (int argc, char *argv[])
     if (!reactor)
         BAIL_OUT ("can't continue without reactor");
 
-    errno = 0;
-    ok (flux_sleep_on (h, FLUX_MATCH_ANY) < 0 && errno == EINVAL,
-        "general: flux_sleep_on outside coproc fails with EINVAL");
-
     test_msg (h);
     test_multmatch (h);
 
