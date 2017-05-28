@@ -33,9 +33,6 @@ _flags_ is the logical "or" of zero or more of the following flags:
 FLUX_O_TRACE::
 Dumps message trace to stderr.
 
-FLUX_O_COPROC::
-Reactor message callbacks should be started as coprocesses.
-
 FLUX_O_NONBLOCK::
 The `flux_send()` and `flux_recv()` functions should never block.
 
