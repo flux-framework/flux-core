@@ -61,7 +61,6 @@ struct dispatch {
     zlist_t *handlers_new;
     struct fastpath norm;
     struct fastpath group;
-    flux_msg_handler_t *current;
     flux_watcher_t *w;
     int running_count;
     int usecount;
@@ -80,7 +79,6 @@ struct flux_msg_handler {
     uint32_t rolemask;
     flux_msg_handler_f fn;
     void *arg;
-    flux_free_f arg_free;
     uint8_t running:1;
 };
 
@@ -93,16 +91,13 @@ static void fastpath_free (struct fastpath *fp);
 
 static void dispatch_usecount_decr (struct dispatch *d)
 {
-    flux_msg_handler_t *w;
     if (d && --d->usecount == 0) {
         if (d->handlers) {
-            while ((w = zlist_pop (d->handlers)))
-                free_msg_handler (w);
+            assert (zlist_size (d->handlers) == 0);
             zlist_destroy (&d->handlers);
         }
         if (d->handlers_new) {
-            while ((w = zlist_pop (d->handlers_new)))
-                free_msg_handler (w);
+            assert (zlist_size (d->handlers_new) == 0);
             zlist_destroy (&d->handlers_new);
         }
         flux_watcher_destroy (d->w);
@@ -460,8 +455,6 @@ static void free_msg_handler (flux_msg_handler_t *w)
         assert (w->magic == HANDLER_MAGIC);
         if (w->match.topic_glob)
             free (w->match.topic_glob);
-        if (w->arg_free)
-            w->arg_free (w->arg);
         w->magic = ~HANDLER_MAGIC;
         free (w);
     }
