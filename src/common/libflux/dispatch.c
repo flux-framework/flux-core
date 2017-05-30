@@ -64,6 +64,7 @@ struct dispatch {
     flux_watcher_t *w;
     int running_count;
     int usecount;
+    zlist_t *unmatched;
 #if HAVE_CALIPER
     cali_id_t prof_msg_type;
     cali_id_t prof_msg_topic;
@@ -89,9 +90,25 @@ static void free_msg_handler (flux_msg_handler_t *w);
 static void fastpath_init (struct fastpath *fp);
 static void fastpath_free (struct fastpath *fp);
 
+static void dispatch_requeue (struct dispatch *d)
+{
+    if (d->unmatched) {
+        flux_msg_t *msg;
+        while ((msg = zlist_pop (d->unmatched))) {
+            if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
+                flux_log_error (d->h, "%s: flux_requeue", __FUNCTION__);
+            flux_msg_destroy (msg);
+        }
+    }
+}
+
 static void dispatch_usecount_decr (struct dispatch *d)
 {
     if (d && --d->usecount == 0) {
+        if (flux_flags_get (d->h) & FLUX_O_CLONE) {
+            dispatch_requeue (d);
+            zlist_destroy (&d->unmatched);
+        }
         if (d->handlers) {
             assert (zlist_size (d->handlers) == 0);
             zlist_destroy (&d->handlers);
@@ -285,12 +302,11 @@ static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
     w->fn (w->d->h, w, msg, w->arg);
 }
 
-static int dispatch_message (struct dispatch *d,
-                             const flux_msg_t *msg, int type)
+static bool dispatch_message (struct dispatch *d,
+                              const flux_msg_t *msg, int type)
 {
     flux_msg_handler_t *w;
     bool match = false;
-    int rc = -1;
 
     /* fastpath */
     if (type == FLUX_MSGTYPE_RESPONSE) {
@@ -306,14 +322,14 @@ static int dispatch_message (struct dispatch *d,
                 continue;
             if (flux_msg_cmp (msg, w->match)) {
                 call_handler (w, msg);
-                match = true;
-                if (type != FLUX_MSGTYPE_EVENT)
+                if (type != FLUX_MSGTYPE_EVENT) {
+                    match = true;
                     break;
+                }
             }
         }
     }
-    rc = match ? 1 : 0;
-    return rc;
+    return match;
 }
 
 static int transfer_items_zlist (zlist_t *from, zlist_t *to)
@@ -340,7 +356,8 @@ static void handle_cb (flux_reactor_t *r,
     struct dispatch *d = arg;
     flux_msg_t *msg = NULL;
     int rc = -1;
-    int type, match;
+    int type;
+    bool match;
 
     if (revents & FLUX_POLLERR)
         goto done;
@@ -380,23 +397,42 @@ static void handle_cb (flux_reactor_t *r,
     cali_end (d->prof_msg_type);
 #endif
 
-    if (match < 0)
-        goto done;
-    /* Message matched nothing.
-     * Respond with ENOSYS if it was a request.
-     * Else log it if FLUX_O_TRACE
+    /* Message was not "consumed".
+     * If in a cloned handle, queue message for later.
+     * Otherwise, respond with ENOSYS if it was a request,
+     * or log it if FLUX_O_TRACE.
      */
-    if (match == 0) {
-        if (type == FLUX_MSGTYPE_REQUEST) {
-            if (flux_respond (d->h, msg, ENOSYS, NULL))
+    if (!match) {
+        if ((flux_flags_get (d->h) & FLUX_O_CLONE)) {
+            if (!d->unmatched && !(d->unmatched = zlist_new ())) {
+                errno = ENOMEM;
                 goto done;
-        } else if (flux_flags_get (d->h) & FLUX_O_TRACE) {
-            const char *topic = NULL;
-            (void)flux_msg_get_topic (msg, &topic);
-            fprintf (stderr,
-                     "nomatch: %s '%s'\n",
-                     flux_msg_typestr (type),
-                     topic ? topic : "");
+            }
+            if (zlist_push (d->unmatched, msg) < 0) {
+                errno = ENOMEM;
+                goto done;
+            }
+            msg = NULL; // prevent destruction below
+        }
+        else {
+            switch (type) {
+                case FLUX_MSGTYPE_REQUEST:
+                    if (flux_respond (d->h, msg, ENOSYS, NULL))
+                        goto done;
+                    break;
+                case FLUX_MSGTYPE_EVENT:
+                    break;
+                default:
+                    if (flux_flags_get (d->h) & FLUX_O_TRACE) {
+                        const char *topic = NULL;
+                        (void)flux_msg_get_topic (msg, &topic);
+                        fprintf (stderr,
+                                 "nomatch: %s '%s'\n",
+                                 flux_msg_typestr (type),
+                                 topic ? topic : "");
+                    }
+                    break;
+            }
         }
     }
     rc = 0;
@@ -485,11 +521,12 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
     flux_msg_handler_t *w = NULL;
     int saved_errno;
 
-    if (!d)
+    if (!d) {
+        saved_errno = errno;
+        goto error;
+    }
+    if (!(w = calloc (1, sizeof (*w))))
         goto nomem;
-    if (!(w = malloc (sizeof (*w))))
-        goto nomem;
-    memset (w, 0, sizeof (*w));
     w->magic = HANDLER_MAGIC;
     if (copy_match (&w->match, match) < 0)
         goto nomem;
@@ -560,6 +597,20 @@ void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[])
             tab[i].w = NULL;
         }
     }
+}
+
+int flux_dispatch_requeue (flux_t *h)
+{
+    struct dispatch *d;
+
+    if (!(flux_flags_get (h) & FLUX_O_CLONE)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(d = dispatch_get (h)))
+        return -1;
+    dispatch_requeue (d);
+    return 0;
 }
 
 /*
