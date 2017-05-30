@@ -145,9 +145,9 @@ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
  */
 
 struct flux_watcher_ops {
-    void (*start)(void *impl, flux_watcher_t *w);
-    void (*stop)(void *impl, flux_watcher_t *w);
-    void (*destroy)(void *impl, flux_watcher_t *w);
+    void (*start) (flux_watcher_t *w);
+    void (*stop) (flux_watcher_t *w);
+    void (*destroy) (flux_watcher_t *w);
 };
 
 /*  Create a custom watcher on reactor 'r' with 'impl_size' bytes reserved
@@ -168,7 +168,6 @@ void * flux_watcher_impl (flux_watcher_t *w);
 /*  Return pointer to flux_watcher_ops structure for this watcher.
  */
 struct flux_watcher_ops * flux_watcher_ops (flux_watcher_t *w);
-
 
 
 #endif /* !_FLUX_CORE_REACTOR_H */

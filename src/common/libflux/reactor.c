@@ -224,7 +224,7 @@ void flux_watcher_start (flux_watcher_t *w)
 {
     if (w) {
         if (w->ops->start)
-            w->ops->start (w->impl, w);
+            w->ops->start (w);
     }
 }
 
@@ -232,7 +232,7 @@ void flux_watcher_stop (flux_watcher_t *w)
 {
     if (w) {
         if (w->ops->stop)
-            w->ops->stop (w->impl, w);
+            w->ops->stop (w);
     }
 }
 
@@ -240,9 +240,9 @@ void flux_watcher_destroy (flux_watcher_t *w)
 {
     if (w) {
         if (w->ops->stop)
-            w->ops->stop (w->impl, w);
+            w->ops->stop (w);
         if (w->ops->destroy)
-            w->ops->destroy (w->impl, w);
+            w->ops->destroy (w);
         if (w->r)
             reactor_usecount_decr (w->r);
         free (w);
@@ -277,14 +277,14 @@ static void watcher_stop_safe (flux_watcher_t *w)
 /* flux_t handle
  */
 
-static void handle_start (void *impl, flux_watcher_t *w)
+static void handle_start (flux_watcher_t *w)
 {
-    ev_flux_start (w->r->loop, (ev_flux *)impl);
+    ev_flux_start (w->r->loop, (ev_flux *)w->impl);
 }
 
-static void handle_stop (void *impl, flux_watcher_t *w)
+static void handle_stop (flux_watcher_t *w)
 {
-    ev_flux_stop (w->r->loop, (ev_flux *)impl);
+    ev_flux_stop (w->r->loop, (ev_flux *)w->impl);
 }
 
 static void handle_cb (struct ev_loop *loop, ev_flux *fw, int revents)
@@ -325,14 +325,14 @@ flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
 /* file descriptors
  */
 
-static void fd_start (void *impl, flux_watcher_t *w)
+static void fd_start (flux_watcher_t *w)
 {
-    ev_io_start (w->r->loop, (ev_io *)impl);
+    ev_io_start (w->r->loop, (ev_io *)w->impl);
 }
 
-static void fd_stop (void *impl, flux_watcher_t *w)
+static void fd_stop (flux_watcher_t *w)
 {
-    ev_io_stop (w->r->loop, (ev_io *)impl);
+    ev_io_stop (w->r->loop, (ev_io *)w->impl);
 }
 
 static void fd_cb (struct ev_loop *loop, ev_io *iow, int revents)
@@ -373,14 +373,14 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w)
 /* 0MQ sockets
  */
 
-static void zmq_start (void *impl, flux_watcher_t *w)
+static void zmq_start (flux_watcher_t *w)
 {
-    ev_zmq_start (w->r->loop, (ev_zmq *)impl);
+    ev_zmq_start (w->r->loop, (ev_zmq *)w->impl);
 }
 
-static void zmq_stop (void *impl, flux_watcher_t *w)
+static void zmq_stop (flux_watcher_t *w)
 {
-    ev_zmq_stop (w->r->loop, (ev_zmq *)impl);
+    ev_zmq_stop (w->r->loop, (ev_zmq *)w->impl);
 }
 
 static void zmq_cb (struct ev_loop *loop, ev_zmq *pw, int revents)
@@ -425,14 +425,14 @@ void *flux_zmq_watcher_get_zsock (flux_watcher_t *w)
 /* Timer
  */
 
-static void timer_start (void *impl, flux_watcher_t *w)
+static void timer_start (flux_watcher_t *w)
 {
-    ev_timer_start (w->r->loop, (ev_timer *)impl);
+    ev_timer_start (w->r->loop, (ev_timer *)w->impl);
 }
 
-static void timer_stop (void *impl, flux_watcher_t *w)
+static void timer_stop (flux_watcher_t *w)
 {
-    ev_timer_stop (w->r->loop, (ev_timer *)impl);
+    ev_timer_stop (w->r->loop, (ev_timer *)w->impl);
 }
 
 static void timer_cb (struct ev_loop *loop, ev_timer *tw, int revents)
@@ -482,13 +482,13 @@ struct f_periodic {
     flux_reschedule_f    reschedule_cb;
 };
 
-static void periodic_start (void *impl, flux_watcher_t *w)
+static void periodic_start (flux_watcher_t *w)
 {
     struct f_periodic *fp = w->impl;
     ev_periodic_start (w->r->loop, &fp->evp);
 }
 
-static void periodic_stop (void *impl, flux_watcher_t *w)
+static void periodic_stop (flux_watcher_t *w)
 {
     struct f_periodic *fp = w->impl;
     ev_periodic_stop (w->r->loop, &fp->evp);
@@ -582,14 +582,14 @@ double flux_watcher_next_wakeup (flux_watcher_t *w)
 
 /* Prepare
  */
-static void prepare_start (void *impl, flux_watcher_t *w)
+static void prepare_start (flux_watcher_t *w)
 {
-    ev_prepare_start (w->r->loop, (ev_prepare *)impl);
+    ev_prepare_start (w->r->loop, (ev_prepare *)w->impl);
 }
 
-static void prepare_stop (void *impl, flux_watcher_t *w)
+static void prepare_stop (flux_watcher_t *w)
 {
-    ev_prepare_stop (w->r->loop, (ev_prepare *)impl);
+    ev_prepare_stop (w->r->loop, (ev_prepare *)w->impl);
 }
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
@@ -623,14 +623,14 @@ flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
 /* Check
  */
 
-static void check_start (void *impl, flux_watcher_t *w)
+static void check_start (flux_watcher_t *w)
 {
-    ev_check_start (w->r->loop, (ev_check *)impl);
+    ev_check_start (w->r->loop, (ev_check *)w->impl);
 }
 
-static void check_stop (void *impl, flux_watcher_t *w)
+static void check_stop (flux_watcher_t *w)
 {
-    ev_check_stop (w->r->loop, (ev_check *)impl);
+    ev_check_stop (w->r->loop, (ev_check *)w->impl);
 }
 
 static void check_cb (struct ev_loop *loop, ev_check *cw, int revents)
@@ -664,14 +664,14 @@ flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
 /* Idle
  */
 
-static void idle_start (void *impl, flux_watcher_t *w)
+static void idle_start (flux_watcher_t *w)
 {
-    ev_idle_start (w->r->loop, (ev_idle *)impl);
+    ev_idle_start (w->r->loop, (ev_idle *)w->impl);
 }
 
-static void idle_stop (void *impl, flux_watcher_t *w)
+static void idle_stop (flux_watcher_t *w)
 {
-    ev_idle_stop (w->r->loop, (ev_idle *)impl);
+    ev_idle_stop (w->r->loop, (ev_idle *)w->impl);
 }
 
 static void idle_cb (struct ev_loop *loop, ev_idle *iw, int revents)
@@ -705,14 +705,14 @@ flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
 /* Child
  */
 
-static void child_start (void *impl, flux_watcher_t *w)
+static void child_start (flux_watcher_t *w)
 {
-    ev_child_start (w->r->loop, (ev_child *)impl);
+    ev_child_start (w->r->loop, (ev_child *)w->impl);
 }
 
-static void child_stop (void *impl, flux_watcher_t *w)
+static void child_stop (flux_watcher_t *w)
 {
-    ev_child_stop (w->r->loop, (ev_child *)impl);
+    ev_child_stop (w->r->loop, (ev_child *)w->impl);
 }
 
 static void child_cb (struct ev_loop *loop, ev_child *cw, int revents)
@@ -772,14 +772,14 @@ int flux_child_watcher_get_rstatus (flux_watcher_t *w)
 /* Signal
  */
 
-static void signal_start (void *impl, flux_watcher_t *w)
+static void signal_start (flux_watcher_t *w)
 {
-    ev_signal_start (w->r->loop, (ev_signal *)impl);
+    ev_signal_start (w->r->loop, (ev_signal *)w->impl);
 }
 
-static void signal_stop (void *impl, flux_watcher_t *w)
+static void signal_stop (flux_watcher_t *w)
 {
-    ev_signal_stop (w->r->loop, (ev_signal *)impl);
+    ev_signal_stop (w->r->loop, (ev_signal *)w->impl);
 }
 
 static void signal_cb (struct ev_loop *loop, ev_signal *sw, int revents)
@@ -823,14 +823,14 @@ int flux_signal_watcher_get_signum (flux_watcher_t *w)
 /* Stat
  */
 
-static void stat_start (void *impl, flux_watcher_t *w)
+static void stat_start (flux_watcher_t *w)
 {
-    ev_stat_start (w->r->loop, (ev_stat *)impl);
+    ev_stat_start (w->r->loop, (ev_stat *)w->impl);
 }
 
-static void stat_stop (void *impl, flux_watcher_t *w)
+static void stat_stop (flux_watcher_t *w)
 {
-    ev_stat_stop (w->r->loop, (ev_stat *)impl);
+    ev_stat_stop (w->r->loop, (ev_stat *)w->impl);
 }
 
 static void stat_cb (struct ev_loop *loop, ev_stat *sw, int revents)
