@@ -71,7 +71,7 @@ static void check_rpc_oneway_faked (flux_t *h)
     new.rolemask = 0x80000000;
     ok (cred_set (h, &new) == 0 && cred_get (h, &cr) == 0
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
-       "set userid/rolemaks to test values");
+       "set userid/rolemask to test values");
 
     rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
     ok (rpc != NULL,
@@ -159,7 +159,7 @@ static void check_rpc_default_policy (flux_t *h)
     new.rolemask = 0x80000000;
     ok (cred_set (h, &new) == 0 && cred_get (h, &cr) == 0
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
-       "set userid/rolemaks to non-owner test values");
+       "set userid/rolemask to non-owner test values");
     testrpc1_called = false;
     ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "random-creds: sent request to message handler");
@@ -217,7 +217,7 @@ static void check_rpc_open_policy (flux_t *h)
     new.rolemask = 0x80000000;
     ok (cred_set (h, &new) == 0 && cred_get (h, &cr) == 0
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
-       "set userid/rolemaks to non-owner test values");
+       "set userid/rolemask to non-owner test values");
     testrpc1_called = false;
     ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "random-creds: sent request to message handler");
@@ -276,7 +276,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     new.rolemask = allow;
     ok (cred_set (h, &new) == 0 && cred_get (h, &cr) == 0
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
-       "set userid/rolemaks to random/target test values");
+       "set userid/rolemask to random/target test values");
     testrpc1_called = false;
     ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "target-creds: sent request to message handler");
