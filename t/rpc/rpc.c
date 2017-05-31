@@ -406,16 +406,8 @@ void test_then (flux_t *h)
 
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
-    /* reg/unreg _then a couple times for fun */
-    ok (flux_rpc_then (r, NULL, 0) == 0,
-        "flux_rpc_then with NULL cb works");
-    ok (flux_rpc_then (r, then_cb, h) == 0,
-        "flux_rpc_then works after NULL");
-    ok (flux_rpc_then (r, NULL, 0) == 0,
-        "flux_rpc_then with NULL cb after non-NULL works");
     ok (flux_rpc_then (r, then_cb, h) == 0,
         "flux_rpc_then works");
-    /* enough of that */
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
         "reactor completed normally");
     flux_rpc_destroy (r);
