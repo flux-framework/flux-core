@@ -141,6 +141,35 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
 void flux_stat_watcher_get_rstat (flux_watcher_t *w,
                                   struct stat *stat, struct stat *prev);
 
+/* Custom watcher construction functions:
+ */
+
+struct flux_watcher_ops {
+    void (*start) (flux_watcher_t *w);
+    void (*stop) (flux_watcher_t *w);
+    void (*destroy) (flux_watcher_t *w);
+};
+
+/*  Create a custom watcher on reactor 'r' with 'impl_size' bytes reserved
+ *   for the implementor, implementation operations in 'ops' and user
+ *   watcher callback and data 'fn' and 'arg'.
+ *
+ *  Caller retrieves pointer to allocated implementation data with
+ *   flux_watcher_impl (w).
+ */
+flux_watcher_t * flux_watcher_create (flux_reactor_t *r, size_t impl_size,
+                                      struct flux_watcher_ops *ops,
+                                      flux_watcher_f fn, void *arg);
+
+/*  Return pointer to implementation data reserved by watcher object 'w'.
+ */
+void * flux_watcher_impl (flux_watcher_t *w);
+
+/*  Return pointer to flux_watcher_ops structure for this watcher.
+ */
+struct flux_watcher_ops * flux_watcher_ops (flux_watcher_t *w);
+
+
 #endif /* !_FLUX_CORE_REACTOR_H */
 
 /*
