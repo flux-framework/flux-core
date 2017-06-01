@@ -641,8 +641,13 @@ done_respond:
         flux_log_error (c->ctx->h, "%s: flux_response_encode", __FUNCTION__);
         goto done;
     }
+    if (flux_msg_set_rolemask (rmsg, FLUX_ROLE_OWNER) < 0) {
+        flux_log_error (c->ctx->h, "%s: flux_response_set_rolemask",
+                        __FUNCTION__);
+        goto done;
+    }
     if (flux_msg_set_matchtag (rmsg, matchtag) < 0) {
-        flux_log_error (c->ctx->h, "%s: flux_response_set_patchtag",
+        flux_log_error (c->ctx->h, "%s: flux_response_set_matchtag",
                         __FUNCTION__);
         goto done;
     }
