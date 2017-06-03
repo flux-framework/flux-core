@@ -46,6 +46,7 @@ MAN3_FILES_PRIMARY = \
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
 MAN3_FILES_SECONDARY = \
+	flux_clone.3 \
 	flux_close.3 \
 	flux_aux_get.3 \
 	flux_flags_unset.3 \
@@ -137,6 +138,7 @@ stderr_devnull_0 = 2>/dev/null
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
 
+flux_clone.3: flux_open.3
 flux_close.3: flux_open.3
 flux_aux_get.3: flux_aux_set.3
 flux_flags_unset.3: flux_flags_set.3
