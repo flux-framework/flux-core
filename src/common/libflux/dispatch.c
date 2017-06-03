@@ -310,7 +310,8 @@ static bool dispatch_message (struct dispatch *d,
 
     /* fastpath */
     if (type == FLUX_MSGTYPE_RESPONSE) {
-        if (fastpath_response_lookup (d, msg, &w) == 0 && w->running) {
+        if (fastpath_response_lookup (d, msg, &w) == 0 && w->running
+                                            && flux_msg_cmp (msg, w->match)) {
             call_handler (w, msg);
             match = true;
         }
