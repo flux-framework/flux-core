@@ -41,8 +41,8 @@
 
 struct flux_reactor {
     struct ev_loop *loop;
-    int loop_rc;
     int usecount;
+    int errflag:1;
 };
 
 struct flux_watcher {
@@ -124,14 +124,9 @@ int flux_reactor_run (flux_reactor_t *r, int flags)
         ev_flags |= EVRUN_NOWAIT;
     if (flags & FLUX_REACTOR_ONCE)
         ev_flags |= EVRUN_ONCE;
-    r->loop_rc = 0;
+    r->errflag = 0;
     count = ev_run (r->loop, ev_flags);
-    if (count > 0 && r->loop_rc == 0 && ((flags & FLUX_REACTOR_NOWAIT)
-                                     || (flags & FLUX_REACTOR_ONCE))) {
-        errno = EWOULDBLOCK;
-        return -1;
-    }
-    return r->loop_rc;
+    return (r->errflag ? -1 : count);
 }
 
 double flux_reactor_time (void)
@@ -151,13 +146,13 @@ void flux_reactor_now_update (flux_reactor_t *r)
 
 void flux_reactor_stop (flux_reactor_t *r)
 {
-    r->loop_rc = 0;
+    r->errflag = 0;
     ev_break (r->loop, EVBREAK_ALL);
 }
 
 void flux_reactor_stop_error (flux_reactor_t *r)
 {
-    r->loop_rc = -1;
+    r->errflag = 1;
     ev_break (r->loop, EVBREAK_ALL);
 }
 

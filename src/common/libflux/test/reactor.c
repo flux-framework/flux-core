@@ -387,7 +387,7 @@ static void test_periodic (flux_reactor_t *reactor)
                                            do_stop_reactor, reactor)) != NULL,
         "periodic: creating with resched callback works");
     flux_watcher_start (w);
-    ok (flux_reactor_run (reactor, 0) == 0,
+    ok (flux_reactor_run (reactor, 0) >= 0,
         "periodic: reactor ran to completion");
     ok (resched_called, "resched_cb was called");
     ok (do_stop_callback_ran, "stop reactor callback was run");
@@ -476,7 +476,7 @@ static void test_prepcheck (flux_reactor_t *reactor)
         "created check watcher");
     flux_watcher_start (chk);
 
-    ok (flux_reactor_run (reactor, 0) == 0,
+    ok (flux_reactor_run (reactor, 0) >= 0,
         "reactor ran successfully");
     ok (prepchecktimer_count == 8,
         "timer fired 8 times, then reactor was stopped");
@@ -522,7 +522,7 @@ static void test_signal (flux_reactor_t *reactor)
         "created idle watcher");
     flux_watcher_start (idle);
 
-    ok (flux_reactor_run (reactor, 0) == 0,
+    ok (flux_reactor_run (reactor, 0) >= 0,
         "reactor ran successfully");
     ok (sigusr1_count == 8,
         "signal watcher handled correct number of SIGUSR1's");
