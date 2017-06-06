@@ -31,6 +31,6 @@ test_expect_success 'valgrind reports no new errors on single broker run' '
 		--leak-resolution=med \
 		--error-exitcode=1 \
 		--suppressions=$VALGRIND_SUPPRESSIONS \
-		${BROKER} ${VALGRIND_WORKLOAD} 10
+		${BROKER} --shutdown-grace=4 ${VALGRIND_WORKLOAD} 10
 '
 test_done
