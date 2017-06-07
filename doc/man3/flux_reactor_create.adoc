@@ -60,10 +60,10 @@ is met:
 * There are no more active watchers.
 * The `flux_reactor_stop()` or `flux_reactor_stop_error()` functions
   are called by one of the watchers.
-* Flags include FLUX_REACTOR_NOWAIT and all outstanding events have
-  been consumed
-* Flags include FLUX_REACTOR_ONCE, at least one event has occurred,
-  and all outstanding events have been consumed.
+* Flags include FLUX_REACTOR_NOWAIT and one reactor loop iteration
+  has been completed.
+* Flags include FLUX_REACTOR_ONCE, at least one event has been handled,
+  and one reactor loop iteration has been completed.
 
 If `flux_reactor_stop_error()` is called, this will cause
 `flux_reactor_run()` to return -1 indicating that an error has occurred.
