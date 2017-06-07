@@ -134,7 +134,7 @@ test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
        ! flux start flux getattr tbon.parent-endpoint
 '
 test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
-       NUM=`flux start --size 4 flux wreckrun -N4 flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
+       NUM=`flux start --size 4 flux exec flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
        test $NUM -eq 3
 '
 test_expect_success 'mcast.endpoint can be read' '

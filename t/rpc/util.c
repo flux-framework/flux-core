@@ -73,7 +73,6 @@ static void test_server_destroy (struct test_server *a)
     if (a) {
         flux_msg_handler_destroy (a->w);
         flux_close (a->s);
-        flux_close (a->c);
         zuuid_destroy (&a->uuid);
         free (a);
     }
