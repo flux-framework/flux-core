@@ -69,7 +69,11 @@ fluxcoreinclude_HEADERS = \
 	flog.h \
 	conf.h \
 	heartbeat.h \
-	content.h
+	content.h \
+	fop.h \
+	fop_dynamic.h \
+	arp.h \
+	fop_protected.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -98,6 +102,9 @@ libflux_la_SOURCES = \
 	ev_flux.c \
 	heartbeat.c \
 	keepalive.c \
+	fop.c \
+	fop_dynamic.c \
+	arp.c \
 	content.c
 
 libflux_la_CPPFLAGS = \
@@ -113,7 +120,8 @@ TESTS = test_module.t \
 	test_event.t \
 	test_tagpool.t \
 	test_security.t \
-	test_reactor.t
+	test_reactor.t \
+	test_fop.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -142,6 +150,9 @@ test_module_t_DEPENDENCIES = $(top_builddir)/src/modules/kvs/kvs.la
 $(test_module_t_DEPENDENCIES):
 	@cd `dirname $@` && $(MAKE)
 
+test_fop_t_SOURCES = test/test_fop.c
+test_fop_t_CPPFLAGS = $(test_cppflags)
+test_fop_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
