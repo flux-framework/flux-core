@@ -416,7 +416,7 @@ void test_then (flux_t *h)
     ok (flux_rpc_then (r, then_cb, h) == 0,
         "flux_rpc_then works");
     /* enough of that */
-    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
         "reactor completed normally");
     flux_rpc_destroy (r);
 
@@ -430,7 +430,7 @@ void test_then (flux_t *h)
         "flux_rpc_get works synchronously and returned expected payload");
     ok (flux_rpc_then (r, then_cb, h) == 0,
         "flux_rpc_then works");
-    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
         "reactor completed normally");
     flux_rpc_destroy (r);
 

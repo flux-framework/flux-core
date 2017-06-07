@@ -207,7 +207,7 @@ local to = f:timer {
 }
 local r, err = f:reactor()
 
-is (r, 0, "reactor exited normally with "..(r and r or err))
+isnt (r, -1, "reactor exited normally with "..(r and r or err))
 to:remove()
 
 ok (kw:remove(), "Can remove kvswatcher without error")
@@ -250,7 +250,7 @@ local t, err = f:timer {
 os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
     data.key, data.value))
 local r, err = f:reactor()
-is (r, 0, "reactor exited normally with ".. (r and r or err))
+isnt (r, -1, "reactor exited normally with ".. (r and r or err))
 is (ncount, 2, "kvswatch callback invoked exactly twice")
 
 note ("Ensure kvs watch callback not invoked after kvswatcher removal")
@@ -263,7 +263,7 @@ local t, err = f:timer {
     handler = function (f, to) return f:reactor_stop () end
 }
 local r, err = f:reactor()
-is (r, 0, "reactor exited normally with "..(r and r or err))
+isnt (r, -1, "reactor exited normally with "..(r and r or err))
 is (ncount, 2, "kvswatch callback not invoked after kvs_unwatch")
 is (dir [data.key], "test3", "but key value has been updated")
 

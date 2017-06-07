@@ -143,9 +143,7 @@ static void check_rpc_default_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
         && flux_rpc_check (rpc) && flux_rpc_get (rpc, NULL) == 0,
@@ -168,9 +166,7 @@ static void check_rpc_default_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "random-creds: reactor successfully handled one event");
     errno = 0;
     ok (testrpc1_called == false
@@ -205,9 +201,7 @@ static void check_rpc_open_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
         && flux_rpc_check (rpc) && flux_rpc_get (rpc, NULL) == 0,
@@ -230,9 +224,7 @@ static void check_rpc_open_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "random-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
         && flux_rpc_check (rpc) == true && flux_rpc_get (rpc, NULL) == 0,
@@ -271,9 +263,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
         && flux_rpc_check (rpc) && flux_rpc_get (rpc, NULL) == 0,
@@ -293,9 +283,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "target-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
         && flux_rpc_check (rpc) == true && flux_rpc_get (rpc, NULL) == 0,
@@ -315,9 +303,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     if (rpc == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
-    if (rc < 0 && errno == EAGAIN && errno == EWOULDBLOCK)
-        rc = 0;
-    ok (rc == 0,
+    ok (rc >= 0,
         "nontarget-creds: reactor successfully handled one event");
     errno = 0;
     ok (testrpc1_called == false

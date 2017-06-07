@@ -31,7 +31,10 @@ static void *thread_wrapper (void *arg)
 {
     struct test_server *a = arg;
 
-    a->rc = a->cb (a->s, a->arg);
+    if (a->cb (a->s, a->arg) < 0)
+        a->rc = -1;
+    else
+        a->rc = 0;
 
     return NULL;
 }

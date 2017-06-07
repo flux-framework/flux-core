@@ -33,8 +33,8 @@ flux_t broker handles.
 There is currently only one possible flag for reactor creation:
 
 FLUX_REACTOR_SIGCHLD::
-  The reactor will internally register a SIGCHLD handler and be capable
-  of handling flux child watchers (see flux_child_watcher_create(3)).
+The reactor will internally register a SIGCHLD handler and be capable
+of handling flux child watchers (see flux_child_watcher_create(3)).
 
 For each event source and type that is to be monitored, a flux_watcher_t
 object is created using a type-specific create function, and started
@@ -49,14 +49,13 @@ control must be transferred to the reactor event loop by calling
 The full list of flux reactor run flags is as follows:
 
 FLUX_REACTOR_NOWAIT::
-  Return after all outstanding events have been consumed.  If there are remaining
-  registered watchers, flux_reactor_run() will return an error.  See RETURN VALUE.
-FLUX_REACTOR_ONCE::
-  Return after at least on event has occurred, and all outstanding
-  events have been consumed.  If there are remaining registered watchers,
-  flux_reactor_run() will return an error.  See RETURN VALUE.
+Run one reactor loop iteration without blocking.
 
-flux_reactor_run() processes events until one of the following conditions is met:
+FLUX_REACTOR_ONCE::
+Run one reactor loop iteration, blocking until at least one event is handled.
+
+flux_reactor_run() processes events until one of the following conditions
+is met:
 
 * There are no more active watchers.
 * The `flux_reactor_stop()` or `flux_reactor_stop_error()` functions
@@ -81,11 +80,9 @@ RETURN VALUE
 `flux_reactor_create()` returns a flux_reactor_t object on success.
 On error, NULL is returned, and errno is set appropriately.
 
-`flux_reactor_run()` returns zero on normal termination.
-On failure, termination by `flux_reactor_stop_error()` -1 is returned
-with errno set.  Additionally if either FLUX_REACTOR_NOWAIT or FLUX_REACTOR_ONCE
-is set and there are still watchers registered -1 is returned and errno set
-to EWOULDBLOCK.
+`flux_reactor_run()` returns the number of active watchers on success.
+On failure, it returns -1 with errno set.  A failure return is triggered
+when the application sets errno and calls `flux_reactor_stop_error()`.
 
 
 ERRORS
