@@ -15,8 +15,7 @@ typedef struct flux_reactor flux_reactor_t;
 /* Flags for flux_reactor_run()
  */
 enum {
-    FLUX_REACTOR_NOWAIT = 1,  /* return after all new and outstanding */
-                              /*     events have been handled */
+    FLUX_REACTOR_NOWAIT = 1,  /* run loop once without blocking */
     FLUX_REACTOR_ONCE = 2,    /* same as above but block until at least */
                               /*     one event occurs */
 };
