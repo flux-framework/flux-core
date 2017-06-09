@@ -244,10 +244,6 @@ void test_encoding (flux_t *h)
     /* cause remote EPROTO (unexpected payload) - will be picked up in _get() */
     ok ((r = flux_rpc (h, "rpctest.hello", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when none is expected works, at first");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
@@ -271,10 +267,6 @@ void test_encoding (flux_t *h)
     /* receive NULL payload on empty response */
     ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with empty payload works");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str == NULL,
@@ -288,10 +280,6 @@ void test_encoding (flux_t *h)
     json_str = Jtostr (o);
     ok ((r = flux_rpc (h, "rpctest.echo", json_str, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload works");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get is ok if user doesn't desire response payload");
@@ -301,10 +289,6 @@ void test_encoding (flux_t *h)
     /* working with-payload RPC */
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     json_str = NULL;
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
@@ -317,14 +301,12 @@ void test_encoding (flux_t *h)
     ok ((r = flux_rpc_raw (h, "rpctest.rawecho", data, len,
                           FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc_raw with payload when payload is expected works");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
-    json_str = NULL;
-    ok (flux_rpc_get_raw (r, &d, &l) == 0
-        && d != NULL && l == len && memcmp (data, d, len) == 0,
-        "flux_rpc_get_raw works and returned expected payload");
+    d = NULL;
+    l = -1;
+    ok (flux_rpc_get_raw (r, &d, &l) == 0,
+        "flux_rpc_get_raw works");
+    ok (d != NULL && l == len && memcmp (data, d, len) == 0,
+        "flux_rpc_get_raw returned expected payload");
     flux_rpc_destroy (r);
 
     /* use newish pack/unpack payload interfaces */
@@ -345,10 +327,6 @@ void test_encoding (flux_t *h)
     ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
                         "{ s:i }", "foo", 42)) != NULL,
         "flux_rpcf with payload when none is expected works, at first");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_getf (r, "{}") < 0
         && errno == EPROTO,
@@ -358,10 +336,6 @@ void test_encoding (flux_t *h)
     /* cause local EPROTO (user incorrectly expects payload) */
     ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
         "flux_rpcf with empty payload works");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_getf (r, "{ s:i }", "foo", &i) < 0
         && errno == EPROTO,
@@ -372,10 +346,6 @@ void test_encoding (flux_t *h)
     errno = 0;
     ok ((r = flux_rpcf (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
         "flux_rpcf with payload works");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_getf (r, "{ ! }") < 0
         && errno == EPROTO,
