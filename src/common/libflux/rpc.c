@@ -45,279 +45,183 @@
 
 #include "src/common/libutil/nodeset.h"
 
-#define RPC_MAGIC 0x114422af
-
-struct flux_rpc_struct {
-    int magic;
-    struct flux_match m;
+struct flux_rpc {
     flux_t *h;
-    flux_then_f then_cb;
-    void *then_arg;
-    flux_msg_handler_t *w;
-    flux_msg_t *rx_msg;
-    int rx_errnum;
-    int flags;
-    zhash_t *aux;
-    flux_free_f aux_destroy;
-    int usecount;
+    uint32_t matchtag;
+    bool inflight;
 };
 
-static void flux_rpc_usecount_incr (flux_rpc_t *rpc)
+static void rpc_destroy (struct flux_rpc *rpc)
 {
-    rpc->usecount++;
-}
-
-static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
-{
-    if (!rpc)
-        return;
-    assert (rpc->magic == RPC_MAGIC);
-    if (--rpc->usecount == 0) {
-        if (rpc->w) {
-            flux_msg_handler_stop (rpc->w);
-            flux_msg_handler_destroy (rpc->w);
-        }
-        if (rpc->m.matchtag != FLUX_MATCHTAG_NONE) {
-            /* FIXME: we cannot safely return matchtags to the pool here
-             * if the rpc was not completed.  Lacking a proper cancellation
-             * protocol, we simply leak them.  See issue #212.
-             */
-            if (rpc->rx_msg)
-                flux_matchtag_free (rpc->h, rpc->m.matchtag);
-        }
-        flux_msg_destroy (rpc->rx_msg);
-        zhash_destroy (&rpc->aux);
-        rpc->magic =~ RPC_MAGIC;
+    if (rpc) {
+        if (rpc->matchtag != FLUX_MATCHTAG_NONE && !rpc->inflight)
+            flux_matchtag_free (rpc->h, rpc->matchtag);
         free (rpc);
     }
 }
 
-void flux_rpc_destroy (flux_rpc_t *rpc)
+static struct flux_rpc *rpc_create (flux_t *h, int flags)
 {
-    int saved_errno = errno;
-    flux_rpc_usecount_decr (rpc);
-    errno = saved_errno;
-}
-
-static flux_rpc_t *rpc_create (flux_t *h, int flags)
-{
-    flux_rpc_t *rpc;
+    struct flux_rpc *rpc;
 
     if (!(rpc = calloc (1, sizeof (*rpc)))) {
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
-    rpc->magic = RPC_MAGIC;
-    rpc->flags = flags;
-    if ((flags & FLUX_RPC_NORESPONSE)) {
-        rpc->m.matchtag = FLUX_MATCHTAG_NONE;
-    } else {
-        rpc->m.matchtag = flux_matchtag_alloc (h, 0);
-        if (rpc->m.matchtag == FLUX_MATCHTAG_NONE) {
-            flux_rpc_destroy (rpc);
-            return NULL;
-        }
-    }
-    rpc->m.typemask = FLUX_MSGTYPE_RESPONSE;
     rpc->h = h;
-    rpc->usecount = 1;
+    rpc->inflight = false;
+    if ((flags & FLUX_RPC_NORESPONSE)) {
+        rpc->matchtag = FLUX_MATCHTAG_NONE;
+    }
+    else {
+        rpc->matchtag = flux_matchtag_alloc (h, 0);
+        if (rpc->matchtag == FLUX_MATCHTAG_NONE)
+            goto error;
+    }
     return rpc;
+error:
+    free (rpc);
+    return NULL;
 }
 
-static int rpc_request_prepare (flux_rpc_t *rpc, flux_msg_t *msg,
-                                uint32_t nodeid)
+int flux_rpc_get (flux_future_t *f, const char **json_str)
 {
-    int flags = 0;
+    const flux_msg_t *msg;
     int rc = -1;
 
-    if (flux_msg_set_matchtag (msg, rpc->m.matchtag) < 0)
+    if (flux_future_get (f, &msg) < 0)
         goto done;
-    if (nodeid == FLUX_NODEID_UPSTREAM) {
-        flags |= FLUX_MSGFLAG_UPSTREAM;
-        if (flux_get_rank (rpc->h, &nodeid) < 0)
-            goto done;
-    }
-    if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
+    if (flux_response_decode (msg, NULL, json_str) < 0)
         goto done;
     rc = 0;
 done:
     return rc;
 }
 
-static int rpc_request_prepare_send (flux_rpc_t *rpc, flux_msg_t *msg,
-                                     uint32_t nodeid)
+int flux_rpc_get_raw (flux_future_t *f, void *data, int *len)
 {
-    if (rpc_request_prepare (rpc, msg, nodeid) < 0)
-        return -1;
-    if (flux_send (rpc->h, msg, 0) < 0)
-        return -1;
-    return 0;
-}
-
-bool flux_rpc_check (flux_rpc_t *rpc)
-{
-    assert (rpc->magic == RPC_MAGIC);
-    if (rpc->rx_msg || rpc->rx_errnum)
-        return true;
-#if HAVE_CALIPER
-    cali_begin_string_byname ("flux.message.rpc", "single");
-#endif
-    if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, FLUX_O_NONBLOCK))) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            errno = 0;
-        else
-            rpc->rx_errnum = errno;
-    }
-#if HAVE_CALIPER
-    cali_end_byname ("flux.message.rpc");
-#endif
-    return (rpc->rx_msg || rpc->rx_errnum);
-}
-
-static int rpc_get (flux_rpc_t *rpc)
-{
+    const flux_msg_t *msg;
     int rc = -1;
 
-    if (rpc->rx_errnum) {
-        errno = rpc->rx_errnum;
+    if (flux_future_get (f, &msg) < 0)
         goto done;
-    }
-    if (!rpc->rx_msg && !rpc->rx_errnum) {
-#if HAVE_CALIPER
-        cali_begin_string_byname ("flux.message.rpc", "single");
-#endif
-
-        if (!(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
-            rpc->rx_errnum = errno;
-
-#if HAVE_CALIPER
-        cali_end_byname ("flux.message.rpc");
-#endif
-
-        if (!rpc->rx_msg)
-            goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-int flux_rpc_get (flux_rpc_t *rpc, const char **json_str)
-{
-    int rc = -1;
-
-    assert (rpc->magic == RPC_MAGIC);
-    if (rpc_get (rpc) < 0)
-        goto done;
-    if (flux_response_decode (rpc->rx_msg, NULL, json_str) < 0)
+    if (flux_response_decode_raw (msg, NULL, data, len) < 0)
         goto done;
     rc = 0;
 done:
     return rc;
 }
 
-int flux_rpc_get_raw (flux_rpc_t *rpc, void *data, int *len)
+static int flux_rpc_vgetf (flux_future_t *f, const char *fmt, va_list ap)
 {
+    const flux_msg_t *msg;
     int rc = -1;
 
-    assert (rpc->magic == RPC_MAGIC);
-    if (rpc_get (rpc) < 0)
+    if (flux_future_get (f, &msg) < 0)
         goto done;
-    if (flux_response_decode_raw (rpc->rx_msg, NULL, data, len) < 0)
+    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
         goto done;
     rc = 0;
 done:
     return rc;
 }
 
-static int flux_rpc_vgetf (flux_rpc_t *rpc, const char *fmt, va_list ap)
-{
-    int rc = -1;
-    const char *json_str;
-
-    assert (rpc->magic == RPC_MAGIC);
-    if (rpc_get (rpc) < 0)
-        goto done;
-    if (flux_response_decode (rpc->rx_msg, NULL, &json_str) < 0)
-        goto done;
-    if (!json_str) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (flux_msg_vget_jsonf (rpc->rx_msg, fmt, ap) < 0)
-        goto done;
-    rc = 0;
-done:
-    return rc;
-}
-
-int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...)
+int flux_rpc_getf (flux_future_t *f, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_rpc_vgetf (rpc, fmt, ap);
+    rc = flux_rpc_vgetf (f, fmt, ap);
     va_end (ap);
 
     return rc;
 }
 
-/* Internal callback for matching response.
+/* Message handler for response.
+ * Parse the response message here so one could call flux_future_get()
+ * instead of flux_rpc_get() to test result of RPC with no response payload.
+ * Fulfill future.
+*/
+static void response_cb (flux_t *h, flux_msg_handler_t *w,
+                         const flux_msg_t *msg, void *arg)
+{
+    flux_future_t *f = arg;
+    struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
+    flux_msg_t *cpy;
+    int saved_errno;
+
+    flux_msg_handler_stop (w);
+    rpc->inflight = false;
+#if HAVE_CALIPER
+    cali_begin_string_byname ("flux.message.rpc", "single");
+#endif
+#if HAVE_CALIPER
+    cali_end_byname ("flux.message.rpc");
+#endif
+    if (flux_response_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto error;
+    flux_future_fulfill (f, cpy, (flux_free_f)flux_msg_destroy);
+    return;
+error:
+    saved_errno = errno;
+    flux_future_fulfill_error (f, saved_errno);
+}
+
+/* Callback to initialize future in main or alternate reactor contexts.
+ * Install a message handler for the response.
  */
-static void rpc_cb (flux_t *h, flux_msg_handler_t *w,
-                    const flux_msg_t *msg, void *arg)
+static void initialize_cb (flux_future_t *f, flux_reactor_t *r, void *arg)
 {
-    flux_rpc_t *rpc = arg;
-    assert (rpc->then_cb != NULL);
+    struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
+    flux_msg_handler_t *w;
+    flux_t *h = flux_future_get_flux (f);
+    struct flux_match m = FLUX_MATCH_RESPONSE;
 
-    flux_rpc_usecount_incr (rpc);
-    if (!(rpc->rx_msg = flux_msg_copy (msg, true)))
-        goto done;
-    rpc->then_cb (rpc, rpc->then_arg);
-done:
-    if (rpc->rx_msg || flux_fatality (rpc->h))
-        flux_msg_handler_stop (rpc->w);
-    flux_rpc_usecount_decr (rpc);
-}
-
-int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
-{
-    int rc = -1;
-
-    assert (rpc->magic == RPC_MAGIC);
-    if (cb) {
-        if (!rpc->w) {
-            if (!(rpc->w = flux_msg_handler_create (rpc->h, rpc->m,
-                                                    rpc_cb, rpc)))
-                goto done;
-        }
-        flux_msg_handler_start (rpc->w);
-        if (rpc->rx_msg) {
-            if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
-                goto done;
-            flux_msg_destroy (rpc->rx_msg);
-            rpc->rx_msg = NULL;
-        }
-    } else {
-        flux_msg_handler_stop (rpc->w);
+    m.matchtag = rpc->matchtag;
+    if (!(w = flux_msg_handler_create (h, m, response_cb, f)))
+        goto error;
+    flux_msg_handler_allow_rolemask (w, FLUX_ROLE_ALL);
+    if (flux_future_aux_set (f, NULL, w,
+                             (flux_free_f)flux_msg_handler_destroy) < 0) {
+        flux_msg_handler_destroy (w);
+        goto error;
     }
-    rpc->then_cb = cb;
-    rpc->then_arg = arg;
-    rc = 0;
-done:
-    return rc;
+    flux_msg_handler_start (w);
+    return;
+error:
+    flux_future_fulfill_error (f, errno);
 }
 
-static flux_rpc_t *rpc_request (flux_t *h,
-                                uint32_t nodeid,
-                                int flags,
-                                flux_msg_t *msg)
+static flux_future_t *flux_rpc_msg (flux_t *h,
+                                    uint32_t nodeid,
+                                    int flags,
+                                    flux_msg_t *msg)
 {
-    flux_rpc_t *rpc;
-    int rv;
+    struct flux_rpc *rpc = NULL;
+    flux_future_t *f;
+    int msgflags = 0;
 
+    if (!(f = flux_future_create (flux_get_reactor (h), initialize_cb, NULL)))
+        goto error;
     if (!(rpc = rpc_create (h, flags)))
+        goto error;
+    if (flux_future_aux_set (f, "flux::rpc", rpc,
+                             (flux_free_f)rpc_destroy) < 0) {
+        rpc_destroy (rpc);
+        goto error;
+    }
+    if (flux_msg_set_matchtag (msg, rpc->matchtag) < 0)
+        goto error;
+    flux_future_set_flux (f, h);
+    if (nodeid == FLUX_NODEID_UPSTREAM) {
+        msgflags |= FLUX_MSGFLAG_UPSTREAM;
+        if (flux_get_rank (h, &nodeid) < 0)
+            goto error;
+    }
+    if (flux_msg_set_nodeid (msg, nodeid, msgflags) < 0)
         goto error;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
@@ -325,109 +229,122 @@ static flux_rpc_t *rpc_request (flux_t *h,
     cali_begin_int_byname ("flux.message.response_expected",
                            !(flags & FLUX_RPC_NORESPONSE));
 #endif
-    rv = rpc_request_prepare_send (rpc, msg, nodeid);
+    int rc = flux_send (h, msg, 0);
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
     cali_end_byname ("flux.message.rpc.nodeid");
     cali_end_byname ("flux.message.rpc");
 #endif
-    if (rv < 0)
+    if (rc < 0)
         goto error;
-    return rpc;
+    rpc->inflight = true;
+    /* Fulfill future now if one-way
+     */
+    if ((flags & FLUX_RPC_NORESPONSE))
+        flux_future_fulfill (f, NULL, NULL);
+    return f;
 error:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return NULL;
 }
 
-flux_rpc_t *flux_rpc (flux_t *h,
-                      const char *topic,
-                      const char *json_str,
-                      uint32_t nodeid,
-                      int flags)
+flux_future_t *flux_rpc (flux_t *h,
+                         const char *topic,
+                         const char *json_str,
+                         uint32_t nodeid,
+                         int flags)
 {
-    flux_msg_t *msg;
-    flux_rpc_t *rc = NULL;
-
+    flux_msg_t *msg = NULL;
+    flux_future_t *f = NULL;
     if (!(msg = flux_request_encode (topic, json_str)))
         goto done;
-    rc = rpc_request (h, nodeid, flags, msg);
+    if (!(f = flux_rpc_msg (h, nodeid, flags, msg)))
+        goto done;
 done:
     flux_msg_destroy (msg);
-    return rc;
+    return f;
 }
 
-flux_rpc_t *flux_rpc_raw (flux_t *h,
-                          const char *topic,
-                          const void *data,
-                          int len,
-                          uint32_t nodeid,
-                          int flags)
+flux_future_t *flux_rpc_raw (flux_t *h,
+                             const char *topic,
+                             const void *data,
+                             int len,
+                             uint32_t nodeid,
+                             int flags)
 {
     flux_msg_t *msg;
-    flux_rpc_t *rc = NULL;
+    flux_future_t *f = NULL;
 
     if (!(msg = flux_request_encode_raw (topic, data, len)))
         goto done;
-    rc = rpc_request (h, nodeid, flags, msg);
+    if (!(f = flux_rpc_msg (h, nodeid, flags, msg)))
+        goto done;
 done:
     flux_msg_destroy (msg);
-    return rc;
+    return f;
 }
 
-static flux_rpc_t *flux_vrpcf (flux_t *h, const char *topic, uint32_t nodeid,
-                               int flags, const char *fmt, va_list ap)
+static flux_future_t *flux_vrpcf (flux_t *h,
+                                  const char *topic,
+                                  uint32_t nodeid,
+                                  int flags,
+                                  const char *fmt, va_list ap)
 {
     flux_msg_t *msg;
-    flux_rpc_t *rc = NULL;
+    flux_future_t *f = NULL;
 
     if (!(msg = flux_request_encode (topic, NULL)))
         goto done;
     if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
         goto done;
-    rc = rpc_request (h, nodeid, flags, msg);
+    f = flux_rpc_msg (h, nodeid, flags, msg);
 done:
     flux_msg_destroy (msg);
-    return rc;
+    return f;
 }
 
-flux_rpc_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
-                       int flags, const char *fmt, ...)
+flux_future_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
+                          int flags, const char *fmt, ...)
 {
     va_list ap;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     va_start (ap, fmt);
-    rpc = flux_vrpcf (h, topic, nodeid, flags, fmt, ap);
+    f = flux_vrpcf (h, topic, nodeid, flags, fmt, ap);
     va_end (ap);
-
-    return rpc;
+    return f;
 }
 
-void *flux_rpc_aux_get (flux_rpc_t *rpc, const char *name)
+/* compat stuff */
+
+void *flux_rpc_aux_get (flux_future_t *f, const char *name)
 {
-    assert (rpc->magic == RPC_MAGIC);
-    if (!rpc->aux)
-        return NULL;
-    return zhash_lookup (rpc->aux, name);
+    return flux_future_aux_get (f, name);
 }
 
-int flux_rpc_aux_set (flux_rpc_t *rpc, const char *name,
+int flux_rpc_aux_set (flux_future_t *f, const char *name,
                       void *aux, flux_free_f destroy)
 {
-    assert (rpc->magic == RPC_MAGIC);
-    if (!rpc->aux)
-        rpc->aux = zhash_new ();
-    if (!rpc->aux) {
-        errno = ENOMEM;
-        return -1;
-    }
-    zhash_delete (rpc->aux, name);
-    if (zhash_insert (rpc->aux, name, aux) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    zhash_freefn (rpc->aux, name, destroy);
-    return 0;
+    return flux_future_aux_set (f, name, aux, destroy);
+}
+
+bool flux_rpc_check (flux_future_t *f)
+{
+    if (flux_future_wait_for (f, 0.1) < 0)
+        return false;
+    return true;
+}
+
+int flux_rpc_then (flux_future_t *f, flux_continuation_f cb, void *arg)
+{
+    return flux_future_then (f, -1., cb, arg);
+}
+
+void flux_rpc_destroy (flux_future_t *f)
+{
+    int saved_errno = errno;
+    flux_future_destroy (f);
+    errno = saved_errno;
 }
 
 /*
