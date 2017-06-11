@@ -72,12 +72,13 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
 
     if (response_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_json (msg, &js) < 0)
-        goto done;
+    if (json_str) {
+        if (flux_msg_get_json (msg, &js) < 0)
+            goto done;
+        *json_str = js;
+    }
     if (topic)
         *topic = ts;
-    if (json_str)
-        *json_str = js;
     rc = 0;
 done:
     return rc;
