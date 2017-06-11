@@ -1,0 +1,128 @@
+flux_future_then(3)
+===================
+:doctype: manpage
+
+
+NAME
+----
+flux_future_then, flux_future_wait_for, flux_future_get, flux_future_destroy - synchronize an activity
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ typedef struct flux_future flux_future_t;
+
+ typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
+
+ int flux_future_then (flux_future_t *f, double timeout,
+                       flux_continuation_f cb, void *arg);
+
+ int bool flux_future_wait_for (flux_future_t *f, double timeout);
+
+ int flux_future_get (flux_future_t *f, void *result);
+
+ void flux_future_destroy (flux_future_t *f);
+
+
+DESCRIPTION
+-----------
+
+A Flux future represents some activity that may be completed with reactor
+watchers and/or message handlers.  It is both a handle for synchronization
+and a container for the result.  A Flux future is said to be "fulfilled"
+when a result is available in the future container, or a fatal error has
+occurred.  Flux futures were inspired by similar constructs in other
+programming environments mentioned in RESOURCES, but are not a faithful
+implementation of any particular one.
+
+Generally other Flux classes return futures, and provide a class-specific
+access function for results. The functions described in this page can be
+used to access, synchronize, and destroy futures returned from any such class.
+Authors of classes that return futures are referred to `flux_future_create(3)`.
+
+`flux_future_then()` sets up a continuation callback _cb_ that is called
+with opaque argument _arg_ once the future is fulfilled.  The continuation
+is registered on the main reactor passed in to `flux_future_create()`.
+The continuation will normally use `flux_future_get()` or a class-specific
+access function to obtain the result from the future container without
+blocking.  `flux_future_then()` may only be called once on a given future.
+It is not an error to set up a continuation on a future that has already
+been fulfilled.  If _timeout_ is non-negative, the future must be fulfilled
+within the specified amount of time or the timeout fulfills it with an error
+(errno set to ETIMEDOUT).  The reactor must be run or re-entered in order
+for the timer and the future activity to make progress.  It is safe to
+destroy the future from within the continuation callback.
+
+`flux_future_wait_for()` blocks until the future is fulfilled, or _timeout_
+(if non-negative) expires.  This function may be called multiple times,
+with different values for _timeout_.  If the timeout expires before
+the future is fulfilled, an error is returned (errno set to ETIMEDOUT)
+but the future remains unfulfilled.  The timer and the future activity can
+make progress while `flux_future_wait_for()` is executing, unless _timeout_
+is zero, in which case the function times out immediately if the future
+has not already been fulfilled.  While `flux_future_wait_for()` is executing,
+unrelated reactor watchers and message handlers are not active.
+
+`flux_future_get()` accesses the result of a fulfilled future.  If the
+future is not yet fulfilled, it calls `flux_future_wait_for()` internally
+with a negative _timeout_, causing it to block until the future is fulfilled.
+A pointer to the result is assigned to _result_ (caller must NOT free),
+or -1 is returned if the future was fulfilled with an error.  Often this
+function is wrapped with a class-specific result access function.
+
+`flux_future_destroy()` destroys a future, including any result contained
+within.
+
+
+RETURN VALUE
+------------
+
+`flux_future_then()`, `flux_future_get()`, and `flux_future_wait_for()`
+return zero on success.  On error, -1 is returned, and errno is set
+appropriately.
+
+`flux_future_check()` returns a boolean result.  If an error occurs,
+it returns true.  A subsequent call to `flux_future_get()` returns
+-1 with errno set to the error that occurred during the check.
+
+
+ERRORS
+------
+
+ENOMEM::
+Out of memory.
+
+EINVAL::
+Invalid argument.
+
+ETIMEDOUT::
+A timeout passed to `flux_future_wait_for()` expired before the future
+was fulfilled.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+C++ std::future: <http://en.cppreference.com/w/cpp/thread/future>
+
+Java util.concurrent.Future: <https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/Future.html>
+
+Python3 concurrent.futures: <https://docs.python.org/3/library/concurrent.futures.html>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_future_create (3)

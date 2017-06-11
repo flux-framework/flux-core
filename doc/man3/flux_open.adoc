@@ -5,7 +5,7 @@ flux_open(3)
 
 NAME
 ----
-flux_open, flux_close - open/close connection to Flux Message Broker
+flux_open, flux_clone, flux_close - open/close connection to Flux Message Broker
 
 
 SYNOPSIS
@@ -15,6 +15,8 @@ SYNOPSIS
 flux_t *flux_open (const char *uri, int flags);
 
 void flux_close (flux_t *h);
+
+flux_t *flux_clone (flux_t *orig);
 
 
 DESCRIPTION
@@ -36,6 +38,13 @@ Dumps message trace to stderr.
 FLUX_O_NONBLOCK::
 The `flux_send()` and `flux_recv()` functions should never block.
 
+`flux_clone()` creates another reference to a `flux_t` handle that is
+identical to the original in all respects except that it does not inherit
+a copy of the original handle's "aux" hash, or its reactor and message
+dispatcher references.  By creating a clone, and calling `flux_set_reactor()`
+on it, one can create message handlers on the cloned handle that run on a
+different reactor than the one associated with the original handle.
+
 `flux_close()` destroys a `flux_t` handle, closing its connection with
 the Flux message broker.
 
@@ -43,8 +52,8 @@ the Flux message broker.
 RETURN VALUE
 ------------
 
-`flux_open()` returns an open `flux_t` handle on success.  On error,
-NULL is returned, and errno is set appropriately.
+`flux_open()` and `flux_clone()` return a `flux_t` handle on success.
+On error, NULL is returned, and errno is set appropriately.
 
 
 ERRORS

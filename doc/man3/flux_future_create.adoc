@@ -1,0 +1,176 @@
+flux_future_create(3)
+=====================
+:doctype: manpage
+
+
+NAME
+----
+flux_future_create, flux_future_fulfill, flux_future_fulfill_error, flux_future_aux_get, flux_future_aux_set, flux_future_set_flux, flux_future_get_flux - support methods for classes that return futures
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ typedef void (*flux_future_init_f)(flux_future_t *f,
+                                   flux_reactor_t *r, void *arg);
+
+ flux_future_t *flux_future_create (flux_reactor_t *r,
+                                    flux_future_init_f cb, void *arg);
+
+ void flux_future_fulfill (flux_future_t *f,
+                           void *result, flux_free_f free_fn);
+
+ void flux_future_fulfill_error (flux_future_t *f, int errnum);
+
+ void *flux_future_aux_get (flux_future_t *f, const char *name);
+
+ int flux_future_aux_set (flux_future_t *f, const char *name,
+                          void *aux, flux_free_f destroy);
+
+ void flux_future_set_flux (flux_future_t *f, flux_t *h);
+
+ flux_t *flux_future_get_flux (flux_future_t *f);
+
+
+DESCRIPTION
+-----------
+
+A Flux future represents some activity that may be completed with reactor
+watchers and/or message handlers.  It is intended to be returned by other
+classes as a handle for synchronization and a container for results.
+Such a class provides two user-facing functions, one to initiate the
+activity and return a future which internally calls `flux_future_create()`,
+and one to access class-specific result(s), which internally calls
+`flux_future_get()`.  The class also provides a _flux_future_init_f_
+function that is called lazily by the future implementation to perform
+class-specific reactor setup, such as installing watchers and message
+handlers.  This page describes the future interfaces used by such classes.
+Class users and users seeking an introduction to Flux futures are referred
+to `flux_future_then(3)`.
+
+`flux_future_create()` creates a future, associates a reactor with it,
+ and registers the class-specific initialization callback _cb_, and an
+opaque argument _arg_ that will be passed to _cb_.  The callback sets
+up class-specific watchers on the reactor to handle asynchronous events.
+The watchers must eventually call `flux_future_fulfill()` or
+`flux_future_fulfill_error()` to fulfill the future.  The callback may
+occur in one or both of two contexts.  A call in the first context occurs
+when the user calls `flux_future_then()`.  A call in the second context
+occurs when the user (or `flux_future_get()`) calls `flux_future_wait_for()`.
+In the former case, the callback receives the reactor _r_ passed to
+`flux_future_create()`.  In the latter case, it receives a temporary reactor
+created within the `flux_future_wait_for()` implementation.  See REACTOR
+CONTEXTS below for more information.
+
+`flux_future_fulfill()` fulfills the future, assigning an opaque
+_result_ value with optional destructor _free_fn_ to the future.
+A NULL _result_ is valid and also fulfills the future.  The _result_
+is contained within the future and can be accessed with `flux_future_get()`
+as needed until the future is destroyed.
+
+`flux_future_fulfill_error()` fulfills the future, assigning an _errnum_
+value.  After the future is fulfilled with an error, `flux_future_get()`
+will return -1 with errno set to _errnum_.
+
+`flux_future_aux_set()` attaches an object _aux_, with optional destructor
+_destroy_, to the future under an optional _name_.  `flux_future_aux_get()`
+retrieves an object by _name_.  Destructors are called when the future is
+destroyed.  Objects may be stored anonymously under a NULL _name_ to be
+scheduled for destruction without the option of retrieval.
+
+`flux_future_set_flux()` may be used to associate a Flux broker handle
+with a future.  The handle may be retrieved from within an init callback using
+`flux_future_get_flux()` and used to set up message handlers that
+fulfill the future in the same manner as described for reactor watchers.
+
+Futures may "contain" other futures, to arbitrary depth.  That is, an
+init callback may create futures and use their continuations to fulfill
+the containing future in the same manner as reactor watchers and message
+handlers.
+
+
+REACTOR CONTEXTS
+----------------
+
+Internally, a future can operate in two reactor contexts.  The init
+callback may be called in either or both contexts, depending on which
+synchronization functions are called by the user.
+
+The main reactor context involves the reactor passed to `flux_future_create()`.
+This reactor is expected to be run or re-entered by the user, and can process
+the future's watchers in parallel with other watchers registered by the
+application.  The call to `flux_future_then()` triggers the init callback
+in this context.
+
+Alternatively, an internal reactor is created when `flux_future_wait_for()`
+is called before the future is complete.  The separate reactor allows these
+functions to wait _only_ for the future's events, without allowing unrelated
+watchers registered in the main reactor to run, which might complicate the
+application's control flow.  After the internal reactor is created, the
+init callback is made in this context.
+
+Since the init callback may be made in either reactor context (at most once
+each), and is unaware of which context that is, it should take care when
+managing any context-specific state not to overwrite the state from a prior
+call.  The ability to attach objects with destructors anonymously to the future
+with `flux_future_aux_set()` may be useful for managing the life cycle
+of reactor watchers and message handlers created by init callbacks.
+
+
+MESSAGE HANDLERS
+----------------
+
+To allow message handlers to be registered in either reactor context,
+`flux_future_get_flux()` is context sensitive.  If called in the main
+reactor context, it directly returns the broker handle registered with
+`flux_future_set_flux()`.  If called in the internal reactor context,
+it returns a clone of that handle, obtained with `flux_clone()`, and
+associated with the internal reactor.  After the internal reactor returns,
+any message unmatched by the dispatcher on the cloned handle are requeued
+in the handle with `flux_dispatch_requeue()`.
+
+
+RETURN VALUE
+------------
+
+`flux_future_create()` returns a future on success.  On error, NULL is
+returned and errno is set appropriately.
+
+`flux_future_aux_set()` returns zero on success.  On error, -1 is
+returned and errno is set appropriately.
+
+`flux_future_aux_get()` returns the requested object on success.
+If it is not found NULL.  This function does not set errno.
+
+`flux_future_get_flux()` returns a flux_t handle on success.  On error,
+NULL is returned and errno is set appropriately.
+
+
+ERRORS
+------
+
+ENOMEM::
+Out of memory.
+
+EINVAL::
+Invalid argument.
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_future_create(3), flux_clone(3)

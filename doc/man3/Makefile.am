@@ -41,11 +41,14 @@ MAN3_FILES_PRIMARY = \
 	flux_response_decode.3 \
 	flux_request_encode.3 \
 	flux_content_load.3 \
-	flux_log.3
+	flux_log.3 \
+	flux_future_then.3 \
+	flux_future_create.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
 MAN3_FILES_SECONDARY = \
+	flux_clone.3 \
 	flux_close.3 \
 	flux_aux_get.3 \
 	flux_flags_unset.3 \
@@ -113,7 +116,16 @@ MAN3_FILES_SECONDARY = \
 	flux_content_store_get.3 \
 	flux_vlog.3 \
 	flux_log_set_appname.3 \
-	flux_log_set_procid.3
+	flux_log_set_procid.3 \
+	flux_future_wait_for.3 \
+	flux_future_destroy.3 \
+	flux_future_get.3 \
+	flux_future_fulfill.3 \
+	flux_future_fulfill_error.3 \
+	flux_future_aux_set.3 \
+	flux_future_aux_get.3 \
+	flux_future_set_flux.3 \
+	flux_future_get_flux.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -137,6 +149,7 @@ stderr_devnull_0 = 2>/dev/null
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
 
+flux_clone.3: flux_open.3
 flux_close.3: flux_open.3
 flux_aux_get.3: flux_aux_set.3
 flux_flags_unset.3: flux_flags_set.3
@@ -202,6 +215,15 @@ flux_content_store_get.3: flux_content_load.3
 flux_vlog.3: flux_log.3
 flux_log_set_appname.3: flux_log.3
 flux_log_set_procid.3: flux_log.3
+flux_future_destroy.3: flux_future_then.3
+flux_future_wait_for.3: flux_future_then.3
+flux_future_get.3: flux_future_then.3
+flux_future_fulfill.3: flux_future_create.3
+flux_future_fulfill_error.3: flux_future_create.3
+flux_future_aux_set.3: flux_future_create.3
+flux_future_aux_get.3: flux_future_create.3
+flux_future_set_flux.3: flux_future_create.3
+flux_future_get_flux.3: flux_future_create.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c

@@ -27,6 +27,7 @@ typedef void (*flux_fatal_f)(const char *msg, void *arg);
  */
 enum {
     FLUX_O_TRACE = 1,   /* send message trace to stderr */
+    FLUX_O_CLONE = 2,   /* handle was created with flux_clone() */
     FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
 };
 
@@ -69,6 +70,12 @@ void flux_close (flux_t *h);
 /* Increment internal reference count on 'h'.
  */
 void flux_incref (flux_t *h);
+
+/* Create a new handle that is an alias for 'orig' in all respects
+ * except it adds FLUX_O_CLONE to flags and has its own 'aux' hash
+ * (which means it has its own reactor and dispatcher).
+ */
+flux_t *flux_clone (flux_t *orig);
 
 /* Get/set handle options.  Options are interpreted by connectors.
  * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).

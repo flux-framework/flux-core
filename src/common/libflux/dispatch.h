@@ -38,6 +38,10 @@ int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
                              void *arg);
 void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
 
+/* Requeue any unmatched messages, if handle was cloned.
+ */
+int flux_dispatch_requeue (flux_t *h);
+
 #endif /* !_FLUX_CORE_DISPATCH_H */
 
 /*

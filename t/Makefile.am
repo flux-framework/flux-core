@@ -25,6 +25,7 @@ uninstall-local:
 TESTS = \
 	shmem/backtoback.t \
 	loop/handle.t \
+	loop/dispatch.t \
 	loop/reactor.t \
 	loop/reduce.t \
 	loop/log.t \
@@ -159,6 +160,7 @@ check_SCRIPTS = \
 check_PROGRAMS = \
 	shmem/backtoback.t \
 	loop/handle.t \
+	loop/dispatch.t \
 	loop/reactor.t \
 	loop/reduce.t \
 	loop/log.t \
@@ -225,6 +227,10 @@ shmem_backtoback_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_handle_t_SOURCES = loop/handle.c
 loop_handle_t_CPPFLAGS = $(test_cppflags)
 loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_dispatch_t_SOURCES = loop/dispatch.c
+loop_dispatch_t_CPPFLAGS = $(test_cppflags)
+loop_dispatch_t_LDADD = $(test_ldadd) $(LIBDL)
 
 loop_log_t_SOURCES = loop/log.c
 loop_log_t_CPPFLAGS = $(test_cppflags)

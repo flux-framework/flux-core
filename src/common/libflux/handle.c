@@ -69,24 +69,34 @@ struct profiling_context {
 #endif
 
 struct flux_handle_struct {
-    const struct flux_handle_ops *ops;
+    flux_t          *parent; // if FLUX_O_CLONE, my parent
+    zhash_t         *aux;
+    int             usecount;
     int             flags;
+
+    /* element below are unused in cloned handles */
+    const struct flux_handle_ops *ops;
     void            *impl;
     void            *dso;
     msglist_t       *queue;
     int             pollfd;
 
-    zhash_t         *aux;
     struct tagpool  *tagpool;
     flux_msgcounters_t msgcounters;
     flux_fatal_f    fatal;
     void            *fatal_arg;
     bool            fatality;
-    int             usecount;
 #if HAVE_CALIPER
     struct profiling_context prof;
 #endif
 };
+
+static flux_t *lookup_clone_ancestor (flux_t *h)
+{
+    while ((h->flags & FLUX_O_CLONE))
+        h = h->parent;
+    return h;
+}
 
 void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags);
 
@@ -137,6 +147,7 @@ static void profiling_msg_snapshot (flux_t *h,
                           int flags,
                           const char *msg_action)
 {
+    h = lookup_clone_ancestor (h);
     cali_id_t attributes[3];
     const void * data[3];
     size_t size[3];
@@ -341,18 +352,45 @@ nomem:
     return NULL;
 }
 
+flux_t *flux_clone (flux_t *orig)
+{
+    if (!orig) {
+        errno = EINVAL;
+        return NULL;
+    }
+    flux_t *h = calloc (1, sizeof (*h));
+    if (!h)
+        goto nomem;
+    h->parent = orig;
+    h->usecount = 1;
+    h->flags = orig->flags | FLUX_O_CLONE;
+    if (!(h->aux = zhash_new()))
+        goto nomem;
+    flux_incref (orig);
+    return h;
+nomem:
+    free (h);
+    errno = ENOMEM;
+    return NULL;
+}
+
 void flux_handle_destroy (flux_t *h)
 {
     if (h && --h->usecount == 0) {
         zhash_destroy (&h->aux);
-        if (h->ops->impl_destroy)
-            h->ops->impl_destroy (h->impl);
-        tagpool_destroy (h->tagpool);
-        if (h->dso)
-            dlclose (h->dso);
-        msglist_destroy (h->queue);
-        if (h->pollfd >= 0)
-            (void)close (h->pollfd);
+        if ((h->flags & FLUX_O_CLONE)) {
+            flux_handle_destroy (h->parent); // decr usecount
+        }
+        else {
+            if (h->ops->impl_destroy)
+                h->ops->impl_destroy (h->impl);
+            tagpool_destroy (h->tagpool);
+            if (h->dso)
+                dlclose (h->dso);
+            msglist_destroy (h->queue);
+            if (h->pollfd >= 0)
+                (void)close (h->pollfd);
+        }
         free (h);
     }
 }
@@ -379,6 +417,7 @@ int flux_flags_get (flux_t *h)
 
 int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 {
+    h = lookup_clone_ancestor (h);
     if (!h->ops->getopt) {
         errno = EINVAL;
         return -1;
@@ -388,6 +427,7 @@ int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 
 int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len)
 {
+    h = lookup_clone_ancestor (h);
     if (!h->ops->setopt) {
         errno = EINVAL;
         return -1;
@@ -408,6 +448,7 @@ void flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy)
 
 void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg)
 {
+    h = lookup_clone_ancestor (h);
     h->fatal = fun;
     h->fatal_arg = arg;
     h->fatality = false;
@@ -415,6 +456,7 @@ void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg)
 
 void flux_fatal_error (flux_t *h, const char *fun, const char *msg)
 {
+    h = lookup_clone_ancestor (h);
     if (!h->fatality) {
         h->fatality = true;
         if (h->fatal) {
@@ -427,16 +469,19 @@ void flux_fatal_error (flux_t *h, const char *fun, const char *msg)
 
 bool flux_fatality (flux_t *h)
 {
+    h = lookup_clone_ancestor (h);
     return h->fatality;
 }
 
 void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs)
 {
+    h = lookup_clone_ancestor (h);
     *mcs = h->msgcounters;
 }
 
 void flux_clr_msgcounters (flux_t *h)
 {
+    h = lookup_clone_ancestor (h);
     memset (&h->msgcounters, 0, sizeof (h->msgcounters));
 }
 
@@ -449,6 +494,7 @@ void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new, int flags)
 
 uint32_t flux_matchtag_alloc (flux_t *h, int flags)
 {
+    h = lookup_clone_ancestor (h);
     uint32_t tag;
     int tpflags = 0;
 
@@ -467,6 +513,7 @@ uint32_t flux_matchtag_alloc (flux_t *h, int flags)
  */
 void flux_matchtag_free (flux_t *h, uint32_t matchtag)
 {
+    h = lookup_clone_ancestor (h);
     struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .topic_glob = NULL,
@@ -485,6 +532,7 @@ void flux_matchtag_free (flux_t *h, uint32_t matchtag)
 
 uint32_t flux_matchtag_avail (flux_t *h, int flags)
 {
+    h = lookup_clone_ancestor (h);
     if ((flags & FLUX_MATCHTAG_GROUP))
         return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_GROUP_AVAIL);
     else
@@ -537,6 +585,7 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
 
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
+    h = lookup_clone_ancestor (h);
     if (!h->ops->send) {
         errno = ENOSYS;
         goto fatal;
@@ -608,6 +657,7 @@ static flux_msg_t *flux_recv_any (flux_t *h, int flags)
  */
 flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
 {
+    h = lookup_clone_ancestor (h);
     zlist_t *l = NULL;
     flux_msg_t *msg = NULL;
     int saved_errno;
@@ -669,6 +719,7 @@ fatal:
  */
 int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 {
+    h = lookup_clone_ancestor (h);
     flux_msg_t *cpy;
     int rc;
 
@@ -694,6 +745,7 @@ fatal:
 
 int flux_event_subscribe (flux_t *h, const char *topic)
 {
+    h = lookup_clone_ancestor (h);
     if (h->ops->event_subscribe) {
         if (h->ops->event_subscribe (h->impl, topic) < 0)
             goto fatal;
@@ -706,6 +758,7 @@ fatal:
 
 int flux_event_unsubscribe (flux_t *h, const char *topic)
 {
+    h = lookup_clone_ancestor (h);
     if (h->ops->event_unsubscribe) {
         if (h->ops->event_unsubscribe (h->impl, topic) < 0)
             goto fatal;
@@ -718,6 +771,7 @@ fatal:
 
 int flux_pollfd (flux_t *h)
 {
+    h = lookup_clone_ancestor (h);
     if (h->pollfd < 0) {
         struct epoll_event ev = {
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
@@ -751,6 +805,7 @@ fatal:
 
 int flux_pollevents (flux_t *h)
 {
+    h = lookup_clone_ancestor (h);
     int e, events = 0;
 
     /* wait for handle event */
