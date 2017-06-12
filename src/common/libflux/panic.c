@@ -39,17 +39,17 @@
 int flux_panic (flux_t *h, int rank, const char *msg)
 {
     uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
-    flux_rpc_t *r = NULL;
+    flux_future_t *f = NULL;
     int rc = -1;
 
-    r = flux_rpcf (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
+    f = flux_rpcf (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
                    "{s:s}", "msg", msg ? msg : "");
-    if (!r)
+    if (!f)
         goto done;
     /* No reply */
     rc = 0;
 done:
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     return rc;
 }
 

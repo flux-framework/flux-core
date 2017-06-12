@@ -34,7 +34,7 @@
 
 #include "src/common/libutil/blobref.h"
 
-flux_rpc_t *flux_content_load (flux_t *h, const char *blobref, int flags)
+flux_future_t *flux_content_load (flux_t *h, const char *blobref, int flags)
 {
     const char *topic = "content.load";
     uint32_t rank = FLUX_NODEID_ANY;
@@ -52,12 +52,12 @@ flux_rpc_t *flux_content_load (flux_t *h, const char *blobref, int flags)
     return flux_rpc_raw (h, topic, blobref, strlen (blobref) + 1, rank, 0);
 }
 
-int flux_content_load_get (flux_rpc_t *rpc, void *buf, int *len)
+int flux_content_load_get (flux_future_t *f, void *buf, int *len)
 {
-    return flux_rpc_get_raw (rpc, buf, len);
+    return flux_rpc_get_raw (f, buf, len);
 }
 
-flux_rpc_t *flux_content_store (flux_t *h, const void *buf, int len, int flags)
+flux_future_t *flux_content_store (flux_t *h, const void *buf, int len, int flags)
 {
     const char *topic = "content.store";
     uint32_t rank = FLUX_NODEID_ANY;
@@ -71,12 +71,12 @@ flux_rpc_t *flux_content_store (flux_t *h, const void *buf, int len, int flags)
     return flux_rpc_raw (h, topic, buf, len, rank, 0);
 }
 
-int flux_content_store_get (flux_rpc_t *rpc, const char **blobref)
+int flux_content_store_get (flux_future_t *f, const char **blobref)
 {
     int ref_size;
     const char *ref;
 
-    if (flux_rpc_get_raw (rpc, &ref, &ref_size) < 0)
+    if (flux_rpc_get_raw (f, &ref, &ref_size) < 0)
         return -1;
     if (!ref || ref[ref_size - 1] != '\0' || blobref_validate (ref) < 0) {
         errno = EPROTO;

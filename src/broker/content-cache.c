@@ -269,17 +269,17 @@ static void remove_entry (content_cache_t *cache, struct cache_entry *e)
  * an error such as ENOENT.
  */
 
-static void cache_load_continuation (flux_rpc_t *rpc, void *arg)
+static void cache_load_continuation (flux_future_t *f, void *arg)
 {
     content_cache_t *cache = arg;
-    struct cache_entry *e = flux_rpc_aux_get (rpc, "entry");
+    struct cache_entry *e = flux_future_aux_get (f, "entry");
     void *data = NULL;
     int len = 0;
     int saved_errno;
     int rc = -1;
 
     e->load_pending = 0;
-    if (flux_content_load_get (rpc, &data, &len) < 0) {
+    if (flux_content_load_get (f, &data, &len) < 0) {
         if (errno == ENOSYS && cache->rank == 0)
             errno = ENOENT;
         saved_errno = errno;
@@ -307,12 +307,12 @@ done:
                         __FUNCTION__);
     if (rc < 0)
         remove_entry (cache, e);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 static int cache_load (content_cache_t *cache, struct cache_entry *e)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int saved_errno = 0;
     int flags = CONTENT_FLAG_UPSTREAM;
     int rc = -1;
@@ -321,7 +321,7 @@ static int cache_load (content_cache_t *cache, struct cache_entry *e)
         return 0;
     if (cache->rank == 0)
         flags = CONTENT_FLAG_CACHE_BYPASS;
-    if (!(rpc = flux_content_load (cache->h, e->blobref, flags))) {
+    if (!(f = flux_content_load (cache->h, e->blobref, flags))) {
         if (errno == ENOSYS && cache->rank == 0)
             errno = ENOENT;
         saved_errno = errno;
@@ -329,14 +329,14 @@ static int cache_load (content_cache_t *cache, struct cache_entry *e)
             flux_log_error (cache->h, "%s: RPC", __FUNCTION__);
         goto done;
     }
-    if (flux_rpc_aux_set (rpc, "entry", e, NULL) < 0) {
-        flux_log_error (cache->h, "content load flux_rpc_aux_set");
+    if (flux_future_aux_set (f, "entry", e, NULL) < 0) {
+        flux_log_error (cache->h, "content load flux_future_aux_set");
         goto done;
     }
-    if (flux_rpc_then (rpc, cache_load_continuation, cache) < 0) {
+    if (flux_future_then (f, -1., cache_load_continuation, cache) < 0) {
         saved_errno = errno;
         flux_log_error (cache->h, "content load");
-        flux_rpc_destroy (rpc);
+        flux_future_destroy (f);
         goto done;
     }
     e->load_pending = 1;
@@ -421,10 +421,10 @@ done:
  * offload rank 0 hash entries at a slower pace.
  */
 
-static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
+static void cache_store_continuation (flux_future_t *f, void *arg)
 {
     content_cache_t *cache = arg;
-    struct cache_entry *e = flux_rpc_aux_get (rpc, "entry");
+    struct cache_entry *e = flux_future_aux_get (f, "entry");
     const char *blobref;
     int saved_errno = 0;
     int rc = -1;
@@ -432,7 +432,7 @@ static void cache_store_continuation (flux_rpc_t *rpc, void *arg)
     e->store_pending = 0;
     assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
-    if (flux_content_store_get (rpc, &blobref) < 0) {
+    if (flux_content_store_get (f, &blobref) < 0) {
         saved_errno = errno;
         if (cache->rank == 0 && errno == ENOSYS)
             flux_log (cache->h, LOG_DEBUG, "content store: %s",
@@ -457,7 +457,7 @@ done:
                                         e->blobref, strlen (e->blobref) + 1) < 0)
         flux_log_error (cache->h, "%s: error responding to store requests",
                         __FUNCTION__);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     /* If cache has been flushed, respond to flush requests, if any.
      * If there are still dirty entries and the number of outstanding
@@ -475,7 +475,7 @@ done:
 
 static int cache_store (content_cache_t *cache, struct cache_entry *e)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int saved_errno = 0;
     int flags = CONTENT_FLAG_UPSTREAM;
     int rc = -1;
@@ -489,19 +489,19 @@ static int cache_store (content_cache_t *cache, struct cache_entry *e)
             return 0;
         flags = CONTENT_FLAG_CACHE_BYPASS;
     }
-    if (!(rpc = flux_content_store (cache->h, e->data, e->len, flags))) {
+    if (!(f = flux_content_store (cache->h, e->data, e->len, flags))) {
         saved_errno = errno;
         flux_log_error (cache->h, "content store");
         goto done;
     }
-    if (flux_rpc_aux_set (rpc, "entry", e, NULL) < 0) {
-        flux_log_error (cache->h, "content store: flux_rpc_aux_set");
+    if (flux_future_aux_set (f, "entry", e, NULL) < 0) {
+        flux_log_error (cache->h, "content store: flux_future_aux_set");
         goto done;
     }
-    if (flux_rpc_then (rpc, cache_store_continuation, cache) < 0) {
+    if (flux_future_then (f, -1., cache_store_continuation, cache) < 0) {
         saved_errno = errno;
         flux_log_error (cache->h, "content store");
-        flux_rpc_destroy (rpc);
+        flux_future_destroy (f);
         goto done;
     }
     e->store_pending = 1;

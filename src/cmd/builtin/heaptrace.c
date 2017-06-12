@@ -26,7 +26,7 @@
 static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     if (optparse_option_index (p) != ac - 1) {
         optparse_print_usage (p);
@@ -34,11 +34,11 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpcf (h, "heaptrace.start", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (h, "heaptrace.start", FLUX_NODEID_ANY, 0,
                            "{ s:s }", "filename", av[ac - 1]))
-            || flux_rpc_get (rpc, NULL) < 0)
+            || flux_future_get (f, NULL) < 0)
         log_err_exit ("heaptrace.start");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
@@ -46,7 +46,7 @@ static int internal_heaptrace_start (optparse_t *p, int ac, char *av[])
 static int internal_heaptrace_stop (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     if (optparse_option_index (p) != ac) {
         optparse_print_usage (p);
@@ -54,10 +54,10 @@ static int internal_heaptrace_stop (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "heaptrace.stop", NULL, FLUX_NODEID_ANY, 0))
-            || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpc (h, "heaptrace.stop", NULL, FLUX_NODEID_ANY, 0))
+            || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("heaptrace.stop");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
@@ -65,7 +65,7 @@ static int internal_heaptrace_stop (optparse_t *p, int ac, char *av[])
 static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     if (optparse_option_index (p) != ac - 1) {
         optparse_print_usage (p);
@@ -73,11 +73,11 @@ static int internal_heaptrace_dump (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpcf (h, "heaptrace.dump", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (h, "heaptrace.dump", FLUX_NODEID_ANY, 0,
                            "{ s:s }", "reason", av[ac - 1]))
-            || flux_rpc_get (rpc, NULL) < 0)
+            || flux_rpc_get (f , NULL) < 0)
         log_err_exit ("heaptrace.dump");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }

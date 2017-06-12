@@ -182,7 +182,7 @@ error:
     return NULL;
 }
 
-static void content_load_completion (flux_rpc_t *rpc, void *arg)
+static void content_load_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_object *o;
@@ -191,11 +191,11 @@ static void content_load_completion (flux_rpc_t *rpc, void *arg)
     const char *blobref;
     struct cache_entry *hp;
 
-    if (flux_rpc_get_raw (rpc, &data, &size) < 0) {
+    if (flux_rpc_get_raw (f, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    blobref = flux_rpc_aux_get (rpc, "ref");
+    blobref = flux_future_aux_get (f, "ref");
     if (!(o = json_tokener_parse_ex (ctx->tok, (char *)data, size))) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s", __FUNCTION__);
@@ -209,7 +209,7 @@ static void content_load_completion (flux_rpc_t *rpc, void *arg)
     assert ((hp = cache_lookup (ctx->cache, blobref, ctx->epoch)));
     cache_entry_set_json (hp, o);
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 /* If now is true, perform the load rpc synchronously;
@@ -217,18 +217,18 @@ done:
  */
 static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now)
 {
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
 
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
-    if (!(rpc = flux_rpc_raw (ctx->h, "content.load",
+    if (!(f = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_rpc_aux_set (rpc, "ref", xstrdup (ref), free) < 0)
+    if (flux_future_aux_set (f, "ref", xstrdup (ref), free) < 0)
         goto error;
     if (now) {
-        content_load_completion (rpc, ctx);
-    } else if (flux_rpc_then (rpc, content_load_completion, ctx) < 0) {
-        flux_rpc_destroy (rpc);
+        content_load_completion (f, ctx);
+    } else if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
+        flux_future_destroy (f);
         goto error;
     }
     return 0;
@@ -263,7 +263,7 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **
     return true;
 }
 
-static int content_store_get (flux_rpc_t *rpc, void *arg)
+static int content_store_get (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct cache_entry *hp;
@@ -271,7 +271,7 @@ static int content_store_get (flux_rpc_t *rpc, void *arg)
     int blobref_size;
     int rc = -1;
 
-    if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0) {
+    if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
@@ -285,31 +285,31 @@ static int content_store_get (flux_rpc_t *rpc, void *arg)
     cache_entry_set_dirty (hp, false);
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
-static void content_store_completion (flux_rpc_t *rpc, void *arg)
+static void content_store_completion (flux_future_t *f, void *arg)
 {
-    (void)content_store_get (rpc, arg);
+    (void)content_store_get (f, arg);
 }
 
 static int content_store_request_send (kvs_ctx_t *ctx, const href_t ref,
                                        json_object *val, bool now)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *data = Jtostr (val);
     int size = strlen (data) + 1;
 
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
-    if (!(rpc = flux_rpc_raw (ctx->h, "content.store",
-                              data, size, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc_raw (ctx->h, "content.store",
+                            data, size, FLUX_NODEID_ANY, 0)))
         goto error;
     if (now) {
-        if (content_store_get (rpc, ctx) < 0)
+        if (content_store_get (f, ctx) < 0)
             goto error;
-    } else if (flux_rpc_then (rpc, content_store_completion, ctx) < 0) {
-        flux_rpc_destroy (rpc);
+    } else if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
+        flux_future_destroy (f);
         goto error;
     }
     return 0;
@@ -1242,11 +1242,11 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
     }
     else {
-        flux_rpc_t *rpc = flux_rpc (h, "kvs.relayfence", json_str,
-                                    0, FLUX_RPC_NORESPONSE);
-        if (!rpc)
+        flux_future_t *f = flux_rpc (h, "kvs.relayfence", json_str,
+                                     0, FLUX_RPC_NORESPONSE);
+        if (!f)
             goto error;
-        flux_rpc_destroy (rpc);
+        flux_future_destroy (f);
     }
     Jput (in);
     return;
@@ -1307,14 +1307,13 @@ error:
 
 static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *ref;
     int rc = -1;
 
-    if (!(rpc = flux_rpc (ctx->h, "kvs.getroot", NULL,
-                                             FLUX_NODEID_UPSTREAM, 0)))
+    if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0)))
         goto done;
-    if (flux_rpc_getf (rpc, "{ s:i s:s }",
+    if (flux_rpc_getf (f, "{ s:i s:s }",
                        "rootseq", rootseq,
                        "rootdir", &ref) < 0)
         goto done;
@@ -1325,7 +1324,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
     strcpy (rootdir, ref);
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

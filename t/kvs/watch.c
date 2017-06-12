@@ -415,16 +415,16 @@ static int simulwatch_cb (const char *key, int val, void *arg, int errnum)
 
 int get_watch_stats (flux_t *h, int *count)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int rc = -1;
 
-    if (!(rpc = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (rpc, "{ s:i }", "#watchers", count) < 0)
+    if (flux_rpc_getf (f, "{ s:i }", "#watchers", count) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

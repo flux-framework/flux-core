@@ -248,13 +248,13 @@ void xping_request_cb (flux_t *h, flux_msg_handler_t *w,
     Jadd_int (in, "seq", seq);
     flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
 
-    flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc (h, service, Jtostr (in), rank,
+    flux_future_t *f;
+    if (!(f = flux_rpc (h, service, Jtostr (in), rank,
                                             FLUX_RPC_NORESPONSE))) {
         saved_errno = errno;
         goto error;
     }
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     if (!(cpy = flux_msg_copy (msg, true))) {
         saved_errno = errno;
         goto error;

@@ -274,19 +274,19 @@ static void r_sink (flux_reduce_t *r, int batch, void *arg)
  */
 static void r_forward (flux_reduce_t *r, int batch, void *arg)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     hello_t *hello = arg;
     int count = (uintptr_t)flux_reduce_pop (r);
 
     assert (batch == 0);
     assert (count > 0);
 
-    if (!(rpc = flux_rpcf (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
+    if (!(f = flux_rpcf (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
                            FLUX_RPC_NORESPONSE, "{ s:i s:i }",
                            "count", count,
                            "batch", batch)))
         log_err_exit ("hello: flux_rpcf");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 /* How many original items does this item represent after reduction?

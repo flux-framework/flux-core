@@ -136,16 +136,17 @@ static int op_event_subscribe (void *impl, const char *topic)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f;
     int rc = -1;
 
-    if (!(rpc = flux_rpcf (ctx->h, "cmb.sub", FLUX_NODEID_ANY, 0,
-                           "{ s:s }", "topic", topic))
-                || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpcf (ctx->h, "cmb.sub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic)))
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -153,16 +154,17 @@ static int op_event_unsubscribe (void *impl, const char *topic)
 {
     shmem_ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     int rc = -1;
 
-    if (!(rpc = flux_rpcf (ctx->h, "cmb.unsub", FLUX_NODEID_ANY, 0,
-                           "{ s:s }", "topic", topic))
-                || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpcf (ctx->h, "cmb.unsub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic)))
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

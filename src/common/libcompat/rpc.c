@@ -37,14 +37,14 @@
 int flux_json_rpc (flux_t *h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *json_str;
     json_object *o = NULL;
     int rc = -1;
 
-    if (!(rpc = flux_rpc (h, topic, Jtostr (in), nodeid, 0)))
+    if (!(f = flux_rpc (h, topic, Jtostr (in), nodeid, 0)))
         goto done;
-    if (flux_rpc_get (rpc, &json_str) < 0)
+    if (flux_rpc_get (f, &json_str) < 0)
         goto done;
     if (out) {
         if (!json_str || !(o = Jfromstr (json_str))) {
@@ -55,7 +55,7 @@ int flux_json_rpc (flux_t *h, uint32_t nodeid, const char *topic,
     }
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

@@ -35,7 +35,7 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
     uint8_t *data;
     int size;
     flux_t *h;
-    flux_rpc_t *r;
+    flux_future_t *f;
     int flags = 0;
 
     n = optparse_option_index (p);
@@ -48,13 +48,13 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (optparse_hasopt (p, "bypass-cache"))
         flags |= CONTENT_FLAG_CACHE_BYPASS;
-    if (!(r = flux_content_load (h, ref, flags)))
+    if (!(f = flux_content_load (h, ref, flags)))
         log_err_exit ("flux_content_load");
-    if (flux_content_load_get (r, &data, &size) < 0)
+    if (flux_content_load_get (f, &data, &size) < 0)
         log_err_exit ("flux_content_load_get");
     if (write_all (STDOUT_FILENO, data, size) < 0)
         log_err_exit ("write");
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
@@ -64,7 +64,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     uint8_t *data;
     int size;
     flux_t *h;
-    flux_rpc_t *r;
+    flux_future_t *f;
     const char *blobref;
     int flags = 0;
 
@@ -78,12 +78,12 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if ((size = read_all (STDIN_FILENO, &data)) < 0)
         log_err_exit ("read");
-    if (!(r = flux_content_store (h, data, size, flags)))
+    if (!(f = flux_content_store (h, data, size, flags)))
         log_err_exit ("flux_content_store");
-    if (flux_content_store_get (r, &blobref) < 0)
+    if (flux_content_store_get (f, &blobref) < 0)
         log_err_exit ("flux_content_store_get");
     printf ("%s\n", blobref);
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     flux_close (h);
     free (data);
     return (0);
@@ -92,7 +92,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
 static int internal_content_flush (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
 
     if (optparse_option_index (p) != ac) {
         optparse_print_usage (p);
@@ -100,11 +100,11 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "content.flush", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "content.flush", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("content.flush");
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_rpc_get (f, NULL) < 0)
         log_err_exit ("content.flush");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
@@ -112,7 +112,7 @@ static int internal_content_flush (optparse_t *p, int ac, char *av[])
 static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
 
     if (optparse_option_index (p) != ac) {
         optparse_print_usage (p);
@@ -120,11 +120,11 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(rpc = flux_rpc (h, "content.dropcache", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "content.dropcache", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("content.dropcache");
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         log_err_exit ("content.dropcache");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
@@ -132,15 +132,15 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
 static int spam_max_inflight;
 static int spam_cur_inflight;
 
-static void store_completion (flux_rpc_t *r, void *arg)
+static void store_completion (flux_future_t *f, void *arg)
 {
     flux_t *h = arg;
     const char *blobref;
 
-    if (flux_content_store_get (r, &blobref) < 0)
+    if (flux_content_store_get (f, &blobref) < 0)
         log_err_exit ("store");
     printf ("%s\n", blobref);
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     if (--spam_cur_inflight < spam_max_inflight/2)
         flux_reactor_stop (flux_get_reactor (h));
 }
@@ -148,7 +148,7 @@ static void store_completion (flux_rpc_t *r, void *arg)
 static int internal_content_spam (optparse_t *p, int ac, char *av[])
 {
     int i, count;
-    flux_rpc_t *r;
+    flux_future_t *f;
     flux_t *h;
     char data[256];
     int size = 256;
@@ -171,10 +171,10 @@ static int internal_content_spam (optparse_t *p, int ac, char *av[])
     while (i < count || spam_cur_inflight > 0) {
         while (i < count && spam_cur_inflight < spam_max_inflight) {
             snprintf (data, size, "spam-o-matic pid=%d seq=%d", getpid(), i);
-            if (!(r = flux_content_store (h, data, size, 0)))
+            if (!(f = flux_content_store (h, data, size, 0)))
                 log_err_exit ("flux_content_store(%d)", i);
-            if (flux_rpc_then (r, store_completion, h) < 0)
-                log_err_exit ("flux_rpc_then(%d)", i);
+            if (flux_future_then (f, -1., store_completion, h) < 0)
+                log_err_exit ("flux_future_then(%d)", i);
             spam_cur_inflight++;
             i++;
         }

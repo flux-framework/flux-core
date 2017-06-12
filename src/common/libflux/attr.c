@@ -95,16 +95,16 @@ static attr_t *attr_create (const char *val, int flags)
 
 static int attr_get_rpc (attr_ctx_t *ctx, const char *name, attr_t **attrp)
 {
-    flux_rpc_t *r;
+    flux_future_t *f;
     const char *val;
     int flags;
     attr_t *attr;
     int rc = -1;
 
-    if (!(r = flux_rpcf (ctx->h, "attr.get", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (ctx->h, "attr.get", FLUX_NODEID_ANY, 0,
                          "{s:s}", "name", name)))
         goto done;
-    if (flux_rpc_getf (r, "{s:s, s:i}", "value", &val, "flags", &flags) < 0)
+    if (flux_rpc_getf (f, "{s:s, s:i}", "value", &val, "flags", &flags) < 0)
         goto done;
     if (!(attr = attr_create (val, flags)))
         goto done;
@@ -113,28 +113,28 @@ static int attr_get_rpc (attr_ctx_t *ctx, const char *name, attr_t **attrp)
     *attrp = attr;
     rc = 0;
 done:
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     return rc;
 }
 
 static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
 {
-    flux_rpc_t *r;
+    flux_future_t *f;
     attr_t *attr;
     int rc = -1;
 
 #if JANSSON_VERSION_HEX >= 0x020800
     /* $? format specifier was introduced in jansson 2.8 */
-    r = flux_rpcf (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
+    f = flux_rpcf (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
                    "{s:s, s:s?}", "name", name, "value", val);
 #else
-    r = flux_rpcf (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
+    f = flux_rpcf (ctx->h, "attr.set", FLUX_NODEID_ANY, 0,
                    val ? "{s:s, s:s}" : "{s:s, s:n}",
                    "name", name, "value", val);
 #endif
-    if (!r)
+    if (!f)
         goto done;
-    if (flux_rpc_get (r, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     if (val) {
         if (!(attr = attr_create (val, 0)))
@@ -145,7 +145,7 @@ static int attr_set_rpc (attr_ctx_t *ctx, const char *name, const char *val)
         zhash_delete (ctx->hash, name);
     rc = 0;
 done:
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -163,14 +163,14 @@ static int attr_strcmp (const char *s1, const char *s2)
 
 static int attr_list_rpc (attr_ctx_t *ctx)
 {
-    flux_rpc_t *r;
+    flux_future_t *f;
     json_t *array, *value;
     size_t index;
     int rc = -1;
 
-    if (!(r = flux_rpc (ctx->h, "attr.list", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (ctx->h, "attr.list", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (r, "{s:o}", "names", &array) < 0)
+    if (flux_rpc_getf (f, "{s:o}", "names", &array) < 0)
         goto done;
     zlist_destroy (&ctx->names);
     if (!(ctx->names = zlist_new ()))
@@ -189,7 +189,7 @@ static int attr_list_rpc (attr_ctx_t *ctx)
     zlist_sort (ctx->names, (zlist_compare_fn *)attr_strcmp);
     rc = 0;
 done:
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     return rc;
 }
 

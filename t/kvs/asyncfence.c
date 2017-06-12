@@ -77,7 +77,7 @@ void kunlink (flux_t *h, const char *s)
 int main (int argc, char *argv[])
 {
     flux_t *h;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     log_init ("asynfence");
 
@@ -93,12 +93,13 @@ int main (int argc, char *argv[])
      * get a,b (should be 42,43)
      */
     kput (h, "a", 42);
-    if (!(rpc = kvs_fence_begin (h, "test.asyncfence.1", 1, 0)))
+    if (!(f = kvs_fence_begin (h, "test.asyncfence.1", 1, 0)))
         log_err_exit ("kvs_fence_begin 1");
     log_msg ("kvs_fence_begin 1");
     kput (h, "b", 43);
-    if (kvs_fence_finish (rpc) < 0)
+    if (kvs_fence_finish (f) < 0)
         log_err_exit ("kvs_fence_finish 1");
+    flux_future_destroy (f);
     log_msg ("kvs_fence_finish 1");
     kget (h, "a", 42);
     kget_xfail (h, "b");

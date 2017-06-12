@@ -462,11 +462,11 @@ static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
 
-    flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc_raw (logbuf->h, "log.append", buf, len,
+    flux_future_t *f;
+    if (!(f = flux_rpc_raw (logbuf->h, "log.append", buf, len,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
         return -1;
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return 0;
 }
 

@@ -134,16 +134,9 @@ int test_server (flux_t *h, void *arg)
     return 0;
 }
 
-
-void *auxfree_arg = NULL;
-void auxfree (void *arg)
-{
-    auxfree_arg = arg;
-}
-
 void test_service (flux_t *h)
 {
-    flux_rpc_t *r;
+    flux_future_t *r;
     flux_msg_t *msg;
     const char *topic;
     int count;
@@ -181,65 +174,40 @@ void test_service (flux_t *h)
     ok ((rc == -1 && errno == EINVAL) || (rc == 0),
         "response has no residual route stack");
     flux_msg_destroy (msg);
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
     ok (flux_matchtag_avail (h, 0) == count - 1,
-        "flux_rpc_destroy did not free matchtag");
+        "flux_future_destroy did not free matchtag");
 
     diag ("completed test with rpc request, flux_recv response");
 }
 
 void test_basic (flux_t *h)
 {
-    flux_rpc_t *r;
+    flux_future_t *r;
 
     r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0);
     ok (r != NULL,
         "flux_rpc sent request to rpctest.hello service");
 
-    int count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
-
+    errno = 0;
+    ok (flux_future_wait_for (r, 0.) < 0 && errno == ETIMEDOUT,
+        "flux_future_wait_for (0.) timed out (not ready)");
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works");
-    ok (flux_rpc_check (r) == true,
-        "flux_rpc_check still returns true");
+    ok (flux_future_wait_for (r, 0.) == 0,
+        "flux_future_wait_for (0.) works (ready)");
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get works a second time");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     diag ("completed synchronous rpc test");
-}
-
-void test_aux (flux_t *h)
-{
-    char *aux_data = "Hello";
-    flux_rpc_t *r;
-
-    ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
-        "flux_rpc works");
-    ok (flux_rpc_aux_set (r, "test", aux_data, auxfree) == 0,
-        "flux_rpc_aux_set works");
-    ok (flux_rpc_aux_get (r, "wrong") == NULL,
-        "flux_rpc_aux_get on wrong key returns NULL");
-    ok (flux_rpc_aux_get (r, "test") == aux_data,
-        "flux_rpc_aux_get on right key returns orig pointer");
-    ok (flux_rpc_get (r, NULL) == 0,
-        "flux_rpc_get works");
-    flux_rpc_destroy (r);
-    ok (auxfree_arg == aux_data,
-        "destroyed rpc and aux destructor was called with correct arg");
-
-    diag ("completed aux test");
 }
 
 void test_encoding (flux_t *h)
 {
     json_object *o;
     const char *json_str;
-    flux_rpc_t *r;
-    int count;
+    flux_future_t *r;
 
     /* cause remote EPROTO (unexpected payload) - will be picked up in _get() */
     ok ((r = flux_rpc (h, "rpctest.hello", "{}", FLUX_NODEID_ANY, 0)) != NULL,
@@ -248,21 +216,17 @@ void test_encoding (flux_t *h)
     ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
         "flux_rpc_get fails with EPROTO");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* cause remote EPROTO (missing payload) - will be picked up in _get() */
     errno = 0;
     ok ((r = flux_rpc (h, "rpctest.echo", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with no payload when payload is expected works, at first");
-    count = 0;
-    while (flux_rpc_check (r) == false)
-        count++;
-    diag ("flux_rpc_check returned true after %d tries", count);
     errno = 0;
     ok (flux_rpc_get (r, NULL) < 0
         && errno == EPROTO,
         "flux_rpc_get fails with EPROTO");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* receive NULL payload on empty response */
     ok ((r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0)) != NULL,
@@ -271,7 +235,7 @@ void test_encoding (flux_t *h)
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str == NULL,
         "flux_rpc_get gets NULL payload on empty response");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* flux_rpc_get is ok if user doesn't desire response payload */
     errno = 0;
@@ -283,7 +247,7 @@ void test_encoding (flux_t *h)
     errno = 0;
     ok (flux_rpc_get (r, NULL) == 0,
         "flux_rpc_get is ok if user doesn't desire response payload");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
     Jput (o);
 
     /* working with-payload RPC */
@@ -293,7 +257,7 @@ void test_encoding (flux_t *h)
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
         "flux_rpc_get works and returned expected payload");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* working with-payload RPC (raw) */
     char *d, data[] = "aaaaaaaaaaaaaaaaaaaa";
@@ -307,7 +271,7 @@ void test_encoding (flux_t *h)
         "flux_rpc_get_raw works");
     ok (d != NULL && l == len && memcmp (data, d, len) == 0,
         "flux_rpc_get_raw returned expected payload");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* use newish pack/unpack payload interfaces */
     int i = 0;
@@ -321,7 +285,7 @@ void test_encoding (flux_t *h)
         "flux_rpc_getf works");
     ok (i == 108,
         "and service returned incremented value");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* cause remote EPROTO (unexpected payload) - will be picked up in _getf() */
     ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
@@ -331,7 +295,7 @@ void test_encoding (flux_t *h)
     ok (flux_rpc_getf (r, "{}") < 0
         && errno == EPROTO,
         "flux_rpc_getf fails with EPROTO");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects payload) */
     ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
@@ -340,7 +304,7 @@ void test_encoding (flux_t *h)
     ok (flux_rpc_getf (r, "{ s:i }", "foo", &i) < 0
         && errno == EPROTO,
         "flux_rpc_getf fails with EPROTO");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects empty payload) */
     errno = 0;
@@ -350,37 +314,37 @@ void test_encoding (flux_t *h)
     ok (flux_rpc_getf (r, "{ ! }") < 0
         && errno == EPROTO,
         "flux_rpc_getf fails with EPROTO");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     diag ("completed encoding/api test");
 }
 
-static void then_cb (flux_rpc_t *r, void *arg)
+static void then_cb (flux_future_t *r, void *arg)
 {
     flux_t *h = arg;
     const char *json_str;
 
-    ok (flux_rpc_check (r) == true,
-        "flux_rpc_check says get won't block in then callback");
+    ok (flux_future_wait_for (r, 0.) == 0,
+        "flux_future_wait_for works (ready) in continuation");
     json_str = NULL;
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
-        "flux_rpc_get works and returned expected payload in then callback");
+        "flux_rpc_get works and returned expected payload in continuation");
     flux_reactor_stop (flux_get_reactor (h));
 }
 
 void test_then (flux_t *h)
 {
-    flux_rpc_t *r;
+    flux_future_t *r;
     const char *json_str;
 
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
-    ok (flux_rpc_then (r, then_cb, h) == 0,
-        "flux_rpc_then works");
+    ok (flux_future_then (r, -1., then_cb, h) == 0,
+        "flux_future_then works");
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
         "reactor completed normally");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     /* ensure contination is called if "get" called before "then"
      */
@@ -390,11 +354,11 @@ void test_then (flux_t *h)
     ok (flux_rpc_get (r, &json_str) == 0
         && json_str && !strcmp (json_str, "{}"),
         "flux_rpc_get works synchronously and returned expected payload");
-    ok (flux_rpc_then (r, then_cb, h) == 0,
-        "flux_rpc_then works");
+    ok (flux_future_then (r, -1., then_cb, h) == 0,
+        "flux_future_then works");
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
         "reactor completed normally");
-    flux_rpc_destroy (r);
+    flux_future_destroy (r);
 
     diag ("completed test of continuations");
 }
@@ -466,7 +430,6 @@ int main (int argc, char *argv[])
 
     test_service (h);
     test_basic (h);
-    test_aux (h);
     test_encoding (h);
     test_then (h);
 

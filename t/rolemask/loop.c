@@ -34,16 +34,16 @@ static int cred_set (flux_t *h, struct creds *cr)
 
 static void check_rpc_oneway (flux_t *h)
 {
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     flux_msg_t *msg = NULL;
     struct creds cr;
 
-    rpc = flux_rpc (h, "testrpc0", NULL, FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
-    ok (rpc != NULL,
+    f = flux_rpc (h, "testrpc0", NULL, FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
+    ok (f != NULL,
         "sent request");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     msg = flux_recv (h, FLUX_MATCH_ANY, 0);
     ok (msg != NULL,
@@ -59,7 +59,7 @@ static void check_rpc_oneway (flux_t *h)
 
 static void check_rpc_oneway_faked (flux_t *h)
 {
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     flux_msg_t *msg = NULL;
     struct creds saved, new, cr;
 
@@ -73,12 +73,12 @@ static void check_rpc_oneway_faked (flux_t *h)
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
        "set userid/rolemask to test values");
 
-    rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
-    ok (rpc != NULL,
+    f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE);
+    ok (f != NULL,
         "sent request");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     msg = flux_recv (h, FLUX_MATCH_ANY, 0);
     ok (msg != NULL,
@@ -119,7 +119,7 @@ flux_msg_handler_t *testrpc1_handler_create (flux_t *h)
 
 static void check_rpc_default_policy (flux_t *h)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     flux_msg_handler_t *w;
     struct creds saved, new, cr;
     int rc;
@@ -138,17 +138,17 @@ static void check_rpc_default_policy (flux_t *h)
     /* Attempt with default creds.
      */
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "default-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
     ok (testrpc1_called == true
-        && flux_rpc_get (rpc, NULL) == 0,
+        && flux_future_get (f, NULL) == 0,
         "default-creds: handler was called and returned success response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     /* Attempt with non-owner creds
      */
@@ -161,18 +161,18 @@ static void check_rpc_default_policy (flux_t *h)
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
        "set userid/rolemask to non-owner test values");
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "random-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "random-creds: reactor successfully handled one event");
     errno = 0;
     ok (testrpc1_called == false
-        && flux_rpc_get (rpc, NULL) == -1 && errno == EPERM,
+        && flux_future_get (f, NULL) == -1 && errno == EPERM,
         "random-creds: handler was NOT called and dispatcher returned EPERM response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     ok (cred_set (h, &saved) == 0,
         "restored connector creds");
 
@@ -181,7 +181,7 @@ static void check_rpc_default_policy (flux_t *h)
 
 static void check_rpc_open_policy (flux_t *h)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     flux_msg_handler_t *w;
     struct creds saved, new, cr;
     int rc;
@@ -195,16 +195,16 @@ static void check_rpc_open_policy (flux_t *h)
     /* Attempt with default creds.
      */
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "default-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_rpc_get (rpc, NULL) == 0,
+    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
         "default-creds: handler was called and returned success response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     /* Attempt with non-owner creds
      */
@@ -217,16 +217,16 @@ static void check_rpc_open_policy (flux_t *h)
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
        "set userid/rolemask to non-owner test values");
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "random-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "random-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_rpc_get (rpc, NULL) == 0,
+    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
         "random-creds: handler was called and returned success response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     ok (cred_set (h, &saved) == 0,
         "restored connector creds");
 
@@ -235,7 +235,7 @@ static void check_rpc_open_policy (flux_t *h)
 
 static void check_rpc_targetted_policy (flux_t *h)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     flux_msg_handler_t *w;
     struct creds saved, new, cr;
     uint32_t allow = 0x1000;
@@ -255,16 +255,16 @@ static void check_rpc_targetted_policy (flux_t *h)
     /* Attempt with default creds.
      */
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "default-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "default-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_rpc_get (rpc, NULL) == 0,
+    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
         "default-creds: handler was called and returned success response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     /* Attempt with target creds
      */
@@ -274,16 +274,16 @@ static void check_rpc_targetted_policy (flux_t *h)
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
        "set userid/rolemask to random/target test values");
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "target-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "target-creds: reactor successfully handled one event");
-    ok (testrpc1_called == true && flux_rpc_get (rpc, NULL) == 0,
+    ok (testrpc1_called == true && flux_future_get (f, NULL) == 0,
         "target-creds: handler was called and returned success response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     /* attempt with non-target creds
      */
@@ -293,18 +293,18 @@ static void check_rpc_targetted_policy (flux_t *h)
         && cr.userid == new.userid && cr.rolemask == new.rolemask,
        "set userid/rollmask to random/non-target test values");
     testrpc1_called = false;
-    ok ((rpc = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
+    ok ((f = flux_rpc (h, "testrpc1", NULL, FLUX_NODEID_ANY, 0)) != NULL,
         "nontarget-creds: sent request to message handler");
-    if (rpc == NULL)
+    if (f == NULL)
         BAIL_OUT ("flux_rpc: %s", flux_strerror (errno));
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_ONCE);
     ok (rc >= 0,
         "nontarget-creds: reactor successfully handled one event");
     errno = 0;
     ok (testrpc1_called == false
-        && flux_rpc_get (rpc, NULL) == -1 && errno == EPERM,
+        && flux_future_get (f, NULL) == -1 && errno == EPERM,
         "nontarget-creds: handler was NOT called and dispatcher returned EPERM response");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 
     ok (cred_set (h, &saved) == 0,
         "restored connector creds");

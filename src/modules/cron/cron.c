@@ -341,9 +341,9 @@ static void cron_entry_destroy (cron_entry_t *e)
 static int64_t next_cronid (flux_t *h)
 {
     int64_t ret = (int64_t) -1;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
-    if (!(rpc = flux_rpcf (h, "seq.fetch", 0, 0,
+    if (!(f = flux_rpcf (h, "seq.fetch", 0, 0,
                            "{ s:s s:i s:i s:b }",
                            "name", "cron",
                            "preincrement", 1,
@@ -353,13 +353,13 @@ static int64_t next_cronid (flux_t *h)
         goto out;
     }
 
-    if (flux_rpc_getf (rpc, "{ s:I }", "value", &ret) < 0) {
+    if (flux_rpc_getf (f, "{ s:I }", "value", &ret) < 0) {
         flux_log_error (h, "next_cronid: rpc_getf");
         goto out;
     }
 
 out:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return ret;
 }
 

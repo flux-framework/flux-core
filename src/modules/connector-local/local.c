@@ -163,17 +163,17 @@ static int send_auth_response (int fd, unsigned char e)
 
 static int lookup_userdb (flux_t *h, uint32_t userid, uint32_t *rolemask)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int rc = -1;
 
-    if (!(rpc = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
                            "{s:i}", "userid", userid)))
         goto done;
-    if (flux_rpc_getf (rpc, "{s:i}", "rolemask", rolemask) < 0)
+    if (flux_rpc_getf (f, "{s:i}", "rolemask", rolemask) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

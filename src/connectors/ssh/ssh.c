@@ -135,16 +135,17 @@ static int op_event_subscribe (void *impl, const char *topic)
 {
     ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f;
     int rc = 0;
 
-    if (!(rpc = flux_rpcf (c->h, "local.sub", FLUX_NODEID_ANY, 0,
-                           "{ s:s }", "topic", topic))
-                || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpcf (c->h, "local.sub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic)))
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -152,16 +153,17 @@ static int op_event_unsubscribe (void *impl, const char *topic)
 {
     ssh_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f;
     int rc = 0;
 
-    if (!(rpc = flux_rpcf (c->h, "local.unsub", FLUX_NODEID_ANY, 0,
-                           "{ s:s }", "topic", topic))
-                || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpcf (c->h, "local.unsub", FLUX_NODEID_ANY, 0,
+                           "{ s:s }", "topic", topic)))
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
