@@ -11,8 +11,6 @@ enum {
     FLUX_RPC_NORESPONSE = 1,
 };
 
-typedef flux_future_t flux_rpc_t;
-
 flux_future_t *flux_rpc (flux_t *h, const char *topic, const char *json_str,
                          uint32_t nodeid, int flags);
 
@@ -29,16 +27,6 @@ int flux_rpc_getf (flux_future_t *f, const char *fmt, ...);
 
 int flux_rpc_get_raw (flux_future_t *f, void *data, int *len);
 
-
-void flux_rpc_destroy (flux_future_t *f);
-
-bool flux_rpc_check (flux_future_t *f);
-
-int flux_rpc_then (flux_future_t *f, flux_continuation_f cb, void *arg);
-
-void *flux_rpc_aux_get (flux_future_t *f, const char *name);
-int flux_rpc_aux_set (flux_future_t *f, const char *name,
-                      void *aux, flux_free_f destroy);
 
 #endif /* !_FLUX_CORE_RPC_H */
 

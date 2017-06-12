@@ -315,38 +315,6 @@ flux_future_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
     return f;
 }
 
-/* compat stuff */
-
-void *flux_rpc_aux_get (flux_future_t *f, const char *name)
-{
-    return flux_future_aux_get (f, name);
-}
-
-int flux_rpc_aux_set (flux_future_t *f, const char *name,
-                      void *aux, flux_free_f destroy)
-{
-    return flux_future_aux_set (f, name, aux, destroy);
-}
-
-bool flux_rpc_check (flux_future_t *f)
-{
-    if (flux_future_wait_for (f, 0.1) < 0)
-        return false;
-    return true;
-}
-
-int flux_rpc_then (flux_future_t *f, flux_continuation_f cb, void *arg)
-{
-    return flux_future_then (f, -1., cb, arg);
-}
-
-void flux_rpc_destroy (flux_future_t *f)
-{
-    int saved_errno = errno;
-    flux_future_destroy (f);
-    errno = saved_errno;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
