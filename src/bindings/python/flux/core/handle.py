@@ -3,16 +3,6 @@ from flux._core import ffi, lib
 from flux.core.inner import raw
 from flux.rpc import RPC
 from flux.message import Message
-from flux._barrier import ffi as b_ffi, lib as b_lib
-
-class BarrierWrapper(Wrapper):
-    # This empty class accepts new methods, preventing accidental overloading
-    # across wrappers
-    pass
-
-
-RAW_BARRIER = BarrierWrapper(b_ffi, b_lib, prefixes=['flux_', ])
-
 
 class Flux(Wrapper):
     """
@@ -119,7 +109,7 @@ class Flux(Wrapper):
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)
 
     def barrier(self, name, nprocs):
-        RAW_BARRIER.barrier(self, name, nprocs)
+        self.flux_barrier(name, nprocs)
 
     def get_rank(self):
         rank = ffi.new('uint32_t [1]')

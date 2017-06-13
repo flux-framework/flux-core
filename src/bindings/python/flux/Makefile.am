@@ -32,7 +32,7 @@ _core_build.py: $(MAKE_BINDING)
 				  --add_long_sub 'FLUX_SEC_TYPE_ALL.*\n.*\),|||FLUX_SEC_TYPE_ALL = 7,'\
 				  flux.h
 
-fluxpy_LTLIBRARIES = _core.la _barrier.la _kvs.la _jsc.la _kz.la
+fluxpy_LTLIBRARIES = _core.la _kvs.la _jsc.la _kz.la
 
 _core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
@@ -49,19 +49,6 @@ _jsc_la_SOURCES = _jsc.c
 _jsc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libjsc
 _jsc_la_LIBADD = $(top_builddir)/src/modules/libjsc/libflux-jsc.la $(common_libs)
 _jsc_la_DEPENDENCIES = _jsc_build.py
-
-_barrier_build.py: $(top_srcdir)/src/modules/barrier/barrier.h $(MAKE_BINDING) _core_build.py
-	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/barrier \
-	  			  --package flux \
-	                          --modname _barrier \
-				  --include_ffi _core_build \
-				  barrier.h
-
-_barrier_la_SOURCES = _barrier.c
-_barrier_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/barrier
-_barrier_la_LIBADD = $(top_builddir)/src/modules/barrier/libflux-barrier.la $(common_libs)
-_barrier_la_DEPENDENCIES = _barrier_build.py
-
 
 _kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs.h $(MAKE_BINDING) _core_build.py
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/kvs \
