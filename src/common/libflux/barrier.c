@@ -33,12 +33,17 @@
 typedef struct {
     const char *id;
     int seq;
+    char *name;
+    size_t name_len;
 } libbarrier_ctx_t;
 
 static void freectx (void *arg)
 {
     libbarrier_ctx_t *ctx = arg;
-    free (ctx);
+    if (ctx) {
+        free (ctx->name);
+        free (ctx);
+    }
 }
 
 static libbarrier_ctx_t *getctx (flux_t *h)
@@ -46,29 +51,48 @@ static libbarrier_ctx_t *getctx (flux_t *h)
     libbarrier_ctx_t *ctx = flux_aux_get (h, "flux::barrier_client");
     if (!ctx) {
         const char *id = getenv ("FLUX_JOB_ID");
-        if (!id && !(id = getenv ("SLURM_STEPID")))
-            return NULL;
-        ctx = xzmalloc (sizeof (*ctx));
+        if (!id && !(id = getenv ("SLURM_STEPID"))) {
+            errno = EINVAL;
+            goto error;
+        }
+        if (!(ctx = calloc (1, sizeof (*ctx)))) {
+            errno = ENOMEM;
+            goto error;
+        }
+        ctx->name_len = strlen (id) + 16;
+        if (!(ctx->name = calloc (1, ctx->name_len))) {
+            errno = ENOMEM;
+            goto error;
+        }
         ctx->id = id;
         flux_aux_set (h, "flux::barrier_client", ctx, freectx);
     }
     return ctx;
+error:
+    freectx (ctx);
+    return NULL;
+}
+
+static const char *generate_unique_name (flux_t *h)
+{
+    libbarrier_ctx_t *ctx = getctx (h);
+    if (!ctx)
+        return NULL;
+    int n = snprintf (ctx->name, ctx->name_len, "%s%d", ctx->id, ctx->seq++);
+    if (n >= ctx->name_len) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return ctx->name;
 }
 
 int flux_barrier (flux_t *h, const char *name, int nprocs)
 {
-    char *s = NULL;
     flux_future_t *f = NULL;
     int ret = -1;
 
-    if (!name) {
-        libbarrier_ctx_t *ctx = getctx (h);
-        if (!ctx) {
-            errno = EINVAL;
-            goto done;
-        }
-        name = s = xasprintf ("%s%d", ctx->id, ctx->seq++);
-    }
+    if (!name && !(name = generate_unique_name (h)))
+        goto done;
     if (!(f = flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
                            "{s:s s:i s:i s:b}",
                            "name", name,
@@ -80,7 +104,6 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
         goto done;
     ret = 0;
 done:
-    free (s);
     flux_future_destroy (f);
     return ret;
 }
