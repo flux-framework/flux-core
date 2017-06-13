@@ -183,10 +183,10 @@ int kvs_commit (flux_t *h, int flags);
 
 /* kvs_commit_begin() sends the commit request and returns immediately.
  * kvs_commit_finish() blocks until the response is received, then returns.
- * Use flux_rpc_then() to arrange for the commit to complete asynchronously.
+ * Use flux_future_then() to arrange for the commit to complete asynchronously.
  */
-flux_rpc_t *kvs_commit_begin (flux_t *h, int flags);
-int kvs_commit_finish (flux_rpc_t *rpc);
+flux_future_t *kvs_commit_begin (flux_t *h, int flags);
+int kvs_commit_finish (flux_future_t *f);
 
 /* kvs_fence() is a collective commit operation.  nprocs tasks make the
  * call with identical arguments.  It is internally optimized to minimize
@@ -202,10 +202,11 @@ int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);
 
 /* kvs_fence_begin() sends the fence request and returns immediately.
  * kvs_fence_finish() blocks until the response is received, then returns.
- * Use flux_rpc_then() to arrange for the fence to complete asynchronously.
+ * Use flux_future_then() to arrange for the fence to complete asynchronously.
  */
-flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs, int flags);
-int kvs_fence_finish (flux_rpc_t *rpc);
+flux_future_t *kvs_fence_begin (flux_t *h, const char *name,
+                                int nprocs, int flags);
+int kvs_fence_finish (flux_future_t *f);
 
 /* Operations (put, unlink, symlink, mkdir) may be associated with a named
  * fence by setting the fence context to that name before issuing them.

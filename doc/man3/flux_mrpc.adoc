@@ -45,7 +45,7 @@ DESCRIPTION
 `flux_mrpc()` encodes and sends a batch of request messages to multiple
 ranks.  A flux_mrpc_t object is returned which can be used with
 `flux_mrpc_get()` and `flux_mrpc_next()` to obtain the decoded responses,
-as they become available.  The flux_rpc_t should finally be disposed of
+as they become available.  The flux_mrpc_t should finally be disposed of
 using `flux_mrpc_destroy()`.
 
 _topic_ must be set to a topic string representing the Flux
@@ -65,7 +65,7 @@ _flags_ may be zero or:
 
 FLUX_RPC_NORESPONSE::
 No response is expected.  The request will not be assigned a matchtag,
-and the flux_rpc_t returned by `flux_mrpc()` may be immediately destroyed.
+and the flux_mrpc_t returned by `flux_mrpc()` may be immediately destroyed.
 
 `flux_mrpc_get()` blocks until a matching response is received, then
 decodes the result.  For asynchronous response handling,
@@ -185,7 +185,7 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_rpc(3), flux_mrpc_then(3)
+flux_mrpc_then(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]

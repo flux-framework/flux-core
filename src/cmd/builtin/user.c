@@ -103,16 +103,16 @@ done:
 
 static void delrole (flux_t *h, uint32_t userid, uint32_t rolemask)
 {
-    flux_rpc_t *r;
+    flux_future_t *f;
     uint32_t final;
     char s[256];
 
-    r = flux_rpcf (h, "userdb.delrole", FLUX_NODEID_ANY, 0,
+    f = flux_rpcf (h, "userdb.delrole", FLUX_NODEID_ANY, 0,
                    "{s:i s:i}", "userid", userid,
                                 "rolemask", rolemask);
-    if (!r)
+    if (!f)
         log_err_exit ("userdb.delrole");
-    if (flux_rpc_getf (r, "{s:i s:i}", "userid", &userid,
+    if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
                                        "rolemask", &final) < 0) {
         if (errno == ENOSYS)
             log_msg_exit ("userdb module is not loaded");
@@ -121,21 +121,21 @@ static void delrole (flux_t *h, uint32_t userid, uint32_t rolemask)
         log_err_exit ("userdb.delrole");
     }
     printf ("%" PRIu32 ":%s\n", userid, rolestr (final, s, sizeof (s)));
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
 }
 
 static void addrole (flux_t *h, uint32_t userid, uint32_t rolemask)
 {
-    flux_rpc_t *r;
+    flux_future_t *f;
     uint32_t final;
     char s[256];
 
-    r = flux_rpcf (h, "userdb.addrole", FLUX_NODEID_ANY, 0,
+    f = flux_rpcf (h, "userdb.addrole", FLUX_NODEID_ANY, 0,
                    "{s:i s:i}", "userid", userid,
                                     "rolemask", rolemask);
-    if (!r)
+    if (!f)
         log_err_exit ("userdb.addrole");
-    if (flux_rpc_getf (r, "{s:i s:i}", "userid", &userid,
+    if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
                                        "rolemask", &final) < 0) {
         if (errno == ENOSYS)
             log_msg_exit ("userdb module is not loaded");
@@ -144,7 +144,7 @@ static void addrole (flux_t *h, uint32_t userid, uint32_t rolemask)
         log_err_exit ("userdb.addrole");
     }
     printf ("%" PRIu32 ":%s\n", userid, rolestr (final, s, sizeof (s)));
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
 }
 
 static uint32_t lookup_user (const char *name)
@@ -174,7 +174,7 @@ static int internal_user_list (optparse_t *p, int ac, char *av[])
 {
     int n;
     flux_t *h;
-    flux_rpc_t *r;
+    flux_future_t *f;
     uint32_t userid;
     uint32_t rolemask;
     char s[256];
@@ -187,22 +187,22 @@ static int internal_user_list (optparse_t *p, int ac, char *av[])
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
     for (;;) {
-        r = flux_rpc (h, "userdb.getnext", NULL, FLUX_NODEID_ANY, 0);
-        if (!r)
+        f = flux_rpc (h, "userdb.getnext", NULL, FLUX_NODEID_ANY, 0);
+        if (!f)
             log_err_exit ("userdb.getnext");
-        if (flux_rpc_getf (r, "{s:i s:i}", "userid", &userid,
+        if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
                                            "rolemask", &rolemask) < 0) {
             if (errno == ENOSYS)
                 log_msg_exit ("userdb module is not loaded");
             if (errno != ENOENT)
                 log_err_exit ("userdb.getnext");
-            flux_rpc_destroy (r);
+            flux_future_destroy (f);
             break;
         }
         printf ("%" PRIu32 ":%s\n",
                 userid, rolestr (rolemask, s, sizeof (s)));
 
-        flux_rpc_destroy (r);
+        flux_future_destroy (f);
     }
     flux_close (h);
     return (0);
@@ -212,7 +212,7 @@ static int internal_user_lookup (optparse_t *p, int ac, char *av[])
 {
     int n;
     flux_t *h;
-    flux_rpc_t *r;
+    flux_future_t *f;
     uint32_t userid;
     uint32_t rolemask;
     char *endptr;
@@ -230,11 +230,11 @@ static int internal_user_lookup (optparse_t *p, int ac, char *av[])
         log_msg_exit ("%s: invalid userid", av[n]);
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    r = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
+    f = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
                    "{s:i}", "userid", userid);
-    if (!r)
+    if (!f)
         log_err_exit ("userdb.lookup");
-    if (flux_rpc_getf (r, "{s:i s:i}", "userid", &userid,
+    if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
                                        "rolemask", &rolemask) < 0) {
         if (errno == ENOSYS)
             log_msg_exit ("userdb module is not loaded");
@@ -244,7 +244,7 @@ static int internal_user_lookup (optparse_t *p, int ac, char *av[])
     }
     printf ("%" PRIu32 ":%s\n",
             userid, rolestr (rolemask, s, sizeof (s)));
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }

@@ -57,13 +57,13 @@ static char *flux_lspeer (flux_t *h, int rank)
 {
     int saved_errno;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    flux_rpc_t *r = NULL;
+    flux_future_t *f;
     const char *json_str;
     char *ret = NULL;
 
-    if (!(r = flux_rpc (h, "cmb.lspeer", NULL, nodeid, 0)))
+    if (!(f = flux_rpc (h, "cmb.lspeer", NULL, nodeid, 0)))
         goto done;
-    if (flux_rpc_get (r, &json_str) < 0)
+    if (flux_rpc_get (f, &json_str) < 0)
         goto done;
     if (!json_str) {
         errno = EPROTO;
@@ -72,7 +72,7 @@ static char *flux_lspeer (flux_t *h, int rank)
     ret = strdup (json_str);
 done:
     saved_errno = errno;
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     errno = saved_errno;
     return ret;
 }

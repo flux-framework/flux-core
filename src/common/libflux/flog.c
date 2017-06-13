@@ -117,18 +117,18 @@ const char *flux_strerror (int errnum)
 
 static int log_rpc (flux_t *h, const char *buf, int len, int flags)
 {
-    flux_rpc_t *r = NULL;
+    flux_future_t *f;
     int rc = (flags & FLUX_RPC_NORESPONSE) ? 0 : -1;
 
-    if (!(r = flux_rpc_raw (h, "log.append", buf, len, FLUX_NODEID_ANY, flags)))
+    if (!(f = flux_rpc_raw (h, "log.append", buf, len, FLUX_NODEID_ANY, flags)))
         goto done;
     if ((flags & FLUX_RPC_NORESPONSE))
         goto done;
-    if (flux_rpc_get (r, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -213,32 +213,32 @@ void flux_log_error (flux_t *h, const char *fmt, ...)
 
 static int dmesg_clear (flux_t *h, int seq)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int rc = -1;
 
-    if (!(rpc = flux_rpcf (h, "log.clear", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (h, "log.clear", FLUX_NODEID_ANY, 0,
                            "{s:i}", "seq", seq)))
         goto done;
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
-static flux_rpc_t *dmesg_rpc (flux_t *h, int seq, bool follow)
+static flux_future_t *dmesg_rpc (flux_t *h, int seq, bool follow)
 {
     return flux_rpcf (h, "log.dmesg", FLUX_NODEID_ANY, 0,
                       "{s:i s:b}", "seq", seq, "follow", follow);
 }
 
-static int dmesg_rpc_get (flux_rpc_t *rpc, int *seq, flux_log_f fun, void *arg)
+static int dmesg_rpc_get (flux_future_t *f, int *seq, flux_log_f fun, void *arg)
 {
     const char *buf;
     int rc = -1;
 
-    if (flux_rpc_getf (rpc, "{s:i s:s}", "seq", seq, "buf", &buf) < 0)
+    if (flux_rpc_getf (f, "{s:i s:s}", "seq", seq, "buf", &buf) < 0)
         goto done;
     fun (buf, strlen (buf), arg);
     rc = 0;
@@ -257,17 +257,17 @@ int flux_dmesg (flux_t *h, int flags, flux_log_f fun, void *arg)
         follow = true;
     if (fun) {
         while (!eof) {
-            flux_rpc_t *rpc;
-            if (!(rpc = dmesg_rpc (h, seq, follow)))
+            flux_future_t *f;
+            if (!(f = dmesg_rpc (h, seq, follow)))
                 goto done;
-            if (dmesg_rpc_get (rpc, &seq, fun, arg) < 0) {
+            if (dmesg_rpc_get (f, &seq, fun, arg) < 0) {
                 if (errno != ENOENT) {
-                    flux_rpc_destroy (rpc);
+                    flux_future_destroy (f);
                     goto done;
                 }
                 eof = true;
             }
-            flux_rpc_destroy (rpc);
+            flux_future_destroy (f);
         }
     }
     if ((flags & FLUX_DMESG_CLEAR)) {

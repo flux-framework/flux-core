@@ -389,21 +389,21 @@ done:
 
 int register_backing_store (flux_t *h, bool value, const char *name)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int saved_errno = 0;
     int rc = -1;
 
-    if (!(rpc = flux_rpcf (h, "content.backing", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (h, "content.backing", FLUX_NODEID_ANY, 0,
                            "{ s:b s:s }",
                            "backing", value,
                            "name", name)))
         goto done;
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
     saved_errno = errno;
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     errno = saved_errno;
     return rc;
 }
@@ -427,7 +427,7 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
                   const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int count = 0;
 
     flux_log (h, LOG_DEBUG, "shutdown: begin");
@@ -475,22 +475,22 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
             data = ctx->lzo_buf;
             size = uncompressed_size;
         }
-        if (!(rpc = flux_rpc_raw (h, "content.store", data, size,
+        if (!(f = flux_rpc_raw (h, "content.store", data, size,
                                                         FLUX_NODEID_ANY, 0))) {
             flux_log_error (h, "shutdown: store");
             continue;
         }
-        if (flux_rpc_get_raw (rpc, &blobref, &blobref_size) < 0) {
+        if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
             flux_log_error (h, "shutdown: store");
-            flux_rpc_destroy (rpc);
+            flux_future_destroy (f);
             continue;
         }
         if (!blobref || blobref[blobref_size - 1] != '\0') {
             flux_log (h, LOG_ERR, "shutdown: store returned malformed blobref");
-            flux_rpc_destroy (rpc);
+            flux_future_destroy (f);
             continue;
         }
-        flux_rpc_destroy (rpc);
+        flux_future_destroy (f);
         count++;
     }
     (void )sqlite3_reset (ctx->dump_stmt);

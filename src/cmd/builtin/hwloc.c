@@ -39,7 +39,7 @@
 
 struct hwloc_topo {
     flux_t *h;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *topo;
 };
 
@@ -54,10 +54,10 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
     if (!(t->h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
 
-    if (!(t->rpc = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0)))
+    if (!(t->f = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0)))
         log_err_exit ("flux_rpc");
 
-    if (flux_rpc_getf (t->rpc, "{ s:s }", "topology", &t->topo) < 0)
+    if (flux_rpc_getf (t->f, "{ s:s }", "topology", &t->topo) < 0)
         log_err_exit ("flux_rpc_getf");
 
     return (t);
@@ -68,7 +68,7 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
  */
 static void hwloc_topo_destroy (struct hwloc_topo *t)
 {
-    flux_rpc_destroy (t->rpc);
+    flux_future_destroy (t->f);
     flux_close (t->h);
     free (t);
 }

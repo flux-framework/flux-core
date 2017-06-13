@@ -135,12 +135,12 @@ int main (int argc, char *argv[])
 
 void test_null (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
-    if (!(rpc = flux_rpc (h, "req.null", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpc (h, "req.null", NULL, nodeid, 0))
+             || flux_future_get (f, NULL) < 0)
         log_err_exit ("req.null");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_echo (flux_t *h, uint32_t nodeid)
@@ -149,11 +149,11 @@ void test_echo (flux_t *h, uint32_t nodeid)
     json_object *out = NULL;
     const char *json_str;
     const char *s;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     Jadd_str (in, "mumble", "burble");
-    if (!(rpc = flux_rpc (h, "req.echo", Jtostr (in), nodeid, 0))
-             || flux_rpc_get (rpc, &json_str) < 0)
+    if (!(f = flux_rpc (h, "req.echo", Jtostr (in), nodeid, 0))
+             || flux_rpc_get (f, &json_str) < 0)
         log_err_exit ("%s", __FUNCTION__);
     if (!json_str
         || !(out = Jfromstr (json_str))
@@ -162,31 +162,31 @@ void test_echo (flux_t *h, uint32_t nodeid)
         log_msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
     Jput (in);
     Jput (out);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_err (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
-    if (!(rpc = flux_rpc (h, "req.err", NULL, nodeid, 0)))
+    if (!(f = flux_rpc (h, "req.err", NULL, nodeid, 0)))
         log_err_exit ("error sending request");
-    if (flux_rpc_get (rpc, NULL) == 0)
+    if (flux_future_get (f, NULL) == 0)
         log_msg_exit ("%s: succeeded when should've failed", __FUNCTION__);
     if (errno != 42)
         log_msg_exit ("%s: got errno %d instead of 42", __FUNCTION__, errno);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_src (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *json_str;
     json_object *out = NULL;
     int i;
 
-    if (!(rpc = flux_rpc (h, "req.src", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, &json_str) < 0)
+    if (!(f = flux_rpc (h, "req.src", NULL, nodeid, 0))
+             || flux_rpc_get (f, &json_str) < 0)
         log_err_exit ("%s", __FUNCTION__);
     if (!json_str
         || !(out = Jfromstr (json_str))
@@ -194,25 +194,25 @@ void test_src (flux_t *h, uint32_t nodeid)
         || i != 42)
         log_msg_exit ("%s: didn't get expected payload", __FUNCTION__);
     Jput (out);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_sink (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     json_object *in = Jnew();
 
     Jadd_double (in, "pi", 3.14);
-    if (!(rpc = flux_rpc (h, "req.sink", Jtostr (in), nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
+    if (!(f = flux_rpc (h, "req.sink", Jtostr (in), nodeid, 0))
+             || flux_future_get (f, NULL) < 0)
         log_err_exit ("%s", __FUNCTION__);
     Jput (in);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_nsrc (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const int count = 10000;
     json_object *in = Jnew ();
     const char *json_str;
@@ -220,10 +220,10 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
     int i, seq;
 
     Jadd_int (in, "count", count);
-    if (!(rpc = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
+    if (!(f = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
                                                       FLUX_RPC_NORESPONSE)))
         log_err_exit ("%s", __FUNCTION__);
-
+    flux_future_destroy (f);
     for (i = 0; i < count; i++) {
         flux_msg_t *msg = flux_recv (h, FLUX_MATCH_ANY, 0);
         if (!msg)
@@ -249,7 +249,7 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
  */
 void test_putmsg (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *json_str;
     const int count = 10000;
     const int defer_start = 5000;
@@ -265,10 +265,10 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
         oom ();
 
     Jadd_int (in, "count", count);
-    if (!(rpc = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
+    if (!(f = flux_rpc (h, "req.nsrc", Jtostr (in), FLUX_NODEID_ANY,
                                                       FLUX_RPC_NORESPONSE)))
         log_err_exit ("%s", __FUNCTION__);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     do {
         flux_msg_t *msg = flux_recv (h, FLUX_MATCH_ANY, 0);
         if (!msg)
@@ -317,7 +317,7 @@ static int count_hops (const char *s)
 
 static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     const char *json_str;
     json_object *in = Jnew ();
     json_object *out = NULL;
@@ -325,8 +325,8 @@ static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc
 
     Jadd_int (in, "rank", xnodeid);
     Jadd_str (in, "service", svc);
-    if (!(rpc = flux_rpc (h, "req.xping", Jtostr (in), nodeid, 0))
-            || flux_rpc_get (rpc, &json_str) < 0)
+    if (!(f = flux_rpc (h, "req.xping", Jtostr (in), nodeid, 0))
+            || flux_rpc_get (f, &json_str) < 0)
         log_err_exit ("req.xping");
     if (!json_str
         || !(out = Jfromstr (json_str))
@@ -335,7 +335,7 @@ static void xping (flux_t *h, uint32_t nodeid, uint32_t xnodeid, const char *svc
     printf ("hops=%d\n", count_hops (route));
     Jput (out);
     Jput (in);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_pingzero (flux_t *h, uint32_t nodeid)
@@ -355,20 +355,20 @@ void test_pingself (flux_t *h, uint32_t nodeid)
 
 void test_flush (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc (h, "req.flush", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
+    flux_future_t *f;
+    if (!(f = flux_rpc (h, "req.flush", NULL, nodeid, 0))
+             || flux_future_get (f, NULL) < 0)
         log_err_exit ("req.flush");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 void test_clog (flux_t *h, uint32_t nodeid)
 {
-    flux_rpc_t *rpc;
-    if (!(rpc = flux_rpc (h, "req.clog", NULL, nodeid, 0))
-             || flux_rpc_get (rpc, NULL) < 0)
+    flux_future_t *f;
+    if (!(f = flux_rpc (h, "req.clog", NULL, nodeid, 0))
+             || flux_rpc_get (f, NULL) < 0)
         log_err_exit ("req.clog");
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 /*

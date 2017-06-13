@@ -376,16 +376,16 @@ int module_stop (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int rc = -1;
 
-    if (!(rpc = flux_rpc (p->broker_h, topic, NULL,
+    if (!(f = flux_rpc (p->broker_h, topic, NULL,
                           FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
     free (topic);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

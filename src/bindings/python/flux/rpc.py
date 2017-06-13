@@ -17,7 +17,7 @@ class RPC(WrapperPimpl):
                      handle=None):
             # hold a reference for destructor ordering
             self._handle = flux_handle
-            dest = raw.flux_rpc_destroy
+            dest = raw.flux_future_destroy
             super(self.__class__, self).__init__(ffi, lib,
                                                  handle=handle,
                                                  match=ffi.typeof(

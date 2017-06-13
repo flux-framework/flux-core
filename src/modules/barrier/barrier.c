@@ -166,9 +166,9 @@ static int barrier_add_client (barrier_t *b, char *sender, const flux_msg_t *msg
 
 static void send_enter_request (barrier_ctx_t *ctx, barrier_t *b)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
-    if (!(rpc = flux_rpcf (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
+    if (!(f = flux_rpcf (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
                            FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
                            "name", b->name,
                            "count", b->count,
@@ -178,7 +178,7 @@ static void send_enter_request (barrier_ctx_t *ctx, barrier_t *b)
         goto done;
     }
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
 }
 
 /* Barrier entry happens in two ways:

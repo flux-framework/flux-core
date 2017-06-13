@@ -173,12 +173,12 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     int rc = -1;
     const char *path;
     const char *json_str;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     uint32_t nodeid = FLUX_NODEID_ANY;
     json_object *o = kvspath_request_json (id);
 
-    if (!(rpc = flux_rpc (h, "job.kvspath", Jtostr (o), nodeid, 0))
-        ||  (flux_rpc_get (rpc, &json_str) < 0)) {
+    if (!(f = flux_rpc (h, "job.kvspath", Jtostr (o), nodeid, 0))
+        ||  (flux_rpc_get (f, &json_str) < 0)) {
         flux_log_error (h, "flux_rpc (job.kvspath)");
         goto out;
     }
@@ -202,7 +202,7 @@ static int lwj_kvs_path (flux_t *h, int64_t id, char **pathp)
     }
     rc = 0;
 out:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     Jput (o);
     return (rc);
 }

@@ -268,7 +268,7 @@ done:
  * If timeout <= 0., there is no timeout.
  * If timeout == 0., time out immediately if future has not been fulfilled.
  * If timeout > 0., lazily set up the "now" reactor context (first call)
- * and un that reactor until fulfilled or error.  If timer expires,
+ * and run that reactor until fulfilled or error.  If timer expires,
  * don't fulfill the future; user might want to defer to continuation.
  * If flux_t handle is used, any messages not "consumed" by the future
  * have to go back to the parent handle with flux_dispatch_requeue().
@@ -358,7 +358,7 @@ void *flux_future_aux_get (flux_future_t *f, const char *name)
     return zhash_lookup (f->aux, name);
 }
 
-/* Store 'aux' object by name.  Allow "aononymous" (name=NULL) objects to
+/* Store 'aux' object by name.  Allow "anonymous" (name=NULL) objects to
  * be set - useful for adding destructors for watchers created in init
  * function, which may be called in both "now" and "then" contexts without
  * knowing which it is.

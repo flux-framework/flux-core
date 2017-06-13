@@ -256,7 +256,7 @@ char *kvsdir_key_at (kvsdir_t *dir, const char *name)
 static int getobj (flux_t *h, json_object *rootdir, const char *key,
                    int flags, json_object **val)
 {
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     const char *json_str;
     json_object *in = NULL;
     json_object *out = NULL;
@@ -270,9 +270,9 @@ static int getobj (flux_t *h, json_object *rootdir, const char *key,
     }
     if (!(in = kp_tget_enc (rootdir, key, flags)))
         goto done;
-    if (!(rpc = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, &json_str) < 0)
+    if (flux_rpc_get (f, &json_str) < 0)
         goto done;
     if (!json_str || !(out = Jfromstr (json_str))) {
         errno = EPROTO;
@@ -287,7 +287,7 @@ done:
     saved_errno = errno;
     Jput (in);
     Jput (out);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     errno = saved_errno;
     return rc;
 }
@@ -594,15 +594,15 @@ static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
 int kvs_unwatch (flux_t *h, const char *key)
 {
     kvsctx_t *ctx = getctx (h);
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     json_object *in = NULL;
     int rc = -1;
 
     if (!(in = kp_tunwatch_enc (key)))
         goto done;
-    if (!(rpc = flux_rpc (h, "kvs.unwatch", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.unwatch", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     /* Delete all watchers for the specified key.
      */
@@ -620,7 +620,7 @@ int kvs_unwatch (flux_t *h, const char *key)
     rc = 0;
 done:
     Jput (in);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -1226,50 +1226,51 @@ out:
  ** Commit/synchronization
  **/
 
-flux_rpc_t *kvs_commit_begin (flux_t *h, int flags)
+flux_future_t *kvs_commit_begin (flux_t *h, int flags)
 {
     zuuid_t *uuid = NULL;
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     int saved_errno;
 
     if (!(uuid = zuuid_new ())) {
         errno = ENOMEM;
         goto done;
     }
-    if (!(rpc = kvs_fence_begin (h, zuuid_str (uuid), 1, flags)))
+    if (!(f = kvs_fence_begin (h, zuuid_str (uuid), 1, flags)))
         goto done;
 done:
     saved_errno = errno;
     zuuid_destroy (&uuid);
     errno = saved_errno;
-    return rpc;
+    return f;
 }
 
-int kvs_commit_finish (flux_rpc_t *rpc)
+int kvs_commit_finish (flux_future_t *f)
 {
-    return flux_rpc_get (rpc, NULL);
+    return flux_future_get (f, NULL);
 }
 
 int kvs_commit (flux_t *h, int flags)
 {
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     int rc = -1;
 
-    if (!(rpc = kvs_commit_begin (h, flags)))
+    if (!(f = kvs_commit_begin (h, flags)))
         goto done;
-    if (kvs_commit_finish (rpc) < 0)
+    if (kvs_commit_finish (f) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
-flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs, int flags)
+flux_future_t *kvs_fence_begin (flux_t *h, const char *name,
+                                int nprocs, int flags)
 {
     kvsctx_t *ctx = getctx (h);
     json_object *in = NULL;
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     int saved_errno = errno;
     json_object *fence_ops = NULL;
 
@@ -1285,18 +1286,18 @@ flux_rpc_t *kvs_fence_begin (flux_t *h, const char *name, int nprocs, int flags)
         Jput (ctx->ops);
         ctx->ops = NULL;
     }
-    if (!(rpc = flux_rpc (h, "kvs.fence", Jtostr (in), FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.fence", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
 done:
     saved_errno = errno;
     Jput (in);
     errno = saved_errno;
-    return rpc;
+    return f;
 }
 
-int kvs_fence_finish (flux_rpc_t *rpc)
+int kvs_fence_finish (flux_future_t *f)
 {
-    return flux_rpc_get (rpc, NULL);
+    return flux_future_get (f, NULL);
 }
 
 void kvs_fence_set_context (flux_t *h, const char *name)
@@ -1323,67 +1324,67 @@ void kvs_fence_clear_context (flux_t *h)
 
 int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
 {
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     int rc = -1;
 
-    if (!(rpc = kvs_fence_begin (h, name, nprocs, flags)))
+    if (!(f = kvs_fence_begin (h, name, nprocs, flags)))
         goto done;
-    if (kvs_fence_finish (rpc) < 0)
+    if (kvs_fence_finish (f) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
 int kvs_get_version (flux_t *h, int *versionp)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int version;
     int rc = -1;
 
-    if (!(rpc = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (rpc, "{ s:i }", "rootseq", &version) < 0)
+    if (flux_rpc_getf (f, "{ s:i }", "rootseq", &version) < 0)
         goto done;
     if (versionp)
         *versionp = version;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 
 int kvs_wait_version (flux_t *h, int version)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int ret = -1;
 
-    if (!(rpc = flux_rpcf (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
+    if (!(f = flux_rpcf (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
                            "rootseq", version)))
         goto done;
     /* N.B. response contains (rootseq, rootdir) but we don't need it.
      */
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     ret = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return ret;
 }
 
 int kvs_dropcache (flux_t *h)
 {
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     int rc = -1;
 
-    if (!(rpc = flux_rpc (h, "kvs.dropcache", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.dropcache", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     return rc;
 }
 

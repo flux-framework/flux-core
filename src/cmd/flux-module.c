@@ -626,7 +626,7 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
     char *service;
     uint32_t nodeid;
     const char *json_str;
-    flux_rpc_t *r = NULL;
+    flux_future_t *f = NULL;
     flux_t *h;
 
     if ((n = optparse_option_index (p)) < argc - 1) {
@@ -641,9 +641,9 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
 
     if (optparse_hasopt (p, "clear")) {
         topic = xasprintf ("%s.stats.clear", service);
-        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+        if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
-        if (flux_rpc_get (r, NULL) < 0)
+        if (flux_future_get (f, NULL) < 0)
             log_err_exit ("%s", topic);
     } else if (optparse_hasopt (p, "clear-all")) {
         topic = xasprintf ("%s.stats.clear", service);
@@ -655,25 +655,25 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
         flux_msg_destroy (msg);
     } else if (optparse_hasopt (p, "rusage")) {
         topic = xasprintf ("%s.rusage", service);
-        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+        if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
-        if (flux_rpc_get (r, &json_str) < 0)
+        if (flux_rpc_get (f, &json_str) < 0)
             log_err_exit ("%s", topic);
         if (!json_str)
             log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
     } else {
         topic = xasprintf ("%s.stats.get", service);
-        if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+        if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
-        if (flux_rpc_get (r, &json_str) < 0)
+        if (flux_rpc_get (f, &json_str) < 0)
             log_err_exit ("%s", topic);
         if (!json_str)
             log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
     }
     free (topic);
-    flux_rpc_destroy (r);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
@@ -685,7 +685,7 @@ int cmd_debug (optparse_t *p, int argc, char **argv)
     char *topic = NULL;
     const char *op = "setbit";
     int flags = 0;
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
 
     if ((n = optparse_option_index (p)) != argc - 1)
         log_msg_exit ("flux-debug requires service argument");
@@ -708,12 +708,13 @@ int cmd_debug (optparse_t *p, int argc, char **argv)
         op = "setbit";
         flags = strtoul (optparse_get_str (p, "setbit", NULL), NULL, 0);
     }
-    if (!(rpc = flux_rpcf (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
+    if (!(f = flux_rpcf (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
                            "op", op, "flags", flags)))
         log_err_exit ("%s", topic);
-    if (flux_rpc_getf (rpc, "{s:i}", "flags", &flags) < 0)
+    if (flux_rpc_getf (f, "{s:i}", "flags", &flags) < 0)
         log_err_exit ("%s", topic);
     printf ("0x%x\n", flags);
+    flux_future_destroy (f);
     flux_close (h);
     free (topic);
     return (0);

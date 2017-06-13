@@ -12,21 +12,21 @@ SYNOPSIS
 --------
  #include <flux/core.h>
 
- flux_rpc_t *flux_content_load (flux_t *h,
-                                const char *blobref,
-                                int flags);
+ flux_future_t *flux_content_load (flux_t *h,
+                                   const char *blobref,
+                                   int flags);
 
- int flux_content_load_get (flux_rpc_t *rpc,
+ int flux_content_load_get (flux_future_t *f,
                             void *buf,
                             size_t *len);
 
 
- flux_rpc_t *flux_content_store (flux_t *h,
-                                 const void *buf,
-                                 size_t len,
-                                 int flags);
+ flux_future_t *flux_content_store (flux_t *h,
+                                    const void *buf,
+                                    size_t len,
+                                    int flags);
 
- int flux_content_store_get (flux_rpc_t *rpc,
+ int flux_content_store_get (flux_future_t *f,
                              const char **ref);
 
 
@@ -39,27 +39,27 @@ All functions described below are idempotent.
 
 `flux_content_load()` sends a request to the content service
 to load a data blob by _blobref_, a hash digest whose format
-is described in RFC 10.  A `flux_rpc_t` object which encapsulates the
+is described in RFC 10.  A `flux_future_t` object which encapsulates the
 remote procedure call state is returned.  _flags_ is a mask that may
 include the values described below.
 
 `flux_request_load_get()` completes a load operation, blocking on
 response(s) if needed, parsing the result, and returning the requested
 blob in _buf_ and its length in _len_.  _buf_ is valid until
-`flux_rpc_destroy()` is called.
+`flux_future_destroy()` is called.
 
 `flux_content_store()` sends a request to the content service
-to store a data blob _buf_ of length _len_.   A `flux_rpc_t`
+to store a data blob _buf_ of length _len_.   A `flux_future_t`
 object which encapsulates the remote procedure call state is returned.
 _flags_ is a mask that may include the values described below.
 
 `flux_content_store_get()` completes a store operation, blocking on
 response(s) if needed, and returning a blobref that can be used to
 retrieve the stored blob.  The blobref string is valid until
-`flux_rpc_destroy()` is called.
+`flux_future_destroy()` is called.
 
 These functions may be used asynchronously.
-See `flux_rpc_then(3)` for details.
+See `flux_future_then(3)` for details.
 
 
 FLAGS
@@ -81,7 +81,7 @@ RETURN VALUE
 ------------
 
 `flux_content_load()` and `flux_content_store()` return a
-`flux_rpc_t` on success, or NULL on failure with errno set appropriately.
+`flux_future_t` on success, or NULL on failure with errno set appropriately.
 
 `flux_content_load_get()` and `flux_content_store_get()`
 return 0 on success, or -1 on failure with errno set appropriately.
@@ -132,6 +132,6 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_rpc(3), flux_rpc_then(3)
+flux_rpc(3), flux_future_then(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_10.adoc[RFC 10: Content Storage Service]

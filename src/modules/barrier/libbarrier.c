@@ -58,7 +58,7 @@ static libbarrier_ctx_t *getctx (flux_t *h)
 int flux_barrier (flux_t *h, const char *name, int nprocs)
 {
     char *s = NULL;
-    flux_rpc_t *rpc = NULL;
+    flux_future_t *f = NULL;
     int ret = -1;
 
     if (!name) {
@@ -69,20 +69,19 @@ int flux_barrier (flux_t *h, const char *name, int nprocs)
         }
         name = s = xasprintf ("%s%d", ctx->id, ctx->seq++);
     }
-    if (!(rpc = flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
                            "{s:s s:i s:i s:b}",
                            "name", name,
                            "count", 1,
                            "nprocs", nprocs,
                            "internal", false)))
         goto done;
-    if (flux_rpc_get (rpc, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     ret = 0;
 done:
-    if (s)
-        free (s);
-    flux_rpc_destroy (rpc);
+    free (s);
+    flux_future_destroy (f);
     return ret;
 }
 

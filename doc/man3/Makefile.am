@@ -13,7 +13,6 @@ MAN3_FILES_PRIMARY = \
 	flux_msg_encode.3 \
 	flux_msg_sendfd.3 \
 	flux_rpc.3 \
-	flux_rpc_then.3 \
 	flux_mrpc.3 \
 	flux_reduce_create.3 \
 	flux_get_rank.3 \
@@ -33,7 +32,6 @@ MAN3_FILES_PRIMARY = \
 	flux_child_watcher_create.3 \
 	flux_signal_watcher_create.3 \
 	flux_stat_watcher_create.3 \
-	flux_rpc_raw.3 \
 	flux_respond.3 \
 	flux_reactor_now.3 \
 	flux_request_decode.3 \
@@ -59,14 +57,6 @@ MAN3_FILES_SECONDARY = \
 	flux_pollfd.3 \
 	flux_msg_decode.3 \
 	flux_msg_recvfd.3 \
-	flux_rpc_destroy.3 \
-	flux_rpc_check.3 \
-	flux_rpc_get.3 \
-	flux_rpcf_multi.3 \
-	flux_rpc_next.3 \
-	flux_rpc_get_nodeid.3 \
-	flux_rpcf.3 \
-	flux_rpc_getf.3 \
 	flux_reduce_destroy.3 \
 	flux_reduce_append.3 \
 	flux_reduce_pop.3 \
@@ -100,7 +90,6 @@ MAN3_FILES_SECONDARY = \
 	flux_child_watcher_get_rstatus.3 \
 	flux_signal_watcher_get_signum.3 \
 	flux_stat_watcher_get_rstat.3 \
-	flux_rpc_get_raw.3 \
 	flux_respond_raw.3 \
 	flux_respondf.3 \
 	flux_reactor_now_update.3 \
@@ -125,7 +114,12 @@ MAN3_FILES_SECONDARY = \
 	flux_future_aux_set.3 \
 	flux_future_aux_get.3 \
 	flux_future_set_flux.3 \
-	flux_future_get_flux.3
+	flux_future_get_flux.3 \
+	flux_rpcf.3 \
+	flux_rpc_raw.3 \
+	flux_rpc_get.3 \
+	flux_rpc_getf.3 \
+	flux_rpc_get_raw.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -160,11 +154,6 @@ flux_event_unsubscribe.3: flux_event_subscribe.3
 flux_pollfd.3: flux_pollevents.3
 flux_msg_decode.3: flux_msg_encode.3
 flux_msg_recvfd.3: flux_msg_sendfd.3
-flux_rpc_destroy.3: flux_rpc.3
-flux_rpc_get.3: flux_rpc.3
-flux_rpc_getf.3: flux_rpc.3
-flux_rpcf.3: flux_rpc.3
-flux_rpc_check.3: flux_rpc_then.3
 flux_reduce_destroy.3: flux_reduce_create.3
 flux_reduce_append.3: flux_reduce_create.3
 flux_reduce_pop.3: flux_reduce_create.3
@@ -198,7 +187,6 @@ flux_child_watcher_get_rpid.3: flux_child_watcher_create.3
 flux_child_watcher_get_rstatus.3: flux_child_watcher_create.3
 flux_signal_watcher_get_signum.3: flux_signal_watcher_create.3
 flux_stat_watcher_get_rstat.3: flux_stat_watcher_create.3
-flux_rpc_get_raw.3: flux_rpc_raw.3
 flux_respond_raw.3: flux_respond.3
 flux_respondf.3: flux_respond.3
 flux_reactor_now_update.3: flux_reactor_now.3
@@ -224,13 +212,18 @@ flux_future_aux_set.3: flux_future_create.3
 flux_future_aux_get.3: flux_future_create.3
 flux_future_set_flux.3: flux_future_create.3
 flux_future_get_flux.3: flux_future_create.3
+flux_rpcf.3: flux_rpc.3
+flux_rpc_raw.3: flux_rpc.3
+flux_rpc_get.3: flux_rpc.3
+flux_rpc_getf.3: flux_rpc.3
+flux_rpc_get_raw.3: flux_rpc.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
 flux_recv.3: trecv.c
 flux_event_subscribe.3: tevent.c
 flux_rpc.3: trpc.c
-flux_rpc_then.3: trpc_then.c
+flux_rpc.3: trpc_then.c
 flux_mrpc.3: tmrpc_then.c
 flux_reduce_create.3: treduce.c
 flux_get_rank.3: tinfo.c

@@ -1913,12 +1913,12 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (ctx->event_active) {
-                flux_rpc_t *rpc;
-                if (!(rpc = flux_rpc (ctx->h, "cmb.event-mute", NULL,
+                flux_future_t *f;
+                if (!(f = flux_rpc (ctx->h, "cmb.event-mute", NULL,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
                     flux_log_error (ctx->h, "cmb.event-mute RPC");
                 goto done;
-                flux_rpc_destroy (rpc);
+                flux_future_destroy (f);
             }
             if (flux_msg_clear_route (msg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event");

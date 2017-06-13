@@ -313,7 +313,7 @@ char *flux_modfind (const char *searchpath, const char *modname)
 
 int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
 {
-    flux_rpc_t *r = NULL;
+    flux_future_t *f = NULL;
     char *service = mod_service (name);
     char *topic = NULL;
     char *json_str = NULL;
@@ -323,25 +323,23 @@ int flux_rmmod (flux_t *h, uint32_t nodeid, const char *name)
         goto done;
     if (!(json_str = flux_rmmod_json_encode (name)))
         goto done;
-    if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
+    if (!(f = flux_rpc (h, topic, json_str, nodeid, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
     free (service);
     free (topic);
-    if (json_str)
-        free (json_str);
-    if (r)
-        flux_rpc_destroy (r);
+    free (json_str);
+    flux_future_destroy (f);
     return rc;
 }
 
 int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg)
 {
-    flux_rpc_t *r = NULL;
+    flux_future_t *f = NULL;
     char *topic = NULL;
     flux_modlist_t *mods = NULL;
     const char *json_str;
@@ -350,9 +348,9 @@ int flux_lsmod (flux_t *h, uint32_t nodeid, const char *service,
 
     if (asprintf (&topic, "%s.lsmod", service ? service : "cmb") < 0)
         goto done;
-    if (!(r = flux_rpc (h, topic, NULL, nodeid, 0)))
+    if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
         goto done;
-    if (flux_rpc_get (r, &json_str) < 0)
+    if (flux_rpc_get (f, &json_str) < 0)
         goto done;
     if (!json_str) {
         errno = EPROTO;
@@ -376,15 +374,14 @@ done:
     free (topic);
     if (mods)
         flux_modlist_destroy (mods);
-    if (r)
-        flux_rpc_destroy (r);
+    flux_future_destroy (f);
     return rc;
 }
 
 int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
                  int argc, char **argv)
 {
-    flux_rpc_t *r = NULL;
+    flux_future_t *f = NULL;
     char *name = NULL;
     char *service = NULL;
     char *topic = NULL;
@@ -398,22 +395,17 @@ int flux_insmod (flux_t *h, uint32_t nodeid, const char *path,
         goto done;
 
     json_str = flux_insmod_json_encode (path, argc, argv);
-    if (!(r = flux_rpc (h, topic, json_str, nodeid, 0)))
+    if (!(f = flux_rpc (h, topic, json_str, nodeid, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    if (name)
-        free (name);
-    if (service)
-        free (service);
-    if (topic)
-        free (topic);
-    if (json_str)
-        free (json_str);
-    if (r)
-        flux_rpc_destroy (r);
+    free (name);
+    free (service);
+    free (topic);
+    free (json_str);
+    flux_future_destroy (f);
     return rc;
 }
 

@@ -38,15 +38,15 @@ void forward (flux_reduce_t *r, int batchnum, void *arg)
 {
     struct context *ctx = arg;
     char *item;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
     while ((item = flux_reduce_pop (r))) {
         json_object *out = Jnew ();
         Jadd_int (out, "batchnum", batchnum);
         Jadd_str (out, "nodeset", item);
-        rpc = flux_rpc (ctx->h, "treduce.forward", Jtostr (out),
+        f = flux_rpc (ctx->h, "treduce.forward", Jtostr (out),
                         FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE);
-        flux_rpc_destroy (rpc);
+        flux_future_destroy (f);
         Jput (out);
         free (item);
     }

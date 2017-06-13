@@ -1351,7 +1351,7 @@ static int aggregator_push_task_exit (struct task_info *t)
 {
     int rc = 0;
     flux_t *h = t->ctx->flux;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
     json_object *o = task_exit_tojson (t);
 
     if (o == NULL) {
@@ -1359,17 +1359,17 @@ static int aggregator_push_task_exit (struct task_info *t)
         return (-1);
     }
 
-    if (!(rpc = flux_rpc (h, "aggregator.push", Jtostr (o),
+    if (!(f = flux_rpc (h, "aggregator.push", Jtostr (o),
                                 FLUX_NODEID_ANY, 0))) {
         flux_log_error (h, "flux_rpc");
         rc = -1;
     }
 
-    if (rpc && flux_rpc_get (rpc, NULL) < 0) {
-        flux_log_error (h, "flux_rpc_get");
+    if (f && flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "flux_future_get");
         rc = -1;
     }
-
+    flux_future_destroy (f);
     Jput (o);
 
     if (t->ctx->noderank == 0 && t->id == 0)
@@ -2224,32 +2224,32 @@ static void wreck_barrier_next (struct prog_ctx *ctx)
               ctx->id, ctx->barrier_sequence++);
 }
 
-static void wreck_barrier_complete (flux_rpc_t *rpc, void *arg)
+static void wreck_barrier_complete (flux_future_t *f, void *arg)
 {
     struct prog_ctx *ctx = arg;
-    int rc = kvs_fence_finish (rpc);
+    int rc = kvs_fence_finish (f);
     pmi_simple_server_barrier_complete (ctx->pmi, rc);
-    flux_rpc_destroy (rpc);
+    flux_future_destroy (f);
     wreck_barrier_next (ctx);
 }
 
 static int wreck_pmi_barrier_enter (void *arg)
 {
     struct prog_ctx *ctx = arg;
-    flux_rpc_t *rpc;
+    flux_future_t *f;
 
-    if ((rpc = kvs_fence_begin (ctx->flux, ctx->barrier_name,
+    if ((f = kvs_fence_begin (ctx->flux, ctx->barrier_name,
                                 ctx->nnodes, 0)) == NULL) {
         wlog_err (ctx, "pmi_barrier_enter: kvs_fence_begin: %s",
                   strerror (errno));
         goto out;
     }
-    if (flux_rpc_then (rpc, wreck_barrier_complete, ctx) < 0) {
-        wlog_err (ctx, "pmi_barrier_enter: rpc_then: %s", strerror (errno));
-        flux_rpc_destroy (rpc);
+    if (flux_future_then (f, -1., wreck_barrier_complete, ctx) < 0) {
+        wlog_err (ctx, "pmi_barrier_enter: future_then: %s", strerror (errno));
+        flux_future_destroy (f);
     }
 out:
-    return (rpc == NULL ? -1 : 0);
+    return (f== NULL ? -1 : 0);
 }
 
 static void wreck_pmi_debug_trace (void *client, const char *buf)

@@ -5,46 +5,71 @@ flux_rpc(3)
 
 NAME
 ----
-flux_rpc, flux_rpcf, flux_rpc_get, flux_rpc_getf, flux_rpc_destroy - perform a remote procedure call to a Flux service
+flux_rpc, flux_rpcf, flux_rpc_raw, flux_rpc_get, flux_rpc_getf, flux_rpc_get_raw - perform a remote procedure call to a Flux service
 
 
 SYNOPSIS
 --------
  #include <flux/core.h>
 
- flux_rpc_t *flux_rpc (flux_t *h, const char *topic,
-                       const char *json_in,
-                       uint32_t nodeid_in, int flags);
+ flux_future_t *flux_rpc (flux_t *h, const char *topic,
+                          const char *json_str,
+                          uint32_t nodeid, int flags);
 
- flux_rpc_t *flux_rpcf (flux_t *h, const char *topic,
-                       uint32_t nodeid_in, int flags,
-                       const char *fmt, ...);
+ flux_future_t *flux_rpcf (flux_t *h, const char *topic,
+                           uint32_t nodeid, int flags,
+                           const char *fmt, ...);
 
+ flux_future_t *flux_rpc_raw (flux_t *h, const char *topic,
+                              const void *data, int len,
+                              uint32_t nodeid, int flags);
 
- void flux_rpc_destroy (flux_rpc_t *rpc);
+ int flux_rpc_get (flux_future_t *f, const char **json_str);
 
- int flux_rpc_get (flux_rpc_t *rpc, const char **json_out);
+ int flux_rpc_getf (flux_future_t *f, const char *fmt, ...);
 
- int flux_rpc_getf (flux_rpc_t *rpc, const char *fmt, ...);
+ int flux_rpc_get_raw (flux_future_t *f, void *data, int *len);
 
 
 DESCRIPTION
 -----------
 
-`flux_rpc()` encodes and sends a request message, comprising the first
-half of a remote procedure call (RPC).  A flux_rpc_t object is returned
-which can be passed to `flux_rpc_get()` to obtain the decoded response
-message, comprising the second half of the RPC.  The flux_rpc_t should
-finally be disposed of using `flux_rpc_destroy()`.
+A remote procedure call (RPC) consists of a matched request and
+response message exchanged with a Flux service.  `flux_rpc()`,
+`flux_rpcf()`, and `flux_rpc_raw()` encode and send a request message
+via Flux broker handle _h_ to a Flux service identified by _topic_
+and _nodeid_.  A `flux_future_t` object is returned which acts as a handle
+for synchronization and a container for the response message which in
+turn contains the RPC result.
 
-_topic_ must be set to a topic string representing the Flux
-service that will handle the request.
+`flux_future_then(3)` may be used to register a reactor callback
+(continuation) to be called once the response has been received.
+`flux_future_wait_for(3)` may be used to block until the
+response has been received.  Both accept an optional timeout.
 
-_json_in_, if non-NULL, must be a string containing valid serialized
-JSON to be attached as payload to the request.  If NULL, the request
-will be sent without a payload.
+`flux_rpc_get()`, `flux_rpc_getf()`, and `flux_rpc_get_raw()`
+decode the RPC result.  Internally, they call `flux_future_get()`
+to access the response message stored in the future.  If the response
+message has not yet been received, these functions block until it is,
+or an error occurs.
 
-_nodeid_in_ affects request routing, and must be set to one of the following
+
+REQUEST OPTIONS
+---------------
+
+The request message is encoded and sent with or without a payload
+using one of the three `flux_rpc()` variants.
+
+`flux_rpc()` attaches _json_str_, a serialized JSON string, as request
+payload.  If NULL, the request is encoded without a payload.
+
+`flux_rpcf()` attaches a JSON payload encoded using Jansson `json_pack()`
+style arguments (see below).
+
+`flux_rpc_raw()` attaches a raw payload _data_ of length _len_, in bytes.
+If _data_ is NULL, the request is encoded without a payload.
+
+_nodeid_ affects request routing, and must be set to one of the following
 values:
 
 FLUX_NODEID_ANY::
@@ -61,33 +86,30 @@ _flags_ may be zero or:
 
 FLUX_RPC_NORESPONSE::
 No response is expected.  The request will not be assigned a matchtag,
-and the flux_rpc_t returned by `flux_rpc()` may be immediately destroyed.
+and the returned flux_future_t is immediately fulfilled, and may simply
+be destroyed.
 
-`flux_rpc_get()` blocks until a matching response is received, then
-decodes the result.  For asynchronous response handling, see flux_rpc_then(3).
+RESPONSE OPTIONS
+----------------
 
-_json_out_, if non-NULL, is assigned a string containing valid
-serialized JSON from the response payload.  If no payload exists,
-_json_out_ is set to NULL.  The storage associated with _json_out_
-belongs to the flux_rpc_t object and is invalidated when that object
-is destroyed.
+The response message is stored in the future when the future is fulfilled.
+At that time it is decoded with `flux_response_decode(3)`.  If it cannot
+be decoded, or if the service returned an error, the future is fulfilled
+with an error.  Otherwise it is fulfilled with the response message.
+If there was an error, `flux_future_get()` or the `flux_rpc_get()` variants
+return an error.
 
-`flux_rpc_destroy()` destroys a completed `flux_rpc_t`, invalidating 
-payload as described above, and freeing the RPC matchtag.  Destroying
-an RPC before completion renders the matchtag associated with the RPC
-unusable; it is effectively leaked from the matchtag pool.
+`flux_rpc_get()` sets _json_str_ (if non-NULL) to the serialized JSON
+payload contained in the RPC response.  If there was no payload, _json_str_
+is set to NULL.
 
-`flux_rpcf()` is a variant of `flux_rpc()` that constructs a JSON
-payload based on the provided _fmt_ string and variable arguments.
-The _fmt_ string and variable arguments are passed internally to
-jansson's `json_pack()` function.  See below for details.
+`flux_rpc_getf()` decodes the JSON payload using Jansson `json_unpack()` style
+arguments (see below).  It is an error if there is no payload, or if the
+payload is not JSON.
 
-`flux_rpc_getf()` is a variant of `flux_rpc_get()` that parses a JSON
-payload based on the provided _fmt_ string and variable arguments.
-The _fmt_ string and variable arguments are passed internally to
-jansson's `json_unpack()` function.  Any strings or objects returned
-are invalidated when `flux_rpc_destroy()` is called.  See below
-for details.
+`flux_rpc_get_raw()` assigns the raw payload of the RPC response message
+to _data_ and its length to _len_.  If there is no payload, this function
+will fail.
 
 
 include::JSON_PACK.adoc[]
@@ -104,7 +126,7 @@ individual RPC, but does stipulate that an RPC may be canceled if a disconnect
 message is received, as is automatically generated by the local connector
 upon client disconnection.
 
-If `flux_rpc_destroy()` is called before a response is received, a
+If `flux_future_destroy()` is called before a response is received, a
 matchtag value from the handle _h_'s matchtag pool is leaked.
 If enough matchtags are leaked, it will be impossible to make RPC calls
 on that handle.
@@ -113,11 +135,11 @@ on that handle.
 RETURN VALUE
 ------------
 
-`flux_rpc()` and `flux_rpcf()` returns a flux_rpc_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+`flux_rpc()`, `flux_rpcf()`, and `flux_rpc_raw()` return a flux_future_t
+object on success.  On error, NULL is returned, and errno is set appropriately.
 
-`flux_rpc_get()` and `flux_rpc_getf()` returns zero on success.  On
-error, -1 is returned, and errno is set appropriately.
+`flux_rpc_get()`, `flux_rpc_getf()`, and `flux_rpc_get_raw()` returns zero on
+success.  On error, -1 is returned, and errno is set appropriately.
 
 
 ERRORS
@@ -136,11 +158,17 @@ A protocol error was encountered.
 EXAMPLES
 --------
 
-This example performs a synchronous RPC with the broker's "cmb.attrget"
+This example performs a synchronous RPC with the broker's "attr.get"
 service to obtain the broker's rank.
 
 ....
 include::trpc.c[]
+....
+
+This example registers a continuation to do the same thing asynchronously.
+
+....
+include::trpc_then.c[]
 ....
 
 
@@ -161,7 +189,7 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 ---------
-flux_rpc_then(3)
+flux_future_then(3)
 
 https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 6: Flux
 Remote Procedure Call Protocol]
