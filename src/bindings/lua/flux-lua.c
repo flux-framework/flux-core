@@ -397,7 +397,10 @@ static int l_flux_barrier (lua_State *L)
     flux_t *f = lua_get_flux (L, 1);
     const char *name = luaL_checkstring (L, 2);
     int nprocs = luaL_checkinteger (L, 3);
-    return (l_pushresult (L, flux_barrier (f, name, nprocs)));
+    flux_future_t *future = flux_barrier (f, name, nprocs);
+    int rc = future ? flux_future_get (future , NULL) : -1;
+    flux_future_destroy (future);
+    return (l_pushresult (L, rc));
 }
 
 static int l_flux_rank (lua_State *L)

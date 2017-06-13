@@ -86,26 +86,17 @@ static const char *generate_unique_name (flux_t *h)
     return ctx->name;
 }
 
-int flux_barrier (flux_t *h, const char *name, int nprocs)
+flux_future_t *flux_barrier (flux_t *h, const char *name, int nprocs)
 {
-    flux_future_t *f = NULL;
-    int ret = -1;
-
     if (!name && !(name = generate_unique_name (h)))
-        goto done;
-    if (!(f = flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
+        return NULL;
+
+    return flux_rpcf (h, "barrier.enter", FLUX_NODEID_ANY, 0,
                            "{s:s s:i s:i s:b}",
                            "name", name,
                            "count", 1,
                            "nprocs", nprocs,
-                           "internal", false)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    ret = 0;
-done:
-    flux_future_destroy (f);
-    return ret;
+                           "internal", false);
 }
 
 /*
