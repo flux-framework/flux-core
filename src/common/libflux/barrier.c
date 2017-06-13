@@ -50,7 +50,7 @@ static libbarrier_ctx_t *getctx (flux_t *h)
             return NULL;
         ctx = xzmalloc (sizeof (*ctx));
         ctx->id = id;
-        flux_aux_set (h, "barriercli", ctx, freectx);
+        flux_aux_set (h, "flux::barrier_client", ctx, freectx);
     }
     return ctx;
 }
