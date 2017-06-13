@@ -10,8 +10,7 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 check_PROGRAMS = \
-	tmunge \
-	tbarrier
+	tmunge
 
 noinst_SCRIPTS = \
 	soak.sh \
