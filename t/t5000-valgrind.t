@@ -11,6 +11,8 @@ if ! which valgrind >/dev/null; then
     test_done
 fi
 
+export FLUX_PMI_SINGLETON=1 # avoid finding leaks in slurm libpmi.so
+
 VALGRIND=`which valgrind`
 VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
 VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh

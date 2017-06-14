@@ -136,7 +136,7 @@ int PMI_Init (int *spawned)
      * Try to dlopen another PMI library, e.g. SLURM's.
      * If that fails, fall through to singleton.
      */
-    if ((ctx.wrap = pmi_wrap_create (NULL))) {
+    if (!getenv ("FLUX_PMI_SINGLETON") && (ctx.wrap = pmi_wrap_create (NULL))) {
         result = pmi_wrap_init (ctx.wrap, spawned);
         if (result != PMI_SUCCESS) {
             pmi_wrap_destroy (ctx.wrap);
