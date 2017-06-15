@@ -10,8 +10,7 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 check_PROGRAMS = \
-	tmunge \
-	tbarrier
+	tmunge
 
 noinst_SCRIPTS = \
 	soak.sh \
@@ -19,7 +18,6 @@ noinst_SCRIPTS = \
 	relnotes.sh
 
 LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(top_builddir)/src/modules/barrier/libflux-barrier.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)

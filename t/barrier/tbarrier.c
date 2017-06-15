@@ -56,6 +56,7 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     flux_t *h;
+    flux_future_t *f;
     int ch;
     struct timespec t0;
     char *name = NULL;
@@ -98,17 +99,19 @@ int main (int argc, char *argv[])
         monotime (&t0);
         if (name)
             tname = xasprintf ("%s.%d", name, i);
-        if (flux_barrier (h, tname, nprocs) < 0) {
+        if (!(f = flux_barrier (h, tname, nprocs))) {
             if (errno == EINVAL && tname == NULL)
                 log_msg_exit ("%s", "provide barrier name if not running as LWJ");
             else
                 log_err_exit ("flux_barrier");
         }
+        if (flux_future_get (f, NULL) < 0)
+            log_err_exit ("barrier completion failed");
         if (!quiet)
             printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
                     tname ? tname : "NULL", nprocs, monotime_since (t0));
-        if (tname)
-            free (tname);
+        free (tname);
+        flux_future_destroy (f);
     }
 
     flux_close (h);
