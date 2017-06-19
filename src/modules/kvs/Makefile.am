@@ -22,7 +22,8 @@ kvs_la_SOURCES = \
 	lookup.h \
 	lookup.c \
 	fence.h \
-	fence.c
+	fence.c \
+	types.h
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \

@@ -52,10 +52,9 @@
 
 #include "lookup.h"
 #include "fence.h"
+#include "types.h"
 
 #define KVS_MAGIC 0xdeadbeef
-
-typedef char href_t[BLOBREF_MAX_STRING_SIZE];
 
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
