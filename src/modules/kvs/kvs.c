@@ -1152,27 +1152,23 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *ops = NULL;
     fence_t *f;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (h, "%s request decode", __FUNCTION__);
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto done;
+    if (!json_str || !(in = Jfromstr (json_str))) {
+        errno = EPROTO;
         goto done;
     }
-    if (!json_str
-        || !(in = Jfromstr (json_str))
-        || kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
+    if (kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
-        flux_log_error (h, "%s payload decode", __FUNCTION__);
         goto done;
     }
     /* FIXME: generate a kvs.fence.abort (or similar) if an error
      * occurs after we know the fence name
      */
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs, flags))) {
-            flux_log_error (h, "%s fence_create %s", __FUNCTION__, name);
+        if (!(f = fence_create (ctx, name, nprocs, flags)))
             goto done;
-        }
         if (fence_add (ctx, f) < 0) {
-            flux_log_error (h, "%s fence_add %s", __FUNCTION__, name);
             fence_destroy (f);
             goto done;
         }
@@ -1180,10 +1176,8 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     else
         f->flags |= flags;
 
-    if (fence_append_ops (f, ops) < 0) {
-        flux_log_error (h, "%s fence_append_ops %s", __FUNCTION__, name);
+    if (fence_append_ops (f, ops) < 0)
         goto done;
-    }
     f->count++;
     //flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
     //          __FUNCTION__, name, f->count, f->nprocs);
