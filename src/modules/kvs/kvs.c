@@ -1070,7 +1070,7 @@ static int fence_append_ops (fence_t *f, json_object *ops)
     return 0;
 }
 
-static int fence_append_request (fence_t *f, const flux_msg_t *request)
+static int fence_add_request_copy (fence_t *f, const flux_msg_t *request)
 {
     flux_msg_t *cpy = flux_msg_copy (request, false);
     if (!cpy)
@@ -1223,7 +1223,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
     else
         f->flags |= flags;
 
-    if (fence_append_request (f, msg) < 0)
+    if (fence_add_request_copy (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
         if (fence_append_ops (f, ops) < 0)
