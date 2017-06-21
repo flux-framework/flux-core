@@ -1,0 +1,211 @@
+flux_kvs_ns_create(3)
+=====================
+:doctype: manpage
+
+
+NAME
+----
+flux_kvs_ns_create, flux_kvs_ns_remove, flux_kvs_ns_lookup, flux_kvs_ns_lookup_get, flux_kvs_ns_lookup_getf, flux_kvs_ns_lookup_get_seq, flux_kvs_ns_commit, flux_kvs_ns_commitf, flux_kvs_ns_event_decode - create, remove, lookup, update KVS namespace
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_future_t *flux_kvs_ns_create (flux_t *h,
+                                    uint32_t nodeid,
+                                    const char *name,
+                                    uint32_t userid,
+                                    int flags);
+
+ flux_future_t *flux_kvs_ns_remove (flux_t *h,
+                                    uint32_t nodeid,
+                                    const char *name);
+
+ flux_future_t *flux_kvs_ns_lookup (flux_t *h,
+                                    uint32_t nodeid,
+                                    const char *name,
+                                    int min_seq,
+                                    int flags);
+
+ int flux_kvs_ns_lookup_get (flux_future_t *f,
+                             const char **json_str);
+
+ int flux_kvs_ns_lookup_getf (flux_future_t *f,
+                              const char *fmt, ...);
+
+ int flux_kvs_ns_lookup_get_seq (flux_future_t *f,
+                                 int *seq);
+
+ flux_future_t *flux_kvs_ns_commit (flux_t *h,
+                                    uint32_t nodeid,
+                                    const char *name,
+                                    int seq,
+                                    const char *json_str);
+
+ flux_future_t *flux_kvs_ns_commitf (flux_t *h,
+                                     uint32_t nodeid,
+                                     const char *name,
+                                     int seq,
+                                     const char *fmt, ...);
+
+ int flux_kvs_ns_event_decode (const flux_msg_t *msg,
+                               const char **name,
+                               int *seq,
+                               const char **json_str);
+
+
+
+DESCRIPTION
+-----------
+
+The flux namespace service tracks the roots of multiple KVS namespaces.
+It provides the ability to create, remove, lookup, and update namespaces
+by name. Each namespace stores a sequenced JSON object intended, but not
+required, to be a Flux RFC 11 treeref reference.
+
+Namespaces can be global for an instance or local to a broker rank.
+The broker rank that receives the create request for a namespace becomes
+the "master" for it.  All commits for a namespace must be directed to its
+master.  If the FLUX_NS_SYNCHRONIZE flag was set on creation, other broker
+ranks act as "slaves" for the namespace, and only handle lookup requests.
+The master updates slaves by broadcasting an event in an open loop manner,
+thus the slaves are "eventually consistent" with the master.
+
+The namespace API calls may be used in reactor or non-reactor
+environments.  Calls that send a request to the namespace service return
+a flux_future_t that acts as a handle for synchronization and a container
+for the result.  Futures returned by these functions must be destroyed with
+`flux_future_destroy(3)`.  See `flux_future_then(3)` for more information
+on synchronizing with futures.
+
+`flux_kvs_ns_create()` creates namespace  _name_ on broker _nodeid_,
+owned by _userid_.  If the FLUX_NS_SYNCHRONIZE flag is set, a create event
+instructs other ranks to become slaves for this namespace.
+`flux_future_get(3)` with a NULL payload argument is used to obtain the
+result of the create operation.
+
+`flux_kvs_ns_remove()` removes namespace _name_ from broker _nodeid_,
+which must be the master for the namespace.  If the namespace was created
+with the FLUX_NS_SYNCHRONIZE flag, a remove event instructs other ranks
+to remove this namespace.  `flux_future_get(3)` with a NULL payload argument
+is used to obtain the result of the remove operation.
+
+`flux_kvs_ns_lookup()` sends a lookup request for the root of
+namespace _name_ to broker _nodeid_.  _min_seq_ should be set to the
+minimum sequence number that can satisfy the lookup, or FLUX_NS_SEQ_ANY (0).
+If _flags_ includes FLUX_NS_WAIT, the future will not be fulfilled until
+the namespace is created and/or _min_seq_ is satisfied.  The JSON portion
+of the result may be accessed with `flux_kvs_ns_lookup_get()` or its cousin,
+`flux_future_lookup_getf()`.  `flux_kvs_ns_lookup_get()` sets _json_str_,
+if non-NULL, to point to a serialized JSON string representing the root
+reference.  `flux_kvs_ns_lookup_getf()` decodes the root reference according
+to the _fmt_ string and variable arguments, which are passed internally to
+jansson's `json_unpack()` function.  `flux_kvs_ns_lookup_get_seq()` sets
+_seq_, if non-NULL, to the sequence number portion of the result.
+
+`flux_kvs_ns_commit()` updates namespace _name_ on broker _nodeid_,
+which must be the master for the namespace.  _seq_ must be the the current
+sequence number plus one.  _json_str_ is the encoded JSON object representing
+the root reference.  `flux_kvs_ns_commitf()` encodes the JSON object
+according to the _fmt_ string and variable arguments, which are passed
+internally to jansson's `json_pack()` function.
+`flux_future_get(3)` with a NULL payload argument is used to obtain the
+result of the commit operation.
+
+In addition to the above API functions, applications may subscribe
+to `ns.allcommit.NAME` to receive an event message each time the `NAME`
+namespace is updated.  `flux_kvs_ns_event_decode()` decodes _msg_ and
+sets _json_str_, if non-NULL, to a serialized JSON string representing the
+root reference, and _seq_, if non-NULL to the matching sequence number.
+
+
+FLAGS
+-----
+
+FLUX_NS_SYNCHRONIZE::
+Create only:  synchronize with slaves on create/remove/update.
+If this flag is not used, the namespace will only be known on the
+broker rank it was created on.
+
+FLUX_NS_WAIT::
+Lookup only:  block until the namespace is created, or until it reaches
+a minimum sequence number specified in _min_seq_.
+
+
+SECURITY
+--------
+
+Only the instance owner can create or remove namespaces.
+
+A namespace is created with a _userid_.  Only this user or the instance
+owner are allowed to access or change the namespace.
+
+The privacy bit is set on ns.allcommit events used to synchronize masters
+and slaves.  The userid is set to the namespace owner.  This prevents a
+user other than the owner of the namespace or the instance owner from
+obtaining content references and looking up content.
+
+
+include::JSON_PACK.adoc[]
+
+
+include::JSON_UNPACK.adoc[]
+
+
+RETURN VALUE
+------------
+
+`flux_kvs_ns_create()`, `flux_kvs_ns_remove()`,
+`flux_kvs_ns_lookup()`, and `flux_kvs_ns_commit()` return a
+_flux_future_t_ on success.  On failure, NULL is returned and errno
+is set appropriately.
+
+`flux_kvs_ns_lookup_get()`, `flux_kvs_ns_lookup_getf()`,
+`flux_kvs_ns_lookup_get_seq()`, and `flux_kvs_ns_event_decode()` return 0
+on success.  On failure, -1 is returned and errno is set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+One of the arguments was invalid.
+
+ENOMEM::
+Out of memory.
+
+ENOENT::
+Lookup, commit, or remove was attempted on an unknown namespace.
+
+EEXIST::
+Create was attempted on an existing namespace.
+
+EPROTO::
+A request was malformed.
+
+EPERM::
+A commit was attempted on a namespace without appropriate rolemask
+or userid credentials.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_event_subscribe(3), flux_future_then(3)
+
+https://github.com/flux-framework/rfc/blob/master/spec_11.adoc[RFC 11: Key Value Store Tree Object Format v1]
