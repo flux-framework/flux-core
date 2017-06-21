@@ -1052,7 +1052,8 @@ error:
     return NULL;
 }
 
-static int fence_append_ops (fence_t *f, json_object *ops)
+/* fence_add_request_data() should be called on each request */
+static int fence_add_request_data (fence_t *f, json_object *ops)
 {
     json_object *op;
     int i;
@@ -1176,9 +1177,10 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     else
         f->flags |= flags;
 
-    if (fence_append_ops (f, ops) < 0)
+    if (fence_add_request_data (f, ops) < 0)
         goto done;
     f->count++;
+
     //flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
     //          __FUNCTION__, name, f->count, f->nprocs);
     if (f->count == f->nprocs) {
@@ -1226,9 +1228,10 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (fence_add_request_copy (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (fence_append_ops (f, ops) < 0)
+        if (fence_add_request_data (f, ops) < 0)
             goto error;
         f->count++;
+
         // flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
         //          __FUNCTION__, name, f->count, f->nprocs);
         if (f->count == f->nprocs) {
