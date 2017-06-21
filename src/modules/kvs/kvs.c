@@ -406,7 +406,7 @@ done:
  */
 static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
                                const char *key, json_object *dirent,
-                               wait_t *wait)
+                               const char **missing_ref)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
@@ -437,8 +437,13 @@ static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
         } else if (json_object_object_get_ex (subdirent, "DIRVAL", &o)) {
             subdir = o;
         } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
-            if (!load (ctx, json_object_get_string (o), wait, &subdir))
+            const char *ref = json_object_get_string (o);
+            if (!(subdir = cache_lookup_and_get_json (ctx->cache,
+                                                      ref,
+                                                      ctx->epoch))) {
+                *missing_ref = ref;
                 goto success; /* stall */
+            }
             /* do not corrupt store by modify orig. */
             subdir = json_object_copydir (subdir);
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
@@ -446,7 +451,11 @@ static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
         } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
             FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
             char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
-            if (commit_link_dirent (ctx, rootdir, nkey, dirent, wait) < 0) {
+            if (commit_link_dirent (ctx,
+                                    rootdir,
+                                    nkey,
+                                    dirent,
+                                    missing_ref) < 0) {
                 free (nkey);
                 goto done;
             }
@@ -540,14 +549,22 @@ static void commit_apply (commit_t *c)
         const char *key;
 
         for (i = 0; i < len; i++) {
+            const char *missing_ref = NULL;
             if (!(op = json_object_array_get_idx (fence_get_json_ops (c->f), i))
                     || !Jget_str (op, "key", &key))
                 continue;
             dirent = NULL;
             (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
-            if (commit_link_dirent (ctx, c->rootcpy, key, dirent, wait) < 0) {
+            if (commit_link_dirent (ctx,
+                                    c->rootcpy,
+                                    key,
+                                    dirent,
+                                    &missing_ref) < 0) {
                 c->errnum = errno;
                 break;
+            }
+            if (missing_ref) {
+                assert (!load (ctx, missing_ref, wait, NULL));
             }
         }
         if (wait_get_usecount (wait) > 0)
