@@ -1110,10 +1110,11 @@ static void fence_finalize (kvs_ctx_t *ctx, fence_t *f, int errnum)
     flux_msg_t *msg;
     const char *name;
 
-    while ((msg = zlist_pop (f->requests))) {
+    msg = zlist_first (f->requests);
+    while (msg) {
         if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
             flux_log_error (ctx->h, "%s", __FUNCTION__);
-        flux_msg_destroy (msg);
+        msg = zlist_next (f->requests);
     }
     if (Jget_ar_str (f->names, 0, &name))
         zhash_delete (ctx->fences, name);
