@@ -1063,26 +1063,27 @@ static fence_t *fence_lookup (kvs_ctx_t *ctx, const char *name)
     return zhash_lookup (ctx->fences, name);
 }
 
-static void fence_finalize (kvs_ctx_t *ctx, fence_t *f, int errnum)
-{
-    flux_msg_t *msg;
-    const char *name;
+struct finalize_data {
+    kvs_ctx_t *ctx;
+    int errnum;
+};
 
-    msg = zlist_first (f->requests);
-    while (msg) {
-        if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
-            flux_log_error (ctx->h, "%s", __FUNCTION__);
-        msg = zlist_next (f->requests);
-    }
-    if (Jget_ar_str (fence_get_json_names (f), 0, &name))
-        zhash_delete (ctx->fences, name);
+static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
+{
+    struct finalize_data *d = data;
+
+    if (flux_respond (d->ctx->h, req, d->errnum, NULL) < 0)
+        flux_log_error (d->ctx->h, "%s", __FUNCTION__);
+
+    return 0;
 }
 
-static void fence_finalize_bynames (kvs_ctx_t *ctx, json_object *names, int errnum)
+static void finalize_fences_bynames (kvs_ctx_t *ctx, json_object *names, int errnum)
 {
     int i, len;
     const char *name;
     fence_t *f;
+    struct finalize_data d = { .ctx = ctx, .errnum = errnum };
 
     if (!Jget_ar_len (names, &len)) {
         flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);
@@ -1093,8 +1094,10 @@ static void fence_finalize_bynames (kvs_ctx_t *ctx, json_object *names, int errn
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = fence_lookup (ctx, name)))
-            fence_finalize (ctx, f, errnum);
+        if ((f = fence_lookup (ctx, name))) {
+            fence_iter_request_copies (f, finalize_fence_req, &d);
+            zhash_delete (ctx->fences, name);
+        }
     }
 }
 
@@ -1296,7 +1299,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: kp_terror_dec", __FUNCTION__);
         goto done;
     }
-    fence_finalize_bynames (ctx, names, errnum);
+    finalize_fences_bynames (ctx, names, errnum);
 done:
     Jput (out);
 }
@@ -1348,7 +1351,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
-    fence_finalize_bynames (ctx, names, 0);
+    finalize_fences_bynames (ctx, names, 0);
     /* Copy of root object (corresponding to rootdir blobref) was included
      * in the setroot event as an optimization, since it would otherwise
      * be loaded from the content store on next KVS access - immediate
