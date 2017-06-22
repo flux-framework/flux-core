@@ -132,6 +132,20 @@ int fence_add_request_copy (fence_t *f, const flux_msg_t *request)
     return 0;
 }
 
+int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data)
+{
+    flux_msg_t *msg;
+
+    msg = zlist_first (f->requests);
+    while (msg) {
+        if (cb (f, msg, data) < 0)
+            return -1;
+        msg = zlist_next (f->requests);
+    }
+
+    return 0;
+}
+
 int fence_merge (fence_t *dest, fence_t *src)
 {
     int i, len;

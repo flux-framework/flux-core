@@ -14,6 +14,8 @@ typedef struct {
     int flags;
 } fence_t;
 
+typedef int (*fence_msg_cb)(fence_t *f, const flux_msg_t *req, void *data);
+
 fence_t *fence_create (const char *name, int nprocs, int flags);
 
 void fence_destroy (fence_t *f);
@@ -37,6 +39,14 @@ int fence_add_request_data (fence_t *f, json_object *ops);
  * later.
  */
 int fence_add_request_copy (fence_t *f, const flux_msg_t *request);
+
+/* Call callback for each request message copy stored internally via
+ * fence_add_request_copy().
+ *
+ * If cb returns < 0 on a message, this function was quit and return
+ * -1.
+ */
+int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
 
 /* Merge src ops & names into dest ops & names
  * - return 1 on merge success, 0 on no-merge
