@@ -51,6 +51,7 @@ TESTS = \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-kvs-cmd.t \
+	t1003-namespace.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
@@ -122,6 +123,7 @@ check_SCRIPTS = \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-kvs-cmd.t \
+	t1003-namespace.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
@@ -178,6 +180,7 @@ check_PROGRAMS = \
 	kvs/watch_disconnect \
 	kvs/commit \
 	kvs/commitmerge \
+	kvs/namespace \
 	kvs/basic \
 	module/basic \
 	request/treq \
@@ -313,6 +316,11 @@ kvs_commitmerge_SOURCES = kvs/commitmerge.c
 kvs_commitmerge_CPPFLAGS = $(test_cppflags)
 kvs_commitmerge_LDADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_namespace_SOURCES = kvs/namespace.c
+kvs_namespace_CPPFLAGS = $(test_cppflags)
+kvs_namespace_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c

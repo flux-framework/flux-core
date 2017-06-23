@@ -52,15 +52,17 @@
 
 #include "lookup.h"
 
+typedef char href_t[BLOBREF_MAX_STRING_SIZE];
+
 #define KVS_MAGIC 0xdeadbeef
 
-typedef char href_t[BLOBREF_MAX_STRING_SIZE];
+static const char *kvs_namespace = "kvs";
 
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
 const int max_lastuse_age = 5;
 
-/* Include root directory in kvs.setroot event.
+/* Include root directory in namespace object.
  */
 const bool event_includes_rootdir = true;
 
@@ -107,7 +109,7 @@ typedef struct {
     href_t newroot;
 } fence_t;
 
-static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
+static int namespace_commit (kvs_ctx_t *ctx, json_object *names);
 static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
@@ -485,7 +487,7 @@ done:
 }
 
 /* Commit all the ops for a particular commit/fence request (rank 0 only).
- * The setroot event will cause responses to be sent to the fence requests
+ * The namespace event will cause responses to be sent to the fence requests
  * and clean up the fence_t state.  This function is idempotent.
  * Error handling: set f->errnum to errno, then let process complete.
  */
@@ -557,7 +559,7 @@ static void commit_apply_fence (fence_t *f)
 
     /* This is the transaction that finalizes the commit by replacing
      * ctx->rootdir with f->newroot, incrementing the root seq,
-     * and sending out the setroot event for "eventual consistency"
+     * and sending out the namespace event for "eventual consistency"
      * of other nodes.
      */
 done:
@@ -569,7 +571,7 @@ done:
                       count, opcount);
         }
         setroot (ctx, f->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, f->names);
+        namespace_commit (ctx, f->names);
     } else {
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (f->errnum));
@@ -1257,77 +1259,6 @@ error:
     Jput (in);
 }
 
-
-/* For wait_version().
- */
-static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
-                             const flux_msg_t *msg, void *arg)
-{
-    kvs_ctx_t *ctx = arg;
-    int rootseq;
-    wait_t *wait = NULL;
-
-    if (flux_request_decodef (msg, NULL, "{ s:i }",
-                              "rootseq", &rootseq) < 0)
-        goto error;
-    if (ctx->rootseq < rootseq) {
-        if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
-            goto error;
-        wait_addqueue (ctx->watchlist, wait);
-        return; /* stall */
-    }
-    if (flux_respondf (h, msg, "{ s:i s:s }",
-                       "rootseq", ctx->rootseq,
-                       "rootdir", ctx->rootdir) < 0)
-        goto error;
-    return;
-
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-}
-
-static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
-                                const flux_msg_t *msg, void *arg)
-{
-    kvs_ctx_t *ctx = arg;
-
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
-    if (flux_respondf (h, msg, "{ s:i s:s }",
-                       "rootseq", ctx->rootseq,
-                       "rootdir", ctx->rootdir) < 0)
-        goto error;
-    return;
-
-error:
-    if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-}
-
-static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
-{
-    flux_future_t *f;
-    const char *ref;
-    int rc = -1;
-
-    if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0)))
-        goto done;
-    if (flux_rpc_getf (f, "{ s:i s:s }",
-                       "rootseq", rootseq,
-                       "rootdir", &ref) < 0)
-        goto done;
-    if (strlen (ref) > sizeof (href_t) - 1) {
-        errno = EPROTO;
-        goto done;
-    }
-    strcpy (rootdir, ref);
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
@@ -1376,10 +1307,10 @@ done:
     return rc;
 }
 
-/* Alter the (rootdir, rootseq) in response to a setroot event.
+/* Alter the (rootdir, rootseq) in response to a ns.sync event.
  */
-static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
-                              const flux_msg_t *msg, void *arg)
+static void namespace_event_cb (flux_t *h, flux_msg_handler_t *w,
+                                const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_object *out = NULL;
@@ -1389,27 +1320,23 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *root = NULL;
     json_object *names = NULL;
 
-    if (flux_event_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
+    if (flux_kvs_ns_event_decode (msg, NULL, &rootseq, &json_str) < 0)
         goto done;
-    }
-    if (!json_str || !(out = Jfromstr (json_str))) {
+    if (!json_str || !(out = Jfromstr (json_str))
+                  || !Jget_str (out, "blobref", &rootdir)
+                  || !Jget_obj (out, "names", &names)
+                  || !json_object_is_type (names, json_type_array)) {
         errno = EPROTO;
-        flux_log_error (ctx->h, "%s: json decode", __FUNCTION__);
-        goto done;
-    }
-    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names) < 0) {
-        flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
     fence_finalize_bynames (ctx, names, 0);
-    /* Copy of root object (corresponding to rootdir blobref) was included
-     * in the setroot event as an optimization, since it would otherwise
+    /* Copy of root object (corresponding to rootdir blobref) may be
+     * included in the event as an optimization, since it would otherwise
      * be loaded from the content store on next KVS access - immediate
      * if there are watchers.  Store this object in the KVS cache
      * with clear dirty bit as it is already valid in the content store.
      */
-    if (root) {
+    if (Jget_obj (out, "rootdir", &root)) {
         struct cache_entry *hp;
         if ((hp = cache_lookup (ctx->cache, rootdir, ctx->epoch))) {
             if (!cache_entry_get_valid (hp))
@@ -1426,29 +1353,49 @@ done:
     Jput (out);
 }
 
-static int setroot_event_send (kvs_ctx_t *ctx, json_object *names)
+static void namespace_commit_completion (flux_future_t *f, void *arg)
 {
-    json_object *in = NULL;
-    json_object *root = NULL;
-    flux_msg_t *msg = NULL;
+    flux_t *h = arg;
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (h, "%s: namespace commit completion", __FUNCTION__);
+    flux_future_destroy (f);
+}
+
+/* Commit the new root to the namespace.
+ * A continuation captures the response to the commit request.
+ * FIXME: this function perpetuates the lack of error handling
+ * of the previous design - we just log errors.  What *should*
+ * happen on error is commit rollback and error event.
+ */
+static int namespace_commit (kvs_ctx_t *ctx, json_object *names)
+{
+    json_object *in = Jnew ();
+    flux_future_t *f;
     int rc = -1;
 
+    Jadd_str (in, "blobref", ctx->rootdir);
+    Jadd_obj (in, "names", names); /* takes a ref */
+
     if (event_includes_rootdir) {
+        json_object *root = NULL;
         bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
+        Jadd_obj (in, "rootdir", root); /* takes a ref */
     }
-    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
+    if (!(f = flux_kvs_ns_commit (ctx->h, FLUX_NODEID_ANY, kvs_namespace,
+                                  ctx->rootseq, Jtostr (in)))) {
+        flux_log_error (ctx->h, "%s: namespace commit %s",
+                        __FUNCTION__, kvs_namespace);
         goto done;
-    if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
-        goto done;
-    if (flux_msg_set_private (msg) < 0)
-        goto done;
-    if (flux_send (ctx->h, msg, 0) < 0)
-        goto done;
+    }
+    if (flux_future_then (f, -1., namespace_commit_completion, ctx->h) < 0) {
+        flux_log_error (ctx->h, "%s: namespace commit then %s",
+                        __FUNCTION__, kvs_namespace);
+        flux_future_destroy (f);
+    }
     rc = 0;
 done:
     Jput (in);
-    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -1546,15 +1493,13 @@ static struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0, NULL },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",    setroot_event_cb, 0, NULL },
     { FLUX_MSGTYPE_EVENT,   "kvs.error",      error_event_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",    getroot_request_cb, 0, NULL },
+    { FLUX_MSGTYPE_EVENT,   "ns.allcommit.*",       namespace_event_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0, NULL },
     { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0, NULL },
     { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",    unwatch_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",       sync_request_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",        get_request_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",      watch_request_cb, 0, NULL },
     { FLUX_MSGTYPE_REQUEST, "kvs.fence",      fence_request_cb, 0, NULL },
@@ -1572,6 +1517,96 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
     }
+}
+
+int create_kvs_namespace (flux_t *h)
+{
+    flux_future_t *f;
+    int ns_flags = FLUX_NS_SYNCHRONIZE;
+    int rc = -1;
+
+    if (!(f = flux_kvs_ns_create (h, FLUX_NODEID_ANY, kvs_namespace,
+                                  geteuid (), ns_flags))) {
+        flux_log_error (h, "%s: namespace create %s",
+                        __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    if (flux_future_get (f, NULL) < 0) {
+        if (errno != EEXIST)
+            flux_log_error (h, "%s: namespace create %s",
+                            __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int master_init_root (kvs_ctx_t *ctx)
+{
+    json_object *rootdir = Jnew ();
+    href_t href;
+    int rootseq = 0;
+    flux_future_t *f = NULL;
+    int rc = -1;
+
+    if (create_kvs_namespace (ctx->h) < 0)
+        goto done;
+    if (store (ctx, rootdir, href, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: storing root object", __FUNCTION__);
+        goto done;
+    }
+    if (!(f = flux_kvs_ns_commitf (ctx->h, FLUX_NODEID_ANY,
+                                   kvs_namespace, rootseq,
+                                   "{s:s s:[s]}",
+                                   "blobref", href,
+                                   "names", "kvs-initial-commit"))) {
+        flux_log_error (ctx->h, "%s: namespace commit %s",
+                        __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    if (flux_future_get (f, NULL) < 0) {
+        if (errno != EEXIST)
+            flux_log_error (ctx->h, "%s: namespace commit %s",
+                            __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    setroot (ctx, href, rootseq);
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int slave_init_root (kvs_ctx_t *ctx)
+{
+    const char *blobref;
+    int rootseq;
+    flux_future_t *f;
+    int rc = -1;
+
+    if (!(f = flux_kvs_ns_lookup (ctx->h, FLUX_NODEID_ANY,
+                                     kvs_namespace, 0, FLUX_NS_WAIT))) {
+        flux_log_error (ctx->h, "%s: namespace lookup %s",
+                        __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    if (flux_kvs_ns_lookup_getf (f, "{s:s}", "blobref", &blobref) < 0) {
+        flux_log_error (ctx->h, "%s: namespace lookup %s",
+                        __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    if (flux_kvs_ns_lookup_get_seq (f, &rootseq) < 0) {
+        flux_log_error (ctx->h, "%s: namespace lookup %s",
+                        __FUNCTION__, kvs_namespace);
+        goto done;
+    }
+    setroot (ctx, blobref, rootseq);
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
 }
 
 int mod_main (flux_t *h, int argc, char **argv)
@@ -1592,23 +1627,24 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         goto done;
     }
+    char s[64];
+    snprintf (s, sizeof (s), "ns.allcommit.%s", kvs_namespace);
+    if (flux_event_subscribe (h, s) < 0) {
+        flux_log_error (h, "flux_event_subscribe");
+        return -1;
+    }
     if (ctx->rank == 0) {
-        json_object *rootdir = Jnew ();
-        href_t href;
-
-        if (store (ctx, rootdir, href, NULL) < 0) {
-            flux_log_error (h, "storing root object");
-            goto done;
+        if (master_init_root (ctx) < 0) {
+            if (errno == EEXIST) {
+                if (slave_init_root (ctx) < 0)
+                    return -1;
+            }
+            else
+                return -1;
         }
-        setroot (ctx, href, 0);
     } else {
-        href_t href;
-        int rootseq;
-        if (getroot_rpc (ctx, &rootseq, href) < 0) {
-            flux_log_error (h, "getroot");
-            goto done;
-        }
-        setroot (ctx, href, rootseq);
+        if (slave_init_root (ctx) < 0)
+            return -1;
     }
     if (flux_msg_handler_addvec (h, handlers, ctx) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");

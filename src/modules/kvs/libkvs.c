@@ -94,6 +94,8 @@ typedef struct {
 static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg);
 
+const char *kvs_namespace = "kvs";
+
 static void freectx (void *arg)
 {
     kvsctx_t *ctx = arg;
@@ -1343,9 +1345,9 @@ int kvs_get_version (flux_t *h, int *versionp)
     int version;
     int rc = -1;
 
-    if (!(f = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_kvs_ns_lookup (h, FLUX_NODEID_ANY, kvs_namespace, 0, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{ s:i }", "rootseq", &version) < 0)
+    if (flux_kvs_ns_lookup_get_seq (f, &version) < 0)
         goto done;
     if (versionp)
         *versionp = version;
@@ -1360,11 +1362,9 @@ int kvs_wait_version (flux_t *h, int version)
     flux_future_t *f;
     int ret = -1;
 
-    if (!(f = flux_rpcf (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
-                           "rootseq", version)))
+    if (!(f = flux_kvs_ns_lookup (h, FLUX_NODEID_ANY, kvs_namespace,
+                                  version, 1)))
         goto done;
-    /* N.B. response contains (rootseq, rootdir) but we don't need it.
-     */
     if (flux_future_get (f, NULL) < 0)
         goto done;
     ret = 0;
