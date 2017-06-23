@@ -22,14 +22,17 @@ libkvs_la_SOURCES = \
 	kvs_classic.c \
 	kvs_watch.c \
 	jansson_dirent.c \
-	jansson_dirent.h
+	jansson_dirent.h \
+	kvs_txn.c \
+	kvs_txn_private.h
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
 	kvs_lookup.h \
 	kvs_dir.h \
 	kvs_watch.h \
-	kvs_classic.h
+	kvs_classic.h \
+	kvs_txn.h
 
 TESTS = \
 	test_proto.t \

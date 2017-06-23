@@ -104,7 +104,7 @@ void *thread (void *arg)
         if (kvs_put_int (t->h, key, 42) < 0)
             log_err_exit ("%s", key);
         if (nopt && (i % nopt_divisor) == 0)
-            flags |= KVS_NO_MERGE;
+            flags |= FLUX_KVS_NO_MERGE;
         else
             flags = 0;
         if (fopt) {

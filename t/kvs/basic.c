@@ -301,7 +301,7 @@ void cmd_put_common (flux_t *h, int argc, char **argv, bool mergeable)
             log_err_exit ("%s", key);
     }
     free (key);
-    if (kvs_commit (h, mergeable ? 0 : KVS_NO_MERGE) < 0)
+    if (kvs_commit (h, mergeable ? 0 : FLUX_KVS_NO_MERGE) < 0)
         log_err_exit ("kvs_commit");
 }
 

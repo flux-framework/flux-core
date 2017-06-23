@@ -232,7 +232,7 @@ void commit_mgr_merge_tests (void)
 
     /* test unsuccessful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", KVS_NO_MERGE);
+    create_ready_commit (cm, "fence1", "key1", "1", FLUX_KVS_NO_MERGE);
     create_ready_commit (cm, "fence2", "key2", "2", 0);
 
     commit_mgr_merge_ready_commits (cm);
@@ -258,7 +258,7 @@ void commit_mgr_merge_tests (void)
     /* test unsuccessful merge */
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
-    create_ready_commit (cm, "fence2", "key2", "2", KVS_NO_MERGE);
+    create_ready_commit (cm, "fence2", "key2", "2", FLUX_KVS_NO_MERGE);
 
     commit_mgr_merge_ready_commits (cm);
 

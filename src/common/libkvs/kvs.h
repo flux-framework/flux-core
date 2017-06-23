@@ -9,12 +9,7 @@
 #include "kvs_dir.h"
 #include "kvs_classic.h"
 #include "kvs_watch.h"
-
-/* Flags for commit and fence operations
- */
-enum flux_kvs_flags {
-    KVS_NO_MERGE = 1,  /* disallow commits to be mergeable with others */
-};
+#include "kvs_txn.h"
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument
  * The caller retains ownership of the original.

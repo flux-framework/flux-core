@@ -259,7 +259,7 @@ void merge_tests (void)
     fence_destroy (f1);
     fence_destroy (f2);
 
-    f1 = create_fence ("foo", "A", KVS_NO_MERGE);
+    f1 = create_fence ("foo", "A", FLUX_KVS_NO_MERGE);
     f2 = create_fence ("bar", "B", 0);
 
     ok (fence_merge (f1, f2) == 0,
@@ -269,7 +269,7 @@ void merge_tests (void)
     fence_destroy (f2);
 
     f1 = create_fence ("foo", "A", 0);
-    f2 = create_fence ("bar", "B", KVS_NO_MERGE);
+    f2 = create_fence ("bar", "B", FLUX_KVS_NO_MERGE);
 
     ok (fence_merge (f1, f2) == 0,
         "fence_merge no merge");

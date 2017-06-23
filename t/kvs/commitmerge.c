@@ -200,7 +200,7 @@ void *committhread (void *arg)
     if (kvs_put_int (t->h, key, t->n) < 0)
         log_err_exit ("%s", key);
 
-    if (kvs_commit (t->h, nopt ? KVS_NO_MERGE : 0) < 0)
+    if (kvs_commit (t->h, nopt ? FLUX_KVS_NO_MERGE : 0) < 0)
         log_err_exit ("kvs_commit");
 
     flux_close (t->h);

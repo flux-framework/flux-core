@@ -154,8 +154,7 @@ int fence_merge (fence_t *dest, fence_t *src)
 {
     int i, len;
 
-    if (dest->flags & KVS_NO_MERGE
-        || src->flags & KVS_NO_MERGE)
+    if ((dest->flags & FLUX_KVS_NO_MERGE) || (src->flags & FLUX_KVS_NO_MERGE))
         return 0;
 
     if (Jget_ar_len (src->names, &len)) {
