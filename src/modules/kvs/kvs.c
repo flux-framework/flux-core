@@ -294,14 +294,13 @@ static void content_store_completion (flux_future_t *f, void *arg)
     (void)content_store_get (f, arg);
 }
 
-static int content_store_request_send (kvs_ctx_t *ctx, const href_t ref,
-                                       json_object *val, bool now)
+static int content_store_request_send (kvs_ctx_t *ctx, json_object *val,
+                                       bool now)
 {
     flux_future_t *f;
     const char *data = Jtostr (val);
     int size = strlen (data) + 1;
 
-    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     if (!(f = flux_rpc_raw (ctx->h, "content.store",
                             data, size, FLUX_NODEID_ANY, 0)))
         goto error;
@@ -344,12 +343,12 @@ static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
         if (wait) {
-            if (content_store_request_send (ctx, ref, o, false) < 0) {
+            if (content_store_request_send (ctx, o, false) < 0) {
                 flux_log_error (ctx->h, "content_store");
                 goto done;
             }
         } else {
-            if (content_store_request_send (ctx, ref, o, true) < 0) {
+            if (content_store_request_send (ctx, o, true) < 0) {
                 flux_log_error (ctx->h, "content_store");
                 goto done;
             }
