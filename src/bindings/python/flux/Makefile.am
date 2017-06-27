@@ -38,16 +38,16 @@ _core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
 _core_la_DEPENDENCIES = _core_build.py
 
-_jsc_build.py: $(top_srcdir)/src/modules/libjsc/jstatctl.h $(MAKE_BINDING) _core_build.py
-	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/libjsc \
+_jsc_build.py: $(top_srcdir)/src/common/libjsc/jstatctl.h $(MAKE_BINDING) _core_build.py
+	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libjsc \
 	  			  --package flux \
 	                          --modname _jsc \
 				  --include_ffi _core_build \
 				  jstatctl.h
 
 _jsc_la_SOURCES = _jsc.c
-_jsc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libjsc
-_jsc_la_LIBADD = $(top_builddir)/src/modules/libjsc/libflux-jsc.la $(common_libs)
+_jsc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libjsc
+_jsc_la_LIBADD = $(common_libs)
 _jsc_la_DEPENDENCIES = _jsc_build.py
 
 _kvs_build.py: $(top_srcdir)/src/common/libkvs/kvs.h $(MAKE_BINDING) _core_build.py

@@ -261,6 +261,7 @@ AC_CONFIG_FILES( \
   src/common/libflux/Makefile \
   src/common/libkvs/Makefile \
   src/common/libkz/Makefile \
+  src/common/libjsc/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
@@ -280,7 +281,6 @@ AC_CONFIG_FILES( \
   src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
   src/modules/content-sqlite/Makefile \
-  src/modules/libjsc/Makefile \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
   src/modules/resource-hwloc/Makefile \

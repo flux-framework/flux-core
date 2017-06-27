@@ -71,10 +71,6 @@ fluxcmd_PROGRAMS = \
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
-flux_jstat_LDADD = \
-	$(top_builddir)/src/modules/libjsc/libflux-jsc.la \
-	$(fluxcmd_ldadd) \
-	$(LIBUTIL)
 
 #
 # Automatically build list of flux(1) builtins from

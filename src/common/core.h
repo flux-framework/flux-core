@@ -30,9 +30,7 @@
  */
 
 #include "core/flux.h"
-
 #include "core/kvs.h"
-#include "core/barrier.h"
 #include "core/jstatctl.h"
 
 #endif /* !_FLUX_CORE_H */
