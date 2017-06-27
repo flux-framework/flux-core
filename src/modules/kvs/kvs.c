@@ -1072,6 +1072,17 @@ static int fence_add_request_data (fence_t *f, json_object *ops)
     return 0;
 }
 
+/* fence_process_fence_request() should be called once per fence request */
+static int fence_process_fence_request (kvs_ctx_t *ctx, fence_t *f)
+{
+    if (f->count == f->nprocs) {
+        if (zlist_append (ctx->ready, f) < 0)
+            oom ();
+    }
+
+    return 0;
+}
+
 static int fence_add_request_copy (fence_t *f, const flux_msg_t *request)
 {
     flux_msg_t *cpy = flux_msg_copy (request, false);
@@ -1181,12 +1192,9 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (fence_add_request_data (f, ops) < 0)
         goto done;
 
-    //flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
-    //          __FUNCTION__, name, f->count, f->nprocs);
-    if (f->count == f->nprocs) {
-        if (zlist_append (ctx->ready, f) < 0)
-            oom ();
-    }
+    if (fence_process_fence_request (ctx, f) < 0)
+        goto done;
+
 done:
     Jput (in);
 }
@@ -1231,12 +1239,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (fence_add_request_data (f, ops) < 0)
             goto error;
 
-        // flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
-        //          __FUNCTION__, name, f->count, f->nprocs);
-        if (f->count == f->nprocs) {
-            if (zlist_append (ctx->ready, f) < 0)
-                oom ();
-        }
+        if (fence_process_fence_request (ctx, f) < 0)
+            goto error;
     }
     else {
         flux_future_t *f = flux_rpc (h, "kvs.relayfence", json_str,
