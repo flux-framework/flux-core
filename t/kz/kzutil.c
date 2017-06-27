@@ -37,7 +37,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libsubprocess/zio.h"
-#include "src/modules/libkz/kz.h"
+#include "src/common/libkz/kz.h"
 
 
 typedef struct {

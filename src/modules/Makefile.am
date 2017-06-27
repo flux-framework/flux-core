@@ -4,7 +4,6 @@ SUBDIRS = \
  connector-local \
  kvs \
  content-sqlite \
- libkz \
  wreck \
  libjsc \
  resource-hwloc \

@@ -263,9 +263,7 @@ mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
 
 kz_kzutil_SOURCES = kz/kzutil.c
 kz_kzutil_CPPFLAGS = $(test_cppflags)
-kz_kzutil_LDADD = \
-	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+kz_kzutil_LDADD = $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)

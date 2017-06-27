@@ -7,6 +7,7 @@ SUBDIRS = libtap \
 	  libutil \
 	  libflux \
 	  libkvs \
+	  libkz \
 	  libsubprocess \
 	  libcompat \
 	  liboptparse
@@ -25,6 +26,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libpmi/libpmi.la \
+	$(builddir)/libkz/libkz.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libjson-c/libjson-c.la \

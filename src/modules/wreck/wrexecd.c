@@ -51,7 +51,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libsubprocess/zio.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/modules/libkz/kz.h"
+#include "src/common/libkz/kz.h"
 
 #include "luastack.h"
 #include "src/bindings/lua/lutil.h"

@@ -43,8 +43,7 @@ wrexecd_libs = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(top_builddir)/src/modules/libkz/libkz.la
+	$(top_builddir)/src/common/libflux-optparse.la
 
 wrexecd_LDADD = \
 	$(wrexecd_libs) \
