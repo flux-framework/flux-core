@@ -37,7 +37,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/modules/kvs/kvs.h"
 
 typedef struct
 {

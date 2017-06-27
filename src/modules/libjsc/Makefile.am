@@ -19,6 +19,5 @@ libflux_jsc_la_SOURCES = jstatctl.c \
 libflux_jsc_la_LDFLAGS = $(fluxlib_ldflags) \
 			 -export-symbols-regex '^jsc_.*'
 
-libflux_jsc_la_LIBADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
-			$(top_builddir)/src/common/libflux-internal.la \
+libflux_jsc_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 			$(top_builddir)/src/common/libflux-core.la

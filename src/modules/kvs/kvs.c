@@ -43,11 +43,11 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libkvs/proto.h"
+#include "src/common/libkvs/json_dirent.h"
 
 #include "waitqueue.h"
-#include "proto.h"
 #include "cache.h"
-#include "json_dirent.h"
 #include "json_util.h"
 
 #include "lookup.h"

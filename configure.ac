@@ -259,6 +259,7 @@ AC_CONFIG_FILES( \
   src/common/libminilzo/Makefile \
   src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
+  src/common/libkvs/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \

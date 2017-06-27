@@ -46,7 +46,6 @@ flux_broker_SOURCES = \
 	rusage.c
 
 flux_broker_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la 
 

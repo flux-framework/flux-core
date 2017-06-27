@@ -6,8 +6,8 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-#include "src/modules/kvs/proto.h"
-#include "src/modules/kvs/json_dirent.h"
+#include "src/common/libkvs/proto.h"
+#include "src/common/libkvs/json_dirent.h"
 
 void test_get (void)
 {

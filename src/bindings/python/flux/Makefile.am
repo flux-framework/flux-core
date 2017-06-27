@@ -50,16 +50,16 @@ _jsc_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/libjsc
 _jsc_la_LIBADD = $(top_builddir)/src/modules/libjsc/libflux-jsc.la $(common_libs)
 _jsc_la_DEPENDENCIES = _jsc_build.py
 
-_kvs_build.py: $(top_srcdir)/src/modules/kvs/kvs.h $(MAKE_BINDING) _core_build.py
-	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/modules/kvs \
+_kvs_build.py: $(top_srcdir)/src/common/libkvs/kvs.h $(MAKE_BINDING) _core_build.py
+	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libkvs \
 	  			  --package flux \
 	                          --modname _kvs \
 				  --include_ffi _core_build \
 				  kvs.h
 
 _kvs_la_SOURCES = _kvs.c
-_kvs_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/modules/kvs
-_kvs_la_LIBADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la $(common_libs)
+_kvs_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libkvs
+_kvs_la_LIBADD = $(common_libs)
 _kvs_la_DEPENDENCIES = _kvs_build.py
 
 _kz_build.py: $(top_srcdir)/src/modules/libkz/kz.h $(MAKE_BINDING) _core_build.py
