@@ -27,6 +27,13 @@ bool cache_entry_get_valid (struct cache_entry *hp);
 bool cache_entry_get_dirty (struct cache_entry *hp);
 void cache_entry_set_dirty (struct cache_entry *hp, bool val);
 
+/* Get set content store flag, used to internally manage
+ * whether or not content in cache entry has been
+ * stored off node into content store.
+ */
+bool cache_entry_get_content_store_flag (struct cache_entry *hp);
+void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val);
+
 /* Accessors for cache entry data.
  * If non-NULL, set transfers ownership of 'o' to the cache entry.
  * An invalid->valid transition runs the entry's wait queue, if any.

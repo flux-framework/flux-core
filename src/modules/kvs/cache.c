@@ -55,6 +55,7 @@ struct cache_entry {
     json_object *o;         /* value object */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
+    uint8_t content_store_flag:1;
 };
 
 struct cache {
@@ -92,6 +93,17 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val)
                 wait_runqueue (hp->waitlist_notdirty);
         }
     }
+}
+
+bool cache_entry_get_content_store_flag (struct cache_entry *hp)
+{
+    return (hp && hp->o && hp->content_store_flag);
+}
+
+void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val)
+{
+    if (hp && hp->o)
+        hp->content_store_flag = val;
 }
 
 json_object *cache_entry_get_json (struct cache_entry *hp)
