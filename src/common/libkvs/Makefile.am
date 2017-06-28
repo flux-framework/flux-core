@@ -18,6 +18,7 @@ libkvs_la_SOURCES = \
 	proto.h \
 	json_dirent.c \
 	json_dirent.h \
+	kvs_deprecated.c \
 	kvs_deprecated.h
 
 fluxinclude_HEADERS = \

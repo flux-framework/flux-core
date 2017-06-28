@@ -71,7 +71,7 @@ struct kvsdir_iterator_struct {
 
 typedef enum {
     WATCH_STRING, WATCH_INT, WATCH_INT64, WATCH_DOUBLE,
-    WATCH_BOOLEAN, WATCH_OBJECT, WATCH_JSONSTR, WATCH_DIR,
+    WATCH_BOOLEAN, WATCH_JSONSTR, WATCH_DIR,
 } watch_type_t;
 
 typedef struct {
@@ -376,12 +376,6 @@ done:
     return rc;
 }
 
-/* deprecated */
-int kvs_get_obj (flux_t *h, const char *key, json_object **val)
-{
-    return getobj (h, NULL, key, 0, val);
-}
-
 int kvs_get_dir (flux_t *h, kvsdir_t **dir, const char *fmt, ...)
 {
     va_list ap;
@@ -668,11 +662,6 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, json_object *val)
                 kvsdir_destroy (dir);
             break;
         }
-        case WATCH_OBJECT: {
-            kvs_set_obj_f set = wp->set;
-            rc = set (wp->key, val, wp->arg, errnum);
-            break;
-        }
         case WATCH_JSONSTR: {
             kvs_set_f set = wp->set;
             rc = set (wp->key, Jtostr (val), wp->arg, errnum);
@@ -772,9 +761,6 @@ done:
     return ret;
 }
 
-/* *valp is IN/OUT parameter.
- * IN *valp is freed internally.  Caller must free OUT *val.
- */
 static int watch_once_obj (flux_t *h, const char *key, json_object **valp)
 {
     int rc = -1;
@@ -788,12 +774,6 @@ static int watch_once_obj (flux_t *h, const char *key, json_object **valp)
     rc = 0;
 done:
     return rc;
-}
-
-/* deprecated */
-int kvs_watch_once_obj (flux_t *h, const char *key, json_object **valp)
-{
-    return watch_once_obj (h, key, valp);
 }
 
 int kvs_watch_once (flux_t *h, const char *key, char **valp)
@@ -874,24 +854,6 @@ done:
         json_object_put (val);
     if (key)
         free (key);
-    return rc;
-}
-
-int kvs_watch_obj (flux_t *h, const char *key, kvs_set_obj_f set, void *arg)
-{
-    uint32_t matchtag;
-    kvs_watcher_t *wp;
-    json_object *val = NULL;
-    int rc = -1;
-
-    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
-        goto done;
-    wp = add_watcher (h, key, WATCH_OBJECT, matchtag, set, arg);
-    dispatch_watch (h, wp, val);
-    rc = 0;
-done:
-    if (val)
-        json_object_put (val);
     return rc;
 }
 
@@ -1085,17 +1047,6 @@ int kvs_put (flux_t *h, const char *key, const char *json_str)
     rc = 0;
 done:
     Jput (val);
-    return rc;
-}
-
-int kvs_put_obj (flux_t *h, const char *key, json_object *val)
-{
-    int rc = -1;
-
-    if (kvs_put (h, key, Jtostr (val)) < 0)
-        goto done;
-    rc = 0;
-done:
     return rc;
 }
 
@@ -1405,11 +1356,6 @@ static int dirgetobj (kvsdir_t *dir, const char *name,
     return rc;
 }
 
-int kvsdir_get_obj (kvsdir_t *dir, const char *name, json_object **valp)
-{
-    return dirgetobj (dir, name, 0, valp);
-}
-
 int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
 {
     json_object *v = NULL;
@@ -1558,22 +1504,6 @@ int kvsdir_get_boolean (kvsdir_t *dir, const char *name, bool *valp)
 done:
     Jput (v);
     return rc;
-}
-
-int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
-{
-    int rc;
-    char *key;
-
-    if (dir->rootref) {
-        errno = EROFS;
-        return -1;
-    }
-    key = kvsdir_key_at (dir, name);
-    rc = kvs_put (dir->handle, key, Jtostr (val));
-    free (key);
-
-    return (rc);
 }
 
 int kvsdir_put (kvsdir_t *dir, const char *name, const char *val)
