@@ -313,6 +313,7 @@ error:
     return -1;
 }
 
+/* Store object 'o' under key 'ref' in local cache. */
 static int store_cache (kvs_ctx_t *ctx, json_object *o, href_t ref,
                         struct cache_entry **hpp)
 {
@@ -341,7 +342,10 @@ static int store_cache (kvs_ctx_t *ctx, json_object *o, href_t ref,
     return rc;
 }
 
-/* assumes all entries are dirty */
+/* This function assumes all entries are dirty.  Flush to content
+ * cache asynchronously and push wait onto cache object's wait queue.
+ * FIXME: asynchronous errors need to be propagated back to caller.
+ */
 static int store_content_store (kvs_ctx_t *ctx, struct cache_entry *hp,
                                 wait_t *wait)
 {
@@ -356,28 +360,6 @@ static int store_content_store (kvs_ctx_t *ctx, struct cache_entry *hp,
     }
     cache_entry_wait_notdirty (hp, wait);
     return 0;
-}
-
-/* Store object 'o' under key 'ref' in local cache.
- * Flush to content cache asynchronously and push wait onto cache
- * object's wait queue.
- * FIXME: asynchronous errors need to be propagated back to caller.
- */
-static int store (kvs_ctx_t *ctx, json_object *o, href_t ref,
-                  wait_t *wait)
-{
-    struct cache_entry *hp;
-    int rc = -1;
-
-    if (store_cache (ctx, o, ref, &hp) < 0)
-        goto done;
-    if (cache_entry_get_dirty (hp)) {
-        if (store_content_store (ctx, hp, wait) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    return rc;
 }
 
 static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
@@ -395,21 +377,26 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
  */
-static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, wait_t *wait)
+static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, commit_t *c)
 {
     json_object_iter iter;
     json_object *subdir, *value;
     const char *s;
     href_t ref;
     int rc = -1;
+    struct cache_entry *hp;
 
     json_object_object_foreachC (dir, iter) {
         if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
-            if (commit_unroll (ctx, subdir, wait) < 0) /* depth first */
+            if (commit_unroll (ctx, subdir, c) < 0) /* depth first */
                 goto done;
             json_object_get (subdir);
-            if (store (ctx, subdir, ref, wait) < 0)
+            if (store_cache (ctx, subdir, ref, &hp) < 0)
                 goto done;
+            if (cache_entry_get_dirty (hp)) {
+                if (zlist_push (c->dirty_cache_entries, hp) < 0)
+                    oom ();
+            }
             json_object_object_add (dir, iter.key,
                                     dirent_create ("DIRREF", ref));
         }
@@ -417,8 +404,12 @@ static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, wait_t *wait)
                                 && (s = Jtostr (value))
                                 && strlen (s) > BLOBREF_MAX_STRING_SIZE) {
             json_object_get (value);
-            if (store (ctx, value, ref, wait) < 0)
+            if (store_cache (ctx, value, ref, &hp) < 0)
                 goto done;
+            if (cache_entry_get_dirty (hp)) {
+                if (zlist_push (c->dirty_cache_entries, hp) < 0)
+                    oom ();
+            }
             json_object_object_add (dir, iter.key,
                                     dirent_create ("FILEREF", ref));
         }
@@ -634,14 +625,30 @@ static void commit_apply (commit_t *c)
      * but we don't proceed until they are completed.
      */
     if (!c->rootcpy_stored) {
-        if (commit_unroll (ctx, c->rootcpy, wait) < 0)
+        struct cache_entry *hp;
+
+        if (commit_unroll (ctx, c->rootcpy, c) < 0)
             c->errnum = errno;
-        else if (store (ctx, c->rootcpy, c->newroot, wait) < 0)
+        else if (store_cache (ctx, c->rootcpy, c->newroot, &hp) < 0)
             c->errnum = errno;
+        else if (cache_entry_get_dirty (hp)
+                 && zlist_push (c->dirty_cache_entries, hp) < 0)
+            oom ();
+
+        if (!c->errnum) {
+            while ((hp = zlist_pop (c->dirty_cache_entries))) {
+                if (store_content_store (ctx, hp, wait) < 0) {
+                    c->errnum = errno;
+                    break;
+                }
+            }
+        }
+
         c->rootcpy_stored = true; /* cache takes ownership of rootcpy */
         c->rootcpy = NULL;
         if (wait_get_usecount (wait) > 0)
             goto stall;
+        /* no need to check c->errnum, fallthrough */
     }
 
     /* This is the transaction that finalizes the commit by replacing
