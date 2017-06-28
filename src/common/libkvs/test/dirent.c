@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include "src/common/libutil/shortjson.h"
-#include "src/modules/kvs/json_dirent.h"
+#include "src/common/libkvs/json_dirent.h"
 #include "src/common/libtap/tap.h"
 
 int main (int argc, char *argv[])

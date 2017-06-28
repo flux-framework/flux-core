@@ -263,27 +263,21 @@ mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
 
 kz_kzutil_SOURCES = kz/kzutil.c
 kz_kzutil_CPPFLAGS = $(test_cppflags)
-kz_kzutil_LDADD = \
-	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+kz_kzutil_LDADD = $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
 kvs_torture_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_dtree_SOURCES = kvs/dtree.c
 kvs_dtree_CPPFLAGS = $(test_cppflags)
 kvs_dtree_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_getas_SOURCES = kvs/getas.c
 kvs_getas_CPPFLAGS = $(test_cppflags)
 kvs_getas_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_blobref_SOURCES = kvs/blobref.c
@@ -294,32 +288,27 @@ kvs_blobref_LDADD = \
 kvs_asyncfence_SOURCES = kvs/asyncfence.c
 kvs_asyncfence_CPPFLAGS = $(test_cppflags)
 kvs_asyncfence_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_watch_SOURCES = kvs/watch.c
 kvs_watch_CPPFLAGS = $(test_cppflags)
 kvs_watch_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_commit_SOURCES = kvs/commit.c
 kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_commitmerge_SOURCES = kvs/commitmerge.c
 kvs_commitmerge_CPPFLAGS = $(test_cppflags)
 kvs_commitmerge_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
 kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(top_builddir)/src/modules/kvs/proto.o \
+	$(top_builddir)/src/common/libkvs/proto.o \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_hashtest_SOURCES = kvs/hashtest.c
@@ -330,7 +319,6 @@ kvs_hashtest_LDADD = \
 kvs_basic_SOURCES = kvs/basic.c
 kvs_basic_CPPFLAGS = $(test_cppflags)
 kvs_basic_LDADD = \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_treq_SOURCES = request/treq.c

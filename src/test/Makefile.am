@@ -17,8 +17,7 @@ noinst_SCRIPTS = \
 	soak-workload.sh \
 	relnotes.sh
 
-LDADD = $(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(top_builddir)/src/common/libflux-internal.la \
+LDADD = $(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 

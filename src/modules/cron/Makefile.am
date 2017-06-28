@@ -28,5 +28,4 @@ cron_la_SOURCES = \
 cron_la_LDFLAGS = $(fluxmod_ldflags) -module
 cron_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		 $(top_builddir)/src/common/libflux-core.la \
-		 $(top_builddir)/src/modules/kvs/libflux-kvs.la \
 		 $(ZMQ_LIBS)

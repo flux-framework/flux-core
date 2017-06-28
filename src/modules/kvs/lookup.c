@@ -39,10 +39,10 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libkvs/proto.h"
+#include "src/common/libkvs/json_dirent.h"
 
 #include "cache.h"
-#include "proto.h"
-#include "json_dirent.h"
 #include "json_util.h"
 
 #include "lookup.h"

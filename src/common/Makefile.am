@@ -1,5 +1,17 @@
-SUBDIRS = libtap libev libminilzo libjson-c libpmi \
-	  liblsd libutil libflux libsubprocess libcompat liboptparse
+SUBDIRS = libtap \
+	  libev \
+	  libminilzo \
+	  libjson-c \
+	  libpmi \
+	  liblsd \
+	  libutil \
+	  libflux \
+	  libkvs \
+	  libkz \
+	  libjsc \
+	  libsubprocess \
+	  libcompat \
+	  liboptparse
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LDFLAGS)
@@ -15,6 +27,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libminilzo/libminilzo.la \
 	$(builddir)/libpmi/libpmi.la \
+	$(builddir)/libkz/libkz.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(builddir)/libjson-c/libjson-c.la \
@@ -28,6 +41,8 @@ fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
+	$(builddir)/libkvs/libkvs.la \
+	$(builddir)/libjsc/libjsc.la \
 	libflux-internal.la
 libflux_core_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-core.map \

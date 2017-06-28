@@ -39,7 +39,7 @@
 #include "src/common/libcompat/compat.h"
 
 #include "src/common/libutil/shortjson.h"
-#include "src/modules/libkz/kz.h"
+#include "src/common/libkz/kz.h"
 #include "src/common/libsubprocess/zio.h"
 
 #include "json-lua.h"

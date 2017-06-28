@@ -6,7 +6,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/modules/kvs/proto.h"
+#include "src/common/libkvs/proto.h"
 
 /* Current kvs_watch() API doesn't accept a rank, so we cheat and
  * build the minimal kvs.watch request message from scratch here.
