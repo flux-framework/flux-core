@@ -11,6 +11,18 @@ if ! which valgrind >/dev/null; then
     test_done
 fi
 
+# Do not run test by default unless valgrind/valgrind.h was found, since
+#  this has been known to introduce false positives (#1097). However, allow
+#  run to be forced on the cmdline with -d, --debug.
+#
+have_valgrind_h() {
+    grep -q "^#define HAVE_VALGRIND_VALGRIND_H" ${FLUX_BUILD_DIR}/config/config.h
+}
+if ! have_valgrind_h && test "$debug" = ""; then
+    skip_all='skipping valgrind tests b/c valgrind.h not found. Use -d, --debug to force'
+    test_done
+fi
+
 export FLUX_PMI_SINGLETON=1 # avoid finding leaks in slurm libpmi.so
 
 VALGRIND=`which valgrind`
