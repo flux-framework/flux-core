@@ -312,12 +312,8 @@ error:
     return -1;
 }
 
-/* Store object 'o' under key 'ref' in local cache.
- * Flush to content cache asynchronously and push wait onto cache
- * object's wait queue.
- * FIXME: asynchronous errors need to be propagated back to caller.
- */
-static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
+static int store_cache (kvs_ctx_t *ctx, json_object *o, href_t ref,
+                        struct cache_entry **hpp)
 {
     struct cache_entry *hp;
     int rc = -1;
@@ -336,13 +332,48 @@ static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
     } else {
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
-        if (content_store_request_send (ctx, o, false) < 0) {
-            flux_log_error (ctx->h, "content_store");
-            goto done;
-        }
+        cache_entry_set_content_store_flag (hp, true);
     }
-    if (cache_entry_get_dirty (hp))
-        cache_entry_wait_notdirty (hp, wait);
+    *hpp = hp;
+    rc = 0;
+ done:
+    return rc;
+}
+
+/* assumes all entries are dirty */
+static int store_content_store (kvs_ctx_t *ctx, struct cache_entry *hp,
+                                wait_t *wait)
+{
+    if (cache_entry_get_content_store_flag (hp)) {
+        if (content_store_request_send (ctx,
+                                        cache_entry_get_json (hp),
+                                        false) < 0) {
+            flux_log_error (ctx->h, "content_store");
+            return -1;
+        }
+        cache_entry_set_content_store_flag (hp, false);
+    }
+    cache_entry_wait_notdirty (hp, wait);
+    return 0;
+}
+
+/* Store object 'o' under key 'ref' in local cache.
+ * Flush to content cache asynchronously and push wait onto cache
+ * object's wait queue.
+ * FIXME: asynchronous errors need to be propagated back to caller.
+ */
+static int store (kvs_ctx_t *ctx, json_object *o, href_t ref,
+                  wait_t *wait)
+{
+    struct cache_entry *hp;
+    int rc = -1;
+
+    if (store_cache (ctx, o, ref, &hp) < 0)
+        goto done;
+    if (cache_entry_get_dirty (hp)) {
+        if (store_content_store (ctx, hp, wait) < 0)
+            goto done;
+    }
     rc = 0;
 done:
     return rc;
