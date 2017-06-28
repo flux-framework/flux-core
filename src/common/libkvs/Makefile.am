@@ -13,6 +13,7 @@ noinst_LTLIBRARIES = libkvs.la
 
 libkvs_la_SOURCES = \
 	kvs.c \
+	kvs_lookup.c \
 	proto.c \
 	proto.h \
 	json_dirent.c \
@@ -20,7 +21,7 @@ libkvs_la_SOURCES = \
 	kvs_deprecated.h
 
 fluxinclude_HEADERS = \
-	kvs.h
+	kvs.h kvs_lookup.h
 
 TESTS = \
 	test_proto.t \

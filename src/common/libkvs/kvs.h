@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <flux/core.h>
 
+#include "kvs_lookup.h"
+
 /* Flags for commit and fence operations
  */
 enum flux_kvs_flags {
