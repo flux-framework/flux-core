@@ -18,11 +18,12 @@ libkvs_la_SOURCES = \
 	proto.h \
 	json_dirent.c \
 	json_dirent.h \
+	kvs_classic.c \
 	kvs_deprecated.c \
 	kvs_deprecated.h
 
 fluxinclude_HEADERS = \
-	kvs.h kvs_lookup.h
+	kvs.h kvs_lookup.h kvs_classic.h
 
 TESTS = \
 	test_proto.t \

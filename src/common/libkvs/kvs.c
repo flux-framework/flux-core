@@ -292,41 +292,6 @@ done:
     return rc;
 }
 
-int kvs_get (flux_t *h, const char *key, char **val)
-{
-    json_object *v = NULL;
-
-    if (getobj (h, NULL, key, 0, &v) < 0)
-        return -1;
-    if (val)
-        *val = xstrdup (Jtostr (v));
-    Jput (v);
-    return 0;
-}
-
-int kvs_getat (flux_t *h, const char *treeobj,
-               const char *key, char **val)
-{
-    json_object *v = NULL;
-    json_object *dirent = NULL;
-
-    if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
-                         || dirent_validate (dirent) < 0) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (getobj (h, dirent, key, 0, &v) < 0)
-        goto error;
-    if (val)
-        *val = xstrdup (Jtostr (v));
-    Jput (dirent);
-    return 0;
-error:
-    Jput (v);
-    Jput (dirent);
-    return -1;
-}
-
 int kvs_get_dirat (flux_t *h, const char *treeobj,
                    const char *key, kvsdir_t **dir)
 {
@@ -346,33 +311,6 @@ int kvs_get_dirat (flux_t *h, const char *treeobj,
 done:
     Jput (v);
     Jput (rootref);
-    return rc;
-}
-
-int kvs_get_symlinkat (flux_t *h, const char *treeobj,
-                       const char *key, char **val)
-{
-    json_object *v = NULL;
-    json_object *dirent = NULL;
-    int rc = -1;
-
-    if (!treeobj || !key || !(dirent = Jfromstr (treeobj))
-                         || dirent_validate (dirent) < 0) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (getobj (h, dirent, key, KVS_PROTO_READLINK, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_string) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = xstrdup (json_object_get_string (v));
-    rc = 0;
-done:
-    Jput (v);
-    Jput (dirent);
     return rc;
 }
 
@@ -406,25 +344,6 @@ done:
     return rc;
 }
 
-int kvs_get_symlink (flux_t *h, const char *key, char **val)
-{
-    json_object *v = NULL;
-    int rc = -1;
-
-    if (getobj (h, NULL, key, KVS_PROTO_READLINK, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_string) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = xstrdup (json_object_get_string (v));
-    rc = 0;
-done:
-    Jput (v);
-    return rc;
-}
-
 int kvs_get_treeobj (flux_t *h, const char *key, char **val)
 {
     json_object *v = NULL;
@@ -437,102 +356,6 @@ int kvs_get_treeobj (flux_t *h, const char *key, char **val)
         s = json_object_to_json_string_ext (v, JSON_C_TO_STRING_PLAIN);
         *val = xstrdup (s);
     }
-    rc = 0;
-done:
-    Jput (v);
-    return rc;
-}
-
-int kvs_get_string (flux_t *h, const char *key, char **val)
-{
-    json_object *v = NULL;
-    int rc = -1;
-
-    if (getobj (h, NULL, key, 0, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_string) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = xstrdup (json_object_get_string (v));
-    rc = 0;
-done:
-    Jput (v);
-    return rc;
-}
-
-int kvs_get_int (flux_t *h, const char *key, int *val)
-{
-    json_object *v = NULL;
-    int rc = -1;
-
-    if (getobj (h, NULL, key, 0, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_int) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = json_object_get_int (v);
-    rc = 0;
-done:
-    Jput (v);
-    return rc;
-}
-
-int kvs_get_int64 (flux_t *h, const char *key, int64_t *val)
-{
-    json_object *v = NULL;
-    int rc = -1;
-
-    if (getobj (h, NULL, key, 0, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_int) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = json_object_get_int64 (v);
-    rc = 0;
-done:
-    Jput (v);
-    return rc;
-}
-
-int kvs_get_double (flux_t *h, const char *key, double *val)
-{
-    json_object *v = NULL;
-    int rc = -1;
-
-    if (getobj (h, NULL, key, 0, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_double
-        && json_object_get_type (v) != json_type_int) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = json_object_get_double (v);
-    rc = 0;
-done:
-    Jput (v);
-    return rc;
-}
-
-int kvs_get_boolean (flux_t *h, const char *key, bool *val)
-{
-    json_object *v = NULL;
-    int rc = -1;
-
-    if (getobj (h, NULL, key, 0, &v) < 0)
-        goto done;
-    if (json_object_get_type (v) != json_type_boolean) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (val)
-        *val = json_object_get_boolean (v);
     rc = 0;
 done:
     Jput (v);

@@ -6,6 +6,7 @@
 #include <flux/core.h>
 
 #include "kvs_lookup.h"
+#include "kvs_classic.h"
 
 /* Flags for commit and fence operations
  */
@@ -42,15 +43,8 @@ void kvsdir_incref (kvsdir_t *dir);
  * values must be freed with kvsdir_destroy().  These functions return
  * -1 on error (errno set), 0 on success.
  */
-int kvs_get (flux_t *h, const char *key, char **json_str);
 int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
-int kvs_get_string (flux_t *h, const char *key, char **valp);
-int kvs_get_int (flux_t *h, const char *key, int *valp);
-int kvs_get_int64 (flux_t *h, const char *key, int64_t *valp);
-int kvs_get_double (flux_t *h, const char *key, double *valp);
-int kvs_get_boolean (flux_t *h, const char *key, bool *valp);
-int kvs_get_symlink (flux_t *h, const char *key, char **valp);
 
 /* Get treeobj associated with a key.  Caller must free.
  */
@@ -58,12 +52,8 @@ int kvs_get_treeobj (flux_t *h, const char *key, char **treeobj);
 
 /* Like kvs_get() but lookup is relative to 'treeobj'.
  */
-int kvs_getat (flux_t *h, const char *treeobj,
-               const char *key, char **json_str);
 int kvs_get_dirat (flux_t *h, const char *treeobj,
                    const char *key, kvsdir_t **dirp);
-int kvs_get_symlinkat (flux_t *h, const char *treeobj,
-                               const char *key, char **val);
 
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
