@@ -319,12 +319,10 @@ error:
 static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
 {
     struct cache_entry *hp;
-    const char *s = json_object_to_json_string (o);
     int rc = -1;
 
-    if (blobref_hash (ctx->hash_name, (uint8_t *)s, strlen (s) + 1,
-                      ref, sizeof (href_t)) < 0) {
-        flux_log_error (ctx->h, "blobref_hash");
+    if (json_hash (ctx->hash_name, o, ref) < 0) {
+        flux_log_error (ctx->h, "json_hash");
         goto done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
