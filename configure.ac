@@ -292,6 +292,7 @@ AC_CONFIG_FILES( \
   etc/Makefile \
   etc/flux-core.pc \
   etc/flux-pmi.pc \
+  etc/flux-optparse.pc \
   etc/flux.service \
   doc/Makefile \
   doc/man1/Makefile \

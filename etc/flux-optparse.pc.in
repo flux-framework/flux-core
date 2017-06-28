@@ -4,7 +4,7 @@ libdir=@libdir@
 includedir=@includedir@
 
 Name: flux-core
-Description: Flux Resource Manager Framework Core
+Description: Flux Resource Manager Option Parser
 Version: @PACKAGE_VERSION@
-Libs: -L${libdir} -lflux-core
+Libs: -L${libdir} -lflux-optparse
 Cflags: -I${includedir}
