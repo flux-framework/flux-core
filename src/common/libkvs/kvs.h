@@ -29,23 +29,6 @@ typedef int (*kvs_set_double_f)(const char *key, double val, void *arg,
 typedef int (*kvs_set_boolean_f)(const char *key, bool val, void *arg,
                                  int errnum);
 
-/* The basic get and put operations, with convenience functions
- * for simple types.  You will get an error if you call kvs_get()
- * on a directory (return -1, errno = EISDIR).  Use kvs_get_dir() which
- * returns the opaque kvsdir_t type.  kvs_get() and kvs_get_string()
- * return values that must be freed with free().  kvs_get_dir() return
- * values must be freed with kvsdir_destroy().  These functions return
- * -1 on error (errno set), 0 on success.
- */
-int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
-        __attribute__ ((format (printf, 3, 4)));
-
-/* Like kvs_get() but lookup is relative to 'treeobj'.
- */
-int kvs_get_dirat (flux_t *h, const char *treeobj,
-                   const char *key, kvsdir_t **dirp);
-
-
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
  * value and again each time the value changes.
@@ -185,16 +168,6 @@ int kvs_dropcache (flux_t *h);
  * They behave exactly like their kvs_ counterparts, except the 'key' path
  * is resolved relative to the directory.
  */
-int kvsdir_get (kvsdir_t *dir, const char *key, char **json_str);
-int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
-        __attribute__ ((format (printf, 3, 4)));
-int kvsdir_get_string (kvsdir_t *dir, const char *key, char **valp);
-int kvsdir_get_int (kvsdir_t *dir, const char *key, int *valp);
-int kvsdir_get_int64 (kvsdir_t *dir, const char *key, int64_t *valp);
-int kvsdir_get_double (kvsdir_t *dir, const char *key, double *valp);
-int kvsdir_get_boolean (kvsdir_t *dir, const char *key, bool *valp);
-int kvsdir_get_symlink (kvsdir_t *dir, const char *key, char **valp);
-
 int kvsdir_put (kvsdir_t *dir, const char *key, const char *json_str);
 int kvsdir_put_string (kvsdir_t *dir, const char *key, const char *val);
 int kvsdir_put_int (kvsdir_t *dir, const char *key, int val);

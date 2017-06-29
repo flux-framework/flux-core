@@ -147,6 +147,42 @@ done:
     return rc;
 }
 
+int kvs_get_dir (flux_t *h, kvsdir_t **dir, const char *fmt, ...)
+{
+    flux_future_t *f = NULL;
+    const char *json_str;
+    va_list ap;
+    char *key = NULL;
+    int rc = -1;
+
+    if (!h || !dir || !fmt) {
+        errno = EINVAL;
+        goto done;
+    }
+    va_start (ap, fmt);
+    if (vasprintf (&key, fmt, ap) < 0)
+        errno = ENOMEM;
+    va_end (ap);
+    if (!key)
+        goto done;
+    /* N.B. python kvs tests use empty string key for some reason.
+     * Don't break them for now.
+     */
+    const char *k = strlen (key) > 0 ? key : ".";
+
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, k)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto done;
+    if (!(*dir = kvsdir_create (h, NULL, k, json_str)))
+        goto done;
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 int kvs_get_symlink (flux_t *h, const char *key, char **valp)
 {
     flux_future_t *f;
@@ -214,6 +250,29 @@ done:
     return rc;
 }
 
+int kvs_get_dirat (flux_t *h, const char *rootref,
+                   const char *key, kvsdir_t **dir)
+{
+    flux_future_t *f = NULL;
+    const char *json_str;
+    int rc = -1;
+
+    if (!rootref || !key || !dir) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto done;
+    if (!(*dir = kvsdir_create (h, rootref, key, json_str)))
+        goto done;
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
 int kvs_get_symlinkat (flux_t *h, const char *treeobj,
                        const char *key, char **valp)
 {
@@ -237,6 +296,218 @@ done:
     return rc;
 }
 
+int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    const char *json_str;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto done;
+    if (valp) {
+        if (!(*valp = strdup (json_str))) {
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    va_list ap;
+    const char *json_str;
+    char *name = NULL;
+    char *key = NULL;
+    int rc = -1;
+
+    va_start (ap, fmt);
+    if (vasprintf (&name, fmt, ap) < 0)
+        errno = ENOMEM;
+    va_end (ap);
+    if (!name)
+        goto done;
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto done;
+    if (!(*dirp = kvsdir_create (h, rootref, key, json_str)))
+        goto done;
+    rc = 0;
+done:
+    free (key);
+    free (name);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_symlink (kvsdir_t *dir, const char *name, char **valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    const char *s;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_getf (f, "s", &s) < 0)
+        goto done;
+    if (valp) {
+        if (!(*valp = strdup (s))) {
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_string (kvsdir_t *dir, const char *name, char **valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    const char *s;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_getf (f, "s", &s) < 0)
+        goto done;
+    if (valp) {
+        if (!(*valp = strdup (s))) {
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_int (kvsdir_t *dir, const char *name, int *valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    int i;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_getf (f, "i", &i) < 0)
+        goto done;
+    if (valp)
+        *valp = i;
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_int64 (kvsdir_t *dir, const char *name, int64_t *valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    int64_t i;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_getf (f, "I", &i) < 0)
+        goto done;
+    if (valp)
+        *valp = i;
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_double (kvsdir_t *dir, const char *name, double *valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    double d;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_getf (f, "F", &d) < 0)
+        goto done;
+    if (valp)
+        *valp = d;
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int kvsdir_get_boolean (kvsdir_t *dir, const char *name, bool *valp)
+{
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
+    flux_future_t *f = NULL;
+    int i;
+    char *key;
+    int rc = -1;
+
+    if (!(key = kvsdir_key_at (dir, name)))
+        goto done;
+    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
+        goto done;
+    if (flux_kvs_lookup_getf (f, "b", &i) < 0)
+        goto done;
+    if (valp)
+        *valp = i;
+    rc = 0;
+done:
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
