@@ -21,13 +21,15 @@ libkvs_la_SOURCES = \
 	kvs_dir.c \
 	kvs_classic.c \
 	kvs_deprecated.c \
-	kvs_deprecated.h
+	kvs_deprecated.h \
+	kvs_watch.c
 
 
 fluxinclude_HEADERS = \
 	kvs.h \
 	kvs_lookup.h \
 	kvs_dir.h \
+	kvs_watch.h \
 	kvs_classic.h
 
 TESTS = \
