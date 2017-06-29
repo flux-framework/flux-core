@@ -53,6 +53,7 @@
 #include "lookup.h"
 #include "fence.h"
 #include "types.h"
+#include "commit.h"
 
 #define KVS_MAGIC 0xdeadbeef
 
@@ -91,25 +92,6 @@ typedef struct {
     int commit_merge;
     const char *hash_name;
 } kvs_ctx_t;
-
-typedef struct {
-    fence_t *f;
-    int errnum;
-    kvs_ctx_t *ctx;
-    json_object *rootcpy;   /* working copy of root dir */
-    int blocked:1;
-    href_t newroot;
-    zlist_t *missing_refs;
-    zlist_t *dirty_cache_entries;
-    enum {
-        COMMIT_STATE_INIT = 1,
-        COMMIT_STATE_LOAD_ROOT = 2,
-        COMMIT_STATE_APPLY_OPS = 3,
-        COMMIT_STATE_STORE = 4,
-        COMMIT_STATE_PRE_FINISHED = 5,
-        COMMIT_STATE_FINISHED = 6,
-    } state;
-} commit_t;
 
 typedef enum {
     COMMIT_PROCESS_ERROR = 1,
@@ -516,45 +498,6 @@ done:
     return rc;
 }
 
-static void commit_destroy (commit_t *c)
-{
-    if (c) {
-        Jput (c->rootcpy);
-        if (c->missing_refs)
-            zlist_destroy (&c->missing_refs);
-        if (c->dirty_cache_entries)
-            zlist_destroy (&c->dirty_cache_entries);
-        /* fence destroyed through management of fence, not commit_t's
-         * responsibility */
-        free (c);
-    }
-}
-
-static commit_t *commit_create (kvs_ctx_t *ctx, fence_t *f)
-{
-    commit_t *c;
-
-    if (!(c = calloc (1, sizeof (*c)))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    c->f = f;
-    c->ctx = ctx;
-    if (!(c->missing_refs = zlist_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    if (!(c->dirty_cache_entries = zlist_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    c->state = COMMIT_STATE_INIT;
-    return c;
-error:
-    commit_destroy (c);
-    return NULL;
-}
-
 /* return COMMIT_PROCESS_ERROR on error,
  * COMMIT_PROCESS_LOAD_MISSING_REFS stall & load,
  * COMMIT_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache entries
@@ -562,7 +505,7 @@ error:
  */
 static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
 {
-    kvs_ctx_t *ctx = c->ctx;
+    kvs_ctx_t *ctx = c->aux;
 
     /* Incase user calls commit_process() again */
     if (c->errnum)
@@ -705,7 +648,7 @@ stall_store:
  */
 static void commit_apply (commit_t *c)
 {
-    kvs_ctx_t *ctx = c->ctx;
+    kvs_ctx_t *ctx = c->aux;
     wait_t *wait = NULL;
     int errnum = 0;
     commit_process_t ret;
@@ -1203,7 +1146,7 @@ static int fence_process_fence_request (kvs_ctx_t *ctx, fence_t *f)
     if (fence_count_reached (f)) {
         commit_t *c;
 
-        if (!(c = commit_create (ctx, f)))
+        if (!(c = commit_create (f, ctx)))
             return -1;
 
         if (zlist_append (ctx->ready, c) < 0)
