@@ -519,14 +519,14 @@ error:
  * and clean up the fence_t state.  This function is idempotent.
  * Error handling: set c->errnum to errno, then let process complete.
  */
-static void commit_apply_fence (commit_t *c)
+static void commit_apply (commit_t *c)
 {
     kvs_ctx_t *ctx = c->ctx;
     wait_t *wait = NULL;
 
     if (c->errnum)
         goto done;
-    if (!(wait = wait_create ((wait_cb_f)commit_apply_fence, c))) {
+    if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
         c->errnum = errno;
         goto done;
     }
@@ -711,7 +711,7 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
         if (ctx->commit_merge)
             commit_merge_all (ctx);
         if (!c->blocked)
-            commit_apply_fence (c);
+            commit_apply (c);
     }
 }
 
