@@ -100,6 +100,7 @@ typedef struct {
     int blocked:1;
     int rootcpy_stored:1;
     href_t newroot;
+    zlist_t *missing_refs;
 } commit_t;
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
@@ -489,6 +490,8 @@ static void commit_destroy (commit_t *c)
 {
     if (c) {
         Jput (c->rootcpy);
+        if (c->missing_refs)
+            zlist_destroy (&c->missing_refs);
         /* fence destroyed through management of fence, not commit_t's
          * responsibility */
         free (c);
@@ -505,6 +508,10 @@ static commit_t *commit_create (kvs_ctx_t *ctx, fence_t *f)
     }
     c->f = f;
     c->ctx = ctx;
+    if (!(c->missing_refs = zlist_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     return c;
 error:
