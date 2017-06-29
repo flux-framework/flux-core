@@ -537,13 +537,13 @@ static void commit_apply (commit_t *c)
      * in the copy. This allows the commit to be self-contained in the rootcpy
      * until it is unrolled later on.
      */
-    if (c->f->ops && !c->rootcpy_stored) {
-        int i, len = json_object_array_length (c->f->ops);
+    if (fence_get_json_ops (c->f) && !c->rootcpy_stored) {
+        int i, len = json_object_array_length (fence_get_json_ops (c->f));
         json_object *op, *dirent;
         const char *key;
 
         for (i = 0; i < len; i++) {
-            if (!(op = json_object_array_get_idx (c->f->ops, i))
+            if (!(op = json_object_array_get_idx (fence_get_json_ops (c->f), i))
                     || !Jget_str (op, "key", &key))
                 continue;
             dirent = NULL;
@@ -584,18 +584,18 @@ static void commit_apply (commit_t *c)
 done:
     if (c->errnum == 0) {
         int count;
-        if (Jget_ar_len (c->f->names, &count) && count > 1) {
+        if (Jget_ar_len (fence_get_json_names (c->f), &count) && count > 1) {
             int opcount = 0;
-            (void)Jget_ar_len (c->f->ops, &opcount);
+            (void)Jget_ar_len (fence_get_json_ops (c->f), &opcount);
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
         setroot (ctx, c->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, c->f->names);
+        setroot_event_send (ctx, fence_get_json_names (c->f));
     } else {
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (c->errnum));
-        error_event_send (ctx, c->f->names, c->errnum);
+        error_event_send (ctx, fence_get_json_names (c->f), c->errnum);
     }
     wait_destroy (wait);
 
@@ -643,7 +643,7 @@ static void commit_merge_all (kvs_ctx_t *ctx)
     if (c
         && c->errnum == 0
         && !c->rootcpy_stored
-        && !(c->f->flags & KVS_NO_MERGE)) {
+        && !(fence_get_flags (c->f) & KVS_NO_MERGE)) {
         commit_t *nc;
         nc = zlist_pop (ctx->ready);
         assert (nc == c);
@@ -1026,7 +1026,7 @@ done:
 /* fence_process_fence_request() should be called once per fence request */
 static int fence_process_fence_request (kvs_ctx_t *ctx, fence_t *f)
 {
-    if (f->count == f->nprocs) {
+    if (fence_count_reached (f)) {
         commit_t *c;
 
         if (!(c = commit_create (ctx, f)))
@@ -1044,7 +1044,7 @@ static int fence_add (kvs_ctx_t *ctx, fence_t *f)
 {
     const char *name;
 
-    if (!Jget_ar_str (f->names, 0, &name)) {
+    if (!Jget_ar_str (fence_get_json_names (f), 0, &name)) {
         errno = EINVAL;
         goto error;
     }
@@ -1074,7 +1074,7 @@ static void fence_finalize (kvs_ctx_t *ctx, fence_t *f, int errnum)
             flux_log_error (ctx->h, "%s", __FUNCTION__);
         msg = zlist_next (f->requests);
     }
-    if (Jget_ar_str (f->names, 0, &name))
+    if (Jget_ar_str (fence_get_json_names (f), 0, &name))
         zhash_delete (ctx->fences, name);
 }
 
@@ -1132,7 +1132,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
     }
     else
-        f->flags |= flags;
+        fence_set_flags (f, fence_get_flags (f) | flags);
 
     if (fence_add_request_data (f, ops) < 0)
         goto done;
@@ -1176,7 +1176,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
     }
     else
-        f->flags |= flags;
+        fence_set_flags (f, fence_get_flags (f) | flags);
 
     if (fence_add_request_copy (f, msg) < 0)
         goto error;

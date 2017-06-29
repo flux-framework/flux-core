@@ -76,6 +76,31 @@ error:
     return NULL;
 }
 
+bool fence_count_reached (fence_t *f)
+{
+    return (f->count >= f->nprocs);
+}
+
+int fence_get_flags (fence_t *f)
+{
+    return f->flags;
+}
+
+void fence_set_flags (fence_t *f, int flags)
+{
+    f->flags = flags;
+}
+
+json_object *fence_get_json_ops (fence_t *f)
+{
+    return f->ops;
+}
+
+json_object *fence_get_json_names (fence_t *f)
+{
+    return f->names;
+}
+
 int fence_add_request_data (fence_t *f, json_object *ops)
 {
     json_object *op;
