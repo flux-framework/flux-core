@@ -539,9 +539,21 @@ static void commit_apply (commit_t *c)
     /* Make a copy of the root directory.
      */
     if (!c->rootcpy_stored && !c->rootcpy) {
+        const char *missing_ref = NULL;
         json_object *rootdir;
-        if (!load (ctx, ctx->rootdir, wait, &rootdir))
+
+        if (!(rootdir = cache_lookup_and_get_json (ctx->cache,
+                                                   ctx->rootdir,
+                                                   ctx->epoch))) {
+            if (zlist_push (c->missing_refs, (void *)ctx->rootdir) < 0)
+                oom ();
+        }
+
+        while ((missing_ref = zlist_pop (c->missing_refs)))
+            assert (!load (ctx, missing_ref, wait, NULL));
+        if (wait_get_usecount (wait) > 0)
             goto stall;
+
         c->rootcpy = json_object_copydir (rootdir);
     }
 
