@@ -93,19 +93,23 @@ typedef struct {
 } kvs_ctx_t;
 
 typedef struct {
-    json_object *ops;
-    zlist_t *requests;
-    json_object *names;
     int nprocs;
-    int flags;
     int count;
+    zlist_t *requests;
+    json_object *ops;
+    json_object *names;
+    int flags;
+} fence_t;
+
+typedef struct {
+    fence_t *f;
     int errnum;
     kvs_ctx_t *ctx;
     json_object *rootcpy;   /* working copy of root dir */
     int blocked:1;
     int rootcpy_stored:1;
     href_t newroot;
-} fence_t;
+} commit_t;
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
 static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
@@ -483,30 +487,57 @@ done:
     return rc;
 }
 
+static void commit_destroy (commit_t *c)
+{
+    if (c) {
+        Jput (c->rootcpy);
+        /* fence destroyed through management of fence, not commit_t's
+         * responsibility */
+        free (c);
+    }
+}
+
+static commit_t *commit_create (kvs_ctx_t *ctx, fence_t *f)
+{
+    commit_t *c;
+
+    if (!(c = calloc (1, sizeof (*c)))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    c->f = f;
+    c->ctx = ctx;
+
+    return c;
+error:
+    commit_destroy (c);
+    return NULL;
+}
+
 /* Commit all the ops for a particular commit/fence request (rank 0 only).
  * The setroot event will cause responses to be sent to the fence requests
  * and clean up the fence_t state.  This function is idempotent.
- * Error handling: set f->errnum to errno, then let process complete.
+ * Error handling: set c->errnum to errno, then let process complete.
  */
-static void commit_apply_fence (fence_t *f)
+static void commit_apply_fence (commit_t *c)
 {
-    kvs_ctx_t *ctx = f->ctx;
+    kvs_ctx_t *ctx = c->ctx;
     wait_t *wait = NULL;
 
-    if (f->errnum)
+    if (c->errnum)
         goto done;
-    if (!(wait = wait_create ((wait_cb_f)commit_apply_fence, f))) {
-        f->errnum = errno;
+    if (!(wait = wait_create ((wait_cb_f)commit_apply_fence, c))) {
+        c->errnum = errno;
         goto done;
     }
 
     /* Make a copy of the root directory.
      */
-    if (!f->rootcpy_stored && !f->rootcpy) {
+    if (!c->rootcpy_stored && !c->rootcpy) {
         json_object *rootdir;
         if (!load (ctx, ctx->rootdir, wait, &rootdir))
             goto stall;
-        f->rootcpy = json_object_copydir (rootdir);
+        c->rootcpy = json_object_copydir (rootdir);
     }
 
     /* Apply each op (e.g. key = val) in sequence to the root copy.
@@ -514,76 +545,76 @@ static void commit_apply_fence (fence_t *f)
      * in the copy. This allows the commit to be self-contained in the rootcpy
      * until it is unrolled later on.
      */
-    if (f->ops && !f->rootcpy_stored) {
-        int i, len = json_object_array_length (f->ops);
+    if (c->f->ops && !c->rootcpy_stored) {
+        int i, len = json_object_array_length (c->f->ops);
         json_object *op, *dirent;
         const char *key;
 
         for (i = 0; i < len; i++) {
-            if (!(op = json_object_array_get_idx (f->ops, i))
+            if (!(op = json_object_array_get_idx (c->f->ops, i))
                     || !Jget_str (op, "key", &key))
                 continue;
             dirent = NULL;
             (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
-            if (commit_link_dirent (ctx, f->rootcpy, key, dirent, wait) < 0) {
-                f->errnum = errno;
+            if (commit_link_dirent (ctx, c->rootcpy, key, dirent, wait) < 0) {
+                c->errnum = errno;
                 break;
             }
         }
         if (wait_get_usecount (wait) > 0)
             goto stall;
-        if (f->errnum != 0)
+        if (c->errnum != 0)
             goto done;
     }
 
     /* Unroll the root copy.
      * When a DIRVAL is found, store an object and replace it with a DIRREF.
      * Finally, store the unrolled root copy as an object and keep its
-     * reference in f->newroot.  Flushes to content cache are asynchronous
+     * reference in c->newroot.  Flushes to content cache are asynchronous
      * but we don't proceed until they are completed.
      */
-    if (!f->rootcpy_stored) {
-        if (commit_unroll (ctx, f->rootcpy, wait) < 0)
-            f->errnum = errno;
-        else if (store (ctx, f->rootcpy, f->newroot, wait) < 0)
-            f->errnum = errno;
-        f->rootcpy_stored = true; /* cache takes ownership of rootcpy */
-        f->rootcpy = NULL;
+    if (!c->rootcpy_stored) {
+        if (commit_unroll (ctx, c->rootcpy, wait) < 0)
+            c->errnum = errno;
+        else if (store (ctx, c->rootcpy, c->newroot, wait) < 0)
+            c->errnum = errno;
+        c->rootcpy_stored = true; /* cache takes ownership of rootcpy */
+        c->rootcpy = NULL;
         if (wait_get_usecount (wait) > 0)
             goto stall;
     }
 
     /* This is the transaction that finalizes the commit by replacing
-     * ctx->rootdir with f->newroot, incrementing the root seq,
+     * ctx->rootdir with c->newroot, incrementing the root seq,
      * and sending out the setroot event for "eventual consistency"
      * of other nodes.
      */
 done:
-    if (f->errnum == 0) {
+    if (c->errnum == 0) {
         int count;
-        if (Jget_ar_len (f->names, &count) && count > 1) {
+        if (Jget_ar_len (c->f->names, &count) && count > 1) {
             int opcount = 0;
-            (void)Jget_ar_len (f->ops, &opcount);
+            (void)Jget_ar_len (c->f->ops, &opcount);
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, f->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, f->names);
+        setroot (ctx, c->newroot, ctx->rootseq + 1);
+        setroot_event_send (ctx, c->f->names);
     } else {
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
-                  flux_strerror (f->errnum));
-        error_event_send (ctx, f->names, f->errnum);
+                  flux_strerror (c->errnum));
+        error_event_send (ctx, c->f->names, c->errnum);
     }
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
-    zlist_remove (ctx->ready, f);
+    zlist_remove (ctx->ready, c);
     return;
 
 stall:
-    f->blocked = 1;
+    c->blocked = 1;
     return;
 }
 
@@ -591,8 +622,8 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    fence_t *f;
-    if ((f = zlist_first (ctx->ready)) && !f->blocked)
+    commit_t *c;
+    if ((c = zlist_first (ctx->ready)) && !c->blocked)
         flux_watcher_start (ctx->idle_w);
 }
 
@@ -643,27 +674,28 @@ static int fence_merge (fence_t *dest, fence_t *src)
  */
 static void commit_merge_all (kvs_ctx_t *ctx)
 {
-    fence_t *f = zlist_first (ctx->ready);
+    commit_t *c = zlist_first (ctx->ready);
 
-    if (f
-        && f->errnum == 0
-        && !f->rootcpy_stored
-        && !(f->flags & KVS_NO_MERGE)) {
-        fence_t *nf;
-        nf = zlist_pop (ctx->ready);
-        assert (nf == f);
-        while ((nf = zlist_first (ctx->ready))) {
+    if (c
+        && c->errnum == 0
+        && !c->rootcpy_stored
+        && !(c->f->flags & KVS_NO_MERGE)) {
+        commit_t *nc;
+        nc = zlist_pop (ctx->ready);
+        assert (nc == c);
+        while ((nc = zlist_first (ctx->ready))) {
 
             /* if return == 0, we've merged as many as we currently
              * can */
-            if (!fence_merge (f, nf))
+            if (!fence_merge (c->f, nc->f))
                 break;
 
-            /* Merged fence, pop off ready list */
-            nf = zlist_pop (ctx->ready);
+            /* Merged fence, remove off ready list */
+            zlist_remove (ctx->ready, nc);
         }
-        if (zlist_push (ctx->ready, f) < 0)
+        if (zlist_push (ctx->ready, c) < 0)
             oom ();
+        zlist_freefn (ctx->ready, c, (zlist_free_fn *)commit_destroy, false);
     }
 }
 
@@ -671,15 +703,15 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    fence_t *f;
+    commit_t *c;
 
     flux_watcher_stop (ctx->idle_w);
 
-    if ((f = zlist_first (ctx->ready))) {
+    if ((c = zlist_first (ctx->ready))) {
         if (ctx->commit_merge)
             commit_merge_all (ctx);
-        if (!f->blocked)
-            commit_apply_fence (f);
+        if (!c->blocked)
+            commit_apply_fence (c);
     }
 }
 
@@ -1032,7 +1064,6 @@ static void fence_destroy (fence_t *f)
     if (f) {
         Jput (f->names);
         Jput (f->ops);
-        Jput (f->rootcpy);
         if (f->requests) {
             flux_msg_t *msg;
             while ((msg = zlist_pop (f->requests)))
@@ -1044,8 +1075,7 @@ static void fence_destroy (fence_t *f)
     }
 }
 
-static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs,
-                              int flags)
+static fence_t *fence_create (const char *name, int nprocs, int flags)
 {
     fence_t *f;
 
@@ -1056,7 +1086,6 @@ static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs,
     }
     f->nprocs = nprocs;
     f->flags = flags;
-    f->ctx = ctx;
     f->names = Jnew_ar ();
     Jadd_ar_str (f->names, name);
     return f;
@@ -1089,8 +1118,14 @@ static int fence_add_request_data (fence_t *f, json_object *ops)
 static int fence_process_fence_request (kvs_ctx_t *ctx, fence_t *f)
 {
     if (f->count == f->nprocs) {
-        if (zlist_append (ctx->ready, f) < 0)
+        commit_t *c;
+
+        if (!(c = commit_create (ctx, f)))
+            return -1;
+
+        if (zlist_append (ctx->ready, c) < 0)
             oom ();
+        zlist_freefn (ctx->ready, c, (zlist_free_fn *)commit_destroy, true);
     }
 
     return 0;
@@ -1192,7 +1227,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
      * occurs after we know the fence name
      */
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs, flags)))
+        if (!(f = fence_create (name, nprocs, flags)))
             goto done;
         if (fence_add (ctx, f) < 0) {
             fence_destroy (f);
@@ -1236,7 +1271,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     }
     if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs, flags)))
+        if (!(f = fence_create (name, nprocs, flags)))
             goto error;
         if (fence_add (ctx, f) < 0) {
             fence_destroy (f);
