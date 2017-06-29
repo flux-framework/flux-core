@@ -110,57 +110,6 @@ static kvsctx_t *getctx (flux_t *h)
 }
 
 /**
- ** GET
- **/
-
-static int getobj (flux_t *h, const char *rootref, const char *key,
-                   int flags, json_object **val)
-{
-    flux_future_t *f = NULL;
-    const char *json_str;
-    json_object *rootref_obj = NULL;
-    json_object *in = NULL;
-    json_object *out = NULL;
-    json_object *v = NULL;
-    int saved_errno;
-    int rc = -1;
-
-    if (!h || !key) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (rootref) {
-        if (!(rootref_obj = Jfromstr (rootref))) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    if (!(in = kp_tget_enc (rootref_obj, key, flags)))
-        goto done;
-    if (!(f = flux_rpc (h, "kvs.get", Jtostr (in), FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (f, &json_str) < 0)
-        goto done;
-    if (!json_str || !(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_rget_dec (out, NULL, &v) < 0)
-        goto done;
-    if (val)
-        *val = Jget (v);
-    rc = 0;
-done:
-    saved_errno = errno;
-    Jput (in);
-    Jput (out);
-    Jput (rootref_obj);
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return rc;
-}
-
-/**
  ** WATCH
  **/
 
@@ -1124,14 +1073,25 @@ int kvsdir_unlink (kvsdir_t *dir, const char *name)
 
 int kvs_copy (flux_t *h, const char *from, const char *to)
 {
-    json_object *dirent;
-    if (getobj (h, NULL, from, KVS_PROTO_TREEOBJ, &dirent) < 0)
-        return -1;
-    if (kvs_put_dirent (h, to, dirent) < 0) {
-        Jput (dirent);
-        return -1;
+    flux_future_t *f;
+    const char *json_str;
+    json_object *dirent = NULL;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, from)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto done;
+    if (!(dirent = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
     }
-    return 0;
+    if (kvs_put_dirent (h, to, dirent) < 0) // steals dirent reference
+        goto done;
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
 }
 
 int kvs_move (flux_t *h, const char *from, const char *to)
