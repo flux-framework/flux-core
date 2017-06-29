@@ -596,6 +596,34 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
+/* Merge src into dest
+ * - return 1 on merge, 0 on no-merge
+ */
+static int fence_merge (fence_t *dest, fence_t *src)
+{
+    int i, len;
+
+    if (dest->flags & KVS_NO_MERGE
+        || src->flags & KVS_NO_MERGE)
+        return 0;
+
+    if (Jget_ar_len (src->names, &len)) {
+        for (i = 0; i < len; i++) {
+            const char *name;
+            if (Jget_ar_str (src->names, i, &name))
+                Jadd_ar_str (dest->names, name);
+        }
+    }
+    if (Jget_ar_len (src->ops, &len)) {
+        for (i = 0; i < len; i++) {
+            json_object *op;
+            if (Jget_ar_obj (src->ops, i, &op))
+                Jadd_ar_obj (dest->ops, op);
+        }
+    }
+    return 1;
+}
+
 /* Merge ready commits that are mergeable, where merging consists of
  * popping the "donor" commit off the ready list, and appending its
  * ops to the top commit.  The top commit can be appended to if it
@@ -625,29 +653,14 @@ static void commit_merge_all (kvs_ctx_t *ctx)
         nf = zlist_pop (ctx->ready);
         assert (nf == f);
         while ((nf = zlist_first (ctx->ready))) {
-            int i, len;
 
-            /* We've merged as many as we currently can */
-            if (nf->flags & KVS_NO_MERGE)
+            /* if return == 0, we've merged as many as we currently
+             * can */
+            if (!fence_merge (f, nf))
                 break;
 
-            /* Fence is mergeable, pop off list */
+            /* Merged fence, pop off ready list */
             nf = zlist_pop (ctx->ready);
-
-            if (Jget_ar_len (nf->names, &len)) {
-                for (i = 0; i < len; i++) {
-                    const char *name;
-                    if (Jget_ar_str (nf->names, i, &name))
-                        Jadd_ar_str (f->names, name);
-                }
-            }
-            if (Jget_ar_len (nf->ops, &len)) {
-                for (i = 0; i < len; i++) {
-                    json_object *op;
-                    if (Jget_ar_obj (nf->ops, i, &op))
-                        Jadd_ar_obj (f->ops, op);
-                }
-            }
         }
         if (zlist_push (ctx->ready, f) < 0)
             oom ();
