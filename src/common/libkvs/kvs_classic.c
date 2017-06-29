@@ -169,6 +169,28 @@ done:
     return rc;
 }
 
+int kvs_get_treeobj (flux_t *h, const char *key, char **valp)
+{
+    flux_future_t *f;
+    const char *json_str;
+    int rc = -1;
+
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, key)))
+        goto done;
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
+        goto done;
+    if (valp) {
+        if (!(*valp = strdup (json_str))) {
+            errno = ENOMEM;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
 int kvs_getat (flux_t *h, const char *treeobj,
                const char *key, char **valp)
 {
@@ -214,6 +236,7 @@ done:
     flux_future_destroy (f);
     return rc;
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

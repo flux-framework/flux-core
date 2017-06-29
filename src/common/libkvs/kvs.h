@@ -6,6 +6,7 @@
 #include <flux/core.h>
 
 #include "kvs_lookup.h"
+#include "kvs_dir.h"
 #include "kvs_classic.h"
 
 /* Flags for commit and fence operations
@@ -13,8 +14,6 @@
 enum flux_kvs_flags {
     KVS_NO_MERGE = 1,  /* disallow commits to be mergeable with others */
 };
-
-typedef struct kvsdir_struct kvsdir_t;
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
                          int errnum);
@@ -30,11 +29,6 @@ typedef int (*kvs_set_double_f)(const char *key, double val, void *arg,
 typedef int (*kvs_set_boolean_f)(const char *key, bool val, void *arg,
                                  int errnum);
 
-/* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
- */
-void kvsdir_destroy (kvsdir_t *dir);
-void kvsdir_incref (kvsdir_t *dir);
-
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
  * on a directory (return -1, errno = EISDIR).  Use kvs_get_dir() which
@@ -45,10 +39,6 @@ void kvsdir_incref (kvsdir_t *dir);
  */
 int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
-
-/* Get treeobj associated with a key.  Caller must free.
- */
-int kvs_get_treeobj (flux_t *h, const char *key, char **treeobj);
 
 /* Like kvs_get() but lookup is relative to 'treeobj'.
  */
@@ -111,36 +101,6 @@ int kvs_put_boolean (flux_t *h, const char *key, bool val);
 /* As above but associate a preconstructed treeobj with key.
  */
 int kvs_put_treeobj (flux_t *h, const char *key, const char *treeobj);
-
-/* An iterator interface for walking the list of names in a kvsdir_t
- * returned by kvs_get_dir().  kvsitr_create() always succeeds.
- * kvsitr_next() returns NULL when the last item is reached.
- */
-typedef struct kvsdir_iterator_struct kvsitr_t;
-kvsitr_t *kvsitr_create (kvsdir_t *dir);
-void kvsitr_destroy (kvsitr_t *itr);
-const char *kvsitr_next (kvsitr_t *itr);
-void kvsitr_rewind (kvsitr_t *itr);
-
-/* Test attributes of 'name', relative to kvsdir object.
- * This is intended for testing names returned by kvsitr_next (no recursion).
- * Symlinks are not dereferenced, i.e. symlink pointing to dir will read
- * issymlink=true, isdir=false.
- */
-bool kvsdir_exists (kvsdir_t *dir, const char *name);
-bool kvsdir_isdir (kvsdir_t *dir, const char *name);
-bool kvsdir_issymlink (kvsdir_t *dir, const char *name);
-
-/* Get key associated with a directory or directory entry.
- * Both functions always succeed.
- */
-const char *kvsdir_key (kvsdir_t *dir);
-char *kvsdir_key_at (kvsdir_t *dir, const char *key); /* caller frees result */
-void *kvsdir_handle (kvsdir_t *dir);
-
-/* Get the number of keys in a directory.
- */
-int kvsdir_get_size (kvsdir_t *dir);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
