@@ -5,14 +5,7 @@
 
 #include "src/common/libutil/shortjson.h"
 
-typedef struct {
-    int nprocs;
-    int count;
-    zlist_t *requests;
-    json_object *ops;
-    json_object *names;
-    int flags;
-} fence_t;
+typedef struct fence fence_t;
 
 typedef int (*fence_msg_cb)(fence_t *f, const flux_msg_t *req, void *data);
 

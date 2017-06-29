@@ -40,6 +40,15 @@
 
 #include "fence.h"
 
+struct fence {
+    int nprocs;
+    int count;
+    zlist_t *requests;
+    json_object *ops;
+    json_object *names;
+    int flags;
+};
+
 void fence_destroy (fence_t *f)
 {
     if (f) {
