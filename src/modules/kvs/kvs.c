@@ -98,10 +98,17 @@ typedef struct {
     kvs_ctx_t *ctx;
     json_object *rootcpy;   /* working copy of root dir */
     int blocked:1;
-    int rootcpy_stored:1;
     href_t newroot;
     zlist_t *missing_refs;
     zlist_t *dirty_cache_entries;
+    enum {
+        COMMIT_STATE_INIT = 1,
+        COMMIT_STATE_LOAD_ROOT = 2,
+        COMMIT_STATE_APPLY_OPS = 3,
+        COMMIT_STATE_STORE = 4,
+        COMMIT_STATE_PRE_FINISHED = 5,
+        COMMIT_STATE_FINISHED = 6,
+    } state;
 } commit_t;
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
@@ -534,7 +541,7 @@ static commit_t *commit_create (kvs_ctx_t *ctx, fence_t *f)
         errno = ENOMEM;
         goto error;
     }
-
+    c->state = COMMIT_STATE_INIT;
     return c;
 error:
     commit_destroy (c);
@@ -552,92 +559,124 @@ static int commit_process (commit_t *c, const href_t rootdir_ref)
     if (c->errnum)
         return -1;
 
-    /* Make a copy of the root directory.
-     */
-    if (!c->rootcpy_stored && !c->rootcpy) {
-        json_object *rootdir;
+    switch (c->state) {
+        case COMMIT_STATE_INIT:
+        case COMMIT_STATE_LOAD_ROOT:
+        {
+            /* Make a copy of the root directory.
+             */
+            json_object *rootdir;
 
-        assert (!zlist_first (c->missing_refs));
+            assert (!zlist_first (c->missing_refs));
 
-        if (!(rootdir = cache_lookup_and_get_json (ctx->cache,
-                                                   rootdir_ref,
-                                                   ctx->epoch))) {
-            if (zlist_push (c->missing_refs, (void *)rootdir_ref) < 0)
-                oom ();
-            goto stall_load;
-        }
+            c->state = COMMIT_STATE_LOAD_ROOT;
 
-        c->rootcpy = json_object_copydir (rootdir);
-    }
-
-    /* Apply each op (e.g. key = val) in sequence to the root copy.
-     * A side effect of walking key paths is to convert DIRREFs to DIRVALs
-     * in the copy. This allows the commit to be self-contained in the rootcpy
-     * until it is unrolled later on.
-     */
-    if (fence_get_json_ops (c->f) && !c->rootcpy_stored) {
-        int i, len = json_object_array_length (fence_get_json_ops (c->f));
-        json_object *op, *dirent;
-        const char *missing_ref = NULL;
-        const char *key;
-
-        assert (!zlist_first (c->missing_refs));
-
-        for (i = 0; i < len; i++) {
-            missing_ref = NULL;
-            if (!(op = json_object_array_get_idx (fence_get_json_ops (c->f), i))
-                    || !Jget_str (op, "key", &key))
-                continue;
-            dirent = NULL;
-            (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
-            if (commit_link_dirent (ctx,
-                                    c->rootcpy,
-                                    key,
-                                    dirent,
-                                    &missing_ref) < 0) {
-                c->errnum = errno;
-                break;
-            }
-            if (missing_ref) {
-                if (zlist_push (c->missing_refs, (void *)missing_ref) < 0)
+            if (!(rootdir = cache_lookup_and_get_json (ctx->cache,
+                                                       rootdir_ref,
+                                                       ctx->epoch))) {
+                if (zlist_push (c->missing_refs, (void *)rootdir_ref) < 0)
                     oom ();
+                goto stall_load;
             }
+
+            c->rootcpy = json_object_copydir (rootdir);
+
+            c->state = COMMIT_STATE_APPLY_OPS;
+            /* fallthrough */
         }
+        case COMMIT_STATE_APPLY_OPS:
+        {
+            /* Apply each op (e.g. key = val) in sequence to the root
+             * copy.  A side effect of walking key paths is to convert
+             * DIRREFs to DIRVALs in the copy. This allows the commit
+             * to be self-contained in the rootcpy until it is
+             * unrolled later on.
+             */
+            if (fence_get_json_ops (c->f)) {
+                json_object *op, *dirent;
+                const char *missing_ref = NULL;
+                const char *key;
+                json_object *ops = fence_get_json_ops (c->f);
+                int i, len = json_object_array_length (ops);
 
-        if (c->errnum != 0)
+                assert (!zlist_first (c->missing_refs));
+
+                for (i = 0; i < len; i++) {
+                    missing_ref = NULL;
+                    if (!(op = json_object_array_get_idx (ops, i))
+                        || !Jget_str (op, "key", &key))
+                        continue;
+                    dirent = NULL;
+                    /* can be NULL for unlink */
+                    (void)Jget_obj (op, "dirent", &dirent);
+                    if (commit_link_dirent (ctx,
+                                            c->rootcpy,
+                                            key,
+                                            dirent,
+                                            &missing_ref) < 0) {
+                        c->errnum = errno;
+                        break;
+                    }
+                    if (missing_ref) {
+                        if (zlist_push (c->missing_refs,
+                                        (void *)missing_ref) < 0)
+                            oom ();
+                    }
+                }
+
+                if (c->errnum != 0)
+                    return -1;
+
+                if (zlist_first (c->missing_refs))
+                    goto stall_load;
+            }
+            c->state = COMMIT_STATE_STORE;
+            /* fallthrough */
+        }
+        case COMMIT_STATE_STORE:
+        {
+            /* Unroll the root copy.
+             * When a DIRVAL is found, store an object and replace it
+             * with a DIRREF.  Finally, store the unrolled root copy
+             * as an object and keep its reference in c->newroot.
+             * Flushes to content cache are asynchronous but we don't
+             * proceed until they are completed.
+             */
+            struct cache_entry *hp;
+
+            assert (!zlist_first (c->dirty_cache_entries));
+
+            if (commit_unroll (ctx, c->rootcpy, c) < 0)
+                c->errnum = errno;
+            else if (store_cache (ctx, c->rootcpy, c->newroot, &hp) < 0)
+                c->errnum = errno;
+            else if (cache_entry_get_dirty (hp)
+                     && zlist_push (c->dirty_cache_entries, hp) < 0)
+                oom ();
+
+            if (c->errnum)
+                return -1;
+
+            /* cache took ownership of rootcpy, we're done, but
+             * may still need to stall user.
+             */
+            c->state = COMMIT_STATE_PRE_FINISHED;
+            c->rootcpy = NULL;
+
+            if (zlist_first (c->dirty_cache_entries))
+                goto stall_store;
+
+            /* fallthrough */
+        }
+        case COMMIT_STATE_PRE_FINISHED:
+            c->state = COMMIT_STATE_FINISHED;
+            /* fallthrough */
+        case COMMIT_STATE_FINISHED:
+            break;
+        default:
+            flux_log (ctx->h, LOG_ERR, "invalid commit state: %d", c->state);
+            c->errnum = EPERM;
             return -1;
-
-        if (zlist_first (c->missing_refs))
-            goto stall_load;
-    }
-
-    /* Unroll the root copy.
-     * When a DIRVAL is found, store an object and replace it with a DIRREF.
-     * Finally, store the unrolled root copy as an object and keep its
-     * reference in c->newroot.  Flushes to content cache are asynchronous
-     * but we don't proceed until they are completed.
-     */
-    if (!c->rootcpy_stored) {
-        struct cache_entry *hp;
-
-        assert (!zlist_first (c->dirty_cache_entries));
-
-        if (commit_unroll (ctx, c->rootcpy, c) < 0)
-            c->errnum = errno;
-        else if (store_cache (ctx, c->rootcpy, c->newroot, &hp) < 0)
-            c->errnum = errno;
-        else if (cache_entry_get_dirty (hp)
-                 && zlist_push (c->dirty_cache_entries, hp) < 0)
-            oom ();
-
-        if (c->errnum)
-            return -1;
-
-        c->rootcpy_stored = true; /* cache takes ownership of rootcpy */
-        c->rootcpy = NULL;
-
-        if (zlist_first (c->dirty_cache_entries))
-            goto stall_store;
     }
 
     return 2;
@@ -762,9 +801,11 @@ static void commit_merge_all (kvs_ctx_t *ctx)
 {
     commit_t *c = zlist_first (ctx->ready);
 
+    /* commit must still be in state where merged in ops can be
+     * applied */
     if (c
         && c->errnum == 0
-        && !c->rootcpy_stored
+        && c->state <= COMMIT_STATE_APPLY_OPS
         && !(fence_get_flags (c->f) & KVS_NO_MERGE)) {
         commit_t *nc;
         nc = zlist_pop (ctx->ready);
