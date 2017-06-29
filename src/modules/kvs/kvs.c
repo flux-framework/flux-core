@@ -541,40 +541,31 @@ error:
     return NULL;
 }
 
-/* Commit all the ops for a particular commit/fence request (rank 0 only).
- * The setroot event will cause responses to be sent to the fence requests
- * and clean up the fence_t state.  This function is idempotent.
- * Error handling: set c->errnum to errno, then let process complete.
+/* return -1 on error, 0 stall & load, 1 stall & process dirty cache
+ * entries, 2 all done
  */
-static void commit_apply (commit_t *c)
+static int commit_process (commit_t *c, const href_t rootdir_ref)
 {
     kvs_ctx_t *ctx = c->ctx;
-    wait_t *wait = NULL;
 
+    /* Incase user calls commit_process() again */
     if (c->errnum)
-        goto done;
-    if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
-        c->errnum = errno;
-        goto done;
-    }
+        return -1;
 
     /* Make a copy of the root directory.
      */
     if (!c->rootcpy_stored && !c->rootcpy) {
-        const char *missing_ref = NULL;
         json_object *rootdir;
 
-        if (!(rootdir = cache_lookup_and_get_json (ctx->cache,
-                                                   ctx->rootdir,
-                                                   ctx->epoch))) {
-            if (zlist_push (c->missing_refs, (void *)ctx->rootdir) < 0)
-                oom ();
-        }
+        assert (!zlist_first (c->missing_refs));
 
-        while ((missing_ref = zlist_pop (c->missing_refs)))
-            assert (!load (ctx, missing_ref, wait, NULL));
-        if (wait_get_usecount (wait) > 0)
-            goto stall;
+        if (!(rootdir = cache_lookup_and_get_json (ctx->cache,
+                                                   rootdir_ref,
+                                                   ctx->epoch))) {
+            if (zlist_push (c->missing_refs, (void *)rootdir_ref) < 0)
+                oom ();
+            goto stall_load;
+        }
 
         c->rootcpy = json_object_copydir (rootdir);
     }
@@ -589,6 +580,8 @@ static void commit_apply (commit_t *c)
         json_object *op, *dirent;
         const char *missing_ref = NULL;
         const char *key;
+
+        assert (!zlist_first (c->missing_refs));
 
         for (i = 0; i < len; i++) {
             missing_ref = NULL;
@@ -610,12 +603,12 @@ static void commit_apply (commit_t *c)
                     oom ();
             }
         }
-        while ((missing_ref = zlist_pop (c->missing_refs)))
-            assert (!load (ctx, missing_ref, wait, NULL));
-        if (wait_get_usecount (wait) > 0)
-            goto stall;
+
         if (c->errnum != 0)
-            goto done;
+            return -1;
+
+        if (zlist_first (c->missing_refs))
+            goto stall_load;
     }
 
     /* Unroll the root copy.
@@ -627,6 +620,8 @@ static void commit_apply (commit_t *c)
     if (!c->rootcpy_stored) {
         struct cache_entry *hp;
 
+        assert (!zlist_first (c->dirty_cache_entries));
+
         if (commit_unroll (ctx, c->rootcpy, c) < 0)
             c->errnum = errno;
         else if (store_cache (ctx, c->rootcpy, c->newroot, &hp) < 0)
@@ -635,20 +630,73 @@ static void commit_apply (commit_t *c)
                  && zlist_push (c->dirty_cache_entries, hp) < 0)
             oom ();
 
-        if (!c->errnum) {
-            while ((hp = zlist_pop (c->dirty_cache_entries))) {
-                if (store_content_store (ctx, hp, wait) < 0) {
-                    c->errnum = errno;
-                    break;
-                }
-            }
-        }
+        if (c->errnum)
+            return -1;
 
         c->rootcpy_stored = true; /* cache takes ownership of rootcpy */
         c->rootcpy = NULL;
-        if (wait_get_usecount (wait) > 0)
-            goto stall;
-        /* no need to check c->errnum, fallthrough */
+
+        if (zlist_first (c->dirty_cache_entries))
+            goto stall_store;
+    }
+
+    return 2;
+
+stall_load:
+    c->blocked = 1;
+    return 0;
+
+stall_store:
+    c->blocked = 1;
+    return 1;
+}
+
+/* Commit all the ops for a particular commit/fence request (rank 0 only).
+ * The setroot event will cause responses to be sent to the fence requests
+ * and clean up the fence_t state.  This function is idempotent.
+ */
+static void commit_apply (commit_t *c)
+{
+    kvs_ctx_t *ctx = c->ctx;
+    wait_t *wait = NULL;
+    int ret, errnum = 0;
+
+    if ((ret = commit_process (c, ctx->rootdir)) < 0) {
+        errnum = c->errnum;
+        goto done;
+    }
+
+    if (!ret) {
+        const char *missing_ref = NULL;
+
+        if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
+            errnum = errno;
+            goto done;
+        }
+
+        while ((missing_ref = zlist_pop (c->missing_refs)))
+            assert (!load (ctx, missing_ref, wait, NULL));
+
+        assert (wait_get_usecount (wait) > 0);
+        goto stall;
+    }
+    else if (ret == 1) {
+        struct cache_entry *hp;
+
+        if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
+            errnum = errno;
+            goto done;
+        }
+
+        while ((hp = zlist_pop (c->dirty_cache_entries))) {
+            if (store_content_store (ctx, hp, wait) < 0) {
+                errnum = errno;
+                break;
+            }
+        }
+
+        assert (wait_get_usecount (wait) > 0);
+        goto stall;
     }
 
     /* This is the transaction that finalizes the commit by replacing
@@ -657,7 +705,7 @@ static void commit_apply (commit_t *c)
      * of other nodes.
      */
 done:
-    if (c->errnum == 0) {
+    if (errnum == 0) {
         int count;
         if (Jget_ar_len (fence_get_json_names (c->f), &count) && count > 1) {
             int opcount = 0;
@@ -669,8 +717,8 @@ done:
         setroot_event_send (ctx, fence_get_json_names (c->f));
     } else {
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
-                  flux_strerror (c->errnum));
-        error_event_send (ctx, fence_get_json_names (c->f), c->errnum);
+                  flux_strerror (errnum));
+        error_event_send (ctx, fence_get_json_names (c->f), errnum);
     }
     wait_destroy (wait);
 
@@ -681,7 +729,6 @@ done:
     return;
 
 stall:
-    c->blocked = 1;
     return;
 }
 
