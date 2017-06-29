@@ -492,7 +492,6 @@ static void commit_apply_fence (fence_t *f)
 {
     kvs_ctx_t *ctx = f->ctx;
     wait_t *wait = NULL;
-    int count;
 
     if (f->errnum)
         goto done;
@@ -561,6 +560,7 @@ static void commit_apply_fence (fence_t *f)
      */
 done:
     if (f->errnum == 0) {
+        int count;
         if (Jget_ar_len (f->names, &count) && count > 1) {
             int opcount = 0;
             (void)Jget_ar_len (f->ops, &opcount);
