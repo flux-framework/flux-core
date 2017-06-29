@@ -77,8 +77,7 @@ typedef struct {
     struct cache *cache;    /* blobref => cache_entry */
     href_t rootdir;         /* current root blobref */
     int rootseq;            /* current root version (for ordering) */
-    zhash_t *fences;
-    zlist_t *ready;
+    commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     stats_t stats;
@@ -112,8 +111,7 @@ static void freectx (void *arg)
     kvs_ctx_t *ctx = arg;
     if (ctx) {
         cache_destroy (ctx->cache);
-        zhash_destroy (&ctx->fences);
-        zlist_destroy (&ctx->ready);
+        commit_mgr_destroy (ctx->cm);
         if (ctx->watchlist)
             wait_queue_destroy (ctx->watchlist);
         if (ctx->tok)
@@ -140,9 +138,8 @@ static kvs_ctx_t *getctx (flux_t *h)
             goto error;
         ctx->cache = cache_create ();
         ctx->watchlist = wait_queue_create ();
-        ctx->fences = zhash_new ();
-        ctx->ready = zlist_new ();
-        if (!ctx->cache || !ctx->watchlist || !ctx->fences || !ctx->ready) {
+        ctx->cm = commit_mgr_create (ctx);
+        if (!ctx->cache || !ctx->watchlist || !ctx->cm) {
             errno = ENOMEM;
             goto error;
         }
@@ -718,7 +715,7 @@ done:
     /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
-    zlist_remove (ctx->ready, c);
+    zlist_remove (ctx->cm->ready, c);
     return;
 
 stall:
@@ -730,7 +727,7 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     kvs_ctx_t *ctx = arg;
     commit_t *c;
-    if ((c = zlist_first (ctx->ready)) && !c->blocked)
+    if ((c = zlist_first (ctx->cm->ready)) && !c->blocked)
         flux_watcher_start (ctx->idle_w);
 }
 
@@ -753,7 +750,7 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
  */
 static void commit_merge_all (kvs_ctx_t *ctx)
 {
-    commit_t *c = zlist_first (ctx->ready);
+    commit_t *c = zlist_first (ctx->cm->ready);
 
     /* commit must still be in state where merged in ops can be
      * applied */
@@ -762,9 +759,9 @@ static void commit_merge_all (kvs_ctx_t *ctx)
         && c->state <= COMMIT_STATE_APPLY_OPS
         && !(fence_get_flags (c->f) & KVS_NO_MERGE)) {
         commit_t *nc;
-        nc = zlist_pop (ctx->ready);
+        nc = zlist_pop (ctx->cm->ready);
         assert (nc == c);
-        while ((nc = zlist_first (ctx->ready))) {
+        while ((nc = zlist_first (ctx->cm->ready))) {
 
             /* if return == 0, we've merged as many as we currently
              * can */
@@ -772,9 +769,9 @@ static void commit_merge_all (kvs_ctx_t *ctx)
                 break;
 
             /* Merged fence, remove off ready list */
-            zlist_remove (ctx->ready, nc);
+            zlist_remove (ctx->cm->ready, nc);
         }
-        if (zlist_push (ctx->ready, c) < 0)
+        if (zlist_push (ctx->cm->ready, c) < 0)
             oom ();
         zlist_freefn (ctx->ready, c, (zlist_free_fn *)commit_destroy, false);
     }
@@ -788,7 +785,7 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     flux_watcher_stop (ctx->idle_w);
 
-    if ((c = zlist_first (ctx->ready))) {
+    if ((c = zlist_first (ctx->cm->ready))) {
         if (ctx->commit_merge)
             commit_merge_all (ctx);
         if (!c->blocked)
@@ -1149,9 +1146,9 @@ static int fence_process_fence_request (kvs_ctx_t *ctx, fence_t *f)
         if (!(c = commit_create (f, ctx)))
             return -1;
 
-        if (zlist_append (ctx->ready, c) < 0)
+        if (zlist_append (ctx->cm->ready, c) < 0)
             oom ();
-        zlist_freefn (ctx->ready, c, (zlist_free_fn *)commit_destroy, true);
+        zlist_freefn (ctx->cm->ready, c, (zlist_free_fn *)commit_destroy, true);
     }
 
     return 0;
@@ -1165,11 +1162,11 @@ static int fence_add (kvs_ctx_t *ctx, fence_t *f)
         errno = EINVAL;
         goto error;
     }
-    if (zhash_insert (ctx->fences, name, f) < 0) {
+    if (zhash_insert (ctx->cm->fences, name, f) < 0) {
         errno = EEXIST;
         goto error;
     }
-    zhash_freefn (ctx->fences, name, (zhash_free_fn *)fence_destroy);
+    zhash_freefn (ctx->cm->fences, name, (zhash_free_fn *)fence_destroy);
     return 0;
 error:
     return -1;
@@ -1177,7 +1174,7 @@ error:
 
 static fence_t *fence_lookup (kvs_ctx_t *ctx, const char *name)
 {
-    return zhash_lookup (ctx->fences, name);
+    return zhash_lookup (ctx->cm->fences, name);
 }
 
 struct finalize_data {
@@ -1213,7 +1210,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, json_object *names, int err
         }
         if ((f = fence_lookup (ctx, name))) {
             fence_iter_request_copies (f, finalize_fence_req, &d);
-            zhash_delete (ctx->fences, name);
+            zhash_delete (ctx->cm->fences, name);
         }
     }
 }

@@ -78,3 +78,38 @@ void commit_destroy (commit_t *c)
         free (c);
     }
 }
+
+commit_mgr_t *commit_mgr_create (void *aux)
+{
+    commit_mgr_t *cm;
+
+    if (!(cm = calloc (1, sizeof (*cm)))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(cm->fences = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(cm->ready = zlist_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    cm->aux = aux;
+    return cm;
+
+ error:
+    commit_mgr_destroy (cm);
+    return NULL;
+}
+
+void commit_mgr_destroy (commit_mgr_t *cm)
+{
+    if (cm) {
+        if (cm->fences)
+            zhash_destroy (&cm->fences);
+        if (cm->ready)
+            zlist_destroy (&cm->ready);
+        free (cm);
+    }
+}
