@@ -553,10 +553,11 @@ static void commit_apply (commit_t *c)
     if (fence_get_json_ops (c->f) && !c->rootcpy_stored) {
         int i, len = json_object_array_length (fence_get_json_ops (c->f));
         json_object *op, *dirent;
+        const char *missing_ref = NULL;
         const char *key;
 
         for (i = 0; i < len; i++) {
-            const char *missing_ref = NULL;
+            missing_ref = NULL;
             if (!(op = json_object_array_get_idx (fence_get_json_ops (c->f), i))
                     || !Jget_str (op, "key", &key))
                 continue;
@@ -571,9 +572,12 @@ static void commit_apply (commit_t *c)
                 break;
             }
             if (missing_ref) {
-                assert (!load (ctx, missing_ref, wait, NULL));
+                if (zlist_push (c->missing_refs, (void *)missing_ref) < 0)
+                    oom ();
             }
         }
+        while ((missing_ref = zlist_pop (c->missing_refs)))
+            assert (!load (ctx, missing_ref, wait, NULL));
         if (wait_get_usecount (wait) > 0)
             goto stall;
         if (c->errnum != 0)
