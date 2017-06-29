@@ -755,7 +755,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
          * Otherwise, use the current root.
          */
         if (root_dirent) {
-            if (!Jget_str (root_dirent, "DIRREF", &root_ref)) {
+            if (dirent_validate (root_dirent) < 0
+                            || !Jget_str (root_dirent, "DIRREF", &root_ref)) {
                 errno = EINVAL;
                 goto done;
             }
