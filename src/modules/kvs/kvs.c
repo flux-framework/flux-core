@@ -502,7 +502,7 @@ done:
  */
 static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
 {
-    kvs_ctx_t *ctx = c->aux;
+    kvs_ctx_t *ctx = c->cm->aux;
 
     /* Incase user calls commit_process() again */
     if (c->errnum)
@@ -645,7 +645,7 @@ stall_store:
  */
 static void commit_apply (commit_t *c)
 {
-    kvs_ctx_t *ctx = c->aux;
+    kvs_ctx_t *ctx = c->cm->aux;
     wait_t *wait = NULL;
     int errnum = 0;
     commit_process_t ret;
@@ -731,52 +731,6 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
-/* Merge ready commits that are mergeable, where merging consists of
- * popping the "donor" commit off the ready list, and appending its
- * ops to the top commit.  The top commit can be appended to if it
- * hasn't started, or is still building the rootcpy, e.g. stalled
- * walking the namespace.
- *
- * Break when an unmergeable commit is discovered.  We do not wish to
- * merge non-adjacent fences, as it can create undesireable out of
- * order scenarios.  e.g.
- *
- * commit #1 is mergeable:     set A=1
- * commit #2 is non-mergeable: set A=2
- * commit #3 is mergeable:     set A=3
- *
- * If we were to merge commit #1 and commit #3, A=2 would be set after
- * A=3.
- */
-static void commit_merge_all (kvs_ctx_t *ctx)
-{
-    commit_t *c = zlist_first (ctx->cm->ready);
-
-    /* commit must still be in state where merged in ops can be
-     * applied */
-    if (c
-        && c->errnum == 0
-        && c->state <= COMMIT_STATE_APPLY_OPS
-        && !(fence_get_flags (c->f) & KVS_NO_MERGE)) {
-        commit_t *nc;
-        nc = zlist_pop (ctx->cm->ready);
-        assert (nc == c);
-        while ((nc = zlist_first (ctx->cm->ready))) {
-
-            /* if return == 0, we've merged as many as we currently
-             * can */
-            if (!fence_merge (c->f, nc->f))
-                break;
-
-            /* Merged fence, remove off ready list */
-            zlist_remove (ctx->cm->ready, nc);
-        }
-        if (zlist_push (ctx->cm->ready, c) < 0)
-            oom ();
-        zlist_freefn (ctx->ready, c, (zlist_free_fn *)commit_destroy, false);
-    }
-}
-
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
@@ -787,7 +741,7 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if ((c = zlist_first (ctx->cm->ready))) {
         if (ctx->commit_merge)
-            commit_merge_all (ctx);
+            commit_mgr_merge_ready_commits (ctx->cm);
         if (!c->blocked)
             commit_apply (c);
     }
@@ -1137,46 +1091,6 @@ done:
         free (p.sender);
 }
 
-/* fence_process_fence_request() should be called once per fence request */
-static int fence_process_fence_request (kvs_ctx_t *ctx, fence_t *f)
-{
-    if (fence_count_reached (f)) {
-        commit_t *c;
-
-        if (!(c = commit_create (f, ctx)))
-            return -1;
-
-        if (zlist_append (ctx->cm->ready, c) < 0)
-            oom ();
-        zlist_freefn (ctx->cm->ready, c, (zlist_free_fn *)commit_destroy, true);
-    }
-
-    return 0;
-}
-
-static int fence_add (kvs_ctx_t *ctx, fence_t *f)
-{
-    const char *name;
-
-    if (!Jget_ar_str (fence_get_json_names (f), 0, &name)) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (zhash_insert (ctx->cm->fences, name, f) < 0) {
-        errno = EEXIST;
-        goto error;
-    }
-    zhash_freefn (ctx->cm->fences, name, (zhash_free_fn *)fence_destroy);
-    return 0;
-error:
-    return -1;
-}
-
-static fence_t *fence_lookup (kvs_ctx_t *ctx, const char *name)
-{
-    return zhash_lookup (ctx->cm->fences, name);
-}
-
 struct finalize_data {
     kvs_ctx_t *ctx;
     int errnum;
@@ -1208,7 +1122,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, json_object *names, int err
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = fence_lookup (ctx, name))) {
+        if ((f = commit_mgr_lookup_fence (ctx->cm, name))) {
             fence_iter_request_copies (f, finalize_fence_req, &d);
             zhash_delete (ctx->cm->fences, name);
         }
@@ -1240,10 +1154,10 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     /* FIXME: generate a kvs.fence.abort (or similar) if an error
      * occurs after we know the fence name
      */
-    if (!(f = fence_lookup (ctx, name))) {
+    if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags)))
             goto done;
-        if (fence_add (ctx, f) < 0) {
+        if (commit_mgr_add_fence (ctx->cm, f) < 0) {
             fence_destroy (f);
             goto done;
         }
@@ -1254,7 +1168,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (fence_add_request_data (f, ops) < 0)
         goto done;
 
-    if (fence_process_fence_request (ctx, f) < 0)
+    if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
         goto done;
 
 done:
@@ -1284,10 +1198,10 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (!(f = fence_lookup (ctx, name))) {
+    if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags)))
             goto error;
-        if (fence_add (ctx, f) < 0) {
+        if (commit_mgr_add_fence (ctx->cm, f) < 0) {
             fence_destroy (f);
             goto error;
         }
@@ -1301,7 +1215,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (fence_add_request_data (f, ops) < 0)
             goto error;
 
-        if (fence_process_fence_request (ctx, f) < 0)
+        if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
             goto error;
     }
     else {
