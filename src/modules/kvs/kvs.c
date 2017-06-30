@@ -644,7 +644,7 @@ stall_store:
  */
 static void commit_apply (commit_t *c)
 {
-    kvs_ctx_t *ctx = c->cm->aux;
+    kvs_ctx_t *ctx = commit_get_aux (c);
     wait_t *wait = NULL;
     int errnum = 0;
     commit_process_t ret;
@@ -652,7 +652,7 @@ static void commit_apply (commit_t *c)
     if ((ret = commit_process (c,
                                ctx->epoch,
                                ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
-        errnum = c->errnum;
+        errnum = commit_get_errnum (c);
         goto done;
     }
 
@@ -691,32 +691,34 @@ static void commit_apply (commit_t *c)
     /* else ret == COMMIT_PROCESS_FINISHED */
 
     /* This is the transaction that finalizes the commit by replacing
-     * ctx->rootdir with c->newroot, incrementing the root seq,
+     * ctx->rootdir with newroot, incrementing the root seq,
      * and sending out the setroot event for "eventual consistency"
      * of other nodes.
      */
 done:
     if (errnum == 0) {
+        fence_t *f = commit_get_fence (c);
         int count;
-        if (Jget_ar_len (fence_get_json_names (c->f), &count) && count > 1) {
+        if (Jget_ar_len (fence_get_json_names (f), &count) && count > 1) {
             int opcount = 0;
-            (void)Jget_ar_len (fence_get_json_ops (c->f), &opcount);
+            (void)Jget_ar_len (fence_get_json_ops (f), &opcount);
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, c->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, fence_get_json_names (c->f));
+        setroot (ctx, commit_get_newroot_ref (c), ctx->rootseq + 1);
+        setroot_event_send (ctx, fence_get_json_names (f));
     } else {
+        fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, fence_get_json_names (c->f), errnum);
+        error_event_send (ctx, fence_get_json_names (f), errnum);
     }
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
-    zlist_remove (ctx->cm->ready, c);
+    commit_mgr_remove_commit (ctx->cm, c);
     return;
 
 stall:
@@ -727,8 +729,8 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    commit_t *c;
-    if ((c = zlist_first (ctx->cm->ready)) && !c->blocked)
+
+    if (commit_mgr_commits_ready (ctx->cm))
         flux_watcher_start (ctx->idle_w);
 }
 
@@ -740,11 +742,10 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     flux_watcher_stop (ctx->idle_w);
 
-    if ((c = zlist_first (ctx->cm->ready))) {
+    if ((c = commit_mgr_get_ready_commit (ctx->cm))) {
         if (ctx->commit_merge)
             commit_mgr_merge_ready_commits (ctx->cm);
-        if (!c->blocked)
-            commit_apply (c);
+        commit_apply (c);
     }
 }
 
@@ -1125,7 +1126,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, json_object *names, int err
         }
         if ((f = commit_mgr_lookup_fence (ctx->cm, name))) {
             fence_iter_request_copies (f, finalize_fence_req, &d);
-            zhash_delete (ctx->cm->fences, name);
+            commit_mgr_remove_fence (ctx->cm, name);
         }
     }
 }
@@ -1490,7 +1491,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    Jadd_int (o, "#no-op stores", ctx->cm->noop_stores);
+    Jadd_int (o, "#no-op stores", commit_mgr_get_noop_stores (ctx->cm));
     Jadd_int (o, "#faults", ctx->faults);
     Jadd_int (o, "store revision", ctx->rootseq);
     rc = 0;
@@ -1504,7 +1505,7 @@ done:
 static void stats_clear (kvs_ctx_t *ctx)
 {
     ctx->faults = 0;
-    ctx->cm->noop_stores = 0;
+    commit_mgr_clear_noop_stores (ctx->cm);
 }
 
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,

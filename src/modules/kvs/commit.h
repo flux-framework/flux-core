@@ -41,6 +41,15 @@ typedef struct {
  * commit_t API
  */
 
+int commit_get_errnum (commit_t *c);
+
+fence_t *commit_get_fence (commit_t *c);
+
+/* returns aux data passed into commit_mgr_create() */
+void *commit_get_aux (commit_t *c);
+
+const char *commit_get_newroot_ref (commit_t *c);
+
 /*
  * commit_mgr_t API
  */
@@ -64,6 +73,26 @@ fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name);
  * store it to a queue of ready to process commits.
  */
 int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f);
+
+/* returns true if there are commits ready for processing and are not
+ * blocked, false if not.
+ */
+bool commit_mgr_commits_ready (commit_mgr_t *cm);
+
+/* if commit_mgr_commits_ready() is true, return a ready commit to
+ * process
+ */
+commit_t *commit_mgr_get_ready_commit (commit_mgr_t *cm);
+
+/* remove a commit from the commit manager after it is done processing
+ */
+void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c);
+
+/* remove a fence from the commit manager */
+void commit_mgr_remove_fence (commit_mgr_t *cm, const char *name);
+
+int commit_mgr_get_noop_stores (commit_mgr_t *cm);
+void commit_mgr_clear_noop_stores (commit_mgr_t *cm);
 
 /* In internally stored ready commits (moved to ready status via
  * commit_mgr_process_fence_request()), merge them if they are capable

@@ -79,6 +79,26 @@ error:
     return NULL;
 }
 
+int commit_get_errnum (commit_t *c)
+{
+    return c->errnum;
+}
+
+fence_t *commit_get_fence (commit_t *c)
+{
+    return c->f;
+}
+
+void *commit_get_aux (commit_t *c)
+{
+    return c->cm->aux;
+}
+
+const char *commit_get_newroot_ref (commit_t *c)
+{
+    return c->newroot;
+}
+
 commit_mgr_t *commit_mgr_create (struct cache *cache,
                                  const char *hash_name,
                                  void *aux)
@@ -155,6 +175,42 @@ int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
     }
 
     return 0;
+}
+
+bool commit_mgr_commits_ready (commit_mgr_t *cm)
+{
+    commit_t *c;
+
+    if ((c = zlist_first (cm->ready)) && !c->blocked)
+        return true;
+    return false;
+}
+
+commit_t *commit_mgr_get_ready_commit (commit_mgr_t *cm)
+{
+    if (commit_mgr_commits_ready (cm))
+        return zlist_first (cm->ready);
+    return NULL;
+}
+
+void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c)
+{
+    zlist_remove (cm->ready, c);
+}
+
+void commit_mgr_remove_fence (commit_mgr_t *cm, const char *name)
+{
+    zhash_delete (cm->fences, name);
+}
+
+int commit_mgr_get_noop_stores (commit_mgr_t *cm)
+{
+    return cm->noop_stores;
+}
+
+void commit_mgr_clear_noop_stores (commit_mgr_t *cm)
+{
+    cm->noop_stores = 0;
 }
 
 /* Merge ready commits that are mergeable, where merging consists of
