@@ -65,13 +65,6 @@ const int max_lastuse_age = 5;
  */
 const bool event_includes_rootdir = true;
 
-/* Statistics gathered for kvs.stats.get, etc.
- */
-typedef struct {
-    int faults;
-    int noop_stores;
-} stats_t;
-
 typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
@@ -80,7 +73,7 @@ typedef struct {
     commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
-    stats_t stats;
+    int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
     int epoch;              /* tracks current heartbeat epoch */
@@ -238,7 +231,7 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **
         cache_insert (ctx->cache, ref, hp);
         if (content_load_request_send (ctx, ref, wait ? false : true) < 0)
             flux_log_error (ctx->h, "content_load_request_send");
-        ctx->stats.faults++;
+        ctx->faults++;
     }
     /* If hash entry is incomplete (either created above or earlier),
      * arrange to stall caller if wait_t was provided.
@@ -307,22 +300,22 @@ error:
 }
 
 /* Store object 'o' under key 'ref' in local cache. */
-static int store_cache (kvs_ctx_t *ctx, json_object *o, href_t ref,
-                        struct cache_entry **hpp)
+static int store_cache (commit_t *c, int current_epoch, json_object *o,
+                        href_t ref, struct cache_entry **hpp)
 {
     struct cache_entry *hp;
     int rc = -1;
 
-    if (json_hash (ctx->hash_name, o, ref) < 0) {
-        flux_log_error (ctx->h, "json_hash");
+    if (json_hash (c->cm->hash_name, o, ref) < 0) {
+        log_err ("json_hash");
         goto done;
     }
-    if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+    if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
         hp = cache_entry_create (NULL);
-        cache_insert (ctx->cache, ref, hp);
+        cache_insert (c->cm->cache, ref, hp);
     }
     if (cache_entry_get_valid (hp)) {
-        ctx->stats.noop_stores++;
+        c->cm->noop_stores++;
         json_object_put (o);
     } else {
         cache_entry_set_json (hp, o);
@@ -370,7 +363,7 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
  */
-static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, commit_t *c)
+static int commit_unroll (commit_t *c, int current_epoch, json_object *dir)
 {
     json_object_iter iter;
     json_object *subdir, *value;
@@ -381,10 +374,10 @@ static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, commit_t *c)
 
     json_object_object_foreachC (dir, iter) {
         if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
-            if (commit_unroll (ctx, subdir, c) < 0) /* depth first */
+            if (commit_unroll (c, current_epoch, subdir) < 0) /* depth first */
                 goto done;
             json_object_get (subdir);
-            if (store_cache (ctx, subdir, ref, &hp) < 0)
+            if (store_cache (c, current_epoch, subdir, ref, &hp) < 0)
                 goto done;
             if (cache_entry_get_dirty (hp)) {
                 if (zlist_push (c->dirty_cache_entries, hp) < 0)
@@ -397,7 +390,7 @@ static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, commit_t *c)
                                 && (s = Jtostr (value))
                                 && strlen (s) > BLOBREF_MAX_STRING_SIZE) {
             json_object_get (value);
-            if (store_cache (ctx, value, ref, &hp) < 0)
+            if (store_cache (c, current_epoch, value, ref, &hp) < 0)
                 goto done;
             if (cache_entry_get_dirty (hp)) {
                 if (zlist_push (c->dirty_cache_entries, hp) < 0)
@@ -414,9 +407,9 @@ done:
 
 /* link (key, dirent) into directory 'dir'.
  */
-static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
-                               const char *key, json_object *dirent,
-                               const char **missing_ref)
+static int commit_link_dirent (commit_t *c, int current_epoch,
+                               json_object *rootdir, const char *key,
+                               json_object *dirent, const char **missing_ref)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
@@ -448,9 +441,9 @@ static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
             subdir = o;
         } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
             const char *ref = json_object_get_string (o);
-            if (!(subdir = cache_lookup_and_get_json (ctx->cache,
+            if (!(subdir = cache_lookup_and_get_json (c->cm->cache,
                                                       ref,
-                                                      ctx->epoch))) {
+                                                      current_epoch))) {
                 *missing_ref = ref;
                 goto success; /* stall */
             }
@@ -459,9 +452,10 @@ static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
         } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
-            FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
+            assert (json_object_get_type (o) == json_type_string);
             char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
-            if (commit_link_dirent (ctx,
+            if (commit_link_dirent (c,
+                                    current_epoch,
                                     rootdir,
                                     nkey,
                                     dirent,
@@ -500,10 +494,10 @@ done:
  * COMMIT_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache entries
  * COMMIT_PROCESS_FINISHED all done
  */
-static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
+static commit_process_t commit_process (commit_t *c,
+                                        int current_epoch,
+                                        const href_t rootdir_ref)
 {
-    kvs_ctx_t *ctx = c->cm->aux;
-
     /* Incase user calls commit_process() again */
     if (c->errnum)
         return COMMIT_PROCESS_ERROR;
@@ -520,9 +514,9 @@ static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
 
             c->state = COMMIT_STATE_LOAD_ROOT;
 
-            if (!(rootdir = cache_lookup_and_get_json (ctx->cache,
+            if (!(rootdir = cache_lookup_and_get_json (c->cm->cache,
                                                        rootdir_ref,
-                                                       ctx->epoch))) {
+                                                       current_epoch))) {
                 if (zlist_push (c->missing_refs, (void *)rootdir_ref) < 0)
                     oom ();
                 goto stall_load;
@@ -558,7 +552,8 @@ static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
                     dirent = NULL;
                     /* can be NULL for unlink */
                     (void)Jget_obj (op, "dirent", &dirent);
-                    if (commit_link_dirent (ctx,
+                    if (commit_link_dirent (c,
+                                            current_epoch,
                                             c->rootcpy,
                                             key,
                                             dirent,
@@ -595,9 +590,13 @@ static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
 
             assert (!zlist_first (c->dirty_cache_entries));
 
-            if (commit_unroll (ctx, c->rootcpy, c) < 0)
+            if (commit_unroll (c, current_epoch, c->rootcpy) < 0)
                 c->errnum = errno;
-            else if (store_cache (ctx, c->rootcpy, c->newroot, &hp) < 0)
+            else if (store_cache (c,
+                                  current_epoch,
+                                  c->rootcpy,
+                                  c->newroot,
+                                  &hp) < 0)
                 c->errnum = errno;
             else if (cache_entry_get_dirty (hp)
                      && zlist_push (c->dirty_cache_entries, hp) < 0)
@@ -623,7 +622,7 @@ static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
         case COMMIT_STATE_FINISHED:
             break;
         default:
-            flux_log (ctx->h, LOG_ERR, "invalid commit state: %d", c->state);
+            log_msg ("invalid commit state: %d", c->state);
             c->errnum = EPERM;
             return COMMIT_PROCESS_ERROR;
     }
@@ -650,7 +649,9 @@ static void commit_apply (commit_t *c)
     int errnum = 0;
     commit_process_t ret;
 
-    if ((ret = commit_process (c, ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
+    if ((ret = commit_process (c,
+                               ctx->epoch,
+                               ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
         errnum = c->errnum;
         goto done;
     }
@@ -1489,8 +1490,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    Jadd_int (o, "#no-op stores", ctx->stats.noop_stores);
-    Jadd_int (o, "#faults", ctx->stats.faults);
+    Jadd_int (o, "#no-op stores", ctx->cm->noop_stores);
+    Jadd_int (o, "#faults", ctx->faults);
     Jadd_int (o, "store revision", ctx->rootseq);
     rc = 0;
 done:
@@ -1500,12 +1501,17 @@ done:
     Jput (o);
 }
 
+static void stats_clear (kvs_ctx_t *ctx)
+{
+    ctx->faults = 0;
+    ctx->cm->noop_stores = 0;
+}
+
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-
-    memset (&ctx->stats, 0, sizeof (ctx->stats));
+    stats_clear (ctx);
 }
 
 static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -1513,7 +1519,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
 
-    memset (&ctx->stats, 0, sizeof (ctx->stats));
+    stats_clear (ctx);
 
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
