@@ -10,6 +10,9 @@
 #include "types.h"
 
 typedef struct {
+    struct cache *cache;
+    const char *hash_name;
+    int noop_stores;            /* for kvs.stats.get, etc.*/
     zhash_t *fences;
     zlist_t *ready;
     void *aux;
@@ -42,7 +45,9 @@ typedef struct {
  * commit_mgr_t API
  */
 
-commit_mgr_t *commit_mgr_create (void *aux);
+commit_mgr_t *commit_mgr_create (struct cache *cache,
+                                 const char *hash_name,
+                                 void *aux);
 
 void commit_mgr_destroy (commit_mgr_t *cm);
 

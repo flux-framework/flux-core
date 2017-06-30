@@ -79,7 +79,9 @@ error:
     return NULL;
 }
 
-commit_mgr_t *commit_mgr_create (void *aux)
+commit_mgr_t *commit_mgr_create (struct cache *cache,
+                                 const char *hash_name,
+                                 void *aux)
 {
     commit_mgr_t *cm;
 
@@ -87,6 +89,8 @@ commit_mgr_t *commit_mgr_create (void *aux)
         errno = ENOMEM;
         goto error;
     }
+    cm->cache = cache;
+    cm->hash_name = hash_name;
     if (!(cm->fences = zhash_new ())) {
         errno = ENOMEM;
         goto error;

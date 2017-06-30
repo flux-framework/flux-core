@@ -136,9 +136,13 @@ static kvs_ctx_t *getctx (flux_t *h)
         ctx->magic = KVS_MAGIC;
         if (!(r = flux_get_reactor (h)))
             goto error;
+        if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
+            flux_log_error (h, "content.hash");
+            goto error;
+        }
         ctx->cache = cache_create ();
         ctx->watchlist = wait_queue_create ();
-        ctx->cm = commit_mgr_create (ctx);
+        ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, ctx);
         if (!ctx->cache || !ctx->watchlist || !ctx->cm) {
             errno = ENOMEM;
             goto error;
@@ -160,10 +164,6 @@ static kvs_ctx_t *getctx (flux_t *h)
             flux_watcher_start (ctx->check_w);
         }
         ctx->commit_merge = 1;
-        if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
-            flux_log_error (h, "content.hash");
-            goto error;
-        }
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
