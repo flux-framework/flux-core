@@ -37,6 +37,13 @@ typedef struct {
     } state;
 } commit_t;
 
+typedef enum {
+    COMMIT_PROCESS_ERROR = 1,
+    COMMIT_PROCESS_LOAD_MISSING_REFS = 2,
+    COMMIT_PROCESS_DIRTY_CACHE_ENTRIES = 3,
+    COMMIT_PROCESS_FINISHED = 4,
+} commit_process_t;
+
 /*
  * commit_t API
  */
@@ -55,6 +62,31 @@ fence_t *commit_get_fence (commit_t *c);
 void *commit_get_aux (commit_t *c);
 
 const char *commit_get_newroot_ref (commit_t *c);
+
+/* Primary commit processing funtion.
+ *
+ * Pass in a commit_t that was obtained via
+ * commit_mgr_get_ready_commit().
+ *
+ * Returns COMMIT_PROCESS_ERROR on error,
+ * COMMIT_PROCESS_LOAD_MISSING_REFS stall & load,
+ * COMMIT_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache
+ * entries,
+ * COMMIT_PROCESS_FINISHED all done
+ *
+ * on error, call commit_get_errnum() to get error number
+ *
+ * on stall & load, call commit_iter_missing_refs()
+ *
+ * on stall & process dirty cache entries, call
+ * commit_iter_dirty_cache_entries() to process entries.
+ *
+ * on completion, call commit_get_newroot_ref() to get reference to
+ * new root to be stored.
+ */
+commit_process_t commit_process (commit_t *c,
+                                 int current_epoch,
+                                 const href_t rootdir_ref);
 
 /* on commit stall, iterate through all missing refs that the caller
  * should load into the cache
