@@ -9,33 +9,8 @@
 #include "fence.h"
 #include "types.h"
 
-typedef struct {
-    struct cache *cache;
-    const char *hash_name;
-    int noop_stores;            /* for kvs.stats.get, etc.*/
-    zhash_t *fences;
-    zlist_t *ready;
-    void *aux;
-} commit_mgr_t;
-
-typedef struct {
-    int errnum;
-    fence_t *f;
-    int blocked:1;
-    json_object *rootcpy;   /* working copy of root dir */
-    href_t newroot;
-    zlist_t *missing_refs;
-    zlist_t *dirty_cache_entries;
-    commit_mgr_t *cm;
-    enum {
-        COMMIT_STATE_INIT = 1,
-        COMMIT_STATE_LOAD_ROOT = 2,
-        COMMIT_STATE_APPLY_OPS = 3,
-        COMMIT_STATE_STORE = 4,
-        COMMIT_STATE_PRE_FINISHED = 5,
-        COMMIT_STATE_FINISHED = 6,
-    } state;
-} commit_t;
+typedef struct commit_mgr commit_mgr_t;
+typedef struct commit commit_t;
 
 typedef enum {
     COMMIT_PROCESS_ERROR = 1,
