@@ -313,8 +313,8 @@ error:
 }
 
 /* Store object 'o' under key 'ref' in local cache.
- * If 'wait' is NULL, flush to content cache synchronously; otherwise,
- * do it asynchronously and push wait onto cache object's wait queue.
+ * Flush to content cache asynchronously and push wait onto cache
+ * object's wait queue.
  * FIXME: asynchronous errors need to be propagated back to caller.
  */
 static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
@@ -336,19 +336,12 @@ static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
     } else {
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
-        if (wait) {
-            if (content_store_request_send (ctx, o, false) < 0) {
-                flux_log_error (ctx->h, "content_store");
-                goto done;
-            }
-        } else {
-            if (content_store_request_send (ctx, o, true) < 0) {
-                flux_log_error (ctx->h, "content_store");
-                goto done;
-            }
+        if (content_store_request_send (ctx, o, false) < 0) {
+            flux_log_error (ctx->h, "content_store");
+            goto done;
         }
     }
-    if (wait && cache_entry_get_dirty (hp))
+    if (cache_entry_get_dirty (hp))
         cache_entry_wait_notdirty (hp, wait);
     rc = 0;
 done:
@@ -1560,6 +1553,36 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
     }
 }
 
+/* Store initial rootdir in local cache, and flush to content
+ * cache synchronously.
+ */
+static int store_initial_rootdir (kvs_ctx_t *ctx, json_object *o, href_t ref)
+{
+    struct cache_entry *hp;
+    int rc = -1;
+
+    if (json_hash (ctx->hash_name, o, ref) < 0) {
+        flux_log_error (ctx->h, "json_hash");
+        goto done;
+    }
+    if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+        hp = cache_entry_create (NULL);
+        cache_insert (ctx->cache, ref, hp);
+    }
+    if (!cache_entry_get_valid (hp)) {
+        cache_entry_set_json (hp, o);
+        cache_entry_set_dirty (hp, true);
+        if (content_store_request_send (ctx, o, true) < 0) {
+            flux_log_error (ctx->h, "content_store");
+            goto done;
+        }
+    } else
+        json_object_put (o);
+    rc = 0;
+done:
+    return rc;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     kvs_ctx_t *ctx = getctx (h);
@@ -1582,7 +1605,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         json_object *rootdir = Jnew ();
         href_t href;
 
-        if (store (ctx, rootdir, href, NULL) < 0) {
+        if (store_initial_rootdir (ctx, rootdir, href) < 0) {
             flux_log_error (h, "storing root object");
             goto done;
         }
