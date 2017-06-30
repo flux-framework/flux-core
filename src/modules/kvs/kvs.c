@@ -328,26 +328,6 @@ static int store_cache (commit_t *c, int current_epoch, json_object *o,
     return rc;
 }
 
-/* This function assumes all entries are dirty.  Flush to content
- * cache asynchronously and push wait onto cache object's wait queue.
- * FIXME: asynchronous errors need to be propagated back to caller.
- */
-static int store_content_store (kvs_ctx_t *ctx, struct cache_entry *hp,
-                                wait_t *wait)
-{
-    if (cache_entry_get_content_store_flag (hp)) {
-        if (content_store_request_send (ctx,
-                                        cache_entry_get_json (hp),
-                                        false) < 0) {
-            flux_log_error (ctx->h, "content_store");
-            return -1;
-        }
-        cache_entry_set_content_store_flag (hp, false);
-    }
-    cache_entry_wait_notdirty (hp, wait);
-    return 0;
-}
-
 static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
 {
     if (rootseq == 0 || rootseq > ctx->rootseq) {
@@ -638,6 +618,40 @@ stall_store:
     return COMMIT_PROCESS_DIRTY_CACHE_ENTRIES;
 }
 
+struct commit_cb_data {
+    kvs_ctx_t *ctx;
+    wait_t *wait;
+};
+
+static int commit_load_cb (commit_t *c, const char *ref, void *data)
+{
+    struct commit_cb_data *cbd = data;
+
+    assert (!load (cbd->ctx, ref, cbd->wait, NULL));
+    return 0;
+}
+
+/* Flush to content cache asynchronously and push wait onto cache
+ * object's wait queue.  FIXME: asynchronous errors need to be
+ * propagated back to caller.
+ */
+static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
+{
+    struct commit_cb_data *cbd = data;
+
+    if (cache_entry_get_content_store_flag (hp)) {
+        if (content_store_request_send (cbd->ctx,
+                                        cache_entry_get_json (hp),
+                                        false) < 0) {
+            flux_log_error (cbd->ctx->h, "content_store");
+            return -1;
+        }
+        cache_entry_set_content_store_flag (hp, false);
+    }
+    cache_entry_wait_notdirty (hp, cbd->wait);
+    return 0;
+}
+
 /* Commit all the ops for a particular commit/fence request (rank 0 only).
  * The setroot event will cause responses to be sent to the fence requests
  * and clean up the fence_t state.  This function is idempotent.
@@ -657,32 +671,38 @@ static void commit_apply (commit_t *c)
     }
 
     if (ret == COMMIT_PROCESS_LOAD_MISSING_REFS) {
-        const char *missing_ref = NULL;
+        struct commit_cb_data cbd;
 
         if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
             errnum = errno;
             goto done;
         }
 
-        while ((missing_ref = zlist_pop (c->missing_refs)))
-            assert (!load (ctx, missing_ref, wait, NULL));
+        cbd.ctx = ctx;
+        cbd.wait = wait;
+
+        if (commit_iter_missing_refs (c, commit_load_cb, &cbd) < 0) {
+            errnum = errno;
+            goto done;
+        }
 
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
     else if (ret == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES) {
-        struct cache_entry *hp;
+        struct commit_cb_data cbd;
 
         if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
             errnum = errno;
             goto done;
         }
 
-        while ((hp = zlist_pop (c->dirty_cache_entries))) {
-            if (store_content_store (ctx, hp, wait) < 0) {
-                errnum = errno;
-                break;
-            }
+        cbd.ctx = ctx;
+        cbd.wait = wait;
+
+        if (commit_iter_dirty_cache_entries (c, commit_cache_cb, &cbd) < 0) {
+            errnum = errno;
+            goto done;
         }
 
         assert (wait_get_usecount (wait) > 0);

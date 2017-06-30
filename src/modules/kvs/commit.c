@@ -99,6 +99,44 @@ const char *commit_get_newroot_ref (commit_t *c)
     return c->newroot;
 }
 
+int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data)
+{
+    const char *ref;
+    int rc = 0;
+
+    while ((ref = zlist_pop (c->missing_refs))) {
+        if (cb (c, ref, data) < 0) {
+            rc = -1;
+            break;
+        }
+    }
+
+    if (rc < 0)
+        while ((ref = zlist_pop (c->missing_refs)));
+
+    return rc;
+}
+
+int commit_iter_dirty_cache_entries (commit_t *c,
+                                     commit_cache_entry_cb cb,
+                                     void *data)
+{
+    struct cache_entry *hp;
+    int rc = 0;
+
+    while ((hp = zlist_pop (c->dirty_cache_entries))) {
+        if (cb (c, hp, data) < 0) {
+            rc = -1;
+            break;
+        }
+    }
+
+    if (rc < 0)
+        while ((hp = zlist_pop (c->dirty_cache_entries)));
+
+    return rc;
+}
+
 commit_mgr_t *commit_mgr_create (struct cache *cache,
                                  const char *hash_name,
                                  void *aux)
