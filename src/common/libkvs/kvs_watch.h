@@ -8,8 +8,6 @@ typedef int (*kvs_set_dir_f)(const char *key, kvsdir_t *dir, void *arg,
 typedef int (*kvs_set_string_f)(const char *key, const char *val, void *arg,
                                 int errnum);
 typedef int (*kvs_set_int_f)(const char *key, int val, void *arg, int errnum);
-typedef int (*kvs_set_int64_f)(const char *key, int64_t val, void *arg,
-                               int errnum);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
@@ -25,7 +23,6 @@ int kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
 int kvs_watch_string (flux_t *h, const char *key, kvs_set_string_f set,
                       void *arg);
 int kvs_watch_int (flux_t *h, const char *key, kvs_set_int_f set, void *arg);
-int kvs_watch_int64 (flux_t *h, const char *key, kvs_set_int64_f set, void *arg);
 
 /* Cancel a kvs_watch, freeing server-side state, and unregistering any
  * callback.  Returns 0 on success, or -1 with errno set on error.
