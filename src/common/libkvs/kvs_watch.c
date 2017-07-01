@@ -54,7 +54,7 @@
 
 
 typedef enum {
-    WATCH_INT, WATCH_JSONSTR, WATCH_DIR,
+    WATCH_JSONSTR, WATCH_DIR,
 } watch_type_t;
 
 typedef struct {
@@ -188,12 +188,6 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, json_object *val)
     int rc = -1;
 
     switch (wp->type) {
-        case WATCH_INT: {
-            kvs_set_int_f set = wp->set;
-            int i = val ? json_object_get_int (val) : 0;
-            rc = set (wp->key, i, wp->arg, errnum);
-            break;
-        }
         case WATCH_DIR: {
             kvs_set_dir_f set = wp->set;
             kvsdir_t *dir = val ? kvsdir_create (h, NULL, wp->key, Jtostr (val))
@@ -443,24 +437,6 @@ done:
         json_object_put (val);
     if (key)
         free (key);
-    return rc;
-}
-
-int kvs_watch_int (flux_t *h, const char *key, kvs_set_int_f set, void *arg)
-{
-    uint32_t matchtag;
-    kvs_watcher_t *wp;
-    json_object *val = NULL;
-    int rc = -1;
-
-    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
-        goto done;
-    wp = add_watcher (h, key, WATCH_INT, matchtag, set, arg);
-    dispatch_watch (h, wp, val);
-    rc = 0;
-done:
-    if (val)
-        json_object_put (val);
     return rc;
 }
 

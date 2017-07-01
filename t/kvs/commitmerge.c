@@ -101,7 +101,7 @@ void watch_prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_reactor_stop (r);
 }
 
-static int watch_count_cb (const char *key, int val, void *arg, int errnum)
+static int watch_count_cb (const char *key, const char *json_str, void *arg, int errnum)
 {
     thd_t *t = arg;
 
@@ -161,8 +161,8 @@ void *watchthread (void *arg)
 
     r = flux_get_reactor (t->h);
 
-    if (kvs_watch_int (t->h, key, watch_count_cb, t) < 0)
-        log_err_exit ("kvs_watch_int %s", key);
+    if (kvs_watch (t->h, key, watch_count_cb, t) < 0)
+        log_err_exit ("kvs_watch %s", key);
 
     pw = flux_prepare_watcher_create (r, watch_prepare_cb, NULL);
 
