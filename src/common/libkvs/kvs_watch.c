@@ -54,7 +54,7 @@
 
 
 typedef enum {
-    WATCH_STRING, WATCH_INT, WATCH_INT64, WATCH_DOUBLE,
+    WATCH_STRING, WATCH_INT, WATCH_INT64,
     WATCH_JSONSTR, WATCH_DIR,
 } watch_type_t;
 
@@ -205,12 +205,6 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, json_object *val)
             kvs_set_int64_f set = wp->set;
             int64_t i = val ? json_object_get_int64 (val) : 0;
             rc = set (wp->key, i, wp->arg, errnum);
-            break;
-        }
-        case WATCH_DOUBLE: {
-            kvs_set_double_f set = wp->set;
-            double d = val ? json_object_get_double (val) : 0;
-            rc = set (wp->key, d, wp->arg, errnum);
             break;
         }
         case WATCH_DIR: {
@@ -512,25 +506,6 @@ int kvs_watch_int64 (flux_t *h, const char *key, kvs_set_int64_f set, void *arg)
     if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_INT64, matchtag, set, arg);
-    dispatch_watch (h, wp, val);
-    rc = 0;
-done:
-    if (val)
-        json_object_put (val);
-    return rc;
-}
-
-int kvs_watch_double (flux_t *h, const char *key, kvs_set_double_f set,
-                      void *arg)
-{
-    uint32_t matchtag;
-    kvs_watcher_t *wp;
-    json_object *val = NULL;
-    int rc = -1;
-
-    if (watch_rpc (h, key, &val, 0, &matchtag) < 0)
-        goto done;
-    wp = add_watcher (h, key, WATCH_DOUBLE, matchtag, set, arg);
     dispatch_watch (h, wp, val);
     rc = 0;
 done:
