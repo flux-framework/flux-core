@@ -12,8 +12,6 @@ typedef int (*kvs_set_int64_f)(const char *key, int64_t val, void *arg,
                                int errnum);
 typedef int (*kvs_set_double_f)(const char *key, double val, void *arg,
                                 int errnum);
-typedef int (*kvs_set_boolean_f)(const char *key, bool val, void *arg,
-                                 int errnum);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
@@ -32,8 +30,6 @@ int kvs_watch_int (flux_t *h, const char *key, kvs_set_int_f set, void *arg);
 int kvs_watch_int64 (flux_t *h, const char *key, kvs_set_int64_f set, void *arg);
 int kvs_watch_double (flux_t *h, const char *key, kvs_set_double_f set,
                       void *arg);
-int kvs_watch_boolean (flux_t *h, const char *key, kvs_set_boolean_f set,
-                       void *arg);
 
 /* Cancel a kvs_watch, freeing server-side state, and unregistering any
  * callback.  Returns 0 on success, or -1 with errno set on error.
