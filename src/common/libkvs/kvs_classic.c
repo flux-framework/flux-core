@@ -129,24 +129,6 @@ done:
     return rc;
 }
 
-int kvs_get_boolean (flux_t *h, const char *key, bool *valp)
-{
-    flux_future_t *f;
-    int b;
-    int rc = -1;
-
-    if (!(f = flux_kvs_lookup (h, 0, key)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "b", &b) < 0)
-        goto done;
-    if (valp)
-        *valp = b;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvs_get_dir (flux_t *h, kvsdir_t **dir, const char *fmt, ...)
 {
     flux_future_t *f = NULL;
@@ -478,30 +460,6 @@ int kvsdir_get_double (kvsdir_t *dir, const char *name, double *valp)
         goto done;
     if (valp)
         *valp = d;
-    rc = 0;
-done:
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
-int kvsdir_get_boolean (kvsdir_t *dir, const char *name, bool *valp)
-{
-    flux_t *h = kvsdir_handle (dir);
-    const char *rootref = kvsdir_rootref (dir);
-    flux_future_t *f = NULL;
-    int i;
-    char *key;
-    int rc = -1;
-
-    if (!(key = kvsdir_key_at (dir, name)))
-        goto done;
-    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "b", &i) < 0)
-        goto done;
-    if (valp)
-        *valp = i;
     rc = 0;
 done:
     free (key);

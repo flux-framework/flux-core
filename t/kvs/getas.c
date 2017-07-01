@@ -115,12 +115,6 @@ void dirgetas (flux_t *h, const char *dir, const char *key, const char *type)
             log_err_exit ("kvsdir_get_int64 %s", key);
         printf ("%" PRIi64 "\n", value);
     }
-    else if (!strcmp (type, "boolean")) {
-        bool value;
-        if (kvsdir_get_boolean (d, key, &value) < 0)
-            log_err_exit ("kvsdir_get_int64 %s", key);
-        printf ("%s\n", value ? "true" : "false");
-    }
     else if (!strcmp (type, "double")) {
         double value;
         if (kvsdir_get_double (d, key, &value) < 0)
@@ -135,7 +129,7 @@ void dirgetas (flux_t *h, const char *dir, const char *key, const char *type)
         free (s);
     }
     else {
-        log_msg_exit ("unknown type (use int/int64/boolean/double/string)");
+        log_msg_exit ("unknown type (use int/int64/double/string)");
     }
 
     kvsdir_destroy (d);
@@ -162,12 +156,6 @@ void getas (flux_t *h, const char *key, const char *type)
             log_err_exit ("kvs_get_int64 %s", key);
         printf ("%" PRIi64 "\n", value);
     }
-    else if (!strcmp (type, "boolean")) {
-        bool value;
-        if (kvs_get_boolean (h, key, &value) < 0)
-            log_err_exit ("kvs_get_int64 %s", key);
-        printf ("%s\n", value ? "true" : "false");
-    }
     else if (!strcmp (type, "double")) {
         double value;
         if (kvs_get_double (h, key, &value) < 0)
@@ -182,7 +170,7 @@ void getas (flux_t *h, const char *key, const char *type)
         free (s);
     }
     else {
-        log_msg_exit ("unknown type (use int/int64/boolean/double/string)");
+        log_msg_exit ("unknown type (use int/int64/double/string)");
     }
 }
 

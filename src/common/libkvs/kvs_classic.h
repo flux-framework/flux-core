@@ -8,7 +8,6 @@ int kvs_get_string (flux_t *h, const char *key, char **valp);
 int kvs_get_int (flux_t *h, const char *key, int *valp);
 int kvs_get_int64 (flux_t *h, const char *key, int64_t *valp);
 int kvs_get_double (flux_t *h, const char *key, double *valp);
-int kvs_get_boolean (flux_t *h, const char *key, bool *valp);
 int kvs_get_symlink (flux_t *h, const char *key, char **valp);
 int kvs_get_treeobj (flux_t *h, const char *key, char **valp);
 int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
@@ -28,7 +27,6 @@ int kvsdir_get_string (kvsdir_t *dir, const char *key, char **valp);
 int kvsdir_get_int (kvsdir_t *dir, const char *key, int *valp);
 int kvsdir_get_int64 (kvsdir_t *dir, const char *key, int64_t *valp);
 int kvsdir_get_double (kvsdir_t *dir, const char *key, double *valp);
-int kvsdir_get_boolean (kvsdir_t *dir, const char *key, bool *valp);
 int kvsdir_get_symlink (kvsdir_t *dir, const char *key, char **valp);
 
 
