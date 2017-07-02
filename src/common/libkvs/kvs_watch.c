@@ -337,27 +337,6 @@ done:
     return rc;
 }
 
-int kvs_watch_once_int (flux_t *h, const char *key, int *valp)
-{
-    json_object *val;
-    int rc = -1;
-
-    if (!(val = json_object_new_int (*valp)))
-        oom ();
-    if (watch_rpc (h, key, &val, KVS_PROTO_ONCE, NULL) < 0)
-        goto done;
-    if (!val) {
-        errno = ENOENT;
-        goto done;
-    }
-    *valp = json_object_get_int (val);
-    rc = 0;
-done:
-    if (val)
-        json_object_put (val);
-    return rc;
-}
-
 int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
 {
     json_object *val = NULL;

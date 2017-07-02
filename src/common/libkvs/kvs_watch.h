@@ -37,7 +37,6 @@ int kvs_unwatch (flux_t *h, const char *key);
 int kvs_watch_once (flux_t *h, const char *key, char **json_str);
 int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
-int kvs_watch_once_int (flux_t *h, const char *key, int *valp);
 
 #endif /* !_FLUX_CORE_KVS_WATCH_H */
 
