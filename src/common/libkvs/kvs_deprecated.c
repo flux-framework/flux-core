@@ -63,17 +63,6 @@ int kvs_get_obj (flux_t *h, const char *key, json_object **valp)
     return common_get_obj (h, key, valp);
 }
 
-int kvsdir_get_obj (kvsdir_t *dir, const char *name, json_object **valp)
-{
-    flux_t *h = kvsdir_handle (dir);
-    char *key = kvsdir_key_at (dir, name);
-    int rc;
-
-    rc = common_get_obj (h, key, valp);
-    free (key);
-    return rc;
-}
-
 /* Put
  */
 

@@ -23,9 +23,6 @@ int kvs_watch_once_obj (flux_t *h, const char *key, json_object **valp)
 int kvs_put_obj (flux_t *h, const char *key, json_object *val)
                  __attribute__ ((deprecated));
 
-int kvsdir_get_obj (kvsdir_t *dir, const char *key, json_object **valp)
-                    __attribute__ ((deprecated));
-
 int kvsdir_put_obj (kvsdir_t *dir, const char *key, json_object *val)
                     __attribute__ ((deprecated));
 
