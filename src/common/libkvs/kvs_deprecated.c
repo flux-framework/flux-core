@@ -80,11 +80,6 @@ done:
     return rc;
 }
 
-int kvs_put_obj (flux_t *h, const char *key, json_object *val)
-{
-    return common_put_obj (h, key, val);
-}
-
 int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
 {
     flux_t *h = kvsdir_handle (dir);
