@@ -25,7 +25,7 @@ libkvs_la_SOURCES = \
 	kvs_watch.c
 
 
-fluxinclude_HEADERS = \
+fluxcoreinclude_HEADERS = \
 	kvs.h \
 	kvs_lookup.h \
 	kvs_dir.h \
