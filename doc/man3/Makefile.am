@@ -41,7 +41,8 @@ MAN3_FILES_PRIMARY = \
 	flux_content_load.3 \
 	flux_log.3 \
 	flux_future_then.3 \
-	flux_future_create.3
+	flux_future_create.3 \
+	flux_kvs_lookup.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -119,7 +120,10 @@ MAN3_FILES_SECONDARY = \
 	flux_rpc_raw.3 \
 	flux_rpc_get.3 \
 	flux_rpc_getf.3 \
-	flux_rpc_get_raw.3
+	flux_rpc_get_raw.3 \
+	flux_kvs_lookupat.3 \
+	flux_kvs_lookup_get.3 \
+	flux_kvs_lookup_getf.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -217,6 +221,9 @@ flux_rpc_raw.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
 flux_rpc_getf.3: flux_rpc.3
 flux_rpc_get_raw.3: flux_rpc.3
+flux_kvs_lookupat.3: flux_kvs_lookup.3
+flux_kvs_get.3: flux_kvs_lookup.3
+flux_kvs_getf.3: flux_kvs_lookup.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c

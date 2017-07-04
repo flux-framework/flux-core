@@ -392,3 +392,8 @@ PUs
 ETIMEDOUT
 fn
 destructors
+ENOTDIR
+EISDIR
+READDIR
+lookupat
+symlink
