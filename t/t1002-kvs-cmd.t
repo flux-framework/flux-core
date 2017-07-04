@@ -344,12 +344,12 @@ test_expect_success 'kvs: version and wait' '
 
 wait_watch_put() {
         i=0
-        while [ "$(flux kvs get $1 2> /dev/null)" != "$2" ] && [ $i -lt "50" ]
+        while [ "$(flux kvs get $1 2> /dev/null)" != "$2" ] && [ $i -lt 50 ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i == "50" ]
+        if [ $i -eq 50 ]
         then
             return 1
         fi
@@ -358,12 +358,12 @@ wait_watch_put() {
 
 wait_watch_empty() {
         i=0
-        while flux kvs get $1 2> /dev/null && [ $i -lt "50" ]
+        while flux kvs get $1 2> /dev/null && [ $i -lt 50 ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i == "50" ]
+        if [ $i -eq 50 ]
         then
             return 1
         fi
@@ -372,12 +372,12 @@ wait_watch_empty() {
 
 wait_watch_current() {
         i=0
-        while [ "$(tail -n 1 watch_out 2> /dev/null)" != "$1" ] && [ $i -lt "50" ]
+        while [ "$(tail -n 1 watch_out 2> /dev/null)" != "$1" ] && [ $i -lt 50 ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i == "50" ]
+        if [ $i -eq 50 ]
         then
             return 1
         fi
@@ -401,10 +401,10 @@ test_expect_success 'kvs: watch a key'  '
         wait_watch_current "0"
         flux kvs put $DIR.foo=1 &&
         wait $watchpid
-	cat >expected <<EOF
-0
-1
-EOF
+	cat >expected <<-EOF
+	0
+	1
+	EOF
         test_cmp watch_out expected
 '
 
@@ -417,10 +417,10 @@ test_expect_success 'kvs: watch a key that at first doesnt exist'  '
         wait_watch_current "nil" &&
         flux kvs put $DIR.foo=1 &&
         wait $watchpid
-	cat >expected <<EOF
-nil
-1
-EOF
+	cat >expected <<-EOF
+	nil
+	1
+	EOF
         test_cmp watch_out expected
 '
 
@@ -434,10 +434,10 @@ test_expect_success 'kvs: watch a key that gets removed'  '
         wait_watch_current "0" &&
         flux kvs unlink $DIR.foo &&
         wait $watchpid
-	cat >expected <<EOF
-0
-nil
-EOF
+	cat >expected <<-EOF
+	0
+	nil
+	EOF
         test_cmp watch_out expected
 '
 
@@ -451,12 +451,12 @@ test_expect_success 'kvs: watch a key that becomes a dir'  '
         wait_watch_current "0" &&
         flux kvs put $DIR.foo.bar.baz=1 &&
         wait $watchpid
-	cat >expected <<EOF
-0
-======================
-$DIR.foo.bar.
-======================
-EOF
+	cat >expected <<-EOF
+	0
+	======================
+	$DIR.foo.bar.
+	======================
+	EOF
         test_cmp watch_out expected
 '
 
@@ -471,12 +471,12 @@ test_expect_success 'kvs: watch a dir'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR.a.a=1 &&
         wait $watchpid
-	cat >expected <<EOF
-$DIR.a.
-======================
-$DIR.a.
-======================
-EOF
+	cat >expected <<-EOF
+	$DIR.a.
+	======================
+	$DIR.a.
+	======================
+	EOF
         test_cmp watch_out expected
 '
 
@@ -489,12 +489,12 @@ test_expect_success 'kvs: watch a dir that at first doesnt exist'  '
         wait_watch_current "nil" &&
         flux kvs put $DIR.a.a=1 &&
         wait $watchpid
-	cat >expected <<EOF
-nil
-======================
-$DIR.a.
-======================
-EOF
+	cat >expected <<-EOF
+	nil
+	======================
+	$DIR.a.
+	======================
+	EOF
         test_cmp watch_out expected
 '
 
@@ -509,12 +509,12 @@ test_expect_success 'kvs: watch a dir that gets removed'  '
         wait_watch_current "======================" &&
         flux kvs unlink -R $DIR.a &&
         wait $watchpid
-	cat >expected <<EOF
-$DIR.a.a.
-======================
-nil
-======================
-EOF
+	cat >expected <<-EOF
+	$DIR.a.a.
+	======================
+	nil
+	======================
+	EOF
         test_cmp watch_out expected
 '
 
@@ -529,11 +529,11 @@ test_expect_success 'kvs: watch a dir, converted into a key'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR.a=1 &&
         wait $watchpid
-	cat >expected <<EOF
-$DIR.a.a.
-======================
-1
-EOF
+	cat >expected <<-EOF
+	$DIR.a.a.
+	======================
+	1
+	EOF
         test_cmp watch_out expected
 '
 
@@ -552,12 +552,12 @@ test_expect_success 'kvs: watch a dir, prefix path converted into a key'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR=1 &&
         wait $watchpid
-	cat >expected <<EOF
-$DIR.a.a.
-======================
-nil
-======================
-EOF
+	cat >expected <<-EOF
+	$DIR.a.a.
+	======================
+	nil
+	======================
+	EOF
         test_cmp watch_out expected
 '
 
@@ -572,14 +572,14 @@ test_expect_success 'kvs: watch a dir with -R'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR.a.a=1 &&
         wait $watchpid
-	cat >expected <<EOF
-$DIR.a.a = 0
-$DIR.a.b = 0
-======================
-$DIR.a.a = 1
-$DIR.a.b = 0
-======================
-EOF
+	cat >expected <<-EOF
+	$DIR.a.a = 0
+	$DIR.a.b = 0
+	======================
+	$DIR.a.a = 1
+	$DIR.a.b = 0
+	======================
+	EOF
         test_cmp watch_out expected
 '
 
@@ -594,14 +594,14 @@ test_expect_success 'kvs: watch a dir with -R and -d'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR.a.a=1 &&
         wait $watchpid
-	cat >expected <<EOF
-$DIR.a.a
-$DIR.a.b
-======================
-$DIR.a.a
-$DIR.a.b
-======================
-EOF
+	cat >expected <<-EOF
+	$DIR.a.a
+	$DIR.a.b
+	======================
+	$DIR.a.a
+	$DIR.a.b
+	======================
+	EOF
         test_cmp watch_out expected
 '
 

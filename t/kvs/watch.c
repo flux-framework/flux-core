@@ -33,6 +33,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
 #include <pthread.h>
 
@@ -92,13 +93,21 @@ static void wait_ready (void)
 /* expect val: {-1,0,1,...,(changes - 1)}
  * count will therefore run 0...changes.
  */
-static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
+static int mt_watch_cb (const char *k, const char *json_str, void *arg, int errnum)
 {
     thd_t *t = arg;
+    json_t *obj;
+    int val;
+
     if (errnum != 0) {
         log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
         return -1;
     }
+    if (!(obj = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+        log_msg ("%d: %s failed to decode value", t->n, __FUNCTION__);
+        return -1;
+    }
+    val = json_integer_value (obj);
     if (val == t->last_val) {
         log_msg ("%d: %s: called with same value as last time: %d", t->n,
             __FUNCTION__, val);
@@ -110,12 +119,13 @@ static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
     if (val + 1 == changes)
         flux_reactor_stop (flux_get_reactor (t->h));
     t->change_count++;
+    json_decref (obj);
     return 0;
 }
 
 /* Watch a key that does not exist throughout the test.
  */
-static int mt_watchnil_cb (const char *k, int val, void *arg, int errnum)
+static int mt_watchnil_cb (const char *k, const char *json_str, void *arg, int errnum)
 {
     thd_t *t = arg;
     if (errnum != ENOENT) {
@@ -128,7 +138,7 @@ static int mt_watchnil_cb (const char *k, int val, void *arg, int errnum)
 
 /* Watch a key that exists but does not change throughout the test.
  */
-static int mt_watchstable_cb (const char *k, int val, void *arg, int errnum)
+static int mt_watchstable_cb (const char *k, const char *json_ttr, void *arg, int errnum)
 {
     thd_t *t = arg;
 
@@ -152,16 +162,16 @@ void *thread (void *arg)
     /* The first kvs.watch reply is handled synchronously, then other kvs.watch
      * replies will arrive asynchronously and be handled by the reactor.
      */
-    if (kvs_watch_int (t->h, key, mt_watch_cb, t) < 0) {
-        log_err ("%d: kvs_watch_int", t->n);
+    if (kvs_watch (t->h, key, mt_watch_cb, t) < 0) {
+        log_err ("%d: kvs_watch", t->n);
         goto done;
     }
-    if (kvs_watch_int (t->h, "nonexistent-key", mt_watchnil_cb, t) < 0) {
-        log_err ("%d: kvs_watch_int", t->n);
+    if (kvs_watch (t->h, "nonexistent-key", mt_watchnil_cb, t) < 0) {
+        log_err ("%d: kvs_watch", t->n);
         goto done;
     }
-    if (kvs_watch_int (t->h, key_stable, mt_watchstable_cb, t) < 0) {
-        log_err ("%d: kvs_watch_int", t->n);
+    if (kvs_watch (t->h, key_stable, mt_watchstable_cb, t) < 0) {
+        log_err ("%d: kvs_watch", t->n);
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (t->h), 0) < 0) {
@@ -269,15 +279,22 @@ void test_mt (int argc, char **argv)
     flux_close (h);
 }
 
-static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
+static int selfmod_watch_cb (const char *key, const char *json_str, void *arg, int errnum)
 {
-    log_msg ("%s: value = %d errnum = %d", __FUNCTION__, val, errnum);
+    int val;
+    json_t *obj;
 
+    log_msg ("%s: value = %s errnum = %d", __FUNCTION__, json_str, errnum);
+
+    if (!(obj = json_loads (json_str, JSON_DECODE_ANY, NULL)))
+        log_msg_exit ("%s: failed to decode json value", __FUNCTION__);
+    val = json_integer_value (obj);
     flux_t *h = arg;
     if (kvs_put_int (h, key, val + 1) < 0)
         log_err_exit ("%s: kvs_put_int", __FUNCTION__);
     if (kvs_commit (h, 0) < 0)
         log_err_exit ("%s: kvs_commit", __FUNCTION__);
+    json_decref (obj);    
     return (val == 0 ? -1 : 0);
 }
 
@@ -298,8 +315,8 @@ void test_selfmod (int argc, char **argv)
         log_err_exit ("kvs_put_int");
     if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
-    if (kvs_watch_int (h, key, selfmod_watch_cb, h) < 0)
-        log_err_exit ("kvs_watch_int");
+    if (kvs_watch (h, key, selfmod_watch_cb, h) < 0)
+        log_err_exit ("kvs_watch");
 
     log_msg ("reactor: start");
     flux_reactor_run (flux_get_reactor (h), 0);
@@ -308,7 +325,7 @@ void test_selfmod (int argc, char **argv)
     flux_close (h);
 }
 
-static int unwatch_watch_cb (const char *key, int val, void *arg, int errnum)
+static int unwatch_watch_cb (const char *key, const char *json_str, void *arg, int errnum)
 {
     int *count = arg;
     (*count)++;
@@ -357,8 +374,8 @@ void test_unwatch (int argc, char **argv)
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     r = flux_get_reactor (ctx.h);
-    if (kvs_watch_int (ctx.h, ctx.key, unwatch_watch_cb, &count) < 0)
-        log_err_exit ("kvs_watch_int %s", ctx.key);
+    if (kvs_watch (ctx.h, ctx.key, unwatch_watch_cb, &count) < 0)
+        log_err_exit ("kvs_watch %s", ctx.key);
     if (!(timer = flux_timer_watcher_create (r, 0.001, 0.001,
                                              unwatch_timer_cb, &ctx)))
         log_err_exit ("flux_timer_watcher_create");
@@ -371,7 +388,7 @@ void test_unwatch (int argc, char **argv)
     flux_close (ctx.h);
 }
 
-static int unwatchloop_cb (const char *key, int val, void *arg, int errnum)
+static int unwatchloop_cb (const char *key, const char *json_str, void *arg, int errnum)
 {
     return 0;
 }
@@ -394,8 +411,8 @@ void test_unwatchloop (int argc, char **argv)
         log_err_exit ("flux_open");
     uint32_t avail = flux_matchtag_avail (h, 0);
     for (i = 0; i < 1000; i++) {
-        if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
-            log_err_exit ("kvs_watch_int[%d] %s", i, key);
+        if (kvs_watch (h, key, unwatchloop_cb, NULL) < 0)
+            log_err_exit ("kvs_watch[%d] %s", i, key);
         if (kvs_unwatch (h, key) < 0)
             log_err_exit ("kvs_unwatch[%d] %s", i, key);
     }
@@ -406,7 +423,7 @@ void test_unwatchloop (int argc, char **argv)
     flux_close (h);
 }
 
-static int simulwatch_cb (const char *key, int val, void *arg, int errnum)
+static int simulwatch_cb (const char *key, const char *json_str, void *arg, int errnum)
 {
     int *count = arg;
     (*count)++;
@@ -447,8 +464,8 @@ void test_simulwatch (int argc, char **argv)
     if (get_watch_stats (h, &start) < 0)
         log_err_exit ("kvs.stats.get");
     for (i = 0; i < max; i++) {
-        if (kvs_watch_int (h, key, simulwatch_cb, &count) < 0)
-            log_err_exit ("kvs_watch_int[%d] %s", i, key);
+        if (kvs_watch (h, key, simulwatch_cb, &count) < 0)
+            log_err_exit ("kvs_watch[%d] %s", i, key);
         if ((i % 4096 == 0 && i > 0 && i + 4096 < max))
             log_msg ("%d of %d watchers registered (continuing)", i, max);
     }
