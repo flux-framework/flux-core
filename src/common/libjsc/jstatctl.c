@@ -366,13 +366,17 @@ static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
     char *key = lwj_key (h, j, ".nnodes");
-    if (kvs_get_int64 (h, key, nnodes) < 0) {
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_getf (f, "I", nnodes) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
         flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *nnodes);
     free (key);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -380,13 +384,17 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
 {
     int rc = 0;
     char *key = lwj_key (h, j, ".ntasks");
-    if (kvs_get_int64 (h, key, ntasks) < 0) {
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_getf (f, "I", ntasks) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
         flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ntasks);
     free (key);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -394,12 +402,17 @@ static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
 {
     int rc = 0;
     char *key = lwj_key (h, j, ".walltime");
-    if (kvs_get_int64 (h, key, walltime) < 0) {
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_getf (f, "I", walltime) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
     else
         flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *walltime);
+    free (key);
+    flux_future_destroy (f);
     return rc;
 }
 
@@ -527,15 +540,16 @@ done:
 
 static int extract_raw_rdl_alloc (flux_t *h, int64_t j, json_object *jcb)
 {
-    int i = 0;
-    char *key;
-    int64_t cores = 0;
+    int i;
     json_object *ra = Jnew_ar ();
     bool processing = true;
 
     for (i=0; processing; ++i) {
-        key = lwj_key (h, j, ".rank.%d.cores", i);
-        if (kvs_get_int64 (h, key, &cores) < 0) {
+        char *key = lwj_key (h, j, ".rank.%d.cores", i);
+        flux_future_t *f = NULL;
+        int64_t cores = 0;
+        if (!key || !(f = flux_kvs_lookup (h, 0, key))
+                 || flux_kvs_lookup_getf (f, "I", &cores) < 0) {
             if (errno != EINVAL)
                 flux_log_error (h, "extract %s", key);
             processing = false;
@@ -547,6 +561,7 @@ static int extract_raw_rdl_alloc (flux_t *h, int64_t j, json_object *jcb)
             json_object_array_add (ra, elem);
         }
         free (key);
+        flux_future_destroy (f);
     }
     json_object_object_add (jcb, JSC_RDL_ALLOC, ra);
     return 0;
