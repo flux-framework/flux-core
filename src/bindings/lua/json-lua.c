@@ -26,6 +26,8 @@
 #include "config.h"
 #endif
 #include <math.h>
+#include <errno.h>
+#include <string.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include "src/common/libjson-c/json.h"
@@ -73,6 +75,20 @@ int json_object_to_lua (lua_State *L, json_object *o)
             break;
         }
         return (1);
+}
+
+int json_object_string_to_lua (lua_State *L, const char *json_str)
+{
+    json_object *o;
+    int rc;
+
+    if (!(o = json_tokener_parse (json_str))) {
+        errno = ENOMEM;
+        return (-1);
+    }
+    rc = json_object_to_lua (L, o);
+    json_object_put (o);
+    return rc;
 }
 
 static int json_array_to_lua (lua_State *L, json_object *o)
@@ -158,6 +174,27 @@ int lua_value_to_json (lua_State *L, int i, json_object **valp)
     }
     *valp = o;
     return (0);
+}
+
+int lua_value_to_json_string (lua_State *L, int i, char **json_str)
+{
+    json_object *o;
+    char *s;
+
+    if (lua_value_to_json (L, i, &o) < 0)
+        return (-1);
+    if (!o) {
+        errno = ENOMEM;
+        return (-1);
+    }
+    if (!(s = strdup (json_object_to_json_string (o)))) {
+        json_object_put (o);
+        errno = ENOMEM;
+        return (-1);
+    }
+    json_object_put (o);
+    *json_str = s;
+    return 0;
 }
 
 static int lua_table_is_array (lua_State *L, int index)

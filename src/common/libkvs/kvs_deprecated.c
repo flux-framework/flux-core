@@ -33,39 +33,6 @@
 
 #include "kvs_deprecated.h"
 
-/* Get
- */
-
-static int common_get_obj (flux_t *h, const char *key, json_object **valp)
-{
-    flux_future_t *f;
-    const char *json_str;
-    int rc = -1;
-
-    if (!(f = flux_kvs_lookup (h, 0, key)))
-        goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
-        goto done;
-    if (valp) {
-        if (!(*valp = json_tokener_parse (json_str))) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-int kvs_get_obj (flux_t *h, const char *key, json_object **valp)
-{
-    return common_get_obj (h, key, valp);
-}
-
-/* Put
- */
-
 static int common_put_obj (flux_t *h, const char *key, json_object *val)
 {
     int rc = -1;

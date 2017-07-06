@@ -231,7 +231,7 @@ static int l_kvsdir_watch (lua_State *L)
     int rc;
     void *h;
     char *key;
-    json_object *o;
+    char *json_str = NULL;
     kvsdir_t *dir;
 
     dir = lua_get_kvsdir (L, 1);
@@ -240,23 +240,23 @@ static int l_kvsdir_watch (lua_State *L)
 
     if (lua_isnoneornil (L, 3)) {
         /* Need to fetch initial value */
-        if (((rc = kvs_get_obj (h, key, &o)) < 0) && (errno != ENOENT))
+        if (((rc = kvs_get (h, key, &json_str)) < 0) && (errno != ENOENT))
             goto err;
     }
     else {
         /*  Otherwise, the alue at top of stack is initial json_object */
-        lua_value_to_json (L, -1, &o);
+        lua_value_to_json_string (L, -1, &json_str);
     }
 
-    rc = kvs_watch_once_obj (h, key, &o);
+    rc = kvs_watch_once (h, key, &json_str);
 err:
     free (key);
     if (rc < 0)
         return lua_pusherror (L, "kvs_watch: %s",
                               (char *)flux_strerror (errno));
 
-    json_object_to_lua (L, o);
-    json_object_put (o);
+    json_object_string_to_lua (L, json_str);
+    free (json_str);
     return (1);
 }
 
@@ -278,7 +278,7 @@ static int l_kvsdir_index (lua_State *L)
     kvsdir_t *d;
     const char *key = lua_tostring (L, 2);
     char *fullkey = NULL;
-    json_object *o = NULL;
+    char *json_str = NULL;
 
     if (key == NULL)
         return luaL_error (L, "kvsdir: invalid index");
@@ -291,8 +291,8 @@ static int l_kvsdir_index (lua_State *L)
     f = kvsdir_handle (d);
     fullkey = kvsdir_key_at (d, key);
 
-    if (kvs_get_obj (f, fullkey, &o) == 0)
-        rc = json_object_to_lua (L, o);
+    if (kvs_get (f, fullkey, &json_str) == 0)
+        rc = json_object_string_to_lua (L, json_str);
     else if (errno == EISDIR)
         rc = l_kvsdir_kvsdir_new (L);
     else {
@@ -308,9 +308,8 @@ static int l_kvsdir_index (lua_State *L)
         rc = 1;
     }
 out:
-    if (o)
-        json_object_put (o);
     free (fullkey);
+    free (json_str);
     return (rc);
 }
 
