@@ -2191,19 +2191,26 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
 {
     struct prog_ctx *ctx = arg;
     char *kvskey = NULL;
-    char *s = NULL;
+    const char *s = NULL;
     int rc = 0;
+    flux_future_t *f;
 
     if (asprintf (&kvskey, "%s.%s", kvsname, key) < 0) {
         wlog_err (ctx, "pmi_kvs_get: asprintf: %s", strerror (errno));
         return (-1);
     }
 
-    if (kvs_get_string (ctx->flux, kvskey, &s) < 0) {
+    if (!(f = flux_kvs_lookup (ctx->flux, 0, kvskey))) {
+        wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup: %s", strerror (errno));
+        free (kvskey);
+        return (-1);
+    }
+    if (flux_kvs_lookup_getf (f, "s", &s) < 0) {
         if (errno != ENOENT)
-            wlog_err (ctx, "pmi_kvs_get: kvs_get_string(%s): %s",
+            wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup_getf (s,%s): %s",
                       kvskey, strerror (errno));
         free (kvskey);
+        flux_future_destroy (f);
         return (-1);
     }
 
@@ -2214,8 +2221,8 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
     else
         strcpy (val, s);
 
-    free (s);
     free (kvskey);
+    flux_future_destroy (f);
 
     return (rc);
 }
