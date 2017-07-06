@@ -704,13 +704,16 @@ void cmd_move (flux_t *h, int argc, char **argv)
 
 void cmd_get_treeobj (flux_t *h, int argc, char **argv)
 {
-    char *treeobj = NULL;
+    const char *treeobj;
+    flux_future_t *f;
+
     if (argc != 1)
         log_msg_exit ("get-treeobj: specify key");
-    if (kvs_get_treeobj (h, argv[0], &treeobj) < 0)
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, argv[0]))
+            || flux_kvs_lookup_get (f, &treeobj) < 0)
         log_err_exit ("kvs_get_treeobj %s", argv[0]);
     printf ("%s\n", treeobj);
-    free (treeobj);
+    flux_future_destroy (f);
 }
 
 void cmd_getat (flux_t *h, int argc, char **argv)
