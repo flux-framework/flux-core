@@ -89,29 +89,6 @@ done:
     return rc;
 }
 
-int kvs_get_dirat (flux_t *h, const char *rootref,
-                   const char *key, kvsdir_t **dir)
-{
-    flux_future_t *f = NULL;
-    const char *json_str;
-    int rc = -1;
-
-    if (!rootref || !key || !dir) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
-        goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
-        goto done;
-    if (!(*dir = kvsdir_create (h, rootref, key, json_str)))
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
 {
     flux_t *h = kvsdir_handle (dir);

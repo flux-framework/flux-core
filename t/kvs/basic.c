@@ -650,7 +650,9 @@ void cmd_dir (flux_t *h, int argc, char **argv)
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
-    kvsdir_t *dir;
+    kvsdir_t *dir = NULL;
+    const char *json_str;
+    flux_future_t *f;
 
     if (argc > 0) {
         while (argc) {
@@ -665,10 +667,13 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
     }
     if (argc != 2)
         log_msg_exit ("dir: specify treeobj and directory");
-    if (kvs_get_dirat (h, argv[0], argv[1], &dir) < 0)
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, argv[1], argv[0]))
+            || flux_kvs_lookup_get (f, &json_str) < 0
+            || !(dir = kvsdir_create (h, argv[0], argv[1], json_str)))
         log_err_exit ("%s", argv[1]);
     dump_kvs_dir (dir, ropt);
     kvsdir_destroy (dir);
+    flux_future_destroy (f);
 }
 
 void cmd_dirsize (flux_t *h, int argc, char **argv)
