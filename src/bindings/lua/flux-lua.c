@@ -306,17 +306,22 @@ static int l_flux_kvs_type (lua_State *L)
     const char *key;
     char *val;
     kvsdir_t *d;
+    flux_future_t *future;
+    const char *target;
+
     if (!(f = lua_get_flux (L, 1)))
         return lua_pusherror (L, "flux handle expected");
     if (!(key = lua_tostring (L, 2)))
         return lua_pusherror (L, "key expected in arg #2");
 
-    if (kvs_get_symlink (f, key, &val) == 0) {
+    if ((future = flux_kvs_lookup (f, FLUX_KVS_READLINK, key))
+            && flux_kvs_lookup_getf (future, "s", &target) == 0) {
         lua_pushstring (L, "symlink");
-        lua_pushstring (L, val);
-        free (val);
+        lua_pushstring (L, target);
+        flux_future_destroy (future);
         return (2);
     }
+    flux_future_destroy (future);
     if (kvs_get_dir (f, &d, "%s", key) == 0) {
         lua_pushstring (L, "dir");
         lua_push_kvsdir (L, d);

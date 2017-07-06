@@ -428,7 +428,8 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex, i;
-    char *target;
+    const char *target;
+    flux_future_t *f;
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
@@ -439,11 +440,12 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     for (i = optindex; i < argc; i++) {
-        if (kvs_get_symlink (h, argv[i], &target) < 0)
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i]))
+                || flux_kvs_lookup_getf (f, "s", &target) < 0)
             log_err_exit ("%s", argv[i]);
         else
             printf ("%s\n", target);
-        free (target);
+        flux_future_destroy (f);
     }
     return (0);
 }

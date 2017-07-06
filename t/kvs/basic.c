@@ -337,15 +337,17 @@ void cmd_link (flux_t *h, int argc, char **argv)
 
 void cmd_readlink (flux_t *h, int argc, char **argv)
 {
-    char *target;
+    const char *target;
+    flux_future_t *f;
 
     if (argc != 1)
         log_msg_exit ("readlink: specify key"); 
-    if (kvs_get_symlink (h, argv[0], &target) < 0)
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[0]))
+            || flux_kvs_lookup_getf (f, "s", &target) < 0)
         log_err_exit ("%s", argv[0]);
     else
         printf ("%s\n", target);
-    free (target);
+    flux_future_destroy (f);
 }
 
 void cmd_mkdir (flux_t *h, int argc, char **argv)

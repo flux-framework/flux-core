@@ -88,7 +88,6 @@ struct prog_ctx {
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
-    char *lwj_link;         /* if lwj.%d is a symlink, this is the target */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -640,7 +639,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
-    free (ctx->lwj_link);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -1042,7 +1040,6 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
-    kvs_get_symlink (ctx->flux, name, &ctx->lwj_link);
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
     /*

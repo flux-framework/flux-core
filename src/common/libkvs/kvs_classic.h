@@ -4,7 +4,6 @@
 /* These interfaces are on their way to being deprecated */
 
 int kvs_get (flux_t *h, const char *key, char **json_str);
-int kvs_get_symlink (flux_t *h, const char *key, char **valp);
 int kvs_get_treeobj (flux_t *h, const char *key, char **valp);
 int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
             __attribute__ ((format (printf, 3, 4)));

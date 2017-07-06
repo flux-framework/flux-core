@@ -89,28 +89,6 @@ done:
     return rc;
 }
 
-int kvs_get_symlink (flux_t *h, const char *key, char **valp)
-{
-    flux_future_t *f;
-    const char *s;
-    int rc = -1;
-
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, key)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "s", &s) < 0)
-        goto done;
-    if (valp) {
-        if (!(*valp = strdup (s))) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvs_get_treeobj (flux_t *h, const char *key, char **valp)
 {
     flux_future_t *f;
