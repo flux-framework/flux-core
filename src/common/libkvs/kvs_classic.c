@@ -75,24 +75,6 @@ done:
     return rc;
 }
 
-int kvs_get_int (flux_t *h, const char *key, int *valp)
-{
-    flux_future_t *f;
-    int i;
-    int rc = -1;
-
-    if (!(f = flux_kvs_lookup (h, 0, key)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "i", &i) < 0)
-        goto done;
-    if (valp)
-        *valp = i;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvs_get_int64 (flux_t *h, const char *key, int64_t *valp)
 {
     flux_future_t *f;

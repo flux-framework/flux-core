@@ -800,11 +800,15 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
     int rc;
     int ncores;
     char *key;
+    flux_future_t *f;
 
     if (asprintf (&key, "%s.rank.%d.cores", ctx->kvspath, nodeid) < 0)
         wlog_fatal (ctx, 1, "cores_on_node: out of memory");
-    rc = kvs_get_int (ctx->flux, key, &ncores);
+    if (!(f = flux_kvs_lookup (ctx->flux, 0, key)))
+        wlog_fatal (ctx, 1, "flux_kvs_lookup");
+    rc = flux_kvs_lookup_getf (f, "i", &ncores);
     free (key);
+    flux_future_destroy (f);
     return (rc < 0 ? -1 : ncores);
 }
 

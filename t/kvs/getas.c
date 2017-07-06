@@ -137,41 +137,46 @@ void dirgetas (flux_t *h, const char *dir, const char *key, const char *type)
 
 void getas (flux_t *h, const char *key, const char *type)
 {
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (h, 0, key)))
+        log_err_exit ("flux_kvs_lookup");
+
     if (type == NULL) {
-        char *value;
-        if (kvs_get (h, key, &value) < 0)
-            log_err_exit ("kvs_get %s", key);
+        const char *value;
+        if (flux_kvs_lookup_get (f, &value) < 0)
+            log_err_exit ("flux_kvs_lookup_get %s", key);
         printf ("%s\n", value);
-        free (value);
     }
     else if (!strcmp (type, "int")) {
         int value;
-        if (kvs_get_int (h, key, &value) < 0)
-            log_err_exit ("kvs_get_int %s", key);
+        if (flux_kvs_lookup_getf (f, "i", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_getf(i) %s", key);
         printf ("%d\n", value);
     }
     else if (!strcmp (type, "int64")) {
         int64_t value;
-        if (kvs_get_int64 (h, key, &value) < 0)
-            log_err_exit ("kvs_get_int64 %s", key);
+        if (flux_kvs_lookup_getf (f, "I", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_getf(I) %s", key);
         printf ("%" PRIi64 "\n", value);
     }
     else if (!strcmp (type, "double")) {
         double value;
-        if (kvs_get_double (h, key, &value) < 0)
-            log_err_exit ("kvs_get_int64 %s", key);
+        if (flux_kvs_lookup_getf (f, "F", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_getf(F) %s", key);
         printf ("%f\n", value);
     }
     else if (!strcmp (type, "string")) {
-        char *s;
-        if (kvs_get_string (h, key, &s) < 0)
-            log_err_exit ("kvs_get_string %s", key);
-        printf ("%s\n", s);
-        free (s);
+        const char *value;
+        if (flux_kvs_lookup_getf (f, "s", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_getf(s) %s", key);
+        printf ("%s\n", value);
     }
     else {
         log_msg_exit ("unknown type (use int/int64/double/string)");
     }
+
+    flux_future_destroy (f);
 }
 
 
