@@ -9,8 +9,6 @@ int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
 
 int kvs_get_dirat (flux_t *h, const char *treeobj,
                    const char *key, kvsdir_t **dirp);
-int kvs_get_symlinkat (flux_t *h, const char *treeobj,
-                       const char *key, char **val);
 
 int kvsdir_get (kvsdir_t *dir, const char *key, char **json_str);
 int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)

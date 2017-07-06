@@ -112,29 +112,6 @@ done:
     return rc;
 }
 
-int kvs_get_symlinkat (flux_t *h, const char *treeobj,
-                       const char *key, char **valp)
-{
-    flux_future_t *f;
-    const char *s;
-    int rc = -1;
-
-    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, treeobj)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "s", &s) < 0)
-        goto done;
-    if (valp) {
-        if (!(*valp = strdup (s))) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
 {
     flux_t *h = kvsdir_handle (dir);

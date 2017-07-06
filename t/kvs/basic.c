@@ -748,15 +748,17 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
 
 void cmd_readlinkat (flux_t *h, int argc, char **argv)
 {
-    char *target;
+    const char *target;
+    flux_future_t *f;
 
     if (argc != 2)
         log_msg_exit ("readlink: specify treeobj and key");
-    if (kvs_get_symlinkat (h, argv[0], argv[1], &target) < 0)
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[1], argv[0]))
+            || flux_kvs_lookup_getf (f, "s", &target) < 0)
         log_err_exit ("%s", argv[1]);
     else
         printf ("%s\n", target);
-    free (target);
+    flux_future_destroy (f);
 }
 
 /*
