@@ -33,36 +33,6 @@
 
 #include "kvs_deprecated.h"
 
-static int common_put_obj (flux_t *h, const char *key, json_object *val)
-{
-    int rc = -1;
-    const char *json_str = NULL;
-
-    if (val)
-        json_str = json_object_to_json_string (val);
-    if (kvs_put (h, key, json_str) < 0)
-        goto done;
-    rc = 0;
-done:
-    return rc;
-}
-
-int kvsdir_put_obj (kvsdir_t *dir, const char *name, json_object *val)
-{
-    flux_t *h = kvsdir_handle (dir);
-    char *key = kvsdir_key_at (dir, name);
-    int rc = -1;
-
-    /* N.B. dropped EROFS check for dir->rootdir != NULL */
-
-    rc = common_put_obj (h, key, val);
-    free (key);
-    return rc;
-}
-
-/* Watch
- */
-
 struct watch_state {
     kvs_set_obj_f cb;
     void *arg;

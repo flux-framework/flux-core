@@ -116,7 +116,7 @@ static int l_kvsdir_newindex (lua_State *L)
      *  Process value;
      */
     if (lua_isnil (L, 3))
-        rc = kvsdir_put_obj (d, key, NULL);
+        rc = kvsdir_put (d, key, NULL);
     else if (lua_type (L, 3) == LUA_TNUMBER) {
         double val = lua_tonumber (L, 3);
         if (floor (val) == val)
@@ -129,10 +129,10 @@ static int l_kvsdir_newindex (lua_State *L)
     else if (lua_isstring (L, 3))
         rc = kvsdir_put_string (d, key, lua_tostring (L, 3));
     else if (lua_istable (L, 3)) {
-        json_object *o;
-        lua_value_to_json (L, 3, &o);
-        rc = kvsdir_put_obj (d, key, o);
-        json_object_put (o);
+        char *json_str;
+        lua_value_to_json_string (L, 3, &json_str);
+        rc = kvsdir_put (d, key, json_str);
+        free (json_str);
     }
     else {
         return luaL_error (L, "Unsupported type for kvs assignment: %s",
