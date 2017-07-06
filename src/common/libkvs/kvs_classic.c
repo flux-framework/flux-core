@@ -75,24 +75,6 @@ done:
     return rc;
 }
 
-int kvs_get_double (flux_t *h, const char *key, double *valp)
-{
-    flux_future_t *f;
-    double d;
-    int rc = -1;
-
-    if (!(f = flux_kvs_lookup (h, 0, key)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "F", &d) < 0)
-        goto done;
-    if (valp)
-        *valp = d;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvs_get_dir (flux_t *h, kvsdir_t **dir, const char *fmt, ...)
 {
     flux_future_t *f = NULL;
