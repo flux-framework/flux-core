@@ -20,8 +20,6 @@ libkvs_la_SOURCES = \
 	json_dirent.h \
 	kvs_dir.c \
 	kvs_classic.c \
-	kvs_deprecated.c \
-	kvs_deprecated.h \
 	kvs_watch.c
 
 

@@ -35,7 +35,6 @@
 
 #include <flux/core.h>
 #include "src/common/libcompat/compat.h"
-#include "src/common/libkvs/kvs_deprecated.h"
 
 #include "json-lua.h"
 #include "lutil.h"
