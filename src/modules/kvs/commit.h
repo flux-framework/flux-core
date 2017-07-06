@@ -36,6 +36,8 @@ fence_t *commit_get_fence (commit_t *c);
 /* returns aux data passed into commit_mgr_create() */
 void *commit_get_aux (commit_t *c);
 
+/* returns non-NULL only if process state complete (commit_process()
+ * returns COMMIT_PROCESS_FINISHED) */
 const char *commit_get_newroot_ref (commit_t *c);
 
 /* Primary commit processing funtion.
