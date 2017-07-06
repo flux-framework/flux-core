@@ -36,13 +36,15 @@ kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
 TESTS = \
 	test_waitqueue.t \
 	test_cache.t \
-	test_lookup.t
+	test_lookup.t \
+	test_fence.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/cache.o \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/json_util.o \
         $(top_builddir)/src/modules/kvs/lookup.o \
+        $(top_builddir)/src/modules/kvs/fence.o \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -70,3 +72,7 @@ test_cache_t_LDADD = $(test_ldadd)
 test_lookup_t_SOURCES = test/lookup.c
 test_lookup_t_CPPFLAGS = $(test_cppflags)
 test_lookup_t_LDADD = $(test_ldadd)
+
+test_fence_t_SOURCES = test/fence.c
+test_fence_t_CPPFLAGS = $(test_cppflags)
+test_fence_t_LDADD = $(test_ldadd)
