@@ -1,3 +1,4 @@
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
 
