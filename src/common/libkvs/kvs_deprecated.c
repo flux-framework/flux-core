@@ -108,23 +108,6 @@ int kvs_watch_obj (flux_t *h, const char *key, kvs_set_obj_f set, void *arg)
     return 0;
 }
 
-int kvs_watch_once_obj (flux_t *h, const char *key, json_object **valp)
-{
-    char *inout = NULL;
-
-    if (*valp)
-        inout = (char *)json_object_to_json_string (*valp);
-    if (kvs_watch_once (h, key, &inout) < 0) {
-        free (inout);
-        return -1;
-    }
-    if (*valp)
-        json_object_put (*valp);
-    *valp = inout ? json_tokener_parse (inout) : NULL;
-    return 0;
-}
-
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
