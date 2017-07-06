@@ -718,13 +718,16 @@ void cmd_get_treeobj (flux_t *h, int argc, char **argv)
 
 void cmd_getat (flux_t *h, int argc, char **argv)
 {
-    char *json_str;
+    const char *json_str;
+    flux_future_t *f;
+
     if (argc != 2)
         log_msg_exit ("getat: specify treeobj and key");
-    if (kvs_getat (h, argv[0], argv[1], &json_str) < 0)
-        log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
+    if (!(f = flux_kvs_lookupat (h, 0, argv[1], argv[0]))
+        || flux_kvs_lookup_get (f, &json_str) < 0)
+        log_err_exit ("flux_kvs_lookupat %s %s", argv[0], argv[1]);
     output_key_json_str (NULL, json_str, argv[1]);
-    free (json_str);
+    flux_future_destroy (f);
 }
 
 void cmd_put_treeobj (flux_t *h, int argc, char **argv)
