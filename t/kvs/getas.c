@@ -89,50 +89,25 @@ int main (int argc, char *argv[])
     flux_close (h);
 }
 
-void dirgetas (flux_t *h, const char *dir, const char *key, const char *type)
+void dirgetas (flux_t *h, const char *dirkey, const char *key, const char *type)
 {
-    kvsdir_t *d;
+    flux_future_t *f;
+    const char *json_str;
+    char *fullkey;
+    kvsdir_t *dir;
 
-    if (kvs_get_dir (h, &d, "%s", dir) < 0)
-        log_err_exit ("kvs_get_dir %s", dir);
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, dirkey))
+            || flux_kvs_lookup_get (f, &json_str) < 0
+            || !(dir = kvsdir_create (h, NULL, dirkey, json_str)))
+        log_err_exit ("flux_kvs_lookup %s", dirkey);
 
-    if (type == NULL) {
-        char *value;
-        if (kvsdir_get (d, key, &value) < 0)
-            log_err_exit ("kvsdir_get %s", key);
-        printf ("%s\n", value);
-        free (value);
-    }
-    else if (!strcmp (type, "int")) {
-        int value;
-        if (kvsdir_get_int (d, key, &value) < 0)
-            log_err_exit ("kvsdir_get_int %s", key);
-        printf ("%d\n", value);
-    }
-    else if (!strcmp (type, "int64")) {
-        int64_t value;
-        if (kvsdir_get_int64 (d, key, &value) < 0)
-            log_err_exit ("kvsdir_get_int64 %s", key);
-        printf ("%" PRIi64 "\n", value);
-    }
-    else if (!strcmp (type, "double")) {
-        double value;
-        if (kvsdir_get_double (d, key, &value) < 0)
-            log_err_exit ("kvsdir_get_int64 %s", key);
-        printf ("%f\n", value);
-    }
-    else if (!strcmp (type, "string")) {
-        char *s;
-        if (kvsdir_get_string (d, key, &s) < 0)
-            log_err_exit ("kvsdir_get_string %s", key);
-        printf ("%s\n", s);
-        free (s);
-    }
-    else {
-        log_msg_exit ("unknown type (use int/int64/double/string)");
-    }
+    fullkey = kvsdir_key_at (dir, key);
 
-    kvsdir_destroy (d);
+    getas (h, fullkey, type);
+
+    free (fullkey);
+    kvsdir_destroy (dir);
+    flux_future_destroy (f);
 }
 
 void getas (flux_t *h, const char *key, const char *type)

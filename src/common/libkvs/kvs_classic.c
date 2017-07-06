@@ -230,30 +230,6 @@ done:
     return rc;
 }
 
-int kvsdir_get_int64 (kvsdir_t *dir, const char *name, int64_t *valp)
-{
-    flux_t *h = kvsdir_handle (dir);
-    const char *rootref = kvsdir_rootref (dir);
-    flux_future_t *f = NULL;
-    int64_t i;
-    char *key;
-    int rc = -1;
-
-    if (!(key = kvsdir_key_at (dir, name)))
-        goto done;
-    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "I", &i) < 0)
-        goto done;
-    if (valp)
-        *valp = i;
-    rc = 0;
-done:
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvsdir_get_double (kvsdir_t *dir, const char *name, double *valp)
 {
     flux_t *h = kvsdir_handle (dir);
