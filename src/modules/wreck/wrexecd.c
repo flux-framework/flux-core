@@ -950,6 +950,8 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     int i;
     char *json_str;
     json_object *v;
+    flux_future_t *f = NULL;
+    char *key;
 
     prog_ctx_get_nodeinfo (ctx);
     prog_ctx_kz_err_open (ctx);
@@ -966,19 +968,34 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         wlog_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
-
-    if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
+    key = kvsdir_key_at (ctx->kvs, "ntasks");
+    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+             || flux_kvs_lookup_getf (f, "i", &ctx->total_ntasks) < 0)
         wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
+    flux_future_destroy (f);
+    free (key);
 
     /*
      *  See if we've got 'cores' assigned for this host
      */
     if (ctx->resources) {
-        if (kvsdir_get_int (ctx->resources, "cores", &ctx->nprocs) < 0)
+        f = NULL;
+        key = kvsdir_key_at (ctx->resources, "cores");
+        if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+                 || flux_kvs_lookup_getf (f, "i", &ctx->nprocs) < 0)
             wlog_fatal (ctx, 1, "Failed to get resources for this node");
+        flux_future_destroy (f);
+        free (key);
     }
-    else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
-        ctx->nprocs = 1;
+    else {
+        f = NULL;
+        key = kvsdir_key_at (ctx->kvs, "tasks-per-node");
+        if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+                 || flux_kvs_lookup_getf (f, "i", &ctx->nprocs) < 0)
+            ctx->nprocs = 1;
+        flux_future_destroy (f);
+        free (key);
+    }
 
     if (ctx->nprocs <= 0) {
         wlog_fatal (ctx, 0,
@@ -1920,6 +1937,8 @@ int start_trace_task (struct task_info *t)
 
 int rexecd_init (struct prog_ctx *ctx)
 {
+    flux_future_t *f = NULL;
+    char *key;
     int errnum = 0;
     char *name = NULL;
     int rc = asprintf (&name, "lwj.%"PRId64".init", (uintmax_t) ctx->id);
@@ -1938,10 +1957,14 @@ int rexecd_init (struct prog_ctx *ctx)
     /*  Now, check for `fatalerror` key in the kvs, which indicates
      *   one or more nodes encountered a fatal error and we should abort
      */
-    if ((kvsdir_get_int (ctx->kvs, "fatalerror", &errnum) < 0) && errno != ENOENT) {
+    key = kvsdir_key_at (ctx->kvs, "fatalerror");
+    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+             || (flux_kvs_lookup_getf (f, "i", &errnum) < 0 && errno != ENOENT)) {
         errnum = 1;
         wlog_msg (ctx, "Error: kvsdir_get (fatalerror): %s\n", flux_strerror (errno));
     }
+    flux_future_destroy (f);
+    free (key);
     if (errnum) {
         /*  Only update job state and print initialization error message
          *   on rank 0.
