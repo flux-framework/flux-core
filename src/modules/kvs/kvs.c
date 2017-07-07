@@ -111,6 +111,13 @@ typedef struct {
     } state;
 } commit_t;
 
+typedef enum {
+    COMMIT_PROCESS_ERROR = 1,
+    COMMIT_PROCESS_LOAD_MISSING_REFS = 2,
+    COMMIT_PROCESS_DIRTY_CACHE_ENTRIES = 3,
+    COMMIT_PROCESS_FINISHED = 4,
+} commit_process_t;
+
 static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
 static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -548,16 +555,18 @@ error:
     return NULL;
 }
 
-/* return -1 on error, 0 stall & load, 1 stall & process dirty cache
- * entries, 2 all done
+/* return COMMIT_PROCESS_ERROR on error,
+ * COMMIT_PROCESS_LOAD_MISSING_REFS stall & load,
+ * COMMIT_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache entries
+ * COMMIT_PROCESS_FINISHED all done
  */
-static int commit_process (commit_t *c, const href_t rootdir_ref)
+static commit_process_t commit_process (commit_t *c, const href_t rootdir_ref)
 {
     kvs_ctx_t *ctx = c->ctx;
 
     /* Incase user calls commit_process() again */
     if (c->errnum)
-        return -1;
+        return COMMIT_PROCESS_ERROR;
 
     switch (c->state) {
         case COMMIT_STATE_INIT:
@@ -625,7 +634,7 @@ static int commit_process (commit_t *c, const href_t rootdir_ref)
                 }
 
                 if (c->errnum != 0)
-                    return -1;
+                    return COMMIT_PROCESS_ERROR;
 
                 if (zlist_first (c->missing_refs))
                     goto stall_load;
@@ -655,7 +664,7 @@ static int commit_process (commit_t *c, const href_t rootdir_ref)
                 oom ();
 
             if (c->errnum)
-                return -1;
+                return COMMIT_PROCESS_ERROR;
 
             /* cache took ownership of rootcpy, we're done, but
              * may still need to stall user.
@@ -676,18 +685,18 @@ static int commit_process (commit_t *c, const href_t rootdir_ref)
         default:
             flux_log (ctx->h, LOG_ERR, "invalid commit state: %d", c->state);
             c->errnum = EPERM;
-            return -1;
+            return COMMIT_PROCESS_ERROR;
     }
 
-    return 2;
+    return COMMIT_PROCESS_FINISHED;
 
 stall_load:
     c->blocked = 1;
-    return 0;
+    return COMMIT_PROCESS_LOAD_MISSING_REFS;
 
 stall_store:
     c->blocked = 1;
-    return 1;
+    return COMMIT_PROCESS_DIRTY_CACHE_ENTRIES;
 }
 
 /* Commit all the ops for a particular commit/fence request (rank 0 only).
@@ -698,14 +707,15 @@ static void commit_apply (commit_t *c)
 {
     kvs_ctx_t *ctx = c->ctx;
     wait_t *wait = NULL;
-    int ret, errnum = 0;
+    int errnum = 0;
+    commit_process_t ret;
 
-    if ((ret = commit_process (c, ctx->rootdir)) < 0) {
+    if ((ret = commit_process (c, ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
         errnum = c->errnum;
         goto done;
     }
 
-    if (!ret) {
+    if (ret == COMMIT_PROCESS_LOAD_MISSING_REFS) {
         const char *missing_ref = NULL;
 
         if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
@@ -719,7 +729,7 @@ static void commit_apply (commit_t *c)
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else if (ret == 1) {
+    else if (ret == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES) {
         struct cache_entry *hp;
 
         if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
@@ -737,6 +747,7 @@ static void commit_apply (commit_t *c)
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
+    /* else ret == COMMIT_PROCESS_FINISHED */
 
     /* This is the transaction that finalizes the commit by replacing
      * ctx->rootdir with c->newroot, incrementing the root seq,
