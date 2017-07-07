@@ -150,34 +150,6 @@ done:
     return rc;
 }
 
-int kvsdir_get_string (kvsdir_t *dir, const char *name, char **valp)
-{
-    flux_t *h = kvsdir_handle (dir);
-    const char *rootref = kvsdir_rootref (dir);
-    flux_future_t *f = NULL;
-    const char *s;
-    char *key;
-    int rc = -1;
-
-    if (!(key = kvsdir_key_at (dir, name)))
-        goto done;
-    if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
-        goto done;
-    if (flux_kvs_lookup_getf (f, "s", &s) < 0)
-        goto done;
-    if (valp) {
-        if (!(*valp = strdup (s))) {
-            errno = ENOMEM;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    free (key);
-    flux_future_destroy (f);
-    return rc;
-}
-
 int kvsdir_get_int (kvsdir_t *dir, const char *name, int *valp)
 {
     flux_t *h = kvsdir_handle (dir);
