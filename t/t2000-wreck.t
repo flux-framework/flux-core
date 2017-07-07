@@ -372,8 +372,8 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 '
 
 check_complete_link() {
-    lastdir=$(flux kvs dir lwj-complete | tail -1)
     for i in `seq 0 5`; do
+        lastdir=$(flux kvs dir lwj-complete | tail -1)
         flux kvs get ${lastdir}${1}.state && return 0
         sleep 0.2
     done
