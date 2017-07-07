@@ -37,7 +37,8 @@ TESTS = \
 	test_waitqueue.t \
 	test_cache.t \
 	test_lookup.t \
-	test_fence.t
+	test_fence.t \
+	test_commit.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/cache.o \
@@ -45,6 +46,7 @@ test_ldadd = \
         $(top_builddir)/src/modules/kvs/json_util.o \
         $(top_builddir)/src/modules/kvs/lookup.o \
         $(top_builddir)/src/modules/kvs/fence.o \
+        $(top_builddir)/src/modules/kvs/commit.o \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -76,3 +78,7 @@ test_lookup_t_LDADD = $(test_ldadd)
 test_fence_t_SOURCES = test/fence.c
 test_fence_t_CPPFLAGS = $(test_cppflags)
 test_fence_t_LDADD = $(test_ldadd)
+
+test_commit_t_SOURCES = test/commit.c
+test_commit_t_CPPFLAGS = $(test_cppflags)
+test_commit_t_LDADD = $(test_ldadd)
