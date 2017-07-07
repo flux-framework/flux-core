@@ -49,9 +49,11 @@ typedef struct
 static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
 {
     int ret = -1;
-    char *key, *path = NULL;
+    char *key = NULL;
     hwloc_bitmap_t restrictset = NULL;
     uint32_t hwloc_version;
+    flux_future_t *f = NULL;
+    const char *path = NULL;
 
     hwloc_version = hwloc_get_api_version ();
     if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16)) {
@@ -75,10 +77,19 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
     }
 
     key = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
-    (void)kvs_get_string (h, key, &path);
-    free (key);
-    if (!path)
-        (void)kvs_get_string (h, "config.resource.hwloc.default_xml", &path);
+    if (!(f = flux_kvs_lookup (h, 0, key))) {
+        flux_log_error (h, "flux_kvs_lookup");
+        goto done;
+    }
+    if (flux_kvs_lookup_getf (f, "s", &path) < 0) {
+        flux_future_destroy (f);
+        if (!(f = flux_kvs_lookup (h, 0, "config.resource.hwloc.default_xml"))) {
+            flux_log_error (h, "flux_kvs_lookup");
+            goto done;
+        }
+        if (flux_kvs_lookup_getf (f, "s", &path) < 0)
+            path = NULL;
+    }
 
     if (path) {
         flux_log (h, LOG_INFO, "loading hwloc from %s", path);
@@ -113,10 +124,10 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
     ctx->loaded = false;
     ret = 0;
 done:
-    if (path)
-        free (path);
     if (restrictset)
         hwloc_bitmap_free (restrictset);
+    flux_future_destroy (f);
+    free (key);
     return ret;
 }
 
@@ -437,15 +448,22 @@ static void topo_request_cb (flux_t *h,
     kvsitr_t *base_iter = kvsitr_create (kd);
     const char *base_key = NULL;
     while ((base_key = kvsitr_next (base_iter))) {
-        char *xml = NULL;
+        char *key = kvsdir_key_at (kd, base_key);
+        const char *xml = NULL;
         hwloc_topology_t rank;
-        if (kvsdir_get_string (kd, base_key, &xml) < 0) {
+        flux_future_t *f;
+
+        if (!(f = flux_kvs_lookup (h, 0, key))
+                || flux_kvs_lookup_getf (f, "s", &xml) < 0) {
             flux_log_error (h, "%s", base_key);
+            flux_future_destroy (f);
+            free (key);
             continue;
         }
         if (hwloc_topology_init (&rank) < 0) {
             flux_log_error (h, "%s: hwloc_topology_init", base_key);
-            free (xml);
+            flux_future_destroy (f);
+            free (key);
             continue;
         }
         if (hwloc_topology_set_xmlbuffer (rank, xml, strlen (xml)) < 0
@@ -456,11 +474,11 @@ static void topo_request_cb (flux_t *h,
                                       NULL) < 0) {
             flux_log_error (h, "%s: hlwoc_set/load/insert", base_key);
             hwloc_topology_destroy (rank);
-            free (xml);
             continue;
         }
         hwloc_topology_destroy (rank);
-        free (xml);
+        flux_future_destroy (f);
+        free (key);
 
         flux_log (h, LOG_DEBUG, "%s: loaded", base_key);
         count++;

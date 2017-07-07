@@ -337,15 +337,17 @@ void cmd_link (flux_t *h, int argc, char **argv)
 
 void cmd_readlink (flux_t *h, int argc, char **argv)
 {
-    char *target;
+    const char *target;
+    flux_future_t *f;
 
     if (argc != 1)
         log_msg_exit ("readlink: specify key"); 
-    if (kvs_get_symlink (h, argv[0], &target) < 0)
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[0]))
+            || flux_kvs_lookup_getf (f, "s", &target) < 0)
         log_err_exit ("%s", argv[0]);
     else
         printf ("%s\n", target);
-    free (target);
+    flux_future_destroy (f);
 }
 
 void cmd_mkdir (flux_t *h, int argc, char **argv)
@@ -537,19 +539,23 @@ static void dump_kvs_val (const char *key, const char *json_str)
 
 static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
 {
+    flux_future_t *f;
     kvsitr_t *itr;
     const char *name;
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
     char *key;
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
         if (kvsdir_issymlink (dir, name)) {
-            char *link;
-            if (kvsdir_get_symlink (dir, name, &link) < 0)
+            const char *link;
+            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
+                    || flux_kvs_lookup_getf (f, "s", &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
-            free (link);
+            flux_future_destroy (f);
 
         } else if (kvsdir_isdir (dir, name)) {
             if (ropt) {
@@ -648,7 +654,9 @@ void cmd_dir (flux_t *h, int argc, char **argv)
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
-    kvsdir_t *dir;
+    kvsdir_t *dir = NULL;
+    const char *json_str;
+    flux_future_t *f;
 
     if (argc > 0) {
         while (argc) {
@@ -663,10 +671,13 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
     }
     if (argc != 2)
         log_msg_exit ("dir: specify treeobj and directory");
-    if (kvs_get_dirat (h, argv[0], argv[1], &dir) < 0)
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, argv[1], argv[0]))
+            || flux_kvs_lookup_get (f, &json_str) < 0
+            || !(dir = kvsdir_create (h, argv[0], argv[1], json_str)))
         log_err_exit ("%s", argv[1]);
     dump_kvs_dir (dir, ropt);
     kvsdir_destroy (dir);
+    flux_future_destroy (f);
 }
 
 void cmd_dirsize (flux_t *h, int argc, char **argv)
@@ -702,24 +713,30 @@ void cmd_move (flux_t *h, int argc, char **argv)
 
 void cmd_get_treeobj (flux_t *h, int argc, char **argv)
 {
-    char *treeobj = NULL;
+    const char *treeobj;
+    flux_future_t *f;
+
     if (argc != 1)
         log_msg_exit ("get-treeobj: specify key");
-    if (kvs_get_treeobj (h, argv[0], &treeobj) < 0)
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, argv[0]))
+            || flux_kvs_lookup_get (f, &treeobj) < 0)
         log_err_exit ("kvs_get_treeobj %s", argv[0]);
     printf ("%s\n", treeobj);
-    free (treeobj);
+    flux_future_destroy (f);
 }
 
 void cmd_getat (flux_t *h, int argc, char **argv)
 {
-    char *json_str;
+    const char *json_str;
+    flux_future_t *f;
+
     if (argc != 2)
         log_msg_exit ("getat: specify treeobj and key");
-    if (kvs_getat (h, argv[0], argv[1], &json_str) < 0)
-        log_err_exit ("kvs_getat %s %s", argv[0], argv[1]);
+    if (!(f = flux_kvs_lookupat (h, 0, argv[1], argv[0]))
+        || flux_kvs_lookup_get (f, &json_str) < 0)
+        log_err_exit ("flux_kvs_lookupat %s %s", argv[0], argv[1]);
     output_key_json_str (NULL, json_str, argv[1]);
-    free (json_str);
+    flux_future_destroy (f);
 }
 
 void cmd_put_treeobj (flux_t *h, int argc, char **argv)
@@ -740,15 +757,17 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
 
 void cmd_readlinkat (flux_t *h, int argc, char **argv)
 {
-    char *target;
+    const char *target;
+    flux_future_t *f;
 
     if (argc != 2)
         log_msg_exit ("readlink: specify treeobj and key");
-    if (kvs_get_symlinkat (h, argv[0], argv[1], &target) < 0)
+    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[1], argv[0]))
+            || flux_kvs_lookup_getf (f, "s", &target) < 0)
         log_err_exit ("%s", argv[1]);
     else
         printf ("%s\n", target);
-    free (target);
+    flux_future_destroy (f);
 }
 
 /*

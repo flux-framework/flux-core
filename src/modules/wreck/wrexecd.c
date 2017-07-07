@@ -88,7 +88,6 @@ struct prog_ctx {
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
-    char *lwj_link;         /* if lwj.%d is a symlink, this is the target */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -640,7 +639,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
-    free (ctx->lwj_link);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -800,11 +798,15 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
     int rc;
     int ncores;
     char *key;
+    flux_future_t *f;
 
     if (asprintf (&key, "%s.rank.%d.cores", ctx->kvspath, nodeid) < 0)
         wlog_fatal (ctx, 1, "cores_on_node: out of memory");
-    rc = kvs_get_int (ctx->flux, key, &ncores);
+    if (!(f = flux_kvs_lookup (ctx->flux, 0, key)))
+        wlog_fatal (ctx, 1, "flux_kvs_lookup");
+    rc = flux_kvs_lookup_getf (f, "i", &ncores);
     free (key);
+    flux_future_destroy (f);
     return (rc < 0 ? -1 : ncores);
 }
 
@@ -948,6 +950,8 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     int i;
     char *json_str;
     json_object *v;
+    flux_future_t *f = NULL;
+    char *key;
 
     prog_ctx_get_nodeinfo (ctx);
     prog_ctx_kz_err_open (ctx);
@@ -964,19 +968,34 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         wlog_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
-
-    if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
+    key = kvsdir_key_at (ctx->kvs, "ntasks");
+    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+             || flux_kvs_lookup_getf (f, "i", &ctx->total_ntasks) < 0)
         wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
+    flux_future_destroy (f);
+    free (key);
 
     /*
      *  See if we've got 'cores' assigned for this host
      */
     if (ctx->resources) {
-        if (kvsdir_get_int (ctx->resources, "cores", &ctx->nprocs) < 0)
+        f = NULL;
+        key = kvsdir_key_at (ctx->resources, "cores");
+        if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+                 || flux_kvs_lookup_getf (f, "i", &ctx->nprocs) < 0)
             wlog_fatal (ctx, 1, "Failed to get resources for this node");
+        flux_future_destroy (f);
+        free (key);
     }
-    else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
-        ctx->nprocs = 1;
+    else {
+        f = NULL;
+        key = kvsdir_key_at (ctx->kvs, "tasks-per-node");
+        if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+                 || flux_kvs_lookup_getf (f, "i", &ctx->nprocs) < 0)
+            ctx->nprocs = 1;
+        flux_future_destroy (f);
+        free (key);
+    }
 
     if (ctx->nprocs <= 0) {
         wlog_fatal (ctx, 0,
@@ -1038,7 +1057,6 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
-    kvs_get_symlink (ctx->flux, name, &ctx->lwj_link);
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
     /*
@@ -1919,6 +1937,8 @@ int start_trace_task (struct task_info *t)
 
 int rexecd_init (struct prog_ctx *ctx)
 {
+    flux_future_t *f = NULL;
+    char *key;
     int errnum = 0;
     char *name = NULL;
     int rc = asprintf (&name, "lwj.%"PRId64".init", (uintmax_t) ctx->id);
@@ -1937,10 +1957,14 @@ int rexecd_init (struct prog_ctx *ctx)
     /*  Now, check for `fatalerror` key in the kvs, which indicates
      *   one or more nodes encountered a fatal error and we should abort
      */
-    if ((kvsdir_get_int (ctx->kvs, "fatalerror", &errnum) < 0) && errno != ENOENT) {
+    key = kvsdir_key_at (ctx->kvs, "fatalerror");
+    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+             || (flux_kvs_lookup_getf (f, "i", &errnum) < 0 && errno != ENOENT)) {
         errnum = 1;
         wlog_msg (ctx, "Error: kvsdir_get (fatalerror): %s\n", flux_strerror (errno));
     }
+    flux_future_destroy (f);
+    free (key);
     if (errnum) {
         /*  Only update job state and print initialization error message
          *   on rank 0.
@@ -2187,19 +2211,26 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
 {
     struct prog_ctx *ctx = arg;
     char *kvskey = NULL;
-    char *s = NULL;
+    const char *s = NULL;
     int rc = 0;
+    flux_future_t *f;
 
     if (asprintf (&kvskey, "%s.%s", kvsname, key) < 0) {
         wlog_err (ctx, "pmi_kvs_get: asprintf: %s", strerror (errno));
         return (-1);
     }
 
-    if (kvs_get_string (ctx->flux, kvskey, &s) < 0) {
+    if (!(f = flux_kvs_lookup (ctx->flux, 0, kvskey))) {
+        wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup: %s", strerror (errno));
+        free (kvskey);
+        return (-1);
+    }
+    if (flux_kvs_lookup_getf (f, "s", &s) < 0) {
         if (errno != ENOENT)
-            wlog_err (ctx, "pmi_kvs_get: kvs_get_string(%s): %s",
+            wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup_getf (s,%s): %s",
                       kvskey, strerror (errno));
         free (kvskey);
+        flux_future_destroy (f);
         return (-1);
     }
 
@@ -2210,8 +2241,8 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
     else
         strcpy (val, s);
 
-    free (s);
     free (kvskey);
+    flux_future_destroy (f);
 
     return (rc);
 }
