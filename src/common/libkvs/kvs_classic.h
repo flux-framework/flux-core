@@ -12,7 +12,6 @@ int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
                     __attribute__ ((format (printf, 3, 4)));
 int kvsdir_get_string (kvsdir_t *dir, const char *key, char **valp);
 int kvsdir_get_int (kvsdir_t *dir, const char *key, int *valp);
-int kvsdir_get_symlink (kvsdir_t *dir, const char *key, char **valp);
 
 
 #endif /* !_FLUX_KVS_CLASSIC_H */

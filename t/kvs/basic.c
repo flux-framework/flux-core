@@ -539,19 +539,23 @@ static void dump_kvs_val (const char *key, const char *json_str)
 
 static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
 {
+    flux_future_t *f;
     kvsitr_t *itr;
     const char *name;
+    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = kvsdir_rootref (dir);
     char *key;
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
         if (kvsdir_issymlink (dir, name)) {
-            char *link;
-            if (kvsdir_get_symlink (dir, name, &link) < 0)
+            const char *link;
+            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
+                    || flux_kvs_lookup_getf (f, "s", &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
-            free (link);
+            flux_future_destroy (f);
 
         } else if (kvsdir_isdir (dir, name)) {
             if (ropt) {
