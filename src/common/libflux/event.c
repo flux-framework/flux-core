@@ -143,7 +143,7 @@ static flux_msg_t *flux_event_vencodef (const char *topic,
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
         goto error;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto error;
     return msg;
 error:

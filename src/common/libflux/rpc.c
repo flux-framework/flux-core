@@ -295,7 +295,7 @@ static flux_future_t *flux_vrpcf (flux_t *h,
 
     if (!(msg = flux_request_encode (topic, NULL)))
         goto done;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto done;
     f = flux_rpc_msg (h, nodeid, flags, msg);
 done:

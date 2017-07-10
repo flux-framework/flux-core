@@ -223,7 +223,7 @@ static int flux_vrespondf (flux_t *h, const flux_msg_t *request,
     flux_msg_t *msg = derive_response (h, request, 0);
     if (!msg)
         goto fatal;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
         goto fatal;

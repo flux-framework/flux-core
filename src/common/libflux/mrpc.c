@@ -518,7 +518,7 @@ flux_mrpc_t *flux_mrpcf (flux_t *h,
     va_start (ap, fmt);
     if (!(msg = flux_request_encode (topic, NULL)))
         goto done;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto done;
     rc = mrpc (h, nodeset, flags, msg);
 done:
