@@ -52,9 +52,9 @@ void kget_xfail (flux_t *h, const char *s)
     snprintf (key, sizeof (key), "test.asyncfence.%s", s);
     if (!(f = flux_kvs_lookup (h, 0, key)))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_getf (f, "i", &val) == 0)
-        log_msg_exit ("flux_kvs_lookup_getf(i) %s=%d (expected failure)", key, val);
-    log_msg ("flux_kvs_lookup_getf(i) %s failed (expected)", key);
+    if (flux_kvs_lookup_get_unpack (f, "i", &val) == 0)
+        log_msg_exit ("flux_kvs_lookup_get_unpack(i) %s=%d (expected failure)", key, val);
+    log_msg ("flux_kvs_lookup_get_unpack(i) %s failed (expected)", key);
     flux_future_destroy (f);
 }
 
@@ -67,12 +67,12 @@ void kget (flux_t *h, const char *s, int expected)
     snprintf (key, sizeof (key), "test.asyncfence.%s", s);
     if (!(f = flux_kvs_lookup (h, 0, key)))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_getf (f, "i", &val) < 0)
-        log_msg_exit ("flux_kvs_lookup_getf(i) %s", key);
+    if (flux_kvs_lookup_get_unpack (f, "i", &val) < 0)
+        log_msg_exit ("flux_kvs_lookup_get_unpack(i) %s", key);
     if (expected != val)
-        log_msg_exit ("flux_kvs_lookup_getf(i) %s=%d (expected %d)",
+        log_msg_exit ("flux_kvs_lookup_get_unpack(i) %s=%d (expected %d)",
                       key, val, expected);
-    log_msg ("flux_kvs_lookup_getf(i) %s=%d", key, val);
+    log_msg ("flux_kvs_lookup_get_unpack(i) %s=%d", key, val);
     flux_future_destroy (f);
 }
 

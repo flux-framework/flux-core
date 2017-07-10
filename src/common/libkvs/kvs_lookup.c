@@ -88,7 +88,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
     return 0;
 }
 
-int flux_kvs_lookup_getf (flux_future_t *f, const char *fmt, ...)
+int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
 {
     va_list ap;
     json_t *obj;

@@ -315,7 +315,7 @@ static int l_flux_kvs_type (lua_State *L)
         return lua_pusherror (L, "key expected in arg #2");
 
     if ((future = flux_kvs_lookup (f, FLUX_KVS_READLINK, key))
-            && flux_kvs_lookup_getf (future, "s", &target) == 0) {
+            && flux_kvs_lookup_get_unpack (future, "s", &target) == 0) {
         lua_pushstring (L, "symlink");
         lua_pushstring (L, target);
         flux_future_destroy (future);

@@ -369,7 +369,7 @@ static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_getf (f, "I", nnodes) < 0) {
+             || flux_kvs_lookup_get_unpack (f, "I", nnodes) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -387,7 +387,7 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_getf (f, "I", ntasks) < 0) {
+             || flux_kvs_lookup_get_unpack (f, "I", ntasks) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -405,7 +405,7 @@ static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_getf (f, "I", walltime) < 0) {
+             || flux_kvs_lookup_get_unpack (f, "I", walltime) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -424,7 +424,7 @@ static int extract_raw_rdl (flux_t *h, int64_t j, char **rdlstr)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_getf (f, "s", &s) < 0) {
+             || flux_kvs_lookup_get_unpack (f, "s", &s) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -445,7 +445,7 @@ static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
     flux_future_t *f = NULL;
 
     if (!key || !(f = flux_kvs_lookup (h, 0, key))
-             || flux_kvs_lookup_getf (f, "s", &state) < 0) {
+             || flux_kvs_lookup_get_unpack (f, "s", &state) < 0) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
     }
@@ -558,7 +558,7 @@ static int extract_raw_rdl_alloc (flux_t *h, int64_t j, json_object *jcb)
         flux_future_t *f = NULL;
         int64_t cores = 0;
         if (!key || !(f = flux_kvs_lookup (h, 0, key))
-                 || flux_kvs_lookup_getf (f, "I", &cores) < 0) {
+                 || flux_kvs_lookup_get_unpack (f, "I", &cores) < 0) {
             if (errno != EINVAL)
                 flux_log_error (h, "extract %s", key);
             processing = false;

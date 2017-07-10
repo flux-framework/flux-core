@@ -81,13 +81,13 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "flux_kvs_lookup");
         goto done;
     }
-    if (flux_kvs_lookup_getf (f, "s", &path) < 0) {
+    if (flux_kvs_lookup_get_unpack (f, "s", &path) < 0) {
         flux_future_destroy (f);
         if (!(f = flux_kvs_lookup (h, 0, "config.resource.hwloc.default_xml"))) {
             flux_log_error (h, "flux_kvs_lookup");
             goto done;
         }
-        if (flux_kvs_lookup_getf (f, "s", &path) < 0)
+        if (flux_kvs_lookup_get_unpack (f, "s", &path) < 0)
             path = NULL;
     }
 
@@ -454,7 +454,7 @@ static void topo_request_cb (flux_t *h,
         flux_future_t *f;
 
         if (!(f = flux_kvs_lookup (h, 0, key))
-                || flux_kvs_lookup_getf (f, "s", &xml) < 0) {
+                || flux_kvs_lookup_get_unpack (f, "s", &xml) < 0) {
             flux_log_error (h, "%s", base_key);
             flux_future_destroy (f);
             free (key);

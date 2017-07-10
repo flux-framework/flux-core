@@ -804,7 +804,7 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
         wlog_fatal (ctx, 1, "cores_on_node: out of memory");
     if (!(f = flux_kvs_lookup (ctx->flux, 0, key)))
         wlog_fatal (ctx, 1, "flux_kvs_lookup");
-    rc = flux_kvs_lookup_getf (f, "i", &ncores);
+    rc = flux_kvs_lookup_get_unpack (f, "i", &ncores);
     free (key);
     flux_future_destroy (f);
     return (rc < 0 ? -1 : ncores);
@@ -970,7 +970,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 
     key = kvsdir_key_at (ctx->kvs, "ntasks");
     if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-             || flux_kvs_lookup_getf (f, "i", &ctx->total_ntasks) < 0)
+             || flux_kvs_lookup_get_unpack (f, "i", &ctx->total_ntasks) < 0)
         wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
     flux_future_destroy (f);
     free (key);
@@ -982,7 +982,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
         f = NULL;
         key = kvsdir_key_at (ctx->resources, "cores");
         if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-                 || flux_kvs_lookup_getf (f, "i", &ctx->nprocs) < 0)
+                 || flux_kvs_lookup_get_unpack (f, "i", &ctx->nprocs) < 0)
             wlog_fatal (ctx, 1, "Failed to get resources for this node");
         flux_future_destroy (f);
         free (key);
@@ -991,7 +991,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
         f = NULL;
         key = kvsdir_key_at (ctx->kvs, "tasks-per-node");
         if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-                 || flux_kvs_lookup_getf (f, "i", &ctx->nprocs) < 0)
+                 || flux_kvs_lookup_get_unpack (f, "i", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
         flux_future_destroy (f);
         free (key);
@@ -1959,7 +1959,7 @@ int rexecd_init (struct prog_ctx *ctx)
      */
     key = kvsdir_key_at (ctx->kvs, "fatalerror");
     if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-             || (flux_kvs_lookup_getf (f, "i", &errnum) < 0 && errno != ENOENT)) {
+             || (flux_kvs_lookup_get_unpack (f, "i", &errnum) < 0 && errno != ENOENT)) {
         errnum = 1;
         wlog_msg (ctx, "Error: kvsdir_get (fatalerror): %s\n", flux_strerror (errno));
     }
@@ -2225,9 +2225,9 @@ static int wreck_pmi_kvs_get (void *arg, const char *kvsname, const char *key,
         free (kvskey);
         return (-1);
     }
-    if (flux_kvs_lookup_getf (f, "s", &s) < 0) {
+    if (flux_kvs_lookup_get_unpack (f, "s", &s) < 0) {
         if (errno != ENOENT)
-            wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup_getf (s,%s): %s",
+            wlog_err (ctx, "pmi_kvs_get: flux_kvs_lookup_get_unpack (s,%s): %s",
                       kvskey, strerror (errno));
         free (kvskey);
         flux_future_destroy (f);

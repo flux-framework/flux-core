@@ -12,7 +12,7 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
                                   const char *treeobj);
 
 int flux_kvs_lookup_get (flux_future_t *f, const char **json_str);
-int flux_kvs_lookup_getf (flux_future_t *f, const char *fmt, ...);
+int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 #endif /* !_FLUX_CORE_KVS_LOOKUP_H */
 

@@ -343,7 +343,7 @@ void cmd_readlink (flux_t *h, int argc, char **argv)
     if (argc != 1)
         log_msg_exit ("readlink: specify key"); 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[0]))
-            || flux_kvs_lookup_getf (f, "s", &target) < 0)
+            || flux_kvs_lookup_get_unpack (f, "s", &target) < 0)
         log_err_exit ("%s", argv[0]);
     else
         printf ("%s\n", target);
@@ -552,7 +552,7 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
         if (kvsdir_issymlink (dir, name)) {
             const char *link;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_getf (f, "s", &link) < 0)
+                    || flux_kvs_lookup_get_unpack (f, "s", &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
             flux_future_destroy (f);
@@ -763,7 +763,7 @@ void cmd_readlinkat (flux_t *h, int argc, char **argv)
     if (argc != 2)
         log_msg_exit ("readlink: specify treeobj and key");
     if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[1], argv[0]))
-            || flux_kvs_lookup_getf (f, "s", &target) < 0)
+            || flux_kvs_lookup_get_unpack (f, "s", &target) < 0)
         log_err_exit ("%s", argv[1]);
     else
         printf ("%s\n", target);
