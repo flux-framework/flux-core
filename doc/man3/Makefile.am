@@ -96,9 +96,9 @@ MAN3_FILES_SECONDARY = \
 	flux_reactor_now_update.3 \
 	flux_request_decodef.3 \
 	flux_request_decode_raw.3 \
-	flux_event_decodef.3 \
+	flux_event_unpack.3 \
 	flux_event_encode.3 \
-	flux_event_encodef.3 \
+	flux_event_pack.3 \
 	flux_response_decode_raw.3 \
 	flux_request_encode_raw.3 \
 	flux_content_load_get.3 \
@@ -196,9 +196,9 @@ flux_respondf.3: flux_respond.3
 flux_reactor_now_update.3: flux_reactor_now.3
 flux_request_decodef.3: flux_request_decode.3
 flux_request_decode_raw.3: flux_request_decode.3
-flux_event_decodef.3: flux_event_decode.3
+flux_event_unpack.3: flux_event_decode.3
 flux_event_encode.3: flux_event_decode.3
-flux_event_encodef.3: flux_event_decode.3
+flux_event_pack.3: flux_event_decode.3
 flux_response_decode_raw.3: flux_response_decode.3
 flux_request_encode_raw.3: flux_request_encode.3
 flux_content_load_get.3: flux_content_load.3
