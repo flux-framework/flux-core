@@ -1182,7 +1182,7 @@ done:
     return rc;
 }
 
-int flux_msg_get_jsonf (const flux_msg_t *msg, const char *fmt, ...)
+int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...)
 {
     va_list ap;
     int rc;
