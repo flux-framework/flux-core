@@ -119,7 +119,7 @@ static int flux_rpc_vgetf (flux_future_t *f, const char *fmt, va_list ap)
 
     if (flux_future_get (f, &msg) < 0)
         goto done;
-    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vunpack (msg, fmt, ap) < 0)
         goto done;
     rc = 0;
 done:

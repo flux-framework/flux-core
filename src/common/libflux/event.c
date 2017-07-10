@@ -83,7 +83,7 @@ static int flux_event_vdecodef (const flux_msg_t *msg, const char **topic,
 
     if (event_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vunpack (msg, fmt, ap) < 0)
         goto done;
     if (topic)
         *topic = ts;

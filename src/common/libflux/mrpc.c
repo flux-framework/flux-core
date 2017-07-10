@@ -269,7 +269,7 @@ static int flux_mrpc_vgetf (flux_mrpc_t *mrpc, const char *fmt, va_list ap)
         errno = EPROTO;
         goto done;
     }
-    if (flux_msg_vget_jsonf (mrpc->rx_msg, fmt, ap) < 0)
+    if (flux_msg_vunpack (mrpc->rx_msg, fmt, ap) < 0)
         goto done;
     rc = 0;
 done:

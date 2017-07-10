@@ -177,7 +177,7 @@ int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap);
 
 int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
 int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...);
-int flux_msg_vget_jsonf (const flux_msg_t *msg, const char *fmt, va_list ap);
+int flux_msg_vunpack (const flux_msg_t *msg, const char *fmt, va_list ap);
 
 /* Get/set nodeid (request only)
  * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.
