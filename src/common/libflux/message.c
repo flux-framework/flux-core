@@ -1050,7 +1050,7 @@ done:
     return rc;
 }
 
-int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...)
+int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
 {
     va_list ap;
     int rc;

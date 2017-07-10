@@ -172,7 +172,7 @@ bool flux_msg_has_payload (const flux_msg_t *msg);
  * encoding/decoding the JSON object payload directly from/to its members.
  */
 int flux_msg_set_json (flux_msg_t *msg, const char *json_str);
-int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...);
 int flux_msg_vset_jsonf (flux_msg_t *msg, const char *fmt, va_list ap);
 
 int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
