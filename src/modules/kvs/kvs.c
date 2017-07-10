@@ -997,9 +997,9 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
 
     if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{ s:i s:s }",
-                       "rootseq", rootseq,
-                       "rootdir", &ref) < 0)
+    if (flux_rpc_get_unpack (f, "{ s:i s:s }",
+                             "rootseq", rootseq,
+                             "rootdir", &ref) < 0)
         goto done;
     if (strlen (ref) > sizeof (href_t) - 1) {
         errno = EPROTO;

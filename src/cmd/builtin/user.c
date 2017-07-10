@@ -112,8 +112,8 @@ static void delrole (flux_t *h, uint32_t userid, uint32_t rolemask)
                                 "rolemask", rolemask);
     if (!f)
         log_err_exit ("userdb.delrole");
-    if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
-                                       "rolemask", &final) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:i s:i}", "userid", &userid,
+                             "rolemask", &final) < 0) {
         if (errno == ENOSYS)
             log_msg_exit ("userdb module is not loaded");
         if (errno == ENOENT)
@@ -132,11 +132,12 @@ static void addrole (flux_t *h, uint32_t userid, uint32_t rolemask)
 
     f = flux_rpc_pack (h, "userdb.addrole", FLUX_NODEID_ANY, 0,
                        "{s:i s:i}", "userid", userid,
-                                    "rolemask", rolemask);
+                       "rolemask", rolemask);
     if (!f)
         log_err_exit ("userdb.addrole");
-    if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
-                                       "rolemask", &final) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:i s:i}",
+                                "userid", &userid,
+                                "rolemask", &final) < 0) {
         if (errno == ENOSYS)
             log_msg_exit ("userdb module is not loaded");
         if (errno == ENOENT)
@@ -190,8 +191,8 @@ static int internal_user_list (optparse_t *p, int ac, char *av[])
         f = flux_rpc (h, "userdb.getnext", NULL, FLUX_NODEID_ANY, 0);
         if (!f)
             log_err_exit ("userdb.getnext");
-        if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
-                                           "rolemask", &rolemask) < 0) {
+        if (flux_rpc_get_unpack (f, "{s:i s:i}", "userid", &userid,
+                                                 "rolemask", &rolemask) < 0) {
             if (errno == ENOSYS)
                 log_msg_exit ("userdb module is not loaded");
             if (errno != ENOENT)
@@ -234,8 +235,8 @@ static int internal_user_lookup (optparse_t *p, int ac, char *av[])
                        "{s:i}", "userid", userid);
     if (!f)
         log_err_exit ("userdb.lookup");
-    if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,
-                                       "rolemask", &rolemask) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:i s:i}", "userid", &userid,
+                                             "rolemask", &rolemask) < 0) {
         if (errno == ENOSYS)
             log_msg_exit ("userdb module is not loaded");
         if (errno == ENOENT)

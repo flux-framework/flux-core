@@ -382,7 +382,7 @@ int kvs_get_version (flux_t *h, int *versionp)
 
     if (!(f = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{ s:i }", "rootseq", &version) < 0)
+    if (flux_rpc_get_unpack (f, "{ s:i }", "rootseq", &version) < 0)
         goto done;
     if (versionp)
         *versionp = version;

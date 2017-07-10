@@ -112,7 +112,7 @@ done:
     return rc;
 }
 
-static int flux_rpc_vgetf (flux_future_t *f, const char *fmt, va_list ap)
+static int flux_rpc_get_vunpack (flux_future_t *f, const char *fmt, va_list ap)
 {
     const flux_msg_t *msg;
     int rc = -1;
@@ -126,13 +126,13 @@ done:
     return rc;
 }
 
-int flux_rpc_getf (flux_future_t *f, const char *fmt, ...)
+int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_rpc_vgetf (f, fmt, ap);
+    rc = flux_rpc_get_vunpack (f, fmt, ap);
     va_end (ap);
 
     return rc;

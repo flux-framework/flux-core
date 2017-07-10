@@ -278,11 +278,11 @@ void test_encoding (flux_t *h)
     ok ((r = flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
                             "{s:i}", "n", 107)) != NULL,
         "flux_rpc_pack works");
-    ok (flux_rpc_getf (r, NULL) < 0
+    ok (flux_rpc_get_unpack (r, NULL) < 0
         && errno == EINVAL,
-        "flux_rpc_getf fails with EINVAL");
-    ok (flux_rpc_getf (r, "{s:i}", "n", &i) == 0,
-        "flux_rpc_getf works");
+        "flux_rpc_get_unpack fails with EINVAL");
+    ok (flux_rpc_get_unpack (r, "{s:i}", "n", &i) == 0,
+        "flux_rpc_get_unpack works");
     ok (i == 108,
         "and service returned incremented value");
     flux_future_destroy (r);
@@ -292,18 +292,18 @@ void test_encoding (flux_t *h)
                             "{ s:i }", "foo", 42)) != NULL,
         "flux_rpc_pack with payload when none is expected works, at first");
     errno = 0;
-    ok (flux_rpc_getf (r, "{}") < 0
+    ok (flux_rpc_get_unpack (r, "{}") < 0
         && errno == EPROTO,
-        "flux_rpc_getf fails with EPROTO");
+        "flux_rpc_get_unpack fails with EPROTO");
     flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects payload) */
     ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
         "flux_rpc_pack with empty payload works");
     errno = 0;
-    ok (flux_rpc_getf (r, "{ s:i }", "foo", &i) < 0
+    ok (flux_rpc_get_unpack (r, "{ s:i }", "foo", &i) < 0
         && errno == EPROTO,
-        "flux_rpc_getf fails with EPROTO");
+        "flux_rpc_get_unpack fails with EPROTO");
     flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects empty payload) */
@@ -311,9 +311,9 @@ void test_encoding (flux_t *h)
     ok ((r = flux_rpc_pack (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
         "flux_rpc_pack with payload works");
     errno = 0;
-    ok (flux_rpc_getf (r, "{ ! }") < 0
+    ok (flux_rpc_get_unpack (r, "{ ! }") < 0
         && errno == EPROTO,
-        "flux_rpc_getf fails with EPROTO");
+        "flux_rpc_get_unpack fails with EPROTO");
     flux_future_destroy (r);
 
     diag ("completed encoding/api test");

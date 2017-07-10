@@ -437,7 +437,7 @@ int get_watch_stats (flux_t *h, int *count)
 
     if (!(f = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{ s:i }", "#watchers", count) < 0)
+    if (flux_rpc_get_unpack (f, "{ s:i }", "#watchers", count) < 0)
         goto done;
     rc = 0;
 done:

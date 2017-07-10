@@ -104,7 +104,8 @@ static int attr_get_rpc (attr_ctx_t *ctx, const char *name, attr_t **attrp)
     if (!(f = flux_rpc_pack (ctx->h, "attr.get", FLUX_NODEID_ANY, 0,
                              "{s:s}", "name", name)))
         goto done;
-    if (flux_rpc_getf (f, "{s:s, s:i}", "value", &val, "flags", &flags) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s, s:i}",
+                             "value", &val, "flags", &flags) < 0)
         goto done;
     if (!(attr = attr_create (val, flags)))
         goto done;
@@ -170,7 +171,7 @@ static int attr_list_rpc (attr_ctx_t *ctx)
 
     if (!(f = flux_rpc (ctx->h, "attr.list", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{s:o}", "names", &array) < 0)
+    if (flux_rpc_get_unpack (f, "{s:o}", "names", &array) < 0)
         goto done;
     zlist_destroy (&ctx->names);
     if (!(ctx->names = zlist_new ()))

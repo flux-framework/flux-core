@@ -166,8 +166,8 @@ static int64_t next_jobid (flux_t *h)
         flux_log_error (h, "next_jobid: flux_rpc");
         goto out;
     }
-    if ((flux_rpc_getf (f, "{s:I}", "value", &ret)) < 0) {
-        flux_log_error (h, "rpc_getf");
+    if ((flux_rpc_get_unpack (f, "{s:I}", "value", &ret)) < 0) {
+        flux_log_error (h, "rpc_get_unpack");
         goto out;
     }
 out:

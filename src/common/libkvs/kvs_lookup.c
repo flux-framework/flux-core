@@ -71,7 +71,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
     char *s;
 
     if (!(s = flux_future_aux_get (f, auxkey))) {
-        if (flux_rpc_getf (f, "{s:o}", "val", &obj) < 0)
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &obj) < 0)
             return -1;
         if (!(s = json_dumps (obj, JSON_COMPACT|JSON_ENCODE_ANY))) {
             errno = EINVAL;
@@ -94,7 +94,7 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     json_t *obj;
     int rc;
 
-    if (flux_rpc_getf (f, "{s:o}", "val", &obj) < 0)
+    if (flux_rpc_get_unpack (f, "{s:o}", "val", &obj) < 0)
         return -1;
     va_start (ap, fmt);
     if ((rc = json_vunpack_ex (obj, NULL, 0, fmt, ap) < 0))

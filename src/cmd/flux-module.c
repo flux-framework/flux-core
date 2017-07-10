@@ -711,7 +711,7 @@ int cmd_debug (optparse_t *p, int argc, char **argv)
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
                              "op", op, "flags", flags)))
         log_err_exit ("%s", topic);
-    if (flux_rpc_getf (f, "{s:i}", "flags", &flags) < 0)
+    if (flux_rpc_get_unpack (f, "{s:i}", "flags", &flags) < 0)
         log_err_exit ("%s", topic);
     printf ("0x%x\n", flags);
     flux_future_destroy (f);
