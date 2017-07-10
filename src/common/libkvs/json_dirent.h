@@ -38,7 +38,7 @@
  * 'type' is one of { "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", "LINKVAL" }.
  * 'arg' is dependent on the type.  This function asserts on failure.
  */
-json_object *dirent_create (char *type, void *arg);
+json_object *dirent_create (const char *type, void *arg);
 
 /* Append a JSON object containing
  *     { "key" : key, "dirent" : dirent }

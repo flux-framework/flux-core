@@ -34,7 +34,7 @@
 
 #include "json_dirent.h"
 
-json_object *dirent_create (char *type, void *arg)
+json_object *dirent_create (const char *type, void *arg)
 {
     json_object *dirent = Jnew ();
     bool valid_type = false;
