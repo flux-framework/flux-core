@@ -304,7 +304,7 @@ void getattr_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *val;
     int flags;
 
-    if (flux_request_decodef (msg, NULL, "{s:s}", "name", &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
     if (attr_get (attrs, name, &val, &flags) < 0)
         goto error;
@@ -327,9 +327,9 @@ void setattr_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *name;
     const char *val;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:s}",       /* SET */
-                              "name", &name,
-                              "value", &val) == 0) {
+    if (flux_request_unpack (msg, NULL, "{s:s s:s}",       /* SET */
+                             "name", &name,
+                             "value", &val) == 0) {
         if (attr_set (attrs, name, val, false) < 0) {
             if (errno != ENOENT)
                 goto error;
@@ -337,9 +337,9 @@ void setattr_request_cb (flux_t *h, flux_msg_handler_t *w,
                 goto error;
         }
     }
-    else if (flux_request_decodef (msg, NULL, "{s:s s:n}",  /* DELETE */
-                                   "name", &name,
-                                   "value") == 0) {
+    else if (flux_request_unpack (msg, NULL, "{s:s s:n}",  /* DELETE */
+                                  "name", &name,
+                                  "value") == 0) {
         if (attr_delete (attrs, name, false) < 0)
             goto error;
     }

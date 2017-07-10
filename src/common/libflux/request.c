@@ -102,8 +102,8 @@ done:
     return rc;
 }
 
-static int flux_request_vdecodef (const flux_msg_t *msg, const char **topic,
-                                  const char *fmt, va_list ap)
+static int flux_request_vunpack (const flux_msg_t *msg, const char **topic,
+                                 const char *fmt, va_list ap)
 {
     const char *ts;
     int rc = -1;
@@ -123,14 +123,14 @@ done:
     return rc;
 }
 
-int flux_request_decodef (const flux_msg_t *msg, const char **topic,
-                          const char *fmt, ...)
+int flux_request_unpack (const flux_msg_t *msg, const char **topic,
+                         const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_request_vdecodef (msg, topic, fmt, ap);
+    rc = flux_request_vunpack (msg, topic, fmt, ap);
     va_end (ap);
     return rc;
 }

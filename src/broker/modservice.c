@@ -132,8 +132,8 @@ static void debug_cb (flux_t *h, flux_msg_handler_t *w,
     int *debug_flags;
     const char *op;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:i}", "op", &op,
-                                                    "flags", &flags) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op,
+                                                     "flags", &flags) < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
         if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {

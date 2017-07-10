@@ -212,8 +212,8 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
     int errnum = 0;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{s:i s:o}", "pid", &pid,
-                                                      "stdin", &o) < 0) {
+    if (flux_request_unpack (msg, NULL, "{s:i s:o}", "pid", &pid,
+                                                     "stdin", &o) < 0) {
         errnum = errno;
         goto out;
     }
@@ -244,9 +244,9 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
     int signum = SIGTERM;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{s:i s?:i}",
-                              "pid", &pid,
-                              "signum", &signum) < 0) {
+    if (flux_request_unpack (msg, NULL, "{s:i s?:i}",
+                             "pid", &pid,
+                             "signum", &signum) < 0) {
         errnum = errno;
         goto out;
     }
@@ -355,10 +355,10 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *cwd = NULL;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{s:o s?:o s?:s}",
-                              "cmdline", &args,
-                              "env", &env,
-                              "cwd", &cwd) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:o s?:o s?:s}",
+                             "cmdline", &args,
+                             "env", &env,
+                             "cwd", &cwd) < 0)
         goto error;
     if (prepare_subprocess (x, args, env, cwd, msg, &p) < 0)
         goto error;

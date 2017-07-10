@@ -1643,9 +1643,9 @@ static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *w,
 {
     const char *s = NULL;
 
-    if (flux_request_decodef (msg, NULL, "{}") < 0)
+    if (flux_request_unpack (msg, NULL, "{}") < 0)
         goto error;
-    if (flux_request_decodef (msg, NULL, "{ s:s }", "msg", &s) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "msg", &s) < 0)
         s = "no reason";
     log_msg_exit ("PANIC: %s", s ? s : "no reason");
     /*NOTREACHED*/
@@ -1686,7 +1686,7 @@ static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
     char *uuid = NULL;
     const char *topic;
 
-    if (flux_request_decodef (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
     if (flux_msg_get_route_first (msg, &uuid) < 0)
         goto error;
@@ -1713,7 +1713,7 @@ static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
     char *uuid = NULL;
     const char *topic;
 
-    if (flux_request_decodef (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
     if (flux_msg_get_route_first (msg, &uuid) < 0)
         goto error;

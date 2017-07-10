@@ -46,7 +46,7 @@ void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
     uint32_t nodeid = 0;
     int flags = 0;
 
-    if (flux_request_decodef (msg, NULL, "{}") < 0
+    if (flux_request_unpack (msg, NULL, "{}") < 0
             || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
         errnum = errno;
         goto done;
@@ -107,7 +107,7 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int errnum = 0;
 
-    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+    if (flux_request_unpack (msg, NULL, "{ ! }") < 0) {
         errnum = errno;
         goto done;
     }

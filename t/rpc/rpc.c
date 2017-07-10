@@ -11,7 +11,7 @@ void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int i;
 
-    if (flux_request_decodef (msg, NULL, "{s:i}", "n", &i) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:i}", "n", &i) < 0)
         flux_respond (h, msg, errno, NULL);
     else
         flux_respondf (h, msg, "{s:i}", "n", i + 1);
@@ -99,7 +99,7 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int errnum = 0;
 
-    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+    if (flux_request_unpack (msg, NULL, "{ ! }") < 0) {
         errnum = errno;
         goto done;
     }

@@ -640,9 +640,9 @@ static void content_backing_request (flux_t *h, flux_msg_handler_t *w,
     int rc = -1;
     int backing;
 
-    if (flux_request_decodef (msg, NULL, "{ s:b s:s }",
-                              "backing", &backing,
-                              "name", &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:b s:s }",
+                             "backing", &backing,
+                             "name", &name) < 0)
         goto done;
     if (cache->rank != 0) {
         errno = EINVAL;

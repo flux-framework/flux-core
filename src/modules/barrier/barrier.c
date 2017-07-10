@@ -197,11 +197,11 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *name;
     int count, nprocs, internal;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:i s:i s:b !}",
-                              "name", &name,
-                              "count", &count,
-                              "nprocs", &nprocs,
-                              "internal", &internal) < 0
+    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:b !}",
+                             "name", &name,
+                             "count", &count,
+                             "nprocs", &nprocs,
+                             "internal", &internal) < 0
                 || flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         goto done;

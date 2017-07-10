@@ -215,7 +215,7 @@ static void lookup (flux_t *h, flux_msg_handler_t *w,
     uint32_t userid;
     struct user *up;
 
-    if (flux_request_decodef (msg, NULL, "{s:i}", "userid", &userid) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:i}", "userid", &userid) < 0)
         goto error;
     if (!(up = user_lookup (ctx, userid))) {
         if (ctx->default_rolemask != FLUX_ROLE_NONE) {
@@ -240,9 +240,9 @@ static void addrole (flux_t *h, flux_msg_handler_t *w,
     uint32_t userid, rolemask;
     struct user *up;
 
-    if (flux_request_decodef (msg, NULL, "{s:i s:i}",
-                              "userid", &userid,
-                              "rolemask", &rolemask) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:i s:i}",
+                             "userid", &userid,
+                             "rolemask", &rolemask) < 0)
         goto error;
     if (!(up = user_lookup (ctx, userid))) {
         if (rolemask == FLUX_ROLE_NONE)
@@ -271,9 +271,9 @@ static void delrole (flux_t *h, flux_msg_handler_t *w,
     uint32_t userid, rolemask;
     struct user *up;
 
-    if (flux_request_decodef (msg, NULL, "{s:i s:i}",
-                              "userid", &userid,
-                              "rolemask", &rolemask) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:i s:i}",
+                             "userid", &userid,
+                             "rolemask", &rolemask) < 0)
         goto error;
     if (!(up = user_lookup (ctx, userid)))
         goto error;

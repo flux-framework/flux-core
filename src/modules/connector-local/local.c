@@ -449,7 +449,7 @@ int sub_request (client_t *c, const flux_msg_t *msg, bool subscribe)
     const char *topic;
     int rc = -1;
 
-    if (flux_request_decodef (msg, NULL, "{s:s}", "topic", &topic) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "topic", &topic) < 0)
         goto done;
     if (subscribe)
         rc = client_subscribe (c, topic);

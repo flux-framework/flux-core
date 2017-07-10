@@ -377,16 +377,16 @@ static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
 {
     int walk_topology = ctx->walk_topology;
 
-    if (flux_request_decodef (msg, NULL, "{}") < 0) {
-        flux_log_error (h, "%s: flux_request_decodef", __FUNCTION__);
+    if (flux_request_unpack (msg, NULL, "{}") < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return (-1);
     }
 
     /*
      *  Set ctx->walk_topology to value in payload, if given.
      */
-    if (!flux_request_decodef (msg, NULL, "{ s:b }",
-                               "walk_topology", &walk_topology))
+    if (!flux_request_unpack (msg, NULL, "{ s:b }",
+                              "walk_topology", &walk_topology))
         ctx->walk_topology = walk_topology;
 
     return (0);

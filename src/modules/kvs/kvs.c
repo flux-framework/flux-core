@@ -951,8 +951,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
     int rootseq;
     wait_t *wait = NULL;
 
-    if (flux_request_decodef (msg, NULL, "{ s:i }",
-                              "rootseq", &rootseq) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:i }",
+                             "rootseq", &rootseq) < 0)
         goto error;
     if (ctx->rootseq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
