@@ -116,10 +116,10 @@ MAN3_FILES_SECONDARY = \
 	flux_future_aux_get.3 \
 	flux_future_set_flux.3 \
 	flux_future_get_flux.3 \
-	flux_rpcf.3 \
+	flux_rpc_pack.3 \
 	flux_rpc_raw.3 \
 	flux_rpc_get.3 \
-	flux_rpc_getf.3 \
+	flux_rpc_get_unpack.3 \
 	flux_rpc_get_raw.3 \
 	flux_kvs_lookupat.3 \
 	flux_kvs_lookup_get.3 \
@@ -216,10 +216,10 @@ flux_future_aux_set.3: flux_future_create.3
 flux_future_aux_get.3: flux_future_create.3
 flux_future_set_flux.3: flux_future_create.3
 flux_future_get_flux.3: flux_future_create.3
-flux_rpcf.3: flux_rpc.3
+flux_rpc_pack.3: flux_rpc.3
 flux_rpc_raw.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
-flux_rpc_getf.3: flux_rpc.3
+flux_rpc_get_unpack.3: flux_rpc.3
 flux_rpc_get_raw.3: flux_rpc.3
 flux_kvs_lookupat.3: flux_kvs_lookup.3
 flux_kvs_get.3: flux_kvs_lookup.3
