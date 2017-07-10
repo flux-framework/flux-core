@@ -317,9 +317,10 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
 
 
     /* Generate reply with new jobid */
-    if (flux_respondf (h, msg, "{s:I,s:s,s:s}",
-                "jobid", id, "state", state, "kvs_path", kvs_path) < 0)
-        flux_log_error (h, "flux_respondf");
+    if (flux_respond_pack (h, msg, "{s:I,s:s,s:s}", "jobid", id,
+                                                    "state", state,
+                                                    "kvs_path", kvs_path) < 0)
+        flux_log_error (h, "flux_respond_pack");
 out:
     free (kvs_path);
 }

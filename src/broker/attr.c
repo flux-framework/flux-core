@@ -312,7 +312,9 @@ void getattr_request_cb (flux_t *h, flux_msg_handler_t *w,
         errno = ENOENT;
         goto error;
     }
-    if (flux_respondf (h, msg, "{s:s s:i}", "value", val, "flags", flags) < 0)
+    if (flux_respond_pack (h, msg, "{s:s s:i}",
+                                   "value", val,
+                                   "flags", flags) < 0)
         FLUX_LOG_ERROR (h);
     return;
 error:
@@ -379,7 +381,7 @@ void lsattr_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
         name = attr_next (attrs);
     }
-    if (flux_respondf (h, msg, "{s:O}", "names", names) < 0)
+    if (flux_respond_pack (h, msg, "{s:O}", "names", names) < 0)
         FLUX_LOG_ERROR (h);
     json_decref (names);
     return;

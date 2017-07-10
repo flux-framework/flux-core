@@ -717,13 +717,13 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
         ctx->sync_epsilon = epsilon;
 
     if (ctx->sync_event) {
-        if (flux_respondf (h, msg, "{ s:s s:f }",
-                           "sync_event", ctx->sync_event,
-                           "sync_epsilon", ctx->sync_epsilon) < 0)
-            flux_log_error (h, "cron.request: flux_respondf");
+        if (flux_respond_pack (h, msg, "{ s:s s:f }",
+                               "sync_event", ctx->sync_event,
+                               "sync_epsilon", ctx->sync_epsilon) < 0)
+            flux_log_error (h, "cron.request: flux_respond_pack");
     } else {
-        if (flux_respondf (h, msg, "{ s:b }", "sync_disabled", true) < 0)
-            flux_log_error (h, "cron.request: flux_respondf");
+        if (flux_respond_pack (h, msg, "{ s:b }", "sync_disabled", true) < 0)
+            flux_log_error (h, "cron.request: flux_respond_pack");
     }
     return;
 

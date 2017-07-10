@@ -583,9 +583,9 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
         goto error;
     }
-    if (flux_respondf (h, msg, "{ s:i s:s# }",
-                       "seq", seq,
-                       "buf", buf, len) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:s# }",
+                                   "seq", seq,
+                                   "buf", buf, len) < 0)
         goto error;
     return;
 

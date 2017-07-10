@@ -518,8 +518,9 @@ static void topo_request_cb (flux_t *h,
         errno = EAGAIN;
         goto done;
     } else {
-        if (flux_respondf (h, msg, "{ s:s# }", "topology", buffer, buflen) < 0) {
-            flux_log_error (h, "%s: flux_respondf", __FUNCTION__);
+        if (flux_respond_pack (h, msg, "{ s:s# }",
+                               "topology", buffer, buflen) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             goto done;
         }
     }

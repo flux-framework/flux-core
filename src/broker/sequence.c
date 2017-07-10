@@ -139,9 +139,9 @@ static int handle_seq_destroy (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
         return (-1);
     if (seq_destroy (s, name) < 0)
         return (-1);
-    return flux_respondf (h, msg, "{ s:s s:b }",
-                          "name", name,
-                          "destroyed", true);
+    return flux_respond_pack (h, msg, "{ s:s s:b }",
+                              "name", name,
+                              "destroyed", true);
 }
 
 static int handle_seq_set (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
@@ -160,10 +160,10 @@ static int handle_seq_set (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
     else if (seq_set (s, name, v) < 0)
         return (-1);
 
-    if (flux_respondf (h, msg, "{ s:s s:b s:I }",
-                       "name", name,
-                       "set", true,
-                       "value", v) < 0)
+    if (flux_respond_pack (h, msg, "{ s:s s:b s:I }",
+                           "name", name,
+                           "set", true,
+                           "value", v) < 0)
         return (-1);
 
     return (0);
@@ -196,14 +196,14 @@ static int handle_seq_fetch (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
     }
 
     if (create && created)
-        return flux_respondf (h, msg, "{ s:s s:I s:b }",
-                              "name", name,
-                              "value", v,
-                              "created", true);
+        return flux_respond_pack (h, msg, "{ s:s s:I s:b }",
+                                  "name", name,
+                                  "value", v,
+                                  "created", true);
 
-    return flux_respondf (h, msg, "{ s:s s:I }",
-                          "name", name,
-                          "value", v);
+    return flux_respond_pack (h, msg, "{ s:s s:I }",
+                              "name", name,
+                              "value", v);
 }
 
 static void sequence_request_cb (flux_t *h, flux_msg_handler_t *w,

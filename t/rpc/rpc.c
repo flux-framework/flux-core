@@ -14,7 +14,7 @@ void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_request_unpack (msg, NULL, "{s:i}", "n", &i) < 0)
         flux_respond (h, msg, errno, NULL);
     else
-        flux_respondf (h, msg, "{s:i}", "n", i + 1);
+        flux_respond_pack (h, msg, "{s:i}", "n", i + 1);
 }
 
 /* request nodeid and flags returned in response */
@@ -107,7 +107,7 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
     if (errnum)
         (void)flux_respond (h, msg, errnum, NULL);
     else
-        (void)flux_respondf (h, msg, "{}");
+        (void)flux_respond_pack (h, msg, "{}");
 }
 
 static struct flux_msg_handler_spec htab[] = {

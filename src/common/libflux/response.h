@@ -48,8 +48,8 @@ int flux_respond (flux_t *h, const flux_msg_t *request,
  * payload directly.
  * All errors in this function are fatal - see flux_fatal_set().
  */
-int flux_respondf (flux_t *h, const flux_msg_t *request,
-                   const char *fmt, ...);
+int flux_respond_pack (flux_t *h, const flux_msg_t *request,
+                       const char *fmt, ...);
 
 
 /* Create a response to the provided request message with optional raw payload.

@@ -58,8 +58,8 @@ void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
     }
 
 done:
-    (void)flux_respondf (h, msg, "{ s:i s:i s:i }", "errnum", errnum,
-                         "nodeid", nodeid, "flags", flags);
+    (void)flux_respond_pack (h, msg, "{ s:i s:i s:i }", "errnum", errnum,
+                             "nodeid", nodeid, "flags", flags);
 }
 
 /* request payload echoed in response */
@@ -116,7 +116,7 @@ done:
     if (errnum)
         (void)flux_respond (h, msg, errnum, NULL);
     else
-        (void)flux_respondf (h, msg, "{}");
+        (void)flux_respond_pack (h, msg, "{}");
 }
 
 static struct flux_msg_handler_spec htab[] = {

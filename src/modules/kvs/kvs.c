@@ -960,9 +960,9 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
         wait_addqueue (ctx->watchlist, wait);
         return; /* stall */
     }
-    if (flux_respondf (h, msg, "{ s:i s:s }",
-                       "rootseq", ctx->rootseq,
-                       "rootdir", ctx->rootdir) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:s }",
+                           "rootseq", ctx->rootseq,
+                           "rootdir", ctx->rootdir) < 0)
         goto error;
     return;
 
@@ -978,9 +978,9 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respondf (h, msg, "{ s:i s:s }",
-                       "rootseq", ctx->rootseq,
-                       "rootdir", ctx->rootdir) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:s }",
+                           "rootseq", ctx->rootseq,
+                           "rootdir", ctx->rootdir) < 0)
         goto error;
     return;
 

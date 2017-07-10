@@ -722,11 +722,11 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respondf (h, msg, "{ s:i s:i s:i s:i}",
-                       "count", zhash_size (cache->entries),
-                       "valid", cache->acct_valid,
-                       "dirty", cache->acct_dirty,
-                       "size", cache->acct_size) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i}",
+                           "count", zhash_size (cache->entries),
+                           "valid", cache->acct_valid,
+                           "dirty", cache->acct_dirty,
+                           "size", cache->acct_size) < 0)
         flux_log_error (h, "content stats");
     return;
 error:
