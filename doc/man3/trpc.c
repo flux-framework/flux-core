@@ -10,8 +10,8 @@ int main (int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_rpcf (h, "attr.get", FLUX_NODEID_ANY, 0,
-		        "{s:s}", "name", "rank")))
+    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0,
+		             "{s:s}", "name", "rank")))
         log_err_exit ("flux_rpcf");
 
     if (flux_rpc_getf (f, "{s:s}", "value", &rankstr) < 0)

@@ -14,8 +14,8 @@ enum {
 flux_future_t *flux_rpc (flux_t *h, const char *topic, const char *json_str,
                          uint32_t nodeid, int flags);
 
-flux_future_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
-                          int flags, const char *fmt, ...);
+flux_future_t *flux_rpc_pack (flux_t *h, const char *topic, uint32_t nodeid,
+                              int flags, const char *fmt, ...);
 
 flux_future_t *flux_rpc_raw (flux_t *h, const char *topic,
                              const void *data, int len,

@@ -343,13 +343,13 @@ static int64_t next_cronid (flux_t *h)
     int64_t ret = (int64_t) -1;
     flux_future_t *f;
 
-    if (!(f = flux_rpcf (h, "seq.fetch", 0, 0,
-                           "{ s:s s:i s:i s:b }",
-                           "name", "cron",
-                           "preincrement", 1,
-                           "postincrement", 0,
-                           "create", true))) {
-        flux_log_error (h, "flux_rpcf");
+    if (!(f = flux_rpc_pack (h, "seq.fetch", 0, 0,
+                             "{ s:s s:i s:i s:b }",
+                             "name", "cron",
+                             "preincrement", 1,
+                             "postincrement", 0,
+                             "create", true))) {
+        flux_log_error (h, "flux_rpc_pack");
         goto out;
     }
 

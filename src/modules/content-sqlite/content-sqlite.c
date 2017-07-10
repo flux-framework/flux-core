@@ -393,10 +393,10 @@ int register_backing_store (flux_t *h, bool value, const char *name)
     int saved_errno = 0;
     int rc = -1;
 
-    if (!(f = flux_rpcf (h, "content.backing", FLUX_NODEID_ANY, 0,
-                           "{ s:b s:s }",
-                           "backing", value,
-                           "name", name)))
+    if (!(f = flux_rpc_pack (h, "content.backing", FLUX_NODEID_ANY, 0,
+                             "{ s:b s:s }",
+                             "backing", value,
+                             "name", name)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;

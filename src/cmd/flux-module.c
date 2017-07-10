@@ -708,8 +708,8 @@ int cmd_debug (optparse_t *p, int argc, char **argv)
         op = "setbit";
         flags = strtoul (optparse_get_str (p, "setbit", NULL), NULL, 0);
     }
-    if (!(f = flux_rpcf (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
-                           "op", op, "flags", flags)))
+    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0, "{s:s s:i}",
+                             "op", op, "flags", flags)))
         log_err_exit ("%s", topic);
     if (flux_rpc_getf (f, "{s:i}", "flags", &flags) < 0)
         log_err_exit ("%s", topic);

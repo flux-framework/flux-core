@@ -36,9 +36,9 @@
 
 flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
 {
-    return flux_rpcf (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i}",
-                                                        "key", key,
-                                                        "flags", flags);
+    return flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i}",
+                                                            "key", key,
+                                                            "flags", flags);
 }
 
 flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
@@ -55,10 +55,10 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
             errno = EINVAL;
             return NULL;
         }
-        f = flux_rpcf (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i s:O}",
-                                                         "key", key,
-                                                         "flags", flags,
-                                                         "rootdir", obj);
+        f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i s:O}",
+                                                             "key", key,
+                                                             "flags", flags,
+                                                             "rootdir", obj);
     }
     json_decref (obj);
     return f;

@@ -284,11 +284,11 @@ done:
     return f;
 }
 
-static flux_future_t *flux_vrpcf (flux_t *h,
-                                  const char *topic,
-                                  uint32_t nodeid,
-                                  int flags,
-                                  const char *fmt, va_list ap)
+static flux_future_t *flux_rpc_vpack (flux_t *h,
+                                      const char *topic,
+                                      uint32_t nodeid,
+                                      int flags,
+                                      const char *fmt, va_list ap)
 {
     flux_msg_t *msg;
     flux_future_t *f = NULL;
@@ -303,14 +303,14 @@ done:
     return f;
 }
 
-flux_future_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
-                          int flags, const char *fmt, ...)
+flux_future_t *flux_rpc_pack (flux_t *h, const char *topic, uint32_t nodeid,
+                              int flags, const char *fmt, ...)
 {
     va_list ap;
     flux_future_t *f;
 
     va_start (ap, fmt);
-    f = flux_vrpcf (h, topic, nodeid, flags, fmt, ap);
+    f = flux_rpc_vpack (h, topic, nodeid, flags, fmt, ap);
     va_end (ap);
     return f;
 }

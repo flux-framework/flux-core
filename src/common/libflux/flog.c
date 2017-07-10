@@ -216,8 +216,8 @@ static int dmesg_clear (flux_t *h, int seq)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpcf (h, "log.clear", FLUX_NODEID_ANY, 0,
-                           "{s:i}", "seq", seq)))
+    if (!(f = flux_rpc_pack (h, "log.clear", FLUX_NODEID_ANY, 0,
+                             "{s:i}", "seq", seq)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -229,8 +229,8 @@ done:
 
 static flux_future_t *dmesg_rpc (flux_t *h, int seq, bool follow)
 {
-    return flux_rpcf (h, "log.dmesg", FLUX_NODEID_ANY, 0,
-                      "{s:i s:b}", "seq", seq, "follow", follow);
+    return flux_rpc_pack (h, "log.dmesg", FLUX_NODEID_ANY, 0,
+                          "{s:i s:b}", "seq", seq, "follow", follow);
 }
 
 static int dmesg_rpc_get (flux_future_t *f, int *seq, flux_log_f fun, void *arg)

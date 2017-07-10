@@ -281,11 +281,11 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
     assert (batch == 0);
     assert (count > 0);
 
-    if (!(f = flux_rpcf (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
-                           FLUX_RPC_NORESPONSE, "{ s:i s:i }",
-                           "count", count,
-                           "batch", batch)))
-        log_err_exit ("hello: flux_rpcf");
+    if (!(f = flux_rpc_pack (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE, "{ s:i s:i }",
+                             "count", count,
+                             "batch", batch)))
+        log_err_exit ("hello: flux_rpc_pack");
     flux_future_destroy (f);
 }
 

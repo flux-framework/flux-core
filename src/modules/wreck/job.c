@@ -157,11 +157,11 @@ static int64_t next_jobid (flux_t *h)
     int64_t ret = (int64_t) -1;
     flux_future_t *f;
 
-    f = flux_rpcf (h, "seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
-                        "name", "lwj",
-                        "preincrement", 1,
-                        "postincrement", 0,
-                        "create", true);
+    f = flux_rpc_pack (h, "seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
+                       "name", "lwj",
+                       "preincrement", 1,
+                       "postincrement", 0,
+                       "create", true);
     if (f == NULL) {
         flux_log_error (h, "next_jobid: flux_rpc");
         goto out;
@@ -252,7 +252,7 @@ static bool ping_sched (flux_t *h)
 {
     bool retval = false;
     flux_future_t *f;
-    if (!(f = flux_rpcf (h, "sched.ping", 0, 0, "{s:i}", "seq", 0))) {
+    if (!(f = flux_rpc_pack (h, "sched.ping", 0, 0, "{s:i}", "seq", 0))) {
         flux_log_error (h, "ping_sched");
         goto out;
     }

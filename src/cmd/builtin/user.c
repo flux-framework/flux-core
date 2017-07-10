@@ -107,8 +107,8 @@ static void delrole (flux_t *h, uint32_t userid, uint32_t rolemask)
     uint32_t final;
     char s[256];
 
-    f = flux_rpcf (h, "userdb.delrole", FLUX_NODEID_ANY, 0,
-                   "{s:i s:i}", "userid", userid,
+    f = flux_rpc_pack (h, "userdb.delrole", FLUX_NODEID_ANY, 0,
+                       "{s:i s:i}", "userid", userid,
                                 "rolemask", rolemask);
     if (!f)
         log_err_exit ("userdb.delrole");
@@ -130,8 +130,8 @@ static void addrole (flux_t *h, uint32_t userid, uint32_t rolemask)
     uint32_t final;
     char s[256];
 
-    f = flux_rpcf (h, "userdb.addrole", FLUX_NODEID_ANY, 0,
-                   "{s:i s:i}", "userid", userid,
+    f = flux_rpc_pack (h, "userdb.addrole", FLUX_NODEID_ANY, 0,
+                       "{s:i s:i}", "userid", userid,
                                     "rolemask", rolemask);
     if (!f)
         log_err_exit ("userdb.addrole");
@@ -230,8 +230,8 @@ static int internal_user_lookup (optparse_t *p, int ac, char *av[])
         log_msg_exit ("%s: invalid userid", av[n]);
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    f = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
-                   "{s:i}", "userid", userid);
+    f = flux_rpc_pack (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
+                       "{s:i}", "userid", userid);
     if (!f)
         log_err_exit ("userdb.lookup");
     if (flux_rpc_getf (f, "{s:i s:i}", "userid", &userid,

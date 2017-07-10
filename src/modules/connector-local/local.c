@@ -166,8 +166,8 @@ static int lookup_userdb (flux_t *h, uint32_t userid, uint32_t *rolemask)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpcf (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
-                           "{s:i}", "userid", userid)))
+    if (!(f = flux_rpc_pack (h, "userdb.lookup", FLUX_NODEID_ANY, 0,
+                             "{s:i}", "userid", userid)))
         goto done;
     if (flux_rpc_getf (f, "{s:i}", "rolemask", rolemask) < 0)
         goto done;

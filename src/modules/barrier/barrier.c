@@ -168,12 +168,12 @@ static void send_enter_request (barrier_ctx_t *ctx, barrier_t *b)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpcf (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
-                           FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
-                           "name", b->name,
-                           "count", b->count,
-                           "nprocs", b->nprocs,
-                           "internal", true))) {
+    if (!(f = flux_rpc_pack (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
+                             "name", b->name,
+                             "count", b->count,
+                             "nprocs", b->nprocs,
+                             "internal", true))) {
         flux_log_error (ctx->h, "sending barrier.enter request");
         goto done;
     }
