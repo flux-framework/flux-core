@@ -270,9 +270,9 @@ static int exit_event_send (flux_t *h, const char *name, int errnum)
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!(msg = flux_event_encodef ("barrier.exit", "{s:s s:i}",
-                                    "name", name,
-                                    "errnum", errnum)))
+    if (!(msg = flux_event_pack ("barrier.exit", "{s:s s:i}",
+                                 "name", name,
+                                 "errnum", errnum)))
         goto done;
     if (flux_send (h, msg, 0) < 0)
         goto done;

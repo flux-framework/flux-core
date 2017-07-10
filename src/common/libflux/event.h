@@ -31,7 +31,7 @@ flux_msg_t *flux_event_encode (const char *topic, const char *json_str);
  * jansson pack style variable arguments for encoding the JSON object
  * payload directly.  Returns message or NULL on failure with errno set.
  */
-flux_msg_t *flux_event_encodef (const char *topic, const char *fmt, ...);
+flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...);
 
 #endif /* !FLUX_CORE_EVENT_H */
 

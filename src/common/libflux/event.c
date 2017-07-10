@@ -137,8 +137,8 @@ error:
     return NULL;
 }
 
-static flux_msg_t *flux_event_vencodef (const char *topic,
-                                        const char *fmt, va_list ap)
+static flux_msg_t *flux_event_vpack (const char *topic,
+                                     const char *fmt, va_list ap)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
@@ -151,13 +151,13 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_event_encodef (const char *topic, const char *fmt, ...)
+flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...)
 {
     flux_msg_t *msg;
     va_list ap;
 
     va_start (ap, fmt);
-    msg = flux_event_vencodef (topic, fmt, ap);
+    msg = flux_event_vpack (topic, fmt, ap);
     va_end (ap);
     return msg;
 }

@@ -200,8 +200,8 @@ static void send_create_event (flux_t *h, int64_t id,
                                const char *path, char *topic)
 {
     flux_msg_t *msg;
-    msg = flux_event_encodef (topic, "{s:I,s:s}",
-                              "lwj", id, "kvs_path", path);
+    msg = flux_event_pack (topic, "{s:I,s:s}",
+                          "lwj", id, "kvs_path", path);
     if (msg == NULL) {
         flux_log_error (h, "failed to create state change event");
         return;

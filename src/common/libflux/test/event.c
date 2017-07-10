@@ -46,8 +46,8 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
 
     /* formatted payload */
-    ok ((msg = flux_event_encodef ("foo.bar", "{s:i}", "foo", 42)) != NULL,
-        "flux_event_encodef packed payload object");
+    ok ((msg = flux_event_pack ("foo.bar", "{s:i}", "foo", 42)) != NULL,
+        "flux_event_pack packed payload object");
     i = 0;
     ok (flux_event_unpack (msg, &topic, "{s:i}", "foo", &i) == 0,
         "flux_event_unpack unpacked payload object");

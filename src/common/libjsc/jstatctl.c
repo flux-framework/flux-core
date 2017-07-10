@@ -669,8 +669,8 @@ static int send_state_event (flux_t *h, job_state_t st, int64_t j)
                         jsc_job_num2state (st));
         goto done;
     }
-    if ((msg = flux_event_encodef (topic, "{ s:I }", "lwj", j)) == NULL) {
-        flux_log_error (h, "flux_event_encodef");
+    if ((msg = flux_event_pack (topic, "{ s:I }", "lwj", j)) == NULL) {
+        flux_log_error (h, "flux_event_pack");
         goto done;
     }
     if (flux_send (h, msg, 0) < 0)

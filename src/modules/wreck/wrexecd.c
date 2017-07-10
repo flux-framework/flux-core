@@ -1158,10 +1158,10 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
         goto out;
     }
 
-    if ((msg = flux_event_encodef (topic, "{ s:I, s:s }",
-                                   "lwj", ctx->id,
-                                   "kvs_path", ctx->kvspath)) == NULL) {
-        wlog_err (ctx, "flux_event_encodef: %s", flux_strerror (errno));
+    if ((msg = flux_event_pack (topic, "{ s:I, s:s }",
+                                "lwj", ctx->id,
+                                "kvs_path", ctx->kvspath)) == NULL) {
+        wlog_err (ctx, "flux_event_pack: %s", flux_strerror (errno));
         goto out;
     }
 

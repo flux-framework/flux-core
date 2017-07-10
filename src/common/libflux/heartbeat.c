@@ -36,7 +36,7 @@ flux_msg_t *flux_heartbeat_encode (int epoch)
 {
     flux_msg_t *msg = NULL;
 
-    if (!(msg = flux_event_encodef ("hb", "{ s:i }", "epoch", epoch)))
+    if (!(msg = flux_event_pack ("hb", "{ s:i }", "epoch", epoch)))
         return NULL;
     return msg;
 }
