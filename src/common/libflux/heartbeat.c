@@ -46,7 +46,7 @@ int flux_heartbeat_decode (const flux_msg_t *msg, int *epoch)
     const char *topic_str;
     int rc = -1;
 
-    if (flux_event_decodef (msg, &topic_str, "{ s:i }", "epoch", epoch) < 0)
+    if (flux_event_unpack (msg, &topic_str, "{ s:i }", "epoch", epoch) < 0)
         goto done;
     if (strcmp (topic_str, "hb") != 0) {
         errno = EPROTO;

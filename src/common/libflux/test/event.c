@@ -49,8 +49,8 @@ int main (int argc, char *argv[])
     ok ((msg = flux_event_encodef ("foo.bar", "{s:i}", "foo", 42)) != NULL,
         "flux_event_encodef packed payload object");
     i = 0;
-    ok (flux_event_decodef (msg, &topic, "{s:i}", "foo", &i) == 0,
-        "flux_event_decodef unpacked payload object");
+    ok (flux_event_unpack (msg, &topic, "{s:i}", "foo", &i) == 0,
+        "flux_event_unpack unpacked payload object");
     ok (i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
         "unpacked payload matched packed");
     flux_msg_destroy (msg);

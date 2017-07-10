@@ -1013,12 +1013,12 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
 
-    if (flux_event_decodef (msg, NULL, "{ s:I }", "lwj", &jobid) < 0) {
+    if (flux_event_unpack (msg, NULL, "{ s:I }", "lwj", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
 
-    if (!flux_event_decodef (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
+    if (!flux_event_unpack (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
         if (jscctx_add_jobid_path (getctx (h), jobid, kvs_path) < 0)
             flux_log_error (h, "jscctx_add_jobid_path");
     }

@@ -292,9 +292,9 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *w,
     const char *key;
     flux_msg_t *req;
 
-    if (flux_event_decodef (msg, NULL, "{s:s s:i !}",
-                            "name", &name,
-                            "errnum", &errnum) < 0) {
+    if (flux_event_unpack (msg, NULL, "{s:s s:i !}",
+                           "name", &name,
+                           "errnum", &errnum) < 0) {
         flux_log_error (h, "%s: decoding event", __FUNCTION__);
         return;
     }
