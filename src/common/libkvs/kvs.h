@@ -68,10 +68,6 @@ int kvs_commit_finish (flux_future_t *f);
  * call with identical arguments.  It is internally optimized to minimize
  * the work that needs to be done.  Once the call returns, all changes
  * from participating tasks are available to all tasks.
- * Note:  if operations were associated with the named fence using
- * kvs_fence_set_context(), only those operations become part of the fence;
- * otherwise fence behavior is like kvs_commit(): all anonymous operations
- * queued in the handle become part of the fence.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);
@@ -83,13 +79,6 @@ int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);
 flux_future_t *kvs_fence_begin (flux_t *h, const char *name,
                                 int nprocs, int flags);
 int kvs_fence_finish (flux_future_t *f);
-
-/* Operations (put, unlink, symlink, mkdir) may be associated with a named
- * fence by setting the fence context to that name before issuing them.
- * When the fence context is clear (the default), operations are anonymous.
- */
-void kvs_fence_set_context (flux_t *h, const char *name);
-void kvs_fence_clear_context (flux_t *h);
 
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.

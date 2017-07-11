@@ -55,15 +55,12 @@
 
 typedef struct {
     json_object *ops;   /* JSON array of put, unlink, etc operations */
-    zhash_t *fence_ops;
-    json_object *fence_context;
 } kvsctx_t;
 
 static void freectx (void *arg)
 {
     kvsctx_t *ctx = arg;
     if (ctx) {
-        zhash_destroy (&ctx->fence_ops);
         Jput (ctx->ops);
         free (ctx);
     }
@@ -89,13 +86,12 @@ static int kvs_put_dirent (flux_t *h, const char *key, json_object *dirent)
 {
     kvsctx_t *ctx = getctx (h);
     int rc = -1;
-    json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
         goto done;
     }
-    dirent_append (ops, key, dirent);
+    dirent_append (&ctx->ops, key, dirent);
     rc = 0;
 done:
     return rc;
@@ -226,7 +222,6 @@ int kvs_symlink (flux_t *h, const char *key, const char *target)
 {
     kvsctx_t *ctx = getctx (h);
     json_object *val = NULL;
-    json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key || !target) {
         errno = EINVAL;
@@ -236,7 +231,7 @@ int kvs_symlink (flux_t *h, const char *key, const char *target)
         errno = ENOMEM;
         return -1;
     }
-    dirent_append (ops, key, dirent_create ("LINKVAL", val));
+    dirent_append (&ctx->ops, key, dirent_create ("LINKVAL", val));
     Jput (val);
     return 0;
 }
@@ -246,14 +241,13 @@ int kvs_mkdir (flux_t *h, const char *key)
     int rc = -1;
     kvsctx_t *ctx = getctx (h);
     json_object *val = Jnew ();
-    json_object **ops = ctx->fence_context ? &ctx->fence_context : &ctx->ops;
 
     if (!h || !key) {
         errno = EINVAL;
         goto out;
     }
     rc = 0;
-    dirent_append (ops, key, dirent_create ("DIRVAL", val));
+    dirent_append (&ctx->ops, key, dirent_create ("DIRVAL", val));
 out:
     Jput (val);
     return rc;
@@ -309,20 +303,11 @@ flux_future_t *kvs_fence_begin (flux_t *h, const char *name,
     json_object *in = NULL;
     flux_future_t *f = NULL;
     int saved_errno = errno;
-    json_object *fence_ops = NULL;
 
-    if (ctx->fence_ops)
-        fence_ops = zhash_lookup (ctx->fence_ops, name);
-    if (fence_ops) {
-        if (!(in = kp_tfence_enc (name, nprocs, flags, fence_ops)))
-            goto done;
-        zhash_delete (ctx->fence_ops, name);
-    } else {
-        if (!(in = kp_tfence_enc (name, nprocs, flags, ctx->ops)))
-            goto done;
-        Jput (ctx->ops);
-        ctx->ops = NULL;
-    }
+    if (!(in = kp_tfence_enc (name, nprocs, flags, ctx->ops)))
+        goto done;
+    Jput (ctx->ops);
+    ctx->ops = NULL;
     if (!(f = flux_rpc (h, "kvs.fence", Jtostr (in), FLUX_NODEID_ANY, 0)))
         goto done;
 done:
@@ -335,28 +320,6 @@ done:
 int kvs_fence_finish (flux_future_t *f)
 {
     return flux_future_get (f, NULL);
-}
-
-void kvs_fence_set_context (flux_t *h, const char *name)
-{
-    kvsctx_t *ctx = getctx (h);
-
-    if (name) {
-        if (!ctx->fence_ops && !(ctx->fence_ops = zhash_new ()))
-            oom ();
-        if (!(ctx->fence_context = zhash_lookup (ctx->fence_ops, name))) {
-            ctx->fence_context = Jnew_ar ();
-            if (zhash_insert (ctx->fence_ops, name, ctx->fence_context) < 0)
-                oom ();
-            zhash_freefn (ctx->fence_ops, name, (zhash_free_fn *)Jput);
-        }
-    } else
-        ctx->fence_context = NULL;
-}
-
-void kvs_fence_clear_context (flux_t *h)
-{
-    kvs_fence_set_context (h, NULL);
 }
 
 int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
