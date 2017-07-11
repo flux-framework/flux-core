@@ -1,3 +1,6 @@
+#ifndef _FLUX_KVS_CACHE_H
+#define _FLUX_KVS_CACHE_H
+
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
@@ -83,6 +86,8 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
  * if they meet match criteria.
  */
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg);
+
+#endif /* !_FLUX_KVS_CACHE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -1,3 +1,6 @@
+#ifndef _FLUX_KVS_LOOKUP_H
+#define _FLUX_KVS_LOOKUP_H
+
 #include "cache.h"
 
 typedef struct lookup lookup_t;
@@ -86,6 +89,8 @@ int lookup_set_aux_data (lookup_t *lh, void *data);
  * or otherwise.
  */
 bool lookup (lookup_t *lh);
+
+#endif /* !_FLUX_KVS_LOOKUP_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
