@@ -300,10 +300,9 @@ commit_process_t commit_process (commit_t *c,
              */
             json_object *rootdir;
 
-            /* assert instead of if & error return, we're requiring
-             * caller to use non-public API correctly
-             */
-            assert (!zlist_first (c->item_callback_list));
+            /* Caller didn't call commit_iter_missing_refs() */
+            if (zlist_first (c->item_callback_list))
+                goto stall_load;
 
             c->state = COMMIT_STATE_LOAD_ROOT;
 
@@ -335,10 +334,9 @@ commit_process_t commit_process (commit_t *c,
                 json_object *ops = fence_get_json_ops (c->f);
                 int i, len = json_object_array_length (ops);
 
-                /* assert instead of if & error return, we're requiring
-                 * caller to use non-public API correctly
-                 */
-                assert (!zlist_first (c->item_callback_list));
+                /* Caller didn't call commit_iter_missing_refs() */
+                if (zlist_first (c->item_callback_list))
+                    goto stall_load;
 
                 for (i = 0; i < len; i++) {
                     missing_ref = NULL;
@@ -385,11 +383,6 @@ commit_process_t commit_process (commit_t *c,
              */
             struct cache_entry *hp;
 
-            /* assert instead of if & error return, we're requiring
-             * caller to use non-public API correctly
-             */
-            assert (!zlist_first (c->item_callback_list));
-
             if (commit_unroll (c, current_epoch, c->rootcpy) < 0)
                 c->errnum = errno;
             else if (store_cache (c,
@@ -411,12 +404,15 @@ commit_process_t commit_process (commit_t *c,
             c->state = COMMIT_STATE_PRE_FINISHED;
             c->rootcpy = NULL;
 
-            if (zlist_first (c->item_callback_list))
-                goto stall_store;
-
             /* fallthrough */
         }
         case COMMIT_STATE_PRE_FINISHED:
+            /* If we did not fall through to here, caller didn't call
+             * commit_iter_dirty_cache_entries()
+             */
+            if (zlist_first (c->item_callback_list))
+                goto stall_store;
+
             c->state = COMMIT_STATE_FINISHED;
             /* fallthrough */
         case COMMIT_STATE_FINISHED:
