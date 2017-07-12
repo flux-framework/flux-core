@@ -54,13 +54,7 @@ void fence_destroy (fence_t *f)
     if (f) {
         Jput (f->names);
         Jput (f->ops);
-        if (f->requests) {
-            flux_msg_t *msg;
-            while ((msg = zlist_pop (f->requests)))
-                flux_msg_destroy (msg);
-            /* FIXME: respond with error here? */
-            zlist_destroy (&f->requests);
-        }
+        zlist_destroy (&f->requests);
         free (f);
     }
 }
@@ -138,6 +132,7 @@ int fence_add_request_copy (fence_t *f, const flux_msg_t *request)
         flux_msg_destroy (cpy);
         return -1;
     }
+    zlist_freefn (f->requests, cpy, (zlist_free_fn *)flux_msg_destroy, false);
     return 0;
 }
 
