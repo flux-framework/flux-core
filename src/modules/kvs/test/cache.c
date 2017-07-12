@@ -52,6 +52,14 @@ int main (int argc, char *argv[])
     cache_entry_set_dirty (e1, true);
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry succcessfully set dirty");
+    ok (cache_entry_get_content_store_flag (e1) == false,
+        "cache entry content_store_flag initially false");
+    cache_entry_set_content_store_flag (e1, true);
+    ok (cache_entry_get_content_store_flag (e1) == true,
+        "cache entry succcessfully set content_store_flag to true");
+    cache_entry_set_content_store_flag (e1, false);
+    ok (cache_entry_get_content_store_flag (e1) == false,
+        "cache entry succcessfully set content_store_flag to false");
     ok ((o2 = cache_entry_get_json (e1)) != NULL,
         "json retrieved from cache entry");
     ok (Jget_int (o2, "foo", &i) == true && i == 42,

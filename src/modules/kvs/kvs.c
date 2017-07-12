@@ -51,10 +51,11 @@
 #include "json_util.h"
 
 #include "lookup.h"
+#include "fence.h"
+#include "types.h"
+#include "commit.h"
 
 #define KVS_MAGIC 0xdeadbeef
-
-typedef char href_t[BLOBREF_MAX_STRING_SIZE];
 
 /* Expire cache_entry after 'max_lastuse_age' heartbeats.
  */
@@ -64,23 +65,15 @@ const int max_lastuse_age = 5;
  */
 const bool event_includes_rootdir = true;
 
-/* Statistics gathered for kvs.stats.get, etc.
- */
-typedef struct {
-    int faults;
-    int noop_stores;
-} stats_t;
-
 typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
     href_t rootdir;         /* current root blobref */
     int rootseq;            /* current root version (for ordering) */
-    zhash_t *fences;
-    zlist_t *ready;
+    commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
-    stats_t stats;
+    int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
     int epoch;              /* tracks current heartbeat epoch */
@@ -91,21 +84,6 @@ typedef struct {
     int commit_merge;
     const char *hash_name;
 } kvs_ctx_t;
-
-typedef struct {
-    json_object *ops;
-    zlist_t *requests;
-    json_object *names;
-    int nprocs;
-    int flags;
-    int count;
-    int errnum;
-    kvs_ctx_t *ctx;
-    json_object *rootcpy;   /* working copy of root dir */
-    int blocked:1;
-    int rootcpy_stored:1;
-    href_t newroot;
-} fence_t;
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
 static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
@@ -119,8 +97,7 @@ static void freectx (void *arg)
     kvs_ctx_t *ctx = arg;
     if (ctx) {
         cache_destroy (ctx->cache);
-        zhash_destroy (&ctx->fences);
-        zlist_destroy (&ctx->ready);
+        commit_mgr_destroy (ctx->cm);
         if (ctx->watchlist)
             wait_queue_destroy (ctx->watchlist);
         if (ctx->tok)
@@ -145,11 +122,14 @@ static kvs_ctx_t *getctx (flux_t *h)
         ctx->magic = KVS_MAGIC;
         if (!(r = flux_get_reactor (h)))
             goto error;
+        if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
+            flux_log_error (h, "content.hash");
+            goto error;
+        }
         ctx->cache = cache_create ();
         ctx->watchlist = wait_queue_create ();
-        ctx->fences = zhash_new ();
-        ctx->ready = zlist_new ();
-        if (!ctx->cache || !ctx->watchlist || !ctx->fences || !ctx->ready) {
+        ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, ctx);
+        if (!ctx->cache || !ctx->watchlist || !ctx->cm) {
             errno = ENOMEM;
             goto error;
         }
@@ -170,10 +150,6 @@ static kvs_ctx_t *getctx (flux_t *h)
             flux_watcher_start (ctx->check_w);
         }
         ctx->commit_merge = 1;
-        if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
-            flux_log_error (h, "content.hash");
-            goto error;
-        }
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
@@ -248,7 +224,7 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **
         cache_insert (ctx->cache, ref, hp);
         if (content_load_request_send (ctx, ref, wait ? false : true) < 0)
             flux_log_error (ctx->h, "content_load_request_send");
-        ctx->stats.faults++;
+        ctx->faults++;
     }
     /* If hash entry is incomplete (either created above or earlier),
      * arrange to stall caller if wait_t was provided.
@@ -294,14 +270,13 @@ static void content_store_completion (flux_future_t *f, void *arg)
     (void)content_store_get (f, arg);
 }
 
-static int content_store_request_send (kvs_ctx_t *ctx, const href_t ref,
-                                       json_object *val, bool now)
+static int content_store_request_send (kvs_ctx_t *ctx, json_object *val,
+                                       bool now)
 {
     flux_future_t *f;
     const char *data = Jtostr (val);
     int size = strlen (data) + 1;
 
-    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     if (!(f = flux_rpc_raw (ctx->h, "content.store",
                             data, size, FLUX_NODEID_ANY, 0)))
         goto error;
@@ -317,51 +292,6 @@ error:
     return -1;
 }
 
-/* Store object 'o' under key 'ref' in local cache.
- * If 'wait' is NULL, flush to content cache synchronously; otherwise,
- * do it asynchronously and push wait onto cache object's wait queue.
- * FIXME: asynchronous errors need to be propagated back to caller.
- */
-static int store (kvs_ctx_t *ctx, json_object *o, href_t ref, wait_t *wait)
-{
-    struct cache_entry *hp;
-    const char *s = json_object_to_json_string (o);
-    int rc = -1;
-
-    if (blobref_hash (ctx->hash_name, (uint8_t *)s, strlen (s) + 1,
-                      ref, sizeof (href_t)) < 0) {
-        flux_log_error (ctx->h, "blobref_hash");
-        goto done;
-    }
-    if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        hp = cache_entry_create (NULL);
-        cache_insert (ctx->cache, ref, hp);
-    }
-    if (cache_entry_get_valid (hp)) {
-        ctx->stats.noop_stores++;
-        json_object_put (o);
-    } else {
-        cache_entry_set_json (hp, o);
-        cache_entry_set_dirty (hp, true);
-        if (wait) {
-            if (content_store_request_send (ctx, ref, o, false) < 0) {
-                flux_log_error (ctx->h, "content_store");
-                goto done;
-            }
-        } else {
-            if (content_store_request_send (ctx, ref, o, true) < 0) {
-                flux_log_error (ctx->h, "content_store");
-                goto done;
-            }
-        }
-    }
-    if (wait && cache_entry_get_dirty (hp))
-        cache_entry_wait_notdirty (hp, wait);
-    rc = 0;
-done:
-    return rc;
-}
-
 static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
 {
     if (rootseq == 0 || rootseq > ctx->rootseq) {
@@ -373,218 +303,130 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
     }
 }
 
-/* Store DIRVAL objects, converting them to DIRREFs.
- * Store (large) FILEVAL objects, converting them to FILEREFs.
- * Return false and enqueue wait_t on cache object(s) if any are dirty.
- */
-static int commit_unroll (kvs_ctx_t *ctx, json_object *dir, wait_t *wait)
-{
-    json_object_iter iter;
-    json_object *subdir, *value;
-    const char *s;
-    href_t ref;
-    int rc = -1;
+struct commit_cb_data {
+    kvs_ctx_t *ctx;
+    wait_t *wait;
+};
 
-    json_object_object_foreachC (dir, iter) {
-        if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
-            if (commit_unroll (ctx, subdir, wait) < 0) /* depth first */
-                goto done;
-            json_object_get (subdir);
-            if (store (ctx, subdir, ref, wait) < 0)
-                goto done;
-            json_object_object_add (dir, iter.key,
-                                    dirent_create ("DIRREF", ref));
-        }
-        else if (json_object_object_get_ex (iter.val, "FILEVAL", &value)
-                                && (s = Jtostr (value))
-                                && strlen (s) > BLOBREF_MAX_STRING_SIZE) {
-            json_object_get (value);
-            if (store (ctx, value, ref, wait) < 0)
-                goto done;
-            json_object_object_add (dir, iter.key,
-                                    dirent_create ("FILEREF", ref));
-        }
-    }
-    rc = 0;
-done:
-    return rc;
+static int commit_load_cb (commit_t *c, const char *ref, void *data)
+{
+    struct commit_cb_data *cbd = data;
+
+    assert (!load (cbd->ctx, ref, cbd->wait, NULL));
+    return 0;
 }
 
-/* link (key, dirent) into directory 'dir'.
+/* Flush to content cache asynchronously and push wait onto cache
+ * object's wait queue.  FIXME: asynchronous errors need to be
+ * propagated back to caller.
  */
-static int commit_link_dirent (kvs_ctx_t *ctx, json_object *rootdir,
-                               const char *key, json_object *dirent,
-                               wait_t *wait)
+static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
-    char *cpy = xstrdup (key);
-    char *next, *name = cpy;
-    json_object *dir = rootdir;
-    json_object *o, *subdir = NULL, *subdirent;
-    int rc = -1;
+    struct commit_cb_data *cbd = data;
 
-    /* Special case root
-     */
-    if (strcmp (name, ".") == 0) {
-        errno = EINVAL;
-        goto done;
-    }
-
-    /* This is the first part of a key with multiple path components.
-     * Make sure that it is a directory in DIRVAL form, then recurse
-     * on the remaining path components.
-     */
-    while ((next = strchr (name, '.'))) {
-        *next++ = '\0';
-        if (!json_object_object_get_ex (dir, name, &subdirent)) {
-            if (!dirent) /* key deletion - it doesn't exist so return */
-                goto success;
-            if (!(subdir = json_object_new_object ()))
-                oom ();
-            json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
-            json_object_put (subdir);
-        } else if (json_object_object_get_ex (subdirent, "DIRVAL", &o)) {
-            subdir = o;
-        } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
-            if (!load (ctx, json_object_get_string (o), wait, &subdir))
-                goto success; /* stall */
-            /* do not corrupt store by modify orig. */
-            subdir = json_object_copydir (subdir);
-            json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
-            json_object_put (subdir);
-        } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
-            FASSERT (ctx->h, json_object_get_type (o) == json_type_string);
-            char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
-            if (commit_link_dirent (ctx, rootdir, nkey, dirent, wait) < 0) {
-                free (nkey);
-                goto done;
-            }
-            free (nkey);
-            goto success;
-        } else {
-            if (!dirent) /* key deletion - it doesn't exist so return */
-                goto success;
-            if (!(subdir = json_object_new_object ()))
-                oom ();
-            json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
-            json_object_put (subdir);
+    if (cache_entry_get_content_store_flag (hp)) {
+        if (content_store_request_send (cbd->ctx,
+                                        cache_entry_get_json (hp),
+                                        false) < 0) {
+            flux_log_error (cbd->ctx->h, "content_store");
+            return -1;
         }
-        name = next;
-        dir = subdir;
+        cache_entry_set_content_store_flag (hp, false);
     }
-    /* This is the final path component of the key.  Add it to the directory.
-     */
-    if (dirent)
-        json_object_object_add (dir, name, json_object_get (dirent));
-    else
-        json_object_object_del (dir, name);
-success:
-    rc = 0;
-done:
-    free (cpy);
-    return rc;
+    cache_entry_wait_notdirty (hp, cbd->wait);
+    return 0;
 }
 
 /* Commit all the ops for a particular commit/fence request (rank 0 only).
  * The setroot event will cause responses to be sent to the fence requests
  * and clean up the fence_t state.  This function is idempotent.
- * Error handling: set f->errnum to errno, then let process complete.
  */
-static void commit_apply_fence (fence_t *f)
+static void commit_apply (commit_t *c)
 {
-    kvs_ctx_t *ctx = f->ctx;
+    kvs_ctx_t *ctx = commit_get_aux (c);
     wait_t *wait = NULL;
-    int count;
+    int errnum = 0;
+    commit_process_t ret;
 
-    if (f->errnum)
-        goto done;
-    if (!(wait = wait_create ((wait_cb_f)commit_apply_fence, f))) {
-        f->errnum = errno;
+    if ((ret = commit_process (c,
+                               ctx->epoch,
+                               ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
+        errnum = commit_get_errnum (c);
         goto done;
     }
 
-    /* Make a copy of the root directory.
-     */
-    if (!f->rootcpy_stored && !f->rootcpy) {
-        json_object *rootdir;
-        if (!load (ctx, ctx->rootdir, wait, &rootdir))
-            goto stall;
-        f->rootcpy = json_object_copydir (rootdir);
-    }
+    if (ret == COMMIT_PROCESS_LOAD_MISSING_REFS) {
+        struct commit_cb_data cbd;
 
-    /* Apply each op (e.g. key = val) in sequence to the root copy.
-     * A side effect of walking key paths is to convert DIRREFs to DIRVALs
-     * in the copy. This allows the commit to be self-contained in the rootcpy
-     * until it is unrolled later on.
-     */
-    if (f->ops && !f->rootcpy_stored) {
-        int i, len = json_object_array_length (f->ops);
-        json_object *op, *dirent;
-        const char *key;
-
-        for (i = 0; i < len; i++) {
-            if (!(op = json_object_array_get_idx (f->ops, i))
-                    || !Jget_str (op, "key", &key))
-                continue;
-            dirent = NULL;
-            (void)Jget_obj (op, "dirent", &dirent); /* NULL for unlink */
-            if (commit_link_dirent (ctx, f->rootcpy, key, dirent, wait) < 0) {
-                f->errnum = errno;
-                break;
-            }
-        }
-        if (wait_get_usecount (wait) > 0)
-            goto stall;
-        if (f->errnum != 0)
+        if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
+            errnum = errno;
             goto done;
-    }
+        }
 
-    /* Unroll the root copy.
-     * When a DIRVAL is found, store an object and replace it with a DIRREF.
-     * Finally, store the unrolled root copy as an object and keep its
-     * reference in f->newroot.  Flushes to content cache are asynchronous
-     * but we don't proceed until they are completed.
-     */
-    if (!f->rootcpy_stored) {
-        if (commit_unroll (ctx, f->rootcpy, wait) < 0)
-            f->errnum = errno;
-        else if (store (ctx, f->rootcpy, f->newroot, wait) < 0)
-            f->errnum = errno;
-        f->rootcpy_stored = true; /* cache takes ownership of rootcpy */
-        f->rootcpy = NULL;
-        if (wait_get_usecount (wait) > 0)
-            goto stall;
+        cbd.ctx = ctx;
+        cbd.wait = wait;
+
+        if (commit_iter_missing_refs (c, commit_load_cb, &cbd) < 0) {
+            errnum = errno;
+            goto done;
+        }
+
+        assert (wait_get_usecount (wait) > 0);
+        goto stall;
     }
+    else if (ret == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES) {
+        struct commit_cb_data cbd;
+
+        if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
+            errnum = errno;
+            goto done;
+        }
+
+        cbd.ctx = ctx;
+        cbd.wait = wait;
+
+        if (commit_iter_dirty_cache_entries (c, commit_cache_cb, &cbd) < 0) {
+            errnum = errno;
+            goto done;
+        }
+
+        assert (wait_get_usecount (wait) > 0);
+        goto stall;
+    }
+    /* else ret == COMMIT_PROCESS_FINISHED */
 
     /* This is the transaction that finalizes the commit by replacing
-     * ctx->rootdir with f->newroot, incrementing the root seq,
+     * ctx->rootdir with newroot, incrementing the root seq,
      * and sending out the setroot event for "eventual consistency"
      * of other nodes.
      */
 done:
-    if (f->errnum == 0) {
-        if (Jget_ar_len (f->names, &count) && count > 1) {
+    if (errnum == 0) {
+        fence_t *f = commit_get_fence (c);
+        int count;
+        if (Jget_ar_len (fence_get_json_names (f), &count) && count > 1) {
             int opcount = 0;
-            (void)Jget_ar_len (f->ops, &opcount);
+            (void)Jget_ar_len (fence_get_json_ops (f), &opcount);
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, f->newroot, ctx->rootseq + 1);
-        setroot_event_send (ctx, f->names);
+        setroot (ctx, commit_get_newroot_ref (c), ctx->rootseq + 1);
+        setroot_event_send (ctx, fence_get_json_names (f));
     } else {
+        fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
-                  flux_strerror (f->errnum));
-        error_event_send (ctx, f->names, f->errnum);
+                  flux_strerror (errnum));
+        error_event_send (ctx, fence_get_json_names (f), errnum);
     }
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
-    zlist_remove (ctx->ready, f);
+    commit_mgr_remove_commit (ctx->cm, c);
     return;
 
 stall:
-    f->blocked = 1;
     return;
 }
 
@@ -592,82 +434,23 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    fence_t *f;
-    if ((f = zlist_first (ctx->ready)) && !f->blocked)
+
+    if (commit_mgr_commits_ready (ctx->cm))
         flux_watcher_start (ctx->idle_w);
-}
-
-/* Merge ready commits that are mergeable, where merging consists of
- * popping the "donor" commit off the ready list, and appending its
- * ops to the top commit.  The top commit can be appended to if it
- * hasn't started, or is still building the rootcpy, e.g. stalled
- * walking the namespace.
- *
- * Break when an unmergeable commit is discovered.  We do not wish to
- * merge non-adjacent fences, as it can create undesireable out of
- * order scenarios.  e.g.
- *
- * commit #1 is mergeable:     set A=1
- * commit #2 is non-mergeable: set A=2
- * commit #3 is mergeable:     set A=3
- *
- * If we were to merge commit #1 and commit #3, A=2 would be set after
- * A=3.
- */
-static void commit_merge_all (kvs_ctx_t *ctx)
-{
-    fence_t *f = zlist_first (ctx->ready);
-
-    if (f
-        && f->errnum == 0
-        && !f->rootcpy_stored
-        && !(f->flags & KVS_NO_MERGE)) {
-        fence_t *nf;
-        nf = zlist_pop (ctx->ready);
-        assert (nf == f);
-        while ((nf = zlist_first (ctx->ready))) {
-            int i, len;
-
-            /* We've merged as many as we currently can */
-            if (nf->flags & KVS_NO_MERGE)
-                break;
-
-            /* Fence is mergeable, pop off list */
-            nf = zlist_pop (ctx->ready);
-
-            if (Jget_ar_len (nf->names, &len)) {
-                for (i = 0; i < len; i++) {
-                    const char *name;
-                    if (Jget_ar_str (nf->names, i, &name))
-                        Jadd_ar_str (f->names, name);
-                }
-            }
-            if (Jget_ar_len (nf->ops, &len)) {
-                for (i = 0; i < len; i++) {
-                    json_object *op;
-                    if (Jget_ar_obj (nf->ops, i, &op))
-                        Jadd_ar_obj (f->ops, op);
-                }
-            }
-        }
-        if (zlist_push (ctx->ready, f) < 0)
-            oom ();
-    }
 }
 
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    fence_t *f;
+    commit_t *c;
 
     flux_watcher_stop (ctx->idle_w);
 
-    if ((f = zlist_first (ctx->ready))) {
+    if ((c = commit_mgr_get_ready_commit (ctx->cm))) {
         if (ctx->commit_merge)
-            commit_merge_all (ctx);
-        if (!f->blocked)
-            commit_apply_fence (f);
+            commit_mgr_merge_ready_commits (ctx->cm);
+        commit_apply (c);
     }
 }
 
@@ -1015,116 +798,27 @@ done:
         free (p.sender);
 }
 
-static void fence_destroy (fence_t *f)
+struct finalize_data {
+    kvs_ctx_t *ctx;
+    int errnum;
+};
+
+static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
 {
-    if (f) {
-        Jput (f->names);
-        Jput (f->ops);
-        Jput (f->rootcpy);
-        if (f->requests) {
-            flux_msg_t *msg;
-            while ((msg = zlist_pop (f->requests)))
-                flux_msg_destroy (msg);
-            /* FIXME: respond with error here? */
-            zlist_destroy (&f->requests);
-        }
-        free (f);
-    }
-}
+    struct finalize_data *d = data;
 
-static fence_t *fence_create (kvs_ctx_t *ctx, const char *name, int nprocs,
-                              int flags)
-{
-    fence_t *f;
+    if (flux_respond (d->ctx->h, req, d->errnum, NULL) < 0)
+        flux_log_error (d->ctx->h, "%s", __FUNCTION__);
 
-    if (!(f = calloc (1, sizeof (*f))) || !(f->ops = json_object_new_array ())
-                                       || !(f->requests = zlist_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    f->nprocs = nprocs;
-    f->flags = flags;
-    f->ctx = ctx;
-    f->names = Jnew_ar ();
-    Jadd_ar_str (f->names, name);
-    return f;
-error:
-    fence_destroy (f);
-    return NULL;
-}
-
-static int fence_append_ops (fence_t *f, json_object *ops)
-{
-    json_object *op;
-    int i;
-
-    if (ops) {
-        for (i = 0; i < json_object_array_length (ops); i++) {
-            if ((op = json_object_array_get_idx (ops, i)))
-                if (json_object_array_add (f->ops, Jget (op)) < 0) {
-                    Jput (op);
-                    errno = ENOMEM;
-                    return -1;
-                }
-        }
-    }
     return 0;
 }
 
-static int fence_append_request (fence_t *f, const flux_msg_t *request)
-{
-    flux_msg_t *cpy = flux_msg_copy (request, false);
-    if (!cpy)
-        return -1;
-    if (zlist_push (f->requests, cpy) < 0) {
-        flux_msg_destroy (cpy);
-        return -1;
-    }
-    return 0;
-}
-
-static int fence_add (kvs_ctx_t *ctx, fence_t *f)
-{
-    const char *name;
-
-    if (!Jget_ar_str (f->names, 0, &name)) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (zhash_insert (ctx->fences, name, f) < 0) {
-        errno = EEXIST;
-        goto error;
-    }
-    zhash_freefn (ctx->fences, name, (zhash_free_fn *)fence_destroy);
-    return 0;
-error:
-    return -1;
-}
-
-static fence_t *fence_lookup (kvs_ctx_t *ctx, const char *name)
-{
-    return zhash_lookup (ctx->fences, name);
-}
-
-static void fence_finalize (kvs_ctx_t *ctx, fence_t *f, int errnum)
-{
-    flux_msg_t *msg;
-    const char *name;
-
-    while ((msg = zlist_pop (f->requests))) {
-        if (flux_respond (ctx->h, msg, errnum, NULL) < 0)
-            flux_log_error (ctx->h, "%s", __FUNCTION__);
-        flux_msg_destroy (msg);
-    }
-    if (Jget_ar_str (f->names, 0, &name))
-        zhash_delete (ctx->fences, name);
-}
-
-static void fence_finalize_bynames (kvs_ctx_t *ctx, json_object *names, int errnum)
+static void finalize_fences_bynames (kvs_ctx_t *ctx, json_object *names, int errnum)
 {
     int i, len;
     const char *name;
     fence_t *f;
+    struct finalize_data d = { .ctx = ctx, .errnum = errnum };
 
     if (!Jget_ar_len (names, &len)) {
         flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);
@@ -1135,8 +829,10 @@ static void fence_finalize_bynames (kvs_ctx_t *ctx, json_object *names, int errn
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = fence_lookup (ctx, name)))
-            fence_finalize (ctx, f, errnum);
+        if ((f = commit_mgr_lookup_fence (ctx->cm, name))) {
+            fence_iter_request_copies (f, finalize_fence_req, &d);
+            commit_mgr_remove_fence (ctx->cm, name);
+        }
     }
 }
 
@@ -1152,45 +848,36 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *ops = NULL;
     fence_t *f;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (h, "%s request decode", __FUNCTION__);
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto done;
+    if (!json_str || !(in = Jfromstr (json_str))) {
+        errno = EPROTO;
         goto done;
     }
-    if (!json_str
-        || !(in = Jfromstr (json_str))
-        || kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
+    if (kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
         errno = EPROTO;
-        flux_log_error (h, "%s payload decode", __FUNCTION__);
         goto done;
     }
     /* FIXME: generate a kvs.fence.abort (or similar) if an error
      * occurs after we know the fence name
      */
-    if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs, flags))) {
-            flux_log_error (h, "%s fence_create %s", __FUNCTION__, name);
+    if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
+        if (!(f = fence_create (name, nprocs, flags)))
             goto done;
-        }
-        if (fence_add (ctx, f) < 0) {
-            flux_log_error (h, "%s fence_add %s", __FUNCTION__, name);
+        if (commit_mgr_add_fence (ctx->cm, f) < 0) {
             fence_destroy (f);
             goto done;
         }
     }
     else
-        f->flags |= flags;
+        fence_set_flags (f, fence_get_flags (f) | flags);
 
-    if (fence_append_ops (f, ops) < 0) {
-        flux_log_error (h, "%s fence_append_ops %s", __FUNCTION__, name);
+    if (fence_add_request_data (f, ops) < 0)
         goto done;
-    }
-    f->count++;
-    //flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
-    //          __FUNCTION__, name, f->count, f->nprocs);
-    if (f->count == f->nprocs) {
-        if (zlist_append (ctx->ready, f) < 0)
-            oom ();
-    }
+
+    if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
+        goto done;
+
 done:
     Jput (in);
 }
@@ -1218,29 +905,25 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (!(f = fence_lookup (ctx, name))) {
-        if (!(f = fence_create (ctx, name, nprocs, flags)))
+    if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
+        if (!(f = fence_create (name, nprocs, flags)))
             goto error;
-        if (fence_add (ctx, f) < 0) {
+        if (commit_mgr_add_fence (ctx->cm, f) < 0) {
             fence_destroy (f);
             goto error;
         }
     }
     else
-        f->flags |= flags;
+        fence_set_flags (f, fence_get_flags (f) | flags);
 
-    if (fence_append_request (f, msg) < 0)
+    if (fence_add_request_copy (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (fence_append_ops (f, ops) < 0)
+        if (fence_add_request_data (f, ops) < 0)
             goto error;
-        f->count++;
-        // flux_log (h, LOG_DEBUG, "%s: %s count=%d/%d",
-        //          __FUNCTION__, name, f->count, f->nprocs);
-        if (f->count == f->nprocs) {
-            if (zlist_append (ctx->ready, f) < 0)
-                oom ();
-        }
+
+        if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
+            goto error;
     }
     else {
         flux_future_t *f = flux_rpc (h, "kvs.relayfence", json_str,
@@ -1351,7 +1034,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: kp_terror_dec", __FUNCTION__);
         goto done;
     }
-    fence_finalize_bynames (ctx, names, errnum);
+    finalize_fences_bynames (ctx, names, errnum);
 done:
     Jput (out);
 }
@@ -1403,7 +1086,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
         goto done;
     }
-    fence_finalize_bynames (ctx, names, 0);
+    finalize_fences_bynames (ctx, names, 0);
     /* Copy of root object (corresponding to rootdir blobref) was included
      * in the setroot event as an optimization, since it would otherwise
      * be loaded from the content store on next KVS access - immediate
@@ -1513,8 +1196,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
     Jadd_int (o, "#obj dirty", dirty);
     Jadd_int (o, "#obj incomplete", incomplete);
     Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    Jadd_int (o, "#no-op stores", ctx->stats.noop_stores);
-    Jadd_int (o, "#faults", ctx->stats.faults);
+    Jadd_int (o, "#no-op stores", commit_mgr_get_noop_stores (ctx->cm));
+    Jadd_int (o, "#faults", ctx->faults);
     Jadd_int (o, "store revision", ctx->rootseq);
     rc = 0;
 done:
@@ -1524,12 +1207,17 @@ done:
     Jput (o);
 }
 
+static void stats_clear (kvs_ctx_t *ctx)
+{
+    ctx->faults = 0;
+    commit_mgr_clear_noop_stores (ctx->cm);
+}
+
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-
-    memset (&ctx->stats, 0, sizeof (ctx->stats));
+    stats_clear (ctx);
 }
 
 static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -1537,7 +1225,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
 
-    memset (&ctx->stats, 0, sizeof (ctx->stats));
+    stats_clear (ctx);
 
     if (flux_respond (h, msg, 0, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
@@ -1575,6 +1263,36 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
     }
 }
 
+/* Store initial rootdir in local cache, and flush to content
+ * cache synchronously.
+ */
+static int store_initial_rootdir (kvs_ctx_t *ctx, json_object *o, href_t ref)
+{
+    struct cache_entry *hp;
+    int rc = -1;
+
+    if (json_hash (ctx->hash_name, o, ref) < 0) {
+        flux_log_error (ctx->h, "json_hash");
+        goto done;
+    }
+    if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+        hp = cache_entry_create (NULL);
+        cache_insert (ctx->cache, ref, hp);
+    }
+    if (!cache_entry_get_valid (hp)) {
+        cache_entry_set_json (hp, o);
+        cache_entry_set_dirty (hp, true);
+        if (content_store_request_send (ctx, o, true) < 0) {
+            flux_log_error (ctx->h, "content_store");
+            goto done;
+        }
+    } else
+        json_object_put (o);
+    rc = 0;
+done:
+    return rc;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     kvs_ctx_t *ctx = getctx (h);
@@ -1597,7 +1315,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         json_object *rootdir = Jnew ();
         href_t href;
 
-        if (store (ctx, rootdir, href, NULL) < 0) {
+        if (store_initial_rootdir (ctx, rootdir, href) < 0) {
             flux_log_error (h, "storing root object");
             goto done;
         }

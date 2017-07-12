@@ -33,9 +33,12 @@
 #include <ctype.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/blobref.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+
+#include "types.h"
 
 json_object *json_object_copydir (json_object *dir)
 {
@@ -57,4 +60,14 @@ bool json_compare (json_object *o1, json_object *o2)
     const char *s2 = json_object_to_json_string (o2);
 
     return !strcmp (s1, s2);
+}
+
+int json_hash (const char *hash_name, json_object *o, href_t ref)
+{
+    const char *s = json_object_to_json_string (o);
+
+    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+                      ref, sizeof (href_t)) < 0)
+        return -1;
+    return 0;
 }

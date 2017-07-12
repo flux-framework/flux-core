@@ -1,3 +1,7 @@
+#ifndef _FLUX_KVS_CACHE_H
+#define _FLUX_KVS_CACHE_H
+
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
 
@@ -22,6 +26,13 @@ bool cache_entry_get_valid (struct cache_entry *hp);
  */
 bool cache_entry_get_dirty (struct cache_entry *hp);
 void cache_entry_set_dirty (struct cache_entry *hp, bool val);
+
+/* Get set content store flag, used to internally manage
+ * whether or not content in cache entry has been
+ * stored off node into content store.
+ */
+bool cache_entry_get_content_store_flag (struct cache_entry *hp);
+void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val);
 
 /* Accessors for cache entry data.
  * If non-NULL, set transfers ownership of 'o' to the cache entry.
@@ -82,6 +93,8 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
  * if they meet match criteria.
  */
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg);
+
+#endif /* !_FLUX_KVS_CACHE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
