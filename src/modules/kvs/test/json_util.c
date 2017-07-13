@@ -53,7 +53,7 @@ int main (int argc, char *argv[])
     json_object_object_add (obj, "D", json_object_new_string ("dumdum"));
 
     ok (json_compare (cpy, obj) == false,
-        "json_compare returns true on not duplicate");
+        "json_compare returns false on not duplicate");
 
     ok (json_hash ("sha1", obj, ref) == 0,
         "json_hash works on sha1");
