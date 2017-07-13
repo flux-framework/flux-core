@@ -20,8 +20,9 @@ libkvs_la_SOURCES = \
 	json_dirent.h \
 	kvs_dir.c \
 	kvs_classic.c \
-	kvs_watch.c
-
+	kvs_watch.c \
+	jansson_dirent.c \
+	jansson_dirent.h
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
@@ -32,7 +33,8 @@ fluxcoreinclude_HEADERS = \
 
 TESTS = \
 	test_proto.t \
-	test_dirent.t
+	test_dirent.t \
+	test_jansson_dirent.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -45,6 +47,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libkvs/proto.o \
 	$(top_builddir)/src/common/libkvs/json_dirent.o \
+	$(top_builddir)/src/common/libkvs/jansson_dirent.o \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la
 
@@ -59,3 +62,7 @@ test_proto_t_LDADD = $(test_ldadd)
 test_dirent_t_SOURCES = test/dirent.c
 test_dirent_t_CPPFLAGS = $(test_cppflags)
 test_dirent_t_LDADD = $(test_ldadd)
+
+test_jansson_dirent_t_SOURCES = test/jansson_dirent.c
+test_jansson_dirent_t_CPPFLAGS = $(test_cppflags)
+test_jansson_dirent_t_LDADD = $(test_ldadd)
