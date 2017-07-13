@@ -1,7 +1,8 @@
 #ifndef _FLUX_KVS_CACHE_H
 #define _FLUX_KVS_CACHE_H
 
-#include "src/common/libutil/shortjson.h"
+#include <jansson.h>
+
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
 
@@ -12,7 +13,7 @@ struct cache;
 /* Create/destroy cache entry.
  * If non-NULL, create transfers ownership of 'o' to the cache entry.
  */
-struct cache_entry *cache_entry_create (json_object *o);
+struct cache_entry *cache_entry_create (json_t *o);
 void cache_entry_destroy (void *arg);
 
 /* Return true if cache entry contains valid json.
@@ -38,8 +39,8 @@ void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val);
  * If non-NULL, set transfers ownership of 'o' to the cache entry.
  * An invalid->valid transition runs the entry's wait queue, if any.
  */
-json_object *cache_entry_get_json (struct cache_entry *hp);
-void cache_entry_set_json (struct cache_entry *hp, json_object *o);
+json_t *cache_entry_get_json (struct cache_entry *hp);
+void cache_entry_set_json (struct cache_entry *hp, json_t *o);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
@@ -65,9 +66,9 @@ struct cache_entry *cache_lookup (struct cache *cache,
  * effectively successful if calls to cache_lookup() and
  * cache_entry_get_json() are both successful.
  */
-json_object *cache_lookup_and_get_json (struct cache *cache,
-                                        const char *ref,
-                                        int current_epoch);
+json_t *cache_lookup_and_get_json (struct cache *cache,
+                                   const char *ref,
+                                   int current_epoch);
 
 /* Insert an entry in the cache by blobref 'ref'.
  * Ownership of the cache entry is transferred to the cache.
