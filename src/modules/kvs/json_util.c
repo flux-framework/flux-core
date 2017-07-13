@@ -32,42 +32,44 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 
 #include "types.h"
 
-json_object *json_object_copydir (json_object *dir)
+json_t *json_object_copydir (json_t *dir)
 {
-    json_object *cpy;
-    json_object_iter iter;
+    json_t *cpy;
+    const char *key;
+    json_t *value;
 
-    if (!(cpy = json_object_new_object ()))
+    if (!(cpy = json_object ()))
         oom ();
-    json_object_object_foreachC (dir, iter) {
-        json_object_get (iter.val);
-        json_object_object_add (cpy, iter.key, iter.val);
+
+    json_object_foreach (dir, key, value) {
+        if (json_object_set (cpy, key, value) < 0)
+            oom ();
     }
     return cpy;
 }
 
-bool json_compare (json_object *o1, json_object *o2)
+bool json_compare (json_t *o1, json_t *o2)
 {
-    const char *s1 = json_object_to_json_string (o1);
-    const char *s2 = json_object_to_json_string (o2);
-
-    return !strcmp (s1, s2);
+    return json_equal (o1, o2);
 }
 
-int json_hash (const char *hash_name, json_object *o, href_t ref)
+int json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    const char *s = json_object_to_json_string (o);
-
-    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
-                      ref, sizeof (href_t)) < 0)
-        return -1;
-    return 0;
+    /* Must pass JSON_ENCODE_ANY, json_hash could be done on any object.
+     * Must set JSON_SORT_KEYS, two different objects with different internal
+     * order should map to same reference */
+    char *s = json_dumps (o, JSON_ENCODE_ANY | JSON_SORT_KEYS);
+    int rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+                           ref, sizeof (href_t));
+    free (s);
+    return rc;
 }
