@@ -27,8 +27,8 @@ int lookup_get_errnum (lookup_t *lh);
 
 /* Get resulting value of lookup() after lookup() returns true.  The
  * json object returned gives a reference to the caller and must be
- * json_object_put()'ed to free memory. */
-json_object *lookup_get_value (lookup_t *lh);
+ * json_decref()'ed to free memory. */
+json_t *lookup_get_value (lookup_t *lh);
 
 /* Get missing ref after a lookup stall, missing reference can then be
  * used to load reference into the KVS cache */
