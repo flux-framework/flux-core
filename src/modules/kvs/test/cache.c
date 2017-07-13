@@ -2,8 +2,8 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libtap/tap.h"
 #include "src/modules/kvs/waitqueue.h"
@@ -20,11 +20,12 @@ int main (int argc, char *argv[])
 {
     struct cache *cache;
     struct cache_entry *e1, *e2, *e3, *e4;
-    json_object *o1;
-    json_object *o2;
-    json_object *o3;
+    json_t *o1;
+    json_t *o2;
+    json_t *o3;
+    json_t *o;
     wait_t *w;
-    int count, i;
+    int count;
 
     plan (NO_PLAN);
 
@@ -41,8 +42,8 @@ int main (int argc, char *argv[])
     /* Play with one entry.
      * N.B.: json ref is NOT incremented by create or get_json.
      */
-    o1 = Jnew ();
-    Jadd_int (o1, "foo", 42);
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
     ok ((e1 = cache_entry_create (o1)) != NULL,
         "cache_entry_create works");
     ok (cache_entry_get_valid (e1) == true,
@@ -62,7 +63,9 @@ int main (int argc, char *argv[])
         "cache entry succcessfully set content_store_flag to false");
     ok ((o2 = cache_entry_get_json (e1)) != NULL,
         "json retrieved from cache entry");
-    ok (Jget_int (o2, "foo", &i) == true && i == 42,
+    ok ((o = json_object_get (o2, "foo")) != NULL,
+        "json_object_get success");
+    ok (json_integer_value (o) == 42,
         "expected json object found");
     cache_entry_destroy (e1); /* destroys o1 */
 
@@ -76,8 +79,8 @@ int main (int argc, char *argv[])
         "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e1) == false,
         "cache entry invalid, adding waiter");
-    o1 = Jnew ();
-    Jadd_int (o1, "foo", 42);
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
     cache_entry_wait_valid (e1, w);
     cache_entry_set_json (e1, o1);
     ok (cache_entry_get_valid (e1) == true,
@@ -134,8 +137,8 @@ int main (int argc, char *argv[])
         "cache contains 1 entry");
 
     /* second test w/ entry with json object */
-    o1 = Jnew ();
-    Jadd_int (o1, "foo", 42);
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
     ok ((e3 = cache_entry_create (o1)) != NULL,
         "cache_entry_create works");
     cache_insert (cache, "xxx2", e3);
@@ -145,14 +148,17 @@ int main (int argc, char *argv[])
         "cache_lookup of wrong hash fails");
     ok ((e4 = cache_lookup (cache, "xxx2", 42)) != NULL,
         "cache_lookup of correct hash works (last use=42)");
-    i = 0;
-    ok ((o2 = cache_entry_get_json (e4)) != NULL
-        && Jget_int (o2, "foo", &i) == true && i == 42,
+    ok ((o2 = cache_entry_get_json (e4)) != NULL,
+        "cache_entry_get_json found entry");
+    ok ((o = json_object_get (o2, "foo")) != NULL,
+        "json_object_get success");
+    ok (json_integer_value (o) == 42,
         "expected json object found");
     ok ((o3 = cache_lookup_and_get_json (cache, "xxx2", 0)) != NULL,
         "cache_lookup_and_get_json of correct hash and valid entry works");
-    i = 0;
-    ok (Jget_int (o3, "foo", &i) == true && i == 42,
+    ok ((o = json_object_get (o3, "foo")) != NULL,
+        "json_object_get success");
+    ok (json_integer_value (o) == 42,
         "expected json object found");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
