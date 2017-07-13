@@ -38,7 +38,8 @@ TESTS = \
 	test_cache.t \
 	test_lookup.t \
 	test_fence.t \
-	test_commit.t
+	test_commit.t \
+	test_json_util.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/cache.o \
@@ -82,3 +83,7 @@ test_fence_t_LDADD = $(test_ldadd)
 test_commit_t_SOURCES = test/commit.c
 test_commit_t_CPPFLAGS = $(test_cppflags)
 test_commit_t_LDADD = $(test_ldadd)
+
+test_json_util_t_SOURCES = test/json_util.c
+test_json_util_t_CPPFLAGS = $(test_cppflags)
+test_json_util_t_LDADD = $(test_ldadd)
