@@ -25,32 +25,12 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <getopt.h>
-#include <libgen.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/param.h>
-#include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <ctype.h>
-#include <stdarg.h>
-#include <inttypes.h>
 #include <flux/core.h>
 #include <czmq.h>
 
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/blobref.h"
 
 #include "proto.h"
-#include "json_dirent.h"
 
 
 typedef enum {
@@ -91,16 +71,21 @@ static kvs_watch_ctx_t *getctx (flux_t *h)
     struct flux_match match = FLUX_MATCH_RESPONSE;
 
     if (!ctx) {
-        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx = calloc (1, sizeof (*ctx))))
+            goto nomem;
         if (!(ctx->watchers = zhash_new ()))
-            oom ();
+            goto nomem;
         match.topic_glob = "kvs.watch";
         if (!(ctx->w = flux_msg_handler_create (h, match, watch_response_cb,
                                                                 ctx)))
-            oom ();
+            goto nomem;
         flux_aux_set (h, auxkey, ctx, freectx);
     }
     return ctx;
+nomem:
+    freectx (ctx);
+    errno = ENOMEM;
+    return NULL;
 }
 
 /**
@@ -119,21 +104,31 @@ static kvs_watcher_t *add_watcher (flux_t *h, const char *key, watch_type_t type
                                    uint32_t matchtag, void *fun, void *arg)
 {
     kvs_watch_ctx_t *ctx = getctx (h);
-    kvs_watcher_t *wp = xzmalloc (sizeof (*wp));
+    if (!ctx)
+        return NULL;
+    kvs_watcher_t *wp = calloc (1, sizeof (*wp));
+    if (!wp) {
+        errno = ENOMEM;
+        return NULL;
+    }
     int lastcount = zhash_size (ctx->watchers);
 
     assert (matchtag != FLUX_MATCHTAG_NONE);
     wp->h = h;
-    wp->key = xstrdup (key);
+    if (!(wp->key = strdup (key))) {
+        free (wp);
+        errno = ENOMEM;
+        return NULL;
+    }
     wp->matchtag = matchtag;
     wp->set = fun;
     wp->type = type;
     wp->arg = arg;
 
-    char *k = xasprintf ("%"PRIu32, matchtag);
+    char k[16];
+    snprintf (k, sizeof (k), "%"PRIu32, matchtag);
     zhash_update (ctx->watchers, k, wp);
     zhash_freefn (ctx->watchers, k, destroy_watcher);
-    free (k);
 
     if (lastcount == 0)
         flux_msg_handler_start (ctx->w);
@@ -143,10 +138,11 @@ static kvs_watcher_t *add_watcher (flux_t *h, const char *key, watch_type_t type
 static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
 {
     kvs_watch_ctx_t *ctx = getctx (h);
-    char *k = xasprintf ("%"PRIu32, matchtag);
-    kvs_watcher_t *wp = zhash_lookup (ctx->watchers, k);
-    free (k);
-    return wp;
+    if (!ctx)
+        return NULL;
+    char k[16];
+    snprintf (k, sizeof (k), "%"PRIu32, matchtag);
+    return zhash_lookup (ctx->watchers, k);
 }
 
 int kvs_unwatch (flux_t *h, const char *key)
@@ -156,6 +152,8 @@ int kvs_unwatch (flux_t *h, const char *key)
     json_object *in = NULL;
     int rc = -1;
 
+    if (!ctx)
+        goto done;
     if (!(in = kp_tunwatch_enc (key)))
         goto done;
     if (!(f = flux_rpc (h, "kvs.unwatch", Jtostr (in), FLUX_NODEID_ANY, 0)))
@@ -190,8 +188,11 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, json_object *val)
     switch (wp->type) {
         case WATCH_DIR: {
             kvs_set_dir_f set = wp->set;
-            kvsdir_t *dir = val ? kvsdir_create (h, NULL, wp->key, Jtostr (val))
-                                : NULL;
+            kvsdir_t *dir = NULL;
+            if (val) {
+                if (!(dir = kvsdir_create (h, NULL, wp->key, Jtostr (val))))
+                    goto done;
+            }
             rc = set (wp->key, dir, wp->arg, errnum);
             if (dir)
                 kvsdir_destroy (dir);
@@ -203,6 +204,7 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, json_object *val)
             break;
         }
     }
+done:
     return rc;
 }
 
@@ -330,7 +332,15 @@ int kvs_watch_once (flux_t *h, const char *key, char **valp)
         goto done;
     if (*valp)
         free (*valp);
-    *valp = val ? xstrdup (Jtostr (val)) : NULL;
+    if (val) {
+        char *new = strdup (Jtostr (val));
+        if (!new) {
+            errno = ENOMEM;
+            goto done;
+        }
+        *valp = new;
+    } else
+        *valp = NULL;
     rc = 0;
 done:
     Jput (val);
@@ -345,8 +355,10 @@ int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
     int rc = -1;
 
     va_start (ap, fmt);
-    if (vasprintf (&key, fmt, ap) < 0)
-        oom ();
+    if (vasprintf (&key, fmt, ap) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
     va_end (ap);
 
     if (*dirp) {
@@ -369,8 +381,7 @@ int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
 done:
     if (val)
         json_object_put (val);
-    if (key)
-        free (key);
+    free (key);
     return rc;
 }
 
@@ -402,8 +413,10 @@ int kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg, const char *fmt, ...
     va_list ap;
 
     va_start (ap, fmt);
-    if (vasprintf (&key, fmt, ap) < 0)
-        oom ();
+    if (vasprintf (&key, fmt, ap) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
     va_end (ap);
 
     if (watch_rpc (h, key, &val, KVS_PROTO_READDIR, &matchtag) < 0)
@@ -414,8 +427,7 @@ int kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg, const char *fmt, ...
 done:
     if (val)
         json_object_put (val);
-    if (key)
-        free (key);
+    free (key);
     return rc;
 }
 
