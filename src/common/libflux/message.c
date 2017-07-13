@@ -1025,7 +1025,7 @@ done:
     return rc;
 }
 
-int flux_msg_vset_jsonf (flux_msg_t *msg, const char *fmt, va_list ap)
+int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap)
 {
     json_error_t error;
     char *json_str = NULL;
@@ -1050,13 +1050,13 @@ done:
     return rc;
 }
 
-int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...)
+int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_msg_vset_jsonf (msg, fmt, ap);
+    rc = flux_msg_vpack (msg, fmt, ap);
     va_end (ap);
     return rc;
 }
@@ -1154,7 +1154,7 @@ done:
  * allow msg to be "annotated" with parsed json object for convenience.
  * The message content is otherwise unchanged.
  */
-int flux_msg_vget_jsonf (const flux_msg_t *cmsg, const char *fmt, va_list ap)
+int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
 {
     int rc = -1;
     const char *json_str;
@@ -1182,13 +1182,13 @@ done:
     return rc;
 }
 
-int flux_msg_get_jsonf (const flux_msg_t *msg, const char *fmt, ...)
+int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_msg_vget_jsonf (msg, fmt, ap);
+    rc = flux_msg_vunpack (msg, fmt, ap);
     va_end (ap);
     return rc;
 }

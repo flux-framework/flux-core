@@ -112,27 +112,27 @@ done:
     return rc;
 }
 
-static int flux_rpc_vgetf (flux_future_t *f, const char *fmt, va_list ap)
+static int flux_rpc_get_vunpack (flux_future_t *f, const char *fmt, va_list ap)
 {
     const flux_msg_t *msg;
     int rc = -1;
 
     if (flux_future_get (f, &msg) < 0)
         goto done;
-    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vunpack (msg, fmt, ap) < 0)
         goto done;
     rc = 0;
 done:
     return rc;
 }
 
-int flux_rpc_getf (flux_future_t *f, const char *fmt, ...)
+int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_rpc_vgetf (f, fmt, ap);
+    rc = flux_rpc_get_vunpack (f, fmt, ap);
     va_end (ap);
 
     return rc;
@@ -284,18 +284,18 @@ done:
     return f;
 }
 
-static flux_future_t *flux_vrpcf (flux_t *h,
-                                  const char *topic,
-                                  uint32_t nodeid,
-                                  int flags,
-                                  const char *fmt, va_list ap)
+static flux_future_t *flux_rpc_vpack (flux_t *h,
+                                      const char *topic,
+                                      uint32_t nodeid,
+                                      int flags,
+                                      const char *fmt, va_list ap)
 {
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
     if (!(msg = flux_request_encode (topic, NULL)))
         goto done;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto done;
     f = flux_rpc_msg (h, nodeid, flags, msg);
 done:
@@ -303,14 +303,14 @@ done:
     return f;
 }
 
-flux_future_t *flux_rpcf (flux_t *h, const char *topic, uint32_t nodeid,
-                          int flags, const char *fmt, ...)
+flux_future_t *flux_rpc_pack (flux_t *h, const char *topic, uint32_t nodeid,
+                              int flags, const char *fmt, ...)
 {
     va_list ap;
     flux_future_t *f;
 
     va_start (ap, fmt);
-    f = flux_vrpcf (h, topic, nodeid, flags, fmt, ap);
+    f = flux_rpc_vpack (h, topic, nodeid, flags, fmt, ap);
     va_end (ap);
     return f;
 }

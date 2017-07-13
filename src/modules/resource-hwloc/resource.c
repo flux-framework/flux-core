@@ -81,13 +81,13 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "flux_kvs_lookup");
         goto done;
     }
-    if (flux_kvs_lookup_getf (f, "s", &path) < 0) {
+    if (flux_kvs_lookup_get_unpack (f, "s", &path) < 0) {
         flux_future_destroy (f);
         if (!(f = flux_kvs_lookup (h, 0, "config.resource.hwloc.default_xml"))) {
             flux_log_error (h, "flux_kvs_lookup");
             goto done;
         }
-        if (flux_kvs_lookup_getf (f, "s", &path) < 0)
+        if (flux_kvs_lookup_get_unpack (f, "s", &path) < 0)
             path = NULL;
     }
 
@@ -377,16 +377,16 @@ static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
 {
     int walk_topology = ctx->walk_topology;
 
-    if (flux_request_decodef (msg, NULL, "{}") < 0) {
-        flux_log_error (h, "%s: flux_request_decodef", __FUNCTION__);
+    if (flux_request_unpack (msg, NULL, "{}") < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return (-1);
     }
 
     /*
      *  Set ctx->walk_topology to value in payload, if given.
      */
-    if (!flux_request_decodef (msg, NULL, "{ s:b }",
-                               "walk_topology", &walk_topology))
+    if (!flux_request_unpack (msg, NULL, "{ s:b }",
+                              "walk_topology", &walk_topology))
         ctx->walk_topology = walk_topology;
 
     return (0);
@@ -454,7 +454,7 @@ static void topo_request_cb (flux_t *h,
         flux_future_t *f;
 
         if (!(f = flux_kvs_lookup (h, 0, key))
-                || flux_kvs_lookup_getf (f, "s", &xml) < 0) {
+                || flux_kvs_lookup_get_unpack (f, "s", &xml) < 0) {
             flux_log_error (h, "%s", base_key);
             flux_future_destroy (f);
             free (key);
@@ -518,8 +518,9 @@ static void topo_request_cb (flux_t *h,
         errno = EAGAIN;
         goto done;
     } else {
-        if (flux_respondf (h, msg, "{ s:s# }", "topology", buffer, buflen) < 0) {
-            flux_log_error (h, "%s: flux_respondf", __FUNCTION__);
+        if (flux_respond_pack (h, msg, "{ s:s# }",
+                               "topology", buffer, buflen) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             goto done;
         }
     }

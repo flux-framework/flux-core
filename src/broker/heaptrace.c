@@ -43,7 +43,7 @@ static void start_cb (flux_t *h, flux_msg_handler_t *w,
 {
     const char *filename;
 
-    if (flux_request_decodef (msg, NULL, "{s:s}", "filename", &filename) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "filename", &filename) < 0)
         goto error;
 #if WITH_TCMALLOC
     if (IsHeapProfilerRunning ()) {
@@ -68,7 +68,7 @@ static void dump_cb (flux_t *h, flux_msg_handler_t *w,
 {
     const char *reason;
 
-    if (flux_request_decodef (msg, NULL, "{s:s}", "reason", &reason) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "reason", &reason) < 0)
         goto error;
 #if WITH_TCMALLOC
     if (!IsHeapProfilerRunning ()) {

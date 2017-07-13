@@ -951,8 +951,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
     int rootseq;
     wait_t *wait = NULL;
 
-    if (flux_request_decodef (msg, NULL, "{ s:i }",
-                              "rootseq", &rootseq) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:i }",
+                             "rootseq", &rootseq) < 0)
         goto error;
     if (ctx->rootseq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
@@ -960,9 +960,9 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
         wait_addqueue (ctx->watchlist, wait);
         return; /* stall */
     }
-    if (flux_respondf (h, msg, "{ s:i s:s }",
-                       "rootseq", ctx->rootseq,
-                       "rootdir", ctx->rootdir) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:s }",
+                           "rootseq", ctx->rootseq,
+                           "rootdir", ctx->rootdir) < 0)
         goto error;
     return;
 
@@ -978,9 +978,9 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respondf (h, msg, "{ s:i s:s }",
-                       "rootseq", ctx->rootseq,
-                       "rootdir", ctx->rootdir) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:s }",
+                           "rootseq", ctx->rootseq,
+                           "rootdir", ctx->rootdir) < 0)
         goto error;
     return;
 
@@ -997,9 +997,9 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
 
     if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{ s:i s:s }",
-                       "rootseq", rootseq,
-                       "rootdir", &ref) < 0)
+    if (flux_rpc_get_unpack (f, "{ s:i s:s }",
+                             "rootseq", rootseq,
+                             "rootdir", &ref) < 0)
         goto done;
     if (strlen (ref) > sizeof (href_t) - 1) {
         errno = EPROTO;

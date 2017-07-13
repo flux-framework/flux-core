@@ -46,7 +46,7 @@ void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
     uint32_t nodeid = 0;
     int flags = 0;
 
-    if (flux_request_decodef (msg, NULL, "{}") < 0
+    if (flux_request_unpack (msg, NULL, "{}") < 0
             || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
         errnum = errno;
         goto done;
@@ -58,8 +58,8 @@ void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
     }
 
 done:
-    (void)flux_respondf (h, msg, "{ s:i s:i s:i }", "errnum", errnum,
-                         "nodeid", nodeid, "flags", flags);
+    (void)flux_respond_pack (h, msg, "{ s:i s:i s:i }", "errnum", errnum,
+                             "nodeid", nodeid, "flags", flags);
 }
 
 /* request payload echoed in response */
@@ -107,7 +107,7 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int errnum = 0;
 
-    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+    if (flux_request_unpack (msg, NULL, "{ ! }") < 0) {
         errnum = errno;
         goto done;
     }
@@ -116,7 +116,7 @@ done:
     if (errnum)
         (void)flux_respond (h, msg, errnum, NULL);
     else
-        (void)flux_respondf (h, msg, "{}");
+        (void)flux_respond_pack (h, msg, "{}");
 }
 
 static struct flux_msg_handler_spec htab[] = {

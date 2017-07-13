@@ -125,26 +125,26 @@ void getas (flux_t *h, const char *key, const char *type)
     }
     else if (!strcmp (type, "int")) {
         int value;
-        if (flux_kvs_lookup_getf (f, "i", &value) < 0)
-            log_err_exit ("flux_kvs_lookup_getf(i) %s", key);
+        if (flux_kvs_lookup_get_unpack (f, "i", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_get_unpack(i) %s", key);
         printf ("%d\n", value);
     }
     else if (!strcmp (type, "int64")) {
         int64_t value;
-        if (flux_kvs_lookup_getf (f, "I", &value) < 0)
-            log_err_exit ("flux_kvs_lookup_getf(I) %s", key);
+        if (flux_kvs_lookup_get_unpack (f, "I", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_get_unpack(I) %s", key);
         printf ("%" PRIi64 "\n", value);
     }
     else if (!strcmp (type, "double")) {
         double value;
-        if (flux_kvs_lookup_getf (f, "F", &value) < 0)
-            log_err_exit ("flux_kvs_lookup_getf(F) %s", key);
+        if (flux_kvs_lookup_get_unpack (f, "F", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_get_unpack(F) %s", key);
         printf ("%f\n", value);
     }
     else if (!strcmp (type, "string")) {
         const char *value;
-        if (flux_kvs_lookup_getf (f, "s", &value) < 0)
-            log_err_exit ("flux_kvs_lookup_getf(s) %s", key);
+        if (flux_kvs_lookup_get_unpack (f, "s", &value) < 0)
+            log_err_exit ("flux_kvs_lookup_get_unpack(s) %s", key);
         printf ("%s\n", value);
     }
     else {

@@ -217,13 +217,13 @@ fatal:
     return -1;
 }
 
-static int flux_vrespondf (flux_t *h, const flux_msg_t *request,
-                    const char *fmt, va_list ap)
+static int flux_respond_vpack (flux_t *h, const flux_msg_t *request,
+                               const char *fmt, va_list ap)
 {
     flux_msg_t *msg = derive_response (h, request, 0);
     if (!msg)
         goto fatal;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto fatal;
     if (flux_send (h, msg, 0) < 0)
         goto fatal;
@@ -235,14 +235,14 @@ fatal:
     return -1;
 }
 
-int flux_respondf (flux_t *h, const flux_msg_t *request,
-                   const char *fmt, ...)
+int flux_respond_pack (flux_t *h, const flux_msg_t *request,
+                       const char *fmt, ...)
 {
     int rc;
     va_list ap;
 
     va_start (ap, fmt);
-    rc = flux_vrespondf (h, request, fmt, ap);
+    rc = flux_respond_vpack (h, request, fmt, ap);
     va_end (ap);
     return rc;
 }

@@ -212,8 +212,8 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
     int errnum = 0;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{s:i s:o}", "pid", &pid,
-                                                      "stdin", &o) < 0) {
+    if (flux_request_unpack (msg, NULL, "{s:i s:o}", "pid", &pid,
+                                                     "stdin", &o) < 0) {
         errnum = errno;
         goto out;
     }
@@ -231,8 +231,8 @@ static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
 out:
     free (s);
-    if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
-        flux_log_error (h, "write_request_cb: flux_respondf");
+    if (flux_respond_pack (h, msg, "{ s:i }", "code", errnum) < 0)
+        flux_log_error (h, "write_request_cb: flux_respond_pack");
 }
 
 static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -244,9 +244,9 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
     int signum = SIGTERM;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{s:i s?:i}",
-                              "pid", &pid,
-                              "signum", &signum) < 0) {
+    if (flux_request_unpack (msg, NULL, "{s:i s?:i}",
+                             "pid", &pid,
+                             "signum", &signum) < 0) {
         errnum = errno;
         goto out;
     }
@@ -261,8 +261,8 @@ static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
         p = subprocess_manager_next (x->sm);
     }
 out:
-    if (flux_respondf (h, msg, "{ s:i }", "code", errnum) < 0)
-        flux_log_error (h, "signal_request_cb: flux_respondf");
+    if (flux_respond_pack (h, msg, "{ s:i }", "code", errnum) < 0)
+        flux_log_error (h, "signal_request_cb: flux_respond_pack");
 }
 
 static int do_setpgrp (struct subprocess *p)
@@ -355,10 +355,10 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *cwd = NULL;
     struct subprocess *p;
 
-    if (flux_request_decodef (msg, NULL, "{s:o s?:o s?:s}",
-                              "cmdline", &args,
-                              "env", &env,
-                              "cwd", &cwd) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:o s?:o s?:s}",
+                             "cmdline", &args,
+                             "env", &env,
+                             "cwd", &cwd) < 0)
         goto error;
     if (prepare_subprocess (x, args, env, cwd, msg, &p) < 0)
         goto error;
@@ -378,10 +378,10 @@ static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
          *   to caller on completion handler (which will be called
          *   immediately)
          */
-        if (flux_respondf (h, msg, "{s:i s:i s:s}",
-                           "rank", x->rank,
-                           "pid", subprocess_pid (p),
-                           "state", subprocess_state_string (p)) < 0)
+        if (flux_respond_pack (h, msg, "{s:i s:i s:s}",
+                               "rank", x->rank,
+                               "pid", subprocess_pid (p),
+                               "state", subprocess_state_string (p)) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     return;
@@ -497,9 +497,9 @@ static void ps_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
         p = subprocess_manager_next (x->sm);
     }
-    if (flux_respondf (h, msg, "{s:i s:o}", "rank", x->rank,
-                                            "procs", procs) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", x->rank,
+                                                "procs", procs) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)

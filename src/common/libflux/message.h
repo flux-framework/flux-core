@@ -168,16 +168,16 @@ bool flux_msg_has_payload (const flux_msg_t *msg);
 /* Get/set JSON payload.
  * flux_msg_set_json() accepts a NULL json_str (no payload).
  * flux_msg_get_json() will set json_str to NULL if there is no payload
- * jsonf functions use jansson pack/unpack style arguments for
+ * pack/unpack functions use jansson pack/unpack style arguments for
  * encoding/decoding the JSON object payload directly from/to its members.
  */
 int flux_msg_set_json (flux_msg_t *msg, const char *json_str);
-int flux_msg_set_jsonf (flux_msg_t *msg, const char *fmt, ...);
-int flux_msg_vset_jsonf (flux_msg_t *msg, const char *fmt, va_list ap);
+int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap);
 
 int flux_msg_get_json (const flux_msg_t *msg, const char **json_str);
-int flux_msg_get_jsonf (const flux_msg_t *msg, const char *fmt, ...);
-int flux_msg_vget_jsonf (const flux_msg_t *msg, const char *fmt, va_list ap);
+int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...);
+int flux_msg_vunpack (const flux_msg_t *msg, const char *fmt, va_list ap);
 
 /* Get/set nodeid (request only)
  * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.

@@ -5,7 +5,7 @@ flux_kvs_lookup(3)
 
 NAME
 ----
-flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_getf - look up KVS key
+flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack - look up KVS key
 
 
 SYNOPSIS
@@ -19,7 +19,7 @@ SYNOPSIS
 
  int flux_kvs_lookup_get (flux_future_t *f, const char **json_str);
 
- int flux_kvs_lookup_getf (flux_future_t *f, const char *fmt, ...);
+ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 
 DESCRIPTION
@@ -44,7 +44,7 @@ response(s) if needed, parsing the result, and returning the requested
 value in _json_str_.  _buf_ is valid until `flux_future_destroy()` is called.
 _json_str_ may be a JSON object, array, or bare value.
 
-`flux_kvs_lookup_getf()` is identical to `flux_kvs_lookup_get()` except
+`flux_kvs_lookup_get_unpack()` is identical to `flux_kvs_lookup_get()` except
 the returned JSON is parsed according to variable arguments in Jansson
 `json_unpack()` format.
 

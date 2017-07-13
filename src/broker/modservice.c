@@ -93,15 +93,15 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
 
     flux_get_msgcounters (h, &mcs);
 
-    if (flux_respondf (h, msg, "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
-                       "#request (tx)", mcs.request_tx,
-                       "#request (rx)", mcs.request_rx,
-                       "#response (tx)", mcs.response_tx,
-                       "#response (rx)", mcs.response_rx,
-                       "#event (tx)", mcs.event_tx,
-                       "#event (rx)", mcs.event_rx,
-                       "#keepalive (tx)", mcs.keepalive_tx,
-                       "#keepalive (rx)", mcs.keepalive_rx) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
+                           "#request (tx)", mcs.request_tx,
+                           "#request (rx)", mcs.request_rx,
+                           "#response (tx)", mcs.response_tx,
+                           "#response (rx)", mcs.response_rx,
+                           "#event (tx)", mcs.event_tx,
+                           "#event (rx)", mcs.event_rx,
+                           "#keepalive (tx)", mcs.keepalive_tx,
+                           "#keepalive (rx)", mcs.keepalive_rx) < 0)
       FLUX_LOG_ERROR (h);
 }
 
@@ -132,8 +132,8 @@ static void debug_cb (flux_t *h, flux_msg_handler_t *w,
     int *debug_flags;
     const char *op;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:i}", "op", &op,
-                                                    "flags", &flags) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:i}", "op", &op,
+                                                     "flags", &flags) < 0)
         goto error;
     if (!(debug_flags = flux_aux_get (h, "flux::debug_flags"))) {
         if (!(debug_flags = calloc (1, sizeof (*debug_flags)))) {
@@ -154,7 +154,7 @@ static void debug_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (flux_respondf (h, msg, "{s:i}", "flags", *debug_flags) < 0)
+    if (flux_respond_pack (h, msg, "{s:i}", "flags", *debug_flags) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:

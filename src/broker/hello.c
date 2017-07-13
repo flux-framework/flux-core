@@ -218,10 +218,10 @@ static void join_request (flux_t *h, flux_msg_handler_t *w,
     hello_t *hello = arg;
     int count, batch;
 
-    if (flux_request_decodef (msg, NULL, "{ s:i s:i }",
-                              "count", &count,
-                              "batch", &batch) < 0)
-        log_err_exit ("hello: flux_request_decodef");
+    if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
+                             "count", &count,
+                             "batch", &batch) < 0)
+        log_err_exit ("hello: flux_request_unpack");
     if (batch != 0 || count <= 0)
         log_msg_exit ("hello: error decoding join request");
     if (flux_reduce_append (hello->reduce, (void *)(uintptr_t)count, batch) < 0)
@@ -281,11 +281,11 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
     assert (batch == 0);
     assert (count > 0);
 
-    if (!(f = flux_rpcf (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
-                           FLUX_RPC_NORESPONSE, "{ s:i s:i }",
-                           "count", count,
-                           "batch", batch)))
-        log_err_exit ("hello: flux_rpcf");
+    if (!(f = flux_rpc_pack (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE, "{ s:i s:i }",
+                             "count", count,
+                             "batch", batch)))
+        log_err_exit ("hello: flux_rpc_pack");
     flux_future_destroy (f);
 }
 

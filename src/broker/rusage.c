@@ -45,7 +45,7 @@ static void rusage_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (getrusage (RUSAGE_THREAD, &ru) < 0)
         goto error;
-    if (flux_respondf (h, msg,
+    if (flux_respond_pack (h, msg,
             "{s:f s:f s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i s:i}",
             "utime", (double)ru.ru_utime.tv_sec + 1E-6 * ru.ru_utime.tv_usec,
             "stime", (double)ru.ru_stime.tv_sec + 1E-6 * ru.ru_stime.tv_usec,

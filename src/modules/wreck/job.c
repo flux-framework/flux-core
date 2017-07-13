@@ -157,17 +157,17 @@ static int64_t next_jobid (flux_t *h)
     int64_t ret = (int64_t) -1;
     flux_future_t *f;
 
-    f = flux_rpcf (h, "seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
-                        "name", "lwj",
-                        "preincrement", 1,
-                        "postincrement", 0,
-                        "create", true);
+    f = flux_rpc_pack (h, "seq.fetch", 0, 0, "{s:s,s:i,s:i,s:b}",
+                       "name", "lwj",
+                       "preincrement", 1,
+                       "postincrement", 0,
+                       "create", true);
     if (f == NULL) {
         flux_log_error (h, "next_jobid: flux_rpc");
         goto out;
     }
-    if ((flux_rpc_getf (f, "{s:I}", "value", &ret)) < 0) {
-        flux_log_error (h, "rpc_getf");
+    if ((flux_rpc_get_unpack (f, "{s:I}", "value", &ret)) < 0) {
+        flux_log_error (h, "rpc_get_unpack");
         goto out;
     }
 out:
@@ -200,8 +200,8 @@ static void send_create_event (flux_t *h, int64_t id,
                                const char *path, char *topic)
 {
     flux_msg_t *msg;
-    msg = flux_event_encodef (topic, "{s:I,s:s}",
-                              "lwj", id, "kvs_path", path);
+    msg = flux_event_pack (topic, "{s:I,s:s}",
+                          "lwj", id, "kvs_path", path);
     if (msg == NULL) {
         flux_log_error (h, "failed to create state change event");
         return;
@@ -252,7 +252,7 @@ static bool ping_sched (flux_t *h)
 {
     bool retval = false;
     flux_future_t *f;
-    if (!(f = flux_rpcf (h, "sched.ping", 0, 0, "{s:i}", "seq", 0))) {
+    if (!(f = flux_rpc_pack (h, "sched.ping", 0, 0, "{s:i}", "seq", 0))) {
         flux_log_error (h, "ping_sched");
         goto out;
     }
@@ -317,9 +317,10 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
 
 
     /* Generate reply with new jobid */
-    if (flux_respondf (h, msg, "{s:I,s:s,s:s}",
-                "jobid", id, "state", state, "kvs_path", kvs_path) < 0)
-        flux_log_error (h, "flux_respondf");
+    if (flux_respond_pack (h, msg, "{s:I,s:s,s:s}", "jobid", id,
+                                                    "state", state,
+                                                    "kvs_path", kvs_path) < 0)
+        flux_log_error (h, "flux_respond_pack");
 out:
     free (kvs_path);
 }

@@ -75,15 +75,15 @@ done:
     return rc;
 }
 
-static int flux_event_vdecodef (const flux_msg_t *msg, const char **topic,
-                                const char *fmt, va_list ap)
+static int flux_event_vunpack (const flux_msg_t *msg, const char **topic,
+                               const char *fmt, va_list ap)
 {
     const char *ts;
     int rc = -1;
 
     if (event_decode (msg, &ts) < 0)
         goto done;
-    if (flux_msg_vget_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vunpack (msg, fmt, ap) < 0)
         goto done;
     if (topic)
         *topic = ts;
@@ -92,14 +92,14 @@ done:
     return rc;
 }
 
-int flux_event_decodef (const flux_msg_t *msg, const char **topic,
-                        const char *fmt, ...)
+int flux_event_unpack (const flux_msg_t *msg, const char **topic,
+                       const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_event_vdecodef (msg, topic, fmt, ap);
+    rc = flux_event_vunpack (msg, topic, fmt, ap);
     va_end (ap);
     return rc;
 }
@@ -137,13 +137,13 @@ error:
     return NULL;
 }
 
-static flux_msg_t *flux_event_vencodef (const char *topic,
-                                        const char *fmt, va_list ap)
+static flux_msg_t *flux_event_vpack (const char *topic,
+                                     const char *fmt, va_list ap)
 {
     flux_msg_t *msg = flux_event_create (topic);
     if (!msg)
         goto error;
-    if (flux_msg_vset_jsonf (msg, fmt, ap) < 0)
+    if (flux_msg_vpack (msg, fmt, ap) < 0)
         goto error;
     return msg;
 error:
@@ -151,13 +151,13 @@ error:
     return NULL;
 }
 
-flux_msg_t *flux_event_encodef (const char *topic, const char *fmt, ...)
+flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...)
 {
     flux_msg_t *msg;
     va_list ap;
 
     va_start (ap, fmt);
-    msg = flux_event_vencodef (topic, fmt, ap);
+    msg = flux_event_vpack (topic, fmt, ap);
     va_end (ap);
     return msg;
 }

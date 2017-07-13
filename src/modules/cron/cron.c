@@ -343,18 +343,18 @@ static int64_t next_cronid (flux_t *h)
     int64_t ret = (int64_t) -1;
     flux_future_t *f;
 
-    if (!(f = flux_rpcf (h, "seq.fetch", 0, 0,
-                           "{ s:s s:i s:i s:b }",
-                           "name", "cron",
-                           "preincrement", 1,
-                           "postincrement", 0,
-                           "create", true))) {
-        flux_log_error (h, "flux_rpcf");
+    if (!(f = flux_rpc_pack (h, "seq.fetch", 0, 0,
+                             "{ s:s s:i s:i s:b }",
+                             "name", "cron",
+                             "preincrement", 1,
+                             "postincrement", 0,
+                             "create", true))) {
+        flux_log_error (h, "flux_rpc_pack");
         goto out;
     }
 
-    if (flux_rpc_getf (f, "{ s:I }", "value", &ret) < 0) {
-        flux_log_error (h, "next_cronid: rpc_getf");
+    if (flux_rpc_get_unpack (f, "{ s:I }", "value", &ret) < 0) {
+        flux_log_error (h, "next_cronid: rpc_get_unpack");
         goto out;
     }
 
@@ -700,11 +700,11 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
     double epsilon;
     int rc = -1;
 
-    if (flux_request_decodef (msg, NULL, "{}") < 0)
+    if (flux_request_unpack (msg, NULL, "{}") < 0)
         goto error;
-    if (flux_request_decodef (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         topic = NULL; /* Disable sync-event */
-    if (flux_request_decodef (msg, NULL, "{ s:b }", "disable", &disable) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:b }", "disable", &disable) < 0)
         disable = false;
 
     if (topic || disable)
@@ -713,17 +713,17 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
     if (rc < 0)
         goto error;
 
-    if (!flux_request_decodef (msg, NULL, "{ s:F }", "sync_epsilon", &epsilon))
+    if (!flux_request_unpack (msg, NULL, "{ s:F }", "sync_epsilon", &epsilon))
         ctx->sync_epsilon = epsilon;
 
     if (ctx->sync_event) {
-        if (flux_respondf (h, msg, "{ s:s s:f }",
-                           "sync_event", ctx->sync_event,
-                           "sync_epsilon", ctx->sync_epsilon) < 0)
-            flux_log_error (h, "cron.request: flux_respondf");
+        if (flux_respond_pack (h, msg, "{ s:s s:f }",
+                               "sync_event", ctx->sync_event,
+                               "sync_epsilon", ctx->sync_epsilon) < 0)
+            flux_log_error (h, "cron.request: flux_respond_pack");
     } else {
-        if (flux_respondf (h, msg, "{ s:b }", "sync_disabled", true) < 0)
-            flux_log_error (h, "cron.request: flux_respondf");
+        if (flux_respond_pack (h, msg, "{ s:b }", "sync_disabled", true) < 0)
+            flux_log_error (h, "cron.request: flux_respond_pack");
     }
     return;
 
@@ -749,7 +749,7 @@ static cron_entry_t *entry_from_request (flux_t *h, const flux_msg_t *msg,
 {
     int64_t id;
 
-    if (flux_request_decodef (msg, NULL, "{ s:I }", "id", &id) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:I }", "id", &id) < 0) {
         flux_log_error (h, "%s: request decodef", service);
         return NULL;
     }
@@ -779,7 +779,7 @@ static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
     rc = 0;
     out = cron_entry_to_json (e);
     if (e->task
-        && !flux_request_decodef (msg, NULL, "{ s:b }", "kill", &kill)
+        && !flux_request_unpack (msg, NULL, "{ s:b }", "kill", &kill)
         && kill == true)
         cron_task_kill (e->task, SIGTERM);
     cron_entry_destroy (e);

@@ -5,8 +5,7 @@ flux_event_decode(3)
 
 NAME
 ----
-flux_event_decode, flux_event_decodef, flux_event_encode, flux_event_encodef 
- - encode/decode a Flux event message
+flux_event_decode, flux_event_unpack, flux_event_encode, flux_event_pack - encode/decode a Flux event message
 
 
 SYNOPSIS
@@ -17,15 +16,15 @@ SYNOPSIS
                         const char **topic,
                         const char **json_str);
 
- int flux_event_decodef (const flux_msg_t *msg,
-                         const char **topic,
-                         const char *fmt, ...);
+ int flux_event_unpack (const flux_msg_t *msg,
+                        const char **topic,
+                        const char *fmt, ...);
 
  flux_msg_t *flux_event_encode (const char *topic,
                                 const char *json_str);
 
- flux_msg_t *flux_event_encodef (const char *topic,
-                                 const char *fmt, ...);
+ flux_msg_t *flux_event_pack (const char *topic,
+                              const char *fmt, ...);
 
 
 DESCRIPTION
@@ -40,7 +39,7 @@ _json_str_, if non-NULL, will be set to the message's JSON payload. If
 no payload exists, _json_str_ is set to NULL.  The storage for this
 string belongs to _msg_ and should not be freed.
 
-`flux_event_decodef()` decodes a Flux event message with a JSON payload as
+`flux_event_unpack()` decodes a Flux event message with a JSON payload as
 above, parsing the payload using variable arguments with a format string
 in the style of jansson's `json_unpack()` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
@@ -49,9 +48,9 @@ if the message doesn't have a JSON payload.
 and optional JSON payload _json_str_.  The newly constructed message that
 is returned must be destroyed with `flux_msg_destroy()`.
 
-`flux_event_encodef()` encodes a Flux event message with a JSON payload as
+`flux_event_pack()` encodes a Flux event message with a JSON payload as
 above, encoding the payload using variable arguments with a format string
-in the style of jansson's `json_unpack()` (used internally). Decoding fails
+in the style of jansson's `json_pack()` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
 Events propagated to all subscribers.  Events will not be received

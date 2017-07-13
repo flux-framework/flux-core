@@ -36,9 +36,9 @@
 
 flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
 {
-    return flux_rpcf (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i}",
-                                                        "key", key,
-                                                        "flags", flags);
+    return flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i}",
+                                                            "key", key,
+                                                            "flags", flags);
 }
 
 flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
@@ -55,10 +55,10 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
             errno = EINVAL;
             return NULL;
         }
-        f = flux_rpcf (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i s:O}",
-                                                         "key", key,
-                                                         "flags", flags,
-                                                         "rootdir", obj);
+        f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i s:O}",
+                                                             "key", key,
+                                                             "flags", flags,
+                                                             "rootdir", obj);
     }
     json_decref (obj);
     return f;
@@ -71,7 +71,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
     char *s;
 
     if (!(s = flux_future_aux_get (f, auxkey))) {
-        if (flux_rpc_getf (f, "{s:o}", "val", &obj) < 0)
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &obj) < 0)
             return -1;
         if (!(s = json_dumps (obj, JSON_COMPACT|JSON_ENCODE_ANY))) {
             errno = EINVAL;
@@ -88,13 +88,13 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
     return 0;
 }
 
-int flux_kvs_lookup_getf (flux_future_t *f, const char *fmt, ...)
+int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
 {
     va_list ap;
     json_t *obj;
     int rc;
 
-    if (flux_rpc_getf (f, "{s:o}", "val", &obj) < 0)
+    if (flux_rpc_get_unpack (f, "{s:o}", "val", &obj) < 0)
         return -1;
     va_start (ap, fmt);
     if ((rc = json_vunpack_ex (obj, NULL, 0, fmt, ap) < 0))

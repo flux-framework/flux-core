@@ -135,13 +135,13 @@ static int handle_seq_destroy (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
 {
     const char *name;
 
-    if (flux_request_decodef (msg, NULL, "{ s:s }", "name", &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "name", &name) < 0)
         return (-1);
     if (seq_destroy (s, name) < 0)
         return (-1);
-    return flux_respondf (h, msg, "{ s:s s:b }",
-                          "name", name,
-                          "destroyed", true);
+    return flux_respond_pack (h, msg, "{ s:s s:b }",
+                              "name", name,
+                              "destroyed", true);
 }
 
 static int handle_seq_set (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
@@ -149,21 +149,21 @@ static int handle_seq_set (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
     const char *name;
     int64_t old, v;
 
-    if (flux_request_decodef (msg, NULL, "{ s:s s:I }",
-                              "name", &name,
-                              "value", &v) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s s:I }",
+                             "name", &name,
+                             "value", &v) < 0)
         return (-1);
 
-    if (!flux_request_decodef (msg, NULL, "{ s:I }", "oldvalue", &old)
+    if (!flux_request_unpack (msg, NULL, "{ s:I }", "oldvalue", &old)
         && seq_cmp_and_set (s, name, old, v) < 0)
         return (-1);
     else if (seq_set (s, name, v) < 0)
         return (-1);
 
-    if (flux_respondf (h, msg, "{ s:s s:b s:I }",
-                       "name", name,
-                       "set", true,
-                       "value", v) < 0)
+    if (flux_respond_pack (h, msg, "{ s:s s:b s:I }",
+                           "name", name,
+                           "set", true,
+                           "value", v) < 0)
         return (-1);
 
     return (0);
@@ -176,11 +176,11 @@ static int handle_seq_fetch (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
     bool created = false;
     int64_t v, pre, post, *valp;
 
-    if (flux_request_decodef (msg, NULL, "{ s:s s:b s:I s:I }",
-                              "name", &name,
-                              "create", &create,
-                              "preincrement", &pre,
-                              "postincrement", &post) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s s:b s:I s:I }",
+                             "name", &name,
+                             "create", &create,
+                             "preincrement", &pre,
+                             "postincrement", &post) < 0)
         return (-1);
 
     if (seq_fetch_and_add (s, name, pre, post, &v) < 0) {
@@ -196,14 +196,14 @@ static int handle_seq_fetch (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
     }
 
     if (create && created)
-        return flux_respondf (h, msg, "{ s:s s:I s:b }",
-                              "name", name,
-                              "value", v,
-                              "created", true);
+        return flux_respond_pack (h, msg, "{ s:s s:I s:b }",
+                                  "name", name,
+                                  "value", v,
+                                  "created", true);
 
-    return flux_respondf (h, msg, "{ s:s s:I }",
-                          "name", name,
-                          "value", v);
+    return flux_respond_pack (h, msg, "{ s:s s:I }",
+                              "name", name,
+                              "value", v);
 }
 
 static void sequence_request_cb (flux_t *h, flux_msg_handler_t *w,

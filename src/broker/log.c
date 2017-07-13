@@ -555,7 +555,7 @@ static void clear_request_cb (flux_t *h, flux_msg_handler_t *w,
     int seq;
     int rc = -1;
 
-    if (flux_request_decodef (msg, NULL, "{ s:i }", "seq", &seq) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:i }", "seq", &seq) < 0)
         goto done;
     logbuf_clear (logbuf, seq);
     rc = 0;
@@ -571,9 +571,9 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
     int len;
     int seq, follow;
 
-    if (flux_request_decodef (msg, NULL, "{ s:i s:b }",
-                              "seq", &seq,
-                              "follow", &follow) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:i s:b }",
+                             "seq", &seq,
+                             "follow", &follow) < 0)
         goto error;
     if (logbuf_get (logbuf, seq, &seq, &buf, &len) < 0) {
         if (follow && errno == ENOENT) {
@@ -583,9 +583,9 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
         }
         goto error;
     }
-    if (flux_respondf (h, msg, "{ s:i s:s# }",
-                       "seq", seq,
-                       "buf", buf, len) < 0)
+    if (flux_respond_pack (h, msg, "{ s:i s:s# }",
+                                   "seq", seq,
+                                   "buf", buf, len) < 0)
         goto error;
     return;
 

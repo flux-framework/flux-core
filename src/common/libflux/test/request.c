@@ -49,9 +49,9 @@ int main (int argc, char *argv[])
         "flux_request_decode returns encoded payload");
     topic = NULL;
     i = 0;
-    ok (flux_request_decodef (msg, &topic, "{s:i}", "a", &i) == 0
+    ok (flux_request_unpack (msg, &topic, "{s:i}", "a", &i) == 0
         && i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
-        "flux_request_decodef returns encoded payload");
+        "flux_request_unpack returns encoded payload");
 
     errno = 0;
     ok (flux_request_decode (msg, NULL, NULL) == 0,

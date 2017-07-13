@@ -382,7 +382,7 @@ int kvs_get_version (flux_t *h, int *versionp)
 
     if (!(f = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_getf (f, "{ s:i }", "rootseq", &version) < 0)
+    if (flux_rpc_get_unpack (f, "{ s:i }", "rootseq", &version) < 0)
         goto done;
     if (versionp)
         *versionp = version;
@@ -397,8 +397,8 @@ int kvs_wait_version (flux_t *h, int version)
     flux_future_t *f;
     int ret = -1;
 
-    if (!(f = flux_rpcf (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
-                           "rootseq", version)))
+    if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
+                             "rootseq", version)))
         goto done;
     /* N.B. response contains (rootseq, rootdir) but we don't need it.
      */

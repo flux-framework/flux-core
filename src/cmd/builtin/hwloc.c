@@ -57,8 +57,8 @@ static struct hwloc_topo * hwloc_topo_create (optparse_t *p)
     if (!(t->f = flux_rpc (t->h, "resource-hwloc.topo", NULL, 0, 0)))
         log_err_exit ("flux_rpc");
 
-    if (flux_rpc_getf (t->f, "{ s:s }", "topology", &t->topo) < 0)
-        log_err_exit ("flux_rpc_getf");
+    if (flux_rpc_get_unpack (t->f, "{ s:s }", "topology", &t->topo) < 0)
+        log_err_exit ("flux_rpc_get_unpack");
 
     return (t);
 }

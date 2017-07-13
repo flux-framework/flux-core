@@ -168,12 +168,12 @@ static void send_enter_request (barrier_ctx_t *ctx, barrier_t *b)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpcf (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
-                           FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
-                           "name", b->name,
-                           "count", b->count,
-                           "nprocs", b->nprocs,
-                           "internal", true))) {
+    if (!(f = flux_rpc_pack (ctx->h, "barrier.enter", FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE, "{s:s s:i s:i s:b}",
+                             "name", b->name,
+                             "count", b->count,
+                             "nprocs", b->nprocs,
+                             "internal", true))) {
         flux_log_error (ctx->h, "sending barrier.enter request");
         goto done;
     }
@@ -197,11 +197,11 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
     const char *name;
     int count, nprocs, internal;
 
-    if (flux_request_decodef (msg, NULL, "{s:s s:i s:i s:b !}",
-                              "name", &name,
-                              "count", &count,
-                              "nprocs", &nprocs,
-                              "internal", &internal) < 0
+    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:b !}",
+                             "name", &name,
+                             "count", &count,
+                             "nprocs", &nprocs,
+                             "internal", &internal) < 0
                 || flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (ctx->h, "%s: decoding request", __FUNCTION__);
         goto done;
@@ -270,9 +270,9 @@ static int exit_event_send (flux_t *h, const char *name, int errnum)
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!(msg = flux_event_encodef ("barrier.exit", "{s:s s:i}",
-                                    "name", name,
-                                    "errnum", errnum)))
+    if (!(msg = flux_event_pack ("barrier.exit", "{s:s s:i}",
+                                 "name", name,
+                                 "errnum", errnum)))
         goto done;
     if (flux_send (h, msg, 0) < 0)
         goto done;
@@ -292,9 +292,9 @@ static void exit_event_cb (flux_t *h, flux_msg_handler_t *w,
     const char *key;
     flux_msg_t *req;
 
-    if (flux_event_decodef (msg, NULL, "{s:s s:i !}",
-                            "name", &name,
-                            "errnum", &errnum) < 0) {
+    if (flux_event_unpack (msg, NULL, "{s:s s:i !}",
+                           "name", &name,
+                           "errnum", &errnum) < 0) {
         flux_log_error (h, "%s: decoding event", __FUNCTION__);
         return;
     }

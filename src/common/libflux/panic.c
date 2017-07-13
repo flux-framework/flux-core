@@ -42,8 +42,8 @@ int flux_panic (flux_t *h, int rank, const char *msg)
     flux_future_t *f = NULL;
     int rc = -1;
 
-    f = flux_rpcf (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
-                   "{s:s}", "msg", msg ? msg : "");
+    f = flux_rpc_pack (h, "cmb.panic", nodeid, FLUX_RPC_NORESPONSE,
+                       "{s:s}", "msg", msg ? msg : "");
     if (!f)
         goto done;
     /* No reply */

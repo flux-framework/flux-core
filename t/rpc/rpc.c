@@ -11,10 +11,10 @@ void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int i;
 
-    if (flux_request_decodef (msg, NULL, "{s:i}", "n", &i) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:i}", "n", &i) < 0)
         flux_respond (h, msg, errno, NULL);
     else
-        flux_respondf (h, msg, "{s:i}", "n", i + 1);
+        flux_respond_pack (h, msg, "{s:i}", "n", i + 1);
 }
 
 /* request nodeid and flags returned in response */
@@ -99,7 +99,7 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
 {
     int errnum = 0;
 
-    if (flux_request_decodef (msg, NULL, "{ ! }") < 0) {
+    if (flux_request_unpack (msg, NULL, "{ ! }") < 0) {
         errnum = errno;
         goto done;
     }
@@ -107,7 +107,7 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
     if (errnum)
         (void)flux_respond (h, msg, errnum, NULL);
     else
-        (void)flux_respondf (h, msg, "{}");
+        (void)flux_respond_pack (h, msg, "{}");
 }
 
 static struct flux_msg_handler_spec htab[] = {
@@ -275,45 +275,45 @@ void test_encoding (flux_t *h)
 
     /* use newish pack/unpack payload interfaces */
     int i = 0;
-    ok ((r = flux_rpcf (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
-                        "{s:i}", "n", 107)) != NULL,
-        "flux_rpcf works");
-    ok (flux_rpc_getf (r, NULL) < 0
+    ok ((r = flux_rpc_pack (h, "rpctest.incr", FLUX_NODEID_ANY, 0,
+                            "{s:i}", "n", 107)) != NULL,
+        "flux_rpc_pack works");
+    ok (flux_rpc_get_unpack (r, NULL) < 0
         && errno == EINVAL,
-        "flux_rpc_getf fails with EINVAL");
-    ok (flux_rpc_getf (r, "{s:i}", "n", &i) == 0,
-        "flux_rpc_getf works");
+        "flux_rpc_get_unpack fails with EINVAL");
+    ok (flux_rpc_get_unpack (r, "{s:i}", "n", &i) == 0,
+        "flux_rpc_get_unpack works");
     ok (i == 108,
         "and service returned incremented value");
     flux_future_destroy (r);
 
     /* cause remote EPROTO (unexpected payload) - will be picked up in _getf() */
-    ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
-                        "{ s:i }", "foo", 42)) != NULL,
-        "flux_rpcf with payload when none is expected works, at first");
+    ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0,
+                            "{ s:i }", "foo", 42)) != NULL,
+        "flux_rpc_pack with payload when none is expected works, at first");
     errno = 0;
-    ok (flux_rpc_getf (r, "{}") < 0
+    ok (flux_rpc_get_unpack (r, "{}") < 0
         && errno == EPROTO,
-        "flux_rpc_getf fails with EPROTO");
+        "flux_rpc_get_unpack fails with EPROTO");
     flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects payload) */
-    ok ((r = flux_rpcf (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
-        "flux_rpcf with empty payload works");
+    ok ((r = flux_rpc_pack (h, "rpcftest.hello", FLUX_NODEID_ANY, 0, "{}")) != NULL,
+        "flux_rpc_pack with empty payload works");
     errno = 0;
-    ok (flux_rpc_getf (r, "{ s:i }", "foo", &i) < 0
+    ok (flux_rpc_get_unpack (r, "{ s:i }", "foo", &i) < 0
         && errno == EPROTO,
-        "flux_rpc_getf fails with EPROTO");
+        "flux_rpc_get_unpack fails with EPROTO");
     flux_future_destroy (r);
 
     /* cause local EPROTO (user incorrectly expects empty payload) */
     errno = 0;
-    ok ((r = flux_rpcf (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
-        "flux_rpcf with payload works");
+    ok ((r = flux_rpc_pack (h, "rpctest.echo", FLUX_NODEID_ANY, 0, "{ s:i }", "foo", 42)) != NULL,
+        "flux_rpc_pack with payload works");
     errno = 0;
-    ok (flux_rpc_getf (r, "{ ! }") < 0
+    ok (flux_rpc_get_unpack (r, "{ ! }") < 0
         && errno == EPROTO,
-        "flux_rpc_getf fails with EPROTO");
+        "flux_rpc_get_unpack fails with EPROTO");
     flux_future_destroy (r);
 
     diag ("completed encoding/api test");

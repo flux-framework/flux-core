@@ -174,52 +174,52 @@ void check_payload_json_formatted (void)
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
     errno = 0;
-    ok (flux_msg_get_jsonf (msg, "{}") < 0 && errno == EPROTO,
-        "flux_msg_get_jsonf fails with EPROTO with no payload");
+    ok (flux_msg_unpack (msg, "{}") < 0 && errno == EPROTO,
+        "flux_msg_unpack fails with EPROTO with no payload");
 
     errno = 0;
-    ok (flux_msg_set_jsonf (msg, "[i,i,i]", 1,2,3) < 0 && errno == EINVAL,
-        "flux_msg_set_jsonf array fails with EINVAL");
+    ok (flux_msg_pack (msg, "[i,i,i]", 1,2,3) < 0 && errno == EINVAL,
+        "flux_msg_pack array fails with EINVAL");
     errno = 0;
-    ok (flux_msg_set_jsonf (msg, "i", 3.14) < 0 && errno == EINVAL,
-       "flux_msg_set_jsonf scalar fails with EINVAL");
-    ok (flux_msg_set_jsonf (msg, "{s:i, s:s}", "foo", 42, "bar", "baz") == 0,
-       "flux_msg_set_jsonf object works");
+    ok (flux_msg_pack (msg, "i", 3.14) < 0 && errno == EINVAL,
+       "flux_msg_pack scalar fails with EINVAL");
+    ok (flux_msg_pack (msg, "{s:i, s:s}", "foo", 42, "bar", "baz") == 0,
+       "flux_msg_pack object works");
     i = 0;
     s = NULL;
-    ok (flux_msg_get_jsonf (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
-       "flux_msg_get_jsonf object works");
+    ok (flux_msg_unpack (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
+       "flux_msg_unpack object works");
     ok (i == 42 && s != NULL && !strcmp (s, "baz"),
         "decoded content matches encoded content");
 
     /* reset payload */
-    ok (flux_msg_set_jsonf (msg, "{s:i, s:s}", "foo", 43, "bar", "smurf") == 0,
-       "flux_msg_set_jsonf can replace JSON object payload");
+    ok (flux_msg_pack (msg, "{s:i, s:s}", "foo", 43, "bar", "smurf") == 0,
+       "flux_msg_pack can replace JSON object payload");
     i = 0;
     s = NULL;
-    ok (flux_msg_get_jsonf (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
-       "flux_msg_get_jsonf object works");
+    ok (flux_msg_unpack (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
+       "flux_msg_unpack object works");
     ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
         "decoded content matches new encoded content");
 
     i = 0;
     s = NULL;
-    ok (flux_msg_get_jsonf (msg, "{s:s, s:i}", "bar", &s, "foo", &i) == 0,
-       "flux_msg_get_jsonf object works out of order");
+    ok (flux_msg_unpack (msg, "{s:s, s:i}", "bar", &s, "foo", &i) == 0,
+       "flux_msg_unpack object works out of order");
     ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
         "decoded content matches new encoded content");
 
     errno = 0;
-    ok (flux_msg_get_jsonf (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_jsonf fails with EINVAL with NULL format");
+    ok (flux_msg_unpack (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_unpack fails with EINVAL with NULL format");
 
     errno = 0;
-    ok (flux_msg_get_jsonf (msg, "") < 0 && errno == EINVAL,
-        "flux_msg_get_jsonf fails with EINVAL with \"\" format");
+    ok (flux_msg_unpack (msg, "") < 0 && errno == EINVAL,
+        "flux_msg_unpack fails with EINVAL with \"\" format");
 
     errno = 0;
-    ok (flux_msg_get_jsonf (msg, "{s:s}", "nope", &s) < 0 && errno == EPROTO,
-        "flux_msg_get_jsonf fails with EPROTO with nonexistent key");
+    ok (flux_msg_unpack (msg, "{s:s}", "nope", &s) < 0 && errno == EPROTO,
+        "flux_msg_unpack fails with EPROTO with nonexistent key");
 
     flux_msg_destroy (msg);
 }

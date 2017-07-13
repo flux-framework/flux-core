@@ -155,11 +155,11 @@ flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
 
     vsnprintf (reason, sizeof (reason), fmt, ap);
 
-    return flux_event_encodef ("shutdown", "{ s:s s:f s:i s:i }",
-                               "reason", reason,
-                               "grace", grace,
-                               "rank", rank,
-                               "exitcode", exitcode);
+    return flux_event_pack ("shutdown", "{ s:s s:f s:i s:i }",
+                            "reason", reason,
+                            "grace", grace,
+                            "rank", rank,
+                            "exitcode", exitcode);
 }
 
 flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
@@ -181,11 +181,11 @@ int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
     const char *s;
     int rc = -1;
 
-    if (flux_event_decodef (msg, NULL, "{ s:s s:F s:i s:i}",
-                            "reason", &s,
-                            "grace", grace,
-                            "rank", rank,
-                            "exitcode", exitcode) < 0)
+    if (flux_event_unpack (msg, NULL, "{ s:s s:F s:i s:i}",
+                           "reason", &s,
+                           "grace", grace,
+                           "rank", rank,
+                           "exitcode", exitcode) < 0)
         goto done;
     snprintf (reason, reason_len, "%s", s);
     rc = 0;
