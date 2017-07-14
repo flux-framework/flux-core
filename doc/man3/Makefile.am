@@ -43,7 +43,8 @@ MAN3_FILES_PRIMARY = \
 	flux_future_then.3 \
 	flux_future_create.3 \
 	flux_kvs_lookup.3 \
-	flux_kvs_commit.3
+	flux_kvs_commit.3 \
+	flux_kvs_txn_create.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -125,7 +126,13 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_lookupat.3 \
 	flux_kvs_lookup_get.3 \
 	flux_kvs_lookup_get_unpack.3 \
-	flux_kvs_fence.3
+	flux_kvs_fence.3 \
+	flux_kvs_txn_destroy.3 \
+	flux_kvs_txn_put.3 \
+	flux_kvs_txn_pack.3 \
+	flux_kvs_txn_mkdir.3 \
+	flux_kvs_txn_unlink.3 \
+	flux_kvs_txn_symlink.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -227,6 +234,11 @@ flux_kvs_lookupat.3: flux_kvs_lookup.3
 flux_kvs_get.3: flux_kvs_lookup.3
 flux_kvs_getf.3: flux_kvs_lookup.3
 flux_kvs_fence.3: flux_kvs_commit.3
+flux_kvs_txn_destroy.3: flux_kvs_txn_create.3
+flux_kvs_txn_put.3: flux_kvs_txn_create.3
+flux_kvs_txn_pack.3: flux_kvs_txn_create.3
+flux_kvs_txn_mkdir.3: flux_kvs_txn_create.3
+flux_kvs_txn_unlink.3: flux_kvs_txn_create.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
