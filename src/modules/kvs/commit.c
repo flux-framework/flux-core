@@ -34,11 +34,12 @@
 #include <ctype.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libkvs/json_dirent.h"
+#include "src/common/libutil/oom.h"
+#include "src/common/libkvs/jansson_dirent.h"
 
 #include "commit.h"
 #include "json_util.h"
@@ -56,7 +57,7 @@ struct commit {
     int errnum;
     fence_t *f;
     int blocked:1;
-    json_object *rootcpy;   /* working copy of root dir */
+    json_t *rootcpy;   /* working copy of root dir */
     href_t newroot;
     zlist_t *item_callback_list;
     commit_mgr_t *cm;
@@ -73,7 +74,7 @@ struct commit {
 static void commit_destroy (commit_t *c)
 {
     if (c) {
-        Jput (c->rootcpy);
+        json_decref (c->rootcpy);
         if (c->item_callback_list)
             zlist_destroy (&c->item_callback_list);
         /* fence destroyed through management of fence, not commit_t's
@@ -126,7 +127,7 @@ const char *commit_get_newroot_ref (commit_t *c)
 }
 
 /* Store object 'o' under key 'ref' in local cache. */
-static int store_cache (commit_t *c, int current_epoch, json_object *o,
+static int store_cache (commit_t *c, int current_epoch, json_t *o,
                         href_t ref, struct cache_entry **hpp)
 {
     struct cache_entry *hp;
@@ -142,7 +143,7 @@ static int store_cache (commit_t *c, int current_epoch, json_object *o,
     }
     if (cache_entry_get_valid (hp)) {
         c->cm->noop_stores++;
-        json_object_put (o);
+        json_decref (o);
     } else {
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
@@ -154,47 +155,66 @@ static int store_cache (commit_t *c, int current_epoch, json_object *o,
     return rc;
 }
 
+static bool fileval_big (json_t *value)
+{
+    char *s = json_dumps (value, JSON_ENCODE_ANY);
+    if (!s)
+        oom ();
+    bool rc = strlen (s) > BLOBREF_MAX_STRING_SIZE;
+    free (s);
+    return rc;
+}
+
 /* Store DIRVAL objects, converting them to DIRREFs.
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return false and enqueue wait_t on cache object(s) if any are dirty.
  */
-static int commit_unroll (commit_t *c, int current_epoch, json_object *dir)
+static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 {
-    json_object_iter iter;
-    json_object *subdir, *value;
-    const char *s;
+    json_t *value;
+    json_t *subdir, *key_value;
     href_t ref;
     int rc = -1;
     struct cache_entry *hp;
+    void *iter = json_object_iter (dir);
 
-    json_object_object_foreachC (dir, iter) {
-        if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
+    /* Do not use json_object_foreach(), unsafe to modify via
+     * json_object_set() while iterating.
+     */
+    while (iter) {
+        value = json_object_iter_value (iter);
+        if ((subdir = json_object_get (value, "DIRVAL"))) {
             if (commit_unroll (c, current_epoch, subdir) < 0) /* depth first */
                 goto done;
-            json_object_get (subdir);
+            json_incref (subdir);
             if (store_cache (c, current_epoch, subdir, ref, &hp) < 0)
                 goto done;
             if (cache_entry_get_dirty (hp)) {
                 if (zlist_push (c->item_callback_list, hp) < 0)
                     oom ();
             }
-            json_object_object_add (dir, iter.key,
-                                    dirent_create ("DIRREF", ref));
+            if (json_object_iter_set_new (dir,
+                                          iter,
+                                          j_dirent_create ("DIRREF", ref)) < 0)
+                oom ();
         }
-        else if (json_object_object_get_ex (iter.val, "FILEVAL", &value)
-                                && (s = Jtostr (value))
-                                && strlen (s) > BLOBREF_MAX_STRING_SIZE) {
-            json_object_get (value);
-            if (store_cache (c, current_epoch, value, ref, &hp) < 0)
+        else if ((key_value = json_object_get (value, "FILEVAL"))
+                 && fileval_big (key_value)) {
+            json_incref (key_value);
+            if (store_cache (c, current_epoch, key_value, ref, &hp) < 0)
                 goto done;
             if (cache_entry_get_dirty (hp)) {
                 if (zlist_push (c->item_callback_list, hp) < 0)
                     oom ();
             }
-            json_object_object_add (dir, iter.key,
-                                    dirent_create ("FILEREF", ref));
+            if (json_object_iter_set_new (dir,
+                                          iter,
+                                          j_dirent_create ("FILEREF", ref)) < 0)
+                oom ();
         }
+        iter = json_object_iter_next (dir, iter);
     }
+
     rc = 0;
 done:
     return rc;
@@ -203,13 +223,13 @@ done:
 /* link (key, dirent) into directory 'dir'.
  */
 static int commit_link_dirent (commit_t *c, int current_epoch,
-                               json_object *rootdir, const char *key,
-                               json_object *dirent, const char **missing_ref)
+                               json_t *rootdir, const char *key,
+                               json_t *dirent, const char **missing_ref)
 {
     char *cpy = xstrdup (key);
     char *next, *name = cpy;
-    json_object *dir = rootdir;
-    json_object *o, *subdir = NULL, *subdirent;
+    json_t *dir = rootdir;
+    json_t *o, *subdir = NULL, *subdirent;
     int rc = -1;
 
     /* Special case root
@@ -225,17 +245,21 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
      */
     while ((next = strchr (name, '.'))) {
         *next++ = '\0';
-        if (!json_object_object_get_ex (dir, name, &subdirent)) {
-            if (!dirent) /* key deletion - it doesn't exist so return */
+        if (!(subdirent = json_object_get (dir, name))) {
+            if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object_new_object ()))
+            if (!(subdir = json_object ()))
                 oom ();
-            json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
-            json_object_put (subdir);
-        } else if (json_object_object_get_ex (subdirent, "DIRVAL", &o)) {
+            if (json_object_set_new (dir,
+                                     name,
+                                     j_dirent_create ("DIRVAL",subdir)) < 0)
+                oom ();
+            json_decref (subdir);
+        } else if ((o = json_object_get (subdirent, "DIRVAL"))) {
             subdir = o;
-        } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
-            const char *ref = json_object_get_string (o);
+        } else if ((o = json_object_get (subdirent, "DIRREF"))) {
+            assert (json_is_string (o));
+            const char *ref = json_string_value (o);
             if (!(subdir = cache_lookup_and_get_json (c->cm->cache,
                                                       ref,
                                                       current_epoch))) {
@@ -244,11 +268,14 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
             /* do not corrupt store by modify orig. */
             subdir = json_object_copydir (subdir);
-            json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
-            json_object_put (subdir);
-        } else if (json_object_object_get_ex (subdirent, "LINKVAL", &o)) {
-            assert (json_object_get_type (o) == json_type_string);
-            char *nkey = xasprintf ("%s.%s", json_object_get_string (o), next);
+            if (json_object_set_new (dir,
+                                     name,
+                                     j_dirent_create ("DIRVAL",subdir)) < 0)
+                oom ();
+            json_decref (subdir);
+        } else if ((o = json_object_get (subdirent, "LINKVAL"))) {
+            assert (json_is_string (o));
+            char *nkey = xasprintf ("%s.%s", json_string_value (o), next);
             if (commit_link_dirent (c,
                                     current_epoch,
                                     rootdir,
@@ -261,22 +288,27 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             free (nkey);
             goto success;
         } else {
-            if (!dirent) /* key deletion - it doesn't exist so return */
+            if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object_new_object ()))
+            if (!(subdir = json_object ()))
                 oom ();
-            json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
-            json_object_put (subdir);
+            if (json_object_set_new (dir,
+                                     name,
+                                     j_dirent_create ("DIRVAL",subdir)) < 0)
+                oom ();
+            json_decref (subdir);
         }
         name = next;
         dir = subdir;
     }
     /* This is the final path component of the key.  Add it to the directory.
      */
-    if (dirent)
-        json_object_object_add (dir, name, json_object_get (dirent));
+    if (!json_is_null (dirent)) {
+        if (json_object_set_new (dir, name, json_incref (dirent)) < 0)
+            oom ();
+    }
     else
-        json_object_object_del (dir, name);
+        json_object_del (dir, name);
 success:
     rc = 0;
 done:
@@ -298,7 +330,7 @@ commit_process_t commit_process (commit_t *c,
         {
             /* Make a copy of the root directory.
              */
-            json_object *rootdir;
+            json_t *rootdir;
 
             /* Caller didn't call commit_iter_missing_refs() */
             if (zlist_first (c->item_callback_list))
@@ -328,11 +360,10 @@ commit_process_t commit_process (commit_t *c,
              * unrolled later on.
              */
             if (fence_get_json_ops (c->f)) {
-                json_object *op, *dirent;
+                json_t *op, *key, *dirent;
                 const char *missing_ref = NULL;
-                const char *key;
-                json_object *ops = fence_get_json_ops (c->f);
-                int i, len = json_object_array_length (ops);
+                json_t *ops = fence_get_json_ops (c->f);
+                int i, len = json_array_size (ops);
 
                 /* Caller didn't call commit_iter_missing_refs() */
                 if (zlist_first (c->item_callback_list))
@@ -340,16 +371,14 @@ commit_process_t commit_process (commit_t *c,
 
                 for (i = 0; i < len; i++) {
                     missing_ref = NULL;
-                    if (!(op = json_object_array_get_idx (ops, i))
-                        || !Jget_str (op, "key", &key))
+                    if (!(op = json_array_get (ops, i))
+                        || !(key = json_object_get (op, "key"))
+                        || !(dirent = json_object_get (op, "dirent")))
                         continue;
-                    dirent = NULL;
-                    /* can be NULL for unlink */
-                    (void)Jget_obj (op, "dirent", &dirent);
                     if (commit_link_dirent (c,
                                             current_epoch,
                                             c->rootcpy,
-                                            key,
+                                            json_string_value (key),
                                             dirent,
                                             &missing_ref) < 0) {
                         c->errnum = errno;
@@ -520,17 +549,19 @@ void commit_mgr_destroy (commit_mgr_t *cm)
 
 int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
 {
-    const char *name;
+    json_t *name;
 
-    if (!Jget_ar_str (fence_get_json_names (f), 0, &name)) {
+    if (!(name = json_array_get (fence_get_json_names (f), 0))) {
         errno = EINVAL;
         goto error;
     }
-    if (zhash_insert (cm->fences, name, f) < 0) {
+    if (zhash_insert (cm->fences, json_string_value (name), f) < 0) {
         errno = EEXIST;
         goto error;
     }
-    zhash_freefn (cm->fences, name, (zhash_free_fn *)fence_destroy);
+    zhash_freefn (cm->fences,
+                  json_string_value (name),
+                  (zhash_free_fn *)fence_destroy);
     return 0;
 error:
     return -1;
