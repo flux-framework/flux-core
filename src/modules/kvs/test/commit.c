@@ -2,11 +2,11 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
-#include "src/common/libkvs/json_dirent.h"
+#include "src/common/libkvs/jansson_dirent.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/commit.h"
 #include "src/modules/kvs/lookup.h"
@@ -25,7 +25,7 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
 {
     struct cache *cache;
     struct cache_entry *hp;
-    json_object *rootdir = Jnew ();
+    json_t *rootdir = json_object ();
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -40,7 +40,7 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
 void commit_mgr_basic_tests (void)
 {
     struct cache *cache;
-    json_object *ops = NULL;
+    json_t *ops = NULL;
     commit_mgr_t *cm;
     commit_t *c;
     fence_t *f, *tf;
@@ -83,15 +83,14 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_get_ready_commit (cm) == NULL,
         "commit_mgr_get_ready_commit returns NULL for no ready commits");
 
-    dirent_append (&ops,
-                   "key1",
-                   dirent_create ("FILEVAL",
-                                  json_object_new_string ("1")));
+    j_dirent_append (&ops,
+                     "key1",
+                     j_dirent_create ("FILEVAL", json_string ("1")));
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
-    Jput (ops);
+    json_decref (ops);
 
     ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
@@ -126,22 +125,22 @@ void create_ready_commit (commit_mgr_t *cm,
                           int flags)
 {
     fence_t *f;
-    json_object *ops = NULL;
+    json_t *ops = NULL;
 
     ok ((f = fence_create (name, 1, flags)) != NULL,
         "fence_create works");
 
     if (val)
-        dirent_append (&ops,
-                       key,
-                       dirent_create ("FILEVAL", json_object_new_string (val)));
+        j_dirent_append (&ops,
+                         key,
+                         j_dirent_create ("FILEVAL", json_string (val)));
     else
-        dirent_append (&ops, key, NULL);
+        j_dirent_append (&ops, key, NULL);
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
-    Jput (ops);
+    json_decref (ops);
 
     ok (commit_mgr_add_fence (cm, f) == 0,
         "commit_mgr_add_fence works");
@@ -154,11 +153,11 @@ void create_ready_commit (commit_mgr_t *cm,
 }
 
 void verify_ready_commit (commit_mgr_t *cm,
-                          json_object *names,
-                          json_object *ops,
+                          json_t *names,
+                          json_t *ops,
                           const char *extramsg)
 {
-    json_object *o;
+    json_t *o;
     commit_t *c;
     fence_t *f;
 
@@ -192,7 +191,7 @@ void clear_ready_commits (commit_mgr_t *cm)
 void commit_mgr_merge_tests (void)
 {
     struct cache *cache;
-    json_object *names, *ops = NULL;
+    json_t *names, *ops = NULL;
     commit_mgr_t *cm;
     href_t rootref;
 
@@ -208,21 +207,21 @@ void commit_mgr_merge_tests (void)
 
     commit_mgr_merge_ready_commits (cm);
 
-    names = Jnew_ar ();
-    Jadd_ar_str (names, "fence1");
-    Jadd_ar_str (names, "fence2");
+    names = json_array ();
+    json_array_append (names, json_string ("fence1"));
+    json_array_append (names, json_string ("fence2"));
 
-    dirent_append (&ops,
-                   "key1",
-                   dirent_create ("FILEVAL", json_object_new_string ("1")));
-    dirent_append (&ops,
-                   "key2",
-                   dirent_create ("FILEVAL", json_object_new_string ("2")));
+    j_dirent_append (&ops,
+                     "key1",
+                     j_dirent_create ("FILEVAL", json_string ("1")));
+    j_dirent_append (&ops,
+                     "key2",
+                     j_dirent_create ("FILEVAL", json_string ("2")));
 
     verify_ready_commit (cm, names, ops, "merged fence");
 
-    Jput (names);
-    Jput (ops);
+    json_decref (names);
+    json_decref (ops);
     ops = NULL;
 
     clear_ready_commits (cm);
@@ -237,17 +236,17 @@ void commit_mgr_merge_tests (void)
 
     commit_mgr_merge_ready_commits (cm);
 
-    names = Jnew_ar ();
-    Jadd_ar_str (names, "fence1");
+    names = json_array ();
+    json_array_append (names, json_string ("fence1"));
 
-    dirent_append (&ops,
-                   "key1",
-                   dirent_create ("FILEVAL", json_object_new_string ("1")));
+    j_dirent_append (&ops,
+                     "key1",
+                     j_dirent_create ("FILEVAL", json_string ("1")));
 
     verify_ready_commit (cm, names, ops, "unmerged fence");
 
-    Jput (names);
-    Jput (ops);
+    json_decref (names);
+    json_decref (ops);
     ops = NULL;
 
     clear_ready_commits (cm);
@@ -262,17 +261,17 @@ void commit_mgr_merge_tests (void)
 
     commit_mgr_merge_ready_commits (cm);
 
-    names = Jnew_ar ();
-    Jadd_ar_str (names, "fence1");
+    names = json_array ();
+    json_array_append (names, json_string ("fence1"));
 
-    dirent_append (&ops,
-                   "key1",
-                   dirent_create ("FILEVAL", json_object_new_string ("1")));
+    j_dirent_append (&ops,
+                     "key1",
+                     j_dirent_create ("FILEVAL", json_string ("1")));
 
     verify_ready_commit (cm, names, ops, "unmerged fence");
 
-    Jput (names);
-    Jput (ops);
+    json_decref (names);
+    json_decref (ops);
     ops = NULL;
 
     clear_ready_commits (cm);
@@ -297,7 +296,7 @@ int cache_noop_cb (commit_t *c, struct cache_entry *hp, void *data)
 void commit_basic_tests (void)
 {
     struct cache *cache;
-    json_object *names, *ops = NULL;
+    json_t *names, *ops = NULL;
     commit_mgr_t *cm;
     commit_t *c;
     href_t rootref;
@@ -309,17 +308,17 @@ void commit_basic_tests (void)
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
 
-    names = Jnew_ar ();
-    Jadd_ar_str (names, "fence1");
+    names = json_array ();
+    json_array_append (names, json_string ("fence1"));
 
-    dirent_append (&ops,
-                   "key1",
-                   dirent_create ("FILEVAL", json_object_new_string ("1")));
+    j_dirent_append (&ops,
+                     "key1",
+                     j_dirent_create ("FILEVAL", json_string ("1")));
 
     verify_ready_commit (cm, names, ops, "basic test");
 
-    Jput (names);
-    Jput (ops);
+    json_decref (names);
+    json_decref (ops);
     ops = NULL;
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
@@ -365,7 +364,7 @@ void verify_value (struct cache *cache,
                    const char *val)
 {
     lookup_t *lh;
-    json_object *test, *o;
+    json_t *test, *o;
 
     ok ((lh = lookup_create (cache,
                              1,
@@ -379,12 +378,12 @@ void verify_value (struct cache *cache,
         "lookup found result");
 
     if (val) {
-        test = json_object_new_string (val);
+        test = json_string (val);
         ok ((o = lookup_get_value (lh)) != NULL,
             "lookup_get_value returns non-NULL as expected");
         ok (json_compare (test, o) == true,
             "lookup_get_value returned matching value");
-        Jput (test);
+        json_decref (test);
     }
     else
         ok (lookup_get_value (lh) == NULL,
@@ -444,7 +443,7 @@ struct rootref_data {
 int rootref_cb (commit_t *c, const char *ref, void *data)
 {
     struct rootref_data *rd = data;
-    json_object *rootdir = Jnew ();
+    json_t *rootdir = json_object ();
     struct cache_entry *hp;
 
     ok (strcmp (ref, rd->rootref) == 0,
@@ -465,7 +464,7 @@ void commit_process_root_missing (void)
     commit_t *c;
     href_t rootref;
     struct rootref_data rd;
-    json_object *rootdir = Jnew ();
+    json_t *rootdir = json_object ();
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -474,7 +473,7 @@ void commit_process_root_missing (void)
     ok (json_hash ("sha1", rootdir, rootref) == 0,
         "json_hash worked");
 
-    Jput (rootdir);
+    json_decref (rootdir);
 
     ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
         "commit_mgr_create works");
@@ -522,7 +521,7 @@ void commit_process_root_missing (void)
 struct missingref_data {
     struct cache *cache;
     const char *dir_ref;
-    json_object *dir;
+    json_t *dir;
 };
 
 int missingref_cb (commit_t *c, const char *ref, void *data)
@@ -545,8 +544,8 @@ void commit_process_missing_ref (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
     struct missingref_data md;
@@ -565,19 +564,18 @@ void commit_process_missing_ref (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -642,8 +640,8 @@ void commit_process_error_callbacks (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
 
@@ -660,19 +658,18 @@ void commit_process_error_callbacks (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -711,8 +708,8 @@ void commit_process_invalid_operation (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
 
@@ -729,19 +726,18 @@ void commit_process_invalid_operation (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -774,8 +770,8 @@ void commit_process_invalid_hash (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
 
@@ -792,19 +788,18 @@ void commit_process_invalid_hash (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -837,8 +832,8 @@ void commit_process_follow_link (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
     const char *newroot;
@@ -857,23 +852,21 @@ void commit_process_follow_link (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
-    json_object_object_add (root,
-                            "linkval",
-                            dirent_create ("LINKVAL",
-                                           json_object_new_string ("dir")));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    json_object_set (root,
+                     "linkval",
+                     j_dirent_create ("LINKVAL", json_string ("dir")));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -910,8 +903,8 @@ void commit_process_dirval_test (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     const char *newroot;
 
@@ -925,16 +918,13 @@ void commit_process_dirval_test (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
-    root = Jnew ();
-    json_object_object_add (root,
-                            "dirval",
-                            dirent_create ("DIRVAL", dir));
+    root = json_object ();
+    json_object_set (root, "dirval", j_dirent_create ("DIRVAL", dir));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -971,8 +961,8 @@ void commit_process_delete_test (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
     const char *newroot;
@@ -990,19 +980,18 @@ void commit_process_delete_test (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
@@ -1040,8 +1029,8 @@ void commit_process_big_fileval (void) {
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    json_object *root;
-    json_object *dir;
+    json_t *root;
+    json_t *dir;
     href_t root_ref;
     href_t dir_ref;
     const char *newroot;
@@ -1062,19 +1051,18 @@ void commit_process_big_fileval (void) {
      *
      */
 
-    dir = Jnew();
-    json_object_object_add (dir,
-                            "fileval",
-                            dirent_create ("FILEVAL",
-                                           json_object_new_string ("42")));
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
 
     ok (json_hash ("sha1", dir, dir_ref) == 0,
         "json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", dir_ref));
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
     ok (json_hash ("sha1", root, root_ref) == 0,
         "json_hash worked");
