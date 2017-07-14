@@ -647,8 +647,8 @@ test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
 	${KVSBASIC} unlink $TEST.a
 '
 
-test_expect_success 'kvs: 8192 simultaneous watches works' '
-	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 8192 &&
+test_expect_success 'kvs: 256 simultaneous watches works' '
+	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 256 &&
 	${KVSBASIC} unlink $TEST.a
 '
 
