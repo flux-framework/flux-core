@@ -589,8 +589,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         root_dirent = tmp_dirent;
     }
 
-    /* ownership of val passed to 'out' */
-    if (!(out = kp_rget_enc (Jget (root_dirent), val)))
+    if (!(out = kp_rget_enc (Jget (root_dirent), Jget (val))))
         goto done;
 
     rc = 0;
@@ -604,6 +603,7 @@ stall:
     Jput (in);
     Jput (out);
     Jput (tmp_dirent);
+    Jput (val);
 }
 
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
