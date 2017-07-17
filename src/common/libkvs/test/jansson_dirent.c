@@ -96,6 +96,21 @@ int main (int argc, char *argv[])
 
     json_decref (array);
 
+    /* jansson:  How is "null" decoded?  How is NULL encoded? */
+    json_t *o;
+    char *str;
+    o = json_loads ("null", JSON_DECODE_ANY, NULL);
+    ok (o != NULL,
+        "json_loads (\"null\") decodes as valid json_t");
+    str = json_dumps (o, JSON_ENCODE_ANY);
+    ok (str != NULL && !strcmp (str, "null"),
+        "json_dumps encodes returned object as \"null\"");
+    free (str);
+    json_decref (o);
+    s = json_dumps (NULL, JSON_ENCODE_ANY);
+    ok (s == NULL,
+        "json_dumps (NULL) returns NULL, which is a failure");
+
     done_testing();
     return (0);
 }
