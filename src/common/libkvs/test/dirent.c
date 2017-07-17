@@ -85,6 +85,16 @@ int main (int argc, char *argv[])
 
     Jput (array);
 
+    /* json-c:  How is "null" decoded?  How is NULL encoded? */
+    json_object *o;
+    const char *s;
+    o = json_tokener_parse ("null");
+    ok (o == NULL,
+        "json_tokener_parse (\"null\") decodes as NULL json_object");
+    s = json_object_to_json_string (NULL);
+    ok (s != NULL && !strcmp (s, "null"),
+        "json_object_to_json_string (NULL) encodes as \"null\"");
+
     done_testing();
     return (0);
 }
