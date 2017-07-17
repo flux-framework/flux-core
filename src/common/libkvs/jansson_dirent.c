@@ -129,7 +129,8 @@ int j_dirent_validate (json_t *dirent)
         }
     }
     else if ((o = json_object_get (dirent, "FILEVAL"))) {
-        /* Any json type is valid here */
+        if (json_typeof (o) == JSON_NULL)
+            goto error;
     }
     else if ((o = json_object_get (dirent, "LINKVAL"))) {
         if (json_typeof (o) != JSON_STRING)
