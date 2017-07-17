@@ -62,12 +62,32 @@ bool json_compare (json_t *o1, json_t *o2)
     return json_equal (o1, o2);
 }
 
+char *json_strdump (json_t *o)
+{
+    /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must
+     * set JSON_SORT_KEYS, two different objects with different
+     * internal order should map to same string (and reference when
+     * used by json_hash()).
+     */
+    int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
+    char *s;
+    if (!o) {
+        json_t *tmp;
+        if (!(tmp = json_null ()))
+            oom ();
+        if (!(s = json_dumps (tmp, flags)))
+            oom ();
+        json_decref (tmp);
+        return s;
+    }
+    if (!(s = json_dumps (o, flags)))
+        oom ();
+    return s;
+}
+
 int json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    /* Must pass JSON_ENCODE_ANY, json_hash could be done on any object.
-     * Must set JSON_SORT_KEYS, two different objects with different internal
-     * order should map to same reference */
-    char *s = json_dumps (o, JSON_ENCODE_ANY | JSON_SORT_KEYS);
+    char *s = json_strdump (o);
     int rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
                            ref, sizeof (href_t));
     free (s);

@@ -17,6 +17,12 @@ json_t *json_object_copydir (json_t *dir);
  */
 bool json_compare (json_t *o1, json_t *o2);
 
+/* Get compact string representation of json object, or json null
+ * object if o is NULL.  Use this function for consistency, especially
+ * when dealing with data that may be hashed via json_hash().
+ */
+char *json_strdump (json_t *o);
+
 /* Calculate hash of a json object
  */
 int json_hash (const char *hash_name, json_t *o, href_t ref);

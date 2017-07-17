@@ -13,6 +13,7 @@ int main (int argc, char *argv[])
     json_t *obj, *cpy, *o;
     href_t ref;
     const char *s;
+    char *s1, *s2;
 
     plan (NO_PLAN);
 
@@ -71,6 +72,46 @@ int main (int argc, char *argv[])
 
     json_decref (obj);
     json_decref (cpy);
+
+    obj = json_object ();
+    json_object_set_new (obj, "A", json_string ("a"));
+    json_object_set_new (obj, "B", json_string ("b"));
+    json_object_set_new (obj, "C", json_string ("c"));
+
+    ok ((s1 = json_strdump (obj)) != NULL,
+        "json_strdump works");
+
+    /* json object is sorted and compacted */
+    s2 = "{\"A\":\"a\",\"B\":\"b\",\"C\":\"c\"}";
+
+    ok (!strcmp (s1, s2),
+        "json_strdump dumps correct string");
+
+    free (s1);
+    json_decref (obj);
+
+    obj = json_null ();
+
+    ok ((s1 = json_strdump (obj)) != NULL,
+        "json_strdump works");
+
+    s2 = "null";
+
+    ok (!strcmp (s1, s2),
+        "json_strdump works on null object");
+
+    free (s1);
+    json_decref (obj);
+
+    ok ((s1 = json_strdump (NULL)) != NULL,
+        "json_strdump works on NULL pointer");
+
+    s2 = "null";
+
+    ok (!strcmp (s1, s2),
+        "json_strdump works on NULL pointer");
+
+    free (s1);
 
     done_testing ();
     return (0);
