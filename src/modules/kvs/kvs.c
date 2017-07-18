@@ -36,15 +36,15 @@
 #include <sys/time.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libkvs/proto.h"
-#include "src/common/libkvs/json_dirent.h"
+#include "src/common/libutil/oom.h"
+#include "src/common/libkvs/jansson_dirent.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -77,7 +77,6 @@ typedef struct {
     flux_t *h;
     uint32_t rank;
     int epoch;              /* tracks current heartbeat epoch */
-    struct json_tokener *tok;
     flux_watcher_t *prep_w;
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
@@ -85,8 +84,8 @@ typedef struct {
     const char *hash_name;
 } kvs_ctx_t;
 
-static int setroot_event_send (kvs_ctx_t *ctx, json_object *names);
-static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum);
+static int setroot_event_send (kvs_ctx_t *ctx, json_t *names);
+static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -100,8 +99,6 @@ static void freectx (void *arg)
         commit_mgr_destroy (ctx->cm);
         if (ctx->watchlist)
             wait_queue_destroy (ctx->watchlist);
-        if (ctx->tok)
-            json_tokener_free (ctx->tok);
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
@@ -136,10 +133,6 @@ static kvs_ctx_t *getctx (flux_t *h)
         ctx->h = h;
         if (flux_get_rank (h, &ctx->rank) < 0)
             goto error;
-        if (!(ctx->tok = json_tokener_new ())) {
-            errno = ENOMEM;
-            goto error;
-        }
         if (ctx->rank == 0) {
             ctx->prep_w = flux_prepare_watcher_create (r, commit_prep_cb, ctx);
             ctx->check_w = flux_check_watcher_create (r, commit_check_cb, ctx);
@@ -161,7 +154,7 @@ error:
 static void content_load_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    json_object *o;
+    json_t *o;
     const void *data;
     int size;
     const char *blobref;
@@ -172,10 +165,9 @@ static void content_load_completion (flux_future_t *f, void *arg)
         goto done;
     }
     blobref = flux_future_aux_get (f, "ref");
-    if (!(o = json_tokener_parse_ex (ctx->tok, (char *)data, size))) {
+    if (!(o = json_loads ((char *)data, JSON_DECODE_ANY, NULL))) {
         errno = EPROTO;
         flux_log_error (ctx->h, "%s", __FUNCTION__);
-        json_tokener_reset (ctx->tok);
         goto done;
     }
     /* cache entry must have be created earlier.
@@ -213,7 +205,7 @@ error:
 }
 
 /* Return true if load successful, false if stalling */
-static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_object **op)
+static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
 
@@ -270,12 +262,17 @@ static void content_store_completion (flux_future_t *f, void *arg)
     (void)content_store_get (f, arg);
 }
 
-static int content_store_request_send (kvs_ctx_t *ctx, json_object *val,
+static int content_store_request_send (kvs_ctx_t *ctx, json_t *val,
                                        bool now)
 {
     flux_future_t *f;
-    const char *data = Jtostr (val);
-    int size = strlen (data) + 1;
+    char *data = NULL;
+    int size;
+    int rc = -1;
+
+    data = json_strdump (val);
+
+    size = strlen (data) + 1;
 
     if (!(f = flux_rpc_raw (ctx->h, "content.store",
                             data, size, FLUX_NODEID_ANY, 0)))
@@ -287,9 +284,11 @@ static int content_store_request_send (kvs_ctx_t *ctx, json_object *val,
         flux_future_destroy (f);
         goto error;
     }
-    return 0;
+
+    rc = 0;
 error:
-    return -1;
+    free (data);
+    return rc;
 }
 
 static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
@@ -404,9 +403,9 @@ done:
     if (errnum == 0) {
         fence_t *f = commit_get_fence (c);
         int count;
-        if (Jget_ar_len (fence_get_json_names (f), &count) && count > 1) {
+        if ((count = json_array_size (fence_get_json_names (f))) > 1) {
             int opcount = 0;
-            (void)Jget_ar_len (fence_get_json_ops (f), &opcount);
+            opcount = json_array_size (fence_get_json_ops (f));
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
@@ -509,16 +508,13 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                             const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = NULL;
-    const char *json_str;
-    json_object *in = NULL;
-    json_object *out = NULL;
     int flags;
     const char *key;
-    json_object *val = NULL;
-    json_object *root_dirent = NULL;
-    json_object *tmp_dirent = NULL;
+    json_t *val = NULL;
+    json_t *root_dirent = NULL;
+    json_t *tmp_dirent = NULL;
     lookup_t *lh = NULL;
-    const char *root_ref = NULL;
+    json_t *root_ref = NULL;
     wait_t *wait = NULL;
     int rc = -1;
 
@@ -526,20 +522,23 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (lookup_validate (arg) == false) {
         ctx = arg;
 
-        if (flux_request_decode (msg, NULL, &json_str) < 0)
-            goto done;
-        if (!json_str || !(in = Jfromstr (json_str))) {
-            errno = EPROTO;
+        if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
+                                 "key", &key,
+                                 "flags", &flags) < 0) {
+            flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
-        if (kp_tget_dec (in, &root_dirent, &key, &flags) < 0)
-            goto done;
+
+        /* rootdir is optional */
+        (void)flux_request_unpack (msg, NULL, "{ s:o }",
+                                   "rootdir", &root_dirent);
+
         /* If root dirent was specified, lookup corresponding 'root' directory.
          * Otherwise, use the current root.
          */
         if (root_dirent) {
-            if (dirent_validate (root_dirent) < 0
-                            || !Jget_str (root_dirent, "DIRREF", &root_ref)) {
+            if (j_dirent_validate (root_dirent) < 0
+                || !(root_ref = json_object_get (root_dirent, "DIRREF"))) {
                 errno = EINVAL;
                 goto done;
             }
@@ -548,7 +547,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
                                   ctx->rootdir,
-                                  root_ref,
+                                  json_string_value (root_ref),
                                   key,
                                   flags)))
             goto done;
@@ -585,37 +584,37 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
 
     if (!root_dirent) {
-        tmp_dirent = dirent_create ("DIRREF", (char *)lookup_get_root_ref (lh));
+        tmp_dirent = j_dirent_create ("DIRREF",
+                                      (char *)lookup_get_root_ref (lh));
         root_dirent = tmp_dirent;
     }
 
-    if (!(out = kp_rget_enc (Jget (root_dirent), Jget (val))))
+    if (flux_respond_pack (h, msg, "{ s:O s:O }",
+                           "rootdir", root_dirent,
+                           "val", val) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto done;
+    }
 
     rc = 0;
 done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
+    if (rc < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s", __FUNCTION__);
+    }
     wait_destroy (wait);
     lookup_destroy (lh);
 stall:
-    Jput (in);
-    Jput (out);
-    Jput (tmp_dirent);
-    Jput (val);
+    json_decref (tmp_dirent);
+    json_decref (val);
 }
 
 static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = NULL;
-    const char *json_str;
-    json_object *in = NULL;
-    json_object *in2 = NULL;
-    json_object *out = NULL;
-    json_object *oval = NULL;
-    json_object *val = NULL;
+    json_t *oval = NULL;
+    json_t *val = NULL;
     flux_msg_t *cpy = NULL;
     const char *key;
     int flags;
@@ -623,20 +622,20 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     wait_t *wait = NULL;
     wait_t *watcher = NULL;
     bool isreplay = false;
+    bool out = false;
     int rc = -1;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
         ctx = arg;
 
-        if (flux_request_decode (msg, NULL, &json_str) < 0)
-            goto done;
-        if (!json_str || !(in = Jfromstr (json_str))) {
-            errno = EPROTO;
+        if (flux_request_unpack (msg, NULL, "{ s:s s:o s:i }",
+                                 "key", &key,
+                                 "val", &oval,
+                                 "flags", &flags) < 0) {
+            flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
-        if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
-            goto done;
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
@@ -676,57 +675,67 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     val = lookup_get_value (lh);
 
-    /* we didn't initialize these values on a replay, get them */
-    if (isreplay) {
-        if (flux_request_decode (msg, NULL, &json_str) < 0)
-            goto done;
-        if (!json_str || !(in = Jfromstr (json_str))) {
-            errno = EPROTO;
-            goto done;
-        }
-        if (kp_twatch_dec (in, &key, &oval, &flags) < 0)
-            goto done;
+    /* if no value, create json null object for remainder of code */
+    if (!val) {
+        if (!(val = json_null ()))
+            oom ();
     }
 
-    /* Value changed or this is the initial request, so prepare a reply.
-     */
-    if ((flags & KVS_PROTO_FIRST) || !json_compare (val, oval)) {
-        if (!(out = kp_rwatch_enc (Jget (val))))
+    /* we didn't initialize these values on a replay, get them */
+    if (isreplay) {
+        if (flux_request_unpack (msg, NULL, "{ s:s s:o s:i }",
+                                 "key", &key,
+                                 "val", &oval,
+                                 "flags", &flags) < 0) {
+            flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
+        }
     }
+
+    /* Value changed or this is the initial request, so there will be
+     * a reply.
+     */
+    if ((flags & KVS_WATCH_FIRST) || !json_compare (val, oval))
+        out = true;
+
     /* No reply sent or this is a multi-response watch request.
      * Arrange to wait on ctx->watchlist for each new commit.
      * Reconstruct the payload with 'first' flag clear, and updated value.
      */
-    if (!out || !(flags & KVS_PROTO_ONCE)) {
+    if (!out || !(flags & KVS_WATCH_ONCE)) {
         if (!(cpy = flux_msg_copy (msg, false)))
             goto done;
-        if (!(in2 = kp_twatch_enc (key,
-                                   Jget (val),
-                                   flags & ~KVS_PROTO_FIRST)))
+
+        if (flux_msg_pack (cpy, "{ s:s s:O s:i }",
+                           "key", key,
+                           "val", val,
+                           "flags", flags & ~KVS_WATCH_FIRST) < 0) {
+            flux_log_error (h, "%s: flux_msg_pack", __FUNCTION__);
             goto done;
-        if (flux_msg_set_json (cpy, Jtostr (in2)) < 0)
-            goto done;
+        }
         if (!(watcher = wait_create_msg_handler (h, w, cpy,
                                                  watch_request_cb, ctx)))
             goto done;
         wait_addqueue (ctx->watchlist, watcher);
     }
+
+    if (out) {
+        if (flux_respond_pack (h, msg, "{ s:O }", "val", val) < 0) {
+            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+            goto done;
+        }
+    }
     rc = 0;
 done:
-    if (rc < 0 || out != NULL) {
-        if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                                  rc < 0 ? NULL : Jtostr (out)) < 0)
+    if (rc < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s", __FUNCTION__);
     }
     wait_destroy (wait);
     lookup_destroy (lh);
 stall:
-    Jput (in);
-    Jput (in2);
-    Jput (out);
     flux_msg_destroy (cpy);
-    Jput (val);
+    json_decref (val);
 }
 
 typedef struct {
@@ -738,13 +747,15 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
 {
     unwatch_param_t *p = arg;
     char *sender = NULL;
-    json_object *o = NULL;
-    json_object *val;
-    const char *key, *topic, *json_str;
+    json_t *val;
+    const char *key, *topic;
     int flags;
     bool match = false;
 
-    if (flux_request_decode (msg, &topic, &json_str) < 0)
+    if (flux_request_unpack (msg, &topic, "{ s:s s:o s:i }",
+                             "key", &key,
+                             "val", &val,
+                             "flags", &flags) < 0)
         goto done;
     if (strcmp (topic, "kvs.watch") != 0)
         goto done;
@@ -752,17 +763,12 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
         goto done;
     if (strcmp (sender, p->sender) != 0)
         goto done;
-    if (!json_str || !(o = Jfromstr (json_str)))
-        goto done;
-    if (kp_twatch_dec (o, &key, &val, &flags) <  0)
-        goto done;
     if (strcmp (p->key, key) != 0)
         goto done;
     match = true;
 done:
     if (sender)
         free (sender);
-    Jput (o);
     return match;
 }
 
@@ -770,19 +776,13 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *in = NULL;
     unwatch_param_t p = { NULL, NULL };
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!json_str || !(in = Jfromstr (json_str))) {
-        errno = EPROTO;
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "key", &p.key) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto done;
     }
-    if (kp_tunwatch_dec (in, &p.key) < 0)
-        goto done;
     if (flux_msg_get_route_first (msg, &p.sender) < 0)
         goto done;
     if (wait_destroy_msg (ctx->watchlist, unwatch_cmp, &p) < 0)
@@ -793,7 +793,6 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
-    Jput (in);
     if (p.sender)
         free (p.sender);
 }
@@ -813,25 +812,25 @@ static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
     return 0;
 }
 
-static void finalize_fences_bynames (kvs_ctx_t *ctx, json_object *names, int errnum)
+static void finalize_fences_bynames (kvs_ctx_t *ctx, json_t *names, int errnum)
 {
     int i, len;
-    const char *name;
+    json_t *name;
     fence_t *f;
     struct finalize_data d = { .ctx = ctx, .errnum = errnum };
 
-    if (!Jget_ar_len (names, &len)) {
+    if (!(len = json_array_size (names))) {
         flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);
         return;
     }
     for (i = 0; i < len; i++) {
-        if (!Jget_ar_str (names, i, &name)) {
+        if (!(name = json_array_get (names, i))) {
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = commit_mgr_lookup_fence (ctx->cm, name))) {
+        if ((f = commit_mgr_lookup_fence (ctx->cm, json_string_value (name)))) {
             fence_iter_request_copies (f, finalize_fence_req, &d);
-            commit_mgr_remove_fence (ctx->cm, name);
+            commit_mgr_remove_fence (ctx->cm, json_string_value (name));
         }
     }
 }
@@ -842,44 +841,40 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    const char *json_str, *name;
+    const char *name;
     int nprocs, flags;
-    json_object *in = NULL;
-    json_object *ops = NULL;
+    json_t *ops = NULL;
     fence_t *f;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto done;
-    if (!json_str || !(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
-        errno = EPROTO;
-        goto done;
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
+                             "ops", &ops,
+                             "name", &name,
+                             "flags", &flags,
+                             "nprocs", &nprocs) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        return;
     }
     /* FIXME: generate a kvs.fence.abort (or similar) if an error
      * occurs after we know the fence name
      */
     if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags)))
-            goto done;
+            return;
         if (commit_mgr_add_fence (ctx->cm, f) < 0) {
             fence_destroy (f);
-            goto done;
+            return;
         }
     }
     else
         fence_set_flags (f, fence_get_flags (f) | flags);
 
     if (fence_add_request_data (f, ops) < 0)
-        goto done;
+        return;
 
     if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
-        goto done;
+        return;
 
-done:
-    Jput (in);
+    return;
 }
 
 /* kvs.fence
@@ -889,20 +884,17 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    const char *json_str, *name;
+    const char *name;
     int nprocs, flags;
-    json_object *in = NULL;
-    json_object *ops = NULL;
+    json_t *ops = NULL;
     fence_t *f;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0)
-        goto error;
-    if (!json_str || !(in = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (kp_tfence_dec (in, &name, &nprocs, &flags, &ops) < 0) {
-        errno = EPROTO;
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
+                             "ops", &ops,
+                             "name", &name,
+                             "flags", &flags,
+                             "nprocs", &nprocs) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
     if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
@@ -926,19 +918,24 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
             goto error;
     }
     else {
-        flux_future_t *f = flux_rpc (h, "kvs.relayfence", json_str,
-                                     0, FLUX_RPC_NORESPONSE);
-        if (!f)
+        flux_future_t *f;
+
+        if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
+                                 "{ s:O s:s s:i s:i }",
+                                 "ops", ops,
+                                 "name", name,
+                                 "flags", flags,
+                                 "nprocs", nprocs))) {
+            flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
             goto error;
+        }
         flux_future_destroy (f);
     }
-    Jput (in);
     return;
 
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s", __FUNCTION__);
-    Jput (in);
 }
 
 
@@ -952,8 +949,10 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
     wait_t *wait = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:i }",
-                             "rootseq", &rootseq) < 0)
+                             "rootseq", &rootseq) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
+    }
     if (ctx->rootseq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
             goto error;
@@ -962,8 +961,11 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", ctx->rootseq,
-                           "rootdir", ctx->rootdir) < 0)
+                           "rootdir", ctx->rootdir) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
+    }
+
     return;
 
 error:
@@ -980,8 +982,10 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", ctx->rootseq,
-                           "rootdir", ctx->rootdir) < 0)
+                           "rootdir", ctx->rootdir) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
+    }
     return;
 
 error:
@@ -999,8 +1003,10 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
         goto done;
     if (flux_rpc_get_unpack (f, "{ s:i s:s }",
                              "rootseq", rootseq,
-                             "rootdir", &ref) < 0)
+                             "rootdir", &ref) < 0) {
+        flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto done;
+    }
     if (strlen (ref) > sizeof (href_t) - 1) {
         errno = EPROTO;
         goto done;
@@ -1016,46 +1022,35 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *out = NULL;
-    json_object *names = NULL;
+    json_t *names = NULL;
     int errnum;
 
-    if (flux_event_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
-        goto done;
-    }
-    if (!json_str || !(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        flux_log_error (ctx->h, "%s: json_decode", __FUNCTION__);
-        goto done;
-    }
-    if (kp_terror_dec (out, &names, &errnum) < 0) {
-        flux_log_error (ctx->h, "%s: kp_terror_dec", __FUNCTION__);
-        goto done;
+    if (flux_event_unpack (msg, NULL, "{ s:o s:i }",
+                           "names", &names,
+                           "errnum", &errnum) < 0) {
+        flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
+        return;
     }
     finalize_fences_bynames (ctx, names, errnum);
-done:
-    Jput (out);
 }
 
-static int error_event_send (kvs_ctx_t *ctx, json_object *names, int errnum)
+static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum)
 {
-    json_object *in = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!(in = kp_terror_enc (names, errnum)))
+    if (!(msg = flux_event_pack ("kvs.error", "{ s:O s:i }",
+                                 "names", names,
+                                 "errnum", errnum))) {
+        flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
-    if (!(msg = flux_event_encode ("kvs.error", Jtostr (in))))
-        goto done;
+    }
     if (flux_msg_set_private (msg) < 0)
         goto done;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_msg_destroy (msg);
     return rc;
 }
@@ -1066,26 +1061,20 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    json_object *out = NULL;
     int rootseq;
-    const char *json_str;
     const char *rootdir;
-    json_object *root = NULL;
-    json_object *names = NULL;
+    json_t *root = NULL;
+    json_t *names = NULL;
 
-    if (flux_event_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
-        goto done;
+    if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
+                           "rootseq", &rootseq,
+                           "rootdir", &rootdir,
+                           "names", &names,
+                           "rootdirval", &root) < 0) {
+        flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
+        return;
     }
-    if (!json_str || !(out = Jfromstr (json_str))) {
-        errno = EPROTO;
-        flux_log_error (ctx->h, "%s: json decode", __FUNCTION__);
-        goto done;
-    }
-    if (kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &names) < 0) {
-        flux_log_error (ctx->h, "%s: kp_tsetroot_dec", __FUNCTION__);
-        goto done;
-    }
+
     finalize_fences_bynames (ctx, names, 0);
     /* Copy of root object (corresponding to rootdir blobref) was included
      * in the setroot event as an optimization, since it would otherwise
@@ -1093,27 +1082,25 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
      * if there are watchers.  Store this object in the KVS cache
      * with clear dirty bit as it is already valid in the content store.
      */
-    if (root) {
+    if (!json_is_null (root)) {
         struct cache_entry *hp;
         if ((hp = cache_lookup (ctx->cache, rootdir, ctx->epoch))) {
             if (!cache_entry_get_valid (hp))
-                cache_entry_set_json (hp, Jget (root));
+                cache_entry_set_json (hp, json_incref (root));
             if (cache_entry_get_dirty (hp))
                 cache_entry_set_dirty (hp, false);
         } else {
-            hp = cache_entry_create (Jget (root));
+            hp = cache_entry_create (json_incref (root));
             cache_insert (ctx->cache, rootdir, hp);
         }
     }
     setroot (ctx, rootdir, rootseq);
-done:
-    Jput (out);
 }
 
-static int setroot_event_send (kvs_ctx_t *ctx, json_object *names)
+static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
 {
-    json_object *in = NULL;
-    json_object *root = NULL;
+    json_t *root = NULL;
+    json_t *nullobj = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
@@ -1121,18 +1108,27 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_object *names)
         bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
     }
-    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, names)))
+    else {
+        if (!(nullobj = json_null ()))
+            oom ();
+        root = nullobj;
+    }
+    if (!(msg = flux_event_pack ("kvs.setroot", "{ s:i s:s s:O s:O }",
+                                 "rootseq", ctx->rootseq,
+                                 "rootdir", ctx->rootdir,
+                                 "names", names,
+                                 "rootdirval", root))) {
+        flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
-    if (!(msg = flux_event_encode ("kvs.setroot", Jtostr (in))))
-        goto done;
+    }
     if (flux_msg_set_private (msg) < 0)
         goto done;
     if (flux_send (ctx->h, msg, 0) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (in);
     flux_msg_destroy (msg);
+    json_decref (nullobj);
     return rc;
 }
 
@@ -1164,47 +1160,53 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
     free (sender);
 }
 
-static void add_tstat (json_object *o, const char *name, tstat_t *ts,
-                       double scale)
-{
-    json_object *t = Jnew ();
-
-    Jadd_int (t, "count", tstat_count (ts));
-    Jadd_double (t, "min", tstat_min (ts)*scale);
-    Jadd_double (t, "mean", tstat_mean (ts)*scale);
-    Jadd_double (t, "stddev", tstat_stddev (ts)*scale);
-    Jadd_double (t, "max", tstat_max (ts)*scale);
-
-    json_object_object_add (o, name, t);
-}
-
 static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    json_object *o = Jnew ();
+    json_t *t = NULL;
     tstat_t ts;
     int size, incomplete, dirty;
     int rc = -1;
+    double scale = 1E-3;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto done;
+
     memset (&ts, 0, sizeof (ts));
     cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty);
-    Jadd_double (o, "obj size total (MiB)", (double)size/1048576);
-    add_tstat (o, "obj size (KiB)", &ts, 1E-3);
-    Jadd_int (o, "#obj dirty", dirty);
-    Jadd_int (o, "#obj incomplete", incomplete);
-    Jadd_int (o, "#watchers", wait_queue_length (ctx->watchlist));
-    Jadd_int (o, "#no-op stores", commit_mgr_get_noop_stores (ctx->cm));
-    Jadd_int (o, "#faults", ctx->faults);
-    Jadd_int (o, "store revision", ctx->rootseq);
+
+    if (!(t = json_pack ("{ s:i s:f s:f s:f s:f }",
+                         "count", tstat_count (&ts),
+                         "min", tstat_min (&ts)*scale,
+                         "mean", tstat_mean (&ts)*scale,
+                         "stddev", tstat_stddev (&ts)*scale,
+                         "max", tstat_max (&ts)*scale))) {
+        errno = ENOMEM;
+        goto done;
+    }
+
+    if (flux_respond_pack (h, msg,
+                           "{ s:f s:O s:i s:i s:i s:i s:i s:i }",
+                           "obj size total (MiB)", (double)size/1048576,
+                           "obj size (KiB)", t,
+                           "#obj dirty", dirty,
+                           "#obj incomplete", incomplete,
+                           "#watchers", wait_queue_length (ctx->watchlist),
+                           "#no-op stores", commit_mgr_get_noop_stores (ctx->cm),
+                           "#faults", ctx->faults,
+                           "store revision", ctx->rootseq) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto done;
+    }
+
     rc = 0;
-done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0,
-                              rc < 0 ? NULL : Jtostr (o)) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
-    Jput (o);
+ done:
+    if (rc < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s", __FUNCTION__);
+    }
+    json_decref (t);
 }
 
 static void stats_clear (kvs_ctx_t *ctx)
@@ -1266,7 +1268,7 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 /* Store initial rootdir in local cache, and flush to content
  * cache synchronously.
  */
-static int store_initial_rootdir (kvs_ctx_t *ctx, json_object *o, href_t ref)
+static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 {
     struct cache_entry *hp;
     int rc = -1;
@@ -1287,7 +1289,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_object *o, href_t ref)
             goto done;
         }
     } else
-        json_object_put (o);
+        json_decref (o);
     rc = 0;
 done:
     return rc;
@@ -1312,8 +1314,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (ctx->rank == 0) {
-        json_object *rootdir = Jnew ();
+        json_t *rootdir;
         href_t href;
+
+        if (!(rootdir = json_object ()))
+            oom ();
 
         if (store_initial_rootdir (ctx, rootdir, href) < 0) {
             flux_log_error (h, "storing root object");
