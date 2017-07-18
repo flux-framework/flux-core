@@ -561,6 +561,26 @@ test_expect_success 'kvs: watch a dir, prefix path converted into a key'  '
         test_cmp watch_out expected
 '
 
+# Output of watch_out could be unsorted/out of order compared to
+# expected output.  This function will re-order the output in each
+# appropriate section (i.e. between ====================== lines)
+sort_watch_output() {
+        rm -f watch_out_sorted
+        rm -f tmp_watch_file
+        while read line
+        do
+            if [ "$line" = "======================" ]
+            then
+                cat tmp_watch_file | sort >> watch_out_sorted
+                echo "======================" >> watch_out_sorted
+                rm -f tmp_watch_file
+            else
+                echo "$line" >> tmp_watch_file
+            fi
+        done <watch_out
+        return 0
+}
+
 test_expect_success 'kvs: watch a dir with -R'  '
         flux kvs unlink -R $DIR &&
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
@@ -572,6 +592,7 @@ test_expect_success 'kvs: watch a dir with -R'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR.a.a=1 &&
         wait $watchpid
+        sort_watch_output
 	cat >expected <<-EOF
 	$DIR.a.a = 0
 	$DIR.a.b = 0
@@ -580,7 +601,7 @@ test_expect_success 'kvs: watch a dir with -R'  '
 	$DIR.a.b = 0
 	======================
 	EOF
-        test_cmp watch_out expected
+        test_cmp watch_out_sorted expected
 '
 
 test_expect_success 'kvs: watch a dir with -R and -d'  '
@@ -594,6 +615,7 @@ test_expect_success 'kvs: watch a dir with -R and -d'  '
         wait_watch_current "======================" &&
         flux kvs put $DIR.a.a=1 &&
         wait $watchpid
+        sort_watch_output
 	cat >expected <<-EOF
 	$DIR.a.a
 	$DIR.a.b
@@ -602,7 +624,7 @@ test_expect_success 'kvs: watch a dir with -R and -d'  '
 	$DIR.a.b
 	======================
 	EOF
-        test_cmp watch_out expected
+        test_cmp watch_out_sorted expected
 '
 
 test_done
