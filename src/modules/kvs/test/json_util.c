@@ -54,6 +54,15 @@ int main (int argc, char *argv[])
     ok (json_compare (cpy, obj) == false,
         "json_compare returns false on not duplicate");
 
+    ok (json_compare (NULL, obj) == false,
+        "json_compare returns false on one NULL");
+
+    ok (json_compare (cpy, NULL) == false,
+        "json_compare returns false on one NULL other position");
+
+    ok (json_compare (NULL, NULL) == false,
+        "json_compare returns false on both NULL");
+
     ok (json_hash ("sha1", obj, ref) == 0,
         "json_hash works on sha1");
 

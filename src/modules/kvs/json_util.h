@@ -11,6 +11,9 @@
 json_t *json_object_copydir (json_t *dir);
 
 /* Compare two json objects, return true if same, false if not
+ *
+ * Note that passing in NULL for o1, o2, or both will always result in
+ * false.
  */
 bool json_compare (json_t *o1, json_t *o2);
 
