@@ -41,15 +41,6 @@
  */
 json_t *j_dirent_create (const char *type, void *arg);
 
-/* Append a JSON object containing
- *     { "key" : key, "dirent" : dirent }
- *     { "key" : key, "dirent" : nil }
- * to a json array, creating '*array' if necessary.  This is used to build
- * a KVS commit, where each new object is an ordered operation that adds/
- * changes/unlinks a key in KVS namespace.  This function asserts on failure.
- */
-void j_dirent_append (json_t **array, const char *key, json_t *dirent);
-
 /* Compare two dirents.
  * N.B. The serialize/strcmp method used here can return false negatives,
  * but a positive can be relied on.

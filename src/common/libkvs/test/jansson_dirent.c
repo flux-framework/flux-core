@@ -4,12 +4,21 @@
 #include "src/common/libkvs/jansson_dirent.h"
 #include "src/common/libtap/tap.h"
 
+void jdiag (json_t *o)
+{
+    if (o) {
+        char *tmp = json_dumps (o, JSON_COMPACT);
+        diag ("%s", tmp);
+        free (tmp);
+    } else
+        diag ("nil");
+}
+
 int main (int argc, char *argv[])
 {
     json_t *d1;
     json_t *d2;
     json_t *dir;
-    json_t *array = NULL;
     char *s;
 
     plan (NO_PLAN);
@@ -18,57 +27,28 @@ int main (int argc, char *argv[])
     d2 = j_dirent_create ("FILEREF", "sha1-fbedb4eb241948f6f802bf47d95ec932e9d4deaf");
     ok (d1 && d2,
         "j_dirent_create FILEREF works");
+    jdiag (d1);
+    jdiag (d2);
     ok (j_dirent_match (d1, d2),
         "j_dirent_match says identical dirents match");
     ok (j_dirent_validate (d1) == 0 && j_dirent_validate (d2) == 0,
         "j_dirent_validate says they are valid");
-
-    j_dirent_append (&array, "foo", d1);
-    j_dirent_append (&array, "bar", d2);
-    ok (array != NULL && json_array_size (array) == 2,
-        "j_dirent_append works"); 
-    /* ownership of d1, d2 transferred to array */
-
-    s = json_dumps (array, JSON_ENCODE_ANY);
-    diag ("ops: %s", s);
-    free (s);
-    
-    d1 = j_dirent_create ("DIRREF", "sha1-fbedb4eb241948f6f802bf47d95ec932e9d4deaf");
-    d2 = j_dirent_create ("DIRREF", "sha1-aaaaa4eb241948f6f802bf47d95ec932e9d4deaf");
-    ok (d1 && d2,
-        "j_dirent_create DIRREF works");
-    ok (!j_dirent_match (d1, d2),
-        "j_dirent_match says different dirents are different");
-    ok (j_dirent_validate (d1) == 0 && j_dirent_validate (d2) == 0,
-        "j_dirent_validate says they are valid");
-
-    j_dirent_append (&array, "baz", d1);
-    j_dirent_append (&array, "urp", d2);
-    ok (array != NULL && json_array_size (array) == 4,
-        "j_dirent_append works"); 
-    /* ownership of d1, d2 transferred to array */
-
-    s = json_dumps (array, JSON_ENCODE_ANY);
-    diag ("ops: %s", s);
-    free (s);
+    json_decref (d1);
+    json_decref (d2);
 
     /* ownership of new objects transferred to dirents */
     d1 = j_dirent_create ("FILEVAL", json_integer (42));
     d2 = j_dirent_create ("FILEVAL", json_string ("hello world"));
     ok (d1 && d2,
         "j_dirent_create FILEVAL works");
+    jdiag (d1);
+    jdiag (d2);
     ok (!j_dirent_match (d1, d2),
         "j_dirent_match says different dirents are different");
     ok (j_dirent_validate (d1) == 0 && j_dirent_validate (d2) == 0,
         "j_dirent_validate says they are valid");
-    j_dirent_append (&array, "baz", d1);
-    j_dirent_append (&array, "urp", d2);
-    ok (array != NULL && json_array_size (array) == 6,
-        "j_dirent_append works"); 
-
-    s = json_dumps (array, JSON_ENCODE_ANY);
-    diag ("ops: %s", s);
-    free (s);
+    json_decref (d1);
+    json_decref (d2);
 
     dir = json_object ();
     json_object_set_new (dir, "foo", j_dirent_create ("FILEVAL", json_integer (33)));
@@ -78,23 +58,8 @@ int main (int argc, char *argv[])
         "j_dirent_create DIRVAL works");
     ok (j_dirent_validate (d1) == 0,
         "j_dirent_validate says it is valid");
-    j_dirent_append (&array, "mmm", d1);
-    ok (array != NULL && json_array_size (array) == 7,
-        "j_dirent_append works"); 
-
-    s = json_dumps (array, JSON_ENCODE_ANY);
-    diag ("ops: %s", s);
-    free (s);
-
-    j_dirent_append (&array, "xxx", NULL);
-    ok (array != NULL && json_array_size (array) == 8,
-        "j_dirent_append allowed op with NULL dirent (unlink op)");
-
-    s = json_dumps (array, JSON_ENCODE_ANY);
-    diag ("ops: %s", s);
-    free (s);
-
-    json_decref (array);
+    jdiag (d1);
+    json_decref (d1);
 
     /* jansson:  How is "null" decoded?  How is NULL encoded? */
     json_t *o;
