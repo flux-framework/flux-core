@@ -1,12 +1,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libkvs/proto.h"
 
 /* Current kvs_watch() API doesn't accept a rank, so we cheat and
  * build the minimal kvs.watch request message from scratch here.
@@ -16,41 +15,34 @@
  */
 void send_watch_requests (flux_t *h, const char *key)
 {
-    json_object *in;
+    int flags = KVS_WATCH_FIRST;
     flux_mrpc_t *r;
 
-    if (!(in = kp_twatch_enc (key, NULL, KVS_PROTO_FIRST)))
-        log_err_exit ("kp_twatch_enc");
-    if (!(r = flux_mrpc (h, "kvs.watch", Jtostr (in), "all", 0)))
+    if (!(r = flux_mrpcf (h, "kvs.watch", "all", 0, "{s:s s:i s:n}",
+                                                    "key", key,
+                                                    "flags", flags,
+                                                    "val")))
         log_err_exit ("flux_mrpc kvs.watch");
     do {
         if (flux_mrpc_get (r, NULL) < 0)
             log_err_exit ("kvs.watch");
     } while (flux_mrpc_next (r) == 0);
     flux_mrpc_destroy (r);
-    Jput (in);
 }
 
 /* Sum #watchers over all ranks.
  */
 int count_watchers (flux_t *h)
 {
-    json_object *out;
-    const char *json_str;
     int n, count = 0;
     flux_mrpc_t *r;
 
     if (!(r = flux_mrpc (h, "kvs.stats.get", NULL, "all", 0)))
         log_err_exit ("flux_mrpc kvs.stats.get");
     do {
-        if (flux_mrpc_get (r, &json_str) < 0)
-            log_err_exit ("kvs.stats.get");
-        if (!json_str
-            || !(out = Jfromstr (json_str))
-            || !Jget_int (out, "#watchers", &n))
-            log_msg_exit ("error decoding stats payload");
+        if (flux_mrpc_getf (r, "{s:i}", "#watchers", &n) < 0)
+            log_err_exit ("kvs.stats.get #watchers");
         count += n;
-        Jput (out);
     } while (flux_mrpc_next (r) == 0);
     flux_mrpc_destroy (r);
     return count;
