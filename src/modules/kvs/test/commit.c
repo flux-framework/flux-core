@@ -431,6 +431,147 @@ void commit_basic_commit_process_test (void)
 
     verify_value (cache, newroot, "key1", "1");
 
+    commit_mgr_remove_commit (cm, c);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
+        "commit_mgr_get_ready_commit returns NULL, no more commits");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+void commit_basic_commit_process_test_multiple_fences (void)
+{
+    struct cache *cache;
+    struct cache_count cc = { .store_count = 0, .dirty_count = 0 };
+    commit_mgr_t *cm;
+    commit_t *c;
+    href_t rootref;
+    const char *newroot;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    create_ready_commit (cm, "fence1", "key1", "1", 0);
+    create_ready_commit (cm, "fence2", "key2", "2", 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (cc.store_count == 1,
+        "correct number of cache entries had to be stored");
+
+    ok (cc.dirty_count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    strcpy (rootref, newroot);
+
+    /* get rid of the this commit, we're done */
+    commit_mgr_remove_commit (cm, c);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    cc.store_count = 0;
+    cc.dirty_count = 0;
+
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (cc.store_count == 1,
+        "correct number of cache entries had to be stored");
+
+    ok (cc.dirty_count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "key1", "1");
+    verify_value (cache, newroot, "key2", "2");
+
+    commit_mgr_remove_commit (cm, c);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
+        "commit_mgr_get_ready_commit returns NULL, no more commits");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+void commit_basic_commit_process_test_multiple_fences_merge (void)
+{
+    struct cache *cache;
+    struct cache_count cc = { .store_count = 0, .dirty_count = 0 };
+    commit_mgr_t *cm;
+    commit_t *c;
+    href_t rootref;
+    const char *newroot;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    create_ready_commit (cm, "fence1", "foo.key1", "1", 0);
+    create_ready_commit (cm, "fence2", "bar.key2", "2", 0);
+
+    /* merge ready commits */
+    commit_mgr_merge_ready_commits (cm);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    /* why three? 1 for root, 1 for foo.key1 (a new dir), and 1 for
+     * bar.key2 (a new dir)
+     */
+
+    ok (cc.store_count == 3,
+        "correct number of cache entries had to be stored");
+
+    ok (cc.dirty_count == 3,
+        "correct number of cache entries were dirty");
+
+    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "foo.key1", "1");
+    verify_value (cache, newroot, "bar.key2", "2");
+
+    commit_mgr_remove_commit (cm, c);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
+        "commit_mgr_get_ready_commit returns NULL, no more commits");
+
     commit_mgr_destroy (cm);
     cache_destroy (cache);
 }
@@ -1025,6 +1166,132 @@ void commit_process_delete_test (void) {
     cache_destroy (cache);
 }
 
+void commit_process_delete_nosubdir_test (void) {
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    json_t *dir;
+    href_t root_ref;
+    href_t dir_ref;
+    const char *newroot;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is
+     *
+     * root
+     * { "dir" : { "DIRREF" : <ref to dir> } }
+     *
+     * dir
+     * { "fileval" : { "FILEVAL" : "42" } }
+     *
+     */
+
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
+
+    ok (json_hash ("sha1", dir, dir_ref) == 0,
+        "json_hash worked");
+
+    cache_insert (cache, dir_ref, cache_entry_create (dir));
+
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+
+    ok (json_hash ("sha1", root, root_ref) == 0,
+        "json_hash worked");
+
+    cache_insert (cache, root_ref, cache_entry_create (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /* subdir doesn't exist for this key */
+    /* NULL value --> delete */
+    create_ready_commit (cm, "fence1", "noexistdir.fileval", NULL, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "noexistdir.fileval", NULL);
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+void commit_process_delete_filevalinpath_test (void) {
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    json_t *dir;
+    href_t root_ref;
+    href_t dir_ref;
+    const char *newroot;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is
+     *
+     * root
+     * { "dir" : { "DIRREF" : <ref to dir> } }
+     *
+     * dir
+     * { "fileval" : { "FILEVAL" : "42" } }
+     *
+     */
+
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
+
+    ok (json_hash ("sha1", dir, dir_ref) == 0,
+        "json_hash worked");
+
+    cache_insert (cache, dir_ref, cache_entry_create (dir));
+
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+
+    ok (json_hash ("sha1", root, root_ref) == 0,
+        "json_hash worked");
+
+    cache_insert (cache, root_ref, cache_entry_create (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /* fileval is in path */
+    /* NULL value --> delete */
+    create_ready_commit (cm, "fence1", "dir.fileval.filebaz", NULL, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "dir.fileval.filebaz", NULL);
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
 void commit_process_big_fileval (void) {
     struct cache *cache;
     commit_mgr_t *cm;
@@ -1099,6 +1366,137 @@ void commit_process_big_fileval (void) {
     cache_destroy (cache);
 }
 
+/* Test giant directory entry, as large json objects will iterate through
+ * their entries randomly based on the internal hash data structure.
+ */
+void commit_process_giant_dir (void) {
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    json_t *dir;
+    href_t root_ref;
+    href_t dir_ref;
+    const char *newroot;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is.
+     *
+     * root
+     * { "dir" : { "DIRREF" : <ref to dir> } }
+     *
+     * Mix up keys and upper/lower case to get different hash ordering
+     * other than the "obvious" one.
+     *
+     * dir
+     * { "fileval0000" : { "FILEVAL" : "0" },
+     *   "fileval0010" : { "FILEVAL" : "1" },
+     *   "fileval0200" : { "FILEVAL" : "2" },
+     *   "fileval3000" : { "FILEVAL" : "3" },
+     *   "fileval0004" : { "FILEVAL" : "4" },
+     *   "fileval0050" : { "FILEVAL" : "5" },
+     *   "fileval0600" : { "FILEVAL" : "6" },
+     *   "fileval7000" : { "FILEVAL" : "7" },
+     *   "fileval0008" : { "FILEVAL" : "8" },
+     *   "fileval0090" : { "FILEVAL" : "9" },
+     *   "fileval0a00" : { "FILEVAL" : "A" },
+     *   "filevalB000" : { "FILEVAL" : "b" },
+     *   "fileval000c" : { "FILEVAL" : "C" },
+     *   "fileval00D0" : { "FILEVAL" : "d" },
+     *   "fileval0e00" : { "FILEVAL" : "E" },
+     *   "filevalF000" : { "FILEVAL" : "f" } }
+     *
+     */
+
+    dir = json_object();
+    json_object_set (dir, "fileval0000",
+                     j_dirent_create ("FILEVAL", json_string ("0")));
+    json_object_set (dir, "fileval0010",
+                     j_dirent_create ("FILEVAL", json_string ("1")));
+    json_object_set (dir, "fileval0200",
+                     j_dirent_create ("FILEVAL", json_string ("2")));
+    json_object_set (dir, "fileval3000",
+                     j_dirent_create ("FILEVAL", json_string ("3")));
+    json_object_set (dir, "fileval0004",
+                     j_dirent_create ("FILEVAL", json_string ("4")));
+    json_object_set (dir, "fileval0050",
+                     j_dirent_create ("FILEVAL", json_string ("5")));
+    json_object_set (dir, "fileval0600",
+                     j_dirent_create ("FILEVAL", json_string ("6")));
+    json_object_set (dir, "fileval7000",
+                     j_dirent_create ("FILEVAL", json_string ("7")));
+    json_object_set (dir, "fileval0008",
+                     j_dirent_create ("FILEVAL", json_string ("8")));
+    json_object_set (dir, "fileval0090",
+                     j_dirent_create ("FILEVAL", json_string ("9")));
+    json_object_set (dir, "fileval0a00",
+                     j_dirent_create ("FILEVAL", json_string ("A")));
+    json_object_set (dir, "filevalB000",
+                     j_dirent_create ("FILEVAL", json_string ("b")));
+    json_object_set (dir, "fileval000c",
+                     j_dirent_create ("FILEVAL", json_string ("C")));
+    json_object_set (dir, "fileval00D0",
+                     j_dirent_create ("FILEVAL", json_string ("d")));
+    json_object_set (dir, "fileval0e00",
+                     j_dirent_create ("FILEVAL", json_string ("E")));
+    json_object_set (dir, "filevalF000",
+                     j_dirent_create ("FILEVAL", json_string ("f")));
+
+    ok (json_hash ("sha1", dir, dir_ref) == 0,
+        "json_hash worked");
+
+    cache_insert (cache, dir_ref, cache_entry_create (dir));
+
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+
+    ok (json_hash ("sha1", root, root_ref) == 0,
+        "json_hash worked");
+
+    cache_insert (cache, root_ref, cache_entry_create (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /* make three ready commits */
+    create_ready_commit (cm, "fence1", "dir.fileval0200", "foo", 0);
+    create_ready_commit (cm, "fence2", "dir.fileval0090", "bar", 0);
+    /* NULL value --> delete */
+    create_ready_commit (cm, "fence3", "dir.fileval00D0", NULL, 0);
+
+    /* merge these three commits */
+    commit_mgr_merge_ready_commits (cm);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "dir.fileval0200", "foo");
+    verify_value (cache, newroot, "dir.fileval0090", "bar");
+    verify_value (cache, newroot, "dir.fileval00D0", NULL);
+
+    commit_mgr_remove_commit (cm, c);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
+        "commit_mgr_get_ready_commit returns NULL, no more commits");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1109,6 +1507,8 @@ int main (int argc, char *argv[])
     commit_basic_commit_process_test ();
     commit_process_root_missing ();
     commit_process_missing_ref ();
+    commit_basic_commit_process_test_multiple_fences ();
+    commit_basic_commit_process_test_multiple_fences_merge ();
     /* no need for dirty_cache_entries() test, as it is the most
      * "normal" situation and is tested throughout
      */
@@ -1118,7 +1518,10 @@ int main (int argc, char *argv[])
     commit_process_follow_link ();
     commit_process_dirval_test ();
     commit_process_delete_test ();
+    commit_process_delete_nosubdir_test ();
+    commit_process_delete_filevalinpath_test ();
     commit_process_big_fileval ();
+    commit_process_giant_dir ();
 
     done_testing ();
     return (0);
