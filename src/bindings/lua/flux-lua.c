@@ -1023,7 +1023,7 @@ static int kvswatch_cb_common (const char *key, kvsdir_t *dir,
     assert (lua_isuserdata (L, -1));
 
     if (dir) {
-        lua_push_kvsdir (L, dir);
+        lua_push_kvsdir_external (L, dir); // take a reference
         lua_pushnil (L);
     }
     else if (val) {
