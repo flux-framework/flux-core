@@ -7,7 +7,6 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/proto.h"
 #include "src/common/libkvs/json_dirent.h"
-#include "src/modules/kvs/waitqueue.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
 #include "src/modules/kvs/json_util.h"
