@@ -224,7 +224,6 @@ static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
     if (dispatch_watch (h, wp, json_str) < 0)
         flux_reactor_stop_error (flux_get_reactor (h));
 done:
-    json_decref (val);
     free (json_str);
 }
 
