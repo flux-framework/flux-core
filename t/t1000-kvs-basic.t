@@ -67,6 +67,12 @@ test_expect_success 'kvs: value can be empty' '
 	  test_kvs_key $KEY "" &&
 	  test_kvs_type $KEY string
 '
+test_expect_success 'kvs: put JSON null is converted to string' '
+	${KVSBASIC} put $KEY=null &&
+	  test_kvs_key $KEY null &&
+	  test_kvs_type $KEY string
+'
+
 KEY=$TEST.b.c.d
 DIR=$TEST.b.c
 test_expect_success 'kvs: string put' '
@@ -647,8 +653,8 @@ test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
 	${KVSBASIC} unlink $TEST.a
 '
 
-test_expect_success 'kvs: 8192 simultaneous watches works' '
-	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 8192 &&
+test_expect_success 'kvs: 256 simultaneous watches works' '
+	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 256 &&
 	${KVSBASIC} unlink $TEST.a
 '
 

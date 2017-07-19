@@ -98,6 +98,7 @@ struct prog_ctx {
     struct pmi_simple_server *pmi;
     unsigned int barrier_sequence;
     char barrier_name[64];
+    flux_kvs_txn_t *barrier_txn;
 
     uint32_t noderank;
 
@@ -661,6 +662,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         zhash_destroy (&ctx->options);
     if (ctx->completion_refs)
         zhash_destroy (&ctx->completion_refs);
+
+    flux_kvs_txn_destroy (ctx->barrier_txn);
 
     free (ctx);
 }
@@ -2191,16 +2194,24 @@ static int wreck_pmi_kvs_put (void *arg, const char *kvsname,
         const char *key, const char *val)
 {
     struct prog_ctx *ctx = arg;
-    char *kvskey;
-    int rc;
+    char *kvskey = NULL;
+    int rc = -1;
 
     if (asprintf (&kvskey, "%s.%s", kvsname, key) < 0) {
         wlog_err (ctx, "pmi_kvs_put: asprintf: %s", strerror (errno));
-        return (-1);
+        goto done;
     }
-    kvs_fence_set_context (ctx->flux, ctx->barrier_name);
-    rc = kvs_put_string (ctx->flux, kvskey, val);
-    kvs_fence_clear_context (ctx->flux);
+    if (!ctx->barrier_txn && !(ctx->barrier_txn = flux_kvs_txn_create ())) {
+        wlog_err (ctx, "pmi_kvs_put: flux_kvs_txn_create: %s",
+                  strerror (errno));
+        goto done;
+    }
+    if (flux_kvs_txn_pack (ctx->barrier_txn, 0, kvskey, "s", val) < 0) {
+        wlog_err (ctx, "pmi_kvs_put: flux_kvs_txn_pack: %s", strerror (errno));
+        goto done;
+    }
+    rc = 0;
+done:
     free (kvskey);
     return (rc);
 }
@@ -2256,7 +2267,7 @@ static void wreck_barrier_next (struct prog_ctx *ctx)
 static void wreck_barrier_complete (flux_future_t *f, void *arg)
 {
     struct prog_ctx *ctx = arg;
-    int rc = kvs_fence_finish (f);
+    int rc = flux_future_get (f, NULL);
     pmi_simple_server_barrier_complete (ctx->pmi, rc);
     flux_future_destroy (f);
     wreck_barrier_next (ctx);
@@ -2267,16 +2278,19 @@ static int wreck_pmi_barrier_enter (void *arg)
     struct prog_ctx *ctx = arg;
     flux_future_t *f;
 
-    if ((f = kvs_fence_begin (ctx->flux, ctx->barrier_name,
-                                ctx->nnodes, 0)) == NULL) {
-        wlog_err (ctx, "pmi_barrier_enter: kvs_fence_begin: %s",
+    if ((f = flux_kvs_fence (ctx->flux, 0, ctx->barrier_name,
+                             ctx->nnodes, ctx->barrier_txn)) == NULL) {
+        wlog_err (ctx, "pmi_barrier_enter: flux_kvs_fence: %s",
                   strerror (errno));
         goto out;
     }
     if (flux_future_then (f, -1., wreck_barrier_complete, ctx) < 0) {
-        wlog_err (ctx, "pmi_barrier_enter: future_then: %s", strerror (errno));
+        wlog_err (ctx, "pmi_barrier_enter: flux_future_then: %s",
+                  strerror (errno));
         flux_future_destroy (f);
     }
+    flux_kvs_txn_destroy (ctx->barrier_txn);
+    ctx->barrier_txn = NULL;
 out:
     return (f== NULL ? -1 : 0);
 }

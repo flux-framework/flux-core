@@ -1,6 +1,11 @@
 #ifndef _FLUX_CORE_KVS_WATCH_H
 #define _FLUX_CORE_KVS_WATCH_H
 
+enum kvs_watch_flags {
+    KVS_WATCH_ONCE = 4,
+    KVS_WATCH_FIRST = 8,
+};
+
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
                          int errnum);
 typedef int (*kvs_set_dir_f)(const char *key, kvsdir_t *dir, void *arg,

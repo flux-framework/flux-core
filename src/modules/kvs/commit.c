@@ -619,7 +619,7 @@ void commit_mgr_merge_ready_commits (commit_mgr_t *cm)
     if (c
         && c->errnum == 0
         && c->state <= COMMIT_STATE_APPLY_OPS
-        && !(fence_get_flags (c->f) & KVS_NO_MERGE)) {
+        && !(fence_get_flags (c->f) & FLUX_KVS_NO_MERGE)) {
         commit_t *nc;
         nc = zlist_pop (cm->ready);
         assert (nc == c);

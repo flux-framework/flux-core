@@ -397,3 +397,6 @@ EISDIR
 READDIR
 lookupat
 symlink
+nprocs
+procs
+txn

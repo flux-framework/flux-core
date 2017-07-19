@@ -1,0 +1,125 @@
+flux_kvs_txn_create(3)
+======================
+:doctype: manpage
+
+
+NAME
+----
+flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink - operate on a KVS transaction object
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_kvs_txn_t *flux_kvs_txn_create (void);
+
+ void flux_kvs_txn_destroy (flux_kvs_txn_t *txn);
+
+ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
+                       const char *key, const char *json_str);
+
+ int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
+                        const char *key, const char *fmt, ...);
+
+ int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
+                         const char *key);
+
+ int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
+                          const char *key);
+
+ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
+                           const char *key, const char *target);
+
+
+DESCRIPTION
+-----------
+
+`flux_kvs_txn_create()` creates a KVS transaction object that may be
+passed to `flux_kvs_commit(3)` or `flux_kvs_fence(3)`.  The transaction
+consists of a list of operations that are applied to the KVS together,
+in order.  The entire transaction either succeeds or fails.  After commit
+or fence, the object must be destroyed with `flux_kvs_txn_destroy()`.
+
+`flux_kvs_txn_put()` sets _key_ to a value represented by _json_str_.
+If _key_ does not exist it is created.  _key_ is hierarchical, with period
+(".") used as a path separator.  "." represents the root of the namespace
+and is optional at the beginning of _key_.  Any path components in _key_
+that do not exist is created.  Any path components in _key_ that must be
+converted to directories are overwritten.  The value _json_str_ may be be
+any bare JSON value (except null), a JSON array, or a JSON object, encoded
+as a string.  Alternatively, the FLUX_KVS_TREEOBJ flag may be specified
+indicating that the _json_str_ value is to be interpreted as an RFC 11
+tree object, as described in FLAGS below.  A NULL _json_str_ value is
+equivalent to calling `flux_kvs_txn_unlink()` on _key_.
+
+`flux_kvs_txn_pack()` is identical to `flux_kvs_txn_put()`, except
+`json_pack()` style arguments (see below) are used to construct the
+value.
+
+`flux_kvs_txn_mkdir()` sets _key_ to an empty directory.
+
+`flux_kvs_txn_unlink()` removes _key_.  If _key_ is a directory,
+all its contents are removed as well.
+
+`flux_kvs_txn_symlink()` sets _key_ to a symbolic link pointing to _target_,
+another key.  _target_ need not exist.
+
+
+FLAGS
+-----
+
+The _flags_ argument may be zero, or a bitmask of one or more of the
+following flags:
+
+FLUX_KVS_TREEOBJ::
+The specified value is interpreted as an RFC 11 tree object (KVS meta data)
+rather than the actual value.  Currently the only way to obtain a valid
+tree object is with `flux_kvs_lookup(3)` or `flux_kvs_lookupat(3)`.  In
+the future, other methods may be available.  Note: this flag is only
+valid for `flux_kvs_txn_put()` and `flux_kvs_txn_pack()`.
+
+
+include::JSON_PACK.adoc[]
+
+
+RETURN VALUE
+------------
+
+`flux_kvs_txn_create()` returns a `flux_kvs_txn_t` object on success,
+or NULL on failure with errno set appropriately.
+
+`flux_kvs_txn_put()`, `flux_kvs_txn_pack()`, `flux_kvs_txn_mkdir()`,
+`flux_kvs_txn_unlink()`, and `flux_kvs_txn_symlink()` returns 0 on success,
+or -1 on failure with errno set appropriately.
+
+ERRORS
+------
+
+EINVAL::
+One of the arguments was invalid.
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_kvs_commit(3)
+
+https://github.com/flux-framework/rfc/blob/master/spec_11.adoc[RFC 11: Key Value Store Tree Object Format v1]

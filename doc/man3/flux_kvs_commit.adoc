@@ -1,0 +1,104 @@
+flux_kvs_commit(3)
+==================
+:doctype: manpage
+
+
+NAME
+----
+flux_kvs_commit, flux_kvs_fence - commit a KVS transaction
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_future_t *flux_kvs_commit (flux_t *h,
+                                 int flags,
+                                 flux_kvs_txn_t *txn);
+
+ flux_future_t *flux_kvs_fence (flux_t *h,
+                                int flags,
+                                const char *name,
+                                int nprocs,
+                                flux_kvs_txn_t *txn);
+
+DESCRIPTION
+-----------
+
+`flux_kvs_commit()` sends a request via handle _h_ to the KVS service
+to commit a transaction _txn_.  _txn_ is created with `flux_kvs_txn_create(3)`
+and after commit completion, is destroyed with `flux_kvs_txn_destroy()`.
+A `flux_future_t` object is returned, which acts as handle for synchronization
+and container for the response.  _flags_ modifies the request as described
+below.
+
+`flux_kvs_fence()` is a "collective" version of `flux_kvs_commit()` that
+supports multiple callers.  Each caller uses the same _flags_, _name_,
+and _nprocs_ arguments.  Once _nprocs_ requests are received by the KVS
+service for the named operation, the transactions are combined and committed
+together as one transaction.  _name_ must be unique across the Flux session
+and should not be reused, even after the fence is complete.
+
+`flux_future_then(3)` may be used to register a reactor callback
+(continuation) to be called once the response to the commit/fence
+request has been received.  `flux_future_wait_for(3)` may be used to
+block until the response has been received.  Both accept an optional timeout.
+
+`flux_future_get()` decodes the response, and returns 0 if the commit/fence
+was successful, indicating the entire transaction was committed, or -1
+on failure, indicating none of the transaction was committed.
+
+FLAGS
+-----
+
+The following are valid bits in a _flags_ mask passed as an argument
+to `flux_kvs_commit()` or `flux_kvs_fence()`.
+
+FLUX_KVS_NO_MERGE::
+The KVS service may merge contemporaneous commit transactions as an
+optimization.  However, if the combined transactions modify the same key,
+a watch on that key may only be notified of the last-in value.  This flag
+can be used to disable that optimization for this transaction.
+
+
+RETURN VALUE
+------------
+
+`flux_kvs_commit()` and `flux_kvs_fence()` return a `flux_future_t` on
+success, or NULL on failure with errno set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+One of the arguments was invalid.
+
+ENOMEM::
+Out of memory.
+
+EPROTO::
+A request was malformed.
+
+ENOSYS::
+The KVS module is not loaded.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_future_then(3), flux_kvs_txn_create(3)

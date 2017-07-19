@@ -5,6 +5,15 @@
 
 #include "src/common/libutil/log.h"
 
+void kput_txn (flux_kvs_txn_t *txn, const char *s, int val)
+{
+    char key[128];
+    snprintf (key, sizeof (key), "test.asyncfence.%s", s);
+    if (flux_kvs_txn_pack (txn, 0, key, "i", val) < 0)
+        log_err_exit ("flux_kvs_txn_pack %s=%d", key, val);
+    log_msg ("flux_kvs_txn_pack %s=%d", key, val);
+}
+
 void kput (flux_t *h, const char *s, int val)
 {
     char key[128];
@@ -19,19 +28,6 @@ void kcommit (flux_t *h)
     if (kvs_commit (h, 0) < 0)
         log_err_exit ("kvs_commit");
     log_msg ("kvs_commit");
-}
-
-void kfencectx (flux_t *h, const char *s)
-{
-    if (s) {
-        char name[128];
-        snprintf (name, sizeof (name), "test.asyncfence.%s", s);
-        kvs_fence_set_context (h, name);
-        log_msg ("kvs_fence_set_context %s", name);
-    } else {
-        kvs_fence_clear_context (h);
-        log_msg ("kvs_fence_clear_context");
-    }
 }
 
 void kfence (flux_t *h, const char *s)
@@ -89,6 +85,7 @@ int main (int argc, char *argv[])
 {
     flux_t *h;
     flux_future_t *f;
+    flux_kvs_txn_t *txn;
 
     log_init ("asynfence");
 
@@ -103,15 +100,19 @@ int main (int argc, char *argv[])
      * fence 2
      * get a,b (should be 42,43)
      */
-    kput (h, "a", 42);
-    if (!(f = kvs_fence_begin (h, "test.asyncfence.1", 1, 0)))
-        log_err_exit ("kvs_fence_begin 1");
-    log_msg ("kvs_fence_begin 1");
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    kput_txn (txn, "a", 42);
+    if (!(f = flux_kvs_fence (h, 0, "test.asyncfence.1", 1, txn)))
+        log_err_exit ("flux_kvs_fence 1");
+    flux_kvs_txn_destroy (txn);
+    log_msg ("BEGIN fence 1");
+
     kput (h, "b", 43);
-    if (kvs_fence_finish (f) < 0)
-        log_err_exit ("kvs_fence_finish 1");
+    if (flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_future_get");
     flux_future_destroy (f);
-    log_msg ("kvs_fence_finish 1");
+    log_msg ("FINISH fence 1");
     kget (h, "a", 42);
     kget_xfail (h, "b");
     kfence (h, "2");
@@ -120,51 +121,6 @@ int main (int argc, char *argv[])
 
     /* Clean up
      */
-    kunlink (h, "a");
-    kunlink (h, "b");
-    kcommit (h);
-
-    /* put a=1
-     * put b=2
-     * set_context 3
-     *   put b=3
-     *   put c=4
-     * set_context 4
-     *   put c=5
-     *   put d=6
-     * clear context
-     * fence 4
-     * get a,b,c,d (should be fail,fail,5,6)
-     * fence 3
-     * get a,b,c,d (should be fail,3,4,6)
-     * commit
-     * get a,b,c,d (should be 1,2,4,6)
-     */
-    kput (h, "a", 1);
-    kput (h, "b", 2);
-    kfencectx (h, "3");
-    kput (h, "b", 3);
-    kput (h, "c", 4);
-    kfencectx (h, "4");
-    kput (h, "c", 5);
-    kput (h, "d", 6);
-    kfencectx (h, NULL);
-    kfence (h, "4");
-    kget_xfail (h, "a");
-    kget_xfail (h, "b");
-    kget (h, "c", 5);
-    kget (h, "d", 6);
-    kfence (h, "3");
-    kget_xfail (h, "a");
-    kget (h, "b", 3);
-    kget (h, "c", 4);
-    kget (h, "d", 6);
-    kcommit (h);
-    kget (h, "a", 1);
-    kget (h, "b", 2);
-    kget (h, "c", 4);
-    kget (h, "d", 6);
-
     kvs_unlink (h, "test.asyncfence");
     kcommit (h);
 
