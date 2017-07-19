@@ -14,8 +14,6 @@ noinst_LTLIBRARIES = libkvs.la
 libkvs_la_SOURCES = \
 	kvs.c \
 	kvs_lookup.c \
-	json_dirent.c \
-	json_dirent.h \
 	kvs_dir.c \
 	kvs_classic.c \
 	kvs_watch.c \
@@ -33,7 +31,6 @@ fluxcoreinclude_HEADERS = \
 	kvs_txn.h
 
 TESTS = \
-	test_dirent.t \
 	test_jansson_dirent.t \
 	test_kvs_txn.t
 
@@ -54,10 +51,6 @@ test_ldadd = \
 test_cppflags = \
 	$(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src/common/libtap
-
-test_dirent_t_SOURCES = test/dirent.c
-test_dirent_t_CPPFLAGS = $(test_cppflags)
-test_dirent_t_LDADD = $(test_ldadd)
 
 test_jansson_dirent_t_SOURCES = test/jansson_dirent.c
 test_jansson_dirent_t_CPPFLAGS = $(test_cppflags)
