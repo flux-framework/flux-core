@@ -266,14 +266,6 @@ int kvs_mkdir (flux_t *h, const char *key)
     return flux_kvs_txn_mkdir (txn, 0, key);
 }
 
-int kvs_put_treeobj (flux_t *h, const char *key, const char *treeobj)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, key, treeobj);
-}
-
 int kvs_copy (flux_t *h, const char *from, const char *to)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);

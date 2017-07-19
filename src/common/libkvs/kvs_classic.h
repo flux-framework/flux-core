@@ -14,7 +14,6 @@ int kvs_put_int64 (flux_t *h, const char *key, int64_t val);
 int kvs_unlink (flux_t *h, const char *key);
 int kvs_symlink (flux_t *h, const char *key, const char *target);
 int kvs_mkdir (flux_t *h, const char *key);
-int kvs_put_treeobj (flux_t *h, const char *key, const char *treeobj);
 int kvs_copy (flux_t *h, const char *from, const char *to);
 int kvs_move (flux_t *h, const char *from, const char *to);
 
