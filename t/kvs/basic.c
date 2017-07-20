@@ -748,10 +748,14 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
     if (!val)
         log_msg_exit ("put-treeobj: you must specify a value as key=val");
     *val++ = '\0';
-    if (kvs_put_treeobj (h, key, val) < 0)
-        log_err_exit ("kvs_put_treeobj %s=%s", key, val);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    flux_kvs_txn_t *txn;
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, key, val) < 0)
+        log_err_exit ("flux_kvs_txn_put %s=%s", key, val);
+    if (flux_kvs_commit (h, 0, txn) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_kvs_txn_destroy (txn);
     free (key);
 }
 

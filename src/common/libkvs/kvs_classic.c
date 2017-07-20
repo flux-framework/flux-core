@@ -242,22 +242,6 @@ int kvs_put_int64 (flux_t *h, const char *key, int64_t val)
     return flux_kvs_txn_pack (txn, 0, key, "I", val);
 }
 
-int kvs_put_double (flux_t *h, const char *key, double val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "f", val);
-}
-
-int kvs_put_boolean (flux_t *h, const char *key, bool val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "b", (int)val);
-}
-
 int kvs_unlink (flux_t *h, const char *key)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
@@ -280,14 +264,6 @@ int kvs_mkdir (flux_t *h, const char *key)
     if (!txn)
         return -1;
     return flux_kvs_txn_mkdir (txn, 0, key);
-}
-
-int kvs_put_treeobj (flux_t *h, const char *key, const char *treeobj)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, key, treeobj);
 }
 
 int kvs_copy (flux_t *h, const char *from, const char *to)
