@@ -41,12 +41,6 @@
  */
 json_t *j_dirent_create (const char *type, void *arg);
 
-/* Compare two dirents.
- * N.B. The serialize/strcmp method used here can return false negatives,
- * but a positive can be relied on.
- */
-bool j_dirent_match (json_t *dirent1, json_t *dirent2);
-
 int j_dirent_validate (json_t *dirent);
 
 /*

@@ -72,17 +72,6 @@ json_t *j_dirent_create (const char *type, void *arg)
     return dirent;
 }
 
-bool j_dirent_match (json_t *dirent1, json_t *dirent2)
-{
-    if (!dirent1 && !dirent2)
-        return true;
-    if ((dirent1 && !dirent2) || (!dirent1 && dirent2))
-        return false;
-    if (json_equal (dirent1, dirent2))
-        return true;
-    return false;
-}
-
 int j_dirent_validate (json_t *dirent)
 {
     json_t *o;

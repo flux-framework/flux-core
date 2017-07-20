@@ -29,8 +29,8 @@ int main (int argc, char *argv[])
         "j_dirent_create FILEREF works");
     jdiag (d1);
     jdiag (d2);
-    ok (j_dirent_match (d1, d2),
-        "j_dirent_match says identical dirents match");
+    ok (json_equal (d1, d2),
+        "json_equal says identical dirents match");
     ok (j_dirent_validate (d1) == 0 && j_dirent_validate (d2) == 0,
         "j_dirent_validate says they are valid");
     json_decref (d1);
@@ -43,8 +43,8 @@ int main (int argc, char *argv[])
         "j_dirent_create FILEVAL works");
     jdiag (d1);
     jdiag (d2);
-    ok (!j_dirent_match (d1, d2),
-        "j_dirent_match says different dirents are different");
+    ok (json_equal (d1, d2) == false,
+        "json_equal says different dirents are different");
     ok (j_dirent_validate (d1) == 0 && j_dirent_validate (d2) == 0,
         "j_dirent_validate says they are valid");
     json_decref (d1);
