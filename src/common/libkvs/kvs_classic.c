@@ -247,7 +247,7 @@ int kvs_put_double (flux_t *h, const char *key, double val)
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
         return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "F", val);
+    return flux_kvs_txn_pack (txn, 0, key, "f", val);
 }
 
 int kvs_put_boolean (flux_t *h, const char *key, bool val)
@@ -400,7 +400,7 @@ int kvsdir_put_double (kvsdir_t *dir, const char *key, double val)
     int rc;
     if (dir_put_init (dir, key, &dp) < 0)
         return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "F", val);
+    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "f", val);
     dir_put_fini (&dp);
     return rc;
 }
