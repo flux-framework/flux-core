@@ -57,11 +57,6 @@ json_t *json_object_copydir (json_t *dir)
     return cpy;
 }
 
-bool json_compare (json_t *o1, json_t *o2)
-{
-    return json_equal (o1, o2);
-}
-
 char *json_strdump (json_t *o)
 {
     /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must

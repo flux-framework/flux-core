@@ -47,22 +47,9 @@ int main (int argc, char *argv[])
     ok (strcmp (s, "cow") == 0,
         "string C is correct");
 
-    ok (json_compare (cpy, obj) == true,
-        "json_compare returns true on duplicate");
-
-    json_object_set_new (obj, "D", json_string ("dumdum"));
-
-    ok (json_compare (cpy, obj) == false,
-        "json_compare returns false on not duplicate");
-
-    ok (json_compare (NULL, obj) == false,
-        "json_compare returns false on one NULL");
-
-    ok (json_compare (cpy, NULL) == false,
-        "json_compare returns false on one NULL other position");
-
-    ok (json_compare (NULL, NULL) == false,
-        "json_compare returns false on both NULL");
+    /* now use comparison to verify */
+    ok (json_equal (cpy, obj) == true,
+        "json_equal returns true on duplicate");
 
     ok (json_hash ("sha1", obj, ref) == 0,
         "json_hash works on sha1");

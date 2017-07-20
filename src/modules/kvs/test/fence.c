@@ -56,7 +56,7 @@ void basic_api_tests (void)
     names = json_array ();
     json_array_append_new (names, json_string ("foo"));
 
-    ok (json_compare (names, o) == true,
+    ok (json_equal (names, o) == true,
         "initial fence_get_json_names match");
 
     json_decref (names);
@@ -71,7 +71,7 @@ void basic_api_tests (void)
     ok ((o = fence_get_json_ops (f)) != NULL,
         "initial fence_get_json_ops call works");
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "initial fence_get_json_ops match");
 
     json_decref (ops);
@@ -151,7 +151,7 @@ void ops_tests (void)
                            json_array_append_new (ops, json_string ("A"));
                            json_array_append_new (ops, json_string ("B"));
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "fence_get_json_ops match");
 
     json_decref (ops);
@@ -240,7 +240,7 @@ void merge_tests (void)
     json_array_append_new (names, json_string ("foo"));
     json_array_append_new (names, json_string ("bar"));
 
-    ok (json_compare (names, o) == true,
+    ok (json_equal (names, o) == true,
         "fence_get_json_names match");
 
     json_decref (names);
@@ -252,7 +252,7 @@ void merge_tests (void)
     json_array_append_new (ops, json_string ("A"));
     json_array_append_new (ops, json_string ("B"));
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "fence_get_json_ops match");
 
     fence_destroy (f1);

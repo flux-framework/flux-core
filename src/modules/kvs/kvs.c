@@ -695,7 +695,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     /* Value changed or this is the initial request, so there will be
      * a reply.
      */
-    if ((flags & KVS_WATCH_FIRST) || !json_compare (val, oval))
+    if ((flags & KVS_WATCH_FIRST) || !json_equal (val, oval))
         out = true;
 
     /* No reply sent or this is a multi-response watch request.

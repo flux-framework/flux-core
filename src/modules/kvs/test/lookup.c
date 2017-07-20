@@ -200,7 +200,7 @@ void check_common (lookup_t *lh,
         ok ((val = lookup_get_value (lh)) != NULL,
             "%s: lookup_get_value returns non-NULL as expected", msg);
         if (val) {
-            ok (json_compare (get_value_result, val) == true,
+            ok (json_equal (get_value_result, val) == true,
                 "%s: lookup_get_value returned matching value", msg);
             json_decref (val);
         }

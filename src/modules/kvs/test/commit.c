@@ -170,13 +170,13 @@ void verify_ready_commit (commit_mgr_t *cm,
     ok ((o = fence_get_json_names (f)) != NULL,
         "fence_get_json_names works");
 
-    ok (json_compare (names, o) == true,
+    ok (json_equal (names, o) == true,
         "names match %s", extramsg);
 
     ok ((o = fence_get_json_ops (f)) != NULL,
         "fence_get_json_ops works");
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "ops match %s", extramsg);
 }
 
@@ -381,7 +381,7 @@ void verify_value (struct cache *cache,
         test = json_string (val);
         ok ((o = lookup_get_value (lh)) != NULL,
             "lookup_get_value returns non-NULL as expected");
-        ok (json_compare (test, o) == true,
+        ok (json_equal (test, o) == true,
             "lookup_get_value returned matching value");
         json_decref (test);
     }
