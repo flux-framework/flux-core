@@ -13,6 +13,7 @@
 #include "src/modules/kvs/fence.h"
 #include "src/modules/kvs/json_util.h"
 #include "src/modules/kvs/types.h"
+#include "src/common/libutil/oom.h"
 
 static int test_global = 5;
 
@@ -20,6 +21,32 @@ struct cache_count {
     int store_count;
     int dirty_count;
 };
+
+/* Append a JSON object containing
+ *     { "key" : key, "dirent" : dirent }
+ *     { "key" : key, "dirent" : null }
+ * to a json array.
+ */
+void ops_append (json_t *array, const char *key, const char *value)
+{
+    json_t *op;
+    json_t *o;
+
+    op = json_object ();
+    o = json_string (key);
+    json_object_set_new (op, "key", o);
+
+    if (value) {
+        json_t *dirent = j_dirent_create ("FILEVAL", json_string (value));
+        json_object_set_new (op, "dirent", dirent);
+    }
+    else {
+        json_t *null;
+        null = json_null ();
+        json_object_set_new (op, "dirent", null);
+    }
+    json_array_append (array, op);
+}
 
 struct cache *create_cache_with_empty_rootdir (href_t ref)
 {
@@ -83,10 +110,9 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_get_ready_commit (cm) == NULL,
         "commit_mgr_get_ready_commit returns NULL for no ready commits");
 
-    j_dirent_append (&ops,
-                     "key1",
-                     j_dirent_create ("FILEVAL", json_string ("1")));
-
+    ops = json_array ();
+    ops_append (ops, "key1", "1");
+ 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
@@ -130,12 +156,8 @@ void create_ready_commit (commit_mgr_t *cm,
     ok ((f = fence_create (name, 1, flags)) != NULL,
         "fence_create works");
 
-    if (val)
-        j_dirent_append (&ops,
-                         key,
-                         j_dirent_create ("FILEVAL", json_string (val)));
-    else
-        j_dirent_append (&ops, key, NULL);
+    ops = json_array ();
+    ops_append (ops, key, val);
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
@@ -211,12 +233,9 @@ void commit_mgr_merge_tests (void)
     json_array_append (names, json_string ("fence1"));
     json_array_append (names, json_string ("fence2"));
 
-    j_dirent_append (&ops,
-                     "key1",
-                     j_dirent_create ("FILEVAL", json_string ("1")));
-    j_dirent_append (&ops,
-                     "key2",
-                     j_dirent_create ("FILEVAL", json_string ("2")));
+    ops = json_array ();
+    ops_append (ops, "key1", "1");
+    ops_append (ops, "key2", "2");
 
     verify_ready_commit (cm, names, ops, "merged fence");
 
@@ -239,9 +258,8 @@ void commit_mgr_merge_tests (void)
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
 
-    j_dirent_append (&ops,
-                     "key1",
-                     j_dirent_create ("FILEVAL", json_string ("1")));
+    ops = json_array ();
+    ops_append (ops, "key1", "1");
 
     verify_ready_commit (cm, names, ops, "unmerged fence");
 
@@ -264,9 +282,8 @@ void commit_mgr_merge_tests (void)
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
 
-    j_dirent_append (&ops,
-                     "key1",
-                     j_dirent_create ("FILEVAL", json_string ("1")));
+    ops = json_array ();
+    ops_append (ops, "key1", "1");
 
     verify_ready_commit (cm, names, ops, "unmerged fence");
 
@@ -311,9 +328,8 @@ void commit_basic_tests (void)
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
 
-    j_dirent_append (&ops,
-                     "key1",
-                     j_dirent_create ("FILEVAL", json_string ("1")));
+    ops = json_array ();
+    ops_append (ops, "key1", "1");
 
     verify_ready_commit (cm, names, ops, "basic test");
 
