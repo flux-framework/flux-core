@@ -17,8 +17,8 @@ kvs_la_SOURCES = \
 	cache.h \
 	waitqueue.c \
 	waitqueue.h \
-	json_util.h \
-	json_util.c \
+	kvs_util.h \
+	kvs_util.c \
 	lookup.h \
 	lookup.c \
 	fence.h \
@@ -39,7 +39,7 @@ TESTS = \
 	test_lookup.t \
 	test_fence.t \
 	test_commit.t \
-	test_json_util.t
+	test_kvs_util.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -62,7 +62,7 @@ test_waitqueue_t_SOURCES = test/waitqueue.c
 test_waitqueue_t_CPPFLAGS = $(test_cppflags)
 test_waitqueue_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/json_util.o \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
 test_cache_t_SOURCES = test/cache.c
@@ -78,14 +78,14 @@ test_lookup_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/json_util.o \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
 test_fence_t_SOURCES = test/fence.c
 test_fence_t_CPPFLAGS = $(test_cppflags)
 test_fence_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/fence.o \
-	$(top_builddir)/src/modules/kvs/json_util.o \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
 test_commit_t_SOURCES = test/commit.c
@@ -96,11 +96,11 @@ test_commit_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
-	$(top_builddir)/src/modules/kvs/json_util.o \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
-test_json_util_t_SOURCES = test/json_util.c
-test_json_util_t_CPPFLAGS = $(test_cppflags)
-test_json_util_t_LDADD = \
-	$(top_builddir)/src/modules/kvs/json_util.o \
+test_kvs_util_t_SOURCES = test/kvs_util.c
+test_kvs_util_t_CPPFLAGS = $(test_cppflags)
+test_kvs_util_t_LDADD = \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)

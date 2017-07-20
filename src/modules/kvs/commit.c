@@ -42,7 +42,7 @@
 #include "src/common/libkvs/jansson_dirent.h"
 
 #include "commit.h"
-#include "json_util.h"
+#include "kvs_util.h"
 
 struct commit_mgr {
     struct cache *cache;
@@ -133,8 +133,8 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     struct cache_entry *hp;
     int rc = -1;
 
-    if (json_hash (c->cm->hash_name, o, ref) < 0) {
-        log_err ("json_hash");
+    if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
+        log_err ("kvs_util_json_hash");
         goto done;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
@@ -267,7 +267,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto success; /* stall */
             }
             /* do not corrupt store by modify orig. */
-            subdir = json_object_copydir (subdir);
+            subdir = kvs_util_json_copydir (subdir);
             if (json_object_set_new (dir,
                                      name,
                                      j_dirent_create ("DIRVAL",subdir)) < 0)
@@ -346,7 +346,7 @@ commit_process_t commit_process (commit_t *c,
                 goto stall_load;
             }
 
-            c->rootcpy = json_object_copydir (rootdir);
+            c->rootcpy = kvs_util_json_copydir (rootdir);
 
             c->state = COMMIT_STATE_APPLY_OPS;
             /* fallthrough */

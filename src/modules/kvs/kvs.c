@@ -48,7 +48,7 @@
 
 #include "waitqueue.h"
 #include "cache.h"
-#include "json_util.h"
+#include "kvs_util.h"
 
 #include "lookup.h"
 #include "fence.h"
@@ -270,7 +270,7 @@ static int content_store_request_send (kvs_ctx_t *ctx, json_t *val,
     int size;
     int rc = -1;
 
-    data = json_strdump (val);
+    data = kvs_util_json_dumps (val);
 
     size = strlen (data) + 1;
 
@@ -1273,8 +1273,8 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
     struct cache_entry *hp;
     int rc = -1;
 
-    if (json_hash (ctx->hash_name, o, ref) < 0) {
-        flux_log_error (ctx->h, "json_hash");
+    if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
+        flux_log_error (ctx->h, "kvs_util_json_hash");
         goto done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {

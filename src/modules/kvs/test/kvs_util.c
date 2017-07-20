@@ -5,7 +5,7 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/modules/kvs/json_util.h"
+#include "src/modules/kvs/kvs_util.h"
 #include "src/modules/kvs/types.h"
 
 int main (int argc, char *argv[])
@@ -22,8 +22,8 @@ int main (int argc, char *argv[])
     json_object_set_new (obj, "B", json_string ("bar"));
     json_object_set_new (obj, "C", json_string ("cow"));
 
-    ok ((cpy = json_object_copydir (obj)) != NULL,
-        "json_object_copydir works");
+    ok ((cpy = kvs_util_json_copydir (obj)) != NULL,
+        "kvs_util_json_copydir works");
 
     /* first manually verify */
     ok ((o = json_object_get (cpy, "A")) != NULL,
@@ -51,11 +51,11 @@ int main (int argc, char *argv[])
     ok (json_equal (cpy, obj) == true,
         "json_equal returns true on duplicate");
 
-    ok (json_hash ("sha1", obj, ref) == 0,
-        "json_hash works on sha1");
+    ok (kvs_util_json_hash ("sha1", obj, ref) == 0,
+        "kvs_util_json_hash works on sha1");
 
-    ok (json_hash ("foobar", obj, ref) < 0,
-        "json_hash error on bad hash name");
+    ok (kvs_util_json_hash ("foobar", obj, ref) < 0,
+        "kvs_util_json_hash error on bad hash name");
 
     json_decref (obj);
     json_decref (cpy);
@@ -65,14 +65,14 @@ int main (int argc, char *argv[])
     json_object_set_new (obj, "B", json_string ("b"));
     json_object_set_new (obj, "C", json_string ("c"));
 
-    ok ((s1 = json_strdump (obj)) != NULL,
-        "json_strdump works");
+    ok ((s1 = kvs_util_json_dumps (obj)) != NULL,
+        "kvs_util_json_dumps works");
 
     /* json object is sorted and compacted */
     s2 = "{\"A\":\"a\",\"B\":\"b\",\"C\":\"c\"}";
 
     ok (!strcmp (s1, s2),
-        "json_strdump dumps correct string");
+        "kvs_util_json_dumps dumps correct string");
 
     free (s1);
     s1 = NULL;
@@ -80,25 +80,25 @@ int main (int argc, char *argv[])
 
     obj = json_null ();
 
-    ok ((s1 = json_strdump (obj)) != NULL,
-        "json_strdump works");
+    ok ((s1 = kvs_util_json_dumps (obj)) != NULL,
+        "kvs_util_json_dumps works");
 
     s2 = "null";
 
     ok (!strcmp (s1, s2),
-        "json_strdump works on null object");
+        "kvs_util_json_dumps works on null object");
 
     free (s1);
     s1 = NULL;
     json_decref (obj);
 
-    ok ((s1 = json_strdump (NULL)) != NULL,
-        "json_strdump works on NULL pointer");
+    ok ((s1 = kvs_util_json_dumps (NULL)) != NULL,
+        "kvs_util_json_dumps works on NULL pointer");
 
     s2 = "null";
 
     ok (!strcmp (s1, s2),
-        "json_strdump works on NULL pointer");
+        "kvs_util_json_dumps works on NULL pointer");
 
     free (s1);
     s1 = NULL;

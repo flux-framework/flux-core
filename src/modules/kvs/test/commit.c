@@ -11,7 +11,7 @@
 #include "src/modules/kvs/commit.h"
 #include "src/modules/kvs/lookup.h"
 #include "src/modules/kvs/fence.h"
-#include "src/modules/kvs/json_util.h"
+#include "src/modules/kvs/kvs_util.h"
 #include "src/modules/kvs/types.h"
 #include "src/common/libutil/oom.h"
 
@@ -56,8 +56,8 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
-    ok (json_hash ("sha1", rootdir, ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", rootdir, ref) == 0,
+        "kvs_util_json_hash worked");
     ok ((hp = cache_entry_create (rootdir)) != NULL,
         "cache_entry_create works");
     cache_insert (cache, ref, hp);
@@ -627,8 +627,8 @@ void commit_process_root_missing (void)
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
-    ok (json_hash ("sha1", rootdir, rootref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", rootdir, rootref) == 0,
+        "kvs_util_json_hash worked");
 
     json_decref (rootdir);
 
@@ -726,16 +726,16 @@ void commit_process_missing_ref (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -820,16 +820,16 @@ void commit_process_error_callbacks (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -888,16 +888,16 @@ void commit_process_invalid_operation (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -950,16 +950,16 @@ void commit_process_invalid_hash (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1014,8 +1014,8 @@ void commit_process_follow_link (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
@@ -1025,8 +1025,8 @@ void commit_process_follow_link (void) {
                      "linkval",
                      j_dirent_create ("LINKVAL", json_string ("dir")));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1083,8 +1083,8 @@ void commit_process_dirval_test (void) {
     root = json_object ();
     json_object_set (root, "dirval", j_dirent_create ("DIRVAL", dir));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1142,16 +1142,16 @@ void commit_process_delete_test (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1210,16 +1210,16 @@ void commit_process_delete_nosubdir_test (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1273,16 +1273,16 @@ void commit_process_delete_filevalinpath_test (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1339,16 +1339,16 @@ void commit_process_big_fileval (void) {
                      "fileval",
                      j_dirent_create ("FILEVAL", json_string ("42")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
@@ -1460,16 +1460,16 @@ void commit_process_giant_dir (void) {
     json_object_set (dir, "filevalF000",
                      j_dirent_create ("FILEVAL", json_string ("f")));
 
-    ok (json_hash ("sha1", dir, dir_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
     root = json_object ();
     json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
 
-    ok (json_hash ("sha1", root, root_ref) == 0,
-        "json_hash worked");
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 

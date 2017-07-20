@@ -41,7 +41,7 @@
 
 #include "types.h"
 
-json_t *json_object_copydir (json_t *dir)
+json_t *kvs_util_json_copydir (json_t *dir)
 {
     json_t *cpy;
     const char *key;
@@ -57,7 +57,7 @@ json_t *json_object_copydir (json_t *dir)
     return cpy;
 }
 
-char *json_strdump (json_t *o)
+char *kvs_util_json_dumps (json_t *o)
 {
     /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must
      * set JSON_SORT_KEYS, two different objects with different
@@ -80,9 +80,9 @@ char *json_strdump (json_t *o)
     return s;
 }
 
-int json_hash (const char *hash_name, json_t *o, href_t ref)
+int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    char *s = json_strdump (o);
+    char *s = kvs_util_json_dumps (o);
     int rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
                            ref, sizeof (href_t));
     free (s);

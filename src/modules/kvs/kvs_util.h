@@ -1,5 +1,5 @@
-#ifndef _FLUX_KVS_JSON_UTIL_H
-#define _FLUX_KVS_JSON_UTIL_H
+#ifndef _FLUX_KVS_UTIL_H
+#define _FLUX_KVS_UTIL_H
 #include <jansson.h>
 
 #include "src/common/libutil/tstat.h"
@@ -8,17 +8,17 @@
 
 /* Copy element wise a json directory object into a new json object.
  */
-json_t *json_object_copydir (json_t *dir);
+json_t *kvs_util_json_copydir (json_t *dir);
 
 /* Get compact string representation of json object, or json null
  * object if o is NULL.  Use this function for consistency, especially
  * when dealing with data that may be hashed via json_hash().
  */
-char *json_strdump (json_t *o);
+char *kvs_util_json_dumps (json_t *o);
 
 /* Calculate hash of a json object
  */
-int json_hash (const char *hash_name, json_t *o, href_t ref);
+int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref);
 
 #endif  /* !_FLUX_KVS_JSON_UTIL_H */
 
