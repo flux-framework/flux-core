@@ -76,11 +76,10 @@ class RPC(WrapperPimpl):
         return json.loads(self.get_str())
 
     def then(self, callback, args):
-        # pylint: disable=unused-argument
-        def then_wrapper(trash, arg):
+        def cb_then_wrapper(trash, arg):
             rpc_handle = ffi.from_handle(arg)
             callback(rpc_handle, rpc_handle.then_args)
         # Save the callback to keep it from getting collected
-        self.then_cb = ffi.callback('flux_then_f', then_wrapper)
+        self.then_cb = ffi.callback('flux_then_f', cb_then_wrapper)
         self.then_args = args
         return self.pimpl.then(self.then_cb, ffi.new_handle(self))

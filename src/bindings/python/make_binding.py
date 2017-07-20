@@ -84,7 +84,7 @@ ffi.include({module}_ffi)
 
 
   print >>modfile, '''
-#pylint: disable-all
+#pylint: skip-file
 # This is a generated file... linting is less than useful
 from cffi import FFI
 ffi = FFI()
