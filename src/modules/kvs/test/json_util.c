@@ -88,6 +88,7 @@ int main (int argc, char *argv[])
         "json_strdump dumps correct string");
 
     free (s1);
+    s1 = NULL;
     json_decref (obj);
 
     obj = json_null ();
@@ -101,6 +102,7 @@ int main (int argc, char *argv[])
         "json_strdump works on null object");
 
     free (s1);
+    s1 = NULL;
     json_decref (obj);
 
     ok ((s1 = json_strdump (NULL)) != NULL,
@@ -112,6 +114,7 @@ int main (int argc, char *argv[])
         "json_strdump works on NULL pointer");
 
     free (s1);
+    s1 = NULL;
 
     done_testing ();
     return (0);
