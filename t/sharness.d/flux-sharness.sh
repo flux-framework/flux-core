@@ -45,6 +45,9 @@ test_under_flux() {
     if test "$debug" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --debug"
     fi
+    if test "$chain_lint" = "t"; then
+        flags="${flags} --chain-lint"
+    fi
     if test -n "$logfile" -o -n "$FLUX_TESTS_LOGFILE" ; then
         flags="${flags} --logfile"
     fi
