@@ -126,7 +126,10 @@ const char *commit_get_newroot_ref (commit_t *c)
     return NULL;
 }
 
-/* Store object 'o' under key 'ref' in local cache. */
+/* Store object 'o' under key 'ref' in local cache.
+ * Object reference is given to this function, it will either give it
+ * to the cache or decref it.
+ */
 static int store_cache (commit_t *c, int current_epoch, json_t *o,
                         href_t ref, struct cache_entry **hpp)
 {
@@ -135,7 +138,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
 
     if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
         log_err ("kvs_util_json_hash");
-        goto done;
+        goto decref_done;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
         hp = cache_entry_create (NULL);
@@ -151,7 +154,10 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     }
     *hpp = hp;
     rc = 0;
- done:
+    return rc;
+
+ decref_done:
+    json_decref (o);
     return rc;
 }
 

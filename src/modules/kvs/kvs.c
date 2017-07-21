@@ -1269,6 +1269,8 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 
 /* Store initial rootdir in local cache, and flush to content
  * cache synchronously.
+ * Object reference is given to this function, it will either give it
+ * to the cache or decref it.
  */
 static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 {
@@ -1277,7 +1279,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 
     if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
         flux_log_error (ctx->h, "kvs_util_json_hash");
-        goto done;
+        goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         hp = cache_entry_create (NULL);
@@ -1294,6 +1296,10 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         json_decref (o);
     rc = 0;
 done:
+    return rc;
+
+decref_done:
+    json_decref (o);
     return rc;
 }
 
