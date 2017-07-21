@@ -307,6 +307,7 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
 struct commit_cb_data {
     kvs_ctx_t *ctx;
     wait_t *wait;
+    int errnum;
 };
 
 static int commit_load_cb (commit_t *c, const char *ref, void *data)
@@ -329,6 +330,7 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
         if (content_store_request_send (cbd->ctx,
                                         cache_entry_get_json (hp),
                                         false) < 0) {
+            cbd->errnum = errno;
             flux_log_error (cbd->ctx->h, "content_store");
             return -1;
         }
@@ -349,6 +351,9 @@ static void commit_apply (commit_t *c)
     int errnum = 0;
     commit_process_t ret;
 
+    if (commit_get_aux_errnum (c))
+        goto done;
+
     if ((ret = commit_process (c,
                                ctx->epoch,
                                ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
@@ -366,9 +371,17 @@ static void commit_apply (commit_t *c)
 
         cbd.ctx = ctx;
         cbd.wait = wait;
+        cbd.errnum = 0;
 
         if (commit_iter_missing_refs (c, commit_load_cb, &cbd) < 0) {
-            errnum = errno;
+            errnum = cbd.errnum;
+
+            /* rpcs already in flight, stall for them to complete */
+            if (wait_get_usecount (wait) > 0) {
+                commit_set_aux_errnum (c, cbd.errnum);
+                goto stall;
+            }
+
             goto done;
         }
 
@@ -385,9 +398,17 @@ static void commit_apply (commit_t *c)
 
         cbd.ctx = ctx;
         cbd.wait = wait;
+        cbd.errnum = 0;
 
         if (commit_iter_dirty_cache_entries (c, commit_cache_cb, &cbd) < 0) {
-            errnum = errno;
+            errnum = cbd.errnum;
+
+            /* rpcs already in flight, stall for them to complete */
+            if (wait_get_usecount (wait) > 0) {
+                commit_set_aux_errnum (c, cbd.errnum);
+                goto stall;
+            }
+
             goto done;
         }
 
