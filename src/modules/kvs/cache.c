@@ -153,7 +153,8 @@ int cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait)
             if (!(hp->waitlist_notdirty = wait_queue_create ()))
                 return -1;
         }
-        wait_addqueue (hp->waitlist_notdirty, wait);
+        if (wait_addqueue (hp->waitlist_notdirty, wait) < 0)
+            return -1;
     }
     return 0;
 }
@@ -165,7 +166,8 @@ int cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait)
             if (!(hp->waitlist_valid = wait_queue_create ()))
                 return -1;
         }
-        wait_addqueue (hp->waitlist_valid, wait);
+        if (wait_addqueue (hp->waitlist_valid, wait) < 0)
+            return -1;
     }
     return 0;
 }

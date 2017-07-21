@@ -814,7 +814,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (!(watcher = wait_create_msg_handler (h, w, cpy,
                                                  watch_request_cb, ctx)))
             goto done;
-        wait_addqueue (ctx->watchlist, watcher);
+        if (wait_addqueue (ctx->watchlist, watcher) < 0) {
+            wait_destroy (watcher);
+            goto done;
+        }
     }
 
     if (out) {
@@ -1069,7 +1072,10 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (ctx->rootseq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
             goto error;
-        wait_addqueue (ctx->watchlist, wait);
+        if (wait_addqueue (ctx->watchlist, wait) < 0) {
+            wait_destroy (wait);
+            goto error;
+        }
         return; /* stall */
     }
     if (flux_respond_pack (h, msg, "{ s:i s:s }",

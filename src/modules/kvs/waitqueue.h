@@ -38,8 +38,9 @@ void wait_queue_destroy (waitqueue_t *q);
 int wait_queue_length (waitqueue_t *q);
 
 /* Add a wait_t to a queue.
+ * Returns -1 on error, 0 on success
  */
-void wait_addqueue (waitqueue_t *q, wait_t *wait);
+int wait_addqueue (waitqueue_t *q, wait_t *wait);
 
 /* Remove all wait_t's from the specified queue.
  * Note: wait_runqueue() empties the waitqueue_t before invoking wait_t

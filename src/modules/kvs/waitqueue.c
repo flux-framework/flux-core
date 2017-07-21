@@ -140,13 +140,16 @@ int wait_queue_length (waitqueue_t *q)
     return zlist_size (q->q);
 }
 
-void wait_addqueue (waitqueue_t *q, wait_t *w)
+int wait_addqueue (waitqueue_t *q, wait_t *w)
 {
     assert (q->magic == WAITQUEUE_MAGIC);
     assert (w->magic == WAIT_MAGIC);
-    if (zlist_append (q->q, w) < 0)
-        oom ();
+    if (zlist_append (q->q, w) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
     w->usecount++;
+    return 0;
 }
 
 static void wait_runone (wait_t *w)
