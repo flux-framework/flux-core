@@ -95,6 +95,18 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val)
     }
 }
 
+int cache_entry_clear_dirty (struct cache_entry *hp)
+{
+    if (hp && hp->o) {
+        if (hp->dirty
+            && (!hp->waitlist_notdirty
+                || !wait_queue_length (hp->waitlist_notdirty)))
+            hp->dirty = 0;
+        return hp->dirty ? 1 : 0;
+    }
+    return -1;
+}
+
 json_t *cache_entry_get_json (struct cache_entry *hp)
 {
     if (!hp || !hp->o)

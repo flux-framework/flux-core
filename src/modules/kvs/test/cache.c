@@ -53,6 +53,10 @@ int main (int argc, char *argv[])
     cache_entry_set_dirty (e1, true);
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry succcessfully set dirty");
+    ok (cache_entry_clear_dirty (e1) == 0,
+        "cache_entry_clear_dirty returns 0, b/c no waiters");
+    ok (cache_entry_get_dirty (e1) == false,
+        "cache entry succcessfully now not dirty");
     ok ((o2 = cache_entry_get_json (e1)) != NULL,
         "json retrieved from cache entry");
     ok ((o = json_object_get (o2, "foo")) != NULL,
@@ -71,6 +75,8 @@ int main (int argc, char *argv[])
         "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e1) == false,
         "cache entry invalid, adding waiter");
+    ok (cache_entry_clear_dirty (e1) < 0,
+        "cache_entry_clear_dirty returns error, b/c no object set");
     o1 = json_object ();
     json_object_set_new (o1, "foo", json_integer (42));
     cache_entry_wait_valid (e1, w);
@@ -87,6 +93,8 @@ int main (int argc, char *argv[])
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry set dirty, adding waiter");
     cache_entry_wait_notdirty (e1, w);
+    ok (cache_entry_clear_dirty (e1) == 1,
+        "cache_entry_clear_dirty returns 1, b/c of a waiter");
     cache_entry_set_dirty (e1, false);
     ok (cache_entry_get_dirty (e1) == false,
         "cache entry set not dirty with one waiter");
