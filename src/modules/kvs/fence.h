@@ -2,8 +2,7 @@
 #define _FLUX_KVS_FENCE_H
 
 #include <czmq.h>
-
-#include "src/common/libutil/shortjson.h"
+#include <jansson.h>
 
 typedef struct fence fence_t;
 
@@ -19,14 +18,14 @@ bool fence_count_reached (fence_t *f);
 int fence_get_flags (fence_t *f);
 void fence_set_flags (fence_t *f, int flags);
 
-json_object *fence_get_json_ops (fence_t *f);
+json_t *fence_get_json_ops (fence_t *f);
 
-json_object *fence_get_json_names (fence_t *f);
+json_t *fence_get_json_names (fence_t *f);
 
 /* fence_add_request_data() should be called with data on each
  * request, even if ops is NULL
  */
-int fence_add_request_data (fence_t *f, json_object *ops);
+int fence_add_request_data (fence_t *f, json_t *ops);
 
 /* copy the request message into the fence, where it can be retrieved
  * later.

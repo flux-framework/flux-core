@@ -38,13 +38,14 @@
 #include <sys/time.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/oom.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -52,7 +53,7 @@
 struct cache_entry {
     waitqueue_t *waitlist_notdirty;
     waitqueue_t *waitlist_valid;
-    json_object *o;         /* value object */
+    json_t *o;              /* value object */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
     uint8_t content_store_flag:1;
@@ -62,7 +63,7 @@ struct cache {
     zhash_t *zh;
 };
 
-struct cache_entry *cache_entry_create (json_object *o)
+struct cache_entry *cache_entry_create (json_t *o)
 {
     struct cache_entry *hp = xzmalloc (sizeof (*hp));
     if (o)
@@ -106,24 +107,24 @@ void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val)
         hp->content_store_flag = val;
 }
 
-json_object *cache_entry_get_json (struct cache_entry *hp)
+json_t *cache_entry_get_json (struct cache_entry *hp)
 {
     if (!hp || !hp->o)
         return NULL;
     return hp->o;
 }
 
-void cache_entry_set_json (struct cache_entry *hp, json_object *o)
+void cache_entry_set_json (struct cache_entry *hp, json_t *o)
 {
     if (hp) {
         if ((o && hp->o) || (!o && !hp->o)) {
-            Jput (o); /* no-op, 'o' is assumed identical to hp->o */
+            json_decref (o); /* no-op, 'o' is assumed identical to hp->o */
         } else if (o && !hp->o) {
             hp->o = o;
             if (hp->waitlist_valid)
                 wait_runqueue (hp->waitlist_valid);
         } else if (!o && hp->o) {
-            Jput (hp->o);
+            json_decref (hp->o);
             hp->o = NULL;
         }
     }
@@ -134,7 +135,7 @@ void cache_entry_destroy (void *arg)
     struct cache_entry *hp = arg;
     if (hp) {
         if (hp->o)
-            json_object_put (hp->o);
+            json_decref (hp->o);
         if (hp->waitlist_notdirty)
             wait_queue_destroy (hp->waitlist_notdirty);
         if (hp->waitlist_valid)
@@ -170,9 +171,9 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
     return hp;
 }
 
-json_object *cache_lookup_and_get_json (struct cache *cache,
-                                        const char *ref,
-                                        int current_epoch)
+json_t *cache_lookup_and_get_json (struct cache *cache,
+                                   const char *ref,
+                                   int current_epoch)
 {
     struct cache_entry *hp = cache_lookup (cache, ref, current_epoch);
     return cache_entry_get_valid (hp) ? cache_entry_get_json (hp) : NULL;
@@ -237,7 +238,12 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     while ((ref = zlist_pop (keys))) {
         hp = zhash_lookup (cache->zh, ref);
         if (cache_entry_get_valid (hp)) {
-            int obj_size = strlen (Jtostr (hp->o));
+            /* must pass JSON_ENCODE_ANY, object could be anything */
+            char *s = json_dumps (hp->o, JSON_ENCODE_ANY);
+            if (!s)
+                oom ();
+            int obj_size = strlen (s);
+            free (s);
             size += obj_size;
             tstat_push (ts, obj_size);
         } else

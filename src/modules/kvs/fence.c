@@ -34,9 +34,10 @@
 #include <ctype.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/oom.h"
 
 #include "fence.h"
 
@@ -44,16 +45,16 @@ struct fence {
     int nprocs;
     int count;
     zlist_t *requests;
-    json_object *ops;
-    json_object *names;
+    json_t *ops;
+    json_t *names;
     int flags;
 };
 
 void fence_destroy (fence_t *f)
 {
     if (f) {
-        Jput (f->names);
-        Jput (f->ops);
+        json_decref (f->names);
+        json_decref (f->ops);
         zlist_destroy (&f->requests);
         free (f);
     }
@@ -62,16 +63,23 @@ void fence_destroy (fence_t *f)
 fence_t *fence_create (const char *name, int nprocs, int flags)
 {
     fence_t *f;
+    json_t *s = NULL;
 
-    if (!(f = calloc (1, sizeof (*f))) || !(f->ops = json_object_new_array ())
-                                       || !(f->requests = zlist_new ())) {
+    if (!(f = calloc (1, sizeof (*f)))
+        || !(f->ops = json_array ())
+        || !(f->names = json_array ())
+        || !(f->requests = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
     f->nprocs = nprocs;
     f->flags = flags;
-    f->names = Jnew_ar ();
-    Jadd_ar_str (f->names, name);
+    if (name) {
+        if (!(s = json_string (name)))
+            oom();
+        if (json_array_append_new (f->names, s) < 0)
+            oom();
+    }
 
     return f;
 error:
@@ -94,26 +102,26 @@ void fence_set_flags (fence_t *f, int flags)
     f->flags = flags;
 }
 
-json_object *fence_get_json_ops (fence_t *f)
+json_t *fence_get_json_ops (fence_t *f)
 {
     return f->ops;
 }
 
-json_object *fence_get_json_names (fence_t *f)
+json_t *fence_get_json_names (fence_t *f)
 {
     return f->names;
 }
 
-int fence_add_request_data (fence_t *f, json_object *ops)
+int fence_add_request_data (fence_t *f, json_t *ops)
 {
-    json_object *op;
+    json_t *op;
     int i;
 
     if (ops) {
-        for (i = 0; i < json_object_array_length (ops); i++) {
-            if ((op = json_object_array_get_idx (ops, i)))
-                if (json_object_array_add (f->ops, Jget (op)) < 0) {
-                    Jput (op);
+        for (i = 0; i < json_array_size (ops); i++) {
+            if ((op = json_array_get (ops, i)))
+                if (json_array_append (f->ops, op) < 0) {
+                    json_decref (op);
                     errno = ENOMEM;
                     return -1;
                 }
@@ -157,18 +165,22 @@ int fence_merge (fence_t *dest, fence_t *src)
     if ((dest->flags & FLUX_KVS_NO_MERGE) || (src->flags & FLUX_KVS_NO_MERGE))
         return 0;
 
-    if (Jget_ar_len (src->names, &len)) {
+    if ((len = json_array_size (src->names))) {
         for (i = 0; i < len; i++) {
-            const char *name;
-            if (Jget_ar_str (src->names, i, &name))
-                Jadd_ar_str (dest->names, name);
+            json_t *name;
+            if ((name = json_array_get (src->names, i))) {
+                if (json_array_append (dest->names, name) < 0)
+                    oom ();
+            }
         }
     }
-    if (Jget_ar_len (src->ops, &len)) {
+    if ((len = json_array_size (src->ops))) {
         for (i = 0; i < len; i++) {
-            json_object *op;
-            if (Jget_ar_obj (src->ops, i, &op))
-                Jadd_ar_obj (dest->ops, op);
+            json_t *op;
+            if ((op = json_array_get (src->ops, i))) {
+                if (json_array_append (dest->ops, op) < 0)
+                    oom ();
+            }
         }
     }
     return 1;

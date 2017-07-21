@@ -3,8 +3,6 @@
 
 #include <czmq.h>
 
-#include "src/common/libutil/shortjson.h"
-
 #include "cache.h"
 #include "fence.h"
 #include "types.h"

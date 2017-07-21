@@ -2,15 +2,13 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libkvs/proto.h"
-#include "src/common/libkvs/json_dirent.h"
-#include "src/modules/kvs/waitqueue.h"
+#include "src/common/libkvs/jansson_dirent.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/json_util.h"
+#include "src/modules/kvs/kvs_util.h"
 
 void basic_api (void)
 {
@@ -26,7 +24,7 @@ void basic_api (void)
                              "root.foo",
                              "ref.bar",
                              "path.baz",
-                             KVS_PROTO_READLINK | KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
     ok (lookup_validate (lh) == true,
         "lookup_validate works");
@@ -46,7 +44,7 @@ void basic_api (void)
         "lookup_get_path works");
     ok (!strcmp (tmp, "path.baz"),
         "lookup_get_path returns correct string");
-    ok (lookup_get_flags (lh) == (KVS_PROTO_READLINK | KVS_PROTO_TREEOBJ),
+    ok (lookup_get_flags (lh) == (FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ),
         "lookup_get_flags works");
     ok (lookup_set_current_epoch (lh, 43) == 0,
         "lookup_set_current_epoch works");
@@ -68,7 +66,7 @@ void basic_api (void)
                              "root.bar",
                              NULL,
                              "path.baz",
-                             KVS_PROTO_READLINK | KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
 
     ok ((tmp = lookup_get_root_dir (lh)) != NULL,
@@ -105,7 +103,7 @@ void basic_api_errors (void)
                              "root.foo",
                              "ref.bar",
                              "path.baz",
-                             KVS_PROTO_READLINK | KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
 
     ok (lookup_get_errnum (lh) == EINVAL,
@@ -187,12 +185,12 @@ void basic_api_errors (void)
 void check_common (lookup_t *lh,
                    bool lookup_result,
                    int get_errnum_result,
-                   json_object *get_value_result,
+                   json_t *get_value_result,
                    const char *missing_ref_result,
                    const char *msg,
                    bool destroy_lookup)
 {
-    json_object *val;
+    json_t *val;
 
     ok (lookup (lh) == lookup_result,
         "%s: lookup matched result", msg);
@@ -202,9 +200,9 @@ void check_common (lookup_t *lh,
         ok ((val = lookup_get_value (lh)) != NULL,
             "%s: lookup_get_value returns non-NULL as expected", msg);
         if (val) {
-            ok (json_compare (get_value_result, val) == true,
+            ok (json_equal (get_value_result, val) == true,
                 "%s: lookup_get_value returned matching value", msg);
-            Jput (val);
+            json_decref (val);
         }
         else {
             ok (false, "%s: lookup_get_value returned matching value", msg);
@@ -213,7 +211,7 @@ void check_common (lookup_t *lh,
     else {
         ok ((val = lookup_get_value (lh)) == NULL,
             "%s: lookup_get_value returns NULL as expected", msg);
-        Jput (val);             /* just in case error */
+        json_decref (val);             /* just in case error */
     }
     if (missing_ref_result) {
         const char *missing_ref;
@@ -241,7 +239,7 @@ void check_common (lookup_t *lh,
 void check (lookup_t *lh,
             bool lookup_result,
             int get_errnum_result,
-            json_object *get_value_result,
+            json_t *get_value_result,
             const char *missing_ref_result,
             const char *msg)
 {
@@ -257,7 +255,7 @@ void check (lookup_t *lh,
 void check_stall (lookup_t *lh,
                   bool lookup_result,
                   int get_errnum_result,
-                  json_object *get_value_result,
+                  json_t *get_value_result,
                   const char *missing_ref_result,
                   const char *msg)
 {
@@ -272,8 +270,8 @@ void check_stall (lookup_t *lh,
 
 /* lookup tests on root dir */
 void lookup_root (void) {
-    json_object *root;
-    json_object *test;
+    json_t *root;
+    json_t *test;
     struct cache *cache;
     lookup_t *lh;
 
@@ -286,8 +284,8 @@ void lookup_root (void) {
      * { "dir" : { "DIRREF" : "dir-ref" } }
      */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", "dir-ref"));
+    root = json_object ();
+    json_object_set_new (root, "dir", j_dirent_create ("DIRREF", "dir-ref"));
     cache_insert (cache, "root-ref", cache_entry_create (root));
 
     /* flags = 0, should error EISDIR */
@@ -300,38 +298,38 @@ void lookup_root (void) {
         "lookup_create on root, no flags, works");
     check (lh, true, EISDIR, NULL, NULL, "root no flags");
 
-    /* flags = KVS_PROTO_READDIR, should succeed */
+    /* flags = FLUX_KVS_READDIR, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
                              "root-ref",
                              "root-ref",
                              ".",
-                             KVS_PROTO_READDIR)) != NULL,
-        "lookup_create on root w/ flag = KVS_PROTO_READDIR, works");
-    check (lh, true, 0, root, NULL, "root w/ KVS_PROTO_READDIR");
+                             FLUX_KVS_READDIR)) != NULL,
+        "lookup_create on root w/ flag = FLUX_KVS_READDIR, works");
+    check (lh, true, 0, root, NULL, "root w/ FLUX_KVS_READDIR");
 
-    /* flags = KVS_PROTO_TREEOBJ, should succeed */
+    /* flags = FLUX_KVS_TREEOBJ, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
                              "root-ref",
                              "root-ref",
                              ".",
-                             KVS_PROTO_TREEOBJ)) != NULL,
-        "lookup_create on root w/ flag = KVS_PROTO_TREEOBJ, works");
-    test = dirent_create ("DIRREF", "root-ref");
-    check (lh, true, 0, test, NULL, "root w/ KVS_PROTO_TREEOBJ");
-    Jput (test);
+                             FLUX_KVS_TREEOBJ)) != NULL,
+        "lookup_create on root w/ flag = FLUX_KVS_TREEOBJ, works");
+    test = j_dirent_create ("DIRREF", "root-ref");
+    check (lh, true, 0, test, NULL, "root w/ FLUX_KVS_TREEOBJ");
+    json_decref (test);
 
     cache_destroy (cache);
 }
 
 /* lookup basic tests */
 void lookup_basic (void) {
-    json_object *root;
-    json_object *dirref;
-    json_object *dirval;
-    json_object *linkval;
-    json_object *test;
+    json_t *root;
+    json_t *dirref;
+    json_t *dirval;
+    json_t *linkval;
+    json_t *test;
     struct cache *cache;
     lookup_t *lh;
 
@@ -353,24 +351,24 @@ void lookup_basic (void) {
      * { 44 }
      */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", "dir-ref"));
+    root = json_object ();
+    json_object_set_new (root, "dir", j_dirent_create ("DIRREF", "dir-ref"));
     cache_insert (cache, "root-ref", cache_entry_create (root));
 
-    dirval = json_object_new_object ();
-    json_object_object_add (dirval, "foo", dirent_create ("FILEVAL", json_object_new_int (43)));
+    dirval = json_object ();
+    json_object_set_new (dirval, "foo", j_dirent_create ("FILEVAL", json_integer (43)));
 
-    linkval = dirent_create ("LINKVAL", json_object_new_string ("baz"));
+    linkval = j_dirent_create ("LINKVAL", json_string ("baz"));
 
-    dirref = Jnew ();
-    json_object_object_add (dirref, "fileval", dirent_create ("FILEVAL", json_object_new_int (42)));
-    json_object_object_add (dirref, "file", dirent_create ("FILEREF", "file-ref"));
-    json_object_object_add (dirref, "dirval", dirent_create ("DIRVAL", dirval));
-    json_object_object_add (dirref, "linkval", linkval);
+    dirref = json_object ();
+    json_object_set_new (dirref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
+    json_object_set_new (dirref, "file", j_dirent_create ("FILEREF", "file-ref"));
+    json_object_set_new (dirref, "dirval", j_dirent_create ("DIRVAL", dirval));
+    json_object_set_new (dirref, "linkval", linkval);
 
     cache_insert (cache, "dir-ref", cache_entry_create (dirref));
 
-    cache_insert (cache, "file-ref", cache_entry_create (json_object_new_int (44)));
+    cache_insert (cache, "file-ref", cache_entry_create (json_integer (44)));
 
     /* lookup dir value */
     ok ((lh = lookup_create (cache,
@@ -378,7 +376,7 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create on path dir");
     check (lh, true, 0, dirref, NULL, "lookup dir");
 
@@ -390,9 +388,9 @@ void lookup_basic (void) {
                              "dir.file",
                              0)) != NULL,
         "lookup_create on path dir.file");
-    test = json_object_new_int (44);
+    test = json_integer (44);
     check (lh, true, 0, test, NULL, "lookup dir.file");
-    Jput (test);
+    json_decref (test);
 
     /* lookup fileval value */
     ok ((lh = lookup_create (cache,
@@ -402,9 +400,9 @@ void lookup_basic (void) {
                              "dir.fileval",
                              0)) != NULL,
         "lookup_create on path dir.fileval");
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "lookup dir.fileval");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dirval value */
     ok ((lh = lookup_create (cache,
@@ -412,7 +410,7 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir.dirval",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create on path dir.dirval");
     check (lh, true, 0, dirval, NULL, "lookup dir.dirval");
 
@@ -422,11 +420,11 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir.linkval",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create on path dir.linkval");
-    test = json_object_new_string ("baz");
+    test = json_string ("baz");
     check (lh, true, 0, test, NULL, "lookup dir.linkval");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dir treeobj */
     ok ((lh = lookup_create (cache,
@@ -434,11 +432,11 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir",
-                             KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dir (treeobj)");
-    test = dirent_create ("DIRREF", "dir-ref");
+    test = j_dirent_create ("DIRREF", "dir-ref");
     check (lh, true, 0, test, NULL, "lookup dir treeobj");
-    Jput (test);
+    json_decref (test);
 
     /* lookup file treeobj */
     ok ((lh = lookup_create (cache,
@@ -446,11 +444,11 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir.file",
-                             KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dir.file (treeobj)");
-    test = dirent_create ("FILEREF", "file-ref");
+    test = j_dirent_create ("FILEREF", "file-ref");
     check (lh, true, 0, test, NULL, "lookup dir.file treeobj");
-    Jput (test);
+    json_decref (test);
 
     /* lookup fileval treeobj */
     ok ((lh = lookup_create (cache,
@@ -458,11 +456,11 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir.fileval",
-                             KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dir.fileval (treeobj)");
-    test = dirent_create ("FILEVAL", json_object_new_int (42));
+    test = j_dirent_create ("FILEVAL", json_integer (42));
     check (lh, true, 0, test, NULL, "lookup dir.fileval treeobj");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dirval treeobj */
     ok ((lh = lookup_create (cache,
@@ -470,11 +468,11 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir.dirval",
-                             KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dir.dirval (treeobj)");
-    test = dirent_create ("DIRVAL", dirval);
+    test = j_dirent_create ("DIRVAL", dirval);
     check (lh, true, 0, test, NULL, "lookup dir.dirval treeobj");
-    Jput (test);
+    json_decref (test);
 
     /* lookup linkval treeobj */
     ok ((lh = lookup_create (cache,
@@ -482,7 +480,7 @@ void lookup_basic (void) {
                              "root-ref",
                              "root-ref",
                              "dir.linkval",
-                             KVS_PROTO_TREEOBJ)) != NULL,
+                             FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dir.linkval (treeobj)");
     check (lh, true, 0, linkval, NULL, "lookup dir.linkval treeobj");
 
@@ -491,8 +489,8 @@ void lookup_basic (void) {
 
 /* lookup tests reach an error or "non-good" result */
 void lookup_errors (void) {
-    json_object *root;
-    json_object *dirval;
+    json_t *root;
+    json_t *dirval;
     struct cache *cache;
     lookup_t *lh;
 
@@ -511,17 +509,17 @@ void lookup_errors (void) {
      *   "linkval2" : { "LINKVAL" : "linkval1" } }
      */
 
-    dirval = json_object_new_object ();
-    json_object_object_add (dirval, "foo", dirent_create ("FILEVAL", json_object_new_int (42)));
+    dirval = json_object ();
+    json_object_set_new (dirval, "foo", j_dirent_create ("FILEVAL", json_integer (42)));
 
-    root = Jnew ();
-    json_object_object_add (root, "dirref", dirent_create ("DIRREF", "dirref-ref"));
-    json_object_object_add (root, "fileref", dirent_create ("FILEREF", "fileref-ref"));
-    json_object_object_add (root, "dirval", dirent_create ("DIRVAL", dirval));
-    json_object_object_add (root, "fileval", dirent_create ("FILEVAL", json_object_new_int (42)));
-    json_object_object_add (root, "linkval", dirent_create ("LINKVAL", json_object_new_string ("linkvalstr")));
-    json_object_object_add (root, "linkval1", dirent_create ("LINKVAL", json_object_new_string ("linkval2")));
-    json_object_object_add (root, "linkval2", dirent_create ("LINKVAL", json_object_new_string ("linkval1")));
+    root = json_object ();
+    json_object_set_new (root, "dirref", j_dirent_create ("DIRREF", "dirref-ref"));
+    json_object_set_new (root, "fileref", j_dirent_create ("FILEREF", "fileref-ref"));
+    json_object_set_new (root, "dirval", j_dirent_create ("DIRVAL", dirval));
+    json_object_set_new (root, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
+    json_object_set_new (root, "linkval", j_dirent_create ("LINKVAL", json_string ("linkvalstr")));
+    json_object_set_new (root, "linkval1", j_dirent_create ("LINKVAL", json_string ("linkval2")));
+    json_object_set_new (root, "linkval2", j_dirent_create ("LINKVAL", json_string ("linkval1")));
 
     cache_insert (cache, "root-ref", cache_entry_create (root));
 
@@ -584,7 +582,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "dirref",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create on dirref");
     check (lh, true, EINVAL, NULL, NULL, "lookup dirref, expecting link");
 
@@ -594,7 +592,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "dirval",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create on dirval");
     check (lh, true, EINVAL, NULL, NULL, "lookup dirval, expecting link");
 
@@ -604,7 +602,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "fileref",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create on fileref");
     check (lh, true, EINVAL, NULL, NULL, "lookup fileref, expecting link");
 
@@ -614,7 +612,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "fileval",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create on fileval");
     check (lh, true, EINVAL, NULL, NULL, "lookup fileval, expecting link");
 
@@ -644,7 +642,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "fileref",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create on fileref");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup fileref, expecting dir");
 
@@ -654,7 +652,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "fileval",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create on fileval");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup fileval, expecting dir");
 
@@ -664,7 +662,7 @@ void lookup_errors (void) {
                              "root-ref",
                              "root-ref",
                              "linkval",
-                             KVS_PROTO_READLINK | KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READLINK | FLUX_KVS_READDIR)) != NULL,
         "lookup_create on linkval");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup linkval, expecting dir");
 
@@ -673,13 +671,13 @@ void lookup_errors (void) {
 
 /* lookup link tests */
 void lookup_links (void) {
-    json_object *root;
-    json_object *dir1ref;
-    json_object *dir2ref;
-    json_object *dir3ref;
-    json_object *dirval;
-    json_object *linkval;
-    json_object *test;
+    json_t *root;
+    json_t *dir1ref;
+    json_t *dir2ref;
+    json_t *dir3ref;
+    json_t *dirval;
+    json_t *linkval;
+    json_t *test;
     struct cache *cache;
     lookup_t *lh;
 
@@ -713,40 +711,40 @@ void lookup_links (void) {
      * { 45 }
      */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir1", dirent_create ("DIRREF", "dir1-ref"));
-    json_object_object_add (root, "dir2", dirent_create ("DIRREF", "dir2-ref"));
+    root = json_object ();
+    json_object_set_new (root, "dir1", j_dirent_create ("DIRREF", "dir1-ref"));
+    json_object_set_new (root, "dir2", j_dirent_create ("DIRREF", "dir2-ref"));
     cache_insert (cache, "root-ref", cache_entry_create (root));
 
-    dir1ref = Jnew ();
-    json_object_object_add (dir1ref, "link2dir", dirent_create ("LINKVAL", json_object_new_string ("dir2")));
-    json_object_object_add (dir1ref, "link2fileval", dirent_create ("LINKVAL", json_object_new_string ("dir2.fileval")));
-    json_object_object_add (dir1ref, "link2file", dirent_create ("LINKVAL", json_object_new_string ("dir2.file")));
-    json_object_object_add (dir1ref, "link2dirval", dirent_create ("LINKVAL", json_object_new_string ("dir2.dirval")));
-    json_object_object_add (dir1ref, "link2linkval", dirent_create ("LINKVAL", json_object_new_string ("dir2.linkval")));
+    dir1ref = json_object ();
+    json_object_set_new (dir1ref, "link2dir", j_dirent_create ("LINKVAL", json_string ("dir2")));
+    json_object_set_new (dir1ref, "link2fileval", j_dirent_create ("LINKVAL", json_string ("dir2.fileval")));
+    json_object_set_new (dir1ref, "link2file", j_dirent_create ("LINKVAL", json_string ("dir2.file")));
+    json_object_set_new (dir1ref, "link2dirval", j_dirent_create ("LINKVAL", json_string ("dir2.dirval")));
+    json_object_set_new (dir1ref, "link2linkval", j_dirent_create ("LINKVAL", json_string ("dir2.linkval")));
 
     cache_insert (cache, "dir1-ref", cache_entry_create (dir1ref));
 
-    dirval = json_object_new_object ();
-    json_object_object_add (dirval, "foo", dirent_create ("FILEVAL", json_object_new_int (43)));
+    dirval = json_object ();
+    json_object_set_new (dirval, "foo", j_dirent_create ("FILEVAL", json_integer (43)));
 
-    linkval = dirent_create ("LINKVAL", json_object_new_string ("dir2.fileval"));
+    linkval = j_dirent_create ("LINKVAL", json_string ("dir2.fileval"));
 
-    dir2ref = Jnew ();
-    json_object_object_add (dir2ref, "fileval", dirent_create ("FILEVAL", json_object_new_int (42)));
-    json_object_object_add (dir2ref, "file", dirent_create ("FILEREF", "file-ref"));
-    json_object_object_add (dir2ref, "dirval", dirent_create ("DIRVAL", dirval));
-    json_object_object_add (dir2ref, "dir", dirent_create ("DIRREF", "dir3-ref"));
-    json_object_object_add (dir2ref, "linkval", linkval);
+    dir2ref = json_object ();
+    json_object_set_new (dir2ref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
+    json_object_set_new (dir2ref, "file", j_dirent_create ("FILEREF", "file-ref"));
+    json_object_set_new (dir2ref, "dirval", j_dirent_create ("DIRVAL", dirval));
+    json_object_set_new (dir2ref, "dir", j_dirent_create ("DIRREF", "dir3-ref"));
+    json_object_set_new (dir2ref, "linkval", linkval);
 
     cache_insert (cache, "dir2-ref", cache_entry_create (dir2ref));
 
-    dir3ref = Jnew ();
-    json_object_object_add (dir3ref, "fileval", dirent_create ("FILEVAL", json_object_new_int (44)));
+    dir3ref = json_object ();
+    json_object_set_new (dir3ref, "fileval", j_dirent_create ("FILEVAL", json_integer (44)));
 
     cache_insert (cache, "dir3-ref", cache_entry_create (dir3ref));
 
-    cache_insert (cache, "file-ref", cache_entry_create (json_object_new_int (45)));
+    cache_insert (cache, "file-ref", cache_entry_create (json_integer (45)));
 
     /* lookup fileval, follow two links */
     ok ((lh = lookup_create (cache,
@@ -756,9 +754,9 @@ void lookup_links (void) {
                              "dir1.link2dir.linkval",
                              0)) != NULL,
         "lookup_create link to fileval via two links");
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "fileval via two links");
-    Jput (test);
+    json_decref (test);
 
     /* lookup fileval, link is middle of path */
     ok ((lh = lookup_create (cache,
@@ -768,9 +766,9 @@ void lookup_links (void) {
                              "dir1.link2dir.fileval",
                              0)) != NULL,
         "lookup_create link to fileval");
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "dir1.link2dir.fileval");
-    Jput (test);
+    json_decref (test);
 
     /* lookup file, link is middle of path */
     ok ((lh = lookup_create (cache,
@@ -780,9 +778,9 @@ void lookup_links (void) {
                              "dir1.link2dir.file",
                              0)) != NULL,
         "lookup_create link to file");
-    test = json_object_new_int (45);
+    test = json_integer (45);
     check (lh, true, 0, test, NULL, "dir1.link2dir.file");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dirval, link is middle of path */
     ok ((lh = lookup_create (cache,
@@ -790,7 +788,7 @@ void lookup_links (void) {
                              "root-ref",
                              "root-ref",
                              "dir1.link2dir.dirval",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dirval");
     check (lh, true, 0, dirval, NULL, "dir1.link2dir.dirval");
 
@@ -800,7 +798,7 @@ void lookup_links (void) {
                              "root-ref",
                              "root-ref",
                              "dir1.link2dir.dir",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dir");
     check (lh, true, 0, dir3ref, NULL, "dir1.link2dir.dir");
 
@@ -810,11 +808,11 @@ void lookup_links (void) {
                              "root-ref",
                              "root-ref",
                              "dir1.link2dir.linkval",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create link to linkval");
-    test = json_object_new_string ("dir2.fileval");
+    test = json_string ("dir2.fileval");
     check (lh, true, 0, test, NULL, "dir1.link2dir.linkval");
-    Jput (test);
+    json_decref (test);
 
     /* lookup fileval, link is last part in path */
     ok ((lh = lookup_create (cache,
@@ -824,9 +822,9 @@ void lookup_links (void) {
                              "dir1.link2fileval",
                              0)) != NULL,
         "lookup_create link to fileval (last part path)");
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "dir1.link2fileval");
-    Jput (test);
+    json_decref (test);
 
     /* lookup file, link is last part in path */
     ok ((lh = lookup_create (cache,
@@ -836,9 +834,9 @@ void lookup_links (void) {
                              "dir1.link2file",
                              0)) != NULL,
         "lookup_create link to file (last part path)");
-    test = json_object_new_int (45);
+    test = json_integer (45);
     check (lh, true, 0, test, NULL, "dir1.link2file");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dirval, link is last part in path */
     ok ((lh = lookup_create (cache,
@@ -846,7 +844,7 @@ void lookup_links (void) {
                              "root-ref",
                              "root-ref",
                              "dir1.link2dirval",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dirval (last part path)");
     check (lh, true, 0, dirval, NULL, "dir1.link2dirval");
 
@@ -856,7 +854,7 @@ void lookup_links (void) {
                              "root-ref",
                              "root-ref",
                              "dir1.link2dir",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dir (last part path)");
     check (lh, true, 0, dir2ref, NULL, "dir1.link2dir");
 
@@ -866,21 +864,21 @@ void lookup_links (void) {
                              "root-ref",
                              "root-ref",
                              "dir1.link2linkval",
-                             KVS_PROTO_READLINK)) != NULL,
+                             FLUX_KVS_READLINK)) != NULL,
         "lookup_create link to linkval (last part path)");
-    test = json_object_new_string ("dir2.linkval");
+    test = json_string ("dir2.linkval");
     check (lh, true, 0, test, NULL, "dir1.link2linkval");
-    Jput (test);
+    json_decref (test);
 
     cache_destroy (cache);
 }
 
 /* lookup alternate root tests */
 void lookup_alt_root (void) {
-    json_object *root;
-    json_object *dir1ref;
-    json_object *dir2ref;
-    json_object *test;
+    json_t *root;
+    json_t *dir1ref;
+    json_t *dir2ref;
+    json_t *test;
     struct cache *cache;
     lookup_t *lh;
 
@@ -900,17 +898,17 @@ void lookup_alt_root (void) {
      * { "fileval" : { "FILEVAL" : 43 } }
      */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir1", dirent_create ("DIRREF", "dir1-ref"));
-    json_object_object_add (root, "dir2", dirent_create ("DIRREF", "dir2-ref"));
+    root = json_object ();
+    json_object_set_new (root, "dir1", j_dirent_create ("DIRREF", "dir1-ref"));
+    json_object_set_new (root, "dir2", j_dirent_create ("DIRREF", "dir2-ref"));
     cache_insert (cache, "root-ref", cache_entry_create (root));
 
-    dir1ref = Jnew ();
-    json_object_object_add (dir1ref, "fileval", dirent_create ("FILEVAL", json_object_new_int (42)));
+    dir1ref = json_object ();
+    json_object_set_new (dir1ref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
     cache_insert (cache, "dir1-ref", cache_entry_create (dir1ref));
 
-    dir2ref = Jnew ();
-    json_object_object_add (dir2ref, "fileval", dirent_create ("FILEVAL", json_object_new_int (43)));
+    dir2ref = json_object ();
+    json_object_set_new (dir2ref, "fileval", j_dirent_create ("FILEVAL", json_integer (43)));
     cache_insert (cache, "dir2-ref", cache_entry_create (dir2ref));
 
     /* lookup fileval, alt root-ref dir1-ref */
@@ -921,9 +919,9 @@ void lookup_alt_root (void) {
                              "fileval",
                              0)) != NULL,
         "lookup_create fileval w/ dir1ref root_ref");
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "alt root fileval");
-    Jput (test);
+    json_decref (test);
 
     /* lookup fileval, alt root-ref dir2-ref */
     ok ((lh = lookup_create (cache,
@@ -933,16 +931,16 @@ void lookup_alt_root (void) {
                              "fileval",
                              0)) != NULL,
         "lookup_create fileval w/ dir2ref root_ref");
-    test = json_object_new_int (43);
+    test = json_integer (43);
     check (lh, true, 0, test, NULL, "alt root fileval");
-    Jput (test);
+    json_decref (test);
 
     cache_destroy (cache);
 }
 
 /* lookup stall tests on root */
 void lookup_stall_root (void) {
-    json_object *root;
+    json_t *root;
     struct cache *cache;
     lookup_t *lh;
 
@@ -955,8 +953,8 @@ void lookup_stall_root (void) {
      * { "dir" : { "DIRREF" : "dir-ref" } }
      */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir", dirent_create ("DIRREF", "dir-ref"));
+    root = json_object ();
+    json_object_set_new (root, "dir", j_dirent_create ("DIRREF", "dir-ref"));
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -966,7 +964,7 @@ void lookup_stall_root (void) {
                              "root-ref",
                              "root-ref",
                              ".",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
     check_stall (lh, false, EAGAIN, NULL, "root-ref", "root \".\" stall");
 
@@ -981,7 +979,7 @@ void lookup_stall_root (void) {
                              "root-ref",
                              "root-ref",
                              ".",
-                             KVS_PROTO_READDIR)) != NULL,
+                             FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
     check (lh, true, 0, root, NULL, "root \".\" #2");
 
@@ -990,11 +988,11 @@ void lookup_stall_root (void) {
 
 /* lookup stall tests */
 void lookup_stall (void) {
-    json_object *root;
-    json_object *dir1ref;
-    json_object *dir2ref;
-    json_object *fileref;
-    json_object *test;
+    json_t *root;
+    json_t *dir1ref;
+    json_t *dir2ref;
+    json_t *fileref;
+    json_t *test;
     struct cache *cache;
     lookup_t *lh;
 
@@ -1020,19 +1018,19 @@ void lookup_stall (void) {
      *
      */
 
-    root = Jnew ();
-    json_object_object_add (root, "dir1", dirent_create ("DIRREF", "dir1-ref"));
-    json_object_object_add (root, "dir2", dirent_create ("DIRREF", "dir2-ref"));
-    json_object_object_add (root, "linkval", dirent_create ("LINKVAL", json_object_new_string ("dir2")));
+    root = json_object ();
+    json_object_set_new (root, "dir1", j_dirent_create ("DIRREF", "dir1-ref"));
+    json_object_set_new (root, "dir2", j_dirent_create ("DIRREF", "dir2-ref"));
+    json_object_set_new (root, "linkval", j_dirent_create ("LINKVAL", json_string ("dir2")));
 
-    dir1ref = Jnew ();
-    json_object_object_add (dir1ref, "fileval", dirent_create ("FILEVAL", json_object_new_int (42)));
-    json_object_object_add (dir1ref, "file", dirent_create ("FILEREF", "file-ref"));
+    dir1ref = json_object ();
+    json_object_set_new (dir1ref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
+    json_object_set_new (dir1ref, "file", j_dirent_create ("FILEREF", "file-ref"));
 
-    dir2ref = Jnew();
-    json_object_object_add (dir2ref, "fileval", dirent_create ("FILEVAL", json_object_new_int (43)));
+    dir2ref = json_object ();
+    json_object_set_new (dir2ref, "fileval", j_dirent_create ("FILEVAL", json_integer (43)));
 
-    fileref = json_object_new_int (44);
+    fileref = json_integer (44);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -1054,9 +1052,9 @@ void lookup_stall (void) {
     cache_insert (cache, "dir1-ref", cache_entry_create (dir1ref));
 
     /* final call to lookup, should succeed */
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "dir1.fileval #1");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dir1.fileval, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
@@ -1066,9 +1064,9 @@ void lookup_stall (void) {
                              "dir1.fileval",
                              0)) != NULL,
         "lookup_create dir1.fileval");
-    test = json_object_new_int (42);
+    test = json_integer (42);
     check (lh, true, 0, test, NULL, "dir1.fileval #2");
-    Jput (test);
+    json_decref (test);
 
     /* lookup linkval.fileval, should stall */
     ok ((lh = lookup_create (cache,
@@ -1083,9 +1081,9 @@ void lookup_stall (void) {
     cache_insert (cache, "dir2-ref", cache_entry_create (dir2ref));
 
     /* lookup linkval.fileval, should succeed */
-    test = json_object_new_int (43);
+    test = json_integer (43);
     check (lh, true, 0, test, NULL, "linkval.fileval #1");
-    Jput (test);
+    json_decref (test);
 
     /* lookup linkval.fileval, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
@@ -1095,9 +1093,9 @@ void lookup_stall (void) {
                              "linkval.fileval",
                              0)) != NULL,
         "lookup_create linkval.fileval");
-    test = json_object_new_int (43);
+    test = json_integer (43);
     check (lh, true, 0, test, NULL, "linkval.fileval #2");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dir1.file, should stall */
     ok ((lh = lookup_create (cache,
@@ -1112,9 +1110,9 @@ void lookup_stall (void) {
     cache_insert (cache, "file-ref", cache_entry_create (fileref));
 
     /* lookup dir1.file, should succeed */
-    test = json_object_new_int (44);
+    test = json_integer (44);
     check (lh, true, 0, test, NULL, "dir1.file #1");
-    Jput (test);
+    json_decref (test);
 
     /* lookup dir1.file, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
@@ -1124,9 +1122,9 @@ void lookup_stall (void) {
                              "dir1.file",
                              0)) != NULL,
         "lookup_create stalltest dir1.file");
-    test = json_object_new_int (44);
+    test = json_integer (44);
     check (lh, true, 0, test, NULL, "dir1.file #2");
-    Jput (test);
+    json_decref (test);
 
     cache_destroy (cache);
 }

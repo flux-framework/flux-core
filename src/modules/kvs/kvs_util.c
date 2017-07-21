@@ -32,42 +32,59 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/oom.h"
 
 #include "types.h"
 
-json_object *json_object_copydir (json_object *dir)
+json_t *kvs_util_json_copydir (json_t *dir)
 {
-    json_object *cpy;
-    json_object_iter iter;
+    json_t *cpy;
+    const char *key;
+    json_t *value;
 
-    if (!(cpy = json_object_new_object ()))
+    if (!(cpy = json_object ()))
         oom ();
-    json_object_object_foreachC (dir, iter) {
-        json_object_get (iter.val);
-        json_object_object_add (cpy, iter.key, iter.val);
+
+    json_object_foreach (dir, key, value) {
+        if (json_object_set (cpy, key, value) < 0)
+            oom ();
     }
     return cpy;
 }
 
-bool json_compare (json_object *o1, json_object *o2)
+char *kvs_util_json_dumps (json_t *o)
 {
-    const char *s1 = json_object_to_json_string (o1);
-    const char *s2 = json_object_to_json_string (o2);
-
-    return !strcmp (s1, s2);
+    /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must
+     * set JSON_SORT_KEYS, two different objects with different
+     * internal order should map to same string (and reference when
+     * used by json_hash()).
+     */
+    int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
+    char *s;
+    if (!o) {
+        json_t *tmp;
+        if (!(tmp = json_null ()))
+            oom ();
+        if (!(s = json_dumps (tmp, flags)))
+            oom ();
+        json_decref (tmp);
+        return s;
+    }
+    if (!(s = json_dumps (o, flags)))
+        oom ();
+    return s;
 }
 
-int json_hash (const char *hash_name, json_object *o, href_t ref)
+int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    const char *s = json_object_to_json_string (o);
-
-    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
-                      ref, sizeof (href_t)) < 0)
-        return -1;
-    return 0;
+    char *s = kvs_util_json_dumps (o);
+    int rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+                           ref, sizeof (href_t));
+    free (s);
+    return rc;
 }

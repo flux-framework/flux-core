@@ -2,14 +2,13 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
+#include <jansson.h>
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
-#include "src/common/libkvs/proto.h"
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/request.h"
-#include "src/modules/kvs/json_util.h"
+#include "src/modules/kvs/kvs_util.h"
 #include "src/modules/kvs/fence.h"
 
 int msg_cb (fence_t *f, const flux_msg_t *req, void *data)
@@ -32,8 +31,8 @@ int msg_cb_error (fence_t *f, const flux_msg_t *req, void *data)
 void basic_api_tests (void)
 {
     fence_t *f;
-    json_object *names, *ops;
-    json_object *o;
+    json_t *names, *ops;
+    json_t *o;
     flux_msg_t *request;
     int count = 0;
 
@@ -54,17 +53,17 @@ void basic_api_tests (void)
     ok ((o = fence_get_json_names (f)) != NULL,
         "initial fence_get_json_names works");
 
-    names = Jnew_ar ();
-    Jadd_ar_str (names, "foo");
+    names = json_array ();
+    json_array_append_new (names, json_string ("foo"));
 
-    ok (json_compare (names, o) == true,
+    ok (json_equal (names, o) == true,
         "initial fence_get_json_names match");
 
-    Jput (names);
+    json_decref (names);
 
     /* for test ops can be anything */
-    ops = Jnew_ar ();
-    Jadd_ar_str (ops, "A");
+    ops = json_array ();
+    json_array_append_new (ops, json_string ("A"));
 
     ok (fence_add_request_data (f, ops) == 0,
         "initial fence_add_request_data add works");
@@ -72,10 +71,10 @@ void basic_api_tests (void)
     ok ((o = fence_get_json_ops (f)) != NULL,
         "initial fence_get_json_ops call works");
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "initial fence_get_json_ops match");
 
-    Jput (ops);
+    json_decref (ops);
 
     ok (fence_iter_request_copies (f, msg_cb, &count) == 0,
         "initial fence_iter_request_copies works");
@@ -106,8 +105,8 @@ void basic_api_tests (void)
 void ops_tests (void)
 {
     fence_t *f;
-    json_object *ops;
-    json_object *o;
+    json_t *ops;
+    json_t *o;
 
     ok ((f = fence_create ("foo", 3, 3)) != NULL,
         "fence_create works");
@@ -122,25 +121,25 @@ void ops_tests (void)
         "fence_count_reached() is still false");
 
     /* for test ops can be anything */
-    ops = Jnew_ar ();
-    Jadd_ar_str (ops, "A");
+    ops = json_array ();
+    json_array_append_new (ops, json_string ("A"));
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
-    Jput (ops);
+    json_decref (ops);
 
     ok (fence_count_reached (f) == false,
         "fence_count_reached() is still false");
 
     /* for test ops can be anything */
-    ops = Jnew_ar ();
-    Jadd_ar_str (ops, "B");
+    ops = json_array ();
+    json_array_append_new (ops, json_string ("B"));
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
-    Jput (ops);
+    json_decref (ops);
 
     ok (fence_count_reached (f) == true,
         "fence_count_reached() is true");
@@ -148,14 +147,14 @@ void ops_tests (void)
     ok ((o = fence_get_json_ops (f)) != NULL,
         "initial fence_get_json_ops call works");
 
-    ops = Jnew_ar ();
-    Jadd_ar_str (ops, "A");
-    Jadd_ar_str (ops, "B");
+    ops = json_array ();
+                           json_array_append_new (ops, json_string ("A"));
+                           json_array_append_new (ops, json_string ("B"));
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "fence_get_json_ops match");
 
-    Jput (ops);
+    json_decref (ops);
 
     fence_destroy (f);
 }
@@ -206,18 +205,18 @@ void request_tests (void)
 fence_t *create_fence (const char *name, const char *opname, int flags)
 {
     fence_t *f;
-    json_object *ops;
+    json_t *ops;
 
     ok ((f = fence_create (name, 1, flags)) != NULL,
         "fence_create works");
 
-    ops = Jnew_ar ();
-    Jadd_ar_str (ops, opname);
+    ops = json_array ();
+    json_array_append_new (ops, json_string (opname));
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
-    Jput (ops);
+    json_decref (ops);
 
     return f;
 }
@@ -225,8 +224,8 @@ fence_t *create_fence (const char *name, const char *opname, int flags)
 void merge_tests (void)
 {
     fence_t *f1, *f2;
-    json_object *names, *ops;
-    json_object *o;
+    json_t *names, *ops;
+    json_t *o;
 
     f1 = create_fence ("foo", "A", 0);
     f2 = create_fence ("bar", "B", 0);
@@ -237,23 +236,23 @@ void merge_tests (void)
     ok ((o = fence_get_json_names (f1)) != NULL,
         "fence_get_json_names works");
 
-    names = Jnew_ar ();
-    Jadd_ar_str (names, "foo");
-    Jadd_ar_str (names, "bar");
+    names = json_array ();
+    json_array_append_new (names, json_string ("foo"));
+    json_array_append_new (names, json_string ("bar"));
 
-    ok (json_compare (names, o) == true,
+    ok (json_equal (names, o) == true,
         "fence_get_json_names match");
 
-    Jput (names);
+    json_decref (names);
 
     ok ((o = fence_get_json_ops (f1)) != NULL,
         "fence_get_json_ops works");
 
-    ops = Jnew_ar ();
-    Jadd_ar_str (ops, "A");
-    Jadd_ar_str (ops, "B");
+    ops = json_array ();
+    json_array_append_new (ops, json_string ("A"));
+    json_array_append_new (ops, json_string ("B"));
 
-    ok (json_compare (ops, o) == true,
+    ok (json_equal (ops, o) == true,
         "fence_get_json_ops match");
 
     fence_destroy (f1);

@@ -72,48 +72,6 @@ json_t *j_dirent_create (const char *type, void *arg)
     return dirent;
 }
 
-bool j_dirent_match (json_t *dirent1, json_t *dirent2)
-{
-    if (!dirent1 && !dirent2)
-        return true;
-    if ((dirent1 && !dirent2) || (!dirent1 && dirent2))
-        return false;
-    if (json_equal (dirent1, dirent2))
-        return true;
-    return false;
-}
-
-void j_dirent_append (json_t **array, const char *key, json_t *dirent)
-{
-    json_t *op;
-    json_t *o;
-
-    if (!(op = json_object ()))
-        oom ();
-
-    if (!(o = json_string (key)))
-        oom ();
-    if (json_object_set_new (op, "key", o) < 0)
-        oom ();
-    if (dirent) {
-        if (json_object_set (op, "dirent", dirent) < 0)
-            oom ();
-    }
-    else {
-        json_t *null;
-        if (!(null = json_null ()))
-            oom ();
-        if (json_object_set_new (op, "dirent", null) < 0)
-            oom ();
-    }
-    if (!*array) {
-        if (!(*array = json_array ()))
-            oom ();
-    }
-    if (json_array_append (*array, op) < 0)
-        oom ();
-}
-
 int j_dirent_validate (json_t *dirent)
 {
     json_t *o;
