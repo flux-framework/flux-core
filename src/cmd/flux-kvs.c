@@ -29,10 +29,10 @@
 #include <flux/optparse.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <jansson.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/readall.h"
 
 int cmd_get (optparse_t *p, int argc, char **argv);
@@ -250,31 +250,38 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
-static void output_key_json_object (const char *key, json_object *o)
+static void output_key_json_object (const char *key, json_t *o)
 {
+    char *s;
     if (key)
         printf ("%s = ", key);
 
-    switch (json_object_get_type (o)) {
-    case json_type_null:
+    switch (json_typeof (o)) {
+    case JSON_NULL:
         printf ("nil\n");
         break;
-    case json_type_boolean:
-        printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
+    case JSON_TRUE:
+        printf ("true\n");
         break;
-    case json_type_double:
-        printf ("%f\n", json_object_get_double (o));
+    case JSON_FALSE:
+        printf ("false\n");
         break;
-    case json_type_int:
-        printf ("%d\n", json_object_get_int (o));
+    case JSON_REAL:
+        printf ("%f\n", json_real_value (o));
         break;
-    case json_type_string:
-        printf ("%s\n", json_object_get_string (o));
+    case JSON_INTEGER:
+        printf ("%lld\n", (long long)json_integer_value (o));
         break;
-    case json_type_array:
-    case json_type_object:
+    case JSON_STRING:
+        printf ("%s\n", json_string_value (o));
+        break;
+    case JSON_ARRAY:
+    case JSON_OBJECT:
     default:
-        printf ("%s\n", Jtostr (o));
+        if (!(s = json_dumps (o, JSON_SORT_KEYS)))
+            log_msg_exit ("json_dumps failed");
+        printf ("%s\n", s);
+        free (s);
         break;
     }
 }
@@ -283,17 +290,16 @@ static void output_key_json_str (const char *key,
                                  const char *json_str,
                                  const char *arg)
 {
-    json_object *o;
+    json_t *o;
+    json_error_t error;
 
-    if (!json_str) {
-        output_key_json_object (key, NULL); 
-        return;
-    }
-
-    if (!(o = Jfromstr (json_str)))
-        log_msg_exit ("%s: malformed JSON", arg);
+    if (!json_str)
+        json_str = "null";
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error)))
+        log_msg_exit ("%s: %s (line %d column %d)",
+                      arg, error.text, error.line, error.column);
     output_key_json_object (key, o);
-    Jput (o);
+    json_decref (o);
 }
 
 int cmd_get (optparse_t *p, int argc, char **argv)
@@ -683,13 +689,18 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
 
 static void dump_kvs_val (const char *key, const char *json_str)
 {
-    json_object *o = Jfromstr (json_str);
-    if (!o) {
-        printf ("%s: invalid JSON", key);
+    json_t *o;
+    json_error_t error;
+
+    if (!json_str)
+        json_str = "null";
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error))) {
+        printf ("%s: %s (line %d column %d)\n",
+                key, error.text, error.line, error.column);
         return;
     }
     output_key_json_object (key, o);
-    Jput (o);
+    json_decref (o);
 }
 
 static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt)

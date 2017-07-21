@@ -68,10 +68,10 @@ test_expect_success 'kvs: boolean get' '
 	test_kvs_key $KEY.boolean true
 '
 test_expect_success 'kvs: array get' '
-	test_kvs_key $KEY.array "[ 1, 3, 5 ]"
+	test_kvs_key $KEY.array "[1, 3, 5]"
 '
 test_expect_success 'kvs: object get' '
-	test_kvs_key $KEY.object "{ \"a\": 42 }"
+	test_kvs_key $KEY.object "{\"a\": 42}"
 '
 test_expect_success 'kvs: dir' '
 	flux kvs dir $DIR | sort >output
@@ -84,11 +84,11 @@ EOF
 test_expect_success 'kvs: dir -R' '
 	flux kvs dir -R $DIR | sort >output
 	cat >expected <<EOF
-$KEY.array = [ 1, 3, 5 ]
+$KEY.array = [1, 3, 5]
 $KEY.boolean = true
 $KEY.double = 3.140000
 $KEY.integer = 42
-$KEY.object = { "a": 42 }
+$KEY.object = {"a": 42}
 $KEY.string = foo
 EOF
 	test_cmp expected output
@@ -152,8 +152,8 @@ test_expect_success 'kvs: get (multiple)' '
 3.140000
 foo
 true
-[ 1, 3, 5 ]
-{ "a": 42 }
+[1, 3, 5]
+{"a": 42}
 EOF
 	test_cmp expected output
 '
@@ -176,8 +176,8 @@ $KEY.a = 42
 $KEY.b = 3.140000
 $KEY.c = foo
 $KEY.d = true
-$KEY.e = [ 1, 3, 5 ]
-$KEY.f = { "a": 42 }
+$KEY.e = [1, 3, 5]
+$KEY.f = {"a": 42}
 EOF
 	test_cmp expected output
 '
