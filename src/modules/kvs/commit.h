@@ -29,6 +29,12 @@ typedef int (*commit_cache_entry_cb)(commit_t *c,
 
 int commit_get_errnum (commit_t *c);
 
+/* if user wishes to stall, but needs future knowledge to fail and
+ * what error caused the failure.
+ */
+int commit_get_aux_errnum (commit_t *c);
+int commit_set_aux_errnum (commit_t *c, int errnum);
+
 fence_t *commit_get_fence (commit_t *c);
 
 /* returns aux data passed into commit_mgr_create() */

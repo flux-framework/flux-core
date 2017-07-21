@@ -55,6 +55,7 @@ struct commit_mgr {
 
 struct commit {
     int errnum;
+    int aux_errnum;
     fence_t *f;
     int blocked:1;
     json_t *rootcpy;   /* working copy of root dir */
@@ -107,6 +108,17 @@ error:
 int commit_get_errnum (commit_t *c)
 {
     return c->errnum;
+}
+
+int commit_get_aux_errnum (commit_t *c)
+{
+    return c->aux_errnum;
+}
+
+int commit_set_aux_errnum (commit_t *c, int errnum)
+{
+    c->aux_errnum = errnum;
+    return c->aux_errnum;
 }
 
 fence_t *commit_get_fence (commit_t *c)

@@ -343,6 +343,18 @@ void commit_basic_tests (void)
     ok (commit_get_errnum (c) == 0,
         "commit_get_errnum returns no error");
 
+    ok (commit_get_aux_errnum (c) == 0,
+        "commit_get_aux_errnum returns no error");
+
+    ok (commit_set_aux_errnum (c, EINVAL) == EINVAL,
+        "commit_set_aux_errnum works");
+
+    ok (commit_get_aux_errnum (c) == EINVAL,
+        "commit_get_aux_errnum gets EINVAL");
+
+    ok (commit_get_errnum (c) == 0,
+        "commit_get_errnum still works");
+
     ok (commit_get_aux (c) == &test_global,
         "commit_get_aux returns correct pointer");
 
