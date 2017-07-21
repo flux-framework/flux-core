@@ -191,8 +191,10 @@ static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now
     if (!(f = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_future_aux_set (f, "ref", xstrdup (ref), free) < 0)
+    if (flux_future_aux_set (f, "ref", xstrdup (ref), free) < 0) {
+        flux_future_destroy (f);
         goto error;
+    }
     if (now) {
         content_load_completion (f, ctx);
     } else if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
