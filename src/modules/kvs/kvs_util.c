@@ -67,23 +67,34 @@ char *kvs_util_json_dumps (json_t *o)
     char *s;
     if (!o) {
         json_t *tmp;
-        if (!(tmp = json_null ()))
-            oom ();
-        if (!(s = json_dumps (tmp, flags)))
-            oom ();
+        if (!(tmp = json_null ())) {
+            errno = ENOMEM;
+            return NULL;
+        }
+        if (!(s = json_dumps (tmp, flags))) {
+            json_decref (tmp);
+            errno = ENOMEM;
+            return NULL;
+        }
         json_decref (tmp);
         return s;
     }
-    if (!(s = json_dumps (o, flags)))
-        oom ();
+    if (!(s = json_dumps (o, flags))) {
+        errno = ENOMEM;
+        return NULL;
+    }
     return s;
 }
 
 int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    char *s = kvs_util_json_dumps (o);
-    int rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
-                           ref, sizeof (href_t));
+    char *s;
+    int rc;
+
+    if (!(s = kvs_util_json_dumps (o)))
+        return -1;
+    rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+                       ref, sizeof (href_t));
     free (s);
     return rc;
 }

@@ -286,7 +286,10 @@ static int content_store_request_send (kvs_ctx_t *ctx, json_t *val,
     int size;
     int rc = -1;
 
-    data = kvs_util_json_dumps (val);
+    if (!(data = kvs_util_json_dumps (val))) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     size = strlen (data) + 1;
 
