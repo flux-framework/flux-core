@@ -141,6 +141,8 @@ const char *commit_get_newroot_ref (commit_t *c)
 /* Store object 'o' under key 'ref' in local cache.
  * Object reference is given to this function, it will either give it
  * to the cache or decref it.
+ * Returns -1 on error, 0 on success entry already there, 1 on success
+ * entry needs to be flushed to content store
  */
 static int store_cache (commit_t *c, int current_epoch, json_t *o,
                         href_t ref, struct cache_entry **hpp)
@@ -159,13 +161,13 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     if (cache_entry_get_valid (hp)) {
         c->cm->noop_stores++;
         json_decref (o);
+        rc = 0;
     } else {
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
-        cache_entry_set_content_store_flag (hp, true);
+        rc = 1;
     }
     *hpp = hp;
-    rc = 0;
     return rc;
 
  decref_done:
@@ -192,7 +194,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     json_t *value;
     json_t *subdir, *key_value;
     href_t ref;
-    int rc = -1;
+    int ret, rc = -1;
     struct cache_entry *hp;
     void *iter = json_object_iter (dir);
 
@@ -205,9 +207,9 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if (commit_unroll (c, current_epoch, subdir) < 0) /* depth first */
                 goto done;
             json_incref (subdir);
-            if (store_cache (c, current_epoch, subdir, ref, &hp) < 0)
+            if ((ret = store_cache (c, current_epoch, subdir, ref, &hp)) < 0)
                 goto done;
-            if (cache_entry_get_dirty (hp)) {
+            if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0)
                     oom ();
             }
@@ -219,9 +221,9 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
         else if ((key_value = json_object_get (value, "FILEVAL"))
                  && fileval_big (key_value)) {
             json_incref (key_value);
-            if (store_cache (c, current_epoch, key_value, ref, &hp) < 0)
+            if ((ret = store_cache (c, current_epoch, key_value, ref, &hp)) < 0)
                 goto done;
-            if (cache_entry_get_dirty (hp)) {
+            if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0)
                     oom ();
             }
@@ -429,16 +431,17 @@ commit_process_t commit_process (commit_t *c,
              * proceed until they are completed.
              */
             struct cache_entry *hp;
+            int sret;
 
             if (commit_unroll (c, current_epoch, c->rootcpy) < 0)
                 c->errnum = errno;
-            else if (store_cache (c,
-                                  current_epoch,
-                                  c->rootcpy,
-                                  c->newroot,
-                                  &hp) < 0)
-                c->errnum = errno;
-            else if (cache_entry_get_dirty (hp)
+            else if ((sret = store_cache (c,
+                                          current_epoch,
+                                          c->rootcpy,
+                                          c->newroot,
+                                          &hp)) < 0)
+                     c->errnum = errno;
+            else if (sret
                      && zlist_push (c->item_callback_list, hp) < 0)
                 oom ();
 

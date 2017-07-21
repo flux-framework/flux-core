@@ -17,11 +17,6 @@
 
 static int test_global = 5;
 
-struct cache_count {
-    int store_count;
-    int dirty_count;
-};
-
 /* Append a JSON object containing
  *     { "key" : key, "dirent" : dirent }
  *     { "key" : key, "dirent" : null }
@@ -373,15 +368,10 @@ void commit_basic_tests (void)
 
 int cache_count_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
-    struct cache_count *cc = data;
-    if (cache_entry_get_content_store_flag (hp)) {
-        if (cc)
-            cc->store_count++;
-        cache_entry_set_content_store_flag (hp, false);
-    }
+    int *count = data;
     if (cache_entry_get_dirty (hp)) {
-        if (cc)
-            cc->dirty_count++;
+        if (count)
+            (*count)++;
     }
     return 0;
 }
@@ -423,7 +413,7 @@ void verify_value (struct cache *cache,
 void commit_basic_commit_process_test (void)
 {
     struct cache *cache;
-    struct cache_count cc = { .store_count = 0, .dirty_count = 0 };
+    int count = 0;
     commit_mgr_t *cm;
     commit_t *c;
     href_t rootref;
@@ -442,13 +432,10 @@ void commit_basic_commit_process_test (void)
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &count) == 0,
         "commit_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (cc.store_count == 1,
-        "correct number of cache entries had to be stored");
-
-    ok (cc.dirty_count == 1,
+    ok (count == 1,
         "correct number of cache entries were dirty");
 
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
@@ -471,7 +458,7 @@ void commit_basic_commit_process_test (void)
 void commit_basic_commit_process_test_multiple_fences (void)
 {
     struct cache *cache;
-    struct cache_count cc = { .store_count = 0, .dirty_count = 0 };
+    int count = 0;
     commit_mgr_t *cm;
     commit_t *c;
     href_t rootref;
@@ -491,13 +478,10 @@ void commit_basic_commit_process_test_multiple_fences (void)
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &count) == 0,
         "commit_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (cc.store_count == 1,
-        "correct number of cache entries had to be stored");
-
-    ok (cc.dirty_count == 1,
+    ok (count == 1,
         "correct number of cache entries were dirty");
 
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
@@ -517,16 +501,12 @@ void commit_basic_commit_process_test_multiple_fences (void)
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    cc.store_count = 0;
-    cc.dirty_count = 0;
+    count = 0;
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &count) == 0,
         "commit_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (cc.store_count == 1,
-        "correct number of cache entries had to be stored");
-
-    ok (cc.dirty_count == 1,
+    ok (count == 1,
         "correct number of cache entries were dirty");
 
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
@@ -550,7 +530,7 @@ void commit_basic_commit_process_test_multiple_fences (void)
 void commit_basic_commit_process_test_multiple_fences_merge (void)
 {
     struct cache *cache;
-    struct cache_count cc = { .store_count = 0, .dirty_count = 0 };
+    int count = 0;
     commit_mgr_t *cm;
     commit_t *c;
     href_t rootref;
@@ -573,17 +553,14 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &cc) == 0,
+    ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &count) == 0,
         "commit_iter_dirty_cache_entries works for dirty cache entries");
 
     /* why three? 1 for root, 1 for foo.key1 (a new dir), and 1 for
      * bar.key2 (a new dir)
      */
 
-    ok (cc.store_count == 3,
-        "correct number of cache entries had to be stored");
-
-    ok (cc.dirty_count == 3,
+    ok (count == 3,
         "correct number of cache entries were dirty");
 
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,

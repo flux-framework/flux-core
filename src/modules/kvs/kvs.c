@@ -326,15 +326,14 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
     struct commit_cb_data *cbd = data;
 
-    if (cache_entry_get_content_store_flag (hp)) {
-        if (content_store_request_send (cbd->ctx,
-                                        cache_entry_get_json (hp),
-                                        false) < 0) {
-            cbd->errnum = errno;
-            flux_log_error (cbd->ctx->h, "content_store");
-            return -1;
-        }
-        cache_entry_set_content_store_flag (hp, false);
+    assert (cache_entry_get_dirty (hp));
+
+    if (content_store_request_send (cbd->ctx,
+                                    cache_entry_get_json (hp),
+                                    false) < 0) {
+        cbd->errnum = errno;
+        flux_log_error (cbd->ctx->h, "content_store");
+        return -1;
     }
     cache_entry_wait_notdirty (hp, cbd->wait);
     return 0;

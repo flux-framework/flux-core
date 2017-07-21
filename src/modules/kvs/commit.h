@@ -77,12 +77,7 @@ commit_process_t commit_process (commit_t *c,
 int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data);
 
 /* on commit stall, iterate through all dirty cache entries that need
- * to be pushed to the content store or wait to be finished being sent
- * to content store.
- *
- * cache_entry_get_content_store_flag() can be used to indicate if it
- * should be sent to the content store or not (be sure to clear the
- * flag appropriately.)
+ * to be pushed to the content store.
  *
  * return -1 in callback to break iteration
  */
