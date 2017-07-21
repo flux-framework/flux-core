@@ -229,8 +229,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             if self.pimpl.isdir(k):
                 yield k
 
-    def list_all(self, topdown=False):
-        # pylint: disable=unused-argument
+    def list_all(self):
         files = []
         dirs = []
         for k in self:
