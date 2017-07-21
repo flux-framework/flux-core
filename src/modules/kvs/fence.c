@@ -75,10 +75,15 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     f->nprocs = nprocs;
     f->flags = flags;
     if (name) {
-        if (!(s = json_string (name)))
-            oom();
-        if (json_array_append_new (f->names, s) < 0)
-            oom();
+        if (!(s = json_string (name))) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (json_array_append_new (f->names, s) < 0) {
+            json_decref (s);
+            errno = ENOMEM;
+            goto error;
+        }
     }
 
     return f;

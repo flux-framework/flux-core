@@ -39,7 +39,6 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libkvs/jansson_dirent.h"
 
 #include "cache.h"
@@ -109,23 +108,35 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
 
     if (!(pathcomps = zlist_new ())) {
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
+
+    /* N.B. not creating memory, placing pointer to path components,
+     * so cleanup is simply list destroy.
+     */
 
     current = wl->path_copy;
     while ((next = strchr (current, '.'))) {
         *next++ = '\0';
 
-        if (zlist_append (pathcomps, current) < 0)
-            oom ();
+        if (zlist_append (pathcomps, current) < 0) {
+            errno = ENOMEM;
+            goto error;
+        }
 
         current = next;
     }
 
-    if (zlist_append (pathcomps, current) < 0)
-        oom ();
+    if (zlist_append (pathcomps, current) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     return pathcomps;
+
+ error:
+    zlist_destroy (&pathcomps);
+    return NULL;
 }
 
 static void walk_level_destroy (void *data)
@@ -166,8 +177,11 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
     if (!(wl = walk_level_create (path, lh->root_dirent, depth)))
         return NULL;
 
-    if (zlist_push (lh->levels, wl) < 0)
-        oom ();
+    if (zlist_push (lh->levels, wl) < 0) {
+        walk_level_destroy (wl);
+        errno = ENOMEM;
+        return NULL;
+    }
     zlist_freefn (lh->levels, wl, walk_level_destroy, false);
 
     return wl;

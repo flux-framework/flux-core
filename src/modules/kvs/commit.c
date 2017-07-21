@@ -299,8 +299,10 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         if (!(subdirent = json_object_get (dir, name))) {
             if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object ()))
-                oom ();
+            if (!(subdir = json_object ())) {
+                errno = ENOMEM;
+                goto done;
+            }
             if (json_object_set_new (dir,
                                      name,
                                      j_dirent_create ("DIRVAL",subdir)) < 0)
@@ -341,8 +343,10 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else {
             if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object ()))
-                oom ();
+            if (!(subdir = json_object ())) {
+                errno = ENOMEM;
+                goto done;
+            }
             if (json_object_set_new (dir,
                                      name,
                                      j_dirent_create ("DIRVAL",subdir)) < 0)
@@ -392,8 +396,11 @@ commit_process_t commit_process (commit_t *c,
             if (!(rootdir = cache_lookup_and_get_json (c->cm->cache,
                                                        rootdir_ref,
                                                        current_epoch))) {
-                if (zlist_push (c->item_callback_list, (void *)rootdir_ref) < 0)
-                    oom ();
+                if (zlist_push (c->item_callback_list,
+                                (void *)rootdir_ref) < 0) {
+                    c->errnum = ENOMEM;
+                    return COMMIT_PROCESS_ERROR;
+                }
                 goto stall_load;
             }
 
@@ -437,8 +444,10 @@ commit_process_t commit_process (commit_t *c,
                     }
                     if (missing_ref) {
                         if (zlist_push (c->item_callback_list,
-                                        (void *)missing_ref) < 0)
-                            oom ();
+                                        (void *)missing_ref) < 0) {
+                            c->errnum = ENOMEM;
+                            break;
+                        }
                     }
                 }
 
@@ -637,8 +646,11 @@ int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
         if (!(c = commit_create (f, cm)))
             return -1;
 
-        if (zlist_append (cm->ready, c) < 0)
-            oom ();
+        if (zlist_append (cm->ready, c) < 0) {
+            commit_destroy (c);
+            errno = ENOMEM;
+            return -1;
+        }
         zlist_freefn (cm->ready, c, (zlist_free_fn *)commit_destroy, true);
     }
 

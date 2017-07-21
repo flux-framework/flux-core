@@ -13,7 +13,6 @@
 #include "src/modules/kvs/fence.h"
 #include "src/modules/kvs/kvs_util.h"
 #include "src/modules/kvs/types.h"
-#include "src/common/libutil/oom.h"
 
 static int test_global = 5;
 

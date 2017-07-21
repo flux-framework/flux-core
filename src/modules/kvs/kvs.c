@@ -43,7 +43,6 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libkvs/jansson_dirent.h"
 
 #include "waitqueue.h"
@@ -720,8 +719,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     /* if no value, create json null object for remainder of code */
     if (!val) {
-        if (!(val = json_null ()))
-            oom ();
+        if (!(val = json_null ())) {
+            errno = ENOMEM;
+            goto done;
+        }
     }
 
     /* we didn't initialize these values on a replay, get them */
@@ -1167,8 +1168,10 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
         FASSERT (ctx->h, stall == false);
     }
     else {
-        if (!(nullobj = json_null ()))
-            oom ();
+        if (!(nullobj = json_null ())) {
+            flux_log_error (ctx->h, "%s: json_null", __FUNCTION__);
+            goto done;
+        }
         root = nullobj;
     }
     if (!(msg = flux_event_pack ("kvs.setroot", "{ s:i s:s s:O s:O }",
@@ -1388,8 +1391,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         json_t *rootdir;
         href_t href;
 
-        if (!(rootdir = json_object ()))
-            oom ();
+        if (!(rootdir = json_object ())) {
+            flux_log_error (h, "json_object");
+            goto done;
+        }
 
         if (store_initial_rootdir (ctx, rootdir, href) < 0) {
             flux_log_error (h, "storing root object");
