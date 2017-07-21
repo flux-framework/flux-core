@@ -19,10 +19,11 @@ void wait_cb (void *arg)
 int main (int argc, char *argv[])
 {
     struct cache *cache;
-    struct cache_entry *e1, *e2, *e3, *e4;
+    struct cache_entry *e1, *e2, *e3, *e4, *e5;
     json_t *o1;
     json_t *o2;
     json_t *o3;
+    json_t *o4;
     json_t *o;
     wait_t *w;
     int count;
@@ -170,6 +171,67 @@ int main (int argc, char *argv[])
         "cache_expire_entries now=44 thresh=1 expired 1");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
+
+    /* cache_remove_entry tests */
+
+    ok ((e5 = cache_entry_create (NULL)) != NULL,
+        "cache_entry_create works");
+    cache_insert (cache, "remove-ref", e5);
+    ok (cache_lookup (cache, "remove-ref", 0) != NULL,
+        "cache_lookup verify entry exists");
+    ok (cache_remove_entry (cache, "blalalala") == 0,
+        "cache_remove_entry failed on bad reference");
+    ok (cache_remove_entry (cache, "remove-ref") == 1,
+        "cache_remove_entry removed cache entry w/o object");
+    ok (cache_lookup (cache, "remove-ref", 0) == NULL,
+        "cache_lookup verify entry gone");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok ((e5 = cache_entry_create (NULL)) != NULL,
+        "cache_entry_create created empty object");
+    cache_insert (cache, "remove-ref", e5);
+    ok (cache_lookup (cache, "remove-ref", 0) != NULL,
+        "cache_lookup verify entry exists");
+    ok (cache_entry_get_valid (e5) == false,
+        "cache entry invalid, adding waiter");
+    cache_entry_wait_valid (e5, w);
+    ok (cache_remove_entry (cache, "remove-ref") == 0,
+        "cache_remove_entry failed on valid waiter");
+    o4 = json_string ("foobar");
+    cache_entry_set_json (e5, o4);
+    ok (cache_entry_get_valid (e5) == true,
+        "cache entry set valid with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+    ok (cache_remove_entry (cache, "remove-ref") == 1,
+        "cache_remove_entry removed cache entry after valid waiter gone");
+    ok (cache_lookup (cache, "remove-ref", 0) == NULL,
+        "cache_lookup verify entry gone");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    o4 = json_string ("foobar");
+    ok ((e5 = cache_entry_create (o4)) != NULL,
+        "cache_entry_create created empty object");
+    cache_insert (cache, "remove-ref", e5);
+    ok (cache_lookup (cache, "remove-ref", 0) != NULL,
+        "cache_lookup verify entry exists");
+    cache_entry_set_dirty (e5, true);
+    ok (cache_remove_entry (cache, "remove-ref") == 0,
+        "cache_remove_entry not removed b/c dirty");
+    cache_entry_wait_notdirty (e5, w);
+    ok (cache_remove_entry (cache, "remove-ref") == 0,
+        "cache_remove_entry failed on notdirty waiter");
+    cache_entry_set_dirty (e5, false);
+    ok (count == 1,
+        "waiter callback ran");
+    ok (cache_remove_entry (cache, "remove-ref") == 1,
+        "cache_remove_entry removed cache entry after notdirty waiter gone");
+    ok (cache_lookup (cache, "remove-ref", 0) == NULL,
+        "cache_lookup verify entry gone");
 
     cache_destroy (cache);
 

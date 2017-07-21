@@ -48,6 +48,7 @@
 #include "src/common/libutil/oom.h"
 
 #include "waitqueue.h"
+#include "kvs_util.h"
 #include "cache.h"
 
 struct cache_entry {
@@ -184,6 +185,22 @@ void cache_insert (struct cache *cache, const char *ref, struct cache_entry *hp)
     int rc = zhash_insert (cache->zh, ref, hp);
     assert (rc == 0);
     zhash_freefn (cache->zh, ref, cache_entry_destroy);
+}
+
+int cache_remove_entry (struct cache *cache, const char *ref)
+{
+    struct cache_entry *hp = zhash_lookup (cache->zh, ref);
+
+    if (hp
+        && !hp->dirty
+        && (!hp->waitlist_notdirty
+            || !wait_queue_length (hp->waitlist_notdirty))
+        && (!hp->waitlist_valid
+            || !wait_queue_length (hp->waitlist_valid))) {
+        zhash_delete (cache->zh, ref);
+        return 1;
+    }
+    return 0;
 }
 
 int cache_count_entries (struct cache *cache)

@@ -81,6 +81,12 @@ json_t *cache_lookup_and_get_json (struct cache *cache,
 void cache_insert (struct cache *cache, const char *ref,
                    struct cache_entry *hp);
 
+/* Remove a cache_entry from the cache.  Will not be removed if dirty
+ * or there are any waiters of any sort.
+ * Returns 1 on removed, 0 if not
+ */
+int cache_remove_entry (struct cache *cache, const char *ref);
+
 /* Return the number of cache entries.
  */
 int cache_count_entries (struct cache *cache);
