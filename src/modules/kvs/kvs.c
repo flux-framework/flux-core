@@ -170,11 +170,13 @@ static void content_load_completion (flux_future_t *f, void *arg)
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    /* cache entry must have be created earlier.
-     * cache_expire_entries() could not have removed it b/c it is not
-     * yet valid.
+    /* should be impossible for lookup to fail, cache entry created
+     * earlier, and cache_expire_entries() could not have removed it
+     * b/c it is not yet valid.  But check and log incase there is
+     * logic error dealng with error paths using cache_remove_entry().
      */
-    assert ((hp = cache_lookup (ctx->cache, blobref, ctx->epoch)));
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+        flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
     cache_entry_set_json (hp, o);
 done:
     flux_future_destroy (f);
@@ -251,7 +253,13 @@ static int content_store_get (flux_future_t *f, void *arg)
         goto done;
     }
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
-    hp = cache_lookup (ctx->cache, blobref, ctx->epoch);
+    /* should be impossible for lookup to fail, cache entry created
+     * earlier, and cache_expire_entries() could not have removed it
+     * b/c it was dirty.  But check and log incase there is logic
+     * error dealng with error paths using cache_remove_entry().
+     */
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+        flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
     cache_entry_set_dirty (hp, false);
     rc = 0;
 done:
