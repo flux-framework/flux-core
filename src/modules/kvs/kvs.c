@@ -1309,6 +1309,11 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
         if (content_store_request_send (ctx, o, true) < 0) {
+            /* Must clean up, don't want cache entry to be assumed
+             * valid.  Everything here is synchronous and w/o waiters,
+             * so nothing should error here */
+            assert (cache_entry_clear_dirty (hp) == 0);
+            assert (cache_remove_entry (ctx->cache, ref) == 1);
             flux_log_error (ctx->h, "content_store");
             goto done;
         }
