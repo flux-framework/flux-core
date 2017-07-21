@@ -92,13 +92,15 @@ int cache_count_entries (struct cache *cache);
 
 /* Expire cache entries that are not dirty, not incomplete, and last
  * used more than 'thresh' epoch's ago.
+ * Returns -1 on error, expired count on success.
  */
 int cache_expire_entries (struct cache *cache, int current_epoch, int thresh);
 
 /* Obtain statistics on the cache.
+ * Returns -1 on error, 0 on success
  */
-void cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
-                      int *incomplete, int *dirty);
+int cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
+                     int *incomplete, int *dirty);
 
 /* Destroy wait_t's on the waitqueue_t of any cache entry
  * if they meet match criteria.

@@ -512,8 +512,13 @@ static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto done;
     size = cache_count_entries (ctx->cache);
-    expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0);
-    flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
+    if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0) {
+        flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
+        goto done;
+    }
+    else
+        flux_log (h, LOG_ALERT, "dropped %d of %d cache entries",
+                  expcount, size);
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
@@ -531,8 +536,11 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
         return;
     }
     size = cache_count_entries (ctx->cache);
-    expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0);
-    flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
+    if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0)
+        flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
+    else
+        flux_log (h, LOG_ALERT, "dropped %d of %d cache entries",
+                  expcount, size);
 }
 
 static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
@@ -552,7 +560,8 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
     /* "touch" root */
     (void)load (ctx, ctx->rootdir, NULL, NULL);
 
-    cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age);
+    if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
+        flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
 }
 
 static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -1244,7 +1253,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
 
     memset (&ts, 0, sizeof (ts));
-    cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty);
+    if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
+        goto done;
 
     if (!(t = json_pack ("{ s:i s:f s:f s:f s:f }",
                          "count", tstat_count (&ts),

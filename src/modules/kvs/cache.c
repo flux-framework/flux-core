@@ -45,7 +45,6 @@
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
-#include "src/common/libutil/oom.h"
 
 #include "waitqueue.h"
 #include "kvs_util.h"
@@ -224,8 +223,10 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     struct cache_entry *hp;
     int count = 0;
 
-    if (!(keys = zhash_keys (cache->zh)))
-        oom ();
+    if (!(keys = zhash_keys (cache->zh))) {
+        errno = ENOMEM;
+        return -1;
+    }
     while ((ref = zlist_pop (keys))) {
         if ((hp = zhash_lookup (cache->zh, ref))
             && !cache_entry_get_dirty (hp)
@@ -240,26 +241,32 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     return count;
 }
 
-void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
-                      int *incompletep, int *dirtyp)
+int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
+                     int *incompletep, int *dirtyp)
 {
-    zlist_t *keys;
+    zlist_t *keys = NULL;
     struct cache_entry *hp;
     char *ref;
     int size = 0;
     int incomplete = 0;
     int dirty = 0;
+    int rc = -1;
 
-    if (!(keys = zhash_keys (cache->zh)))
-        oom ();
+    if (!(keys = zhash_keys (cache->zh))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     while ((ref = zlist_pop (keys))) {
         hp = zhash_lookup (cache->zh, ref);
         if (cache_entry_get_valid (hp)) {
             /* must pass JSON_ENCODE_ANY, object could be anything */
             char *s = json_dumps (hp->o, JSON_ENCODE_ANY);
-            if (!s)
-                oom ();
-            int obj_size = strlen (s);
+            int obj_size;
+            if (!s) {
+                errno = ENOMEM;
+                goto cleanup;
+            }
+            obj_size = strlen (s);
             free (s);
             size += obj_size;
             tstat_push (ts, obj_size);
@@ -269,13 +276,16 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
             dirty++;
         free (ref);
     }
-    zlist_destroy (&keys);
     if (sizep)
         *sizep = size;
     if (incompletep)
         *incompletep = incomplete;
     if (dirtyp)
         *dirtyp = dirty;
+    rc = 0;
+cleanup:
+    zlist_destroy (&keys);
+    return rc;
 }
 
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
