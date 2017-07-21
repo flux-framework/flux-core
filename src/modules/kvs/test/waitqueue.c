@@ -1,6 +1,5 @@
 #include "src/modules/kvs/waitqueue.h"
 #include "src/common/libflux/message.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 
 void wait_cb (void *arg)

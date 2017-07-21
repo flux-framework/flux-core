@@ -304,7 +304,11 @@ done:
 
 struct cache *cache_create (void)
 {
-    struct cache *cache = xzmalloc (sizeof (*cache));
+    struct cache *cache = calloc (1, sizeof (*cache));
+    if (!cache) {
+        errno = ENOMEM;
+        return NULL;
+    }
     if (!(cache->zh = zhash_new ())) {
         free (cache);
         errno = ENOMEM;

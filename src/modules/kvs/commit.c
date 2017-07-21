@@ -36,7 +36,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libkvs/jansson_dirent.h"
@@ -277,11 +276,16 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                                json_t *rootdir, const char *key,
                                json_t *dirent, const char **missing_ref)
 {
-    char *cpy = xstrdup (key);
+    char *cpy = strdup (key);
     char *next, *name = cpy;
     json_t *dir = rootdir;
     json_t *o, *subdir = NULL, *subdirent;
     int rc = -1;
+
+    if (!cpy) {
+        errno = ENOMEM;
+        goto done;
+    }
 
     /* Special case root
      */
@@ -328,7 +332,11 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "LINKVAL"))) {
             assert (json_is_string (o));
-            char *nkey = xasprintf ("%s.%s", json_string_value (o), next);
+            char *nkey = NULL;
+            if (asprintf (&nkey, "%s.%s", json_string_value (o), next) < 0) {
+                errno = ENOMEM;
+                goto done;
+            }
             if (commit_link_dirent (c,
                                     current_epoch,
                                     rootdir,

@@ -37,7 +37,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libkvs/jansson_dirent.h"
 
@@ -153,9 +152,16 @@ static walk_level_t *walk_level_create (const char *path,
                                         json_t *root_dirent,
                                         int depth)
 {
-    walk_level_t *wl = xzmalloc (sizeof (*wl));
+    walk_level_t *wl = calloc (1, sizeof (*wl));
 
-    wl->path_copy = xstrdup (path);
+    if (!wl) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(wl->path_copy = strdup (path))) {
+        errno = ENOMEM;
+        goto error;
+    }
     wl->depth = depth;
     wl->dirent = root_dirent;
     if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl)))
@@ -320,23 +326,35 @@ lookup_t *lookup_create (struct cache *cache,
         return NULL;
     }
 
-    lh = xzmalloc (sizeof (*lh));
+    if (!(lh = calloc (1, sizeof (*lh)))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
 
     lh->magic = LOOKUP_MAGIC;
     lh->cache = cache;
     lh->current_epoch = current_epoch;
     /* must duplicate these strings, user may not keep pointer
      * alive */
-    lh->root_dir = xstrdup (root_dir);
+    if (!(lh->root_dir = strdup (root_dir))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     if (root_ref) {
-        lh->root_ref_copy = xstrdup (root_ref);
+        if (!(lh->root_ref_copy = strdup (root_ref))) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
         lh->root_ref = lh->root_ref_copy;
     }
     else {
         lh->root_ref_copy = NULL;
         lh->root_ref = lh->root_dir;
     }
-    lh->path = xstrdup (path);
+    if (!(lh->path = strdup (path))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     lh->flags = flags;
 
     lh->aux = NULL;

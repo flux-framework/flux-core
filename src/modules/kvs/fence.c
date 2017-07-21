@@ -36,7 +36,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/oom.h"
 
 #include "fence.h"

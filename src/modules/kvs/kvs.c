@@ -39,7 +39,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
@@ -187,12 +186,19 @@ done:
 static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now)
 {
     flux_future_t *f = NULL;
+    char *refcpy;
 
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     if (!(f = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_future_aux_set (f, "ref", xstrdup (ref), free) < 0) {
+    if (!(refcpy = strdup (ref))) {
+        flux_future_destroy (f);
+        errno = ENOMEM;
+        goto error;
+    }
+    if (flux_future_aux_set (f, "ref", refcpy, free) < 0) {
+        free (refcpy);
         flux_future_destroy (f);
         goto error;
     }
