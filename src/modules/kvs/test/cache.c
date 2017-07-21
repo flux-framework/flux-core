@@ -20,6 +20,8 @@ int main (int argc, char *argv[])
 {
     struct cache *cache;
     struct cache_entry *e1, *e2, *e3, *e4, *e5;
+    tstat_t ts;
+    int size, incomplete, dirty;
     json_t *o1;
     json_t *o2;
     json_t *o3;
@@ -38,6 +40,13 @@ int main (int argc, char *argv[])
         "cache_create works");
     ok (cache_count_entries (cache) == 0,
         "cache contains 0 entries");
+    memset (&ts, 0, sizeof (ts));
+    ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
+        "cache_get_stats works");
+    ok (ts.n == 0, "empty cache, ts.n == 0");
+    ok (size == 0, "empty cache, size == 0");
+    ok (incomplete == 0, "empty cache, incomplete == 0");
+    ok (dirty == 0, "empty cache, dirty == 0");
     cache_destroy (cache);
 
     /* Play with one entry.
@@ -128,6 +137,13 @@ int main (int argc, char *argv[])
         "no json object found");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
+    memset (&ts, 0, sizeof (ts));
+    ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
+        "cache_get_stats works");
+    ok (ts.n == 0, "cache w/ entry w/o json, ts.n == 0");
+    ok (size == 0, "cache w/ entry w/o json, size == 0");
+    ok (incomplete == 1, "cache w/ entry w/o json, incomplete == 1");
+    ok (dirty == 0, "cache w/ entry w/o json, dirty == 0");
     ok (cache_expire_entries (cache, 43, 1) == 0,
         "cache_expire_entries now=43 thresh=1 expired 0 b/c entry invalid");
     ok (cache_count_entries (cache) == 1,
@@ -163,6 +179,27 @@ int main (int argc, char *argv[])
         "expected json object found");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
+
+    memset (&ts, 0, sizeof (ts));
+    ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
+        "cache_get_stats works");
+    ok (ts.n == 1, "cache w/ entry w/ json, ts.n == 1");
+    ok (size != 0, "cache w/ entry w/ json, size != 0");
+    ok (incomplete == 1, "cache w/ entry w/ json, incomplete == 1");
+    ok (dirty == 0, "cache w/ entry w/ json, dirty == 0");
+
+    cache_entry_set_dirty (e4, true);
+
+    memset (&ts, 0, sizeof (ts));
+    ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
+        "cache_get_stats works");
+    ok (ts.n == 1, "cache w/ entry w/ dirty json, ts.n == 1");
+    ok (size != 0, "cache w/ entry w/ dirty json, size != 0");
+    ok (incomplete == 1, "cache w/ entry w/ dirty json, incomplete == 1");
+    ok (dirty == 1, "cache w/ entry w/ dirty json, dirty == 1");
+
+    cache_entry_set_dirty (e4, false);
+
     ok (cache_expire_entries (cache, 43, 1) == 0,
         "cache_expire_entries now=43 thresh=1 expired 0");
     ok (cache_count_entries (cache) == 2,
