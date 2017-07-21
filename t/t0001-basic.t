@@ -55,11 +55,11 @@ test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start ${BUG1006} --size=2 'flux comms info' | grep 'size=2'
 "
 test_expect_success 'flux-start with size 1 has no peers' "
-	flux start ${BUG1006} --size=1 'flux comms idle' > idle.out
+	flux start ${BUG1006} --size=1 'flux comms idle' > idle.out &&
         ! grep 'idle' idle.out
 "
 test_expect_success 'flux-start with size 2 has a peer' "
-	flux start ${BUG1006} --size=2 'flux comms idle' > idle.out
+	flux start ${BUG1006} --size=2 'flux comms idle' > idle.out &&
         grep 'idle' idle.out
 "
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
@@ -254,10 +254,14 @@ test_expect_success 'flux-help command can display manpages for api calls' '
 	EOF
 	MANPATH=${PWD}/man FLUX_IGNORE_NO_DOCS=y flux help flux_foo | grep "^FOO(3)"
 '
-test_expect_success 'flux-help returns nonzero exit code from man(1)' '
+missing_man_code()
+{
         man notacommand >/dev/null 2>&1
-        code=$?
-        test_expect_code $code eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
+        echo $?
+}
+test_expect_success 'flux-help returns nonzero exit code from man(1)' '
+        test_expect_code $(missing_man_code) \
+                         eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '
 test_expect_success 'flux appends colon to missing or unset MANPATH' '
       (unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
