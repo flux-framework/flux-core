@@ -65,6 +65,8 @@ commit_process_t commit_process (commit_t *c,
 
 /* on commit stall, iterate through all missing refs that the caller
  * should load into the cache
+ *
+ * return -1 in callback to break iteration
  */
 int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data);
 
@@ -75,6 +77,8 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data);
  * cache_entry_get_content_store_flag() can be used to indicate if it
  * should be sent to the content store or not (be sure to clear the
  * flag appropriately.)
+ *
+ * return -1 in callback to break iteration
  */
 int commit_iter_dirty_cache_entries (commit_t *c,
                                      commit_cache_entry_cb cb,
