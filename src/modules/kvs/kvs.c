@@ -237,7 +237,14 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
      * arrange to stall caller if wait_t was provided.
      */
     if (!cache_entry_get_valid (hp)) {
-        cache_entry_wait_valid (hp, wait);
+        if (cache_entry_wait_valid (hp, wait) < 0) {
+            /* no cleanup in this path, if an rpc was sent, it will
+             * complete, but not call a waiter on this load.  Return
+             * error so caller can handle error appropriately.
+             */
+            flux_log_error (ctx->h, "cache_entry_wait_valid");
+            return -1;
+        }
         if (stall)
             *stall = true;
         return 0;
@@ -363,21 +370,18 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
     if (content_store_request_send (cbd->ctx,
                                     cache_entry_get_json (hp),
                                     false) < 0) {
-        href_t ref;
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
                         __FUNCTION__);
-        /* there should be no waiters on any cache entry passed to us */
-        assert (cache_entry_clear_dirty (hp) == 0);
-        if (kvs_util_json_hash (cbd->ctx->hash_name,
-                                cache_entry_get_json (hp),
-                                ref) < 0)
-            flux_log_error (cbd->ctx->h, "%s: kvs_util_json_hash", __FUNCTION__);
-        else
-            assert (cache_remove_entry (cbd->ctx->cache, ref) == 1);
+        commit_cleanup_dirty_cache_entry (c, hp);
         return -1;
     }
-    cache_entry_wait_notdirty (hp, cbd->wait);
+    if (cache_entry_wait_notdirty (hp, cbd->wait) < 0) {
+        cbd->errnum = errno;
+        flux_log_error (cbd->ctx->h, "cache_entry_wait_notdirty");
+        commit_cleanup_dirty_cache_entry (c, hp);
+        return -1;
+    }
     return 0;
 }
 

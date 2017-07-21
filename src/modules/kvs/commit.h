@@ -85,6 +85,13 @@ int commit_iter_dirty_cache_entries (commit_t *c,
                                      commit_cache_entry_cb cb,
                                      void *data);
 
+/* convenience function for cleaning up a dirty cache entry that was
+ * returned to the user via commit_process().  Generally speaking, this
+ * should only be used for error cleanup in the callback function used in
+ * commit_iter_dirty_cache_entries().
+ */
+void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp);
+
 /*
  * commit_mgr_t API
  */

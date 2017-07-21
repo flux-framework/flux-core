@@ -89,7 +89,8 @@ int main (int argc, char *argv[])
         "cache_entry_clear_dirty returns error, b/c no object set");
     o1 = json_object ();
     json_object_set_new (o1, "foo", json_integer (42));
-    cache_entry_wait_valid (e1, w);
+    ok (cache_entry_wait_valid (e1, w) == 0,
+        "cache_entry_wait_valid success");
     cache_entry_set_json (e1, o1);
     ok (cache_entry_get_valid (e1) == true,
         "cache entry set valid with one waiter");
@@ -102,7 +103,8 @@ int main (int argc, char *argv[])
     cache_entry_set_dirty (e1, true);
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry set dirty, adding waiter");
-    cache_entry_wait_notdirty (e1, w);
+    ok (cache_entry_wait_notdirty (e1, w) == 0,
+        "cache_entry_wait_notdirty success");
     ok (cache_entry_clear_dirty (e1) == 1,
         "cache_entry_clear_dirty returns 1, b/c of a waiter");
     cache_entry_set_dirty (e1, false);
@@ -233,7 +235,8 @@ int main (int argc, char *argv[])
         "cache_lookup verify entry exists");
     ok (cache_entry_get_valid (e5) == false,
         "cache entry invalid, adding waiter");
-    cache_entry_wait_valid (e5, w);
+    ok (cache_entry_wait_valid (e5, w) == 0,
+        "cache_entry_wait_valid success");
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry failed on valid waiter");
     o4 = json_string ("foobar");
@@ -259,7 +262,8 @@ int main (int argc, char *argv[])
     cache_entry_set_dirty (e5, true);
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry not removed b/c dirty");
-    cache_entry_wait_notdirty (e5, w);
+    ok (cache_entry_wait_notdirty (e5, w) == 0,
+        "cache_entry_wait_notdirty success");
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry failed on notdirty waiter");
     cache_entry_set_dirty (e5, false);

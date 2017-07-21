@@ -151,17 +151,20 @@ const char *commit_get_newroot_ref (commit_t *c)
  * this dirty cache list (i.e. in store_cache() below when
  * cache_entry_set_json() was called).
  */
-static void cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
+void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
 {
-    href_t ref;
-    assert (cache_entry_get_dirty (hp) == true);
-    assert (cache_entry_clear_dirty (hp) == 0);
-    if (kvs_util_json_hash (c->cm->hash_name,
-                            cache_entry_get_json (hp),
-                            ref) < 0)
-        log_err ("kvs_util_json_hash");
-    else
-        assert (cache_remove_entry (c->cm->cache, ref) == 1);
+    if (c->state == COMMIT_STATE_STORE
+        || c->state == COMMIT_STATE_PRE_FINISHED) {
+        href_t ref;
+        assert (cache_entry_get_dirty (hp) == true);
+        assert (cache_entry_clear_dirty (hp) == 0);
+        if (kvs_util_json_hash (c->cm->hash_name,
+                                cache_entry_get_json (hp),
+                                ref) < 0)
+            log_err ("kvs_util_json_hash");
+        else
+            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+    }
 }
 
 static void cleanup_dirty_cache_list (commit_t *c)
@@ -169,7 +172,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
     struct cache_entry *hp;
 
     while ((hp = zlist_pop (c->item_callback_list)))
-        cleanup_dirty_cache_entry (c, hp);
+        commit_cleanup_dirty_cache_entry (c, hp);
 }
 
 /* Store object 'o' under key 'ref' in local cache.
@@ -248,7 +251,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                 goto done;
             if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0) {
-                    cleanup_dirty_cache_entry (c, hp);
+                    commit_cleanup_dirty_cache_entry (c, hp);
                     errno = ENOMEM;
                     goto done;
                 }
@@ -268,7 +271,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                     goto done;
                 if (ret) {
                     if (zlist_push (c->item_callback_list, hp) < 0) {
-                        cleanup_dirty_cache_entry (c, hp);
+                        commit_cleanup_dirty_cache_entry (c, hp);
                         errno = ENOMEM;
                         goto done;
                     }
@@ -512,7 +515,7 @@ commit_process_t commit_process (commit_t *c,
                      c->errnum = errno;
             else if (sret
                      && zlist_push (c->item_callback_list, hp) < 0) {
-                cleanup_dirty_cache_entry (c, hp);
+                commit_cleanup_dirty_cache_entry (c, hp);
                 c->errnum = ENOMEM;
             }
 

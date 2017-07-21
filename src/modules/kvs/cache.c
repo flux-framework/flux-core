@@ -144,22 +144,28 @@ void cache_entry_destroy (void *arg)
     }
 }
 
-void cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait)
+int cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait)
 {
     if (wait) {
-        if (!hp->waitlist_notdirty)
-            hp->waitlist_notdirty = wait_queue_create ();
+        if (!hp->waitlist_notdirty) {
+            if (!(hp->waitlist_notdirty = wait_queue_create ()))
+                return -1;
+        }
         wait_addqueue (hp->waitlist_notdirty, wait);
     }
+    return 0;
 }
 
-void cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait)
+int cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait)
 {
     if (wait) {
-        if (!hp->waitlist_valid)
-            hp->waitlist_valid = wait_queue_create ();
+        if (!hp->waitlist_valid) {
+            if (!(hp->waitlist_valid = wait_queue_create ()))
+                return -1;
+        }
         wait_addqueue (hp->waitlist_valid, wait);
     }
+    return 0;
 }
 
 struct cache_entry *cache_lookup (struct cache *cache, const char *ref,

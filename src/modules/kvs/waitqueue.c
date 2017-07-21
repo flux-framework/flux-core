@@ -29,7 +29,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
 
 #include "waitqueue.h"
 
@@ -106,9 +105,16 @@ void wait_destroy (wait_t *w)
 
 waitqueue_t *wait_queue_create (void)
 {
-    waitqueue_t *q = xzmalloc (sizeof (*q));
-    if (!(q->q = zlist_new ()))
-        oom ();
+    waitqueue_t *q = calloc (1, sizeof (*q));
+    if (!q) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(q->q = zlist_new ())) {
+        free (q);
+        errno = ENOMEM;
+        return NULL;
+    }
     q->magic = WAITQUEUE_MAGIC;
     return q;
 }

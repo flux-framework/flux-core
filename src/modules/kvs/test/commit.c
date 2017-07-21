@@ -778,6 +778,7 @@ int ref_error_cb (commit_t *c, const char *ref, void *data)
 
 int cache_error_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
+    commit_cleanup_dirty_cache_entry (c, hp);
     return -1;
 }
 

@@ -49,9 +49,10 @@ void cache_entry_set_json (struct cache_entry *hp, json_t *o);
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
  * load or store RPC.
+ * Returns -1 on error, 0 on success
  */
-void cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait);
-void cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait);
+int cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait);
+int cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait);
 
 /* Create/destroy the cache container and its contents.
  */
