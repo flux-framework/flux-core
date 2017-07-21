@@ -850,6 +850,89 @@ void commit_process_error_callbacks (void) {
     cache_destroy (cache);
 }
 
+struct error_partway_data {
+    int total_calls;
+    int success_returns;
+};
+
+int cache_error_partway_cb (commit_t *c, struct cache_entry *hp, void *data)
+{
+    struct error_partway_data *epd = data;
+    epd->total_calls++;
+    if (epd->total_calls > 1)
+        return -1;
+    epd->success_returns++;
+    return 0;
+}
+
+void commit_process_error_callbacks_partway (void) {
+    struct cache *cache;
+    struct error_partway_data epd = { .total_calls = 0, .success_returns = 0};
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    json_t *dir;
+    href_t root_ref;
+    href_t dir_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is
+     *
+     * root
+     * { "dir" : { "DIRREF" : <ref to dir> } }
+     *
+     * dir
+     * { "fileval" : { "FILEVAL" : "42" } }
+     *
+     */
+
+    dir = json_object();
+    json_object_set (dir,
+                     "fileval",
+                     j_dirent_create ("FILEVAL", json_string ("42")));
+
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, dir_ref, cache_entry_create (dir));
+
+    root = json_object ();
+    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, root_ref, cache_entry_create (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    create_ready_commit (cm, "fence1", "dir.fileA", "52", 0);
+    create_ready_commit (cm, "fence2", "dir.fileB", "53", 0);
+
+    /* merge these commits */
+    commit_mgr_merge_ready_commits (cm);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (commit_iter_dirty_cache_entries (c, cache_error_partway_cb, &epd) < 0,
+        "commit_iter_dirty_cache_entries errors on callback error");
+
+    ok (epd.total_calls == 2,
+        "correct number of total calls to dirty cache callback");
+    ok (epd.success_returns == 1,
+        "correct number of successful returns from dirty cache callback");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
 void commit_process_invalid_operation (void) {
     struct cache *cache;
     commit_mgr_t *cm;

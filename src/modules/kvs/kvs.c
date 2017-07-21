@@ -331,8 +331,17 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
     if (content_store_request_send (cbd->ctx,
                                     cache_entry_get_json (hp),
                                     false) < 0) {
+        href_t ref;
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "content_store");
+        /* there should be no waiters on any cache entry passed to us */
+        assert (cache_entry_clear_dirty (hp) == 0);
+        if (kvs_util_json_hash (cbd->ctx->hash_name,
+                                cache_entry_get_json (hp),
+                                ref) < 0)
+            flux_log_error (cbd->ctx->h, "%s: kvs_util_json_hash", __FUNCTION__);
+        else
+            assert (cache_remove_entry (cbd->ctx->cache, ref) == 1);
         return -1;
     }
     cache_entry_wait_notdirty (hp, cbd->wait);

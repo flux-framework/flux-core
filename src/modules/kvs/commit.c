@@ -138,6 +138,37 @@ const char *commit_get_newroot_ref (commit_t *c)
     return NULL;
 }
 
+static void cleanup_dirty_cache_list (commit_t *c)
+{
+    struct cache_entry *hp;
+
+    /* On error we should cleanup anything on the dirty cache list
+     * that has not yet been passed to the user.  Because this has not
+     * been passed to the user, there should be no waiters and the
+     * cache_entry_clear_dirty() should always succeed in clearing the
+     * bit.
+     *
+     * As of the writing of this code, it should also be impossible
+     * for the cache_entry_removal() to fail.  In the rare case of two
+     * callers kvs-get and kvs.put-ing items that end up at the
+     * blobref in the cache, any waiters for a valid cache entry would
+     * have been satisfied when the dirty cache entry was put onto
+     * this dirty cache list (i.e. in store_cache() below when
+     * cache_entry_set_json() was called)..
+     */
+    while ((hp = zlist_pop (c->item_callback_list))) {
+        href_t ref;
+        assert (cache_entry_get_dirty (hp) == true);
+        assert (cache_entry_clear_dirty (hp) == 0);
+        if (kvs_util_json_hash (c->cm->hash_name,
+                                cache_entry_get_json (hp),
+                                ref) < 0)
+            log_err ("kvs_util_json_hash");
+        else
+            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+    }
+}
+
 /* Store object 'o' under key 'ref' in local cache.
  * Object reference is given to this function, it will either give it
  * to the cache or decref it.
@@ -445,8 +476,10 @@ commit_process_t commit_process (commit_t *c,
                      && zlist_push (c->item_callback_list, hp) < 0)
                 oom ();
 
-            if (c->errnum)
+            if (c->errnum) {
+                cleanup_dirty_cache_list (c);
                 return COMMIT_PROCESS_ERROR;
+            }
 
             /* cache took ownership of rootcpy, we're done, but
              * may still need to stall user.
@@ -524,7 +557,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
     }
 
     if (rc < 0)
-        while ((hp = zlist_pop (c->item_callback_list)));
+        cleanup_dirty_cache_list (c);
 
     return rc;
 }
