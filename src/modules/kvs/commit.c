@@ -442,8 +442,11 @@ commit_process_t commit_process (commit_t *c,
                     }
                 }
 
-                if (c->errnum != 0)
+                if (c->errnum != 0) {
+                    /* empty item_callback_list to prevent mistakes later */
+                    while ((missing_ref = zlist_pop (c->item_callback_list)));
                     return COMMIT_PROCESS_ERROR;
+                }
 
                 if (zlist_first (c->item_callback_list))
                     goto stall_load;
