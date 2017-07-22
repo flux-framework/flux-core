@@ -27,9 +27,7 @@ test_expect_success 'event: can subscribe' '
 '
 
 test_expect_success 'version: reports an expected string' '
-        set -x
-	flux version | grep -q "flux-core-[0-9]+\.[0-9]+\.[0-9]"
-	set +x
+	flux version | grep -q "flux-core-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"
 '
 
 # heaptrace is only enabled if configured --with-tcmalloc
