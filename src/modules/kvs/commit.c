@@ -137,35 +137,39 @@ const char *commit_get_newroot_ref (commit_t *c)
     return NULL;
 }
 
+/* On error we should cleanup anything on the dirty cache list
+ * that has not yet been passed to the user.  Because this has not
+ * been passed to the user, there should be no waiters and the
+ * cache_entry_clear_dirty() should always succeed in clearing the
+ * bit.
+ *
+ * As of the writing of this code, it should also be impossible
+ * for the cache_entry_removal() to fail.  In the rare case of two
+ * callers kvs-get and kvs.put-ing items that end up at the
+ * blobref in the cache, any waiters for a valid cache entry would
+ * have been satisfied when the dirty cache entry was put onto
+ * this dirty cache list (i.e. in store_cache() below when
+ * cache_entry_set_json() was called).
+ */
+static void cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
+{
+    href_t ref;
+    assert (cache_entry_get_dirty (hp) == true);
+    assert (cache_entry_clear_dirty (hp) == 0);
+    if (kvs_util_json_hash (c->cm->hash_name,
+                            cache_entry_get_json (hp),
+                            ref) < 0)
+        log_err ("kvs_util_json_hash");
+    else
+        assert (cache_remove_entry (c->cm->cache, ref) == 1);
+}
+
 static void cleanup_dirty_cache_list (commit_t *c)
 {
     struct cache_entry *hp;
 
-    /* On error we should cleanup anything on the dirty cache list
-     * that has not yet been passed to the user.  Because this has not
-     * been passed to the user, there should be no waiters and the
-     * cache_entry_clear_dirty() should always succeed in clearing the
-     * bit.
-     *
-     * As of the writing of this code, it should also be impossible
-     * for the cache_entry_removal() to fail.  In the rare case of two
-     * callers kvs-get and kvs.put-ing items that end up at the
-     * blobref in the cache, any waiters for a valid cache entry would
-     * have been satisfied when the dirty cache entry was put onto
-     * this dirty cache list (i.e. in store_cache() below when
-     * cache_entry_set_json() was called)..
-     */
-    while ((hp = zlist_pop (c->item_callback_list))) {
-        href_t ref;
-        assert (cache_entry_get_dirty (hp) == true);
-        assert (cache_entry_clear_dirty (hp) == 0);
-        if (kvs_util_json_hash (c->cm->hash_name,
-                                cache_entry_get_json (hp),
-                                ref) < 0)
-            log_err ("kvs_util_json_hash");
-        else
-            assert (cache_remove_entry (c->cm->cache, ref) == 1);
-    }
+    while ((hp = zlist_pop (c->item_callback_list)))
+        cleanup_dirty_cache_entry (c, hp);
 }
 
 /* Store object 'o' under key 'ref' in local cache.
@@ -240,8 +244,11 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if ((ret = store_cache (c, current_epoch, subdir, ref, &hp)) < 0)
                 goto done;
             if (ret) {
-                if (zlist_push (c->item_callback_list, hp) < 0)
-                    oom ();
+                if (zlist_push (c->item_callback_list, hp) < 0) {
+                    cleanup_dirty_cache_entry (c, hp);
+                    errno = ENOMEM;
+                    goto done;
+                }
             }
             if (json_object_iter_set_new (dir,
                                           iter,
@@ -254,8 +261,11 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if ((ret = store_cache (c, current_epoch, key_value, ref, &hp)) < 0)
                 goto done;
             if (ret) {
-                if (zlist_push (c->item_callback_list, hp) < 0)
-                    oom ();
+                if (zlist_push (c->item_callback_list, hp) < 0) {
+                    cleanup_dirty_cache_entry (c, hp);
+                    errno = ENOMEM;
+                    goto done;
+                }
             }
             if (json_object_iter_set_new (dir,
                                           iter,
@@ -493,8 +503,10 @@ commit_process_t commit_process (commit_t *c,
                                           &hp)) < 0)
                      c->errnum = errno;
             else if (sret
-                     && zlist_push (c->item_callback_list, hp) < 0)
-                oom ();
+                     && zlist_push (c->item_callback_list, hp) < 0) {
+                cleanup_dirty_cache_entry (c, hp);
+                c->errnum = ENOMEM;
+            }
 
             if (c->errnum) {
                 cleanup_dirty_cache_list (c);
