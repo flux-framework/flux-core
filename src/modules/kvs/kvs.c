@@ -213,8 +213,9 @@ error:
     return -1;
 }
 
-/* Return true if load successful, false if stalling */
-static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op)
+/* Return 0 on success, -1 on error.  Set stall variable appropriately */
+static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
+                 bool *stall)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
 
@@ -223,9 +224,13 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op)
     if (!hp) {
         hp = cache_entry_create (NULL);
         cache_insert (ctx->cache, ref, hp);
-        if (content_load_request_send (ctx, ref, wait ? false : true) < 0)
+        if (content_load_request_send (ctx, ref, wait ? false : true) < 0) {
             flux_log_error (ctx->h, "%s: content_load_request_send",
                             __FUNCTION__);
+            /* cache entry just created, should always work */
+            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            return -1;
+        }
         ctx->faults++;
     }
     /* If hash entry is incomplete (either created above or earlier),
@@ -233,12 +238,16 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op)
      */
     if (!cache_entry_get_valid (hp)) {
         cache_entry_wait_valid (hp, wait);
-        return false;
+        if (stall)
+            *stall = true;
+        return 0;
     }
 
     if (op)
         *op = cache_entry_get_json (hp);
-    return true;
+    if (stall)
+        *stall = false;
+    return 0;
 }
 
 static int content_store_get (flux_future_t *f, void *arg)
@@ -330,8 +339,14 @@ struct commit_cb_data {
 static int commit_load_cb (commit_t *c, const char *ref, void *data)
 {
     struct commit_cb_data *cbd = data;
+    bool stall;
 
-    assert (!load (cbd->ctx, ref, cbd->wait, NULL));
+    if (load (cbd->ctx, ref, cbd->wait, NULL, &stall) < 0) {
+        flux_log_error (cbd->ctx->h, "%s: load", __FUNCTION__);
+        return -1;
+    }
+    /* if not stalling, logic issue within code */
+    assert (stall);
     return 0;
 }
 
@@ -558,7 +573,8 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
     /* "touch" root */
-    (void)load (ctx, ctx->rootdir, NULL, NULL);
+    if (load (ctx, ctx->rootdir, NULL, NULL, NULL) < 0)
+        flux_log_error (ctx->h, "%s: load", __FUNCTION__);
 
     if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
@@ -624,14 +640,19 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (!lookup (lh)) {
         const char *missing_ref;
+        bool stall;
 
         missing_ref = lookup_get_missing_ref (lh);
         assert (missing_ref);
 
         if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, lh)))
             goto done;
-        if (load (ctx, missing_ref, wait, NULL))
-            log_msg_exit ("%s: failure in load logic", __FUNCTION__);
+        if (load (ctx, missing_ref, wait, NULL, &stall) < 0) {
+            flux_log_error (h, "%s: load", __FUNCTION__);
+            goto done;
+        }
+        /* if not stalling, logic issue within code */
+        assert (stall);
         goto stall;
     }
     if (lookup_get_errnum (lh) != 0) {
@@ -719,14 +740,19 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (!lookup (lh)) {
         const char *missing_ref;
+        bool stall;
 
         missing_ref = lookup_get_missing_ref (lh);
         assert (missing_ref);
 
         if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, lh)))
             goto done;
-        if (load (ctx, missing_ref, wait, NULL))
-            log_msg_exit ("%s: failure in load logic", __FUNCTION__);
+        if (load (ctx, missing_ref, wait, NULL, &stall) < 0) {
+            flux_log_error (h, "%s: load", __FUNCTION__);
+            goto done;
+        }
+        /* if not stalling, logic issue within code */
+        assert (stall);
         goto stall;
     }
     if (lookup_get_errnum (lh) != 0) {
@@ -1182,7 +1208,11 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     int rc = -1;
 
     if (event_includes_rootdir) {
-        bool stall = !load (ctx, ctx->rootdir, NULL, &root);
+        bool stall;
+        if (load (ctx, ctx->rootdir, NULL, &root, &stall) < 0) {
+            flux_log_error (ctx->h, "%s: load", __FUNCTION__);
+            goto done;
+        }
         FASSERT (ctx->h, stall == false);
     }
     else {
