@@ -59,6 +59,7 @@ wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *w,
 
 /* Destroy all wait_t's fitting message match critieria, tested with
  * wait_test_msg_f callback.
+ * On error, the waitqueue is unaltered.
  */
 typedef bool (*wait_test_msg_f)(const flux_msg_t *msg, void *arg);
 int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg);

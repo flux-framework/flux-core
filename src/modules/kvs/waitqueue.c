@@ -194,15 +194,20 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     w = zlist_first (q->q);
     while (w) {
         if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
-            if (!tmp && !(tmp = zlist_new ()))
-                oom ();
-            if (zlist_append (tmp, w) < 0)
-                oom ();
+            if (!tmp && !(tmp = zlist_new ())) {
+                errno = ENOMEM;
+                goto error;
+            }
+            if (zlist_append (tmp, w) < 0) {
+                errno = ENOMEM;
+                goto error;
+            }
             w->hand.cb = NULL; // prevent wait_runone from restarting handler
             count++;
         }
         w = zlist_next (q->q);
     }
+    rc = 0;
     if (tmp) {
         while ((w = zlist_pop (tmp))) {
             zlist_remove (q->q, w);
@@ -211,6 +216,12 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
         }
     }
     rc = count;
+error:
+    /* if an error occurs above in zlist_new() or zlist_append(),
+     * simply destroy the tmp list.  Nothing has been removed off of
+     * the original queue yet.  Allow user to handle error as they see
+     * fit.
+     */
     zlist_destroy (&tmp);
     return rc;
 }

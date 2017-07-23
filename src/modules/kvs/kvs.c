@@ -886,10 +886,21 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (flux_msg_get_route_first (msg, &p.sender) < 0)
         goto done;
-    if (wait_destroy_msg (ctx->watchlist, unwatch_cmp, &p) < 0)
+    /* N.B. impossible for a watch to be on watchlist and cache waiter
+     * at the same time (i.e. on watchlist means we're watching, if on
+     * cache waiter we're not done processing towards being on the
+     * watchlist).  So if wait_destroy_msg() on the waitlist succeeds
+     * but cache_wait_destroy_msg() fails, it's not that big of a
+     * deal.  The current state is still maintained.
+     */
+    if (wait_destroy_msg (ctx->watchlist, unwatch_cmp, &p) < 0) {
+        flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
         goto done;
-    if (cache_wait_destroy_msg (ctx->cache, unwatch_cmp, &p) < 0)
+    }
+    if (cache_wait_destroy_msg (ctx->cache, unwatch_cmp, &p) < 0) {
+        flux_log_error (h, "%s: cache_wait_destroy_msg", __FUNCTION__);
         goto done;
+    }
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
@@ -1289,8 +1300,17 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    (void)wait_destroy_msg (ctx->watchlist, disconnect_cmp, sender);
-    (void)cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender);
+    /* N.B. impossible for a watch to be on watchlist and cache waiter
+     * at the same time (i.e. on watchlist means we're watching, if on
+     * cache waiter we're not done processing towards being on the
+     * watchlist).  So if wait_destroy_msg() on the waitlist succeeds
+     * but cache_wait_destroy_msg() fails, it's not that big of a
+     * deal.  The current state is still maintained.
+     */
+    if (wait_destroy_msg (ctx->watchlist, disconnect_cmp, sender) < 0)
+        flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
+    if (cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender) < 0)
+        flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
     free (sender);
 }
 
