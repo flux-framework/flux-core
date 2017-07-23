@@ -41,7 +41,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
@@ -64,7 +63,11 @@ struct cache {
 
 struct cache_entry *cache_entry_create (json_t *o)
 {
-    struct cache_entry *hp = xzmalloc (sizeof (*hp));
+    struct cache_entry *hp = calloc (1, sizeof (*hp));
+    if (!hp) {
+        errno = ENOMEM;
+        return NULL;
+    }
     if (o)
         hp->o = o;
     return hp;

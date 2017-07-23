@@ -222,7 +222,10 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
     /* Create an incomplete hash entry if none found.
      */
     if (!hp) {
-        hp = cache_entry_create (NULL);
+        if (!(hp = cache_entry_create (NULL))) {
+            flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+            return -1;
+        }
         cache_insert (ctx->cache, ref, hp);
         if (content_load_request_send (ctx, ref, wait ? false : true) < 0) {
             flux_log_error (ctx->h, "%s: content_load_request_send",
@@ -1200,7 +1203,16 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
             if (cache_entry_get_dirty (hp))
                 cache_entry_set_dirty (hp, false);
         } else {
-            hp = cache_entry_create (json_incref (root));
+            /* This is a pretty terrible situation, as we've lost a
+             * root update.  But we won't assert here, as later
+             * setroot event updates may succeed and put the root back
+             * to the correct value.
+             */
+            if (!(hp = cache_entry_create (json_incref (root)))) {
+                json_decref (root);
+                flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+                return;
+            }
             cache_insert (ctx->cache, rootdir, hp);
         }
     }
@@ -1398,7 +1410,10 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        hp = cache_entry_create (NULL);
+        if (!(hp = cache_entry_create (NULL))) {
+            flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+            goto decref_done;
+        }
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
