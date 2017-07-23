@@ -339,8 +339,12 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 json_decref (subdir);
                 goto done;
             }
-            if (json_object_set_new (dir, name, tmpdirent) < 0)
-                oom ();
+            if (json_object_set_new (dir, name, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                json_decref (subdir);
+                errno = ENOMEM;
+                goto done;
+            }
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "DIRVAL"))) {
             subdir = o;
@@ -359,8 +363,12 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 json_decref (subdir);
                 goto done;
             }
-            if (json_object_set_new (dir, name, tmpdirent) < 0)
-                oom ();
+            if (json_object_set_new (dir, name, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                json_decref (subdir);
+                errno = ENOMEM;
+                goto done;
+            }
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "LINKVAL"))) {
             assert (json_is_string (o));
@@ -391,8 +399,12 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 json_decref (subdir);
                 goto done;
             }
-            if (json_object_set_new (dir, name, tmpdirent) < 0)
-                oom ();
+            if (json_object_set_new (dir, name, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                json_decref (subdir);
+                errno = ENOMEM;
+                goto done;
+            }
             json_decref (subdir);
         }
         name = next;
@@ -401,8 +413,10 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
     /* This is the final path component of the key.  Add it to the directory.
      */
     if (!json_is_null (dirent)) {
-        if (json_object_set_new (dir, name, json_incref (dirent)) < 0)
-            oom ();
+        if (json_object_set_new (dir, name, json_incref (dirent)) < 0) {
+            json_decref (dirent);
+            goto done;
+        }
     }
     else
         json_object_del (dir, name);
