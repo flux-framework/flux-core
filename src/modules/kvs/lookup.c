@@ -41,7 +41,6 @@
 #include "src/common/libkvs/jansson_dirent.h"
 
 #include "cache.h"
-#include "kvs_util.h"
 
 #include "lookup.h"
 
@@ -582,7 +581,10 @@ bool lookup (lookup_t *lh)
                     lh->missing_ref = reftmp;
                     goto stall;
                 }
-                lh->val = kvs_util_json_copydir (valtmp);
+                if (!(lh->val = json_copy (valtmp))) {
+                    lh->errnum = ENOMEM;
+                    goto done;
+                }
             } else if ((vp = json_object_get (lh->wdirent, "FILEREF"))) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
@@ -610,7 +612,10 @@ bool lookup (lookup_t *lh)
                     lh->errnum = EISDIR;
                     goto done;
                 }
-                lh->val = kvs_util_json_copydir (vp);
+                if (!(lh->val = json_copy (vp))) {
+                    lh->errnum = ENOMEM;
+                    goto done;
+                }
             } else if ((vp = json_object_get (lh->wdirent, "FILEVAL"))) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;

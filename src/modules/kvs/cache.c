@@ -46,7 +46,6 @@
 #include "src/common/libutil/iterators.h"
 
 #include "waitqueue.h"
-#include "kvs_util.h"
 #include "cache.h"
 
 struct cache_entry {

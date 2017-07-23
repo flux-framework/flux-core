@@ -31,7 +31,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/oom.h"
 
 #include "jansson_dirent.h"
 

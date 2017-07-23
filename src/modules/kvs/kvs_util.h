@@ -6,10 +6,6 @@
 #include "waitqueue.h"
 #include "types.h"
 
-/* Copy element wise a json directory object into a new json object.
- */
-json_t *kvs_util_json_copydir (json_t *dir);
-
 /* Get compact string representation of json object, or json null
  * object if o is NULL.  Use this function for consistency, especially
  * when dealing with data that may be hashed via json_hash().

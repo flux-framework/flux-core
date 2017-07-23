@@ -8,7 +8,6 @@
 #include "src/common/libkvs/jansson_dirent.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/kvs_util.h"
 
 void basic_api (void)
 {

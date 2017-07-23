@@ -36,25 +36,8 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 
 #include "types.h"
-
-json_t *kvs_util_json_copydir (json_t *dir)
-{
-    json_t *cpy;
-    const char *key;
-    json_t *value;
-
-    if (!(cpy = json_object ()))
-        oom ();
-
-    json_object_foreach (dir, key, value) {
-        if (json_object_set (cpy, key, value) < 0)
-            oom ();
-    }
-    return cpy;
-}
 
 char *kvs_util_json_dumps (json_t *o)
 {

@@ -361,7 +361,10 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto success; /* stall */
             }
             /* do not corrupt store by modify orig. */
-            subdir = kvs_util_json_copydir (subdir);
+            if (!(subdir = json_copy (subdir))) {
+                errno = ENOMEM;
+                goto done;
+            }
             if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
                 json_decref (subdir);
                 goto done;
@@ -463,7 +466,13 @@ commit_process_t commit_process (commit_t *c,
                 goto stall_load;
             }
 
-            c->rootcpy = kvs_util_json_copydir (rootdir);
+            if (!(c->rootcpy = json_copy (rootdir))) {
+                const char *tmpref;
+                /* empty item_callback_list to prevent mistakes later */
+                while ((tmpref = zlist_pop (c->item_callback_list)));
+                c->errnum = ENOMEM;
+                return COMMIT_PROCESS_ERROR;
+            }
 
             c->state = COMMIT_STATE_APPLY_OPS;
             /* fallthrough */
