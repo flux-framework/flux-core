@@ -363,7 +363,8 @@ lookup_t *lookup_create (struct cache *cache,
     lh->missing_ref = NULL;
     lh->errnum = 0;
 
-    lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref);
+    if (!(lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref)))
+        goto cleanup;
 
     if (!(lh->levels = zlist_new ())) {
         errno = ENOMEM;
@@ -521,7 +522,11 @@ bool lookup (lookup_t *lh)
             /* special case root */
             if (!strcmp (lh->path, ".")) {
                 if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                    lh->val = j_dirent_create ("DIRREF", (char *)lh->root_dir);
+                    char *tmprootref = (char *)lh->root_dir;
+                    if (!(lh->val = j_dirent_create ("DIRREF", tmprootref))) {
+                        lh->errnum = errno;
+                        goto done;
+                    }
                 } else {
                     if (!(lh->flags & FLUX_KVS_READDIR)) {
                         lh->errnum = EISDIR;

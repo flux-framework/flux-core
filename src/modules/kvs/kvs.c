@@ -669,8 +669,11 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
 
     if (!root_dirent) {
-        tmp_dirent = j_dirent_create ("DIRREF",
-                                      (char *)lookup_get_root_ref (lh));
+        char *tmprootref = (char *)lookup_get_root_ref (lh);
+        if (!(tmp_dirent = j_dirent_create ("DIRREF", tmprootref))) {
+            flux_log_error (h, "%s: j_dirent_create", __FUNCTION__);
+            goto done;
+        }
         root_dirent = tmp_dirent;
     }
 

@@ -233,6 +233,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 {
     json_t *value;
     json_t *subdir, *key_value;
+    json_t *tmpdirent;
     href_t ref;
     int ret, rc = -1;
     struct cache_entry *hp;
@@ -256,10 +257,13 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                     goto done;
                 }
             }
-            if (json_object_iter_set_new (dir,
-                                          iter,
-                                          j_dirent_create ("DIRREF", ref)) < 0)
-                oom ();
+            if (!(tmpdirent = j_dirent_create ("DIRREF", ref)))
+                goto done;
+            if (json_object_iter_set_new (dir, iter, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                errno = ENOMEM;
+                goto done;
+            }
         }
         else if ((key_value = json_object_get (value, "FILEVAL"))) {
             if ((ret = fileval_big (key_value)) < 0)
@@ -276,11 +280,13 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                         goto done;
                     }
                 }
-                if (json_object_iter_set_new (dir,
-                                              iter,
-                                              j_dirent_create ("FILEREF",
-                                                               ref)) < 0)
-                    oom ();
+                if (!(tmpdirent = j_dirent_create ("FILEREF", ref)))
+                    goto done;
+                if (json_object_iter_set_new (dir, iter, tmpdirent) < 0) {
+                    json_decref (tmpdirent);
+                    errno = ENOMEM;
+                    goto done;
+                }
             }
         }
         iter = json_object_iter_next (dir, iter);
@@ -301,6 +307,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
     char *next, *name = cpy;
     json_t *dir = rootdir;
     json_t *o, *subdir = NULL, *subdirent;
+    json_t *tmpdirent;
     int rc = -1;
 
     if (!cpy) {
@@ -328,9 +335,11 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 errno = ENOMEM;
                 goto done;
             }
-            if (json_object_set_new (dir,
-                                     name,
-                                     j_dirent_create ("DIRVAL",subdir)) < 0)
+            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+                json_decref (subdir);
+                goto done;
+            }
+            if (json_object_set_new (dir, name, tmpdirent) < 0)
                 oom ();
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "DIRVAL"))) {
@@ -346,9 +355,11 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
             /* do not corrupt store by modify orig. */
             subdir = kvs_util_json_copydir (subdir);
-            if (json_object_set_new (dir,
-                                     name,
-                                     j_dirent_create ("DIRVAL",subdir)) < 0)
+            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+                json_decref (subdir);
+                goto done;
+            }
+            if (json_object_set_new (dir, name, tmpdirent) < 0)
                 oom ();
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "LINKVAL"))) {
@@ -376,9 +387,11 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 errno = ENOMEM;
                 goto done;
             }
-            if (json_object_set_new (dir,
-                                     name,
-                                     j_dirent_create ("DIRVAL",subdir)) < 0)
+            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+                json_decref (subdir);
+                goto done;
+            }
+            if (json_object_set_new (dir, name, tmpdirent) < 0)
                 oom ();
             json_decref (subdir);
         }
