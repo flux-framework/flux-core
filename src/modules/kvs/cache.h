@@ -28,12 +28,16 @@ bool cache_entry_get_valid (struct cache_entry *hp);
 bool cache_entry_get_dirty (struct cache_entry *hp);
 void cache_entry_set_dirty (struct cache_entry *hp, bool val);
 
-/* Get set content store flag, used to internally manage
- * whether or not content in cache entry has been
- * stored off node into content store.
+/* cache_entry_clear_dirty() is similar to calling
+ * cache_entry_set_dirty(hp,false), but it will not set to the dirty
+ * bit to false if there are waiters for notdirty
+ * (i.e. cache_entry_wait_notdirty() has been called on this entry).
+ * This is typically called in an error path where the caller wishes
+ * to give up on a previously marked dirty cache entry but has not yet
+ * done anything with it.  Returns current value of dirty bit on
+ * success, -1 on error.
  */
-bool cache_entry_get_content_store_flag (struct cache_entry *hp);
-void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val);
+int cache_entry_clear_dirty (struct cache_entry *hp);
 
 /* Accessors for cache entry data.
  * If non-NULL, set transfers ownership of 'o' to the cache entry.
@@ -41,6 +45,7 @@ void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val);
  */
 json_t *cache_entry_get_json (struct cache_entry *hp);
 void cache_entry_set_json (struct cache_entry *hp, json_t *o);
+int cache_entry_clear_json (struct cache_entry *hp);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
@@ -75,6 +80,12 @@ json_t *cache_lookup_and_get_json (struct cache *cache,
  */
 void cache_insert (struct cache *cache, const char *ref,
                    struct cache_entry *hp);
+
+/* Remove a cache_entry from the cache.  Will not be removed if dirty
+ * or there are any waiters of any sort.
+ * Returns 1 on removed, 0 if not
+ */
+int cache_remove_entry (struct cache *cache, const char *ref);
 
 /* Return the number of cache entries.
  */

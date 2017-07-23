@@ -170,11 +170,13 @@ static void content_load_completion (flux_future_t *f, void *arg)
         flux_log_error (ctx->h, "%s", __FUNCTION__);
         goto done;
     }
-    /* cache entry must have be created earlier.
-     * cache_expire_entries() could not have removed it b/c it is not
-     * yet valid.
+    /* should be impossible for lookup to fail, cache entry created
+     * earlier, and cache_expire_entries() could not have removed it
+     * b/c it is not yet valid.  But check and log incase there is
+     * logic error dealng with error paths using cache_remove_entry().
      */
-    assert ((hp = cache_lookup (ctx->cache, blobref, ctx->epoch)));
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+        flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
     cache_entry_set_json (hp, o);
 done:
     flux_future_destroy (f);
@@ -191,8 +193,10 @@ static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now
     if (!(f = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
         goto error;
-    if (flux_future_aux_set (f, "ref", xstrdup (ref), free) < 0)
+    if (flux_future_aux_set (f, "ref", xstrdup (ref), free) < 0) {
+        flux_future_destroy (f);
         goto error;
+    }
     if (now) {
         content_load_completion (f, ctx);
     } else if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
@@ -249,7 +253,13 @@ static int content_store_get (flux_future_t *f, void *arg)
         goto done;
     }
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
-    hp = cache_lookup (ctx->cache, blobref, ctx->epoch);
+    /* should be impossible for lookup to fail, cache entry created
+     * earlier, and cache_expire_entries() could not have removed it
+     * b/c it was dirty.  But check and log incase there is logic
+     * error dealng with error paths using cache_remove_entry().
+     */
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+        flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
     cache_entry_set_dirty (hp, false);
     rc = 0;
 done:
@@ -305,6 +315,7 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
 struct commit_cb_data {
     kvs_ctx_t *ctx;
     wait_t *wait;
+    int errnum;
 };
 
 static int commit_load_cb (commit_t *c, const char *ref, void *data)
@@ -323,14 +334,23 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
     struct commit_cb_data *cbd = data;
 
-    if (cache_entry_get_content_store_flag (hp)) {
-        if (content_store_request_send (cbd->ctx,
-                                        cache_entry_get_json (hp),
-                                        false) < 0) {
-            flux_log_error (cbd->ctx->h, "content_store");
-            return -1;
-        }
-        cache_entry_set_content_store_flag (hp, false);
+    assert (cache_entry_get_dirty (hp));
+
+    if (content_store_request_send (cbd->ctx,
+                                    cache_entry_get_json (hp),
+                                    false) < 0) {
+        href_t ref;
+        cbd->errnum = errno;
+        flux_log_error (cbd->ctx->h, "content_store");
+        /* there should be no waiters on any cache entry passed to us */
+        assert (cache_entry_clear_dirty (hp) == 0);
+        if (kvs_util_json_hash (cbd->ctx->hash_name,
+                                cache_entry_get_json (hp),
+                                ref) < 0)
+            flux_log_error (cbd->ctx->h, "%s: kvs_util_json_hash", __FUNCTION__);
+        else
+            assert (cache_remove_entry (cbd->ctx->cache, ref) == 1);
+        return -1;
     }
     cache_entry_wait_notdirty (hp, cbd->wait);
     return 0;
@@ -346,6 +366,9 @@ static void commit_apply (commit_t *c)
     wait_t *wait = NULL;
     int errnum = 0;
     commit_process_t ret;
+
+    if (commit_get_aux_errnum (c))
+        goto done;
 
     if ((ret = commit_process (c,
                                ctx->epoch,
@@ -364,9 +387,17 @@ static void commit_apply (commit_t *c)
 
         cbd.ctx = ctx;
         cbd.wait = wait;
+        cbd.errnum = 0;
 
         if (commit_iter_missing_refs (c, commit_load_cb, &cbd) < 0) {
-            errnum = errno;
+            errnum = cbd.errnum;
+
+            /* rpcs already in flight, stall for them to complete */
+            if (wait_get_usecount (wait) > 0) {
+                commit_set_aux_errnum (c, cbd.errnum);
+                goto stall;
+            }
+
             goto done;
         }
 
@@ -383,9 +414,17 @@ static void commit_apply (commit_t *c)
 
         cbd.ctx = ctx;
         cbd.wait = wait;
+        cbd.errnum = 0;
 
         if (commit_iter_dirty_cache_entries (c, commit_cache_cb, &cbd) < 0) {
-            errnum = errno;
+            errnum = cbd.errnum;
+
+            /* rpcs already in flight, stall for them to complete */
+            if (wait_get_usecount (wait) > 0) {
+                commit_set_aux_errnum (c, cbd.errnum);
+                goto stall;
+            }
+
             goto done;
         }
 
@@ -1267,6 +1306,8 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 
 /* Store initial rootdir in local cache, and flush to content
  * cache synchronously.
+ * Object reference is given to this function, it will either give it
+ * to the cache or decref it.
  */
 static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 {
@@ -1275,7 +1316,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 
     if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
         flux_log_error (ctx->h, "kvs_util_json_hash");
-        goto done;
+        goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         hp = cache_entry_create (NULL);
@@ -1285,6 +1326,11 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
         if (content_store_request_send (ctx, o, true) < 0) {
+            /* Must clean up, don't want cache entry to be assumed
+             * valid.  Everything here is synchronous and w/o waiters,
+             * so nothing should error here */
+            assert (cache_entry_clear_dirty (hp) == 0);
+            assert (cache_remove_entry (ctx->cache, ref) == 1);
             flux_log_error (ctx->h, "content_store");
             goto done;
         }
@@ -1292,6 +1338,10 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         json_decref (o);
     rc = 0;
 done:
+    return rc;
+
+decref_done:
+    json_decref (o);
     return rc;
 }
 

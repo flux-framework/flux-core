@@ -55,6 +55,7 @@ struct commit_mgr {
 
 struct commit {
     int errnum;
+    int aux_errnum;
     fence_t *f;
     int blocked:1;
     json_t *rootcpy;   /* working copy of root dir */
@@ -109,6 +110,17 @@ int commit_get_errnum (commit_t *c)
     return c->errnum;
 }
 
+int commit_get_aux_errnum (commit_t *c)
+{
+    return c->aux_errnum;
+}
+
+int commit_set_aux_errnum (commit_t *c, int errnum)
+{
+    c->aux_errnum = errnum;
+    return c->aux_errnum;
+}
+
 fence_t *commit_get_fence (commit_t *c)
 {
     return c->f;
@@ -126,7 +138,43 @@ const char *commit_get_newroot_ref (commit_t *c)
     return NULL;
 }
 
-/* Store object 'o' under key 'ref' in local cache. */
+static void cleanup_dirty_cache_list (commit_t *c)
+{
+    struct cache_entry *hp;
+
+    /* On error we should cleanup anything on the dirty cache list
+     * that has not yet been passed to the user.  Because this has not
+     * been passed to the user, there should be no waiters and the
+     * cache_entry_clear_dirty() should always succeed in clearing the
+     * bit.
+     *
+     * As of the writing of this code, it should also be impossible
+     * for the cache_entry_removal() to fail.  In the rare case of two
+     * callers kvs-get and kvs.put-ing items that end up at the
+     * blobref in the cache, any waiters for a valid cache entry would
+     * have been satisfied when the dirty cache entry was put onto
+     * this dirty cache list (i.e. in store_cache() below when
+     * cache_entry_set_json() was called)..
+     */
+    while ((hp = zlist_pop (c->item_callback_list))) {
+        href_t ref;
+        assert (cache_entry_get_dirty (hp) == true);
+        assert (cache_entry_clear_dirty (hp) == 0);
+        if (kvs_util_json_hash (c->cm->hash_name,
+                                cache_entry_get_json (hp),
+                                ref) < 0)
+            log_err ("kvs_util_json_hash");
+        else
+            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+    }
+}
+
+/* Store object 'o' under key 'ref' in local cache.
+ * Object reference is given to this function, it will either give it
+ * to the cache or decref it.
+ * Returns -1 on error, 0 on success entry already there, 1 on success
+ * entry needs to be flushed to content store
+ */
 static int store_cache (commit_t *c, int current_epoch, json_t *o,
                         href_t ref, struct cache_entry **hpp)
 {
@@ -135,7 +183,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
 
     if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
         log_err ("kvs_util_json_hash");
-        goto done;
+        goto decref_done;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
         hp = cache_entry_create (NULL);
@@ -144,14 +192,17 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     if (cache_entry_get_valid (hp)) {
         c->cm->noop_stores++;
         json_decref (o);
+        rc = 0;
     } else {
         cache_entry_set_json (hp, o);
         cache_entry_set_dirty (hp, true);
-        cache_entry_set_content_store_flag (hp, true);
+        rc = 1;
     }
     *hpp = hp;
-    rc = 0;
- done:
+    return rc;
+
+ decref_done:
+    json_decref (o);
     return rc;
 }
 
@@ -174,7 +225,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     json_t *value;
     json_t *subdir, *key_value;
     href_t ref;
-    int rc = -1;
+    int ret, rc = -1;
     struct cache_entry *hp;
     void *iter = json_object_iter (dir);
 
@@ -187,9 +238,9 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if (commit_unroll (c, current_epoch, subdir) < 0) /* depth first */
                 goto done;
             json_incref (subdir);
-            if (store_cache (c, current_epoch, subdir, ref, &hp) < 0)
+            if ((ret = store_cache (c, current_epoch, subdir, ref, &hp)) < 0)
                 goto done;
-            if (cache_entry_get_dirty (hp)) {
+            if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0)
                     oom ();
             }
@@ -201,9 +252,9 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
         else if ((key_value = json_object_get (value, "FILEVAL"))
                  && fileval_big (key_value)) {
             json_incref (key_value);
-            if (store_cache (c, current_epoch, key_value, ref, &hp) < 0)
+            if ((ret = store_cache (c, current_epoch, key_value, ref, &hp)) < 0)
                 goto done;
-            if (cache_entry_get_dirty (hp)) {
+            if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0)
                     oom ();
             }
@@ -391,8 +442,11 @@ commit_process_t commit_process (commit_t *c,
                     }
                 }
 
-                if (c->errnum != 0)
+                if (c->errnum != 0) {
+                    /* empty item_callback_list to prevent mistakes later */
+                    while ((missing_ref = zlist_pop (c->item_callback_list)));
                     return COMMIT_PROCESS_ERROR;
+                }
 
                 if (zlist_first (c->item_callback_list))
                     goto stall_load;
@@ -411,21 +465,24 @@ commit_process_t commit_process (commit_t *c,
              * proceed until they are completed.
              */
             struct cache_entry *hp;
+            int sret;
 
             if (commit_unroll (c, current_epoch, c->rootcpy) < 0)
                 c->errnum = errno;
-            else if (store_cache (c,
-                                  current_epoch,
-                                  c->rootcpy,
-                                  c->newroot,
-                                  &hp) < 0)
-                c->errnum = errno;
-            else if (cache_entry_get_dirty (hp)
+            else if ((sret = store_cache (c,
+                                          current_epoch,
+                                          c->rootcpy,
+                                          c->newroot,
+                                          &hp)) < 0)
+                     c->errnum = errno;
+            else if (sret
                      && zlist_push (c->item_callback_list, hp) < 0)
                 oom ();
 
-            if (c->errnum)
+            if (c->errnum) {
+                cleanup_dirty_cache_list (c);
                 return COMMIT_PROCESS_ERROR;
+            }
 
             /* cache took ownership of rootcpy, we're done, but
              * may still need to stall user.
@@ -503,7 +560,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
     }
 
     if (rc < 0)
-        while ((hp = zlist_pop (c->item_callback_list)));
+        cleanup_dirty_cache_list (c);
 
     return rc;
 }

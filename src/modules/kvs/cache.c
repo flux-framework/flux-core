@@ -48,6 +48,7 @@
 #include "src/common/libutil/oom.h"
 
 #include "waitqueue.h"
+#include "kvs_util.h"
 #include "cache.h"
 
 struct cache_entry {
@@ -56,7 +57,6 @@ struct cache_entry {
     json_t *o;              /* value object */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
-    uint8_t content_store_flag:1;
 };
 
 struct cache {
@@ -96,15 +96,16 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val)
     }
 }
 
-bool cache_entry_get_content_store_flag (struct cache_entry *hp)
+int cache_entry_clear_dirty (struct cache_entry *hp)
 {
-    return (hp && hp->o && hp->content_store_flag);
-}
-
-void cache_entry_set_content_store_flag (struct cache_entry *hp, bool val)
-{
-    if (hp && hp->o)
-        hp->content_store_flag = val;
+    if (hp && hp->o) {
+        if (hp->dirty
+            && (!hp->waitlist_notdirty
+                || !wait_queue_length (hp->waitlist_notdirty)))
+            hp->dirty = 0;
+        return hp->dirty ? 1 : 0;
+    }
+    return -1;
 }
 
 json_t *cache_entry_get_json (struct cache_entry *hp)
@@ -184,6 +185,22 @@ void cache_insert (struct cache *cache, const char *ref, struct cache_entry *hp)
     int rc = zhash_insert (cache->zh, ref, hp);
     assert (rc == 0);
     zhash_freefn (cache->zh, ref, cache_entry_destroy);
+}
+
+int cache_remove_entry (struct cache *cache, const char *ref)
+{
+    struct cache_entry *hp = zhash_lookup (cache->zh, ref);
+
+    if (hp
+        && !hp->dirty
+        && (!hp->waitlist_notdirty
+            || !wait_queue_length (hp->waitlist_notdirty))
+        && (!hp->waitlist_valid
+            || !wait_queue_length (hp->waitlist_valid))) {
+        zhash_delete (cache->zh, ref);
+        return 1;
+    }
+    return 0;
 }
 
 int cache_count_entries (struct cache *cache)
