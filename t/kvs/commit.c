@@ -83,10 +83,12 @@ double *ddup (double d)
 void *thread (void *arg)
 {
     thd_t *t = arg;
-    char *key, *fence = NULL;
+    char *key, *fence_name = NULL;
     int i, flags = 0;
     struct timespec t0;
     uint32_t rank;
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
 
     if (!(t->h = flux_open (NULL, 0))) {
         log_err ("%d: flux_open", t->n);
@@ -97,29 +99,36 @@ void *thread (void *arg)
         goto done;
     }
     for (i = 0; i < count; i++) {
+        if (!(txn = flux_kvs_txn_create ()))
+            log_err_exit ("flux_kvs_txn_create");
         key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
         if (fopt)
-            fence = xasprintf ("%s-%d", prefix, i);
+            fence_name = xasprintf ("%s-%d", prefix, i);
         if (sopt)
             monotime (&t0);
-        if (kvs_put_int (t->h, key, 42) < 0)
+        if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
             log_err_exit ("%s", key);
         if (nopt && (i % nopt_divisor) == 0)
             flags |= FLUX_KVS_NO_MERGE;
         else
             flags = 0;
         if (fopt) {
-            if (kvs_fence (t->h, fence, fence_nprocs, flags) < 0)
-                log_err_exit ("kvs_fence");
+            if (!(f = flux_kvs_fence (t->h, flags, fence_name,
+                                                   fence_nprocs, txn))
+                    || flux_future_get (f, NULL) < 0)
+                log_err_exit ("flux_kvs_fence");
+            flux_future_destroy (f);
         } else {
-            if (kvs_commit (t->h, flags) < 0)
-                log_err_exit ("kvs_commit");
+            if (!(f = flux_kvs_commit (t->h, flags, txn))
+                    || flux_future_get (f, NULL) < 0)
+                log_err_exit ("flux_kvs_commit");
+            flux_future_destroy (f);
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
             oom ();
         free (key);
-        if (fence)
-            free (fence);
+        free (fence_name);
+        flux_kvs_txn_destroy (txn);
     }
 done:
     if (t->h)
