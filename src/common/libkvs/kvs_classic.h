@@ -30,7 +30,6 @@ int kvsdir_put_double (kvsdir_t *dir, const char *key, double val);
 int kvsdir_put_boolean (kvsdir_t *dir, const char *key, bool val);
 
 int kvsdir_unlink (kvsdir_t *dir, const char *key);
-int kvsdir_symlink (kvsdir_t *dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t *dir, const char *key);
 
 

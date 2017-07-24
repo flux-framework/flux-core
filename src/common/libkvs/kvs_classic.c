@@ -375,17 +375,6 @@ int kvsdir_unlink (kvsdir_t *dir, const char *key)
     return rc;
 }
 
-int kvsdir_symlink (kvsdir_t *dir, const char *key, const char *target)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_symlink (dp.txn, 0, dp.key, target);
-    dir_put_fini (&dp);
-    return rc;
-}
-
 int kvsdir_mkdir (kvsdir_t *dir, const char *key)
 {
     struct dir_put dp;
