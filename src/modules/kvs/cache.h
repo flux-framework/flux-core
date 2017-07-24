@@ -24,9 +24,10 @@ bool cache_entry_get_valid (struct cache_entry *hp);
 /* Get/set cache entry's dirty bit.
  * The dirty bit indicates that a store RPC is in progress.
  * A true->false transitions runs the entry's wait queue, if any.
+ * cache_entry_set_dirty() returns -1 on error, 0 on success
  */
 bool cache_entry_get_dirty (struct cache_entry *hp);
-void cache_entry_set_dirty (struct cache_entry *hp, bool val);
+int cache_entry_set_dirty (struct cache_entry *hp, bool val);
 
 /* cache_entry_clear_dirty() is similar to calling
  * cache_entry_set_dirty(hp,false), but it will not set to the dirty
@@ -46,9 +47,10 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
 /* Accessors for cache entry data.
  * If non-NULL, set transfers ownership of 'o' to the cache entry.
  * An invalid->valid transition runs the entry's wait queue, if any.
+ * cache_entry_set_json() returns -1 on error, 0 on success
  */
 json_t *cache_entry_get_json (struct cache_entry *hp);
-void cache_entry_set_json (struct cache_entry *hp, json_t *o);
+int cache_entry_set_json (struct cache_entry *hp, json_t *o);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a

@@ -68,7 +68,8 @@ int main (int argc, char *argv[])
        "wait_get_usecount 1 after wait_addqueue");
     ok (count == 0,
        "wait_t callback not run");
-    wait_runqueue (q);
+    ok (wait_runqueue (q) == 0,
+        "wait_runqueue success");
     ok (count == 1,
        "wait_runqueue ran callback");
     ok (wait_get_usecount (w) == 0,
@@ -111,7 +112,8 @@ int main (int argc, char *argv[])
     ok (wait_queue_length (q) == 1 && wait_queue_length (q2) == 1,
         "wait_queue_length of each queue is 1");
 
-    wait_runqueue (q);
+    ok (wait_runqueue (q) == 0,
+        "wait_runqueue success");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 1,
         "wait_runqueue dequeued wait_t from first queue");
     ok (wait_get_usecount (w) == 1,
@@ -119,7 +121,8 @@ int main (int argc, char *argv[])
     ok (count == 0,
         "wait_t callback has not run");
 
-    wait_runqueue (q2);
+    ok (wait_runqueue (q2) == 0,
+        "wait_runqueue success");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 0,
         "wait_runqueue dequeued wait_t from second queue");
     ok (count == 1,

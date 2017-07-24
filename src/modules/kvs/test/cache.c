@@ -60,14 +60,16 @@ int main (int argc, char *argv[])
         "cache entry initially valid");
     ok (cache_entry_get_dirty (e1) == false,
         "cache entry initially not dirty");
-    cache_entry_set_dirty (e1, true);
+    ok (cache_entry_set_dirty (e1, true) == 0,
+        "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry succcessfully set dirty");
     ok (cache_entry_clear_dirty (e1) == 0,
         "cache_entry_clear_dirty returns 0, b/c no waiters");
     ok (cache_entry_get_dirty (e1) == false,
         "cache entry succcessfully now not dirty");
-    cache_entry_set_dirty (e1, true);
+    ok (cache_entry_set_dirty (e1, true) == 0,
+        "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry succcessfully set dirty");
     ok (cache_entry_force_clear_dirty (e1) == 0,
@@ -101,7 +103,8 @@ int main (int argc, char *argv[])
     json_object_set_new (o1, "foo", json_integer (42));
     ok (cache_entry_wait_valid (e1, w) == 0,
         "cache_entry_wait_valid success");
-    cache_entry_set_json (e1, o1);
+    ok (cache_entry_set_json (e1, o1) == 0,
+        "cache_entry_set_json success");
     ok (cache_entry_get_valid (e1) == true,
         "cache entry set valid with one waiter");
     ok (count == 1,
@@ -110,14 +113,16 @@ int main (int argc, char *argv[])
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    cache_entry_set_dirty (e1, true);
+    ok (cache_entry_set_dirty (e1, true) == 0,
+        "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e1) == true,
         "cache entry set dirty, adding waiter");
     ok (cache_entry_wait_notdirty (e1, w) == 0,
         "cache_entry_wait_notdirty success");
     ok (cache_entry_clear_dirty (e1) == 1,
         "cache_entry_clear_dirty returns 1, b/c of a waiter");
-    cache_entry_set_dirty (e1, false);
+    ok (cache_entry_set_dirty (e1, false) == 0,
+        "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e1) == false,
         "cache entry set not dirty with one waiter");
     ok (count == 1,
@@ -200,7 +205,8 @@ int main (int argc, char *argv[])
     ok (incomplete == 1, "cache w/ entry w/ json, incomplete == 1");
     ok (dirty == 0, "cache w/ entry w/ json, dirty == 0");
 
-    cache_entry_set_dirty (e4, true);
+    ok (cache_entry_set_dirty (e4, true)  == 0,
+        "cache_entry_set_dirty success");
 
     memset (&ts, 0, sizeof (ts));
     ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
@@ -210,7 +216,8 @@ int main (int argc, char *argv[])
     ok (incomplete == 1, "cache w/ entry w/ dirty json, incomplete == 1");
     ok (dirty == 1, "cache w/ entry w/ dirty json, dirty == 1");
 
-    cache_entry_set_dirty (e4, false);
+    ok (cache_entry_set_dirty (e4, false) == 0,
+        "cache_entry_set_dirty success");
 
     ok (cache_expire_entries (cache, 43, 1) == 0,
         "cache_expire_entries now=43 thresh=1 expired 0");
@@ -250,7 +257,8 @@ int main (int argc, char *argv[])
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry failed on valid waiter");
     o4 = json_string ("foobar");
-    cache_entry_set_json (e5, o4);
+    ok (cache_entry_set_json (e5, o4) == 0,
+        "cache_entry_set_json success");
     ok (cache_entry_get_valid (e5) == true,
         "cache entry set valid with one waiter");
     ok (count == 1,
@@ -269,14 +277,16 @@ int main (int argc, char *argv[])
     cache_insert (cache, "remove-ref", e5);
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
-    cache_entry_set_dirty (e5, true);
+    ok (cache_entry_set_dirty (e5, true) == 0,
+        "cache_entry_set_dirty success");
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry not removed b/c dirty");
     ok (cache_entry_wait_notdirty (e5, w) == 0,
         "cache_entry_wait_notdirty success");
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry failed on notdirty waiter");
-    cache_entry_set_dirty (e5, false);
+    ok (cache_entry_set_dirty (e5, false) == 0,
+        "cache_entry_set_dirty success");
     ok (count == 1,
         "waiter callback ran");
     ok (cache_remove_entry (cache, "remove-ref") == 1,

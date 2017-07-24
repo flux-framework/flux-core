@@ -28,8 +28,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/oom.h"
-
 #include "waitqueue.h"
 
 struct handler {
@@ -163,23 +161,33 @@ static void wait_runone (wait_t *w)
     }
 }
 
-void wait_runqueue (waitqueue_t *q)
+int wait_runqueue (waitqueue_t *q)
 {
-    zlist_t *cpy = NULL;
-    wait_t *w;
-
     assert (q->magic == WAITQUEUE_MAGIC);
-    while ((w = zlist_pop (q->q))) {
-        if (!cpy && !(cpy = zlist_new ()))
-            oom ();
-        if (zlist_append (cpy, w) < 0)
-            oom ();
-    }
-    if (cpy) {
+    /* N.B. for safety on errors, we must copy all elements off of
+     * q->q or none, otherwise it's not clear what's to be done
+     * otherwise. e.g. if code was
+     * while ((w = zlist_pop (q->q))) {
+     *    if (zlist_append (cpy, w) < 0) {
+     *        what to do on error here?
+     *        pop off all of q?
+     *        call wait_runone() on cpy but not on rest of q->q?
+     *    }
+     * }
+     */
+    if (zlist_size (q->q) > 0) {
+        zlist_t *cpy = NULL;
+        wait_t *w;
+        if (!(cpy = zlist_dup (q->q))) {
+            errno = ENOMEM;
+            return -1;
+        }
+        zlist_purge (q->q);
         while ((w = zlist_pop (cpy)))
             wait_runone (w);
         zlist_destroy (&cpy);
     }
+    return 0;
 }
 
 int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)

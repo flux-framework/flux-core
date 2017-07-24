@@ -82,7 +82,7 @@ bool cache_entry_get_dirty (struct cache_entry *hp)
     return (hp && hp->o && hp->dirty);
 }
 
-void cache_entry_set_dirty (struct cache_entry *hp, bool val)
+int cache_entry_set_dirty (struct cache_entry *hp, bool val)
 {
     if (hp && hp->o) {
         if ((val && hp->dirty) || (!val && !hp->dirty))
@@ -91,10 +91,16 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val)
             hp->dirty = 1;
         else if (!val && hp->dirty) {
             hp->dirty = 0;
-            if (hp->waitlist_notdirty)
-                wait_runqueue (hp->waitlist_notdirty);
+            if (hp->waitlist_notdirty) {
+                if (wait_runqueue (hp->waitlist_notdirty) < 0) {
+                    /* set back dirty bit to orig */
+                    hp->dirty = 1;
+                    return -1;
+                }
+            }
         }
     }
+    return 0;
 }
 
 int cache_entry_clear_dirty (struct cache_entry *hp)
@@ -126,20 +132,26 @@ json_t *cache_entry_get_json (struct cache_entry *hp)
     return hp->o;
 }
 
-void cache_entry_set_json (struct cache_entry *hp, json_t *o)
+int cache_entry_set_json (struct cache_entry *hp, json_t *o)
 {
     if (hp) {
         if ((o && hp->o) || (!o && !hp->o)) {
             json_decref (o); /* no-op, 'o' is assumed identical to hp->o */
         } else if (o && !hp->o) {
             hp->o = o;
-            if (hp->waitlist_valid)
-                wait_runqueue (hp->waitlist_valid);
+            if (hp->waitlist_valid) {
+                if (wait_runqueue (hp->waitlist_valid) < 0) {
+                    /* set back to orig */
+                    hp->o = NULL;
+                    return -1;
+                }
+            }
         } else if (!o && hp->o) {
             json_decref (hp->o);
             hp->o = NULL;
         }
     }
+    return 0;
 }
 
 void cache_entry_destroy (void *arg)

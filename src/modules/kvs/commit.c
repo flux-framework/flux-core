@@ -202,8 +202,15 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         json_decref (o);
         rc = 0;
     } else {
-        cache_entry_set_json (hp, o);
-        cache_entry_set_dirty (hp, true);
+        if (cache_entry_set_json (hp, o) < 0) {
+            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+            goto decref_done;
+        }
+        if (cache_entry_set_dirty (hp, true) < 0) {
+            /* cache_remove_entry will decref object */
+            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+            goto done;
+        }
         rc = 1;
     }
     *hpp = hp;
@@ -211,6 +218,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
 
  decref_done:
     json_decref (o);
+ done:
     return rc;
 }
 

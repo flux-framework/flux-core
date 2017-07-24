@@ -179,7 +179,23 @@ static int content_load_get (flux_future_t *f, void *arg)
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto done;
     }
-    cache_entry_set_json (hp, o);
+
+    /* This is a pretty terrible error case, where we've loaded an
+     * object from the content store, but can't put it in the cache.
+     *
+     * If there was a waiter on this cache entry waiting for it to be
+     * valid, the load() will ultimately hang.  The caller will
+     * timeout or eventually give up, so the KVS can continue along
+     * its merry way.  So we just log this error.
+     *
+     * If this is the result of a synchronous call to load(), there
+     * should be no waiters on this cache entry.  load() will handle
+     * this error scenario appropriately.
+     */
+    if (cache_entry_set_json (hp, o) < 0) {
+        flux_log_error (ctx->h, "%s: cache_entry_set_json", __FUNCTION__);
+        goto done;
+    }
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -254,6 +270,11 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
      * arrange to stall caller if wait_t was provided.
      */
     if (!cache_entry_get_valid (hp)) {
+        if (!wait) {
+            flux_log (ctx->h, LOG_ERR, "synchronous load(), invalid cache entry");
+            errno = ENODATA; /* better errno than this? */
+            return -1;
+        }
         if (cache_entry_wait_valid (hp, wait) < 0) {
             /* no cleanup in this path, if an rpc was sent, it will
              * complete, but not call a waiter on this load.  Return
@@ -297,9 +318,34 @@ static int content_store_get (flux_future_t *f, void *arg)
      * b/c it was dirty.  But check and log incase there is logic
      * error dealng with error paths using cache_remove_entry().
      */
-    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+        errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
-    cache_entry_set_dirty (hp, false);
+        goto done;
+    }
+
+    /* This is a pretty terrible error case, where we've received
+     * verification that a dirty cache entry has been flushed to the
+     * content store, but we can't notify waiters that it has been
+     * flushed.  We also can't notify waiters of an error occurring.
+     *
+     * If a commit has hung, the most likely scenario is that that
+     * commiter will timeout or give up at some point.  setroot() will
+     * never happen, so the entire commit has failed and no
+     * consistency issue will occur.
+     *
+     * We'll mark the cache entry not dirty, so that memory can be
+     * reclaimed at a later time.  But we can't do that with
+     * cache_entry_clear_dirty() b/c that will only clear dirty for
+     * entries without waiters.  So in this rare case, we must call
+     * cache_entry_force_clear_dirty().
+     */
+    if (cache_entry_set_dirty (hp, false) < 0) {
+        flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
+                        __FUNCTION__);
+        assert (cache_entry_force_clear_dirty (hp) == 0);
+        goto done;
+    }
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -349,7 +395,11 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
         assert (strlen (rootdir) < sizeof (href_t));
         strcpy (ctx->rootdir, rootdir);
         ctx->rootseq = rootseq;
-        wait_runqueue (ctx->watchlist);
+        /* log error on wait_runqueue(), don't error out.  watchers
+         * may miss value change, but will never get older one.
+         * Maintains consistency model */
+        if (wait_runqueue (ctx->watchlist) < 0)
+            flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
 }
@@ -595,7 +645,11 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
     }
     /* "touch" objects involved in watched keys */
     if (ctx->epoch - ctx->watchlist_lastrun_epoch > max_lastuse_age) {
-        wait_runqueue (ctx->watchlist);
+        /* log error on wait_runqueue(), don't error out.  watchers
+         * may miss value change, but will never get older one.
+         * Maintains consistency model */
+        if (wait_runqueue (ctx->watchlist) < 0)
+            flux_log_error (h, "%s: wait_runqueue", __FUNCTION__);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
     /* "touch" root */
@@ -1234,15 +1288,30 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
     if (!json_is_null (root)) {
         struct cache_entry *hp;
         if ((hp = cache_lookup (ctx->cache, rootdir, ctx->epoch))) {
-            if (!cache_entry_get_valid (hp))
-                cache_entry_set_json (hp, json_incref (root));
-            if (cache_entry_get_dirty (hp))
-                cache_entry_set_dirty (hp, false);
+            if (!cache_entry_get_valid (hp)) {
+                /* On error, bad that we can't cache new root, but
+                 * no consistency issue by not caching.  We will still
+                 * set new root below via setroot().
+                 */
+                if (cache_entry_set_json (hp, json_incref (root)) < 0) {
+                    json_decref (root);
+                    flux_log_error (ctx->h, "%s: cache_entry_set_json",
+                                    __FUNCTION__);
+                }
+            }
+            if (cache_entry_get_dirty (hp)) {
+                /* If it was dirty, an RPC is already in process, so
+                 * let that RPC handle any error handling with this
+                 * cache entry, we just log this error.
+                 */
+                if (cache_entry_set_dirty (hp, false) < 0)
+                    flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
+                                    __FUNCTION__);
+            }
         } else {
-            /* This is a pretty terrible situation, as we've lost a
-             * root update.  But we won't assert here, as later
-             * setroot event updates may succeed and put the root back
-             * to the correct value.
+            /* On error, bad that we can't cache new root, but
+             * no consistency issue by not caching.  We will still
+             * set new root below via setroot().
              */
             if (!(hp = cache_entry_create (json_incref (root)))) {
                 json_decref (root);
@@ -1462,8 +1531,18 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
-        cache_entry_set_json (hp, o);
-        cache_entry_set_dirty (hp, true);
+        if (cache_entry_set_json (hp, o) < 0) {
+            flux_log_error (ctx->h, "%s: cache_entry_set_json",
+                            __FUNCTION__);
+            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            goto decref_done;
+        }
+        if (cache_entry_set_dirty (hp, true) < 0) {
+            /* remove entry will decref object */
+            flux_log_error (ctx->h, "%s: cache_entry_set_dirty", __FUNCTION__);
+            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            goto done;
+        }
         if (content_store_request_send (ctx, o, true) < 0) {
             /* Must clean up, don't want cache entry to be assumed
              * valid.  Everything here is synchronous and w/o waiters,
