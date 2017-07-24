@@ -216,7 +216,7 @@ EOF
 "
 
 test_expect_success 'jstat 10: update procdescs' "
-    flux kvs get $(flux wreck kvs-path 1).0.procdesc > output.10.1
+    flux kvs get $(flux wreck kvs-path 1).0.procdesc > output.10.1 &&
     flux jstat update 1 pdesc '{\"pdesc\": {\"procsize\":1, \"hostnames\":[\"0\"], \"executables\":[\"fake\"], \"pdarray\":[{\"pid\":8482,\"eindx\":0,\"hindx\":0}]}}' &&
     flux kvs get $(flux wreck kvs-path 1).0.procdesc > output.10.2 &&
     test_expect_code 1 diff output.10.1 output.10.2 
