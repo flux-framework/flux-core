@@ -33,12 +33,13 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/tstat.h"
 
 typedef struct {
@@ -199,21 +200,25 @@ int main (int argc, char *argv[])
     }
 
     if (sopt) {
-        json_object *o = Jnew ();
-        json_object *t = Jnew ();
+        json_t *o;
+        char *s;
 
-        Jadd_int (t, "count", tstat_count (&ts));
-        Jadd_double (t, "min", tstat_min (&ts)*1E-3);
-        Jadd_double (t, "mean", tstat_mean (&ts)*1E-3);
-        Jadd_double (t, "stddev", tstat_stddev (&ts)*1E-3);
-        Jadd_double (t, "max", tstat_max (&ts)*1E-3);
-
-        json_object_object_add (o, "put+commit times (sec)", t);
-        Jadd_double (o, "put+commmit throughput (#/sec)",
-                          (double)(count*nthreads)/(monotime_since (t0)*1E-3));
-        printf ("%s\n",
-                json_object_to_json_string_ext (o, JSON_C_TO_STRING_PRETTY));
-        json_object_put (o);
+        if (!(o = json_pack ("{s:{s:i s:f s:f s:f s:f} s:f}",
+                             "put+commit times (sec)",
+                                 "count", tstat_count (&ts),
+                                 "min", tstat_min (&ts)*1E-3,
+                                 "mean", tstat_mean (&ts)*1E-3,
+                                 "stddev", tstat_stddev (&ts)*1E-3,
+                                 "max", tstat_max (&ts)*1E-3,
+                             "put+commit throughput (#/sec)",
+                             (double)(count*nthreads)
+                                    / (monotime_since (t0)*1E-3))))
+            log_err_exit ("json_pack");
+        if (!(s = json_dumps (o, JSON_INDENT(2))))
+            log_err_exit ("json_dumps");
+        printf ("%s\n", s);
+        json_decref (o);
+        free (s);
     }
 
     free (thd);
