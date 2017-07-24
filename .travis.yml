@@ -85,6 +85,8 @@ before_install:
 script:
  # Skip build if we already ran coverity-scan
  - test "${TRAVIS_BRANCH}" != 'coverity_scan' || exit 0
+ # Force git to update the shallow clone and include tags so git-describe works
+ - git fetch --unshallow --tags
  - ulimit -c unlimited
  - export CC="ccache $CC"
  - export MAKECMDS="make -j 2 distcheck"
