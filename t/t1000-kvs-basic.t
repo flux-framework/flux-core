@@ -616,23 +616,6 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mix
 
 # watch tests
 
-test_expect_success 'kvs: watch 5 versions of key'  '
-	${KVSBASIC} unlink $TEST.foo &&
-        ${KVSBASIC} put $TEST.foo.a=1 &&
-	${KVSBASIC} watch 5 $TEST.foo.a >watch_out &
-        for i in $(seq 2 5); do
-            ${KVSBASIC} put $TEST.foo.a=${i}
-        done
-'
-
-test_expect_success 'kvs: watch 5 versions of directory'  '
-	${KVSBASIC} unlink $TEST.foo &&
-	${KVSBASIC} watch-dir -r 5 $TEST.foo >watch_dir_out &
-	while $(grep -s '===============' watch_dir_out | wc -l) -lt 5; do
-	    ${KVSBASIC} put $TEST.foo.a=$(date +%N); \
-	done
-'
-
 test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
 	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
 	${KVSBASIC} unlink $TEST.a
