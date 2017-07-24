@@ -130,7 +130,7 @@ test_expect_success 'kvs: array type' '
 	test_kvs_type $KEY array
 '
 test_expect_success 'kvs: array get' '
-	test_kvs_key $KEY "[ 1, 3, 5, 7 ]"
+	test_kvs_key $KEY "[1, 3, 5, 7]"
 '
 test_expect_success 'kvs: object put' '
 	${KVSBASIC} put $KEY="{\"a\":42}"
@@ -139,7 +139,7 @@ test_expect_success 'kvs: object type' '
 	test_kvs_type $KEY object
 '
 test_expect_success 'kvs: object get' '
-	test_kvs_key $KEY "{ \"a\": 42 }"
+	test_kvs_key $KEY "{\"a\": 42}"
 '
 test_expect_success 'kvs: try to retrieve key as directory should fail' '
 	test_must_fail ${KVSBASIC} dir $KEY

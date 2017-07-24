@@ -29,10 +29,11 @@
 #include <flux/core.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <jansson.h>
+#include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/base64.h"
 #include "src/common/libutil/readall.h"
 
@@ -191,69 +192,81 @@ int main (int argc, char *argv[])
 
 void cmd_type (flux_t *h, int argc, char **argv)
 {
-    char *json_str;
-    json_object *o;
+    const char *json_str;
+    json_t *o;
+    json_error_t error;
+    flux_future_t *f;
 
     if (argc != 1)
         log_msg_exit ("get-type: specify key");
-    if (kvs_get (h, argv[0], &json_str) < 0)
+    if (!(f = flux_kvs_lookup (h, 0, argv[0])))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
         log_err_exit ("%s", argv[0]);
-    if (!(o = Jfromstr (json_str)))
-        log_msg_exit ("%s: malformed JSON", argv[0]);
-    const char *type = "unknown";
-    switch (json_object_get_type (o)) {
-    case json_type_null:
-        type = "null";
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error))) {
+        log_msg_exit ("%s: %s (line %d column %d)", argv[0],
+                      error.text, error.line, error.column);
+    }
+    switch (json_typeof (o)) {
+    case JSON_NULL:
+        printf ("null\n");
         break;
-    case json_type_boolean:
-        type = "boolean";
+    case JSON_TRUE:
+    case JSON_FALSE:
+        printf ("boolean\n");
         break;
-    case json_type_double:
-        type = "double";
-                break;
-    case json_type_int:
-        type = "int";
+    case JSON_REAL:
+        printf ("double\n");
         break;
-    case json_type_object:
-        type = "object";
+    case JSON_INTEGER:
+        printf ("int\n");
         break;
-    case json_type_array:
-        type = "array";
+    case JSON_OBJECT:
+        printf ("object\n");
         break;
-    case json_type_string:
-        type = "string";
+    case JSON_ARRAY:
+        printf ("array\n");
+        break;
+    case JSON_STRING:
+        printf ("string\n");
         break;
     }
-    printf ("%s\n", type);
-    Jput (o);
-    free (json_str);
+    json_decref (o);
+    flux_future_destroy (f);
 }
 
-static void output_key_json_object (const char *key, json_object *o)
+static void output_key_json_object (const char *key, json_t *o)
 {
+    char *s;
     if (key)
         printf ("%s = ", key);
 
-    switch (json_object_get_type (o)) {
-    case json_type_null:
+    switch (json_typeof (o)) {
+    case JSON_NULL:
         printf ("nil\n");
         break;
-    case json_type_boolean:
-        printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
+    case JSON_TRUE:
+        printf ("true\n");
         break;
-    case json_type_double:
-        printf ("%f\n", json_object_get_double (o));
+    case JSON_FALSE:
+        printf ("false\n");
         break;
-    case json_type_int:
-        printf ("%d\n", json_object_get_int (o));
+    case JSON_REAL:
+        printf ("%f\n", json_real_value (o));
         break;
-    case json_type_string:
-        printf ("%s\n", json_object_get_string (o));
+    case JSON_INTEGER:
+        printf ("%lld\n", (long long)json_integer_value (o));
         break;
-    case json_type_array:
-    case json_type_object:
+    case JSON_STRING:
+        printf ("%s\n", json_string_value (o));
+        break;
+    case JSON_ARRAY:
+    case JSON_OBJECT:
     default:
-        printf ("%s\n", Jtostr (o));
+        if (!(s = json_dumps (o, JSON_SORT_KEYS)))
+            log_msg_exit ("json_dumps failed");
+        printf ("%s\n", s);
+        free (s);
         break;
     }
 }
@@ -262,17 +275,16 @@ static void output_key_json_str (const char *key,
                                  const char *json_str,
                                  const char *arg)
 {
-    json_object *o;
+    json_t *o;
+    json_error_t error;
 
-    if (!json_str) {
-        output_key_json_object (key, NULL); 
-        return;
-    }
-
-    if (!(o = Jfromstr (json_str)))
-        log_msg_exit ("%s: malformed JSON", arg);
+    if (!json_str)
+        json_str = "null";
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error)))
+        log_msg_exit ("%s: %s (line %d column %d)",
+                      arg, error.text, error.line, error.column);
     output_key_json_object (key, o);
-    Jput (o);
+    json_decref (o);
 }
 
 void cmd_get (flux_t *h, int argc, char **argv)
@@ -454,7 +466,8 @@ void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
     char *file, *key;
     int fd, len;
     uint8_t *buf;
-    json_object *o;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
 
     if (argc != 2)
         log_msg_exit ("copy-tokvs: specify key and filename");
@@ -474,13 +487,13 @@ void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
     char *s_buf = xzmalloc (s_len);
     if (base64_encode_block (s_buf, &s_len, buf, len) < 0)
         log_err_exit ("base64_encode_block error");
-    o = Jnew ();
-    Jadd_str (o, "data", s_buf);
-    if (kvs_put (h, key, Jtostr (o)) < 0)
-        log_err_exit ("%s", key);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
-    Jput (o);
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_pack (txn, 0, key, "{s:s}", "data", s_buf) < 0)
+        log_err_exit ("flux_kvs_txn_pack");
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_kvs_txn_destroy (txn);
     free (buf);
     free (s_buf);
 }
@@ -491,19 +504,16 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
     int fd, len, s_len;
     uint8_t *buf;
     const char *s_buf;
-    json_object *o;
-    char *json_str;
+    flux_future_t *f;
 
     if (argc != 2)
         log_msg_exit ("copy-fromkvs: specify key and filename");
     key = argv[0];
     file = argv[1];
-    if (kvs_get (h, key, &json_str) < 0)
+    if (!(f = flux_kvs_lookup (h, 0, key)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get_unpack (f, "{s:s}", "data", &s_buf) < 0)
         log_err_exit ("%s", key);
-    if (!(o = Jfromstr (json_str)))
-        log_msg_exit ("%s: invalid JSON", key);
-    if (!Jget_str (o, "data", &s_buf))
-        log_msg_exit ("%s: JSON decode error", key);
     s_len = strlen (s_buf);
     len = base64_decode_length (s_len);
     buf = xzmalloc (len);
@@ -521,20 +531,23 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
             log_err_exit ("%s", file);
     }
     free (buf);
-    Jput (o);
-    free (json_str);
+    flux_future_destroy (f);
 }
-
 
 static void dump_kvs_val (const char *key, const char *json_str)
 {
-    json_object *o = Jfromstr (json_str);
-    if (!o) {
-        printf ("%s: invalid JSON", key);
+    json_t *o;
+    json_error_t error;
+
+    if (!json_str)
+        json_str = "null";
+    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error))) {
+        printf ("%s: %s (line %d column %d)\n",
+                key, error.text, error.line, error.column);
         return;
     }
     output_key_json_object (key, o);
-    Jput (o);
+    json_decref (o);
 }
 
 static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
