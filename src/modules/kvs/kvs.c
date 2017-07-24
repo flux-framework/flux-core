@@ -1349,10 +1349,10 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
             /* Must clean up, don't want cache entry to be assumed
              * valid.  Everything here is synchronous and w/o waiters,
              * so nothing should error here */
-            assert (cache_entry_clear_dirty (hp) == 0);
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
             flux_log_error (ctx->h, "%s: content_store_request_send",
                             __FUNCTION__);
+            assert (cache_entry_clear_dirty (hp) == 0);
+            assert (cache_remove_entry (ctx->cache, ref) == 1);
             goto done;
         }
     } else
