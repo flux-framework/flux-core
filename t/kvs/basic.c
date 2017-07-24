@@ -289,18 +289,24 @@ static void output_key_json_str (const char *key,
 
 void cmd_get (flux_t *h, int argc, char **argv)
 {
-    char *json_str;
+    const char *json_str;
+    flux_future_t *f;
 
-    if (argc == 0)
-        log_msg_exit ("get: specify one or more keys");
-    if (kvs_get (h, argv[0], &json_str) < 0)
+    if (argc != 1)
+        log_msg_exit ("get: specify one key");
+    if (!(f = flux_kvs_lookup (h, 0, argv[0])))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
         log_err_exit ("%s", argv[0]);
     output_key_json_str (NULL, json_str, argv[0]);
-    free (json_str);
+    flux_future_destroy (f);
 }
 
-void cmd_put_common (flux_t *h, int argc, char **argv, bool mergeable)
+void cmd_put_common (flux_t *h, int argc, char **argv, int flags)
 {
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+
     if (argc == 0)
         log_msg_exit ("put: specify one key=value pair");
     char *key = xstrdup (argv[0]);
@@ -308,43 +314,64 @@ void cmd_put_common (flux_t *h, int argc, char **argv, bool mergeable)
     if (!val)
         log_msg_exit ("put: you must specify a value as key=value");
     *val++ = '\0';
-    if (kvs_put (h, key, val) < 0) {
-        if (errno != EINVAL || kvs_put_string (h, key, val) < 0)
+
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit( "flux_kvs_txn_create");
+    if (flux_kvs_txn_put (txn, 0, key, val) < 0) {
+        if (errno != EINVAL)
+            log_err_exit ("%s", key);
+        if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
             log_err_exit ("%s", key);
     }
     free (key);
-    if (kvs_commit (h, mergeable ? 0 : FLUX_KVS_NO_MERGE) < 0)
-        log_err_exit ("kvs_commit");
+    if (!(f = flux_kvs_commit (h, flags, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 }
 
 void cmd_put (flux_t *h, int argc, char **argv)
 {
-    cmd_put_common (h, argc, argv, true);
+    cmd_put_common (h, argc, argv, 0);
 }
 
 void cmd_put_no_merge (flux_t *h, int argc, char **argv)
 {
-    cmd_put_common (h, argc, argv, false);
+    cmd_put_common (h, argc, argv, FLUX_KVS_NO_MERGE);
 }
 
 void cmd_unlink (flux_t *h, int argc, char **argv)
 {
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+
     if (argc != 1)
         log_msg_exit ("unlink: specify key");
-    if (kvs_unlink (h, argv[0]) < 0)
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_unlink (txn, 0, argv[0]) < 0)
         log_err_exit ("%s", argv[0]);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 }
 
 void cmd_link (flux_t *h, int argc, char **argv)
 {
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+
     if (argc != 2)
         log_msg_exit ("link: specify target and link_name");
-    if (kvs_symlink (h, argv[1], argv[0]) < 0)
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_symlink (txn, 0, argv[1], argv[0]) < 0)
         log_err_exit ("%s", argv[1]);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 }
 
 void cmd_readlink (flux_t *h, int argc, char **argv)
@@ -364,36 +391,36 @@ void cmd_readlink (flux_t *h, int argc, char **argv)
 
 void cmd_mkdir (flux_t *h, int argc, char **argv)
 {
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+
     if (argc != 1)
         log_msg_exit ("mkdir: specify directory");
-    if (kvs_mkdir (h, argv[0]) < 0)
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_mkdir (txn, 0, argv[0]) < 0)
         log_err_exit ("%s", argv[0]);
-    if (kvs_commit (h, 0) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL)  < 0)
         log_err_exit ("kvs_commit");
-}
-
-bool key_exists (flux_t *h, const char *key)
-{
-    char *json_str = NULL;
-    kvsdir_t *dir = NULL;
-
-    if (kvs_get (h, key, &json_str) == 0) {
-        free (json_str);
-        return true;
-    }
-    if (errno == EISDIR && kvs_get_dir (h, &dir, "%s", key) == 0) {
-        kvsdir_destroy (dir);
-        return true;
-    }
-    return false;
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 }
 
 void cmd_exists (flux_t *h, int argc, char **argv)
 {
+    flux_future_t *f;
+
     if (argc != 1)
         log_msg_exit ("exist: specify key");
-    if (!key_exists (h, argv[0]))
-        exit (1);
+    if (!(f = flux_kvs_lookup (h, 0, argv[0])))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_future_get (f, NULL) < 0) {
+        if (errno != ENOTDIR && errno != ENOENT)
+            log_err_exit ("flux_kvs_lookup");
+        if (errno == ENOENT)
+            exit (1);
+    }
+    flux_future_destroy (f);
 }
 
 void cmd_version (flux_t *h, int argc, char **argv)
@@ -643,6 +670,8 @@ done:
 void cmd_dir (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
+    flux_future_t *f;
+    const char *json_str;
     kvsdir_t *dir;
 
     if (argc > 0) {
@@ -658,10 +687,15 @@ void cmd_dir (flux_t *h, int argc, char **argv)
     }
     if (argc != 1)
         log_msg_exit ("dir: specify directory");
-    if (kvs_get_dir (h, &dir, "%s", argv[0]) < 0)
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, argv[0])))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
         log_err_exit ("%s", argv[0]);
+    if (!(dir = kvsdir_create (h, NULL, argv[0], json_str)))
+        log_err_exit( "kvsdir_create");
     dump_kvs_dir (dir, ropt);
     kvsdir_destroy (dir);
+    flux_future_destroy (f);
 }
 
 void cmd_dirat (flux_t *h, int argc, char **argv)
@@ -695,33 +729,75 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
 
 void cmd_dirsize (flux_t *h, int argc, char **argv)
 {
+    flux_future_t *f;
+    const char *json_str;
     kvsdir_t *dir = NULL;
+
     if (argc != 1)
         log_msg_exit ("dirsize: specify one directory");
-    if (kvs_get_dir (h, &dir, "%s", argv[0]) < 0)
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, argv[0])))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, &json_str) < 0)
         log_err_exit ("%s", argv[0]);
+    if (!(dir = kvsdir_create (h, NULL, argv[0], json_str)))
+        log_err_exit ("kvsdir_create");
     printf ("%d\n", kvsdir_get_size (dir));
     kvsdir_destroy (dir);
+    flux_future_destroy (f);
 }
 
 void cmd_copy (flux_t *h, int argc, char **argv)
 {
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
+    const char *json_str;
+
     if (argc != 2)
         log_msg_exit ("copy: specify srckey dstkey");
-    if (kvs_copy (h, argv[0], argv[1]) < 0)
-        log_err_exit ("kvs_copy %s %s", argv[0], argv[1]);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    const char *srckey = argv[0];
+    const char *dstkey = argv[1];
+
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
+            || flux_kvs_lookup_get (f, &json_str) < 0)
+        log_err_exit ("flux_kvs_lookup %s", srckey);
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, dstkey, json_str) < 0)
+        log_err_exit( "flux_kvs_txn_put");
+    flux_future_destroy (f);
+
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
 }
 
 void cmd_move (flux_t *h, int argc, char **argv)
 {
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
+    const char *json_str;
+
     if (argc != 2)
         log_msg_exit ("move: specify srckey dstkey");
-    if (kvs_move (h, argv[0], argv[1]) < 0)
-        log_err_exit ("kvs_move %s %s", argv[0], argv[1]);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    const char *srckey = argv[0];
+    const char *dstkey = argv[1];
+
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
+            || flux_kvs_lookup_get (f, &json_str) < 0)
+        log_err_exit ("flux_kvs_lookup %s", srckey);
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, dstkey, json_str) < 0)
+        log_err_exit( "flux_kvs_txn_put");
+    if (flux_kvs_txn_unlink (txn, 0, srckey) < 0)
+        log_err_exit( "flux_kvs_txn_unlink");
+    flux_future_destroy (f);
+
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
 }
 
 void cmd_get_treeobj (flux_t *h, int argc, char **argv)
@@ -754,6 +830,9 @@ void cmd_getat (flux_t *h, int argc, char **argv)
 
 void cmd_put_treeobj (flux_t *h, int argc, char **argv)
 {
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
+
     if (argc != 1)
         log_msg_exit ("put-treeobj: specify key=val");
     char *key = xstrdup (argv[0]);
@@ -761,13 +840,14 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
     if (!val)
         log_msg_exit ("put-treeobj: you must specify a value as key=val");
     *val++ = '\0';
-    flux_kvs_txn_t *txn;
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, key, val) < 0)
         log_err_exit ("flux_kvs_txn_put %s=%s", key, val);
-    if (flux_kvs_commit (h, 0, txn) < 0)
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
     free (key);
 }
