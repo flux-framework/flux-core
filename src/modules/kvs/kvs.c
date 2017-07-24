@@ -161,13 +161,13 @@ static void content_load_completion (flux_future_t *f, void *arg)
     struct cache_entry *hp;
 
     if (flux_rpc_get_raw (f, &data, &size) < 0) {
-        flux_log_error (ctx->h, "%s", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
         goto done;
     }
     blobref = flux_future_aux_get (f, "ref");
     if (!(o = json_loads ((char *)data, JSON_DECODE_ANY, NULL))) {
         errno = EPROTO;
-        flux_log_error (ctx->h, "%s", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: json_loads", __FUNCTION__);
         goto done;
     }
     /* should be impossible for lookup to fail, cache entry created
@@ -219,7 +219,8 @@ static bool load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op)
         hp = cache_entry_create (NULL);
         cache_insert (ctx->cache, ref, hp);
         if (content_load_request_send (ctx, ref, wait ? false : true) < 0)
-            flux_log_error (ctx->h, "content_load_request_send");
+            flux_log_error (ctx->h, "%s: content_load_request_send",
+                            __FUNCTION__);
         ctx->faults++;
     }
     /* If hash entry is incomplete (either created above or earlier),
@@ -244,12 +245,12 @@ static int content_store_get (flux_future_t *f, void *arg)
     int rc = -1;
 
     if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
-        flux_log_error (ctx->h, "%s", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
         goto done;
     }
     if (!blobref || blobref[blobref_size - 1] != '\0') {
         errno = EPROTO;
-        flux_log_error (ctx->h, "%s", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: invalid blobref", __FUNCTION__);
         goto done;
     }
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
@@ -341,7 +342,8 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
                                     false) < 0) {
         href_t ref;
         cbd->errnum = errno;
-        flux_log_error (cbd->ctx->h, "content_store");
+        flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
+                        __FUNCTION__);
         /* there should be no waiters on any cache entry passed to us */
         assert (cache_entry_clear_dirty (hp) == 0);
         if (kvs_util_json_hash (cbd->ctx->hash_name,
@@ -507,7 +509,7 @@ static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *w,
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
@@ -516,8 +518,10 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
     kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
 
-    if (flux_event_decode (msg, NULL, NULL) < 0)
+    if (flux_event_decode (msg, NULL, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
         return;
+    }
     size = cache_count_entries (ctx->cache);
     expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0);
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, size);
@@ -529,7 +533,7 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
     kvs_ctx_t *ctx = arg;
 
     if (flux_heartbeat_decode (msg, &ctx->epoch) < 0) {
-        flux_log_error (ctx->h, "%s", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: flux_heartbeat_decode", __FUNCTION__);
         return;
     }
     /* "touch" objects involved in watched keys */
@@ -639,7 +643,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 done:
     if (rc < 0) {
         if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s", __FUNCTION__);
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     wait_destroy (wait);
     lookup_destroy (lh);
@@ -768,7 +772,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 done:
     if (rc < 0) {
         if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s", __FUNCTION__);
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     wait_destroy (wait);
     lookup_destroy (lh);
@@ -831,7 +835,7 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
     rc = 0;
 done:
     if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     if (p.sender)
         free (p.sender);
 }
@@ -846,7 +850,7 @@ static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
     struct finalize_data *d = data;
 
     if (flux_respond (d->ctx->h, req, d->errnum, NULL) < 0)
-        flux_log_error (d->ctx->h, "%s", __FUNCTION__);
+        flux_log_error (d->ctx->h, "%s: flux_respond", __FUNCTION__);
 
     return 0;
 }
@@ -897,9 +901,12 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
      * occurs after we know the fence name
      */
     if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
-        if (!(f = fence_create (name, nprocs, flags)))
+        if (!(f = fence_create (name, nprocs, flags))) {
+            flux_log_error (h, "%s: fence_create", __FUNCTION__);
             return;
+        }
         if (commit_mgr_add_fence (ctx->cm, f) < 0) {
+            flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
             return;
         }
@@ -907,11 +914,15 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
     else
         fence_set_flags (f, fence_get_flags (f) | flags);
 
-    if (fence_add_request_data (f, ops) < 0)
+    if (fence_add_request_data (f, ops) < 0) {
+        flux_log_error (h, "%s: fence_add_request_data", __FUNCTION__);
         return;
+    }
 
-    if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
+    if (commit_mgr_process_fence_request (ctx->cm, f) < 0) {
+        flux_log_error (h, "%s: commit_mgr_process_fence_request", __FUNCTION__);
         return;
+    }
 
     return;
 }
@@ -937,9 +948,12 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     }
     if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
-        if (!(f = fence_create (name, nprocs, flags)))
+        if (!(f = fence_create (name, nprocs, flags))) {
+            flux_log_error (h, "%s: fence_create", __FUNCTION__);
             goto error;
+        }
         if (commit_mgr_add_fence (ctx->cm, f) < 0) {
+            flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
             goto error;
         }
@@ -950,11 +964,16 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (fence_add_request_copy (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (fence_add_request_data (f, ops) < 0)
+        if (fence_add_request_data (f, ops) < 0) {
+            flux_log_error (h, "%s: fence_add_request_data", __FUNCTION__);
             goto error;
+        }
 
-        if (commit_mgr_process_fence_request (ctx->cm, f) < 0)
+        if (commit_mgr_process_fence_request (ctx->cm, f) < 0) {
+            flux_log_error (h, "%s: commit_mgr_process_fence_request",
+                            __FUNCTION__);
             goto error;
+        }
     }
     else {
         flux_future_t *f;
@@ -974,7 +993,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
 
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 
@@ -1009,7 +1028,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
 
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -1243,7 +1262,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
  done:
     if (rc < 0) {
         if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s", __FUNCTION__);
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
     json_decref (t);
 }
@@ -1269,7 +1288,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
     stats_clear (ctx);
 
     if (flux_respond (h, msg, 0, NULL) < 0)
-        flux_log_error (h, "%s", __FUNCTION__);
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
 static struct flux_msg_handler_spec handlers[] = {
@@ -1315,7 +1334,8 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
     int rc = -1;
 
     if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
-        flux_log_error (ctx->h, "kvs_util_json_hash");
+        flux_log_error (ctx->h, "%s: kvs_util_json_hash",
+                        __FUNCTION__);
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
@@ -1331,7 +1351,8 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
              * so nothing should error here */
             assert (cache_entry_clear_dirty (hp) == 0);
             assert (cache_remove_entry (ctx->cache, ref) == 1);
-            flux_log_error (ctx->h, "content_store");
+            flux_log_error (ctx->h, "%s: content_store_request_send",
+                            __FUNCTION__);
             goto done;
         }
     } else
