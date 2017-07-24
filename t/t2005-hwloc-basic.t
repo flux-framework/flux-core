@@ -128,7 +128,7 @@ test_expect_success 'hwloc: reload --walk-topology=no removes broken down topo' 
 '
 
 test_expect_success 'hwloc: reload fails on invalid rank' '
-    flux hwloc reload -r $(invalid_rank) 2> stderr
+    flux hwloc reload -r $(invalid_rank) 2> stderr &&
     grep "No route to host" stderr
 '
 
