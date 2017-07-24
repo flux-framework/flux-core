@@ -55,8 +55,6 @@ void cmd_mkdir (flux_t *h, int argc, char **argv);
 void cmd_exists (flux_t *h, int argc, char **argv);
 void cmd_version (flux_t *h, int argc, char **argv);
 void cmd_wait (flux_t *h, int argc, char **argv);
-void cmd_watch (flux_t *h, int argc, char **argv);
-void cmd_watch_dir (flux_t *h, int argc, char **argv);
 void cmd_dropcache (flux_t *h, int argc, char **argv);
 void cmd_dropcache_all (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
@@ -84,8 +82,6 @@ void usage (void)
 "       basic readlink            key\n"
 "       basic mkdir               key\n"
 "       basic exists              key\n"
-"       basic watch               [count] key\n"
-"       basic watch-dir [-r]      [count] key\n"
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
 "       basic copy                srckey dstkey\n"
@@ -152,10 +148,6 @@ int main (int argc, char *argv[])
         cmd_version (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "wait"))
         cmd_wait (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "watch"))
-        cmd_watch (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "watch-dir"))
-        cmd_watch_dir (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dropcache"))
         cmd_dropcache (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dropcache-all"))
@@ -444,32 +436,6 @@ void cmd_wait (flux_t *h, int argc, char **argv)
     //printf ("%d\n", vers);
 }
 
-void cmd_watch (flux_t *h, int argc, char **argv)
-{
-    char *json_str = NULL;
-    char *key;
-    int count = -1;
-
-    if (argc == 2) {
-        count = strtoul (argv[0], NULL, 10);
-        argc--;
-        argv++;
-    }
-    if (argc != 1)
-        log_msg_exit ("watch: specify one key");
-    key = argv[0];
-    if (kvs_get (h, key, &json_str) < 0 && errno != ENOENT) 
-        log_err_exit ("%s", key);
-    do {
-        output_key_json_str (NULL, json_str, key);
-        if (--count == 0)
-            break;
-        if (kvs_watch_once (h, argv[0], &json_str) < 0 && errno != ENOENT)
-            log_err_exit ("%s", argv[0]);
-    } while (true);
-    free (json_str);
-}
-
 void cmd_dropcache (flux_t *h, int argc, char **argv)
 {
     if (argc != 0)
@@ -616,55 +582,6 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
         free (key);
     }
     kvsitr_destroy (itr);
-}
-
-void cmd_watch_dir (flux_t *h, int argc, char **argv)
-{
-    bool ropt = false;
-    char *key;
-    kvsdir_t *dir = NULL;
-    int rc;
-    int count = -1;
-
-    if (argc > 0) {
-        while (argc) {
-            if (!strcmp (argv[0], "-r")) {
-                ropt = true;
-                argc--;
-                argv++;
-            }
-            else
-                break;
-        }
-    }
-    if (argc == 2) {
-        count = strtoul (argv[0], NULL, 10);
-        argc--;
-        argv++;
-    }
-    if (argc != 1)
-        log_msg_exit ("watchdir: specify one directory");
-    key = argv[0];
-
-    rc = kvs_get_dir (h, &dir, "%s", key);
-    while (rc == 0 || (rc < 0 && errno == ENOENT)) {
-        if (rc < 0) {
-            printf ("%s: %s\n", key, flux_strerror (errno));
-            if (dir)
-                kvsdir_destroy (dir);
-            dir = NULL;
-        } else {
-            dump_kvs_dir (dir, ropt);
-            printf ("======================\n");
-            fflush (stdout);
-        }
-        if (--count == 0)
-            goto done;
-        rc = kvs_watch_once_dir (h, &dir, "%s", key);
-    }
-    log_err_exit ("%s", key);
-done:
-    kvsdir_destroy (dir);
 }
 
 void cmd_dir (flux_t *h, int argc, char **argv)
