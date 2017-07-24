@@ -266,27 +266,6 @@ int kvs_mkdir (flux_t *h, const char *key)
     return flux_kvs_txn_mkdir (txn, 0, key);
 }
 
-int kvs_copy (flux_t *h, const char *from, const char *to)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    flux_future_t *f;
-    const char *json_str;
-    int rc = -1;
-
-    if (!txn)
-        return -1;
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, from)))
-        goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
-        goto done;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, to, json_str) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 struct dir_put {
     char *key;
     flux_kvs_txn_t *txn;
