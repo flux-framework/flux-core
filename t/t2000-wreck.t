@@ -138,7 +138,7 @@ test_expect_success 'wreck: job state events emitted' '
 	EOF
 	test_cmp expected_states output_states
 '
-test_expect_success 'wreck: signaling wreckrun works' '
+test_expect_success NO_CHAIN_LINT 'wreck: signaling wreckrun works' '
         flux wreckrun -n${SIZE} sleep 15 </dev/null &
 	q=$! &&
 	$SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
@@ -164,7 +164,7 @@ test_expect_success 'wreckrun: -n1 runs one task on rank 0' '
 '
 test_expect_success 'wreckrun: -n divides tasks among ranks' '
 	flux wreckrun -l -n$((${SIZE}*2)) printenv FLUX_NODE_ID | sort >output_nx2 &&
-        i=0
+        i=0 &&
 	for n in $(seq 0 $((${SIZE}-1))); do
 		echo "$i: $n"; echo "$((i+1)): $n";
 		i=$((i+2));
@@ -246,14 +246,14 @@ test_expect_success 'wreckrun: top level environment' '
 	test_cmp expected_top_env2 output_top_env2
 '
 test_expect_success 'wreck plugins can use wreck:log_msg()' '
-	saved_pattern=$(flux getattr wrexec.lua_pattern)
+	saved_pattern=$(flux getattr wrexec.lua_pattern) &&
 	if test $? = 0; then
 	  test_when_finished \
 	    "flux setattr wrexec.lua_pattern \"$saved_pattern\""
 	else
 	  test_when_finished \
 	     "flux setattr --expunge wrexec.lua_pattern"
-	fi
+	fi &&
 	cat <<-EOF >test.lua &&
 	function rexecd_init ()
 	    local rc, err = wreck:log_msg ("lwj.%d: plugin test successful", wreck.id)
@@ -262,7 +262,7 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	EOF
 	flux setattr wrexec.lua_pattern "$(pwd)/*.lua" &&
 	flux wreckrun /bin/true &&
-	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
+	(flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false))
 '
 test_expect_success 'wreckrun: --detach supported' '
 	flux wreckrun --detach /bin/true | grep "^[0-9]"
