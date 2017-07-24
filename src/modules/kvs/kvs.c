@@ -518,8 +518,13 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_watcher_stop (ctx->idle_w);
 
     if ((c = commit_mgr_get_ready_commit (ctx->cm))) {
-        if (ctx->commit_merge)
-            commit_mgr_merge_ready_commits (ctx->cm);
+        if (ctx->commit_merge) {
+            /* if merge fails, set errnum in commit_t, let
+             * commit_apply() handle error handling.
+             */
+            if (commit_mgr_merge_ready_commits (ctx->cm) < 0)
+                commit_set_aux_errnum (c, errno);
+        }
         commit_apply (c);
     }
 }

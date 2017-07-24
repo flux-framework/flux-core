@@ -139,7 +139,11 @@ void commit_mgr_clear_noop_stores (commit_mgr_t *cm);
 /* In internally stored ready commits (moved to ready status via
  * commit_mgr_process_fence_request()), merge them if they are capable
  * of being merged.
+ * Returns -1 on error, 0 on success.  On error, it is possible that
+ * the ready commit has been modified with different fence names
+ * and operations.  The caller is responsible for sending errors to
+ * all appropriately.
  */
-void commit_mgr_merge_ready_commits (commit_mgr_t *cm);
+int commit_mgr_merge_ready_commits (commit_mgr_t *cm);
 
 #endif /* !_FLUX_KVS_COMMIT_H */

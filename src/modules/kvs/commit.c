@@ -37,7 +37,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libkvs/jansson_dirent.h"
 
 #include "commit.h"
@@ -768,7 +767,7 @@ void commit_mgr_clear_noop_stores (commit_mgr_t *cm)
  * If we were to merge commit #1 and commit #3, A=2 would be set after
  * A=3.
  */
-void commit_mgr_merge_ready_commits (commit_mgr_t *cm)
+int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
 {
     commit_t *c = zlist_first (cm->ready);
 
@@ -779,20 +778,20 @@ void commit_mgr_merge_ready_commits (commit_mgr_t *cm)
         && c->state <= COMMIT_STATE_APPLY_OPS
         && !(fence_get_flags (c->f) & FLUX_KVS_NO_MERGE)) {
         commit_t *nc;
-        nc = zlist_pop (cm->ready);
-        assert (nc == c);
-        while ((nc = zlist_first (cm->ready))) {
+        while ((nc = zlist_next (cm->ready))) {
+            int ret;
+
+            if ((ret = fence_merge (c->f, nc->f)) < 0)
+                return -1;
 
             /* if return == 0, we've merged as many as we currently
              * can */
-            if (!fence_merge (c->f, nc->f))
+            if (!ret)
                 break;
 
             /* Merged fence, remove off ready list */
             zlist_remove (cm->ready, nc);
         }
-        if (zlist_push (cm->ready, c) < 0)
-            oom ();
-        zlist_freefn (cm->ready, c, (zlist_free_fn *)commit_destroy, false);
     }
+    return 0;
 }
