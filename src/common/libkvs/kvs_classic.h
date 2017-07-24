@@ -15,7 +15,6 @@ int kvs_unlink (flux_t *h, const char *key);
 int kvs_symlink (flux_t *h, const char *key, const char *target);
 int kvs_mkdir (flux_t *h, const char *key);
 int kvs_copy (flux_t *h, const char *from, const char *to);
-int kvs_move (flux_t *h, const char *from, const char *to);
 
 int kvs_commit (flux_t *h, int flags);
 int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);

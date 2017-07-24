@@ -287,13 +287,6 @@ done:
     return rc;
 }
 
-int kvs_move (flux_t *h, const char *from, const char *to)
-{
-    if (kvs_copy (h, from, to) < 0)
-        return -1;
-    return kvs_unlink (h, from);
-}
-
 struct dir_put {
     char *key;
     flux_kvs_txn_t *txn;
