@@ -272,11 +272,21 @@ char *dir_self (void)
 bool flux_is_installed (void)
 {
     char *selfdir = dir_self ();
+    char *bindir = NULL;
     bool ret = false;
-
-    if (!strcmp (selfdir, X_BINDIR))
+    /*
+     *  Calling realpath(3) with NULL second arg is safe since POSIX.1-2008.
+     *   (Equivalent to glibc's canonicalize_path_name(3))
+     *
+     *  If realpath(3) returns ENOENT, then BINDIR doesn't exist and flux
+     *   clearly can't be from the installed path:
+     */
+    if (!(bindir = realpath (X_BINDIR, NULL)) && (errno != ENOENT))
+        log_err_exit ("realpath (%s)", X_BINDIR);
+    else if (bindir && !strcmp (selfdir, bindir))
         ret = true;
     free (selfdir);
+    free (bindir);
     return ret;
 }
 
