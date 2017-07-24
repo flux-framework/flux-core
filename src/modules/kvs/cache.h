@@ -45,7 +45,6 @@ int cache_entry_clear_dirty (struct cache_entry *hp);
  */
 json_t *cache_entry_get_json (struct cache_entry *hp);
 void cache_entry_set_json (struct cache_entry *hp, json_t *o);
-int cache_entry_clear_json (struct cache_entry *hp);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
