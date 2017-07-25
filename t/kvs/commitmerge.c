@@ -46,7 +46,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/shortjson.h"
 
 typedef struct {
     pthread_t t;
@@ -134,11 +133,11 @@ void *watchthread (void *arg)
 {
     thd_t *t = arg;
     watch_count_t wc;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
     flux_reactor_t *r;
     flux_watcher_t *pw = NULL;
     flux_watcher_t *tw = NULL;
-    char *json_str = NULL;
-    int rc;
 
     if (!(t->h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -147,17 +146,14 @@ void *watchthread (void *arg)
      * test by chance (i.e. initial value = 0, commit 0 and thus no
      * change)
      */
-
-    rc = kvs_get (t->h, key, &json_str);
-    if (rc < 0 && errno != ENOENT)
-        log_err_exit ("kvs_get");
-
-    if (!rc) {
-        if (kvs_unlink (t->h, key) < 0)
-            log_err_exit ("kvs_unlink");
-        if (kvs_commit (t->h, 0) < 0)
-            log_err_exit ("kvs_commit");
-    }
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_unlink (txn, 0, key) < 0)
+        log_err_exit ("flux_kvs_txn_unlink");
+    if (!(f = flux_kvs_commit (t->h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 
     r = flux_get_reactor (t->h);
 
@@ -182,8 +178,6 @@ void *watchthread (void *arg)
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
-    if (json_str)
-        free (json_str);
     flux_watcher_destroy (pw);
     flux_watcher_destroy (tw);
     flux_close (t->h);

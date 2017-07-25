@@ -33,12 +33,13 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/tstat.h"
 
 typedef struct {
@@ -82,10 +83,12 @@ double *ddup (double d)
 void *thread (void *arg)
 {
     thd_t *t = arg;
-    char *key, *fence = NULL;
+    char *key, *fence_name = NULL;
     int i, flags = 0;
     struct timespec t0;
     uint32_t rank;
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
 
     if (!(t->h = flux_open (NULL, 0))) {
         log_err ("%d: flux_open", t->n);
@@ -96,29 +99,36 @@ void *thread (void *arg)
         goto done;
     }
     for (i = 0; i < count; i++) {
+        if (!(txn = flux_kvs_txn_create ()))
+            log_err_exit ("flux_kvs_txn_create");
         key = xasprintf ("%s.%"PRIu32".%d.%d", prefix, rank, t->n, i);
         if (fopt)
-            fence = xasprintf ("%s-%d", prefix, i);
+            fence_name = xasprintf ("%s-%d", prefix, i);
         if (sopt)
             monotime (&t0);
-        if (kvs_put_int (t->h, key, 42) < 0)
+        if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
             log_err_exit ("%s", key);
         if (nopt && (i % nopt_divisor) == 0)
             flags |= FLUX_KVS_NO_MERGE;
         else
             flags = 0;
         if (fopt) {
-            if (kvs_fence (t->h, fence, fence_nprocs, flags) < 0)
-                log_err_exit ("kvs_fence");
+            if (!(f = flux_kvs_fence (t->h, flags, fence_name,
+                                                   fence_nprocs, txn))
+                    || flux_future_get (f, NULL) < 0)
+                log_err_exit ("flux_kvs_fence");
+            flux_future_destroy (f);
         } else {
-            if (kvs_commit (t->h, flags) < 0)
-                log_err_exit ("kvs_commit");
+            if (!(f = flux_kvs_commit (t->h, flags, txn))
+                    || flux_future_get (f, NULL) < 0)
+                log_err_exit ("flux_kvs_commit");
+            flux_future_destroy (f);
         }
         if (sopt && zlist_append (t->perf, ddup (monotime_since (t0))) < 0)
             oom ();
         free (key);
-        if (fence)
-            free (fence);
+        free (fence_name);
+        flux_kvs_txn_destroy (txn);
     }
 done:
     if (t->h)
@@ -199,21 +209,25 @@ int main (int argc, char *argv[])
     }
 
     if (sopt) {
-        json_object *o = Jnew ();
-        json_object *t = Jnew ();
+        json_t *o;
+        char *s;
 
-        Jadd_int (t, "count", tstat_count (&ts));
-        Jadd_double (t, "min", tstat_min (&ts)*1E-3);
-        Jadd_double (t, "mean", tstat_mean (&ts)*1E-3);
-        Jadd_double (t, "stddev", tstat_stddev (&ts)*1E-3);
-        Jadd_double (t, "max", tstat_max (&ts)*1E-3);
-
-        json_object_object_add (o, "put+commit times (sec)", t);
-        Jadd_double (o, "put+commmit throughput (#/sec)",
-                          (double)(count*nthreads)/(monotime_since (t0)*1E-3));
-        printf ("%s\n",
-                json_object_to_json_string_ext (o, JSON_C_TO_STRING_PRETTY));
-        json_object_put (o);
+        if (!(o = json_pack ("{s:{s:i s:f s:f s:f s:f} s:f}",
+                             "put+commit times (sec)",
+                                 "count", tstat_count (&ts),
+                                 "min", tstat_min (&ts)*1E-3,
+                                 "mean", tstat_mean (&ts)*1E-3,
+                                 "stddev", tstat_stddev (&ts)*1E-3,
+                                 "max", tstat_max (&ts)*1E-3,
+                             "put+commit throughput (#/sec)",
+                             (double)(count*nthreads)
+                                    / (monotime_since (t0)*1E-3))))
+            log_err_exit ("json_pack");
+        if (!(s = json_dumps (o, JSON_INDENT(2))))
+            log_err_exit ("json_dumps");
+        printf ("%s\n", s);
+        json_decref (o);
+        free (s);
     }
 
     free (thd);

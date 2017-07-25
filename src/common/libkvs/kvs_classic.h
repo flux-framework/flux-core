@@ -14,8 +14,6 @@ int kvs_put_int64 (flux_t *h, const char *key, int64_t val);
 int kvs_unlink (flux_t *h, const char *key);
 int kvs_symlink (flux_t *h, const char *key, const char *target);
 int kvs_mkdir (flux_t *h, const char *key);
-int kvs_copy (flux_t *h, const char *from, const char *to);
-int kvs_move (flux_t *h, const char *from, const char *to);
 
 int kvs_commit (flux_t *h, int flags);
 int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);
@@ -32,7 +30,6 @@ int kvsdir_put_double (kvsdir_t *dir, const char *key, double val);
 int kvsdir_put_boolean (kvsdir_t *dir, const char *key, bool val);
 
 int kvsdir_unlink (kvsdir_t *dir, const char *key);
-int kvsdir_symlink (kvsdir_t *dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t *dir, const char *key);
 
 

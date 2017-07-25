@@ -266,34 +266,6 @@ int kvs_mkdir (flux_t *h, const char *key)
     return flux_kvs_txn_mkdir (txn, 0, key);
 }
 
-int kvs_copy (flux_t *h, const char *from, const char *to)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    flux_future_t *f;
-    const char *json_str;
-    int rc = -1;
-
-    if (!txn)
-        return -1;
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, from)))
-        goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
-        goto done;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, to, json_str) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-int kvs_move (flux_t *h, const char *from, const char *to)
-{
-    if (kvs_copy (h, from, to) < 0)
-        return -1;
-    return kvs_unlink (h, from);
-}
-
 struct dir_put {
     char *key;
     flux_kvs_txn_t *txn;
@@ -399,17 +371,6 @@ int kvsdir_unlink (kvsdir_t *dir, const char *key)
     if (dir_put_init (dir, key, &dp) < 0)
         return -1;
     rc = flux_kvs_txn_unlink (dp.txn, 0, dp.key);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int kvsdir_symlink (kvsdir_t *dir, const char *key, const char *target)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_symlink (dp.txn, 0, dp.key, target);
     dir_put_fini (&dp);
     return rc;
 }
