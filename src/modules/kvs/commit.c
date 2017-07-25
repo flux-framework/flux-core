@@ -230,7 +230,7 @@ static int fileval_big (json_t *value)
 
 /* Store DIRVAL objects, converting them to DIRREFs.
  * Store (large) FILEVAL objects, converting them to FILEREFs.
- * Return false and enqueue wait_t on cache object(s) if any are dirty.
+ * Return 0 on success, -1 on error
  */
 static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 {
