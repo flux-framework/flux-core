@@ -73,6 +73,9 @@ int main (int argc, char *argv[])
         "json_object_get success");
     ok (json_integer_value (o) == 42,
         "expected json object found");
+    cache_entry_set_json (e1, NULL);
+    ok (cache_entry_get_json (e1) == NULL,
+        "cache entry no longer has json object");
     cache_entry_destroy (e1); /* destroys o1 */
 
     /* Test cache entry waiters.
