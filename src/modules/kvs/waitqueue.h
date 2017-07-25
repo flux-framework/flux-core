@@ -38,8 +38,9 @@ void wait_queue_destroy (waitqueue_t *q);
 int wait_queue_length (waitqueue_t *q);
 
 /* Add a wait_t to a queue.
+ * Returns -1 on error, 0 on success
  */
-void wait_addqueue (waitqueue_t *q, wait_t *wait);
+int wait_addqueue (waitqueue_t *q, wait_t *wait);
 
 /* Remove all wait_t's from the specified queue.
  * Note: wait_runqueue() empties the waitqueue_t before invoking wait_t
@@ -58,6 +59,7 @@ wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *w,
 
 /* Destroy all wait_t's fitting message match critieria, tested with
  * wait_test_msg_f callback.
+ * On error, the waitqueue is unaltered.
  */
 typedef bool (*wait_test_msg_f)(const flux_msg_t *msg, void *arg);
 int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg);

@@ -37,13 +37,10 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 #include "src/common/libkvs/jansson_dirent.h"
 
 #include "cache.h"
-#include "kvs_util.h"
 
 #include "lookup.h"
 
@@ -109,23 +106,35 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
 
     if (!(pathcomps = zlist_new ())) {
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
+
+    /* N.B. not creating memory, placing pointer to path components,
+     * so cleanup is simply list destroy.
+     */
 
     current = wl->path_copy;
     while ((next = strchr (current, '.'))) {
         *next++ = '\0';
 
-        if (zlist_append (pathcomps, current) < 0)
-            oom ();
+        if (zlist_append (pathcomps, current) < 0) {
+            errno = ENOMEM;
+            goto error;
+        }
 
         current = next;
     }
 
-    if (zlist_append (pathcomps, current) < 0)
-        oom ();
+    if (zlist_append (pathcomps, current) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     return pathcomps;
+
+ error:
+    zlist_destroy (&pathcomps);
+    return NULL;
 }
 
 static void walk_level_destroy (void *data)
@@ -142,9 +151,16 @@ static walk_level_t *walk_level_create (const char *path,
                                         json_t *root_dirent,
                                         int depth)
 {
-    walk_level_t *wl = xzmalloc (sizeof (*wl));
+    walk_level_t *wl = calloc (1, sizeof (*wl));
 
-    wl->path_copy = xstrdup (path);
+    if (!wl) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(wl->path_copy = strdup (path))) {
+        errno = ENOMEM;
+        goto error;
+    }
     wl->depth = depth;
     wl->dirent = root_dirent;
     if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl)))
@@ -166,8 +182,11 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
     if (!(wl = walk_level_create (path, lh->root_dirent, depth)))
         return NULL;
 
-    if (zlist_push (lh->levels, wl) < 0)
-        oom ();
+    if (zlist_push (lh->levels, wl) < 0) {
+        walk_level_destroy (wl);
+        errno = ENOMEM;
+        return NULL;
+    }
     zlist_freefn (lh->levels, wl, walk_level_destroy, false);
 
     return wl;
@@ -306,23 +325,35 @@ lookup_t *lookup_create (struct cache *cache,
         return NULL;
     }
 
-    lh = xzmalloc (sizeof (*lh));
+    if (!(lh = calloc (1, sizeof (*lh)))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
 
     lh->magic = LOOKUP_MAGIC;
     lh->cache = cache;
     lh->current_epoch = current_epoch;
     /* must duplicate these strings, user may not keep pointer
      * alive */
-    lh->root_dir = xstrdup (root_dir);
+    if (!(lh->root_dir = strdup (root_dir))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     if (root_ref) {
-        lh->root_ref_copy = xstrdup (root_ref);
+        if (!(lh->root_ref_copy = strdup (root_ref))) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
         lh->root_ref = lh->root_ref_copy;
     }
     else {
         lh->root_ref_copy = NULL;
         lh->root_ref = lh->root_dir;
     }
-    lh->path = xstrdup (path);
+    if (!(lh->path = strdup (path))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     lh->flags = flags;
 
     lh->aux = NULL;
@@ -331,7 +362,8 @@ lookup_t *lookup_create (struct cache *cache,
     lh->missing_ref = NULL;
     lh->errnum = 0;
 
-    lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref);
+    if (!(lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref)))
+        goto cleanup;
 
     if (!(lh->levels = zlist_new ())) {
         errno = ENOMEM;
@@ -489,7 +521,11 @@ bool lookup (lookup_t *lh)
             /* special case root */
             if (!strcmp (lh->path, ".")) {
                 if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                    lh->val = j_dirent_create ("DIRREF", (char *)lh->root_dir);
+                    char *tmprootref = (char *)lh->root_dir;
+                    if (!(lh->val = j_dirent_create ("DIRREF", tmprootref))) {
+                        lh->errnum = errno;
+                        goto done;
+                    }
                 } else {
                     if (!(lh->flags & FLUX_KVS_READDIR)) {
                         lh->errnum = EISDIR;
@@ -545,7 +581,10 @@ bool lookup (lookup_t *lh)
                     lh->missing_ref = reftmp;
                     goto stall;
                 }
-                lh->val = kvs_util_json_copydir (valtmp);
+                if (!(lh->val = json_copy (valtmp))) {
+                    lh->errnum = ENOMEM;
+                    goto done;
+                }
             } else if ((vp = json_object_get (lh->wdirent, "FILEREF"))) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
@@ -573,7 +612,10 @@ bool lookup (lookup_t *lh)
                     lh->errnum = EISDIR;
                     goto done;
                 }
-                lh->val = kvs_util_json_copydir (vp);
+                if (!(lh->val = json_copy (vp))) {
+                    lh->errnum = ENOMEM;
+                    goto done;
+                }
             } else if ((vp = json_object_get (lh->wdirent, "FILEVAL"))) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;

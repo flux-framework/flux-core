@@ -35,27 +35,9 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
 
 #include "types.h"
-
-json_t *kvs_util_json_copydir (json_t *dir)
-{
-    json_t *cpy;
-    const char *key;
-    json_t *value;
-
-    if (!(cpy = json_object ()))
-        oom ();
-
-    json_object_foreach (dir, key, value) {
-        if (json_object_set (cpy, key, value) < 0)
-            oom ();
-    }
-    return cpy;
-}
 
 char *kvs_util_json_dumps (json_t *o)
 {
@@ -67,24 +49,41 @@ char *kvs_util_json_dumps (json_t *o)
     int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
     char *s;
     if (!o) {
-        json_t *tmp;
-        if (!(tmp = json_null ()))
-            oom ();
-        if (!(s = json_dumps (tmp, flags)))
-            oom ();
-        json_decref (tmp);
+        if (!(s = strdup ("null"))) {
+            errno = ENOMEM;
+            return NULL;
+        }
         return s;
     }
-    if (!(s = json_dumps (o, flags)))
-        oom ();
+    if (!(s = json_dumps (o, flags))) {
+        errno = ENOMEM;
+        return NULL;
+    }
     return s;
+}
+
+int kvs_util_json_encoded_size (json_t *o, size_t *size)
+{
+    char *s = kvs_util_json_dumps (o);
+    if (!s) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (size)
+        *size = strlen (s);
+    free (s);
+    return 0;
 }
 
 int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    char *s = kvs_util_json_dumps (o);
-    int rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
-                           ref, sizeof (href_t));
+    char *s;
+    int rc;
+
+    if (!(s = kvs_util_json_dumps (o)))
+        return -1;
+    rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+                       ref, sizeof (href_t));
     free (s);
     return rc;
 }

@@ -29,7 +29,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
 
 #include "waitqueue.h"
 
@@ -106,9 +105,16 @@ void wait_destroy (wait_t *w)
 
 waitqueue_t *wait_queue_create (void)
 {
-    waitqueue_t *q = xzmalloc (sizeof (*q));
-    if (!(q->q = zlist_new ()))
-        oom ();
+    waitqueue_t *q = calloc (1, sizeof (*q));
+    if (!q) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(q->q = zlist_new ())) {
+        free (q);
+        errno = ENOMEM;
+        return NULL;
+    }
     q->magic = WAITQUEUE_MAGIC;
     return q;
 }
@@ -134,13 +140,16 @@ int wait_queue_length (waitqueue_t *q)
     return zlist_size (q->q);
 }
 
-void wait_addqueue (waitqueue_t *q, wait_t *w)
+int wait_addqueue (waitqueue_t *q, wait_t *w)
 {
     assert (q->magic == WAITQUEUE_MAGIC);
     assert (w->magic == WAIT_MAGIC);
-    if (zlist_append (q->q, w) < 0)
-        oom ();
+    if (zlist_append (q->q, w) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
     w->usecount++;
+    return 0;
 }
 
 static void wait_runone (wait_t *w)
@@ -185,15 +194,20 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     w = zlist_first (q->q);
     while (w) {
         if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
-            if (!tmp && !(tmp = zlist_new ()))
-                oom ();
-            if (zlist_append (tmp, w) < 0)
-                oom ();
+            if (!tmp && !(tmp = zlist_new ())) {
+                errno = ENOMEM;
+                goto error;
+            }
+            if (zlist_append (tmp, w) < 0) {
+                errno = ENOMEM;
+                goto error;
+            }
             w->hand.cb = NULL; // prevent wait_runone from restarting handler
             count++;
         }
         w = zlist_next (q->q);
     }
+    rc = 0;
     if (tmp) {
         while ((w = zlist_pop (tmp))) {
             zlist_remove (q->q, w);
@@ -202,6 +216,12 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
         }
     }
     rc = count;
+error:
+    /* if an error occurs above in zlist_new() or zlist_append(),
+     * simply destroy the tmp list.  Nothing has been removed off of
+     * the original queue yet.  Allow user to handle error as they see
+     * fit.
+     */
     zlist_destroy (&tmp);
     return rc;
 }

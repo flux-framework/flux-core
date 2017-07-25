@@ -36,7 +36,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libkvs/jansson_dirent.h"
@@ -138,25 +137,24 @@ const char *commit_get_newroot_ref (commit_t *c)
     return NULL;
 }
 
-static void cleanup_dirty_cache_list (commit_t *c)
+/* On error we should cleanup anything on the dirty cache list
+ * that has not yet been passed to the user.  Because this has not
+ * been passed to the user, there should be no waiters and the
+ * cache_entry_clear_dirty() should always succeed in clearing the
+ * bit.
+ *
+ * As of the writing of this code, it should also be impossible
+ * for the cache_entry_removal() to fail.  In the rare case of two
+ * callers kvs-get and kvs.put-ing items that end up at the
+ * blobref in the cache, any waiters for a valid cache entry would
+ * have been satisfied when the dirty cache entry was put onto
+ * this dirty cache list (i.e. in store_cache() below when
+ * cache_entry_set_json() was called).
+ */
+void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
 {
-    struct cache_entry *hp;
-
-    /* On error we should cleanup anything on the dirty cache list
-     * that has not yet been passed to the user.  Because this has not
-     * been passed to the user, there should be no waiters and the
-     * cache_entry_clear_dirty() should always succeed in clearing the
-     * bit.
-     *
-     * As of the writing of this code, it should also be impossible
-     * for the cache_entry_removal() to fail.  In the rare case of two
-     * callers kvs-get and kvs.put-ing items that end up at the
-     * blobref in the cache, any waiters for a valid cache entry would
-     * have been satisfied when the dirty cache entry was put onto
-     * this dirty cache list (i.e. in store_cache() below when
-     * cache_entry_set_json() was called)..
-     */
-    while ((hp = zlist_pop (c->item_callback_list))) {
+    if (c->state == COMMIT_STATE_STORE
+        || c->state == COMMIT_STATE_PRE_FINISHED) {
         href_t ref;
         assert (cache_entry_get_dirty (hp) == true);
         assert (cache_entry_clear_dirty (hp) == 0);
@@ -167,6 +165,14 @@ static void cleanup_dirty_cache_list (commit_t *c)
         else
             assert (cache_remove_entry (c->cm->cache, ref) == 1);
     }
+}
+
+static void cleanup_dirty_cache_list (commit_t *c)
+{
+    struct cache_entry *hp;
+
+    while ((hp = zlist_pop (c->item_callback_list)))
+        commit_cleanup_dirty_cache_entry (c, hp);
 }
 
 /* Store object 'o' under key 'ref' in local cache.
@@ -186,7 +192,10 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         goto decref_done;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
-        hp = cache_entry_create (NULL);
+        if (!(hp = cache_entry_create (NULL))) {
+            errno = ENOMEM;
+            goto decref_done;
+        }
         cache_insert (c->cm->cache, ref, hp);
     }
     if (cache_entry_get_valid (hp)) {
@@ -206,24 +215,15 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     return rc;
 }
 
-static bool fileval_big (json_t *value)
-{
-    char *s = json_dumps (value, JSON_ENCODE_ANY);
-    if (!s)
-        oom ();
-    bool rc = strlen (s) > BLOBREF_MAX_STRING_SIZE;
-    free (s);
-    return rc;
-}
-
 /* Store DIRVAL objects, converting them to DIRREFs.
  * Store (large) FILEVAL objects, converting them to FILEREFs.
- * Return false and enqueue wait_t on cache object(s) if any are dirty.
+ * Return 0 on success, -1 on error
  */
 static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 {
     json_t *value;
     json_t *subdir, *key_value;
+    json_t *tmpdirent;
     href_t ref;
     int ret, rc = -1;
     struct cache_entry *hp;
@@ -241,27 +241,44 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if ((ret = store_cache (c, current_epoch, subdir, ref, &hp)) < 0)
                 goto done;
             if (ret) {
-                if (zlist_push (c->item_callback_list, hp) < 0)
-                    oom ();
+                if (zlist_push (c->item_callback_list, hp) < 0) {
+                    commit_cleanup_dirty_cache_entry (c, hp);
+                    errno = ENOMEM;
+                    goto done;
+                }
             }
-            if (json_object_iter_set_new (dir,
-                                          iter,
-                                          j_dirent_create ("DIRREF", ref)) < 0)
-                oom ();
-        }
-        else if ((key_value = json_object_get (value, "FILEVAL"))
-                 && fileval_big (key_value)) {
-            json_incref (key_value);
-            if ((ret = store_cache (c, current_epoch, key_value, ref, &hp)) < 0)
+            if (!(tmpdirent = j_dirent_create ("DIRREF", ref)))
                 goto done;
-            if (ret) {
-                if (zlist_push (c->item_callback_list, hp) < 0)
-                    oom ();
+            if (json_object_iter_set_new (dir, iter, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                errno = ENOMEM;
+                goto done;
             }
-            if (json_object_iter_set_new (dir,
-                                          iter,
-                                          j_dirent_create ("FILEREF", ref)) < 0)
-                oom ();
+        }
+        else if ((key_value = json_object_get (value, "FILEVAL"))) {
+            size_t size;
+            if (kvs_util_json_encoded_size (key_value, &size) < 0)
+                goto done;
+            if (size > BLOBREF_MAX_STRING_SIZE) {
+                json_incref (key_value);
+                if ((ret = store_cache (c, current_epoch, key_value,
+                                        ref, &hp)) < 0)
+                    goto done;
+                if (ret) {
+                    if (zlist_push (c->item_callback_list, hp) < 0) {
+                        commit_cleanup_dirty_cache_entry (c, hp);
+                        errno = ENOMEM;
+                        goto done;
+                    }
+                }
+                if (!(tmpdirent = j_dirent_create ("FILEREF", ref)))
+                    goto done;
+                if (json_object_iter_set_new (dir, iter, tmpdirent) < 0) {
+                    json_decref (tmpdirent);
+                    errno = ENOMEM;
+                    goto done;
+                }
+            }
         }
         iter = json_object_iter_next (dir, iter);
     }
@@ -277,11 +294,17 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                                json_t *rootdir, const char *key,
                                json_t *dirent, const char **missing_ref)
 {
-    char *cpy = xstrdup (key);
+    char *cpy = strdup (key);
     char *next, *name = cpy;
     json_t *dir = rootdir;
     json_t *o, *subdir = NULL, *subdirent;
+    json_t *tmpdirent;
     int rc = -1;
+
+    if (!cpy) {
+        errno = ENOMEM;
+        goto done;
+    }
 
     /* Special case root
      */
@@ -299,12 +322,20 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         if (!(subdirent = json_object_get (dir, name))) {
             if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object ()))
-                oom ();
-            if (json_object_set_new (dir,
-                                     name,
-                                     j_dirent_create ("DIRVAL",subdir)) < 0)
-                oom ();
+            if (!(subdir = json_object ())) {
+                errno = ENOMEM;
+                goto done;
+            }
+            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+                json_decref (subdir);
+                goto done;
+            }
+            if (json_object_set_new (dir, name, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                json_decref (subdir);
+                errno = ENOMEM;
+                goto done;
+            }
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "DIRVAL"))) {
             subdir = o;
@@ -318,15 +349,28 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto success; /* stall */
             }
             /* do not corrupt store by modify orig. */
-            subdir = kvs_util_json_copydir (subdir);
-            if (json_object_set_new (dir,
-                                     name,
-                                     j_dirent_create ("DIRVAL",subdir)) < 0)
-                oom ();
+            if (!(subdir = json_copy (subdir))) {
+                errno = ENOMEM;
+                goto done;
+            }
+            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+                json_decref (subdir);
+                goto done;
+            }
+            if (json_object_set_new (dir, name, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                json_decref (subdir);
+                errno = ENOMEM;
+                goto done;
+            }
             json_decref (subdir);
         } else if ((o = json_object_get (subdirent, "LINKVAL"))) {
             assert (json_is_string (o));
-            char *nkey = xasprintf ("%s.%s", json_string_value (o), next);
+            char *nkey = NULL;
+            if (asprintf (&nkey, "%s.%s", json_string_value (o), next) < 0) {
+                errno = ENOMEM;
+                goto done;
+            }
             if (commit_link_dirent (c,
                                     current_epoch,
                                     rootdir,
@@ -341,12 +385,20 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else {
             if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object ()))
-                oom ();
-            if (json_object_set_new (dir,
-                                     name,
-                                     j_dirent_create ("DIRVAL",subdir)) < 0)
-                oom ();
+            if (!(subdir = json_object ())) {
+                errno = ENOMEM;
+                goto done;
+            }
+            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+                json_decref (subdir);
+                goto done;
+            }
+            if (json_object_set_new (dir, name, tmpdirent) < 0) {
+                json_decref (tmpdirent);
+                json_decref (subdir);
+                errno = ENOMEM;
+                goto done;
+            }
             json_decref (subdir);
         }
         name = next;
@@ -355,8 +407,10 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
     /* This is the final path component of the key.  Add it to the directory.
      */
     if (!json_is_null (dirent)) {
-        if (json_object_set_new (dir, name, json_incref (dirent)) < 0)
-            oom ();
+        if (json_object_set_new (dir, name, json_incref (dirent)) < 0) {
+            json_decref (dirent);
+            goto done;
+        }
     }
     else
         json_object_del (dir, name);
@@ -392,12 +446,21 @@ commit_process_t commit_process (commit_t *c,
             if (!(rootdir = cache_lookup_and_get_json (c->cm->cache,
                                                        rootdir_ref,
                                                        current_epoch))) {
-                if (zlist_push (c->item_callback_list, (void *)rootdir_ref) < 0)
-                    oom ();
+                if (zlist_push (c->item_callback_list,
+                                (void *)rootdir_ref) < 0) {
+                    c->errnum = ENOMEM;
+                    return COMMIT_PROCESS_ERROR;
+                }
                 goto stall_load;
             }
 
-            c->rootcpy = kvs_util_json_copydir (rootdir);
+            if (!(c->rootcpy = json_copy (rootdir))) {
+                const char *tmpref;
+                /* empty item_callback_list to prevent mistakes later */
+                while ((tmpref = zlist_pop (c->item_callback_list)));
+                c->errnum = ENOMEM;
+                return COMMIT_PROCESS_ERROR;
+            }
 
             c->state = COMMIT_STATE_APPLY_OPS;
             /* fallthrough */
@@ -437,8 +500,10 @@ commit_process_t commit_process (commit_t *c,
                     }
                     if (missing_ref) {
                         if (zlist_push (c->item_callback_list,
-                                        (void *)missing_ref) < 0)
-                            oom ();
+                                        (void *)missing_ref) < 0) {
+                            c->errnum = ENOMEM;
+                            break;
+                        }
                     }
                 }
 
@@ -476,8 +541,10 @@ commit_process_t commit_process (commit_t *c,
                                           &hp)) < 0)
                      c->errnum = errno;
             else if (sret
-                     && zlist_push (c->item_callback_list, hp) < 0)
-                oom ();
+                     && zlist_push (c->item_callback_list, hp) < 0) {
+                commit_cleanup_dirty_cache_entry (c, hp);
+                c->errnum = ENOMEM;
+            }
 
             if (c->errnum) {
                 cleanup_dirty_cache_list (c);
@@ -637,8 +704,11 @@ int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
         if (!(c = commit_create (f, cm)))
             return -1;
 
-        if (zlist_append (cm->ready, c) < 0)
-            oom ();
+        if (zlist_append (cm->ready, c) < 0) {
+            commit_destroy (c);
+            errno = ENOMEM;
+            return -1;
+        }
         zlist_freefn (cm->ready, c, (zlist_free_fn *)commit_destroy, true);
     }
 

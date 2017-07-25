@@ -31,26 +31,32 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/oom.h"
 
 #include "jansson_dirent.h"
 
 json_t *j_dirent_create (const char *type, void *arg)
 {
-    json_t *dirent;
+    json_t *dirent = NULL;
     bool valid_type = false;
 
-    if (!(dirent = json_object ()))
-        oom ();
+    if (!(dirent = json_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     if (!strcmp (type, "FILEREF") || !strcmp (type, "DIRREF")) {
         char *ref = arg;
         json_t *o;
 
-        if (!(o = json_string (ref)))
-            oom ();
-        if (json_object_set_new (dirent, type, o) < 0)
-            oom ();
+        if (!(o = json_string (ref))) {
+            errno = ENOMEM;
+            goto error;
+        }
+        if (json_object_set_new (dirent, type, o) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
 
         valid_type = true;
     } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")
@@ -60,16 +66,25 @@ json_t *j_dirent_create (const char *type, void *arg)
         if (val)
             json_incref (val);
         else {
-            if (!(val = json_object ()))
-                oom ();
+            if (!(val = json_object ())) {
+                errno = ENOMEM;
+                goto error;
+            }
         }
-        if (json_object_set_new (dirent, type, val) < 0)
-            oom ();
+        if (json_object_set_new (dirent, type, val) < 0) {
+            json_decref (val);
+            errno = ENOMEM;
+            goto error;
+        }
         valid_type = true;
     }
     assert (valid_type == true);
 
     return dirent;
+
+error:
+    json_decref (dirent);
+    return NULL;
 }
 
 int j_dirent_validate (json_t *dirent)

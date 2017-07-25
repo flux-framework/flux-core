@@ -45,14 +45,14 @@ int cache_entry_clear_dirty (struct cache_entry *hp);
  */
 json_t *cache_entry_get_json (struct cache_entry *hp);
 void cache_entry_set_json (struct cache_entry *hp, json_t *o);
-int cache_entry_clear_json (struct cache_entry *hp);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
  * load or store RPC.
+ * Returns -1 on error, 0 on success
  */
-void cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait);
-void cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait);
+int cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait);
+int cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait);
 
 /* Create/destroy the cache container and its contents.
  */
@@ -93,13 +93,15 @@ int cache_count_entries (struct cache *cache);
 
 /* Expire cache entries that are not dirty, not incomplete, and last
  * used more than 'thresh' epoch's ago.
+ * Returns -1 on error, expired count on success.
  */
 int cache_expire_entries (struct cache *cache, int current_epoch, int thresh);
 
 /* Obtain statistics on the cache.
+ * Returns -1 on error, 0 on success
  */
-void cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
-                      int *incomplete, int *dirty);
+int cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
+                     int *incomplete, int *dirty);
 
 /* Destroy wait_t's on the waitqueue_t of any cache entry
  * if they meet match criteria.

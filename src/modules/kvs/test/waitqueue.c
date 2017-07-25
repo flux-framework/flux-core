@@ -1,6 +1,5 @@
 #include "src/modules/kvs/waitqueue.h"
 #include "src/common/libflux/message.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 
 void wait_cb (void *arg)
@@ -63,7 +62,8 @@ int main (int argc, char *argv[])
        "wait_create works");
     ok ((q = wait_queue_create ()) != NULL,
        "wait_queue_create works");
-    wait_addqueue (q, w);
+    ok (wait_addqueue (q, w) == 0,
+        "wait_addqueue works");
     ok (wait_get_usecount (w) == 1,
        "wait_get_usecount 1 after wait_addqueue");
     ok (count == 0,
@@ -100,10 +100,12 @@ int main (int argc, char *argv[])
 
     ok (wait_get_usecount (w) == 0,
         "wait_usecount 0 initially");
-    wait_addqueue (q, w);
+    ok (wait_addqueue (q, w) == 0,
+        "wait_addqueue works");
     ok (wait_get_usecount (w) == 1,
         "wait_usecount 1 after adding to one queue");
-    wait_addqueue (q2, w);
+    ok (wait_addqueue (q2, w) == 0,
+        "wait_addqueue works");
     ok (wait_get_usecount (w) == 2,
         "wait_usecount 2 after adding to second queue");
     ok (wait_queue_length (q) == 1 && wait_queue_length (q2) == 1,
@@ -137,7 +139,8 @@ int main (int argc, char *argv[])
         if (!(w = wait_create_msg_handler (NULL, NULL, msg, msghand, &count)))
             break;
         flux_msg_destroy (msg); /* msg was copied into wait_t */
-        wait_addqueue (q, w);
+        if (wait_addqueue (q, w) < 0)
+            break;
     }
     ok (wait_queue_length (q) == 20,
         "wait_queue_length 20 after 20 wait_addqueues");

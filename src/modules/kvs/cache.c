@@ -41,14 +41,11 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
-#include "src/common/libutil/oom.h"
 
 #include "waitqueue.h"
-#include "kvs_util.h"
 #include "cache.h"
 
 struct cache_entry {
@@ -65,7 +62,11 @@ struct cache {
 
 struct cache_entry *cache_entry_create (json_t *o)
 {
-    struct cache_entry *hp = xzmalloc (sizeof (*hp));
+    struct cache_entry *hp = calloc (1, sizeof (*hp));
+    if (!hp) {
+        errno = ENOMEM;
+        return NULL;
+    }
     if (o)
         hp->o = o;
     return hp;
@@ -145,22 +146,30 @@ void cache_entry_destroy (void *arg)
     }
 }
 
-void cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait)
+int cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait)
 {
     if (wait) {
-        if (!hp->waitlist_notdirty)
-            hp->waitlist_notdirty = wait_queue_create ();
-        wait_addqueue (hp->waitlist_notdirty, wait);
+        if (!hp->waitlist_notdirty) {
+            if (!(hp->waitlist_notdirty = wait_queue_create ()))
+                return -1;
+        }
+        if (wait_addqueue (hp->waitlist_notdirty, wait) < 0)
+            return -1;
     }
+    return 0;
 }
 
-void cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait)
+int cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait)
 {
     if (wait) {
-        if (!hp->waitlist_valid)
-            hp->waitlist_valid = wait_queue_create ();
-        wait_addqueue (hp->waitlist_valid, wait);
+        if (!hp->waitlist_valid) {
+            if (!(hp->waitlist_valid = wait_queue_create ()))
+                return -1;
+        }
+        if (wait_addqueue (hp->waitlist_valid, wait) < 0)
+            return -1;
     }
+    return 0;
 }
 
 struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
@@ -224,8 +233,10 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     struct cache_entry *hp;
     int count = 0;
 
-    if (!(keys = zhash_keys (cache->zh)))
-        oom ();
+    if (!(keys = zhash_keys (cache->zh))) {
+        errno = ENOMEM;
+        return -1;
+    }
     while ((ref = zlist_pop (keys))) {
         if ((hp = zhash_lookup (cache->zh, ref))
             && !cache_entry_get_dirty (hp)
@@ -240,26 +251,32 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
     return count;
 }
 
-void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
-                      int *incompletep, int *dirtyp)
+int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
+                     int *incompletep, int *dirtyp)
 {
-    zlist_t *keys;
+    zlist_t *keys = NULL;
     struct cache_entry *hp;
     char *ref;
     int size = 0;
     int incomplete = 0;
     int dirty = 0;
+    int rc = -1;
 
-    if (!(keys = zhash_keys (cache->zh)))
-        oom ();
+    if (!(keys = zhash_keys (cache->zh))) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
     while ((ref = zlist_pop (keys))) {
         hp = zhash_lookup (cache->zh, ref);
         if (cache_entry_get_valid (hp)) {
             /* must pass JSON_ENCODE_ANY, object could be anything */
             char *s = json_dumps (hp->o, JSON_ENCODE_ANY);
-            if (!s)
-                oom ();
-            int obj_size = strlen (s);
+            int obj_size;
+            if (!s) {
+                errno = ENOMEM;
+                goto cleanup;
+            }
+            obj_size = strlen (s);
             free (s);
             size += obj_size;
             tstat_push (ts, obj_size);
@@ -269,13 +286,16 @@ void cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
             dirty++;
         free (ref);
     }
-    zlist_destroy (&keys);
     if (sizep)
         *sizep = size;
     if (incompletep)
         *incompletep = incomplete;
     if (dirtyp)
         *dirtyp = dirty;
+    rc = 0;
+cleanup:
+    zlist_destroy (&keys);
+    return rc;
 }
 
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
@@ -304,9 +324,16 @@ done:
 
 struct cache *cache_create (void)
 {
-    struct cache *cache = xzmalloc (sizeof (*cache));
-    if (!(cache->zh = zhash_new ()))
-        oom ();
+    struct cache *cache = calloc (1, sizeof (*cache));
+    if (!cache) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!(cache->zh = zhash_new ())) {
+        free (cache);
+        errno = ENOMEM;
+        return NULL;
+    }
     return cache;
 }
 

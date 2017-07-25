@@ -13,7 +13,6 @@
 #include "src/modules/kvs/fence.h"
 #include "src/modules/kvs/kvs_util.h"
 #include "src/modules/kvs/types.h"
-#include "src/common/libutil/oom.h"
 
 static int test_global = 5;
 
@@ -779,6 +778,7 @@ int ref_error_cb (commit_t *c, const char *ref, void *data)
 
 int cache_error_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
+    commit_cleanup_dirty_cache_entry (c, hp);
     return -1;
 }
 
