@@ -62,6 +62,19 @@ char *kvs_util_json_dumps (json_t *o)
     return s;
 }
 
+int kvs_util_json_encoded_size (json_t *o, size_t *size)
+{
+    char *s = kvs_util_json_dumps (o);
+    if (!s) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (size)
+        *size = strlen (s);
+    free (s);
+    return 0;
+}
+
 int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 {
     char *s;

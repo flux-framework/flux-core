@@ -215,19 +215,6 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     return rc;
 }
 
-/* -1 on error, 0 on false, 1 on true */
-static int fileval_big (json_t *value)
-{
-    char *s = json_dumps (value, JSON_ENCODE_ANY);
-    if (!s) {
-        errno = ENOMEM;
-        return -1;
-    }
-    int rc = (strlen (s) > BLOBREF_MAX_STRING_SIZE) ? 1 : 0;
-    free (s);
-    return rc;
-}
-
 /* Store DIRVAL objects, converting them to DIRREFs.
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return 0 on success, -1 on error
@@ -269,9 +256,10 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             }
         }
         else if ((key_value = json_object_get (value, "FILEVAL"))) {
-            if ((ret = fileval_big (key_value)) < 0)
+            size_t size;
+            if (kvs_util_json_encoded_size (key_value, &size) < 0)
                 goto done;
-            if (ret) {
+            if (size > BLOBREF_MAX_STRING_SIZE) {
                 json_incref (key_value);
                 if ((ret = store_cache (c, current_epoch, key_value,
                                         ref, &hp)) < 0)

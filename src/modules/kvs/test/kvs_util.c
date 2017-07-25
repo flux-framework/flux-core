@@ -13,6 +13,7 @@ int main (int argc, char *argv[])
     json_t *obj;
     href_t ref;
     char *s1, *s2;
+    size_t size;
 
     plan (NO_PLAN);
 
@@ -43,6 +44,15 @@ int main (int argc, char *argv[])
     ok (!strcmp (s1, s2),
         "kvs_util_json_dumps dumps correct string");
 
+    ok (kvs_util_json_encoded_size (obj, NULL) == 0,
+        "kvs_util_json_encoded_size works w/ NULL size param");
+
+    ok (kvs_util_json_encoded_size (obj, &size) == 0,
+        "kvs_util_json_encoded_size works");
+
+    ok (size == strlen (s2),
+        "kvs_util_json_encoded_size returns correct size");
+
     free (s1);
     s1 = NULL;
     json_decref (obj);
@@ -57,6 +67,12 @@ int main (int argc, char *argv[])
     ok (!strcmp (s1, s2),
         "kvs_util_json_dumps works on null object");
 
+    ok (kvs_util_json_encoded_size (obj, &size) == 0,
+        "kvs_util_json_encoded_size works");
+
+    ok (size == strlen (s2),
+        "kvs_util_json_encoded_size returns correct size");
+
     free (s1);
     s1 = NULL;
     json_decref (obj);
@@ -69,8 +85,15 @@ int main (int argc, char *argv[])
     ok (!strcmp (s1, s2),
         "kvs_util_json_dumps works on NULL pointer");
 
+    ok (kvs_util_json_encoded_size (NULL, &size) == 0,
+        "kvs_util_json_encoded_size works on NULL pointer");
+
+    ok (size == strlen (s2),
+        "kvs_util_json_encoded_size returns correct size");
+
     free (s1);
     s1 = NULL;
+
 
     done_testing ();
     return (0);

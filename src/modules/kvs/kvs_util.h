@@ -14,6 +14,9 @@
  */
 char *kvs_util_json_dumps (json_t *o);
 
+/* returns 0 on success, -1 on failure */
+int kvs_util_json_encoded_size (json_t *o, size_t *size);
+
 /* Calculate hash of a json object
  *
  * Returns -1 on error, 0 on success
