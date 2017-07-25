@@ -49,17 +49,10 @@ char *kvs_util_json_dumps (json_t *o)
     int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
     char *s;
     if (!o) {
-        json_t *tmp;
-        if (!(tmp = json_null ())) {
+        if (!(s = strdup ("null"))) {
             errno = ENOMEM;
             return NULL;
         }
-        if (!(s = json_dumps (tmp, flags))) {
-            json_decref (tmp);
-            errno = ENOMEM;
-            return NULL;
-        }
-        json_decref (tmp);
         return s;
     }
     if (!(s = json_dumps (o, flags))) {
