@@ -2,7 +2,7 @@ coverage:
  round: down
  range: "50...100"
  ignore:
- - ".*/t/.*"
+ - "t/.*"
  - ".*/test/.*"
  - ".*/tests/.*"
  - ".*/man3/*.c"
