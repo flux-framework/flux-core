@@ -572,6 +572,7 @@ int main (int argc, char *argv[])
         runlevel_set_subprocess_manager (ctx.runlevel, ctx.sm);
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
+        runlevel_set_flux (ctx.runlevel, ctx.h);
 
         if (runlevel_set_rc (ctx.runlevel, 1, rc1, rc1 ? strlen (rc1) + 1 : 0, uri) < 0)
             log_err_exit ("runlevel_set_rc 1");

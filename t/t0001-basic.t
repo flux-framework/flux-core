@@ -87,6 +87,10 @@ test_expect_success 'flux-start in subprocess/pmi mode works as initial program'
 	flux start --size=2 flux start ${BUG1006} --size=1 flux comms info | grep size=1
 "
 
+test_expect_success 'flux-start init.rc2_timeout attribute works' "
+	test_expect_code 143 flux start ${BUG1006} -o,-Sinit.rc2_timeout=0.1 sleep 5
+"
+
 test_expect_success 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
 	mkdir -p test-under-flux && (
