@@ -51,6 +51,10 @@ test_under_flux() {
     if test -n "$SHARNESS_TEST_DIRECTORY"; then
         cd $SHARNESS_TEST_DIRECTORY
     fi
+    timeout="-o -Sinit.rc2_timeout=300"
+    if test -n "$FLUX_TEST_DISABLE_TIMEOUT"; then
+        timeout=""
+    fi
 
     if test "$personality" = "minimal"; then
         export FLUX_RC1_PATH=""
@@ -67,7 +71,8 @@ test_under_flux() {
 
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
-      exec flux start --bootstrap=selfpmi --size=${size} ${quiet} "sh $0 ${flags}"
+      exec flux start --bootstrap=selfpmi --size=${size} ${quiet} ${timeout} \
+                     "sh $0 ${flags}"
 }
 
 mock_bootstrap_instance() {
