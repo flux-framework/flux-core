@@ -248,6 +248,7 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
                  bool *stall)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
+    int ret;
 
     /* Create an incomplete hash entry if none found.
      */
@@ -261,7 +262,8 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
             flux_log_error (ctx->h, "%s: content_load_request_send",
                             __FUNCTION__);
             /* cache entry just created, should always work */
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
             return -1;
         }
         ctx->faults++;
@@ -302,6 +304,7 @@ static int content_store_get (flux_future_t *f, void *arg)
     const char *blobref;
     int blobref_size;
     int rc = -1;
+    int ret;
 
     if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
         flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
@@ -343,7 +346,8 @@ static int content_store_get (flux_future_t *f, void *arg)
     if (cache_entry_set_dirty (hp, false) < 0) {
         flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
                         __FUNCTION__);
-        assert (cache_entry_force_clear_dirty (hp) == 0);
+        ret = cache_entry_force_clear_dirty (hp);
+        assert (ret == 0);
         goto done;
     }
     rc = 0;
@@ -673,6 +677,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_t *root_ref = NULL;
     wait_t *wait = NULL;
     int rc = -1;
+    int ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
@@ -708,14 +713,17 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   flags)))
             goto done;
 
-        assert (lookup_set_aux_data (lh, ctx) == 0);
+        ret = lookup_set_aux_data (lh, ctx);
+        assert (ret == 0);
     }
     else {
         lh = arg;
 
-        assert ((ctx = lookup_get_aux_data (lh)));
+        ctx = lookup_get_aux_data (lh);
+        assert (ctx);
 
-        assert (lookup_set_current_epoch (lh, ctx->epoch) == 0);
+        ret = lookup_set_current_epoch (lh, ctx->epoch);
+        assert (ret == 0);
     }
 
     if (!lookup (lh)) {
@@ -788,6 +796,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     bool isreplay = false;
     bool out = false;
     int rc = -1;
+    int ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
@@ -809,14 +818,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   flags)))
             goto done;
 
-        assert (lookup_set_aux_data (lh, ctx) == 0);
+        ret = lookup_set_aux_data (lh, ctx);
+        assert (ret == 0);
     }
     else {
         lh = arg;
 
-        assert ((ctx = lookup_get_aux_data (lh)));
+        ctx = lookup_get_aux_data (lh);
+        assert (ctx);
 
-        assert (lookup_set_current_epoch (lh, ctx->epoch) == 0);
+        ret = lookup_set_current_epoch (lh, ctx->epoch);
+        assert (ret == 0);
 
         isreplay = true;
     }
@@ -1517,6 +1529,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 {
     struct cache_entry *hp;
     int rc = -1;
+    int ret;
 
     if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
         flux_log_error (ctx->h, "%s: kvs_util_json_hash",
@@ -1534,13 +1547,15 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         if (cache_entry_set_json (hp, o) < 0) {
             flux_log_error (ctx->h, "%s: cache_entry_set_json",
                             __FUNCTION__);
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
             goto decref_done;
         }
         if (cache_entry_set_dirty (hp, true) < 0) {
             /* remove entry will decref object */
             flux_log_error (ctx->h, "%s: cache_entry_set_dirty", __FUNCTION__);
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
             goto done;
         }
         if (content_store_request_send (ctx, o, true) < 0) {
@@ -1549,8 +1564,10 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
              * so nothing should error here */
             flux_log_error (ctx->h, "%s: content_store_request_send",
                             __FUNCTION__);
-            assert (cache_entry_clear_dirty (hp) == 0);
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            ret = cache_entry_clear_dirty (hp);
+            assert (ret == 0);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
             goto done;
         }
     } else

@@ -155,14 +155,18 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
     if (c->state == COMMIT_STATE_STORE
         || c->state == COMMIT_STATE_PRE_FINISHED) {
         href_t ref;
+        int ret;
         assert (cache_entry_get_dirty (hp) == true);
-        assert (cache_entry_clear_dirty (hp) == 0);
+        ret = cache_entry_clear_dirty (hp);
+        assert (ret == 0);
         if (kvs_util_json_hash (c->cm->hash_name,
                                 cache_entry_get_json (hp),
                                 ref) < 0)
             log_err ("kvs_util_json_hash");
-        else
-            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+        else {
+            ret = cache_remove_entry (c->cm->cache, ref);
+            assert (ret == 1);
+        }
     }
 }
 
@@ -203,12 +207,14 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         rc = 0;
     } else {
         if (cache_entry_set_json (hp, o) < 0) {
-            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+            int ret = cache_remove_entry (c->cm->cache, ref);
+            assert (ret == 1);
             goto decref_done;
         }
         if (cache_entry_set_dirty (hp, true) < 0) {
             /* cache_remove_entry will decref object */
-            assert (cache_remove_entry (c->cm->cache, ref) == 1);
+            int ret = cache_remove_entry (c->cm->cache, ref);
+            assert (ret == 1);
             goto done;
         }
         rc = 1;
