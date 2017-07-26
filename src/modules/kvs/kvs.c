@@ -149,7 +149,7 @@ error:
     return NULL;
 }
 
-static void content_load_completion (flux_future_t *f, void *arg)
+static int content_load_get (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *o;
@@ -157,6 +157,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
     int size;
     const char *blobref;
     struct cache_entry *hp;
+    int rc = -1;
 
     if (flux_rpc_get_raw (f, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
@@ -173,11 +174,21 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * b/c it is not yet valid.  But check and log incase there is
      * logic error dealng with error paths using cache_remove_entry().
      */
-    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+        errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
+        goto done;
+    }
     cache_entry_set_json (hp, o);
+    rc = 0;
 done:
     flux_future_destroy (f);
+    return rc;
+}
+
+static void content_load_completion (flux_future_t *f, void *arg)
+{
+    (void)content_load_get (f, arg);
 }
 
 /* If now is true, perform the load rpc synchronously;
@@ -203,7 +214,10 @@ static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now
         goto error;
     }
     if (now) {
-        content_load_completion (f, ctx);
+        if (content_load_get (f, ctx) < 0) {
+            flux_log_error (ctx->h, "%s: content_load_get", __FUNCTION__);
+            goto error;
+        }
     } else if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
         flux_future_destroy (f);
         goto error;
