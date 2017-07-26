@@ -36,8 +36,12 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val);
  * to give up on a previously marked dirty cache entry but has not yet
  * done anything with it.  Returns current value of dirty bit on
  * success, -1 on error.
+ *
+ * cache_entry_force_clear_dirty() will clear the dirty bit no matter
+ * what.  It should be only used in emergency error handling cases.
  */
 int cache_entry_clear_dirty (struct cache_entry *hp);
+int cache_entry_force_clear_dirty (struct cache_entry *hp);
 
 /* Accessors for cache entry data.
  * If non-NULL, set transfers ownership of 'o' to the cache entry.

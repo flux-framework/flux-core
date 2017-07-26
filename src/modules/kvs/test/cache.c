@@ -67,6 +67,13 @@ int main (int argc, char *argv[])
         "cache_entry_clear_dirty returns 0, b/c no waiters");
     ok (cache_entry_get_dirty (e1) == false,
         "cache entry succcessfully now not dirty");
+    cache_entry_set_dirty (e1, true);
+    ok (cache_entry_get_dirty (e1) == true,
+        "cache entry succcessfully set dirty");
+    ok (cache_entry_force_clear_dirty (e1) == 0,
+        "cache_entry_force_clear_dirty returns 0");
+    ok (cache_entry_get_dirty (e1) == false,
+        "cache entry succcessfully now not dirty");
     ok ((o2 = cache_entry_get_json (e1)) != NULL,
         "json retrieved from cache entry");
     ok ((o = json_object_get (o2, "foo")) != NULL,

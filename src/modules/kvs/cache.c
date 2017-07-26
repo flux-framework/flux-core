@@ -109,6 +109,16 @@ int cache_entry_clear_dirty (struct cache_entry *hp)
     return -1;
 }
 
+int cache_entry_force_clear_dirty (struct cache_entry *hp)
+{
+    if (hp && hp->o) {
+        if (hp->dirty)
+            hp->dirty = 0;
+        return hp->dirty ? 1 : 0;
+    }
+    return -1;
+}
+
 json_t *cache_entry_get_json (struct cache_entry *hp)
 {
     if (!hp || !hp->o)
