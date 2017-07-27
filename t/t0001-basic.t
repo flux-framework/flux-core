@@ -30,6 +30,9 @@ test_expect_success 'flux-keygen works' '
 	rm -rf $tmpkeydir
 '
 
+# None of the individual tests should run over 10s
+ARGS="-o -Sinit.rc2_timeout=10"
+
 #
 # N.B. since we have many back to back flux-starts within this test,
 # and each instance runs out the shutdown grace period per issue #1006,
@@ -41,54 +44,55 @@ test_expect_success 'flux-keygen works' '
 # basic functionality...
 #
 BUG1006="-o,--shutdown-grace=0.1"
+ARGS="$ARGS $BUG1006"
 
 test_expect_success 'broker --shutdown-grace option works' '
 	flux start -o,--shutdown-grace=0.1 /bin/true
 '
 test_expect_success 'flux-start in exec mode works' "
-	flux start ${BUG1006} 'flux comms info' | grep 'size=1'
+	flux start ${ARGS} 'flux comms info' | grep 'size=1'
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
-	flux start ${BUG1006} --size=1 'flux comms info' | grep 'size=1'
+	flux start ${ARGS} --size=1 'flux comms info' | grep 'size=1'
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
-	flux start ${BUG1006} --size=2 'flux comms info' | grep 'size=2'
+	flux start ${ARGS} --size=2 'flux comms info' | grep 'size=2'
 "
 test_expect_success 'flux-start with size 1 has no peers' "
-	flux start ${BUG1006} --size=1 'flux comms idle' > idle.out &&
+	flux start ${ARGS} --size=1 'flux comms idle' > idle.out &&
         ! grep 'idle' idle.out
 "
 test_expect_success 'flux-start with size 2 has a peer' "
-	flux start ${BUG1006} --size=2 'flux comms idle' > idle.out &&
+	flux start ${ARGS} --size=2 'flux comms idle' > idle.out &&
         grep 'idle' idle.out
 "
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
-	flux start ${BUG1006} --size=1 --bootstrap=selfpmi /bin/true
+	flux start ${ARGS} --size=1 --bootstrap=selfpmi /bin/true
 "
 test_expect_success 'flux-start --size=1 --boostrap=pmi fails' "
-	test_must_fail flux start ${BUG1006} --size=1 --bootstrap=pmi /bin/true
+	test_must_fail flux start ${ARGS} --size=1 --bootstrap=pmi /bin/true
 "
 test_expect_success 'flux-start in exec mode passes through errors from command' "
-	test_must_fail flux start ${BUG1006} /bin/false
+	test_must_fail flux start ${ARGS} /bin/false
 "
 test_expect_success 'flux-start in subprocess/pmi mode passes through errors from command' "
-	test_must_fail flux start ${BUG1006} --size=1 /bin/false
+	test_must_fail flux start ${ARGS} --size=1 /bin/false
 "
 test_expect_success 'flux-start in exec mode passes exit code due to signal' "
-	test_expect_code 130 flux start ${BUG1006} 'kill -INT \$\$'
+	test_expect_code 130 flux start ${ARGS} 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in subprocess/pmi mode passes exit code due to signal' "
-	test_expect_code 130 flux start ${BUG1006} --size=1 'kill -INT \$\$'
+	test_expect_code 130 flux start ${ARGS} --size=1 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in exec mode works as initial program' "
-	flux start --size=2 flux start ${BUG1006} flux comms info | grep size=1
+	flux start --size=2 flux start ${ARGS} flux comms info | grep size=1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works as initial program' "
-	flux start --size=2 flux start ${BUG1006} --size=1 flux comms info | grep size=1
+	flux start --size=2 flux start ${ARGS} --size=1 flux comms info | grep size=1
 "
 
 test_expect_success 'flux-start init.rc2_timeout attribute works' "
-	test_expect_code 143 flux start ${BUG1006} -o,-Sinit.rc2_timeout=0.1 sleep 5
+	test_expect_code 143 flux start ${ARGS} -o,-Sinit.rc2_timeout=0.1 sleep 5
 "
 
 test_expect_success 'test_under_flux works' '
@@ -114,7 +118,7 @@ test_expect_success 'test_under_flux works' '
 	grep "size=2" test-under-flux/out
 '
 test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes' '
-	ATTR_VAL=`flux start ${BUG1006} -o,--setattr=foo-test=42 flux getattr foo-test` &&
+	ATTR_VAL=`flux start ${ARGS} -o,--setattr=foo-test=42 flux getattr foo-test` &&
 	test $ATTR_VAL -eq 42
 '
 test_expect_success 'tbon.endpoint can be read' '
@@ -158,21 +162,21 @@ test_expect_success 'mcast.relay-endpoint not set by default' '
 '
 test_expect_success 'broker.rundir override works' '
 	RUNDIR=`mktemp -d` &&
-	DIR=`flux start ${BUG1006} -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&
+	DIR=`flux start ${ARGS} -o,--setattr=broker.rundir=$RUNDIR flux getattr broker.rundir` &&
 	test "$DIR" = "$RUNDIR" &&
 	test -d $RUNDIR &&
 	rmdir $RUNDIR
 '
 test_expect_success 'broker persist-directory works' '
 	PERSISTDIR=`mktemp -d` &&
-	flux start ${BUG1006} -o,--setattr=persist-directory=$PERSISTDIR /bin/true &&
+	flux start ${ARGS} -o,--setattr=persist-directory=$PERSISTDIR /bin/true &&
 	test -d $PERSISTDIR &&
 	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
 	rm -rf $PERSISTDIR
 '
 test_expect_success 'broker persist-filesystem works' '
 	PERSISTFS=`mktemp -d` &&
-	PERSISTDIR=`flux start ${BUG1006} -o,--setattr=persist-filesystem=$PERSISTFS flux getattr persist-directory` &&
+	PERSISTDIR=`flux start ${ARGS} -o,--setattr=persist-filesystem=$PERSISTFS flux getattr persist-directory` &&
 	test -d $PERSISTDIR &&
 	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
 	rm -rf $PERSISTDIR &&
@@ -182,7 +186,7 @@ test_expect_success 'broker persist-filesystem works' '
 test_expect_success 'broker persist-filesystem is ignored if persist-directory set' '
 	PERSISTFS=`mktemp -d` &&
 	PERSISTDIR=`mktemp -d` &&
-	DIR=`flux start ${BUG1006} -o,--setattr=persist-filesystem=$PERSISTFS,--setattr=persist-directory=$PERSISTDIR \
+	DIR=`flux start ${ARGS} -o,--setattr=persist-filesystem=$PERSISTFS,--setattr=persist-directory=$PERSISTDIR \
 		flux getattr persist-directory` &&
 	test "$DIR" = "$PERSISTDIR" &&
 	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
@@ -191,24 +195,24 @@ test_expect_success 'broker persist-filesystem is ignored if persist-directory s
 '
 # Use -eq hack to test that BROKERPID is a number
 test_expect_success 'broker broker.pid attribute is readable' '
-	BROKERPID=`flux start ${BUG1006} flux getattr broker.pid` &&
+	BROKERPID=`flux start ${ARGS} flux getattr broker.pid` &&
 	test -n "$BROKERPID" &&
 	test "$BROKERPID" -eq "$BROKERPID"
 '
 test_expect_success 'broker broker.pid attribute is immutable' '
-	test_must_fail flux start ${BUG1006} -o,--setattr=broker.pid=1234 flux getattr broker.pid
+	test_must_fail flux start ${ARGS} -o,--setattr=broker.pid=1234 flux getattr broker.pid
 '
 test_expect_success 'broker --verbose option works' '
-	flux start ${BUG1006} -o,-v /bin/true
+	flux start ${ARGS} -o,-v /bin/true
 '
 test_expect_success 'broker --heartrate option works' '
-	flux start ${BUG1006} -o,--heartrate=0.1 /bin/true
+	flux start ${ARGS} -o,--heartrate=0.1 /bin/true
 '
 test_expect_success 'broker --k-ary option works' '
-	flux start ${BUG1006} -s4 -o,--k-ary=1 /bin/true &&
-	flux start ${BUG1006} -s4 -o,--k-ary=2 /bin/true &&
-	flux start ${BUG1006} -s4 -o,--k-ary=3 /bin/true &&
-	flux start ${BUG1006} -s4 -o,--k-ary=4 /bin/true
+	flux start ${ARGS} -s4 -o,--k-ary=1 /bin/true &&
+	flux start ${ARGS} -s4 -o,--k-ary=2 /bin/true &&
+	flux start ${ARGS} -s4 -o,--k-ary=3 /bin/true &&
+	flux start ${ARGS} -s4 -o,--k-ary=4 /bin/true
 '
 
 test_expect_success 'flux-help command list can be extended' '
@@ -316,7 +320,7 @@ test_expect_success 'scripts/waitfile works after 1s' '
 '
 # test for issue #1025
 test_expect_success 'instance can stop cleanly with subscribers (#1025)' '
-	flux start ${BUG1006} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub hb &"
+	flux start ${ARGS} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub hb &"
 '
 
 test_done
