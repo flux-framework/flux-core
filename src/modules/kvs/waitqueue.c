@@ -196,6 +196,7 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     wait_t *w;
     int rc = -1;
     int count = 0;
+    int saved_errno;
 
     assert (q->magic == WAITQUEUE_MAGIC);
 
@@ -203,11 +204,11 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     while (w) {
         if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
             if (!tmp && !(tmp = zlist_new ())) {
-                errno = ENOMEM;
+                saved_errno = ENOMEM;
                 goto error;
             }
             if (zlist_append (tmp, w) < 0) {
-                errno = ENOMEM;
+                saved_errno = ENOMEM;
                 goto error;
             }
             w->hand.cb = NULL; // prevent wait_runone from restarting handler
@@ -231,6 +232,8 @@ error:
      * fit.
      */
     zlist_destroy (&tmp);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 

@@ -282,10 +282,11 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     int size = 0;
     int incomplete = 0;
     int dirty = 0;
+    int saved_errno;
     int rc = -1;
 
     if (!(keys = zhash_keys (cache->zh))) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto cleanup;
     }
     while ((ref = zlist_pop (keys))) {
@@ -295,7 +296,7 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
             char *s = json_dumps (hp->o, JSON_ENCODE_ANY);
             int obj_size;
             if (!s) {
-                errno = ENOMEM;
+                saved_errno = ENOMEM;
                 goto cleanup;
             }
             obj_size = strlen (s);
@@ -317,6 +318,8 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     rc = 0;
 cleanup:
     zlist_destroy (&keys);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 

@@ -61,24 +61,25 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
 {
     fence_t *f;
     json_t *s = NULL;
+    int saved_errno;
 
     if (!(f = calloc (1, sizeof (*f)))
         || !(f->ops = json_array ())
         || !(f->names = json_array ())
         || !(f->requests = zlist_new ())) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto error;
     }
     f->nprocs = nprocs;
     f->flags = flags;
     if (name) {
         if (!(s = json_string (name))) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
         if (json_array_append_new (f->names, s) < 0) {
             json_decref (s);
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
     }
@@ -86,6 +87,7 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     return f;
 error:
     fence_destroy (f);
+    errno = saved_errno;
     return NULL;
 }
 
@@ -164,21 +166,21 @@ int fence_merge (fence_t *dest, fence_t *src)
 {
     json_t *names = NULL;
     json_t *ops = NULL;
-    int i, len;
+    int i, len, saved_errno;
 
     if ((dest->flags & FLUX_KVS_NO_MERGE) || (src->flags & FLUX_KVS_NO_MERGE))
         return 0;
 
     if ((len = json_array_size (src->names))) {
         if (!(names = json_copy (dest->names))) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
         for (i = 0; i < len; i++) {
             json_t *name;
             if ((name = json_array_get (src->names, i))) {
                 if (json_array_append (names, name) < 0) {
-                    errno = ENOMEM;
+                    saved_errno = ENOMEM;
                     goto error;
                 }
             }
@@ -186,14 +188,14 @@ int fence_merge (fence_t *dest, fence_t *src)
     }
     if ((len = json_array_size (src->ops))) {
         if (!(ops = json_copy (dest->ops))) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
         for (i = 0; i < len; i++) {
             json_t *op;
             if ((op = json_array_get (src->ops, i))) {
                 if (json_array_append (ops, op) < 0) {
-                    errno = ENOMEM;
+                    saved_errno = ENOMEM;
                     goto error;
                 }
             }
@@ -213,5 +215,6 @@ int fence_merge (fence_t *dest, fence_t *src)
 error:
     json_decref (names);
     json_decref (ops);
+    errno = saved_errno;
     return -1;
 }

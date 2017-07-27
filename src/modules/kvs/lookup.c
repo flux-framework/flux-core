@@ -103,9 +103,10 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
 {
     char *next, *current;
     zlist_t *pathcomps = NULL;
+    int saved_errno;
 
     if (!(pathcomps = zlist_new ())) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto error;
     }
 
@@ -118,7 +119,7 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
         *next++ = '\0';
 
         if (zlist_append (pathcomps, current) < 0) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
 
@@ -126,7 +127,7 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
     }
 
     if (zlist_append (pathcomps, current) < 0) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto error;
     }
 
@@ -134,6 +135,7 @@ static zlist_t *walk_pathcomps_zlist_create (walk_level_t *wl)
 
  error:
     zlist_destroy (&pathcomps);
+    errno = saved_errno;
     return NULL;
 }
 
@@ -152,24 +154,28 @@ static walk_level_t *walk_level_create (const char *path,
                                         int depth)
 {
     walk_level_t *wl = calloc (1, sizeof (*wl));
+    int saved_errno;
 
     if (!wl) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto error;
     }
     if (!(wl->path_copy = strdup (path))) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto error;
     }
     wl->depth = depth;
     wl->dirent = root_dirent;
-    if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl)))
+    if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl))) {
+        saved_errno = errno;
         goto error;
+    }
 
     return wl;
 
  error:
     walk_level_destroy (wl);
+    errno = saved_errno;
     return NULL;
 }
 
@@ -319,6 +325,7 @@ lookup_t *lookup_create (struct cache *cache,
                          int flags)
 {
     lookup_t *lh = NULL;
+    int saved_errno;
 
     if (!cache || !root_dir || !path) {
         errno = EINVAL;
@@ -326,7 +333,7 @@ lookup_t *lookup_create (struct cache *cache,
     }
 
     if (!(lh = calloc (1, sizeof (*lh)))) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto cleanup;
     }
 
@@ -336,12 +343,12 @@ lookup_t *lookup_create (struct cache *cache,
     /* must duplicate these strings, user may not keep pointer
      * alive */
     if (!(lh->root_dir = strdup (root_dir))) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto cleanup;
     }
     if (root_ref) {
         if (!(lh->root_ref_copy = strdup (root_ref))) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto cleanup;
         }
         lh->root_ref = lh->root_ref_copy;
@@ -351,7 +358,7 @@ lookup_t *lookup_create (struct cache *cache,
         lh->root_ref = lh->root_dir;
     }
     if (!(lh->path = strdup (path))) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto cleanup;
     }
     lh->flags = flags;
@@ -362,17 +369,21 @@ lookup_t *lookup_create (struct cache *cache,
     lh->missing_ref = NULL;
     lh->errnum = 0;
 
-    if (!(lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref)))
+    if (!(lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref))) {
+        saved_errno = errno;
         goto cleanup;
+    }
 
     if (!(lh->levels = zlist_new ())) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto cleanup;
     }
 
     /* first depth is level 0 */
-    if (!walk_levels_push (lh, lh->path, 0))
+    if (!walk_levels_push (lh, lh->path, 0)) {
+        saved_errno = errno;
         goto cleanup;
+    }
 
     lh->wdirent = NULL;
     lh->state = LOOKUP_STATE_INIT;
@@ -381,6 +392,7 @@ lookup_t *lookup_create (struct cache *cache,
 
  cleanup:
     lookup_destroy (lh);
+    errno = saved_errno;
     return NULL;
 }
 
