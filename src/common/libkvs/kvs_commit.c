@@ -37,27 +37,24 @@
 flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                int nprocs, flux_kvs_txn_t *txn)
 {
-    flux_kvs_txn_t *empty_txn = NULL;
-    flux_future_t *f = NULL;
-    json_t *ops;
-    int saved_errno;
-
-    if (!txn && !(txn = empty_txn = flux_kvs_txn_create ()))
-        goto done;
-    if (txn_get (txn, TXN_GET_ALL, &ops) < 0)
-        goto done;
-    if (!(f = flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
-                             "{s:s s:i s:i s:O}",
-                             "name", name,
-                             "nprocs", nprocs,
-                             "flags", flags,
-                             "ops", ops)))
-        goto done;
-done:
-    saved_errno = errno;
-    flux_kvs_txn_destroy (empty_txn);
-    errno = saved_errno;
-    return f;
+    if (txn) {
+        json_t *ops;
+        if (txn_get (txn, TXN_GET_ALL, &ops) < 0)
+            return NULL;
+        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+                                 "{s:s s:i s:i s:O}",
+                                 "name", name,
+                                 "nprocs", nprocs,
+                                 "flags", flags,
+                                 "ops", ops);
+    } else {
+        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+                                 "{s:s s:i s:i s:[]}",
+                                 "name", name,
+                                 "nprocs", nprocs,
+                                 "flags", flags,
+                                 "ops");
+    }
 }
 
 flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
