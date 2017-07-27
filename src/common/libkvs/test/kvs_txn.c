@@ -3,6 +3,7 @@
 #endif
 
 #include <jansson.h>
+#include <string.h>
 
 #include "kvs_txn.h"
 #include "kvs_txn_private.h"

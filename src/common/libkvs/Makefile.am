@@ -19,6 +19,7 @@ libkvs_la_SOURCES = \
 	kvs_watch.c \
 	jansson_dirent.c \
 	jansson_dirent.h \
+	kvs_commit.c \
 	kvs_txn.c \
 	kvs_txn_private.h
 
@@ -28,7 +29,8 @@ fluxcoreinclude_HEADERS = \
 	kvs_dir.h \
 	kvs_watch.h \
 	kvs_classic.h \
-	kvs_txn.h
+	kvs_txn.h \
+	kvs_commit.h
 
 TESTS = \
 	test_jansson_dirent.t \

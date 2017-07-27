@@ -26,13 +26,11 @@
 #include "config.h"
 #endif
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
+#include <string.h>
 
 #include "kvs_txn_private.h"
 #include "jansson_dirent.h"
-
-#include "src/common/libutil/blobref.h"
 
 struct flux_kvs_txn {
     json_t *ops;
@@ -275,7 +273,7 @@ error:
     return -1;
 }
 
-/* for unit tests
+/* accessors for KVS internals and unit tests
  */
 int txn_get (flux_kvs_txn_t *txn, int request, void *arg)
 {
@@ -300,48 +298,6 @@ int txn_get (flux_kvs_txn_t *txn, int request, void *arg)
             return -1;
     }
     return 0;
-}
-
-flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
-                               int nprocs, flux_kvs_txn_t *txn)
-{
-    flux_kvs_txn_t *empty_txn = NULL;
-    flux_future_t *f = NULL;
-    int saved_errno;
-
-    if (!txn && !(txn = empty_txn = flux_kvs_txn_create ()))
-        goto done;
-    if (!(f = flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
-                             "{s:s s:i s:i s:O}",
-                             "name", name,
-                             "nprocs", nprocs,
-                             "flags", flags,
-                             "ops", txn->ops)))
-        goto done;
-done:
-    saved_errno = errno;
-    flux_kvs_txn_destroy (empty_txn);
-    errno = saved_errno;
-    return f;
-}
-
-flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
-{
-    zuuid_t *uuid;
-    flux_future_t *f = NULL;
-    int saved_errno;
-
-    if (!(uuid = zuuid_new ())) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if (!(f = flux_kvs_fence (h, flags, zuuid_str (uuid), 1, txn)))
-        goto done;
-done:
-    saved_errno = errno;
-    zuuid_destroy (&uuid);
-    errno = saved_errno;
-    return f;
 }
 
 /*
