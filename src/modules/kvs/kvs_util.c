@@ -77,13 +77,16 @@ int kvs_util_json_encoded_size (json_t *o, size_t *size)
 
 int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 {
-    char *s;
-    int rc;
+    char *s = NULL;
+    int rc = -1;
 
     if (!(s = kvs_util_json_dumps (o)))
-        return -1;
-    rc = blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
-                       ref, sizeof (href_t));
+        goto error;
+    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+                      ref, sizeof (href_t)) < 0)
+        goto error;
+    rc = 0;
+error:
     free (s);
     return rc;
 }

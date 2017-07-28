@@ -82,7 +82,7 @@ bool cache_entry_get_dirty (struct cache_entry *hp)
     return (hp && hp->o && hp->dirty);
 }
 
-void cache_entry_set_dirty (struct cache_entry *hp, bool val)
+int cache_entry_set_dirty (struct cache_entry *hp, bool val)
 {
     if (hp && hp->o) {
         if ((val && hp->dirty) || (!val && !hp->dirty))
@@ -91,10 +91,16 @@ void cache_entry_set_dirty (struct cache_entry *hp, bool val)
             hp->dirty = 1;
         else if (!val && hp->dirty) {
             hp->dirty = 0;
-            if (hp->waitlist_notdirty)
-                wait_runqueue (hp->waitlist_notdirty);
+            if (hp->waitlist_notdirty) {
+                if (wait_runqueue (hp->waitlist_notdirty) < 0) {
+                    /* set back dirty bit to orig */
+                    hp->dirty = 1;
+                    return -1;
+                }
+            }
         }
     }
+    return 0;
 }
 
 int cache_entry_clear_dirty (struct cache_entry *hp)
@@ -109,6 +115,16 @@ int cache_entry_clear_dirty (struct cache_entry *hp)
     return -1;
 }
 
+int cache_entry_force_clear_dirty (struct cache_entry *hp)
+{
+    if (hp && hp->o) {
+        if (hp->dirty)
+            hp->dirty = 0;
+        return hp->dirty ? 1 : 0;
+    }
+    return -1;
+}
+
 json_t *cache_entry_get_json (struct cache_entry *hp)
 {
     if (!hp || !hp->o)
@@ -116,20 +132,26 @@ json_t *cache_entry_get_json (struct cache_entry *hp)
     return hp->o;
 }
 
-void cache_entry_set_json (struct cache_entry *hp, json_t *o)
+int cache_entry_set_json (struct cache_entry *hp, json_t *o)
 {
     if (hp) {
         if ((o && hp->o) || (!o && !hp->o)) {
             json_decref (o); /* no-op, 'o' is assumed identical to hp->o */
         } else if (o && !hp->o) {
             hp->o = o;
-            if (hp->waitlist_valid)
-                wait_runqueue (hp->waitlist_valid);
+            if (hp->waitlist_valid) {
+                if (wait_runqueue (hp->waitlist_valid) < 0) {
+                    /* set back to orig */
+                    hp->o = NULL;
+                    return -1;
+                }
+            }
         } else if (!o && hp->o) {
             json_decref (hp->o);
             hp->o = NULL;
         }
     }
+    return 0;
 }
 
 void cache_entry_destroy (void *arg)
@@ -260,10 +282,11 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     int size = 0;
     int incomplete = 0;
     int dirty = 0;
+    int saved_errno;
     int rc = -1;
 
     if (!(keys = zhash_keys (cache->zh))) {
-        errno = ENOMEM;
+        saved_errno = ENOMEM;
         goto cleanup;
     }
     while ((ref = zlist_pop (keys))) {
@@ -273,7 +296,7 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
             char *s = json_dumps (hp->o, JSON_ENCODE_ANY);
             int obj_size;
             if (!s) {
-                errno = ENOMEM;
+                saved_errno = ENOMEM;
                 goto cleanup;
             }
             obj_size = strlen (s);
@@ -295,6 +318,8 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     rc = 0;
 cleanup:
     zlist_destroy (&keys);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 

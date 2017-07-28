@@ -108,16 +108,20 @@ static kvs_ctx_t *getctx (flux_t *h)
 {
     kvs_ctx_t *ctx = (kvs_ctx_t *)flux_aux_get (h, "kvssrv");
     flux_reactor_t *r;
+    int saved_errno;
 
     if (!ctx) {
         if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
         ctx->magic = KVS_MAGIC;
-        if (!(r = flux_get_reactor (h)))
+        if (!(r = flux_get_reactor (h))) {
+            saved_errno = errno;
             goto error;
+        }
         if (!(ctx->hash_name = flux_attr_get (h, "content.hash", NULL))) {
+            saved_errno = errno;
             flux_log_error (h, "content.hash");
             goto error;
         }
@@ -125,18 +129,30 @@ static kvs_ctx_t *getctx (flux_t *h)
         ctx->watchlist = wait_queue_create ();
         ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, ctx);
         if (!ctx->cache || !ctx->watchlist || !ctx->cm) {
-            errno = ENOMEM;
+            saved_errno = ENOMEM;
             goto error;
         }
         ctx->h = h;
-        if (flux_get_rank (h, &ctx->rank) < 0)
+        if (flux_get_rank (h, &ctx->rank) < 0) {
+            saved_errno = errno;
             goto error;
+        }
         if (ctx->rank == 0) {
             ctx->prep_w = flux_prepare_watcher_create (r, commit_prep_cb, ctx);
-            ctx->check_w = flux_check_watcher_create (r, commit_check_cb, ctx);
-            ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
-            if (!ctx->prep_w || !ctx->check_w || !ctx->idle_w)
+            if (!ctx->prep_w) {
+                saved_errno = errno;
                 goto error;
+            }
+            ctx->check_w = flux_check_watcher_create (r, commit_check_cb, ctx);
+            if (!ctx->check_w) {
+                saved_errno = errno;
+                goto error;
+            }
+            ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
+            if (!ctx->idle_w) {
+                saved_errno = errno;
+                goto error;
+            }
             flux_watcher_start (ctx->prep_w);
             flux_watcher_start (ctx->check_w);
         }
@@ -146,10 +162,11 @@ static kvs_ctx_t *getctx (flux_t *h)
     return ctx;
 error:
     freectx (ctx);
+    errno = saved_errno;
     return NULL;
 }
 
-static void content_load_completion (flux_future_t *f, void *arg)
+static int content_load_get (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *o;
@@ -157,14 +174,16 @@ static void content_load_completion (flux_future_t *f, void *arg)
     int size;
     const char *blobref;
     struct cache_entry *hp;
+    int saved_errno, rc = -1;
 
     if (flux_rpc_get_raw (f, &data, &size) < 0) {
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
         goto done;
     }
     blobref = flux_future_aux_get (f, "ref");
     if (!(o = json_loads ((char *)data, JSON_DECODE_ANY, NULL))) {
-        errno = EPROTO;
+        saved_errno = EPROTO;
         flux_log_error (ctx->h, "%s: json_loads", __FUNCTION__);
         goto done;
     }
@@ -173,11 +192,40 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * b/c it is not yet valid.  But check and log incase there is
      * logic error dealng with error paths using cache_remove_entry().
      */
-    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+        saved_errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
-    cache_entry_set_json (hp, o);
+        goto done;
+    }
+
+    /* This is a pretty terrible error case, where we've loaded an
+     * object from the content store, but can't put it in the cache.
+     *
+     * If there was a waiter on this cache entry waiting for it to be
+     * valid, the load() will ultimately hang.  The caller will
+     * timeout or eventually give up, so the KVS can continue along
+     * its merry way.  So we just log this error.
+     *
+     * If this is the result of a synchronous call to load(), there
+     * should be no waiters on this cache entry.  load() will handle
+     * this error scenario appropriately.
+     */
+    if (cache_entry_set_json (hp, o) < 0) {
+        saved_errno = errno;
+        flux_log_error (ctx->h, "%s: cache_entry_set_json", __FUNCTION__);
+        goto done;
+    }
+    rc = 0;
 done:
     flux_future_destroy (f);
+    if (rc < 0)
+        errno = saved_errno;
+    return rc;
+}
+
+static void content_load_completion (flux_future_t *f, void *arg)
+{
+    (void)content_load_get (f, arg);
 }
 
 /* If now is true, perform the load rpc synchronously;
@@ -187,30 +235,36 @@ static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now
 {
     flux_future_t *f = NULL;
     char *refcpy;
+    int saved_errno;
 
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     if (!(f = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
-        goto error;
+        return -1;
     if (!(refcpy = strdup (ref))) {
         flux_future_destroy (f);
         errno = ENOMEM;
-        goto error;
+        return -1;
     }
     if (flux_future_aux_set (f, "ref", refcpy, free) < 0) {
+        saved_errno = errno;
         free (refcpy);
         flux_future_destroy (f);
-        goto error;
+        errno = saved_errno;
+        return -1;
     }
     if (now) {
-        content_load_completion (f, ctx);
+        if (content_load_get (f, ctx) < 0) {
+            flux_log_error (ctx->h, "%s: content_load_get", __FUNCTION__);
+            return -1;
+        }
     } else if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
+        saved_errno = errno;
         flux_future_destroy (f);
-        goto error;
+        errno = saved_errno;
+        return -1;
     }
     return 0;
-error:
-    return -1;
 }
 
 /* Return 0 on success, -1 on error.  Set stall variable appropriately */
@@ -218,6 +272,7 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
                  bool *stall)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
+    int saved_errno, ret;
 
     /* Create an incomplete hash entry if none found.
      */
@@ -228,10 +283,13 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
         }
         cache_insert (ctx->cache, ref, hp);
         if (content_load_request_send (ctx, ref, wait ? false : true) < 0) {
+            saved_errno = errno;
             flux_log_error (ctx->h, "%s: content_load_request_send",
                             __FUNCTION__);
             /* cache entry just created, should always work */
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
+            errno = saved_errno;
             return -1;
         }
         ctx->faults++;
@@ -240,6 +298,11 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
      * arrange to stall caller if wait_t was provided.
      */
     if (!cache_entry_get_valid (hp)) {
+        if (!wait) {
+            flux_log (ctx->h, LOG_ERR, "synchronous load(), invalid cache entry");
+            errno = ENODATA; /* better errno than this? */
+            return -1;
+        }
         if (cache_entry_wait_valid (hp, wait) < 0) {
             /* no cleanup in this path, if an rpc was sent, it will
              * complete, but not call a waiter on this load.  Return
@@ -267,13 +330,15 @@ static int content_store_get (flux_future_t *f, void *arg)
     const char *blobref;
     int blobref_size;
     int rc = -1;
+    int saved_errno, ret;
 
     if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
         goto done;
     }
     if (!blobref || blobref[blobref_size - 1] != '\0') {
-        errno = EPROTO;
+        saved_errno = EPROTO;
         flux_log_error (ctx->h, "%s: invalid blobref", __FUNCTION__);
         goto done;
     }
@@ -283,12 +348,41 @@ static int content_store_get (flux_future_t *f, void *arg)
      * b/c it was dirty.  But check and log incase there is logic
      * error dealng with error paths using cache_remove_entry().
      */
-    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch)))
+    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+        saved_errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
-    cache_entry_set_dirty (hp, false);
+        goto done;
+    }
+
+    /* This is a pretty terrible error case, where we've received
+     * verification that a dirty cache entry has been flushed to the
+     * content store, but we can't notify waiters that it has been
+     * flushed.  We also can't notify waiters of an error occurring.
+     *
+     * If a commit has hung, the most likely scenario is that that
+     * commiter will timeout or give up at some point.  setroot() will
+     * never happen, so the entire commit has failed and no
+     * consistency issue will occur.
+     *
+     * We'll mark the cache entry not dirty, so that memory can be
+     * reclaimed at a later time.  But we can't do that with
+     * cache_entry_clear_dirty() b/c that will only clear dirty for
+     * entries without waiters.  So in this rare case, we must call
+     * cache_entry_force_clear_dirty().
+     */
+    if (cache_entry_set_dirty (hp, false) < 0) {
+        saved_errno = errno;
+        flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
+                        __FUNCTION__);
+        ret = cache_entry_force_clear_dirty (hp);
+        assert (ret == 0);
+        goto done;
+    }
     rc = 0;
 done:
     flux_future_destroy (f);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 
@@ -303,12 +397,10 @@ static int content_store_request_send (kvs_ctx_t *ctx, json_t *val,
     flux_future_t *f;
     char *data = NULL;
     int size;
-    int rc = -1;
+    int saved_errno, rc = -1;
 
-    if (!(data = kvs_util_json_dumps (val))) {
-        errno = ENOMEM;
+    if (!(data = kvs_util_json_dumps (val)))
         goto error;
-    }
 
     size = strlen (data) + 1;
 
@@ -319,7 +411,9 @@ static int content_store_request_send (kvs_ctx_t *ctx, json_t *val,
         if (content_store_get (f, ctx) < 0)
             goto error;
     } else if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
+        saved_errno = errno;
         flux_future_destroy (f);
+        errno = saved_errno;
         goto error;
     }
 
@@ -335,7 +429,11 @@ static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
         assert (strlen (rootdir) < sizeof (href_t));
         strcpy (ctx->rootdir, rootdir);
         ctx->rootseq = rootseq;
-        wait_runqueue (ctx->watchlist);
+        /* log error on wait_runqueue(), don't error out.  watchers
+         * may miss value change, but will never get older one.
+         * Maintains consistency model */
+        if (wait_runqueue (ctx->watchlist) < 0)
+            flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
 }
@@ -352,6 +450,7 @@ static int commit_load_cb (commit_t *c, const char *ref, void *data)
     bool stall;
 
     if (load (cbd->ctx, ref, cbd->wait, NULL, &stall) < 0) {
+        cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: load", __FUNCTION__);
         return -1;
     }
@@ -518,8 +617,13 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_watcher_stop (ctx->idle_w);
 
     if ((c = commit_mgr_get_ready_commit (ctx->cm))) {
-        if (ctx->commit_merge)
-            commit_mgr_merge_ready_commits (ctx->cm);
+        if (ctx->commit_merge) {
+            /* if merge fails, set errnum in commit_t, let
+             * commit_apply() handle error handling.
+             */
+            if (commit_mgr_merge_ready_commits (ctx->cm) < 0)
+                commit_set_aux_errnum (c, errno);
+        }
         commit_apply (c);
     }
 }
@@ -576,7 +680,11 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
     }
     /* "touch" objects involved in watched keys */
     if (ctx->epoch - ctx->watchlist_lastrun_epoch > max_lastuse_age) {
-        wait_runqueue (ctx->watchlist);
+        /* log error on wait_runqueue(), don't error out.  watchers
+         * may miss value change, but will never get older one.
+         * Maintains consistency model */
+        if (wait_runqueue (ctx->watchlist) < 0)
+            flux_log_error (h, "%s: wait_runqueue", __FUNCTION__);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
     /* "touch" root */
@@ -600,6 +708,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_t *root_ref = NULL;
     wait_t *wait = NULL;
     int rc = -1;
+    int ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
@@ -635,14 +744,17 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   flags)))
             goto done;
 
-        assert (lookup_set_aux_data (lh, ctx) == 0);
+        ret = lookup_set_aux_data (lh, ctx);
+        assert (ret == 0);
     }
     else {
         lh = arg;
 
-        assert ((ctx = lookup_get_aux_data (lh)));
+        ctx = lookup_get_aux_data (lh);
+        assert (ctx);
 
-        assert (lookup_set_current_epoch (lh, ctx->epoch) == 0);
+        ret = lookup_set_current_epoch (lh, ctx->epoch);
+        assert (ret == 0);
     }
 
     if (!lookup (lh)) {
@@ -715,6 +827,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     bool isreplay = false;
     bool out = false;
     int rc = -1;
+    int saved_errno, ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
@@ -736,14 +849,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   flags)))
             goto done;
 
-        assert (lookup_set_aux_data (lh, ctx) == 0);
+        ret = lookup_set_aux_data (lh, ctx);
+        assert (ret == 0);
     }
     else {
         lh = arg;
 
-        assert ((ctx = lookup_get_aux_data (lh)));
+        ctx = lookup_get_aux_data (lh);
+        assert (ctx);
 
-        assert (lookup_set_current_epoch (lh, ctx->epoch) == 0);
+        ret = lookup_set_current_epoch (lh, ctx->epoch);
+        assert (ret == 0);
 
         isreplay = true;
     }
@@ -815,7 +931,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                                  watch_request_cb, ctx)))
             goto done;
         if (wait_addqueue (ctx->watchlist, watcher) < 0) {
+            saved_errno = errno;
             wait_destroy (watcher);
+            errno = saved_errno;
             goto done;
         }
     }
@@ -1004,7 +1122,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
 {
     kvs_ctx_t *ctx = arg;
     const char *name;
-    int nprocs, flags;
+    int saved_errno, nprocs, flags;
     json_t *ops = NULL;
     fence_t *f;
 
@@ -1022,8 +1140,10 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
             goto error;
         }
         if (commit_mgr_add_fence (ctx->cm, f) < 0) {
+            saved_errno = errno;
             flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
+            errno = saved_errno;
             goto error;
         }
     }
@@ -1072,7 +1192,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
                              const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    int rootseq;
+    int saved_errno, rootseq;
     wait_t *wait = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:i }",
@@ -1084,7 +1204,9 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
             goto error;
         if (wait_addqueue (ctx->watchlist, wait) < 0) {
+            saved_errno = errno;
             wait_destroy (wait);
+            errno = saved_errno;
             goto error;
         }
         return; /* stall */
@@ -1127,24 +1249,29 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
 {
     flux_future_t *f;
     const char *ref;
-    int rc = -1;
+    int saved_errno, rc = -1;
 
-    if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0)))
+    if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0))) {
+        saved_errno = errno;
         goto done;
+    }
     if (flux_rpc_get_unpack (f, "{ s:i s:s }",
                              "rootseq", rootseq,
                              "rootdir", &ref) < 0) {
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto done;
     }
     if (strlen (ref) > sizeof (href_t) - 1) {
-        errno = EPROTO;
+        saved_errno = EPROTO;
         goto done;
     }
     strcpy (rootdir, ref);
     rc = 0;
 done:
     flux_future_destroy (f);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 
@@ -1167,21 +1294,28 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
 static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum)
 {
     flux_msg_t *msg = NULL;
-    int rc = -1;
+    int saved_errno, rc = -1;
 
     if (!(msg = flux_event_pack ("kvs.error", "{ s:O s:i }",
                                  "names", names,
                                  "errnum", errnum))) {
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
     }
-    if (flux_msg_set_private (msg) < 0)
+    if (flux_msg_set_private (msg) < 0) {
+        saved_errno = errno;
         goto done;
-    if (flux_send (ctx->h, msg, 0) < 0)
+    }
+    if (flux_send (ctx->h, msg, 0) < 0) {
+        saved_errno = errno;
         goto done;
+    }
     rc = 0;
 done:
     flux_msg_destroy (msg);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 
@@ -1215,19 +1349,34 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
     if (!json_is_null (root)) {
         struct cache_entry *hp;
         if ((hp = cache_lookup (ctx->cache, rootdir, ctx->epoch))) {
-            if (!cache_entry_get_valid (hp))
-                cache_entry_set_json (hp, json_incref (root));
-            if (cache_entry_get_dirty (hp))
-                cache_entry_set_dirty (hp, false);
+            if (!cache_entry_get_valid (hp)) {
+                /* On error, bad that we can't cache new root, but
+                 * no consistency issue by not caching.  We will still
+                 * set new root below via setroot().
+                 */
+                if (cache_entry_set_json (hp, json_incref (root)) < 0) {
+                    flux_log_error (ctx->h, "%s: cache_entry_set_json",
+                                    __FUNCTION__);
+                    json_decref (root);
+                }
+            }
+            if (cache_entry_get_dirty (hp)) {
+                /* If it was dirty, an RPC is already in process, so
+                 * let that RPC handle any error handling with this
+                 * cache entry, we just log this error.
+                 */
+                if (cache_entry_set_dirty (hp, false) < 0)
+                    flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
+                                    __FUNCTION__);
+            }
         } else {
-            /* This is a pretty terrible situation, as we've lost a
-             * root update.  But we won't assert here, as later
-             * setroot event updates may succeed and put the root back
-             * to the correct value.
+            /* On error, bad that we can't cache new root, but
+             * no consistency issue by not caching.  We will still
+             * set new root below via setroot().
              */
             if (!(hp = cache_entry_create (json_incref (root)))) {
-                json_decref (root);
                 flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+                json_decref (root);
                 return;
             }
             cache_insert (ctx->cache, rootdir, hp);
@@ -1241,11 +1390,12 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     json_t *root = NULL;
     json_t *nullobj = NULL;
     flux_msg_t *msg = NULL;
-    int rc = -1;
+    int saved_errno, rc = -1;
 
     if (event_includes_rootdir) {
         bool stall;
         if (load (ctx, ctx->rootdir, NULL, &root, &stall) < 0) {
+            saved_errno = errno;
             flux_log_error (ctx->h, "%s: load", __FUNCTION__);
             goto done;
         }
@@ -1253,6 +1403,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     }
     else {
         if (!(nullobj = json_null ())) {
+            saved_errno = errno;
             flux_log_error (ctx->h, "%s: json_null", __FUNCTION__);
             goto done;
         }
@@ -1263,17 +1414,24 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
                                  "rootdir", ctx->rootdir,
                                  "names", names,
                                  "rootdirval", root))) {
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
     }
-    if (flux_msg_set_private (msg) < 0)
+    if (flux_msg_set_private (msg) < 0) {
+        saved_errno = errno;
         goto done;
-    if (flux_send (ctx->h, msg, 0) < 0)
+    }
+    if (flux_send (ctx->h, msg, 0) < 0) {
+        saved_errno = errno;
         goto done;
+    }
     rc = 0;
 done:
     flux_msg_destroy (msg);
     json_decref (nullobj);
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 
@@ -1429,40 +1587,62 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 {
     struct cache_entry *hp;
     int rc = -1;
+    int saved_errno, ret;
 
     if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: kvs_util_json_hash",
                         __FUNCTION__);
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         if (!(hp = cache_entry_create (NULL))) {
+            saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto decref_done;
         }
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
-        cache_entry_set_json (hp, o);
-        cache_entry_set_dirty (hp, true);
+        if (cache_entry_set_json (hp, o) < 0) {
+            saved_errno = errno;
+            flux_log_error (ctx->h, "%s: cache_entry_set_json",
+                            __FUNCTION__);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
+            goto decref_done;
+        }
+        if (cache_entry_set_dirty (hp, true) < 0) {
+            /* remove entry will decref object */
+            saved_errno = errno;
+            flux_log_error (ctx->h, "%s: cache_entry_set_dirty", __FUNCTION__);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
+            goto done_error;
+        }
         if (content_store_request_send (ctx, o, true) < 0) {
             /* Must clean up, don't want cache entry to be assumed
              * valid.  Everything here is synchronous and w/o waiters,
              * so nothing should error here */
+            saved_errno = errno;
             flux_log_error (ctx->h, "%s: content_store_request_send",
                             __FUNCTION__);
-            assert (cache_entry_clear_dirty (hp) == 0);
-            assert (cache_remove_entry (ctx->cache, ref) == 1);
-            goto done;
+            ret = cache_entry_clear_dirty (hp);
+            assert (ret == 0);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
+            goto done_error;
         }
     } else
         json_decref (o);
     rc = 0;
-done:
     return rc;
 
 decref_done:
     json_decref (o);
+done_error:
+    if (rc < 0)
+        errno = saved_errno;
     return rc;
 }
 

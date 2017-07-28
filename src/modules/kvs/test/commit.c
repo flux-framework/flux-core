@@ -221,7 +221,8 @@ void commit_mgr_merge_tests (void)
     create_ready_commit (cm, "fence1", "key1", "1", 0);
     create_ready_commit (cm, "fence2", "key2", "2", 0);
 
-    commit_mgr_merge_ready_commits (cm);
+    ok (commit_mgr_merge_ready_commits (cm) == 0,
+        "commit_mgr_merge_ready_commits success");
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -247,7 +248,8 @@ void commit_mgr_merge_tests (void)
     create_ready_commit (cm, "fence1", "key1", "1", FLUX_KVS_NO_MERGE);
     create_ready_commit (cm, "fence2", "key2", "2", 0);
 
-    commit_mgr_merge_ready_commits (cm);
+    ok (commit_mgr_merge_ready_commits (cm) == 0,
+        "commit_mgr_merge_ready_commits success");
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -271,7 +273,8 @@ void commit_mgr_merge_tests (void)
     create_ready_commit (cm, "fence1", "key1", "1", 0);
     create_ready_commit (cm, "fence2", "key2", "2", FLUX_KVS_NO_MERGE);
 
-    commit_mgr_merge_ready_commits (cm);
+    ok (commit_mgr_merge_ready_commits (cm) == 0,
+        "commit_mgr_merge_ready_commits success");
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -544,7 +547,8 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
     create_ready_commit (cm, "fence2", "bar.key2", "2", 0);
 
     /* merge ready commits */
-    commit_mgr_merge_ready_commits (cm);
+    ok (commit_mgr_merge_ready_commits (cm) == 0,
+        "commit_mgr_merge_ready_commits success");
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -913,7 +917,8 @@ void commit_process_error_callbacks_partway (void) {
     create_ready_commit (cm, "fence2", "dir.fileB", "53", 0);
 
     /* merge these commits */
-    commit_mgr_merge_ready_commits (cm);
+    ok (commit_mgr_merge_ready_commits (cm) == 0,
+        "commit_mgr_merge_ready_commits success");
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1555,7 +1560,8 @@ void commit_process_giant_dir (void) {
     create_ready_commit (cm, "fence3", "dir.fileval00D0", NULL, 0);
 
     /* merge these three commits */
-    commit_mgr_merge_ready_commits (cm);
+    ok (commit_mgr_merge_ready_commits (cm) == 0,
+        "commit_mgr_merge_ready_commits success");
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
