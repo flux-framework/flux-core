@@ -39,7 +39,8 @@ int cache_entry_set_dirty (struct cache_entry *hp, bool val);
  * success, -1 on error.
  *
  * cache_entry_force_clear_dirty() will clear the dirty bit no matter
- * what.  It should be only used in emergency error handling cases.
+ * what and destroy internal wait queue of dirty bit waiters.  It
+ * should be only used in emergency error handling cases.
  */
 int cache_entry_clear_dirty (struct cache_entry *hp);
 int cache_entry_force_clear_dirty (struct cache_entry *hp);

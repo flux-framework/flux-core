@@ -118,8 +118,13 @@ int cache_entry_clear_dirty (struct cache_entry *hp)
 int cache_entry_force_clear_dirty (struct cache_entry *hp)
 {
     if (hp && hp->o) {
-        if (hp->dirty)
+        if (hp->dirty) {
+            if (hp->waitlist_notdirty) {
+                wait_queue_destroy (hp->waitlist_notdirty);
+                hp->waitlist_notdirty = NULL;
+            }
             hp->dirty = 0;
+        }
         return hp->dirty ? 1 : 0;
     }
     return -1;
