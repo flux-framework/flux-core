@@ -127,6 +127,22 @@ int main (int argc, char *argv[])
         "cache entry set not dirty with one waiter");
     ok (count == 1,
         "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e1, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e1) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e1, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_force_clear_dirty (e1) == 0,
+        "cache_entry_clear_dirty returns 0 w/ waiter");
+    ok (cache_entry_get_dirty (e1) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 0,
+        "waiter callback not called on force clear dirty");
     cache_entry_destroy (e1); /* destroys o1 */
 
     /* Put entry in cache and test lookup, expire
