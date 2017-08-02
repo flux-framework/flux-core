@@ -106,7 +106,7 @@ void commit_mgr_basic_tests (void)
 
     ops = json_array ();
     ops_append (ops, "key1", "1");
- 
+
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
