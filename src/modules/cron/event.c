@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include "entry.h"
-#include "src/common/libutil/xzmalloc.h"
 
 /* event handler
  */
@@ -97,6 +96,20 @@ static void event_handler (flux_t *h, flux_msg_handler_t *w,
     cron_entry_schedule_task (e);
 }
 
+static void cron_event_destroy (void *arg)
+{
+    struct cron_event *ev = arg;
+    if (ev == NULL)
+        return;
+
+    if (ev->mh)
+        flux_msg_handler_destroy (ev->mh);
+    if (ev->h && ev->event)
+        (void) flux_event_unsubscribe (ev->h, ev->event);
+    free (ev->event);
+    free (ev);
+}
+
 static void *cron_event_create (flux_t *h, cron_entry_t *e, json_object *arg)
 {
     struct cron_event *ev;
@@ -116,6 +129,10 @@ static void *cron_event_create (flux_t *h, cron_entry_t *e, json_object *arg)
         after = 0;
     if (!Jget_double (arg, "min_interval", &min_interval))
         min_interval = 0.;
+    if ((ev = calloc (1, sizeof (*ev))) == NULL) {
+        flux_log_error (h, "cron event: calloc");
+        return (NULL);
+    }
 
     /* Call subscribe per cron entry. Multiple event subscriptions are
      *  allowed and each cron_event entry will have a corresponding
@@ -123,36 +140,31 @@ static void *cron_event_create (flux_t *h, cron_entry_t *e, json_object *arg)
      */
     if (flux_event_subscribe (h, event) < 0) {
         flux_log_error (h, "cron_event: subscribe");
-        return (NULL);
+        goto fail;
     }
-
-    ev = xzmalloc (sizeof (*ev));
     /* Save a copy of this handle for event unsubscribe at destroy */
     ev->h = h;
-    ev->event = xstrdup (event);
     ev->nth = nth;
     ev->after = after;
     ev->min_interval = min_interval;
     ev->counter = 0;
 
+    if ((ev->event = strdup (event)) == NULL) {
+        flux_log_error (h, "cron event: strdup");
+        goto fail;
+    }
+
     match.topic_glob = ev->event;
     ev->mh = flux_msg_handler_create (h, match, event_handler, (void *)e);
     if (!ev->mh) {
         flux_log_error (h, "cron_event: flux_msg_handler_create");
-        free (ev);
-        return (NULL);
+        goto fail;
     }
 
     return (ev);
-}
-
-static void cron_event_destroy (void *arg)
-{
-    struct cron_event *ev = arg;
-    flux_msg_handler_destroy (ev->mh);
-    (void) flux_event_unsubscribe (ev->h, ev->event);
-    free (ev->event);
-    free (ev);
+fail:
+    cron_event_destroy (ev);
+    return (NULL);
 }
 
 static void cron_event_start (void *arg)

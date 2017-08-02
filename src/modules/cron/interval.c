@@ -30,7 +30,6 @@
 
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "entry.h"
 
 struct cron_interval {
@@ -57,7 +56,10 @@ static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_object *arg)
     if (!(Jget_double (arg, "after", &after)))
         after = i;
 
-    iv = xzmalloc (sizeof (*iv));
+    if ((iv = calloc (1, sizeof (*iv))) == NULL) {
+        flux_log_error (h, "cron interval");
+        return NULL;
+    }
     iv->seconds = i;
     iv->after = after;
     iv->w = flux_timer_watcher_create (flux_get_reactor (h),

@@ -31,7 +31,6 @@
 #include <stdarg.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libsubprocess/zio.h"
@@ -88,13 +87,17 @@ void cron_task_destroy (cron_task_t *t)
 
 cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg)
 {
-    cron_task_t *t = xzmalloc (sizeof (*t));
-    memset (t, 0, sizeof (*t));
+    cron_task_t *t = calloc (1, sizeof (*t));
+    if (t == NULL)
+        return NULL;
+    if ((t->state = strdup ("Initialized")) == NULL) {
+        free (t);
+        return NULL;
+    }
     t->h = h;
     t->match = FLUX_MATCH_RESPONSE;
     t->completion_cb = cb;
     t->arg = arg;
-    t->state = xstrdup ("Initialized");
     clock_gettime (CLOCK_REALTIME, &t->createtime);
     t->timeout = 0.0;
     return (t);
@@ -126,7 +129,7 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
     va_start (ap, fmt);
     free (t->state);
     if ((rc = vasprintf (&t->state, fmt, ap) < 0))
-        t->state = xstrdup (fmt);
+        t->state = strdup (fmt);
     va_end (ap);
 }
 

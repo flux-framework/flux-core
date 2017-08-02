@@ -33,7 +33,6 @@
 
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cronodate.h"
 
 #include "entry.h"
@@ -54,10 +53,10 @@ void datetime_entry_destroy (struct datetime_entry *dt)
 
 struct datetime_entry * datetime_entry_create ()
 {
-    struct datetime_entry *dt = xzmalloc (sizeof (*dt));
-    dt->h = NULL;
-    dt->w = NULL;
-    dt->d = cronodate_create ();
+    struct datetime_entry *dt = calloc (1, sizeof (*dt));
+    if (dt) {
+        dt->d = cronodate_create ();
+    }
     return (dt);
 }
 

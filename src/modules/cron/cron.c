@@ -45,7 +45,6 @@
 #include <flux/core.h>
 #include <czmq.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
@@ -431,8 +430,11 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
         goto done;
     }
 
-    e = xzmalloc (sizeof (*e));
-    memset (e, 0, sizeof (*e));
+    saved_errno = ENOMEM;
+    if ((e = calloc (1, sizeof (*e))) == NULL) {
+        flux_log_error (h, "cron.create: Out of memory");
+        goto done;
+    }
 
     /* Allocate a new ID from this cron entry:
      */
@@ -445,8 +447,10 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
 
     e->ctx = ctx;
     e->stopped = 1;
-    e->name = xstrdup (name);
-    e->command = xstrdup (command);
+    if (!(e->name = strdup (name)) || !(e->command = strdup (command))) {
+        saved_errno = errno;
+        goto out_err;
+    }
     cron_stats_init (&e->stats);
 
     /* Get optional fields
@@ -485,7 +489,10 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
         saved_errno = ENOSYS; /* year,month,day,etc. not supported */
         goto out_err;
     }
-    e->typename = xstrdup (type);
+    if ((e->typename = strdup (type)) == NULL) {
+        saved_errno = errno;
+        goto out_err;
+    }
 
     if (!(e->data = e->ops.create (h, e, Jobj_get (in, "args")))) {
         saved_errno = errno;
@@ -542,7 +549,10 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
     flux_log (ctx->h, LOG_INFO,
         "synchronizing cron tasks to event %s", topic);
 
-    ctx->sync_event = xstrdup (topic);
+    if ((ctx->sync_event = strdup (topic)) == NULL) {
+        flux_log_error (ctx->h, "sync_event_init: strdup");
+        return (-1);
+    }
     match.topic_glob = ctx->sync_event;
     ctx->mh = flux_msg_handler_create (ctx->h, match,
                                        deferred_cb, (void *) ctx);
@@ -560,7 +570,11 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
 
 static cron_ctx_t * cron_ctx_create (flux_t *h)
 {
-    cron_ctx_t *ctx = xzmalloc (sizeof (*ctx));
+    cron_ctx_t *ctx = calloc (1, sizeof (*ctx));
+    if (ctx == NULL) {
+        flux_log_error (h, "cron_ctx_create");
+        goto error;
+    }
 
     ctx->sync_event = NULL;
     ctx->last_sync  = 0.0;
