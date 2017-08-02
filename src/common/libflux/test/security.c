@@ -469,9 +469,18 @@ void test_curve (void)
     unlink_recursive (path);
 }
 
+void alarm_callback (int arg)
+{
+    diag ("test timed out");
+    exit (1);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
+
+    signal (SIGALRM, alarm_callback);
+    alarm (30);
 
     test_ctor_dtor ();
     test_keygen ();

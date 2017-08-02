@@ -121,6 +121,8 @@ after_failure:
  - find . -name *.broker.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
  - src/test/backtrace-all.sh
  - cat config.log
+ # Issue #997 debugging
+ - cat src/common/libflux/test_reactor.log
 
 before_deploy:
   # Get anchor (formatted properly) and base URI for latest tag in NEWS file

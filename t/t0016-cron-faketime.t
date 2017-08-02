@@ -12,6 +12,7 @@ if test "$t" != "123456789" ; then
 fi
 
 SIZE=1
+export FLUX_TEST_DISABLE_TIMEOUT=t
 export LD_PRELOAD=libfaketimeMT.so.1
 export FAKETIME_NO_CACHE=1
 export FAKETIME_TIMESTAMP_FILE=$(pwd)/faketimerc

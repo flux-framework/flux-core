@@ -45,11 +45,18 @@ test_under_flux() {
     if test "$debug" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --debug"
     fi
+    if test "$chain_lint" = "t"; then
+        flags="${flags} --chain-lint"
+    fi
     if test -n "$logfile" -o -n "$FLUX_TESTS_LOGFILE" ; then
         flags="${flags} --logfile"
     fi
     if test -n "$SHARNESS_TEST_DIRECTORY"; then
         cd $SHARNESS_TEST_DIRECTORY
+    fi
+    timeout="-o -Sinit.rc2_timeout=300"
+    if test -n "$FLUX_TEST_DISABLE_TIMEOUT"; then
+        timeout=""
     fi
 
     if test "$personality" = "minimal"; then
@@ -67,7 +74,8 @@ test_under_flux() {
 
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
-      exec flux start --bootstrap=selfpmi --size=${size} ${quiet} "sh $0 ${flags}"
+      exec flux start --bootstrap=selfpmi --size=${size} ${quiet} ${timeout} \
+                     "sh $0 ${flags}"
 }
 
 mock_bootstrap_instance() {
@@ -99,4 +107,7 @@ if ! lua -e 'require "posix"'; then
     error "failed to find lua posix module in path"
 fi
 
+#  Some tests in flux don't work with --chain-lint, add a prereq for
+#   --no-chain-lint:
+test "$chain_lint" = "t" || test_set_prereq NO_CHAIN_LINT
 # vi: ts=4 sw=4 expandtab
