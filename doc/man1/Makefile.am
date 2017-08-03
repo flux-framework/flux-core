@@ -15,7 +15,6 @@ MAN1_FILES_PRIMARY = \
 	flux-module.1 \
 	flux-exec.1 \
 	flux-env.1 \
-	flux-list-instances.1 \
 	flux-ps.1 \
 	flux-getattr.1 \
 	flux-dmesg.1 \
