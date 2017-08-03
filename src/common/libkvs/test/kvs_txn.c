@@ -6,7 +6,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include "kvs_txn.h"
+#include "kvs.h"
 #include "kvs_txn_private.h"
 #include "treeobj.h"
 
@@ -19,6 +19,9 @@ void jdiag (json_t *o)
     free (tmp);
 }
 
+/* Decode a 'val' containing base64 encoded JSON.
+ * Extract a number, and compare it to 'expected'.
+ */
 int check_int_value (json_t *dirent, int expected)
 {
     char *data;
@@ -54,6 +57,9 @@ int check_int_value (json_t *dirent, int expected)
     return 0;
 }
 
+/* Decode a 'val' containing base64 encoded JSON.
+ * Extract a string, and compare it to 'expected'.
+ */
 int check_string_value (json_t *dirent, const char *expected)
 {
     char *data;
@@ -210,7 +216,75 @@ void basic (void)
         "8: NULL - end of transaction");
 
     flux_kvs_txn_destroy (txn);
+}
 
+void test_raw_values (void)
+{
+    flux_kvs_txn_t *txn;
+    char buf[13], *nbuf;
+    json_t *entry, *dirent;
+    const char *key;
+    int nlen;
+
+    memset (buf, 'c', sizeof (buf));
+
+    txn = flux_kvs_txn_create ();
+    ok (txn != NULL,
+        "flux_kvs_txn_create works");
+
+    /* Try some bad params
+     */
+    errno = 0;
+    ok (flux_kvs_txn_put_raw (txn, FLUX_KVS_TREEOBJ, "a.b.c",
+                              buf, sizeof (buf)) < 0
+        && errno == EINVAL,
+        "flux_kvs_txn_put_raw fails with EINVAL when fed TREEOBJ flag");
+    errno = 0;
+    ok (flux_kvs_txn_put_raw (txn, 0, NULL, buf, sizeof (buf)) < 0
+        && errno == EINVAL,
+        "flux_kvs_txn_put_raw fails with EINVAL when fed NULL key");
+
+    /* Put an empty buffer.
+     */
+    ok (flux_kvs_txn_put_raw (txn, 0, "a.a.a", NULL, 0) == 0,
+        "flux_kvs_txn_put_raw works on empty buffer");
+    /* Put some data
+     */
+    ok (flux_kvs_txn_put_raw (txn, 0, "a.b.c", buf, sizeof (buf)) == 0,
+        "flux_kvs_txn_put_raw works with data");
+    /* Get first.
+     */
+    ok (txn_get (txn, TXN_GET_FIRST, &entry) == 0 && entry != NULL,
+        "retreived 1st op from txn");
+    jdiag (entry);
+    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
+                                         "dirent", &dirent) == 0,
+        "decoded op to get dirent");
+    nbuf = buf;
+    nlen = sizeof (buf);
+    ok (treeobj_decode_val (dirent, (void **)&nbuf, &nlen) == 0,
+        "retrieved buffer from dirent");
+    ok (nlen == 0,
+        "and it is size of zero");
+    ok (nbuf == NULL,
+        "and buffer is NULL");
+
+    /* Get 2nd
+     */
+    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+        "retreived 2nd op from txn");
+    jdiag (entry);
+    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
+                                         "dirent", &dirent) == 0,
+        "decoded op to get dirent");
+    ok (treeobj_decode_val (dirent, (void **)&nbuf, &nlen) == 0,
+        "retrieved buffer from dirent");
+    ok (nlen == sizeof (buf),
+        "and it is the correct size");
+    ok (memcmp (nbuf, buf, nlen) == 0,
+        "and it is the correct content");
+    free (nbuf);
+    flux_kvs_txn_destroy (txn);
 }
 
 int main (int argc, char *argv[])
@@ -219,6 +293,7 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     basic ();
+    test_raw_values ();
 
     done_testing();
     return (0);
