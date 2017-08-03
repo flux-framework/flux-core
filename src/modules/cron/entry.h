@@ -80,7 +80,7 @@ struct cron_entry {
 
     unsigned int        stopped:1;          /* This entry is inactive        */
 
-    const char *           typename;        /* Name of this type             */
+    char *                 typename;        /* Name of this type             */
     struct cron_entry_ops  ops;             /* Type-specific operations      */
     void *                 data;            /* Entry type specific data      */
 

@@ -322,6 +322,7 @@ static void cron_entry_destroy (cron_entry_t *e)
 
     free (e->name);
     free (e->command);
+    free (e->typename);
 
     if (e->completed_tasks) {
         t = zlist_first (e->completed_tasks);
