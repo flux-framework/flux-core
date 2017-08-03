@@ -116,6 +116,16 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
         }
     }
     else {
+        json_t *test;
+
+        /* User must pass in valid json object str, otherwise they
+         * should use flux_kvs_txn_pack() or flux_kvs_txn_put_raw()
+         */
+        if (!(test = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+            errno = EINVAL;
+            goto done;
+        }
+        json_decref (test);
         if (!(dirent = treeobj_create_val (json_str, strlen (json_str) + 1)))
             goto error;
     }
