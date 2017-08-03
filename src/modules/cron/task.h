@@ -25,6 +25,7 @@
 #ifndef HAVE_CRON_TASK_H
 #define HAVE_CRON_TASK_H
 
+#include <jansson.h>
 #include <flux/core.h>
 
 /*  cron_task_t: async task handling for cron
@@ -94,7 +95,7 @@ int cron_task_status (cron_task_t *t);
 
 /*  return JSON representation of cron task `t`
  */
-json_object *cron_task_to_json (cron_task_t *t);
+json_t *cron_task_to_json (cron_task_t *t);
 
 #endif /* !HAVE_CRON_TASK_H */
 

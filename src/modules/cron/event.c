@@ -110,28 +110,28 @@ static void cron_event_destroy (void *arg)
     free (ev);
 }
 
-static void *cron_event_create (flux_t *h, cron_entry_t *e, json_object *arg)
+static void *cron_event_create (flux_t *h, cron_entry_t *e, json_t *arg)
 {
     struct cron_event *ev;
-    int nth;
-    int after;
-    double min_interval;
+    int nth = 0;
+    int after = 0;
+    double min_interval = 0.;
     const char *event;
     struct flux_match match = FLUX_MATCH_EVENT;
 
-    if (!(Jget_str (arg, "topic", &event))) {
+    if (json_unpack (arg, "{ s:s, s?i, s?i, s?F }",
+                          "topic", &event,
+                          "nth",   &nth,
+                          "after", &after,
+                          "min_interval", &min_interval) < 0) {
+        flux_log_error (h, "cron event: json_unpack");
         errno = EPROTO;
         return NULL;
     }
-    if (!Jget_int (arg, "nth", &nth))
-        nth = 0;
-    if (!Jget_int (arg, "after", &after))
-        after = 0;
-    if (!Jget_double (arg, "min_interval", &min_interval))
-        min_interval = 0.;
+
     if ((ev = calloc (1, sizeof (*ev))) == NULL) {
         flux_log_error (h, "cron event: calloc");
-        return (NULL);
+        return NULL;
     }
 
     /* Call subscribe per cron entry. Multiple event subscriptions are
@@ -179,16 +179,15 @@ static void cron_event_stop (void *arg)
     flux_msg_handler_stop (((struct cron_event *)arg)->mh);
 }
 
-static json_object *cron_event_to_json (void *arg)
+static json_t *cron_event_to_json (void *arg)
 {
     struct cron_event *ev = arg;
-    json_object *o = Jnew ();
-    Jadd_str (o, "topic", ev->event);
-    Jadd_int (o, "nth", ev->nth);
-    Jadd_int (o, "after", ev->after);
-    Jadd_int (o, "counter", ev->counter);
-    Jadd_double (o, "min_interval", ev->min_interval);
-    return (o);
+    return json_pack ("{ s:s, s:i, s:i, s:i, s:f }",
+                      "topic", ev->event,
+                      "nth", ev->nth,
+                      "after", ev->after,
+                      "counter", ev->counter,
+                      "min_interval", ev->min_interval);
 }
 
 struct cron_entry_ops cron_event_operations = {
