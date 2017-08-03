@@ -5,9 +5,12 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libkvs/jansson_dirent.h"
+#include "src/common/libkvs/treeobj.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
+#include "src/modules/kvs/kvs_util.h"
+#include "src/modules/kvs/types.h"
+#include "src/common/libutil/base64.h"
 
 void basic_api (void)
 {
@@ -181,6 +184,21 @@ void basic_api_errors (void)
     cache_destroy (cache);
 }
 
+json_t *get_json_base64_string (const char *s)
+{
+    int len, xlen;
+    char *xdata;
+    json_t *rv;
+
+    len = strlen (s);
+    xlen = base64_encode_length (len);
+    xdata = malloc (xlen);
+    base64_encode_block (xdata, &xlen, s, len);
+    rv = json_string (xdata);
+    free (xdata);
+    return rv;
+}
+
 void check_common (lookup_t *lh,
                    bool lookup_result,
                    int get_errnum_result,
@@ -273,25 +291,26 @@ void lookup_root (void) {
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
+    href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
     /* This cache is
      *
-     * root-ref
-     * { "dir" : { "DIRREF" : "dir-ref" } }
+     * root_ref
+     * treeobj dir, no entries
      */
 
-    root = json_object ();
-    json_object_set_new (root, "dir", j_dirent_create ("DIRREF", "dir-ref"));
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    root = treeobj_create_dir ();
+    kvs_util_json_hash ("sha1", root, root_ref);
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              ".",
                              0)) != NULL,
         "lookup_create on root, no flags, works");
@@ -300,8 +319,8 @@ void lookup_root (void) {
     /* flags = FLUX_KVS_READDIR, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              ".",
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_READDIR, works");
@@ -310,12 +329,12 @@ void lookup_root (void) {
     /* flags = FLUX_KVS_TREEOBJ, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              ".",
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_TREEOBJ, works");
-    test = j_dirent_create ("DIRREF", "root-ref");
+    test = treeobj_create_dirref (root_ref);
     check (lh, true, 0, test, NULL, "root w/ FLUX_KVS_TREEOBJ");
     json_decref (test);
 
@@ -326,162 +345,168 @@ void lookup_root (void) {
 void lookup_basic (void) {
     json_t *root;
     json_t *dirref;
-    json_t *dirval;
-    json_t *linkval;
+    json_t *dir;
+    json_t *opaque_data;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
+    href_t valref_ref;
+    href_t dirref_ref;
+    href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
     /* This cache is
      *
-     * root-ref
-     * { "dir" : { "DIRREF" : "dir-ref" } }
+     * valref_ref
+     * "abcd"
      *
-     * dir-ref
-     * { "fileval" : { "FILEVAL" : 42 }
-     *   "file" : { "FILEREF" : "file-ref" }
-     *   "dirval" : { "DIRVAL" : { "foo" : { "FILEVAL" : 43 } } }
-     *   "linkval" : { "LINKVAL" : "baz" } }
+     * dirref_ref
+     * "valref" : valref to valref_ref
+     * "val" : val to "foo"
+     * "dir" : dir w/ "val" : val to "bar"
+     * "symlink" : symlink to "baz"
      *
-     * file-ref
-     * { 44 }
+     * root_ref
+     * "dirref" : dirref to dirref_ref
      */
 
-    root = json_object ();
-    json_object_set_new (root, "dir", j_dirent_create ("DIRREF", "dir-ref"));
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    opaque_data = get_json_base64_string ("abcd");
+    kvs_util_json_hash ("sha1", opaque_data, valref_ref);
+    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
 
-    dirval = json_object ();
-    json_object_set_new (dirval, "foo", j_dirent_create ("FILEVAL", json_integer (43)));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
 
-    linkval = j_dirent_create ("LINKVAL", json_string ("baz"));
+    dirref = treeobj_create_dir ();
+    treeobj_insert_entry (dirref, "valref", treeobj_create_valref (valref_ref));
+    treeobj_insert_entry (dirref, "val", treeobj_create_val ("foo", 3));
+    treeobj_insert_entry (dirref, "dir", dir);
+    treeobj_insert_entry (dirref, "symlink", treeobj_create_symlink ("baz"));
 
-    dirref = json_object ();
-    json_object_set_new (dirref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
-    json_object_set_new (dirref, "file", j_dirent_create ("FILEREF", "file-ref"));
-    json_object_set_new (dirref, "dirval", j_dirent_create ("DIRVAL", dirval));
-    json_object_set_new (dirref, "linkval", linkval);
+    kvs_util_json_hash ("sha1", dirref, dirref_ref);
+    cache_insert (cache, dirref_ref, cache_entry_create (dirref));
 
-    cache_insert (cache, "dir-ref", cache_entry_create (dirref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
 
-    cache_insert (cache, "file-ref", cache_entry_create (json_integer (44)));
+    kvs_util_json_hash ("sha1", root, root_ref);
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
-    /* lookup dir value */
+    /* lookup dir via dirref */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir",
+                             root_ref,
+                             root_ref,
+                             "dirref",
                              FLUX_KVS_READDIR)) != NULL,
-        "lookup_create on path dir");
-    check (lh, true, 0, dirref, NULL, "lookup dir");
+        "lookup_create on path dirref");
+    check (lh, true, 0, dirref, NULL, "lookup dirref");
 
-    /* lookup file value */
+    /* lookup value via valref */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.file",
+                             root_ref,
+                             root_ref,
+                             "dirref.valref",
                              0)) != NULL,
-        "lookup_create on path dir.file");
-    test = json_integer (44);
-    check (lh, true, 0, test, NULL, "lookup dir.file");
+        "lookup_create on path dirref.valref");
+    test = treeobj_create_val ("abcd", 4);
+    check (lh, true, 0, test, NULL, "lookup dirref.valref");
     json_decref (test);
 
-    /* lookup fileval value */
+    /* lookup value via val */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.fileval",
+                             root_ref,
+                             root_ref,
+                             "dirref.val",
                              0)) != NULL,
-        "lookup_create on path dir.fileval");
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "lookup dir.fileval");
+        "lookup_create on path dirref.val");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "lookup dirref.val");
     json_decref (test);
 
-    /* lookup dirval value */
+    /* lookup dir via dir */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.dirval",
+                             root_ref,
+                             root_ref,
+                             "dirref.dir",
                              FLUX_KVS_READDIR)) != NULL,
-        "lookup_create on path dir.dirval");
-    check (lh, true, 0, dirval, NULL, "lookup dir.dirval");
+        "lookup_create on path dirref.dir");
+    check (lh, true, 0, dir, NULL, "lookup dirref.dir");
 
-    /* lookup linkval value */
+    /* lookup symlink */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.linkval",
+                             root_ref,
+                             root_ref,
+                             "dirref.symlink",
                              FLUX_KVS_READLINK)) != NULL,
-        "lookup_create on path dir.linkval");
-    test = json_string ("baz");
-    check (lh, true, 0, test, NULL, "lookup dir.linkval");
+        "lookup_create on path dirref.symlink");
+    test = treeobj_create_symlink ("baz");
+    check (lh, true, 0, test, NULL, "lookup dirref.symlink");
+    json_decref (test);
+
+    /* lookup dirref treeobj */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref",
+                             FLUX_KVS_TREEOBJ)) != NULL,
+        "lookup_create on path dirref (treeobj)");
+    test = treeobj_create_dirref (dirref_ref);
+    check (lh, true, 0, test, NULL, "lookup dirref treeobj");
+    json_decref (test);
+
+    /* lookup valref treeobj */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref.valref",
+                             FLUX_KVS_TREEOBJ)) != NULL,
+        "lookup_create on path dirref.valref (treeobj)");
+    test = treeobj_create_valref (valref_ref);
+    check (lh, true, 0, test, NULL, "lookup dirref.valref treeobj");
+    json_decref (test);
+
+    /* lookup val treeobj */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref.val",
+                             FLUX_KVS_TREEOBJ)) != NULL,
+        "lookup_create on path dirref.val (treeobj)");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "lookup dirref.val treeobj");
     json_decref (test);
 
     /* lookup dir treeobj */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir",
+                             root_ref,
+                             root_ref,
+                             "dirref.dir",
                              FLUX_KVS_TREEOBJ)) != NULL,
-        "lookup_create on path dir (treeobj)");
-    test = j_dirent_create ("DIRREF", "dir-ref");
-    check (lh, true, 0, test, NULL, "lookup dir treeobj");
-    json_decref (test);
+        "lookup_create on path dirref.dir (treeobj)");
+    check (lh, true, 0, dir, NULL, "lookup dirref.dir treeobj");
 
-    /* lookup file treeobj */
+    /* lookup symlink treeobj */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.file",
+                             root_ref,
+                             root_ref,
+                             "dirref.symlink",
                              FLUX_KVS_TREEOBJ)) != NULL,
-        "lookup_create on path dir.file (treeobj)");
-    test = j_dirent_create ("FILEREF", "file-ref");
-    check (lh, true, 0, test, NULL, "lookup dir.file treeobj");
+        "lookup_create on path dirref.symlink (treeobj)");
+    test = treeobj_create_symlink ("baz");
+    check (lh, true, 0, test, NULL, "lookup dirref.symlink treeobj");
     json_decref (test);
-
-    /* lookup fileval treeobj */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.fileval",
-                             FLUX_KVS_TREEOBJ)) != NULL,
-        "lookup_create on path dir.fileval (treeobj)");
-    test = j_dirent_create ("FILEVAL", json_integer (42));
-    check (lh, true, 0, test, NULL, "lookup dir.fileval treeobj");
-    json_decref (test);
-
-    /* lookup dirval treeobj */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.dirval",
-                             FLUX_KVS_TREEOBJ)) != NULL,
-        "lookup_create on path dir.dirval (treeobj)");
-    test = j_dirent_create ("DIRVAL", dirval);
-    check (lh, true, 0, test, NULL, "lookup dir.dirval treeobj");
-    json_decref (test);
-
-    /* lookup linkval treeobj */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir.linkval",
-                             FLUX_KVS_TREEOBJ)) != NULL,
-        "lookup_create on path dir.linkval (treeobj)");
-    check (lh, true, 0, linkval, NULL, "lookup dir.linkval treeobj");
 
     cache_destroy (cache);
 }
@@ -489,88 +514,110 @@ void lookup_basic (void) {
 /* lookup tests reach an error or "non-good" result */
 void lookup_errors (void) {
     json_t *root;
-    json_t *dirval;
+    json_t *dirref;
+    json_t *dir;
+    json_t *opaque_data;
     struct cache *cache;
     lookup_t *lh;
+    href_t dirref_ref;
+    href_t valref_ref;
+    href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
     /* This cache is
      *
-     * root-ref
-     * { "dirref" : { "DIRREF" : "dirref-ref" },
-     *   "fileref" : { "FILEREF" : "fileref-ref" }
-     *   "dirval" : { "DIRVAL" : { "foo" : { "FILEVAL" : 42 } } }
-     *   "fileval" : { "FILEVAL" : 42 }
-     *   "linkval" : { "LINKVAL" : "linkvalstr" }
-     *   "linkval1" : { "LINKVAL" : "linkval2" }
-     *   "linkval2" : { "LINKVAL" : "linkval1" } }
+     * valref_ref
+     * "abcd"
+     *
+     * dirref_ref
+     * "val" : val to "bar"
+     *
+     * root_ref
+     * "symlink" : symlink to "symlinkstr"
+     * "symlink1" : symlink to "symlink2"
+     * "symlink2" : symlink to "symlink1"
+     * "val" : val to "foo"
+     * "valref" : valref to valref_ref
+     * "dirref" : dirref to dirref_ref
+     * "dir" : dir w/ "val" : val to "baz"
+     *
      */
 
-    dirval = json_object ();
-    json_object_set_new (dirval, "foo", j_dirent_create ("FILEVAL", json_integer (42)));
+    opaque_data = get_json_base64_string ("abcd");
+    kvs_util_json_hash ("sha1", opaque_data, valref_ref);
+    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
 
-    root = json_object ();
-    json_object_set_new (root, "dirref", j_dirent_create ("DIRREF", "dirref-ref"));
-    json_object_set_new (root, "fileref", j_dirent_create ("FILEREF", "fileref-ref"));
-    json_object_set_new (root, "dirval", j_dirent_create ("DIRVAL", dirval));
-    json_object_set_new (root, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
-    json_object_set_new (root, "linkval", j_dirent_create ("LINKVAL", json_string ("linkvalstr")));
-    json_object_set_new (root, "linkval1", j_dirent_create ("LINKVAL", json_string ("linkval2")));
-    json_object_set_new (root, "linkval2", j_dirent_create ("LINKVAL", json_string ("linkval1")));
+    dirref = treeobj_create_dir ();
+    treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
+    kvs_util_json_hash ("sha1", dirref, dirref_ref);
+    cache_insert (cache, dirref_ref, cache_entry_create (dirref));
 
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("baz", 3));
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("symlinkstr"));
+    treeobj_insert_entry (root, "symlink1", treeobj_create_symlink ("symlink2"));
+    treeobj_insert_entry (root, "symlink2", treeobj_create_symlink ("symlink1"));
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    treeobj_insert_entry (root, "valref", treeobj_create_valref (valref_ref));
+    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    treeobj_insert_entry (root, "dir", dir);
+
+    kvs_util_json_hash ("sha1", root, root_ref);
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              "foo",
                              0)) != NULL,
         "lookup_create on bad path in path");
     check (lh, true, 0, NULL, NULL, "lookup bad path");
 
-    /* Lookup path w/ fileval in middle, Not ENOENT - caller of lookup
+    /* Lookup path w/ val in middle, Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "fileval.foo",
+                             root_ref,
+                             root_ref,
+                             "val.foo",
                              0)) != NULL,
-        "lookup_create on fileval in path");
-    check (lh, true, 0, NULL, NULL, "lookup fileval in path");
+        "lookup_create on val in path");
+    check (lh, true, 0, NULL, NULL, "lookup val in path");
 
-    /* Lookup path w/ fileref in middle, Not ENOENT - caller of lookup
+    /* Lookup path w/ valref in middle, Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "fileref.foo",
+                             root_ref,
+                             root_ref,
+                             "valref.foo",
                              0)) != NULL,
-        "lookup_create on fileref in path");
-    check (lh, true, 0, NULL, NULL, "lookup fileref in path");
+        "lookup_create on valref in path");
+    check (lh, true, 0, NULL, NULL, "lookup valref in path");
 
-    /* Lookup path w/ dirval in middle, should get EPERM */
+    /* Lookup path w/ dir in middle, should get EPERM */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dirval.foo",
+                             root_ref,
+                             root_ref,
+                             "dir.foo",
                              0)) != NULL,
-        "lookup_create on dirval in path");
-    check (lh, true, EPERM, NULL, NULL, "lookup dirval in path");
+        "lookup_create on dir in path");
+    check (lh, true, EPERM, NULL, NULL, "lookup dir in path");
 
     /* Lookup path w/ infinite link loop, should get ELOOP */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "linkval1",
+                             root_ref,
+                             root_ref,
+                             "symlink1",
                              0)) != NULL,
         "lookup_create on link loop");
     check (lh, true, ELOOP, NULL, NULL, "lookup infinite links");
@@ -578,92 +625,92 @@ void lookup_errors (void) {
     /* Lookup a dirref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              "dirref",
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create on dirref");
     check (lh, true, EINVAL, NULL, NULL, "lookup dirref, expecting link");
 
-    /* Lookup a dirval, but expecting a link, should get EINVAL. */
+    /* Lookup a dir, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dirval",
+                             root_ref,
+                             root_ref,
+                             "dir",
                              FLUX_KVS_READLINK)) != NULL,
-        "lookup_create on dirval");
-    check (lh, true, EINVAL, NULL, NULL, "lookup dirval, expecting link");
+        "lookup_create on dir");
+    check (lh, true, EINVAL, NULL, NULL, "lookup dir, expecting link");
 
-    /* Lookup a fileref, but expecting a link, should get EINVAL. */
+    /* Lookup a valref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "fileref",
+                             root_ref,
+                             root_ref,
+                             "valref",
                              FLUX_KVS_READLINK)) != NULL,
-        "lookup_create on fileref");
-    check (lh, true, EINVAL, NULL, NULL, "lookup fileref, expecting link");
+        "lookup_create on valref");
+    check (lh, true, EINVAL, NULL, NULL, "lookup valref, expecting link");
 
-    /* Lookup a fileval, but expecting a link, should get EINVAL. */
+    /* Lookup a val, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "fileval",
+                             root_ref,
+                             root_ref,
+                             "val",
                              FLUX_KVS_READLINK)) != NULL,
-        "lookup_create on fileval");
-    check (lh, true, EINVAL, NULL, NULL, "lookup fileval, expecting link");
+        "lookup_create on val");
+    check (lh, true, EINVAL, NULL, NULL, "lookup val, expecting link");
 
     /* Lookup a dirref, but don't expect a dir, should get EISDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              "dirref",
                              0)) != NULL,
         "lookup_create on dirref");
     check (lh, true, EISDIR, NULL, NULL, "lookup dirref, not expecting dirref");
 
-    /* Lookup a dirval, but don't expect a dir, should get EISDIR. */
+    /* Lookup a dir, but don't expect a dir, should get EISDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dirval",
+                             root_ref,
+                             root_ref,
+                             "dir",
                              0)) != NULL,
-        "lookup_create on dirval");
-    check (lh, true, EISDIR, NULL, NULL, "lookup dirval, not expecting dirval");
+        "lookup_create on dir");
+    check (lh, true, EISDIR, NULL, NULL, "lookup dir, not expecting dir");
 
-    /* Lookup a fileref, but expecting a dir, should get ENOTDIR. */
+    /* Lookup a valref, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "fileref",
+                             root_ref,
+                             root_ref,
+                             "valref",
                              FLUX_KVS_READDIR)) != NULL,
-        "lookup_create on fileref");
-    check (lh, true, ENOTDIR, NULL, NULL, "lookup fileref, expecting dir");
+        "lookup_create on valref");
+    check (lh, true, ENOTDIR, NULL, NULL, "lookup valref, expecting dir");
 
-    /* Lookup a fileval, but expecting a dir, should get ENOTDIR. */
+    /* Lookup a val, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "fileval",
+                             root_ref,
+                             root_ref,
+                             "val",
                              FLUX_KVS_READDIR)) != NULL,
-        "lookup_create on fileval");
-    check (lh, true, ENOTDIR, NULL, NULL, "lookup fileval, expecting dir");
+        "lookup_create on val");
+    check (lh, true, ENOTDIR, NULL, NULL, "lookup val, expecting dir");
 
-    /* Lookup a linkval, but expecting a dir, should get ENOTDIR. */
+    /* Lookup a symlink, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "linkval",
+                             root_ref,
+                             root_ref,
+                             "symlink",
                              FLUX_KVS_READLINK | FLUX_KVS_READDIR)) != NULL,
-        "lookup_create on linkval");
-    check (lh, true, ENOTDIR, NULL, NULL, "lookup linkval, expecting dir");
+        "lookup_create on symlink");
+    check (lh, true, ENOTDIR, NULL, NULL, "lookup symlink, expecting dir");
 
     cache_destroy (cache);
 }
@@ -671,202 +718,208 @@ void lookup_errors (void) {
 /* lookup link tests */
 void lookup_links (void) {
     json_t *root;
-    json_t *dir1ref;
-    json_t *dir2ref;
-    json_t *dir3ref;
-    json_t *dirval;
-    json_t *linkval;
+    json_t *dirref1;
+    json_t *dirref2;
+    json_t *dirref3;
+    json_t *dir;
+    json_t *opaque_data;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
+    href_t valref_ref;
+    href_t dirref3_ref;
+    href_t dirref2_ref;
+    href_t dirref1_ref;
+    href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
     /* This cache is
      *
-     * root-ref
-     * { "dir1" : { "DIRREF" : "dir1-ref" }
-     *   "dir2" : { "DIRREF" : "dir2-ref" } }
+     * opaque_data
+     * "abcd"
      *
-     * dir1-ref
-     * { "link2dir" : { "LINKVAL" : "dir2" }
-     *   "link2fileval" : { "LINKVAL" : "dir2.fileval" }
-     *   "link2file" : { "LINKVAL" : "dir2.file" }
-     *   "link2dirval" : { "LINKVAL" : "dir2.dirval" }
-     *   "link2linkval" : { "LINKVAL" : "dir2.linkval" } }
+     * dirref3_ref
+     * "val" : val to "baz"
      *
-     * dir2-ref
-     * { "fileval" : { "FILEVAL" : 42 }
-     *   "file" : { "FILEREF" : "file-ref" }
-     *   "dirval" : { "DIRVAL" : { "foo" : { "FILEVAL" : 43 } } }
-     *   "dir" : { "DIRREF" : "dir3-ref" }
-     *   "linkval" : { "LINKVAL" : "dir2.fileval" } }
+     * dirref2_ref
+     * "val" : val to "foo"
+     * "valref" : valref to valref_ref
+     * "dir" : dir w/ "val" : val to "bar"
+     * "dirref" : dirref to dirref3_ref
+     * "symlink" : symlink to "dirref2.val"
      *
-     * dir3-ref
-     * { "fileval" : { "FILEVAL" : 44 } }
+     * dirref1_ref
+     * "link2dirref" : symlink to "dirref2"
+     * "link2val" : symlink to "dirref2.val"
+     * "link2valref" : symlink to "dirref2.valref"
+     * "link2dir" : symlink to "dirref2.dir"
+     * "link2symlink" : symlink to "dirref2.symlink"
      *
-     * file-ref
-     * { 45 }
+     * root_ref
+     * "dirref1" : dirref to "dirref1_ref
+     * "dirref2" : dirref to "dirref2_ref
      */
 
-    root = json_object ();
-    json_object_set_new (root, "dir1", j_dirent_create ("DIRREF", "dir1-ref"));
-    json_object_set_new (root, "dir2", j_dirent_create ("DIRREF", "dir2-ref"));
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    opaque_data = get_json_base64_string ("abcd");
+    kvs_util_json_hash ("sha1", opaque_data, valref_ref);
+    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
 
-    dir1ref = json_object ();
-    json_object_set_new (dir1ref, "link2dir", j_dirent_create ("LINKVAL", json_string ("dir2")));
-    json_object_set_new (dir1ref, "link2fileval", j_dirent_create ("LINKVAL", json_string ("dir2.fileval")));
-    json_object_set_new (dir1ref, "link2file", j_dirent_create ("LINKVAL", json_string ("dir2.file")));
-    json_object_set_new (dir1ref, "link2dirval", j_dirent_create ("LINKVAL", json_string ("dir2.dirval")));
-    json_object_set_new (dir1ref, "link2linkval", j_dirent_create ("LINKVAL", json_string ("dir2.linkval")));
+    dirref3 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref3, "val", treeobj_create_val ("baz", 3));
+    kvs_util_json_hash ("sha1", dirref3, dirref3_ref);
+    cache_insert (cache, dirref3_ref, cache_entry_create (dirref3));
 
-    cache_insert (cache, "dir1-ref", cache_entry_create (dir1ref));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
 
-    dirval = json_object ();
-    json_object_set_new (dirval, "foo", j_dirent_create ("FILEVAL", json_integer (43)));
+    dirref2 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref2, "val", treeobj_create_val ("foo", 3));
+    treeobj_insert_entry (dirref2, "valref", treeobj_create_valref (valref_ref));
+    treeobj_insert_entry (dirref2, "dir", dir);
+    treeobj_insert_entry (dirref2, "dirref", treeobj_create_dirref (dirref3_ref));
+    treeobj_insert_entry (dirref2, "symlink", treeobj_create_symlink ("dirref2.val"));
+    kvs_util_json_hash ("sha1", dirref2, dirref2_ref);
+    cache_insert (cache, dirref2_ref, cache_entry_create (dirref2));
 
-    linkval = j_dirent_create ("LINKVAL", json_string ("dir2.fileval"));
+    dirref1 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref1, "link2dirref", treeobj_create_symlink ("dirref2"));
+    treeobj_insert_entry (dirref1, "link2val", treeobj_create_symlink ("dirref2.val"));
+    treeobj_insert_entry (dirref1, "link2valref", treeobj_create_symlink ("dirref2.valref"));
+    treeobj_insert_entry (dirref1, "link2dir", treeobj_create_symlink ("dirref2.dir"));
+    treeobj_insert_entry (dirref1, "link2symlink", treeobj_create_symlink ("dirref2.symlink"));
+    kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
+    cache_insert (cache, dirref1_ref, cache_entry_create (dirref1));
 
-    dir2ref = json_object ();
-    json_object_set_new (dir2ref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
-    json_object_set_new (dir2ref, "file", j_dirent_create ("FILEREF", "file-ref"));
-    json_object_set_new (dir2ref, "dirval", j_dirent_create ("DIRVAL", dirval));
-    json_object_set_new (dir2ref, "dir", j_dirent_create ("DIRREF", "dir3-ref"));
-    json_object_set_new (dir2ref, "linkval", linkval);
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
+    treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
+    kvs_util_json_hash ("sha1", root, root_ref);
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
-    cache_insert (cache, "dir2-ref", cache_entry_create (dir2ref));
-
-    dir3ref = json_object ();
-    json_object_set_new (dir3ref, "fileval", j_dirent_create ("FILEVAL", json_integer (44)));
-
-    cache_insert (cache, "dir3-ref", cache_entry_create (dir3ref));
-
-    cache_insert (cache, "file-ref", cache_entry_create (json_integer (45)));
-
-    /* lookup fileval, follow two links */
+    /* lookup val, follow two links */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir.linkval",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref.symlink",
                              0)) != NULL,
-        "lookup_create link to fileval via two links");
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "fileval via two links");
+        "lookup_create link to val via two links");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "val via two links");
     json_decref (test);
 
-    /* lookup fileval, link is middle of path */
+    /* lookup val, link is middle of path */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir.fileval",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref.val",
                              0)) != NULL,
-        "lookup_create link to fileval");
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "dir1.link2dir.fileval");
+        "lookup_create link to val");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "dirref1.link2dirref.val");
     json_decref (test);
 
-    /* lookup file, link is middle of path */
+    /* lookup valref, link is middle of path */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir.file",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref.valref",
                              0)) != NULL,
-        "lookup_create link to file");
-    test = json_integer (45);
-    check (lh, true, 0, test, NULL, "dir1.link2dir.file");
+        "lookup_create link to valref");
+    test = treeobj_create_val ("abcd", 4);
+    check (lh, true, 0, test, NULL, "dirref1.link2dirref.valref");
     json_decref (test);
-
-    /* lookup dirval, link is middle of path */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir.dirval",
-                             FLUX_KVS_READDIR)) != NULL,
-        "lookup_create link to dirval");
-    check (lh, true, 0, dirval, NULL, "dir1.link2dir.dirval");
 
     /* lookup dir, link is middle of path */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir.dir",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref.dir",
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dir");
-    check (lh, true, 0, dir3ref, NULL, "dir1.link2dir.dir");
+    check (lh, true, 0, dir, NULL, "dirref1.link2dirref.dir");
 
-    /* lookup linkval, link is middle of path */
+    /* lookup dirref, link is middle of path */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir.linkval",
-                             FLUX_KVS_READLINK)) != NULL,
-        "lookup_create link to linkval");
-    test = json_string ("dir2.fileval");
-    check (lh, true, 0, test, NULL, "dir1.link2dir.linkval");
-    json_decref (test);
-
-    /* lookup fileval, link is last part in path */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2fileval",
-                             0)) != NULL,
-        "lookup_create link to fileval (last part path)");
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "dir1.link2fileval");
-    json_decref (test);
-
-    /* lookup file, link is last part in path */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2file",
-                             0)) != NULL,
-        "lookup_create link to file (last part path)");
-    test = json_integer (45);
-    check (lh, true, 0, test, NULL, "dir1.link2file");
-    json_decref (test);
-
-    /* lookup dirval, link is last part in path */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dirval",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref.dirref",
                              FLUX_KVS_READDIR)) != NULL,
-        "lookup_create link to dirval (last part path)");
-    check (lh, true, 0, dirval, NULL, "dir1.link2dirval");
+        "lookup_create link to dirref");
+    check (lh, true, 0, dirref3, NULL, "dirref1.link2dirref.dirref");
+
+    /* lookup symlink, link is middle of path */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref.symlink",
+                             FLUX_KVS_READLINK)) != NULL,
+        "lookup_create link to symlink");
+    test = treeobj_create_symlink ("dirref2.val");
+    check (lh, true, 0, test, NULL, "dirref1.link2dirref.symlink");
+    json_decref (test);
+
+    /* lookup val, link is last part in path */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2val",
+                             0)) != NULL,
+        "lookup_create link to val (last part path)");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "dirref1.link2val");
+    json_decref (test);
+
+    /* lookup valref, link is last part in path */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2valref",
+                             0)) != NULL,
+        "lookup_create link to valref (last part path)");
+    test = treeobj_create_val ("abcd", 4);
+    check (lh, true, 0, test, NULL, "dirref1.link2valref");
+    json_decref (test);
 
     /* lookup dir, link is last part in path */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2dir",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dir",
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dir (last part path)");
-    check (lh, true, 0, dir2ref, NULL, "dir1.link2dir");
+    check (lh, true, 0, dir, NULL, "dirref1.link2dir");
 
-    /* lookup linkval, link is last part in path */
+    /* lookup dirref, link is last part in path */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.link2linkval",
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2dirref",
+                             FLUX_KVS_READDIR)) != NULL,
+        "lookup_create link to dirref (last part path)");
+    check (lh, true, 0, dirref2, NULL, "dirref1.link2dirref");
+
+    /* lookup symlink, link is last part in path */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.link2symlink",
                              FLUX_KVS_READLINK)) != NULL,
-        "lookup_create link to linkval (last part path)");
-    test = json_string ("dir2.linkval");
-    check (lh, true, 0, test, NULL, "dir1.link2linkval");
+        "lookup_create link to symlink (last part path)");
+    test = treeobj_create_symlink ("dirref2.symlink");
+    check (lh, true, 0, test, NULL, "dirref1.link2symlink");
     json_decref (test);
 
     cache_destroy (cache);
@@ -875,63 +928,68 @@ void lookup_links (void) {
 /* lookup alternate root tests */
 void lookup_alt_root (void) {
     json_t *root;
-    json_t *dir1ref;
-    json_t *dir2ref;
+    json_t *dirref1;
+    json_t *dirref2;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-
+    href_t dirref1_ref;
+    href_t dirref2_ref;
+    href_t root_ref;
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
     /* This cache is
      *
-     * root-ref
-     * { "dir1" : { "DIRREF" : "dir1-ref" }
-     *   "dir2" : { "DIRREF" : "dir2-ref" } }
+     * dirref1_ref
+     * "val" to "foo"
      *
-     * dir1-ref
-     * { "fileval" : { "FILEVAL" : 42 } }
+     * dirref2_ref
+     * "val" to "bar"
      *
-     * dir2-ref
-     * { "fileval" : { "FILEVAL" : 43 } }
+     * root_ref
+     * "dirref1" : dirref to dirref1_ref
+     * "dirref2" : dirref to dirref2_ref
      */
 
-    root = json_object ();
-    json_object_set_new (root, "dir1", j_dirent_create ("DIRREF", "dir1-ref"));
-    json_object_set_new (root, "dir2", j_dirent_create ("DIRREF", "dir2-ref"));
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    dirref1 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
+    kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
+    cache_insert (cache, dirref1_ref, cache_entry_create (dirref1));
 
-    dir1ref = json_object ();
-    json_object_set_new (dir1ref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
-    cache_insert (cache, "dir1-ref", cache_entry_create (dir1ref));
+    dirref2 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
+    kvs_util_json_hash ("sha1", dirref2, dirref2_ref);
+    cache_insert (cache, dirref2_ref, cache_entry_create (dirref2));
 
-    dir2ref = json_object ();
-    json_object_set_new (dir2ref, "fileval", j_dirent_create ("FILEVAL", json_integer (43)));
-    cache_insert (cache, "dir2-ref", cache_entry_create (dir2ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
+    treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
+    kvs_util_json_hash ("sha1", root, root_ref);
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
-    /* lookup fileval, alt root-ref dir1-ref */
+    /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "dir1-ref",
-                             "fileval",
+                             root_ref,
+                             dirref1_ref,
+                             "val",
                              0)) != NULL,
-        "lookup_create fileval w/ dir1ref root_ref");
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "alt root fileval");
+        "lookup_create val w/ dirref1 root_ref");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "alt root val");
     json_decref (test);
 
-    /* lookup fileval, alt root-ref dir2-ref */
+    /* lookup val, alt root-ref dirref2_ref */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "dir2-ref",
-                             "fileval",
+                             root_ref,
+                             dirref2_ref,
+                             "val",
                              0)) != NULL,
-        "lookup_create fileval w/ dir2ref root_ref");
-    test = json_integer (43);
-    check (lh, true, 0, test, NULL, "alt root fileval");
+        "lookup_create val w/ dirref2 root_ref");
+    test = treeobj_create_val ("bar", 3);
+    check (lh, true, 0, test, NULL, "alt root val");
     json_decref (test);
 
     cache_destroy (cache);
@@ -942,6 +1000,7 @@ void lookup_stall_root (void) {
     json_t *root;
     struct cache *cache;
     lookup_t *lh;
+    href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -952,22 +1011,23 @@ void lookup_stall_root (void) {
      * { "dir" : { "DIRREF" : "dir-ref" } }
      */
 
-    root = json_object ();
-    json_object_set_new (root, "dir", j_dirent_create ("DIRREF", "dir-ref"));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    kvs_util_json_hash ("sha1", root, root_ref);
 
     /* do not insert entries into cache until later for these stall tests */
 
     /* lookup root ".", should stall on root */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              ".",
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
-    check_stall (lh, false, EAGAIN, NULL, "root-ref", "root \".\" stall");
+    check_stall (lh, false, EAGAIN, NULL, root_ref, "root \".\" stall");
 
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
     /* lookup root ".", should succeed */
     check (lh, true, 0, root, NULL, "root \".\" #1");
@@ -975,8 +1035,8 @@ void lookup_stall_root (void) {
     /* lookup root ".", now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
+                             root_ref,
+                             root_ref,
                              ".",
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
@@ -988,141 +1048,149 @@ void lookup_stall_root (void) {
 /* lookup stall tests */
 void lookup_stall (void) {
     json_t *root;
-    json_t *dir1ref;
-    json_t *dir2ref;
-    json_t *fileref;
+    json_t *dirref1;
+    json_t *dirref2;
+    json_t *opaque_data;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
+    href_t valref_ref;
+    href_t dirref1_ref;
+    href_t dirref2_ref;
+    href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
     /* This cache is
      *
-     * root-ref
-     * { "dir1" : { "DIRREF" : "dir1-ref" }
-     *   "dir2" : { "DIRREF" : "dir2-ref" }
-     *   "linkval" : { "LINKVAL" : "dir2" } }
+     * valref_ref
+     * "abcd"
      *
-     * dir1-ref
-     * { "fileval" : { "FILEVAL" : 42 }
-     *   "file" : { "FILEREF" : "file-ref" } }
+     * dirref1_ref
+     * "val" : val to "foo"
+     * "valref" : valref to valref_ref
      *
-     * dir2-ref
-     * { "fileval" : { "FILEVAL" : 43 } }
+     * dirref2_ref
+     * "val" : val to "bar"
      *
-     * file-ref
-     * { 44 }
+     * root_ref
+     * "symlink" : symlink to "dirref2"
+     * "dirref1" : dirref to dirref1_ref
+     * "dirref2" : dirref to dirref2_ref
      *
      */
 
-    root = json_object ();
-    json_object_set_new (root, "dir1", j_dirent_create ("DIRREF", "dir1-ref"));
-    json_object_set_new (root, "dir2", j_dirent_create ("DIRREF", "dir2-ref"));
-    json_object_set_new (root, "linkval", j_dirent_create ("LINKVAL", json_string ("dir2")));
+    opaque_data = get_json_base64_string ("abcd");
+    kvs_util_json_hash ("sha1", opaque_data, valref_ref);
 
-    dir1ref = json_object ();
-    json_object_set_new (dir1ref, "fileval", j_dirent_create ("FILEVAL", json_integer (42)));
-    json_object_set_new (dir1ref, "file", j_dirent_create ("FILEREF", "file-ref"));
+    dirref1 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
+    treeobj_insert_entry (dirref1, "valref", treeobj_create_valref (valref_ref));
+    kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
 
-    dir2ref = json_object ();
-    json_object_set_new (dir2ref, "fileval", j_dirent_create ("FILEVAL", json_integer (43)));
+    dirref2 = treeobj_create_dir ();
+    treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
+    kvs_util_json_hash ("sha1", dirref2, dirref2_ref);
 
-    fileref = json_integer (44);
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
+    treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
+    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
+    kvs_util_json_hash ("sha1", root, root_ref);
 
     /* do not insert entries into cache until later for these stall tests */
 
-    /* lookup dir1.fileval, should stall on root */
+    /* lookup dirref1.val, should stall on root */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.fileval",
+                             root_ref,
+                             root_ref,
+                             "dirref1.val",
                              0)) != NULL,
-        "lookup_create stalltest dir1.fileval");
-    check_stall (lh, false, EAGAIN, NULL, "root-ref", "dir1.fileval stall #1");
+        "lookup_create stalltest dirref1.val");
+    check_stall (lh, false, EAGAIN, NULL, root_ref, "dirref1.val stall #1");
 
-    cache_insert (cache, "root-ref", cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create (root));
 
     /* next call to lookup, should stall */
-    check_stall (lh, false, EAGAIN, NULL, "dir1-ref", "dir1.fileval stall #2");
+    check_stall (lh, false, EAGAIN, NULL, dirref1_ref, "dirref1.val stall #2");
 
-    cache_insert (cache, "dir1-ref", cache_entry_create (dir1ref));
+    cache_insert (cache, dirref1_ref, cache_entry_create (dirref1));
 
     /* final call to lookup, should succeed */
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "dir1.fileval #1");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "dirref1.val #1");
     json_decref (test);
 
-    /* lookup dir1.fileval, now fully cached, should succeed */
+    /* lookup dirref1.val, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.fileval",
+                             root_ref,
+                             root_ref,
+                             "dirref1.val",
                              0)) != NULL,
-        "lookup_create dir1.fileval");
-    test = json_integer (42);
-    check (lh, true, 0, test, NULL, "dir1.fileval #2");
+        "lookup_create dirref1.val");
+    test = treeobj_create_val ("foo", 3);
+    check (lh, true, 0, test, NULL, "dirref1.val #2");
     json_decref (test);
 
-    /* lookup linkval.fileval, should stall */
+    /* lookup symlink.val, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "linkval.fileval",
+                             root_ref,
+                             root_ref,
+                             "symlink.val",
                              0)) != NULL,
-        "lookup_create stalltest linkval.fileval");
-    check_stall (lh, false, EAGAIN, NULL, "dir2-ref", "linkval.fileval stall");
+        "lookup_create stalltest symlink.val");
+    check_stall (lh, false, EAGAIN, NULL, dirref2_ref, "symlink.val stall");
 
-    cache_insert (cache, "dir2-ref", cache_entry_create (dir2ref));
+    cache_insert (cache, dirref2_ref, cache_entry_create (dirref2));
 
-    /* lookup linkval.fileval, should succeed */
-    test = json_integer (43);
-    check (lh, true, 0, test, NULL, "linkval.fileval #1");
+    /* lookup symlink.val, should succeed */
+    test = treeobj_create_val ("bar", 3);
+    check (lh, true, 0, test, NULL, "symlink.val #1");
     json_decref (test);
 
-    /* lookup linkval.fileval, now fully cached, should succeed */
+    /* lookup symlink.val, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "linkval.fileval",
+                             root_ref,
+                             root_ref,
+                             "symlink.val",
                              0)) != NULL,
-        "lookup_create linkval.fileval");
-    test = json_integer (43);
-    check (lh, true, 0, test, NULL, "linkval.fileval #2");
+        "lookup_create symlink.val");
+    test = treeobj_create_val ("bar", 3);
+    check (lh, true, 0, test, NULL, "symlink.val #2");
     json_decref (test);
 
-    /* lookup dir1.file, should stall */
+    /* lookup dirref1.valref, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.file",
+                             root_ref,
+                             root_ref,
+                             "dirref1.valref",
                              0)) != NULL,
-        "lookup_create stalltest dir1.file");
-    check_stall (lh, false, EAGAIN, NULL, "file-ref", "dir1.file stall");
+        "lookup_create stalltest dirref1.valref");
+    check_stall (lh, false, EAGAIN, NULL, valref_ref, "dirref1.valref stall");
 
-    cache_insert (cache, "file-ref", cache_entry_create (fileref));
+    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
 
-    /* lookup dir1.file, should succeed */
-    test = json_integer (44);
-    check (lh, true, 0, test, NULL, "dir1.file #1");
+    /* lookup dirref1.valref, should succeed */
+    test = treeobj_create_val ("abcd", 4);
+    check (lh, true, 0, test, NULL, "dirref1.valref #1");
     json_decref (test);
 
-    /* lookup dir1.file, now fully cached, should succeed */
+    /* lookup dirref1.valref, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             "root-ref",
-                             "root-ref",
-                             "dir1.file",
+                             root_ref,
+                             root_ref,
+                             "dirref1.valref",
                              0)) != NULL,
-        "lookup_create stalltest dir1.file");
-    test = json_integer (44);
-    check (lh, true, 0, test, NULL, "dir1.file #2");
+        "lookup_create stalltest dirref1.valref");
+    test = treeobj_create_val ("abcd", 4);
+    check (lh, true, 0, test, NULL, "dirref1.valref #2");
     json_decref (test);
 
     cache_destroy (cache);
