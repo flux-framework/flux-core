@@ -190,7 +190,7 @@ for url in $checkouts; do
             cmake -DCMAKE_INSTALL_PREFIX=${prefix} $cmake_opts ..
         fi
       fi
-      make PREFIX=${prefix} $make_opts &&
+      make -j2 PREFIX=${prefix} $make_opts &&
       make PREFIX=${prefix} $make_opts install
     ) || die "Failed to build and install $name"
     add_cache "$cache_name"
@@ -211,7 +211,7 @@ for pkg in $downloads; do
       test -x configure && CC=gcc ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
                   ${extra_configure_opts[$name]} || : &&
-      make PREFIX=${prefix} &&
+      make -j 2 PREFIX=${prefix} &&
       make PREFIX=${prefix} install
     ) || die "Failed to build and install $name"
     add_cache "$name"
