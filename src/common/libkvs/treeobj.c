@@ -348,14 +348,31 @@ json_t *treeobj_create_val (const void *data, int len)
         goto done;
     }
     base64_encode_block (xdata, &xlen, data, len);
+
+    if (!(obj = treeobj_create_val_base64 (xdata)))
+        goto done;
+
+done:
+    free (xdata);
+    return obj;
+}
+
+json_t *treeobj_create_val_base64 (const char *data)
+{
+    json_t *obj = NULL;
+
+    if (!data) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (!(obj = json_pack ("{s:i s:s s:s}", "ver", treeobj_version,
                                             "type", "val",
-                                            "data", xdata))) {
+                                            "data", data))) {
         errno = ENOMEM;
         goto done;
     }
 done:
-    free (xdata);
     return obj;
 }
 

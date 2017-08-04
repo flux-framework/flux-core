@@ -196,6 +196,33 @@ void test_val (void)
     json_decref (val2);
 }
 
+void test_val_base64 (void)
+{
+    json_t *val;
+    char *base64 = "NDI="; /* 42 w/o ending NUL byte*/
+    char *outbuf;
+    int outlen;
+
+    ok ((val = treeobj_create_val_base64 (base64)) != NULL,
+        "treeobj_create_val_base64 works");
+    diag_json (val);
+    ok (treeobj_is_val (val),
+        "treeobj_is_value returns true");
+    ok (treeobj_decode_val (val, (void **)&outbuf, &outlen) == 0,
+        "treeobj_decode_val works");
+    ok (outlen == 2,
+        "and returned correct size");
+    ok (memcmp ("42", outbuf, 2) == 0,
+        "and returned correct data");
+    free (outbuf);
+
+    errno = 0;
+    ok (treeobj_create_val_base64 (NULL) == NULL && errno == EINVAL,
+        "treeobj_create_val_base64 NULL fails ");
+
+    json_decref (val);
+}
+
 void test_dirref (void)
 {
     json_t *dirref;
@@ -449,6 +476,7 @@ int main(int argc, char** argv)
 
     test_valref ();
     test_val ();
+    test_val_base64 ();
     test_dirref ();
     test_dir ();
     test_symlink ();

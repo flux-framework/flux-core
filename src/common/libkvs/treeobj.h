@@ -9,11 +9,13 @@
 /* Create a treeobj
  * valref, dirref: if blobref is NULL, treeobj_append_blobref()
  * must be called before object is valid.
- * val: copies argument (caller retains ownership)
+ * val & val_base64: copies argument (caller retains ownership)
+ * val_base64: user supplies base64 string
  * Return JSON object on success, NULL on failure with errno set.
  */
 json_t *treeobj_create_symlink (const char *target);
 json_t *treeobj_create_val (const void *data, int len);
+json_t *treeobj_create_val_base64 (const char *data);
 json_t *treeobj_create_valref (const char *blobref);
 json_t *treeobj_create_dir (void);
 json_t *treeobj_create_dirref (const char *blobref);
