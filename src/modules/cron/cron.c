@@ -85,18 +85,11 @@ void *cron_entry_type_data (cron_entry_t *e)
     return e->data;
 }
 
-static double timespec_to_double (struct timespec *tm)
-{
-    double s = tm->tv_sec;
-    double ns = tm->tv_nsec/1.0e9 + .5e-9; // round 1/2 epsilon
-    return (s + ns);
-}
-
 double get_timestamp (void)
 {
     struct timespec tm;
     clock_gettime (CLOCK_REALTIME, &tm);
-    return timespec_to_double (&tm);
+    return ((double) tm.tv_sec + (tm.tv_nsec/1.0e9));
 }
 
 static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)

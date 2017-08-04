@@ -447,10 +447,15 @@ int cron_task_status (cron_task_t *t)
     return (t->status);
 }
 
-static double timespec_to_double (struct timespec *tm)
+static double round_timespec_to_double (struct timespec *tm)
 {
     double s = tm->tv_sec;
-    double ns = tm->tv_nsec/1.0e9 + .5e-9; // round 1/2 epsilon
+    /*  Add .5ns (1/2 the minumim possible value change) to avoid
+     *   underflow which represents something like .5 as .499999...
+     *   (we don't care about overflow since we'll truncate fractional
+     *    part to 9 significant digits *at the most* anyway)
+     */
+    double ns = tm->tv_nsec/1.0e9 + .5e-9;
     return (s + ns);
 }
 
@@ -480,7 +485,7 @@ static const char * cron_task_state_string (cron_task_t *t)
  */
 static int add_timespec (json_t *o, const char *name, struct timespec *tm)
 {
-    json_t *n = json_real (timespec_to_double (tm));
+    json_t *n = json_real (round_timespec_to_double (tm));
     if (n == NULL)
         return -1;
     return json_object_set_new (o, name, n);
