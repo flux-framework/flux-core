@@ -34,8 +34,26 @@
 
 #include "kvs_lookup.h"
 
+static int validate_lookup_flags (int flags)
+{
+    switch (flags) {
+        case 0:
+        case FLUX_KVS_TREEOBJ:
+        case FLUX_KVS_READDIR:
+        case FLUX_KVS_READDIR | FLUX_KVS_TREEOBJ:
+        case FLUX_KVS_READLINK:
+            return 0;
+        default:
+            return -1;
+    }
+}
+
 flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
 {
+    if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
     return flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i}",
                                                             "key", key,
                                                             "flags", flags);
@@ -47,6 +65,10 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
     flux_future_t *f;
     json_t *obj = NULL;
 
+    if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!treeobj) {
         f = flux_kvs_lookup (h, flags, key);
     }
