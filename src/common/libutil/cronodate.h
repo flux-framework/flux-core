@@ -62,6 +62,12 @@ void cronodate_emptyset (cronodate_t *);
  */
 int cronodate_set (cronodate_t *d, tm_unit_t u, const char *range);
 
+/*  Set cronodate field for time unit u to a single value
+ *  Returns EINVAL if value is outside of [min, max] for time unit u.
+ *  Returns 0 on success.
+ */
+int cronodate_set_integer (cronodate_t *d, tm_unit_t u, int value);
+
 /*  Get the current set/range for time unit `u` in cronodate object `d`
  *   in the form of a nodeset range string.
  */
@@ -73,7 +79,7 @@ const char *cronodate_get (cronodate_t *d, tm_unit_t u);
  */
 bool cronodate_match (cronodate_t *d, struct tm *tm);
 
-/* 
+/*
  *  Advance `now` to the next date/time that will match `m`.
  */
 int cronodate_next (cronodate_t *d, struct tm *now);

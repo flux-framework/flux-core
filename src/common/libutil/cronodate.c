@@ -297,6 +297,20 @@ int cronodate_set (cronodate_t *d, tm_unit_t item, const char *range)
     return range_parse (n, item, range);
 }
 
+int cronodate_set_integer (cronodate_t *d, tm_unit_t item, int value)
+{
+    nodeset_t *n = d->item [item];
+    assert (n != NULL);
+    if (value > tm_unit_max (item) || value < tm_unit_min (item)) {
+        errno = ERANGE;
+        return -1;
+    }
+    /*  Clear all members before setting the new value */
+    nodeset_delete_range (n, tm_unit_min (item), tm_unit_max (item));
+    nodeset_add_rank (n, value);
+    return 0;
+}
+
 const char *cronodate_get (cronodate_t *d, tm_unit_t u)
 {
     return (nodeset_string (d->item [u]));
