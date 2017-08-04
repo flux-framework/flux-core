@@ -214,6 +214,47 @@ int main (int argc, char *argv[])
     ok (cronodate_check_next (d, "2016-06-06 08:00:00", "2016-06-13 08:00:00"),
         "cronodate_next returns next matching date when current matches ");
 
+    cronodate_fillset (d);
+    // Same as above, but use cronodate_set_integer()
+    ok (cronodate_set_integer (d, TM_SEC, 0) >= 0, "set integer, sec = 0");
+    ok (cronodate_set_integer (d, TM_MIN, 0) >= 0, "set integer, min = 0");
+    ok (cronodate_set_integer (d, TM_HOUR, 8) >= 0, "set integer, hour = 0");
+    ok (cronodate_set_integer (d, TM_WDAY, 1) >= 0, "set integer, wday = 1 (Mon)");
+    ok (cronodate_check_next (d, "2016-06-01 10:45:00", "2016-06-06 08:00:00"),
+        "cronodate_next worked for next monday");
+    ok (cronodate_check_next (d, "2016-06-06 08:00:00", "2016-06-13 08:00:00"),
+        "cronodate_next returns next matching date when current matches ");
+
+    // ERANGE test for cronodate_set_integer
+    ok (cronodate_set_integer (d, TM_SEC, -1) < 0 && errno == ERANGE,
+        "TM_SEC == -1 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_SEC, 61) < 0 && errno == ERANGE,
+        "TM_SEC == 61 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_MIN, -1) < 0 && errno == ERANGE,
+        "TM_MIN == -1 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_MIN, 60) < 0 && errno == ERANGE,
+        "TM_MIN == 60 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_HOUR, -1) < 0 && errno == ERANGE,
+        "TM_HOUR == 0 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_HOUR, 24) < 0 && errno == ERANGE,
+        "TM_HOUR == 24 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_WDAY, -1) < 0 && errno == ERANGE,
+        "TM_WDAY == -1 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_WDAY, 7) < 0 && errno == ERANGE,
+        "TM_WDAY == 24 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_MON, -1) < 0 && errno == ERANGE,
+        "TM_MON == -1 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_MON, 12) < 0 && errno == ERANGE,
+        "TM_MON == 12 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_MDAY, 0) < 0 && errno == ERANGE,
+        "TM_MDAY == 0 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_MDAY, 32) < 0 && errno == ERANGE,
+        "TM_MDAY == 32 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_YEAR, -1) < 0 && errno == ERANGE,
+        "TM_YEAR == -1 returns ERANGE");
+    ok (cronodate_set_integer (d, TM_YEAR, 3001-1900) < 0 && errno == ERANGE,
+        "TM_YEAR == %d returns ERANGE", 3001-1900);
+
     ok (cronodate_set (d, TM_MON, "6") >= 0, "date glob set, mon = 6");
     ok (cronodate_set (d, TM_MDAY, "6") >= 0, "date glob set, mday = 6");
     ok (cronodate_set (d, TM_YEAR, "*") >= 0, "date glob set, year = *");
