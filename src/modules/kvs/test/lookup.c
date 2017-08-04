@@ -212,7 +212,7 @@ void check_common (lookup_t *lh,
     ok (lookup (lh) == lookup_result,
         "%s: lookup matched result", msg);
     ok (lookup_get_errnum (lh) == get_errnum_result,
-        "%s: lookup_get_errnum returns expected errnum", msg);
+        "%s: lookup_get_errnum returns expected errnum %d", msg, lookup_get_errnum (lh));
     if (get_value_result) {
         ok ((val = lookup_get_value (lh)) != NULL,
             "%s: lookup_get_value returns non-NULL as expected", msg);
@@ -517,6 +517,8 @@ void lookup_errors (void) {
     json_t *dirref;
     json_t *dir;
     json_t *opaque_data;
+    json_t *valref_multi;
+    json_t *dirref_multi;
     struct cache *cache;
     lookup_t *lh;
     href_t dirref_ref;
@@ -542,7 +544,10 @@ void lookup_errors (void) {
      * "valref" : valref to valref_ref
      * "dirref" : dirref to dirref_ref
      * "dir" : dir w/ "val" : val to "baz"
-     *
+     * "dirref_bad" : dirref to valref_ref
+     * "valref_bad" : valref to dirref_ref
+     * "dirref_multi" : dirref to [ dirref_ref, dirref_ref ]
+     * "valref_multi" : valref to [ valref_ref, valref_ref ]
      */
 
     opaque_data = get_json_base64_string ("abcd");
@@ -565,6 +570,17 @@ void lookup_errors (void) {
     treeobj_insert_entry (root, "valref", treeobj_create_valref (valref_ref));
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
     treeobj_insert_entry (root, "dir", dir);
+    treeobj_insert_entry (root, "dirref_bad", treeobj_create_dirref (valref_ref));
+    treeobj_insert_entry (root, "valref_bad", treeobj_create_valref (dirref_ref));
+
+    valref_multi = treeobj_create_valref (valref_ref);
+    treeobj_append_blobref (valref_multi, valref_ref);
+
+    dirref_multi = treeobj_create_dirref (dirref_ref);
+    treeobj_append_blobref (dirref_multi, dirref_ref);
+
+    treeobj_insert_entry (root, "dirref_multi", dirref_multi);
+    treeobj_insert_entry (root, "valref_multi", valref_multi);
 
     kvs_util_json_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, cache_entry_create (root));
@@ -711,6 +727,79 @@ void lookup_errors (void) {
                              FLUX_KVS_READLINK | FLUX_KVS_READDIR)) != NULL,
         "lookup_create on symlink");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup symlink, expecting dir");
+
+    /* Lookup a dirref that doesn't point to a dir, should get EPERM. */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref_bad",
+                             FLUX_KVS_READDIR)) != NULL,
+        "lookup_create on dirref_bad");
+    check (lh, true, EPERM, NULL, NULL, "lookup dirref_bad");
+
+    /* Lookup a valref that doesn't point to a base64 string, should get EPERM */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "valref_bad",
+                             0)) != NULL,
+        "lookup_create on valref_bad");
+    check (lh, true, EPERM, NULL, NULL, "lookup valref_bad");
+
+    /* Lookup with an invalid root_ref, should get EINVAL */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             valref_ref,
+                             "val",
+                             0)) != NULL,
+        "lookup_create on bad root_ref");
+    check (lh, true, EINVAL, NULL, NULL, "lookup bad root_ref");
+
+    /* Lookup dirref with multiple blobrefs, should get EPERM */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref_multi",
+                             FLUX_KVS_READDIR)) != NULL,
+        "lookup_create on dirref_multi");
+    check (lh, true, EPERM, NULL, NULL, "lookup dirref_multi");
+
+    /* Lookup path w/ dirref w/ multiple blobrefs in middle, should
+     * get EPERM */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref_multi.foo",
+                             0)) != NULL,
+        "lookup_create on dirref_multi, part of path");
+    check (lh, true, EPERM, NULL, NULL, "lookup dirref_multi, part of path");
+
+    /* Lookup valref with multiple blobrefs, should get EPERM */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "valref_multi",
+                             0)) != NULL,
+        "lookup_create on valref_multi");
+    check (lh, true, EPERM, NULL, NULL, "lookup valref_multi");
+
+    /* Lookup path w/ valref w/ multiple blobrefs in middle, Not
+     * ENOENT - caller of lookup decides what to do with entry not
+     * found */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "valref_multi.foo",
+                             0)) != NULL,
+        "lookup_create on valref_multi, part of path");
+    check (lh, true, 0, NULL, NULL, "lookup valref_multi, part of path");
 
     cache_destroy (cache);
 }
