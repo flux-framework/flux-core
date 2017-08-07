@@ -33,17 +33,6 @@ Jput (json_object *o)
         json_object_put (o);
 }
 
-/* Add bool to JSON.
- */
-static __inline__ void
-Jadd_bool (json_object *o, const char *name, bool b)
-{
-    json_object *n = json_object_new_boolean (b);
-    if (!n)
-        oom ();
-    json_object_object_add (o, (char *)name, n);
-}
-
 /* Add integer to JSON.
  */
 static __inline__ void
