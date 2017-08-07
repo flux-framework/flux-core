@@ -481,9 +481,6 @@ commit_process_t commit_process (commit_t *c,
             }
 
             if (!(c->rootcpy = json_copy (rootdir))) {
-                const char *tmpref;
-                /* empty item_callback_list to prevent mistakes later */
-                while ((tmpref = zlist_pop (c->item_callback_list)));
                 c->errnum = ENOMEM;
                 return COMMIT_PROCESS_ERROR;
             }
