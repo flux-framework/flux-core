@@ -69,6 +69,13 @@ json_t *treeobj_get_entry (json_t *obj, const char *name);
 int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2);
 int treeobj_delete_entry (json_t *obj, const char *name);
 
+/* Copy a treeobj dir.
+ * This function performs a shallow copy on a dir object, copying the
+ * first level of directory entries.  Use this function over json_copy()
+ * on dir objects, as the latter is not safe on treeobj objects.
+ */
+json_t *treeobj_copy_dir (json_t *obj);
+
 /* add blobref to dirref,valref object.
  * Return 0 on success, -1 on failure with errno set.
  */
