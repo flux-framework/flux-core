@@ -37,7 +37,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libkvs/jansson_dirent.h"
+#include "src/common/libkvs/treeobj.h"
 
 #include "commit.h"
 #include "kvs_util.h"
@@ -242,24 +242,31 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
  */
 static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 {
-    json_t *value;
-    json_t *subdir, *key_value;
-    json_t *tmpdirent;
+    json_t *dir_entry;
+    json_t *dir_data;
+    json_t *tmp;
     href_t ref;
     int ret;
     struct cache_entry *hp;
-    void *iter = json_object_iter (dir);
+    void *iter;
+
+    assert (treeobj_is_dir (dir));
+
+    if (!(dir_data = treeobj_get_data (dir)))
+        return -1;
+
+    iter = json_object_iter (dir_data);
 
     /* Do not use json_object_foreach(), unsafe to modify via
      * json_object_set() while iterating.
      */
     while (iter) {
-        value = json_object_iter_value (iter);
-        if ((subdir = json_object_get (value, "DIRVAL"))) {
-            if (commit_unroll (c, current_epoch, subdir) < 0) /* depth first */
+        dir_entry = json_object_iter_value (iter);
+        if (treeobj_is_dir (dir_entry)) {
+            if (commit_unroll (c, current_epoch, dir_entry) < 0) /* depth first */
                 return -1;
-            json_incref (subdir);
-            if ((ret = store_cache (c, current_epoch, subdir, ref, &hp)) < 0)
+            json_incref (dir_entry);
+            if ((ret = store_cache (c, current_epoch, dir_entry, ref, &hp)) < 0)
                 return -1;
             if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0) {
@@ -268,21 +275,25 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                     return -1;
                 }
             }
-            if (!(tmpdirent = j_dirent_create ("DIRREF", ref)))
+            if (!(tmp = treeobj_create_dirref (ref)))
                 return -1;
-            if (json_object_iter_set_new (dir, iter, tmpdirent) < 0) {
-                json_decref (tmpdirent);
+            if (json_object_iter_set_new (dir, iter, tmp) < 0) {
+                json_decref (tmp);
                 errno = ENOMEM;
                 return -1;
             }
         }
-        else if ((key_value = json_object_get (value, "FILEVAL"))) {
+        else if (treeobj_is_val (dir_entry)) {
+            json_t *val_data;
             size_t size;
-            if (kvs_util_json_encoded_size (key_value, &size) < 0)
+
+            if (!(val_data = treeobj_get_data (dir_entry)))
+                return -1;
+            if (kvs_util_json_encoded_size (val_data, &size) < 0)
                 return -1;
             if (size > BLOBREF_MAX_STRING_SIZE) {
-                json_incref (key_value);
-                if ((ret = store_cache (c, current_epoch, key_value,
+                json_incref (val_data);
+                if ((ret = store_cache (c, current_epoch, val_data,
                                         ref, &hp)) < 0)
                     return -1;
                 if (ret) {
@@ -292,16 +303,16 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                         return -1;
                     }
                 }
-                if (!(tmpdirent = j_dirent_create ("FILEREF", ref)))
+                if (!(tmp = treeobj_create_valref (ref)))
                     return -1;
-                if (json_object_iter_set_new (dir, iter, tmpdirent) < 0) {
-                    json_decref (tmpdirent);
+                if (json_object_iter_set_new (dir, iter, tmp) < 0) {
+                    json_decref (tmp);
                     errno = ENOMEM;
                     return -1;
                 }
             }
         }
-        iter = json_object_iter_next (dir, iter);
+        iter = json_object_iter_next (dir_data, iter);
     }
 
     return 0;
@@ -316,8 +327,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
     char *cpy = strdup (key);
     char *next, *name = cpy;
     json_t *dir = rootdir;
-    json_t *o, *subdir = NULL, *subdirent;
-    json_t *tmpdirent;
+    json_t *subdir = NULL, *dir_entry;
     int saved_errno, rc = -1;
 
     if (!cpy) {
@@ -333,62 +343,85 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
     }
 
     /* This is the first part of a key with multiple path components.
-     * Make sure that it is a directory in DIRVAL form, then recurse
-     * on the remaining path components.
+     * Make sure that it is a treeobj dir, then recurse on the
+     * remaining path components.
      */
     while ((next = strchr (name, '.'))) {
         *next++ = '\0';
-        if (!(subdirent = json_object_get (dir, name))) {
+
+        if (!treeobj_is_dir (dir)) {
+            saved_errno = EPERM;
+            goto done;
+        }
+
+        if (!(dir_entry = treeobj_get_entry (dir, name))) {
             if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object ())) {
-                saved_errno = ENOMEM;
+            if (!(subdir = treeobj_create_dir ())) {
+                saved_errno = errno;
                 goto done;
             }
-            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+            if (treeobj_insert_entry (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
             }
-            if (json_object_set_new (dir, name, tmpdirent) < 0) {
-                json_decref (tmpdirent);
-                json_decref (subdir);
-                saved_errno = ENOMEM;
+            json_decref (subdir);
+        } else if (treeobj_is_dir (dir_entry)) {
+            subdir = dir_entry;
+        } else if (treeobj_is_dirref (dir_entry)) {
+            const char *ref;
+            int refcount;
+
+            if ((refcount = treeobj_get_count (dir_entry)) < 0) {
+                saved_errno = errno;
                 goto done;
             }
-            json_decref (subdir);
-        } else if ((o = json_object_get (subdirent, "DIRVAL"))) {
-            subdir = o;
-        } else if ((o = json_object_get (subdirent, "DIRREF"))) {
-            assert (json_is_string (o));
-            const char *ref = json_string_value (o);
+
+            if (refcount != 1) {
+                log_msg ("invalid dirref count: %d", refcount);
+                saved_errno = EPERM;
+                goto done;
+            }
+
+            if (!(ref = treeobj_get_blobref (dir_entry, 0))) {
+                saved_errno = errno;
+                goto done;
+            }
+
             if (!(subdir = cache_lookup_and_get_json (c->cm->cache,
                                                       ref,
                                                       current_epoch))) {
                 *missing_ref = ref;
                 goto success; /* stall */
             }
-            /* do not corrupt store by modify orig. */
-            if (!(subdir = json_copy (subdir))) {
-                saved_errno = ENOMEM;
+
+            /* do not corrupt store by modifying orig. */
+            if (!(subdir = treeobj_copy_dir (subdir))) {
+                saved_errno = errno;
                 goto done;
             }
-            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+
+            if (treeobj_insert_entry (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
             }
-            if (json_object_set_new (dir, name, tmpdirent) < 0) {
-                json_decref (tmpdirent);
-                json_decref (subdir);
-                saved_errno = ENOMEM;
+            json_decref (subdir);
+        } else if (treeobj_is_symlink (dir_entry)) {
+            json_t *symlink = treeobj_get_data (dir_entry);
+            const char *symlinkstr;
+            char *nkey = NULL;
+
+            if (!symlink) {
+                saved_errno = errno;
                 goto done;
             }
-            json_decref (subdir);
-        } else if ((o = json_object_get (subdirent, "LINKVAL"))) {
-            assert (json_is_string (o));
-            char *nkey = NULL;
-            if (asprintf (&nkey, "%s.%s", json_string_value (o), next) < 0) {
+
+            assert (json_is_string (symlink));
+
+            symlinkstr = json_string_value (symlink);
+            if (asprintf (&nkey, "%s.%s", symlinkstr, next) < 0) {
                 saved_errno = ENOMEM;
                 goto done;
             }
@@ -407,19 +440,13 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else {
             if (json_is_null (dirent)) /* key deletion - it doesn't exist so return */
                 goto success;
-            if (!(subdir = json_object ())) {
-                saved_errno = ENOMEM;
+            if (!(subdir = treeobj_create_dir ())) {
+                saved_errno = errno;
                 goto done;
             }
-            if (!(tmpdirent = j_dirent_create ("DIRVAL", subdir))) {
+            if (treeobj_insert_entry (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
-                goto done;
-            }
-            if (json_object_set_new (dir, name, tmpdirent) < 0) {
-                json_decref (tmpdirent);
-                json_decref (subdir);
-                saved_errno = ENOMEM;
                 goto done;
             }
             json_decref (subdir);
@@ -430,14 +457,20 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
     /* This is the final path component of the key.  Add it to the directory.
      */
     if (!json_is_null (dirent)) {
-        if (json_object_set_new (dir, name, json_incref (dirent)) < 0) {
+        if (treeobj_insert_entry (dir, name, dirent) < 0) {
             saved_errno = errno;
-            json_decref (dirent);
             goto done;
         }
     }
-    else
-        json_object_del (dir, name);
+    else {
+        if (treeobj_delete_entry (dir, name) < 0) {
+            /* if ENOENT, it's ok since we're deleting */
+            if (errno != ENOENT) {
+                saved_errno = errno;
+                goto done;
+            }
+        }
+    }
 success:
     rc = 0;
 done:
@@ -480,8 +513,8 @@ commit_process_t commit_process (commit_t *c,
                 goto stall_load;
             }
 
-            if (!(c->rootcpy = json_copy (rootdir))) {
-                c->errnum = ENOMEM;
+            if (!(c->rootcpy = treeobj_copy_dir (rootdir))) {
+                c->errnum = errno;
                 return COMMIT_PROCESS_ERROR;
             }
 
@@ -492,9 +525,9 @@ commit_process_t commit_process (commit_t *c,
         {
             /* Apply each op (e.g. key = val) in sequence to the root
              * copy.  A side effect of walking key paths is to convert
-             * DIRREFs to DIRVALs in the copy. This allows the commit
-             * to be self-contained in the rootcpy until it is
-             * unrolled later on.
+             * dirref objects to dir objects in the copy.  This allows
+             * the commit to be self-contained in the rootcpy until it
+             * is unrolled later on.
              */
             if (fence_get_json_ops (c->f)) {
                 json_t *op, *key, *dirent;
@@ -546,8 +579,8 @@ commit_process_t commit_process (commit_t *c,
         case COMMIT_STATE_STORE:
         {
             /* Unroll the root copy.
-             * When a DIRVAL is found, store an object and replace it
-             * with a DIRREF.  Finally, store the unrolled root copy
+             * When a dir is found, store an object and replace it
+             * with a dirref.  Finally, store the unrolled root copy
              * as an object and keep its reference in c->newroot.
              * Flushes to content cache are asynchronous but we don't
              * proceed until they are completed.
