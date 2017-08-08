@@ -129,8 +129,12 @@ function Command:request (type, typeargs, arg)
         args = typeargs,
         command = command,
         name = self.opt.N or command:match("%S+"),
+        cwd = self.opt.d,
         ["repeat"] = tonumber (self.opt.c)
     }
+    if self.opt.E then
+        req.environ = require 'posix'.getenv ()
+    end
     -- Process comma-separated list of options to add undocumented
     --  members to JSON request, e.g. `-o rank=1,task-history-count=5`
     if self.opt.o then
@@ -160,6 +164,12 @@ program:SubCommand {
     { name = "options", char = "o", arg = "OPTS",
       usage = "Comma separated list of key=value options to set in request"
     },
+    { name = "preserve-env", char = "E",
+      usage = "Use current environment for cron command"
+    },
+    { name = "working-dir", char = "d", arg = "DIR",
+      usage = "Set working director for cron command"
+    }
  },
  handler = function (self, arg)
     if #arg <  2 then self:die ("INTERVAL and COMMAND required") end
@@ -197,6 +207,12 @@ program:SubCommand {
     },
     { name = "name", char = "N", arg = "S",
       usage = "Name cron job string S instead of default"
+    },
+    { name = "preserve-env", char = "E",
+      usage = "Use current environment for cron command"
+    },
+    { name = "working-dir", char = "d", arg = "DIR",
+      usage = "Set working director for cron command"
     }
  },
  handler = function (self, arg)
@@ -221,6 +237,12 @@ program:SubCommand {
     { name = "options", char = "o", arg = "OPTS",
       usage = "Comma separated list of key=value options to set in request"
     },
+    { name = "preserve-env", char = "E",
+      usage = "Use current environment for cron command"
+    },
+    { name = "working-dir", char = "d", arg = "DIR",
+      usage = "Set working director for cron command"
+    }
  },
  handler = function (self, arg)
     local fp = io.stdin
@@ -273,6 +295,12 @@ program:SubCommand {
     { name = "options", char = "o", arg = "OPTS",
       usage = "Comma separated list of key=value options to set in request"
     },
+    { name = "preserve-env", char = "E",
+      usage = "Use current environment for cron command"
+    },
+    { name = "working-dir", char = "d", arg = "DIR",
+      usage = "Set working director for cron command"
+    }
  },
  handler = function (self, arg)
     if #arg < 2 then self:die ("TIME and COMMAND args are required") end
