@@ -32,6 +32,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "treeobj.h"
 
 struct kvsdir_struct {
     flux_t *handle;
@@ -43,7 +44,7 @@ struct kvsdir_struct {
 };
 
 struct kvsdir_iterator_struct {
-    json_t *dirobj;
+    json_t *dirdata;
     void *iter;
 };
 
@@ -54,11 +55,13 @@ void kvsdir_incref (kvsdir_t *dir)
 
 void kvsdir_destroy (kvsdir_t *dir)
 {
-    if (--dir->usecount == 0) {
+    if (dir && --dir->usecount == 0) {
+        int saved_errno = errno;
         free (dir->rootref);
         free (dir->key);
         json_decref (dir->dirobj);
         free (dir);
+        errno = saved_errno;
     }
 }
 
@@ -76,23 +79,30 @@ kvsdir_t *kvsdir_create (flux_t *handle, const char *rootref,
         return NULL;
     }
     if (!(dir = calloc (1, sizeof (*dir))))
-        goto nomem;
+        goto error;
 
     dir->handle = handle;
     if (rootref) {
         if (!(dir->rootref = strdup (rootref)))
-            goto nomem;
+            goto error;
     }
     if (!(dir->key = strdup (key)))
-        goto nomem;
-    if (!(dir->dirobj = json_loads (json_str, 0, NULL)))
-        goto nomem;
+        goto error;
+    if (!(dir->dirobj = json_loads (json_str, 0, NULL))) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (treeobj_validate (dir->dirobj) < 0)
+        goto error;
+    if (!treeobj_is_dir (dir->dirobj)) {
+        errno = EINVAL;
+        goto error;
+    }
     dir->usecount = 1;
 
     return dir;
-nomem:
+error:
     kvsdir_destroy (dir);
-    errno = ENOMEM;
     return NULL;
 }
 
@@ -109,7 +119,7 @@ const char *kvsdir_tostring (kvsdir_t *dir)
 
 int kvsdir_get_size (kvsdir_t *dir)
 {
-    return json_object_size (dir->dirobj);
+    return treeobj_get_count (dir->dirobj);
 }
 
 const char *kvsdir_key (kvsdir_t *dir)
@@ -139,20 +149,18 @@ kvsitr_t *kvsitr_create (kvsdir_t *dir)
     kvsitr_t *itr;
 
     if (!(itr = calloc (1, sizeof (*itr))))
-        goto nomem;
-    itr->dirobj = dir->dirobj;
-    itr->iter = json_object_iter (itr->dirobj);
-
+        goto error;
+    itr->dirdata = treeobj_get_data (dir->dirobj);
+    itr->iter = json_object_iter (itr->dirdata);
     return itr;
-nomem:
+error:
     kvsitr_destroy (itr);
-    errno = ENOMEM;
     return NULL;
 }
 
 void kvsitr_rewind (kvsitr_t *itr)
 {
-    itr->iter = json_object_iter (itr->dirobj);
+    itr->iter = json_object_iter (itr->dirdata);
 }
 
 const char *kvsitr_next (kvsitr_t *itr)
@@ -161,24 +169,24 @@ const char *kvsitr_next (kvsitr_t *itr)
 
     if (itr->iter) {
         name = json_object_iter_key (itr->iter);
-        itr->iter = json_object_iter_next (itr->dirobj, itr->iter);
+        itr->iter = json_object_iter_next (itr->dirdata, itr->iter);
     }
     return name;
 }
 
 bool kvsdir_exists (kvsdir_t *dir, const char *name)
 {
-    if (json_object_get (dir->dirobj, name))
+    if (treeobj_get_entry (dir->dirobj, name))
         return true;
     return false;
 }
 
 bool kvsdir_isdir (kvsdir_t *dir, const char *name)
 {
-    json_t *obj = json_object_get (dir->dirobj, name);
+    json_t *obj = treeobj_get_entry (dir->dirobj, name);
 
     if (obj) {
-        if (json_object_get (obj, "DIRREF") || json_object_get (obj, "DIRVAL"))
+        if (treeobj_is_dir (obj) || treeobj_is_dirref (obj))
             return true;
     }
     return false;
@@ -186,10 +194,10 @@ bool kvsdir_isdir (kvsdir_t *dir, const char *name)
 
 bool kvsdir_issymlink (kvsdir_t *dir, const char *name)
 {
-    json_t *obj = json_object_get (dir->dirobj, name);
+    json_t *obj = treeobj_get_entry (dir->dirobj, name);
 
     if (obj) {
-        if (json_object_get (obj, "LINKVAL"))
+        if (treeobj_is_symlink (obj))
             return true;
     }
     return false;
