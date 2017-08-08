@@ -32,6 +32,30 @@
 #include "kvs_txn_private.h"
 #include "treeobj.h"
 
+/* A transaction is an ordered list of operations.
+ * Each operation contains a key and a "dirent" (RFC 11 tree object).
+ * The operation assigns a new dirent to the key.  A NULL dirent removes
+ * the key.  A commit operation accepts a transaction and applies the
+ * whole thing, in order.  If any operation fails, the transaction is
+ * not finalized, thus either all or none of the operations are applied.
+ *
+ * Raw versus JSON values:
+ * All values are base64 encoded per RFC 11, even values that
+ * are themselves JSON.  This is a change from the original design,
+ * which stored only JSON values.  The new design stores only untyped
+ * opaque data.  Because of this history, and because it offers convenience
+ * for KVS use cases, we still have flux_kvs_txn_put() which accepts encoded
+ * JSON, and flux_kvs_txn_pack() which builds a JSON object, then encodes it.
+ * The encoded JSON is converted internally to a string, that is encoded as
+ * base64 and becomes the raw value (with terminating NULL).
+ * An exception is if the FLUX_KVS_TREEOBJ flag is set - then the encoded
+ * or built JSON object is interpreted directly as an RFC 11 tree object.
+ *
+ * NULL or empty values:
+ * A zero length raw value is considered valid.
+ * A NULL JSON string passed to flux_kvs_txn_put() is interpreted as an unlink.
+ * A NULL format string passed to flux_kvs_txn_pack() is invalid.
+ */
 struct flux_kvs_txn {
     json_t *ops;
     int cursor;
