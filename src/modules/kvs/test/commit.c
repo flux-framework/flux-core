@@ -588,6 +588,47 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
     cache_destroy (cache);
 }
 
+void commit_basic_root_not_dir (void)
+{
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    href_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* make a non-dir root */
+    root = treeobj_create_val ("abcd", 4);
+
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, root_ref, cache_entry_create (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    create_ready_commit (cm, "fence1", "val", "42", 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
+        "commit_process returns COMMIT_PROCESS_ERROR");
+
+    /* error is caught continuously */
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
+        "commit_process returns COMMIT_PROCESS_ERROR again");
+
+    ok (commit_get_errnum (c) == EINVAL,
+        "commit_get_errnum return EINVAL");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
 struct rootref_data {
     struct cache *cache;
     const char *rootref;
@@ -1374,6 +1415,70 @@ void commit_process_delete_filevalinpath_test (void) {
     cache_destroy (cache);
 }
 
+void commit_process_bad_dirrefs (void) {
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    json_t *dirref;
+    json_t *dir;
+    href_t root_ref;
+    href_t dir_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is
+     *
+     * root_ref
+     * "dir" : dirref to [ dir_ref, dir_ref ]
+     *
+     * dir_ref
+     * "val" : val w/ "42"
+     *
+     */
+
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
+
+    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, dir_ref, cache_entry_create (dir));
+
+    dirref = treeobj_create_dirref (dir_ref);
+    treeobj_append_blobref (dirref, dir_ref);
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", dirref);
+
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, root_ref, cache_entry_create (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
+        "commit_process returns COMMIT_PROCESS_ERROR");
+
+    /* error is caught continuously */
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
+        "commit_process returns COMMIT_PROCESS_ERROR again");
+
+    ok (commit_get_errnum (c) == EPERM,
+        "commit_get_errnum return EPERM");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
 void commit_process_big_fileval (void) {
     struct cache *cache;
     commit_mgr_t *cm;
@@ -1573,6 +1678,7 @@ int main (int argc, char *argv[])
     commit_basic_commit_process_test ();
     commit_basic_commit_process_test_multiple_fences ();
     commit_basic_commit_process_test_multiple_fences_merge ();
+    commit_basic_root_not_dir ();
     commit_process_root_missing ();
     commit_process_missing_ref ();
     /* no need for dirty_cache_entries() test, as it is the most
@@ -1587,6 +1693,7 @@ int main (int argc, char *argv[])
     commit_process_delete_test ();
     commit_process_delete_nosubdir_test ();
     commit_process_delete_filevalinpath_test ();
+    commit_process_bad_dirrefs ();
     commit_process_big_fileval ();
     commit_process_giant_dir ();
 
