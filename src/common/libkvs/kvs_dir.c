@@ -71,6 +71,10 @@ kvsdir_t *kvsdir_create (flux_t *handle, const char *rootref,
 {
     kvsdir_t *dir;
 
+    if (!key || !json_str) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(dir = calloc (1, sizeof (*dir))))
         goto nomem;
 
