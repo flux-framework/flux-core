@@ -75,6 +75,9 @@ struct cron_entry {
     int                 rank;               /* Optional rank on which to run */
     char *              name;               /* Entry name, if given          */
     char *              command;            /* Command to execute            */
+    char *              cwd;                /* Change working directory      */
+    json_t *            env;                /* Optional environment for cmd,
+                                               (encoded as json array)       */
 
     int                 repeat;             /* Total number of times to run  */
 

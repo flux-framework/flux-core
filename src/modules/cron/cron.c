@@ -103,7 +103,7 @@ static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)
 static int cron_entry_run_task (cron_entry_t *e)
 {
     flux_t *h = e->ctx->h;
-    if (cron_task_run (e->task, e->rank, e->command, NULL, NULL) < 0) {
+    if (cron_task_run (e->task, e->rank, e->command, e->cwd, e->env) < 0) {
         flux_log_error (h, "cron-%ju: cron_task_run", e->id);
         /* Run "completion" handler since this task is done */
         cron_entry_completion_handler (h, e->task, e);
@@ -316,6 +316,10 @@ static void cron_entry_destroy (cron_entry_t *e)
     free (e->name);
     free (e->command);
     free (e->typename);
+    free (e->cwd);
+
+    if (e->env)
+        json_decref (e->env);
 
     if (e->completed_tasks) {
         t = zlist_first (e->completed_tasks);
@@ -412,6 +416,7 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
     const char *name;
     const char *command;
     const char *type;
+    const char *cwd = NULL;
     int saved_errno = EPROTO;
 
     /* Get required fields "type", "name" and "command" */
@@ -456,7 +461,9 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
     e->stop_on_failure = 0;    /* Whether the cron job is stopped on failure */
     e->timeout = -1.0;         /* Task timeout (default -1, no timeout)      */
 
-    if (flux_msg_unpack (msg, "{ s?i, s?i, s?i, s?i, s?F }",
+    if (flux_msg_unpack (msg, "{ s?O, s?s, s?i, s?i, s?i, s?i, s?F }",
+            "environ",            &e->env,
+            "cwd",                &cwd,
             "repeat",             &e->repeat,
             "rank",               &e->rank,
             "task-history-count", &e->task_history_count,
@@ -464,6 +471,12 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
             "timeout",            &e->timeout) < 0) {
         saved_errno = EPROTO;
         flux_log_error (h, "cron.create: flux_msg_unpack");
+        goto out_err;
+    }
+
+    if (cwd && (e->cwd = strdup (cwd)) == NULL) {
+        flux_log_error (h, "cron.create: strdup (cwd)");
+        errno = ENOMEM;
         goto out_err;
     }
 
