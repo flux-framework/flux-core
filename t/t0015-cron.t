@@ -90,6 +90,21 @@ test_expect_success 'rank option works' '
     cron_entry_check ${id} rank 1 &&
     flux dmesg | grep "cron-${id}.*command=\"flux getattr rank\": \"1\""
 '
+test_expect_success '--preserve-env option works' '
+    export FOO=bar &&
+    id=$(flux_cron interval --preserve-env -c1 -o rank=1 .01s printenv FOO) &&
+    unset FOO &&
+    sleep .1 &&
+    cron_entry_check ${id} stopped true &&
+    flux dmesg | grep "cron-${id}.*command=\"printenv FOO\": \"bar\""
+'
+test_expect_success '--working-dir option works' '
+    id=$(flux_cron interval -c1 -d /tmp .01s pwd) &&
+    sleep .1 &&
+    cron_entry_check ${id} stopped true &&
+    flux dmesg | grep "cron-${id}.*command=\"pwd\": \"/tmp\""
+'
+
 test_expect_success 'cron entry exec failure is recorded' '
     id=$(flux_cron interval -c1 0.01s notaprogram) &&
     sleep 0.1 &&
