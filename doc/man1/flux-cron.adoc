@@ -68,6 +68,18 @@ Options:
  The '--options' option allows a comma separated list of extra options to be
  passed to the flux-cron service. See EXTRA OPTIONS below.
 
+ --preserve-env:::
+ -E:::
+ The '--preserve-env' option allows the current environment to be exported
+ and used for the command being executed as part of the cron job. Normally,
+ the broker environment is used.
+
+ --working-dir='DIR':::
+ -d 'DIR':::
+ The '--working-dir' option allows the working directory to be set for the command
+ being executed as part of the cron job. Normally, the working directory of
+ the broker is used.
+
 *event* [OPTIONS] 'topic' 'command'::
 
 Create a cron entry to execute 'command' after every event matching 'topic'.
@@ -99,6 +111,18 @@ Create a cron entry to execute 'command' after every event matching 'topic'.
  -o 'LIST':::
  Set comma separated EXTRA OPTIONS for this cron entry.
 
+ --preserve-env:::
+ -E:::
+ The '--preserve-env' option allows the current environment to be exported
+ and used for the command being executed as part of the cron job. Normally,
+ the broker environment is used.
+
+ --working-dir='DIR':::
+ -d 'DIR':::
+ The '--working-dir' option allows the working directory to be set for the command
+ being executed as part of the cron job. Normally, the working directory of
+ the broker is used.
+
 *tab* [OPTIONS] ['file'] ::
 Process one or more lines containing crontab expressions from 'file'
 (stdin by default) Each valid crontab line will result in a new cron
@@ -118,6 +142,17 @@ Run 'command' at specific date and time described by 'string'
  -o 'LIST':::
  Set comma separated EXTRA OPTIONS for all cron entries.
 
+ --preserve-env:::
+ -E:::
+ The '--preserve-env' option allows the current environment to be exported
+ and used for the command being executed as part of the cron job. Normally,
+ the broker environment is used.
+
+ --working-dir='DIR':::
+ -d 'DIR':::
+ The '--working-dir' option allows the working directory to be set for the command
+ being executed as part of the cron job. Normally, the working directory of
+ the broker is used.
 *list*::
 Display a list of current entries registered with the cron module and
 their current state, last run time, etc.
