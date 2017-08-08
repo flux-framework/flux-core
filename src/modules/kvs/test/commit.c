@@ -1608,6 +1608,7 @@ int main (int argc, char *argv[])
      * "normal" situation and is tested throughout
      */
     commit_process_error_callbacks ();
+    commit_process_error_callbacks_partway ();
     commit_process_invalid_operation ();
     commit_process_invalid_hash ();
     commit_process_follow_link ();
