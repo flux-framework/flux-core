@@ -1061,7 +1061,7 @@ int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
     return rc;
 }
 
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void *buf, int *size)
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void **buf, int *size)
 {
     zframe_t *zf;
     uint8_t msgflags;
@@ -1090,7 +1090,7 @@ int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void *buf, int *siz
     if (flags)
         *flags = msgflags & FLUX_MSGFLAG_JSON;
     if (buf)
-        *(void **)buf = zframe_data (zf);
+        *buf = zframe_data (zf);
     if (size)
         *size = zframe_size (zf);
     return 0;
