@@ -170,7 +170,7 @@ static int content_load_get (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *o;
-    const void *data;
+    void *data;
     int size;
     const char *blobref;
     struct cache_entry *hp;
@@ -332,7 +332,7 @@ static int content_store_get (flux_future_t *f, void *arg)
     int rc = -1;
     int saved_errno, ret;
 
-    if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
+    if (flux_rpc_get_raw (f, (void **)&blobref, &blobref_size) < 0) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
         goto done;

@@ -18,7 +18,7 @@ SYNOPSIS
 
  int flux_response_decode_raw (const flux_msg_t *msg,
                                const char **topic,
-                               void *data, int *len);
+                               void **data, int *len);
 
 DESCRIPTION
 -----------

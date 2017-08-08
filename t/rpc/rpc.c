@@ -260,7 +260,8 @@ void test_encoding (flux_t *h)
     flux_future_destroy (r);
 
     /* working with-payload RPC (raw) */
-    char *d, data[] = "aaaaaaaaaaaaaaaaaaaa";
+    void *d;
+    char data[] = "aaaaaaaaaaaaaaaaaaaa";
     int l, len = strlen (data);
     ok ((r = flux_rpc_raw (h, "rpctest.rawecho", data, len,
                           FLUX_NODEID_ANY, 0)) != NULL,

@@ -25,7 +25,7 @@ int flux_rpc_get (flux_future_t *f, const char **json_str);
 
 int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
 
-int flux_rpc_get_raw (flux_future_t *f, void *data, int *len);
+int flux_rpc_get_raw (flux_future_t *f, void **data, int *len);
 
 
 #endif /* !_FLUX_CORE_RPC_H */

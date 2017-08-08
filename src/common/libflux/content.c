@@ -52,7 +52,7 @@ flux_future_t *flux_content_load (flux_t *h, const char *blobref, int flags)
     return flux_rpc_raw (h, topic, blobref, strlen (blobref) + 1, rank, 0);
 }
 
-int flux_content_load_get (flux_future_t *f, void *buf, int *len)
+int flux_content_load_get (flux_future_t *f, void **buf, int *len)
 {
     return flux_rpc_get_raw (f, buf, len);
 }
@@ -76,7 +76,7 @@ int flux_content_store_get (flux_future_t *f, const char **blobref)
     int ref_size;
     const char *ref;
 
-    if (flux_rpc_get_raw (f, &ref, &ref_size) < 0)
+    if (flux_rpc_get_raw (f, (void **)&ref, &ref_size) < 0)
         return -1;
     if (!ref || ref[ref_size - 1] != '\0' || blobref_validate (ref) < 0) {
         errno = EPROTO;

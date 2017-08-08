@@ -59,7 +59,7 @@ int flux_mrpc_get_nodeid (flux_mrpc_t *mrpc, uint32_t *nodeid);
  * or flux_mrpc_next().
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_mrpc_get_raw (flux_mrpc_t *mrpc, void *data, int *len);
+int flux_mrpc_get_raw (flux_mrpc_t *mrpc, void **data, int *len);
 
 /* Arrange for reactor to handle response and call 'cb' continuation function
  * when a response is received.  The function should call flux_mrpc_get().

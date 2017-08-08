@@ -50,7 +50,7 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
         flags |= CONTENT_FLAG_CACHE_BYPASS;
     if (!(f = flux_content_load (h, ref, flags)))
         log_err_exit ("flux_content_load");
-    if (flux_content_load_get (f, &data, &size) < 0)
+    if (flux_content_load_get (f, (void **)&data, &size) < 0)
         log_err_exit ("flux_content_load_get");
     if (write_all (STDOUT_FILENO, data, size) < 0)
         log_err_exit ("write");

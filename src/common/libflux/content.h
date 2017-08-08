@@ -19,7 +19,7 @@ flux_future_t *flux_content_load (flux_t *h,
  * Storage for 'buf' belongs to 'f' and is valid until 'f' is destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int flux_content_load_get (flux_future_t *f, void *buf, int *len);
+int flux_content_load_get (flux_future_t *f, void **buf, int *len);
 
 /* Send request to store blob.
  */
