@@ -348,7 +348,7 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
 static json_t *exec_request_create (struct cron_task *t,
     const char *command,
     const char *cwd,
-    char *const env[])
+    json_t *env)
 {
     json_t *o;
     json_t *cmdline = NULL;
@@ -370,16 +370,8 @@ static json_t *exec_request_create (struct cron_task *t,
         }
     }
 
-    if (env) {
-        json_t *enva = json_array ();
-        const char *e = env[0];
-        while (e != NULL)
-            json_array_append_new (enva, json_string (e));
-        if (json_object_set_new (o, "environ", enva) < 0) {
-            json_decref (enva);
+    if (env && json_object_set (o, "env", env) < 0)
             goto fail;
-        }
-    }
     return (o);
 fail:
     json_decref (o);
@@ -388,7 +380,7 @@ fail:
 
 int cron_task_run (cron_task_t *t,
     int rank, const char *cmd, const char *cwd,
-    char *const env[])
+    json_t *env)
 {
     flux_t *h = t->h;
     json_t *req = NULL;
