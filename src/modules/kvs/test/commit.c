@@ -6,7 +6,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
-#include "src/common/libkvs/jansson_dirent.h"
+#include "src/common/libkvs/treeobj.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/commit.h"
 #include "src/modules/kvs/lookup.h"
@@ -16,8 +16,9 @@
 
 static int test_global = 5;
 
-/* Append a JSON object containing
- *     { "key" : key, "dirent" : dirent }
+/* Append a json object containing
+ *     { "key" : key, "dirent" : <treeobj> } }
+ * or
  *     { "key" : key, "dirent" : null }
  * to a json array.
  */
@@ -31,7 +32,7 @@ void ops_append (json_t *array, const char *key, const char *value)
     json_object_set_new (op, "key", o);
 
     if (value) {
-        json_t *dirent = j_dirent_create ("FILEVAL", json_string (value));
+        json_t *dirent = treeobj_create_val ((void *)value, strlen (value));
         json_object_set_new (op, "dirent", dirent);
     }
     else {
@@ -46,7 +47,9 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
 {
     struct cache *cache;
     struct cache_entry *hp;
-    json_t *rootdir = json_object ();
+    json_t *rootdir;
+
+    rootdir = treeobj_create_dir ();
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -398,7 +401,7 @@ void verify_value (struct cache *cache,
         "lookup found result");
 
     if (val) {
-        test = json_string (val);
+        test = treeobj_create_val (val, strlen (val));
         ok ((o = lookup_get_value (lh)) != NULL,
             "lookup_get_value returns non-NULL as expected");
         ok (json_equal (test, o) == true,
@@ -593,11 +596,14 @@ struct rootref_data {
 int rootref_cb (commit_t *c, const char *ref, void *data)
 {
     struct rootref_data *rd = data;
-    json_t *rootdir = json_object ();
+    json_t *rootdir;
     struct cache_entry *hp;
 
     ok (strcmp (ref, rd->rootref) == 0,
         "missing root reference is what we expect it to be");
+
+    ok ((rootdir = treeobj_create_dir ()) != NULL,
+        "treeobj_create_dir works");
 
     ok ((hp = cache_entry_create (rootdir)) != NULL,
         "cache_entry_create works");
@@ -614,11 +620,14 @@ void commit_process_root_missing (void)
     commit_t *c;
     href_t rootref;
     struct rootref_data rd;
-    json_t *rootdir = json_object ();
+    json_t *rootdir;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+
+    ok ((rootdir = treeobj_create_dir ()) != NULL,
+        "treeobj_create_dir works");
 
     ok (kvs_util_json_hash ("sha1", rootdir, rootref) == 0,
         "kvs_util_json_hash worked");
@@ -706,26 +715,24 @@ void commit_process_missing_ref (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -735,7 +742,7 @@ void commit_process_missing_ref (void) {
     ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.fileval", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -770,7 +777,7 @@ void commit_process_missing_ref (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dir.fileval", "52");
+    verify_value (cache, newroot, "dir.val", "52");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -801,26 +808,24 @@ void commit_process_error_callbacks (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -830,7 +835,7 @@ void commit_process_error_callbacks (void) {
     ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.file", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -885,26 +890,24 @@ void commit_process_error_callbacks_partway (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -953,26 +956,24 @@ void commit_process_invalid_operation (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1015,26 +1016,24 @@ void commit_process_invalid_hash (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1078,40 +1077,37 @@ void commit_process_follow_link (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> }
-     *   "linkval" : { "LINKVAL" : "dir" } }
+     * root_ref
+     * "dir" : dirref to dir_ref
+     * "symlink" : symlink to "dir"
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
-    json_object_set (root,
-                     "linkval",
-                     j_dirent_create ("LINKVAL", json_string ("dir")));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
+
     ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "linkval.fileval", "52", 0);
+    create_ready_commit (cm, "fence1", "symlink.val", "52", 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1128,7 +1124,7 @@ void commit_process_follow_link (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "linkval.fileval", "52");
+    verify_value (cache, newroot, "symlink.val", "52");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1148,18 +1144,16 @@ void commit_process_dirval_test (void) {
 
     /* This root is
      *
-     * root
-     * { "dirval" : { "DIRVAL" : { "fileval" : { "FILEVAL" : "42" } } } }
+     * root_ref
+     * "dir" : dir with { "val" : val to 42 }
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    root = json_object ();
-    json_object_set (root, "dirval", j_dirent_create ("DIRVAL", dir));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", dir);
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1169,7 +1163,7 @@ void commit_process_dirval_test (void) {
     ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dirval.fileval", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1186,7 +1180,7 @@ void commit_process_dirval_test (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dirval.fileval", "52");
+    verify_value (cache, newroot, "dir.val", "52");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1207,26 +1201,24 @@ void commit_process_delete_test (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1237,7 +1229,7 @@ void commit_process_delete_test (void) {
         "commit_mgr_create works");
 
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "dir.fileval", NULL, 0);
+    create_ready_commit (cm, "fence1", "dir.val", NULL, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1254,7 +1246,7 @@ void commit_process_delete_test (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dir.fileval", NULL);
+    verify_value (cache, newroot, "dir.val", NULL);
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1275,26 +1267,24 @@ void commit_process_delete_nosubdir_test (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1306,7 +1296,7 @@ void commit_process_delete_nosubdir_test (void) {
 
     /* subdir doesn't exist for this key */
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "noexistdir.fileval", NULL, 0);
+    create_ready_commit (cm, "fence1", "noexistdir.val", NULL, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1317,7 +1307,7 @@ void commit_process_delete_nosubdir_test (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "noexistdir.fileval", NULL);
+    verify_value (cache, newroot, "noexistdir.val", NULL);
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1338,26 +1328,24 @@ void commit_process_delete_filevalinpath_test (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1367,9 +1355,9 @@ void commit_process_delete_filevalinpath_test (void) {
     ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
         "commit_mgr_create works");
 
-    /* fileval is in path */
+    /* val is in path */
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "dir.fileval.filebaz", NULL, 0);
+    create_ready_commit (cm, "fence1", "dir.val.valbaz", NULL, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1380,7 +1368,7 @@ void commit_process_delete_filevalinpath_test (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dir.fileval.filebaz", NULL);
+    verify_value (cache, newroot, "dir.val.valbaz", NULL);
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1404,26 +1392,24 @@ void commit_process_big_fileval (void) {
 
     /* This root is
      *
-     * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * root_ref
+     * "dir" : dirref to dir_ref
      *
-     * dir
-     * { "fileval" : { "FILEVAL" : "42" } }
+     * dir_ref
+     * "val" : val w/ "42"
      *
      */
 
-    dir = json_object();
-    json_object_set (dir,
-                     "fileval",
-                     j_dirent_create ("FILEVAL", json_string ("42")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1437,7 +1423,7 @@ void commit_process_big_fileval (void) {
     for (i = 0; i < bigstrsize - 1; i++)
         bigstr[i] = 'a';
 
-    create_ready_commit (cm, "fence1", "dir.fileval", bigstr, 0);
+    create_ready_commit (cm, "fence1", "dir.val", bigstr, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1454,7 +1440,7 @@ void commit_process_big_fileval (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dir.fileval", bigstr);
+    verify_value (cache, newroot, "dir.val", bigstr);
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1479,72 +1465,57 @@ void commit_process_giant_dir (void) {
     /* This root is.
      *
      * root
-     * { "dir" : { "DIRREF" : <ref to dir> } }
+     * "dir" : dirref to dir_ref
      *
      * Mix up keys and upper/lower case to get different hash ordering
      * other than the "obvious" one.
      *
-     * dir
-     * { "fileval0000" : { "FILEVAL" : "0" },
-     *   "fileval0010" : { "FILEVAL" : "1" },
-     *   "fileval0200" : { "FILEVAL" : "2" },
-     *   "fileval3000" : { "FILEVAL" : "3" },
-     *   "fileval0004" : { "FILEVAL" : "4" },
-     *   "fileval0050" : { "FILEVAL" : "5" },
-     *   "fileval0600" : { "FILEVAL" : "6" },
-     *   "fileval7000" : { "FILEVAL" : "7" },
-     *   "fileval0008" : { "FILEVAL" : "8" },
-     *   "fileval0090" : { "FILEVAL" : "9" },
-     *   "fileval0a00" : { "FILEVAL" : "A" },
-     *   "filevalB000" : { "FILEVAL" : "b" },
-     *   "fileval000c" : { "FILEVAL" : "C" },
-     *   "fileval00D0" : { "FILEVAL" : "d" },
-     *   "fileval0e00" : { "FILEVAL" : "E" },
-     *   "filevalF000" : { "FILEVAL" : "f" } }
+     * dir_ref
+     * "val0000" : val to "0"
+     * "val0010" : val to "1"
+     * "val0200" : val to "2"
+     * "val3000" : val to "3"
+     * "val0004" : val to "4"
+     * "val0050" : val to "5"
+     * "val0600" : val to "6"
+     * "val7000" : val to "7"
+     * "val0008" : val to "8"
+     * "val0090" : val to "9"
+     * "val0a00" : val to "A"
+     * "valB000" : val to "b"
+     * "val000c" : val to "C"
+     * "val00D0" : val to "d"
+     * "val0e00" : val to "E"
+     * "valF000" : val to "f"
      *
      */
 
     dir = json_object();
-    json_object_set (dir, "fileval0000",
-                     j_dirent_create ("FILEVAL", json_string ("0")));
-    json_object_set (dir, "fileval0010",
-                     j_dirent_create ("FILEVAL", json_string ("1")));
-    json_object_set (dir, "fileval0200",
-                     j_dirent_create ("FILEVAL", json_string ("2")));
-    json_object_set (dir, "fileval3000",
-                     j_dirent_create ("FILEVAL", json_string ("3")));
-    json_object_set (dir, "fileval0004",
-                     j_dirent_create ("FILEVAL", json_string ("4")));
-    json_object_set (dir, "fileval0050",
-                     j_dirent_create ("FILEVAL", json_string ("5")));
-    json_object_set (dir, "fileval0600",
-                     j_dirent_create ("FILEVAL", json_string ("6")));
-    json_object_set (dir, "fileval7000",
-                     j_dirent_create ("FILEVAL", json_string ("7")));
-    json_object_set (dir, "fileval0008",
-                     j_dirent_create ("FILEVAL", json_string ("8")));
-    json_object_set (dir, "fileval0090",
-                     j_dirent_create ("FILEVAL", json_string ("9")));
-    json_object_set (dir, "fileval0a00",
-                     j_dirent_create ("FILEVAL", json_string ("A")));
-    json_object_set (dir, "filevalB000",
-                     j_dirent_create ("FILEVAL", json_string ("b")));
-    json_object_set (dir, "fileval000c",
-                     j_dirent_create ("FILEVAL", json_string ("C")));
-    json_object_set (dir, "fileval00D0",
-                     j_dirent_create ("FILEVAL", json_string ("d")));
-    json_object_set (dir, "fileval0e00",
-                     j_dirent_create ("FILEVAL", json_string ("E")));
-    json_object_set (dir, "filevalF000",
-                     j_dirent_create ("FILEVAL", json_string ("f")));
+    dir = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "val0000", treeobj_create_val ("0", 1));
+    treeobj_insert_entry (dir, "val0010", treeobj_create_val ("1", 1));
+    treeobj_insert_entry (dir, "val0200", treeobj_create_val ("2", 1));
+    treeobj_insert_entry (dir, "val3000", treeobj_create_val ("3", 1));
+    treeobj_insert_entry (dir, "val0004", treeobj_create_val ("4", 1));
+    treeobj_insert_entry (dir, "val0050", treeobj_create_val ("5", 1));
+    treeobj_insert_entry (dir, "val0600", treeobj_create_val ("6", 1));
+    treeobj_insert_entry (dir, "val7000", treeobj_create_val ("7", 1));
+    treeobj_insert_entry (dir, "val0008", treeobj_create_val ("8", 1));
+    treeobj_insert_entry (dir, "val0090", treeobj_create_val ("9", 1));
+    treeobj_insert_entry (dir, "val0a00", treeobj_create_val ("A", 1));
+    treeobj_insert_entry (dir, "valB000", treeobj_create_val ("b", 1));
+    treeobj_insert_entry (dir, "val000c", treeobj_create_val ("C", 1));
+    treeobj_insert_entry (dir, "val00D0", treeobj_create_val ("d", 1));
+    treeobj_insert_entry (dir, "val0e00", treeobj_create_val ("E", 1));
+    treeobj_insert_entry (dir, "valF000", treeobj_create_val ("f", 1));
 
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
     cache_insert (cache, dir_ref, cache_entry_create (dir));
 
-    root = json_object ();
-    json_object_set (root, "dir", j_dirent_create ("DIRREF", dir_ref));
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (dir, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1555,10 +1526,10 @@ void commit_process_giant_dir (void) {
         "commit_mgr_create works");
 
     /* make three ready commits */
-    create_ready_commit (cm, "fence1", "dir.fileval0200", "foo", 0);
-    create_ready_commit (cm, "fence2", "dir.fileval0090", "bar", 0);
+    create_ready_commit (cm, "fence1", "dir.val0200", "foo", 0);
+    create_ready_commit (cm, "fence2", "dir.val0090", "bar", 0);
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence3", "dir.fileval00D0", NULL, 0);
+    create_ready_commit (cm, "fence3", "dir.val00D0", NULL, 0);
 
     /* merge these three commits */
     ok (commit_mgr_merge_ready_commits (cm) == 0,
@@ -1579,9 +1550,9 @@ void commit_process_giant_dir (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dir.fileval0200", "foo");
-    verify_value (cache, newroot, "dir.fileval0090", "bar");
-    verify_value (cache, newroot, "dir.fileval00D0", NULL);
+    verify_value (cache, newroot, "dir.val0200", "foo");
+    verify_value (cache, newroot, "dir.val0090", "bar");
+    verify_value (cache, newroot, "dir.val00D0", NULL);
 
     commit_mgr_remove_commit (cm, c);
 
@@ -1600,10 +1571,10 @@ int main (int argc, char *argv[])
     commit_mgr_merge_tests ();
     commit_basic_tests ();
     commit_basic_commit_process_test ();
-    commit_process_root_missing ();
-    commit_process_missing_ref ();
     commit_basic_commit_process_test_multiple_fences ();
     commit_basic_commit_process_test_multiple_fences_merge ();
+    commit_process_root_missing ();
+    commit_process_missing_ref ();
     /* no need for dirty_cache_entries() test, as it is the most
      * "normal" situation and is tested throughout
      */
