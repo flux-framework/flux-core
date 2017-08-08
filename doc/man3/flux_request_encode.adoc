@@ -16,7 +16,7 @@ SYNOPSIS
                                   const char *json_str);
 
  flux_msg_t *flux_request_encode_raw (const char *topic,
-                                      void *data, int *len);
+                                      void *data, int len);
 
 DESCRIPTION
 -----------
@@ -26,7 +26,8 @@ _topic_ and optional JSON payload _json_str_.  The newly constructed
 message that is returned must be destroyed with `flux_msg_destroy()`.
 
 `flux_request_encode_raw()` encodes a request message with topic
-string _topic_.  If _data_ is non-NULL assign the raw payload.
+string _topic_.  If _data_ is non-NULL its contents will be used
+as the message payload, and the payload type set to raw.
 
 
 RETURN VALUE
