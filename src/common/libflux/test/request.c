@@ -11,7 +11,8 @@ int main (int argc, char *argv[])
     flux_msg_t *msg;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
-    char *d, data[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    void *d;
+    char data[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     int i, l, len = strlen (data);
 
     plan (NO_PLAN);

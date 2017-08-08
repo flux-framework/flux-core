@@ -532,7 +532,7 @@ static void append_request_cb (flux_t *h, flux_msg_handler_t *w,
         log_msg ("%s: malformed log request", __FUNCTION__);
         return;
     }
-    if (flux_request_decode_raw (msg, NULL, &buf, &len) < 0)
+    if (flux_request_decode_raw (msg, NULL, (void **)&buf, &len) < 0)
         goto error;
     if (logbuf_append (logbuf, buf, len) < 0)
         goto error;
