@@ -246,7 +246,10 @@ test_expect_success 'flux module remove cron' '
     flux module remove cron
 '
 test_expect_success 'module load with sync' '
-    flux module load cron sync=cron.sync
+    flux module load cron sync=cron.sync sync_epsilon=0.025
+'
+test_expect_success 'sync and sync_epsilon are set as expected' '
+    flux cron sync | grep "cron\.sync.*epsilon=0.025"
 '
 test_expect_success 'tasks do not run until sync event' '
     id=$(flux_cron event t.cron.trigger flux event pub t.cron.complete)
