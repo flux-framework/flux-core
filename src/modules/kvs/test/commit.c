@@ -988,33 +988,13 @@ void commit_process_invalid_operation (void) {
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    json_t *dir;
     href_t root_ref;
-    href_t dir_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
-    /* This root is
-     *
-     * root_ref
-     * "dir" : dirref to dir_ref
-     *
-     * dir_ref
-     * "val" : val w/ "42"
-     *
-     */
-
-    dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
-
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
-
-    cache_insert (cache, dir_ref, cache_entry_create (dir));
-
+    /* This root is an empty root */
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1048,33 +1028,13 @@ void commit_process_invalid_hash (void) {
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    json_t *dir;
     href_t root_ref;
-    href_t dir_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
-    /* This root is
-     *
-     * root_ref
-     * "dir" : dirref to dir_ref
-     *
-     * dir_ref
-     * "val" : val w/ "42"
-     *
-     */
-
-    dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
-
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
-
-    cache_insert (cache, dir_ref, cache_entry_create (dir));
-
+    /* This root is an empty root */
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1298,34 +1258,14 @@ void commit_process_delete_nosubdir_test (void) {
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    json_t *dir;
     href_t root_ref;
-    href_t dir_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
-    /* This root is
-     *
-     * root_ref
-     * "dir" : dirref to dir_ref
-     *
-     * dir_ref
-     * "val" : val w/ "42"
-     *
-     */
-
-    dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
-
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
-
-    cache_insert (cache, dir_ref, cache_entry_create (dir));
-
+    /* This root is an empty root */
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1484,9 +1424,7 @@ void commit_process_big_fileval (void) {
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    json_t *dir;
     href_t root_ref;
-    href_t dir_ref;
     const char *newroot;
     int bigstrsize = BLOBREF_MAX_STRING_SIZE * 2;
     char bigstr[bigstrsize];
@@ -1498,23 +1436,11 @@ void commit_process_big_fileval (void) {
     /* This root is
      *
      * root_ref
-     * "dir" : dirref to dir_ref
-     *
-     * dir_ref
      * "val" : val w/ "42"
-     *
      */
 
-    dir = treeobj_create_dir ();
-    treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
-
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
-
-    cache_insert (cache, dir_ref, cache_entry_create (dir));
-
     root = treeobj_create_dir ();
-    treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
+    treeobj_insert_entry (root, "val", treeobj_create_val ("42", 2));
 
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
@@ -1528,7 +1454,7 @@ void commit_process_big_fileval (void) {
     for (i = 0; i < bigstrsize - 1; i++)
         bigstr[i] = 'a';
 
-    create_ready_commit (cm, "fence1", "dir.val", bigstr, 0);
+    create_ready_commit (cm, "fence1", "val", bigstr, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1545,7 +1471,7 @@ void commit_process_big_fileval (void) {
     ok ((newroot = commit_get_newroot_ref (c)) != NULL,
         "commit_get_newroot_ref returns != NULL when processing complete");
 
-    verify_value (cache, newroot, "dir.val", bigstr);
+    verify_value (cache, newroot, "val", bigstr);
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
