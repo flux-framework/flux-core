@@ -611,7 +611,7 @@ void check_copy (void)
     const char *topic;
     int cpylen, flags;
     char buf[] = "xxxxxxxxxxxxxxxxxx";
-    char *cpybuf;
+    void *cpybuf;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
         "created no-payload keepalive");

@@ -85,7 +85,7 @@ done:
 }
 
 int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
-                              void *data, int *len)
+                              void **data, int *len)
 {
     const char *ts;
     void *d = NULL;
@@ -106,7 +106,7 @@ int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
     }
     if (topic)
         *topic = ts;
-    *(void **)data = d;
+    *data = d;
     *len = l;
     rc = 0;
 done:

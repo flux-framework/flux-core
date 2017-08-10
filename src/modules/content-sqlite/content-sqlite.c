@@ -255,7 +255,8 @@ void load_cb (flux_t *h, flux_msg_handler_t *w,
     int uncompressed_size;
     int rc = -1;
 
-    if (flux_request_decode_raw (msg, NULL, &blobref, &blobref_size) < 0) {
+    if (flux_request_decode_raw (msg, NULL, (void **)&blobref,
+                                 &blobref_size) < 0) {
         flux_log_error (h, "load: request decode failed");
         goto done;
     }
@@ -480,7 +481,7 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
             flux_log_error (h, "shutdown: store");
             continue;
         }
-        if (flux_rpc_get_raw (f, &blobref, &blobref_size) < 0) {
+        if (flux_rpc_get_raw (f, (void **)&blobref, &blobref_size) < 0) {
             flux_log_error (h, "shutdown: store");
             flux_future_destroy (f);
             continue;

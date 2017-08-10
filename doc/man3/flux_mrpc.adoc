@@ -22,7 +22,7 @@ int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str);
 
 int flux_mrpc_getf (flux_mrpc_t *mrpc, const char *fmt, ...);
 
-int flux_mrpc_get_raw (flux_mrpc_t *mrpc, void *data, int *len);
+int flux_mrpc_get_raw (flux_mrpc_t *mrpc, void **data, int *len);
 
 int flux_mrpc_get_nodeid (flux_mrpc_t *mrpc, uint32_t *nodeid);
 

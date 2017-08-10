@@ -359,7 +359,8 @@ void content_load_request (flux_t *h, flux_msg_handler_t *w,
     int saved_errno = 0;
     int rc = -1;
 
-    if (flux_request_decode_raw (msg, NULL, &blobref, &blobref_size) < 0) {
+    if (flux_request_decode_raw (msg, NULL, (void **)&blobref,
+                                 &blobref_size) < 0) {
         saved_errno = errno;
         goto done;
     }
