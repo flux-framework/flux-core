@@ -19,7 +19,7 @@ if egrep -q '^[[:space:]]*$' $dict; then
    exit 1
 fi
 if test  -z "$ASPELL"; then
-   echo "1..$# # skip because aspell is not installed"
+   echo "1..0 # skip because aspell is not installed"
    exit 0
 fi
 if ! $ASPELL -n list </dev/null >/dev/null; then
