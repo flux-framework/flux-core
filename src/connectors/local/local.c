@@ -261,7 +261,7 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     c->fd_nonblock = -1;
     for (count=0;;count++) {
-        if (count >= env_getint("FLUX_RETRY_COUNT", 5))
+        if (count >= env_getint("FLUX_LOCAL_CONNECTOR_RETRY_COUNT", 5))
             goto error;
         memset (&addr, 0, sizeof (struct sockaddr_un));
         addr.sun_family = AF_UNIX;
