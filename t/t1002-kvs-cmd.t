@@ -281,12 +281,12 @@ EOF
 	test_cmp output expected
 '
 test_expect_success 'kvs: readlink fails on regular value' '
-        flux kvs unlink -R $DIR &&
+        flux kvs unlink -Rf $DIR &&
 	flux kvs put $DIR.target=42 &&
 	! flux kvs readlink $DIR.target
 '
 test_expect_success 'kvs: readlink fails on directory' '
-        flux kvs unlink -R $DIR &&
+        flux kvs unlink -Rf $DIR &&
 	flux kvs mkdir $DIR.a.b.c &&
 	! flux kvs readlink $DIR.a.b.
 '
@@ -295,7 +295,7 @@ test_expect_success 'kvs: readlink fails on directory' '
 # copy/move tests
 #
 test_expect_success 'kvs: copy works' '
-        flux kvs unlink -R $DIR &&
+        flux kvs unlink -Rf $DIR &&
 	flux kvs put $DIR.src=\"foo\" &&
         flux kvs copy $DIR.src $DIR.dest &&
 	OUTPUT1=$(flux kvs get $DIR.src) &&
@@ -305,7 +305,7 @@ test_expect_success 'kvs: copy works' '
 '
 
 test_expect_success 'kvs: move works' '
-        flux kvs unlink -R $DIR &&
+        flux kvs unlink -Rf $DIR &&
 	flux kvs put $DIR.src=\"foo\" &&
         flux kvs move $DIR.src $DIR.dest &&
 	test_must_fail flux kvs get $DIR.src &&
@@ -398,7 +398,7 @@ wait_watch_current() {
 # of kvs watch process and a previous test's watch_out file.
 
 test_expect_success 'kvs: watch a key'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
         rm -f watch_out
@@ -415,7 +415,7 @@ test_expect_success 'kvs: watch a key'  '
 '
 
 test_expect_success 'kvs: watch a key that at first doesnt exist'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         wait_watch_empty "$DIR.foo"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
@@ -431,7 +431,7 @@ test_expect_success 'kvs: watch a key that at first doesnt exist'  '
 '
 
 test_expect_success 'kvs: watch a key that gets removed'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
         rm -f watch_out
@@ -448,7 +448,7 @@ test_expect_success 'kvs: watch a key that gets removed'  '
 '
 
 test_expect_success 'kvs: watch a key that becomes a dir'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
         rm -f watch_out
@@ -467,7 +467,7 @@ test_expect_success 'kvs: watch a key that becomes a dir'  '
 '
 
 test_expect_success 'kvs: watch a dir'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
@@ -487,7 +487,7 @@ test_expect_success 'kvs: watch a dir'  '
 '
 
 test_expect_success 'kvs: watch a dir that at first doesnt exist'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         wait_watch_empty "$DIR"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
@@ -505,7 +505,7 @@ test_expect_success 'kvs: watch a dir that at first doesnt exist'  '
 '
 
 test_expect_success 'kvs: watch a dir that gets removed'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
@@ -525,7 +525,7 @@ test_expect_success 'kvs: watch a dir that gets removed'  '
 '
 
 test_expect_success 'kvs: watch a dir, converted into a key'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
@@ -548,7 +548,7 @@ test_expect_success 'kvs: watch a dir, converted into a key'  '
 # prior test should see conversion of a $DIR.a to a key.  This time,
 # $DIR.a is no longer valid and we should see 'nil' as a result.
 test_expect_success 'kvs: watch a dir, prefix path converted into a key'  '
-        flux kvs unlink -R $DIR &&
+        flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
@@ -588,7 +588,7 @@ sort_watch_output() {
 }
 
 test_expect_success 'kvs: watch a dir with -R'  '
-        flux kvs unlink -R $DIR &&
+        flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
@@ -611,7 +611,7 @@ test_expect_success 'kvs: watch a dir with -R'  '
 '
 
 test_expect_success 'kvs: watch a dir with -R and -d'  '
-	flux kvs unlink -R $DIR &&
+	flux kvs unlink -Rf $DIR &&
         flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
