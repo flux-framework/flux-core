@@ -46,7 +46,6 @@ static const struct option longopts[] = {
 
 void cmd_type (flux_t *h, int argc, char **argv);
 void cmd_put_no_merge (flux_t *h, int argc, char **argv);
-void cmd_exists (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
 void cmd_dirsize (flux_t *h, int argc, char **argv);
@@ -62,7 +61,6 @@ void usage (void)
     fprintf (stderr,
 "Usage: basic type                key\n"
 "       basic put-no-merge        key=val\n"
-"       basic exists              key\n"
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
 "       basic dirsize             key\n"
@@ -104,8 +102,6 @@ int main (int argc, char *argv[])
         cmd_type (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put-no-merge"))
         cmd_put_no_merge (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "exists"))
-        cmd_exists (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-tokvs"))
         cmd_copy_tokvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-fromkvs"))
@@ -254,23 +250,6 @@ void cmd_put_no_merge (flux_t *h, int argc, char **argv)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
-}
-
-void cmd_exists (flux_t *h, int argc, char **argv)
-{
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("exist: specify key");
-    if (!(f = flux_kvs_lookup (h, 0, argv[0])))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_future_get (f, NULL) < 0) {
-        if (errno != ENOTDIR && errno != ENOENT)
-            log_err_exit ("flux_kvs_lookup");
-        if (errno == ENOENT)
-            exit (1);
-    }
-    flux_future_destroy (f);
 }
 
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv)

@@ -562,13 +562,13 @@ test_expect_success 'kvs: symlink: error on link depth, loop' '
 test_expect_success 'kvs: put on rank 0, exists on all ranks' '
 	flux kvs put $TEST.xxx=99 &&
 	VERS=$(flux kvs version) &&
-	flux exec sh -c "flux kvs wait ${VERS} && ${KVSBASIC} exists $TEST.xxx"
+	flux exec sh -c "flux kvs wait ${VERS} && flux kvs get $TEST.xxx"
 '
 
 test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 	flux kvs unlink -Rf $TEST.xxx &&
 	VERS=$(flux kvs version) &&
-	flux exec sh -c "flux kvs wait ${VERS} && ! ${KVSBASIC} exists $TEST.xxx"
+	flux exec sh -c "flux kvs wait ${VERS} && ! flux kvs get $TEST.xxx"
 '
 
 # commit test
