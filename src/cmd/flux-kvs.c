@@ -88,6 +88,9 @@ static struct optparse_option unlink_opts[] =  {
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Remove directory contents recursively",
     },
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "ignore nonexistent files",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -362,19 +365,25 @@ int cmd_put (optparse_t *p, int argc, char **argv)
 }
 
 /* Some checks prior to unlinking key:
- * - fail if key does not exist (ENOENT) or other fatal lookup error
+ * - fail if key does not exist (ENOENT) and fopt not specified or
+ *   other fatal lookup error
  * - fail if key is a non-empty directory (ENOTEMPTY) and -R was not specified
  */
-static int unlink_safety_check (flux_t *h, const char *key, bool Ropt)
+static int unlink_safety_check (flux_t *h, const char *key, bool Ropt,
+                                bool fopt, bool *unlinkable)
 {
     flux_future_t *f;
     kvsdir_t *dir = NULL;
     const char *json_str;
     int rc = -1;
 
+    *unlinkable = false;
+
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
         goto done;
     if (flux_kvs_lookup_get (f, &json_str) < 0) {
+        if (errno == ENOENT && fopt)
+            goto out;
         if (errno != ENOTDIR)
             goto done;
     }
@@ -386,6 +395,8 @@ static int unlink_safety_check (flux_t *h, const char *key, bool Ropt)
             goto done;
         }
     }
+    *unlinkable = true;
+out:
     rc = 0;
 done:
     if (dir)
@@ -400,7 +411,7 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
     int optindex, i;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
-    bool Ropt;
+    bool Ropt, fopt;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
@@ -408,14 +419,18 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     Ropt = optparse_hasopt (p, "recursive");
+    fopt = optparse_hasopt (p, "force");
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     for (i = optindex; i < argc; i++) {
-        if (unlink_safety_check (h, argv[i], Ropt) < 0)
+        bool unlinkable;
+        if (unlink_safety_check (h, argv[i], Ropt, fopt, &unlinkable) < 0)
             log_err_exit ("cannot unlink '%s'", argv[i]);
-        if (flux_kvs_txn_unlink (txn, 0, argv[i]) < 0)
-            log_err_exit ("%s", argv[i]);
+        if (unlinkable) {
+            if (flux_kvs_txn_unlink (txn, 0, argv[i]) < 0)
+                log_err_exit ("%s", argv[i]);
+        }
     }
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");

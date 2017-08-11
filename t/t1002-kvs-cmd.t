@@ -231,6 +231,12 @@ test_expect_success 'kvs: try to retrieve key as directory should fail' '
 test_expect_success 'kvs: unlink nonexistent key fails' '
         test_must_fail flux kvs unlink NOT.A.KEY
 '
+test_expect_success 'kvs: unlink nonexistent key with -f does not fail' '
+        flux kvs unlink -f NOT.A.KEY
+'
+test_expect_success 'kvs: unlink nonexistent dir with -f does not fail' '
+        flux kvs unlink -Rf NOT.A.KEY
+'
 test_expect_success 'kvs: unlink non-empty dir fails' '
         flux kvs mkdir $SUBDIR1 $SUBDIR2
 	test_must_fail flux kvs unlink $DIR
