@@ -69,23 +69,11 @@ test_expect_success 'kvs: string put' '
 test_expect_success 'kvs: string type' '
 	test_kvs_type $KEY string
 '
-test_expect_success 'kvs: boolean put (true)' '
+test_expect_success 'kvs: boolean put' '
 	flux kvs put $KEY=true
 '
 test_expect_success 'kvs: boolean type' '
 	test_kvs_type $KEY boolean
-'
-test_expect_success 'kvs: boolean get (true)' '
-	test_kvs_key $KEY true
-'
-test_expect_success 'kvs: boolean put (false)' '
-	flux kvs put $KEY=false
-'
-test_expect_success 'kvs: boolean type' '
-	test_kvs_type $KEY boolean
-'
-test_expect_success 'kvs: boolean get (false)' '
-	test_kvs_key $KEY false
 '
 test_expect_success 'kvs: put double' '
 	flux kvs put $KEY=3.14159
@@ -116,57 +104,6 @@ test_expect_success 'kvs: object put' '
 '
 test_expect_success 'kvs: object type' '
 	test_kvs_type $KEY object
-'
-
-test_empty_directory() {
-	OUTPUT=`${KVSBASIC} dirsize $1` &&
-	test "x$OUTPUT" = "x0"
-}
-test_expect_success 'kvs: empty directory remains after key removed' '
-	flux kvs unlink $KEY &&
-	test_empty_directory $DIR
-'
-test_expect_success 'kvs: remove directory' '
-	flux kvs unlink -R $TEST
-'
-test_expect_success 'kvs: empty directory can be created' '
-	flux kvs mkdir $DIR  &&
-	test_empty_directory $DIR
-'
-test_expect_success 'kvs: create a dir with keys and subdir' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $DIR.a=69 &&
-        flux kvs put $DIR.b=70 &&
-        flux kvs put $DIR.c.d.e.f.g=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
-        flux kvs put $DIR.e=true &&
-	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF
-$DIR.a = 69
-$DIR.b = 70
-$DIR.c.d.e.f.g = 3.140000
-$DIR.d = snerg
-$DIR.e = true
-EOF
-	test_cmp expected output
-'
-
-test_expect_success 'kvs: directory with multiple subdirs' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $DIR.a=69 &&
-        flux kvs put $DIR.b.c.d.e.f.g=70 &&
-        flux kvs put $DIR.c.a.b=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
-        flux kvs put $DIR.e=true &&
-	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF
-$DIR.a = 69
-$DIR.b.c.d.e.f.g = 70
-$DIR.c.a.b = 3.140000
-$DIR.d = snerg
-$DIR.e = true
-EOF
-	test_cmp expected output
 '
 
 test_expect_success 'kvs: put using no-merge flag' '
@@ -204,86 +141,6 @@ d = snerg
 e = true
 EOF
 	test_cmp expected output
-'
-
-test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c=42 &&
-	flux kvs link $TEST.a.b $TEST.Z.Y &&
-	OUTPUT=$(flux kvs get $TEST.Z.Y.c) &&
-	test "$OUTPUT" = "42"
-'
-test_expect_success 'kvs: symlink: path resolution with intermediate symlink and nonexistent key' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs link $TEST.a.b $TEST.Z.Y &&
-	test_must_fail flux kvs get $TEST.Z.Y
-'
-test_expect_success 'kvs: symlink: intermediate symlink points to another symlink' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c=42 &&
-	flux kvs link $TEST.a.b $TEST.Z.Y &&
-	flux kvs link $TEST.Z.Y $TEST.X.W &&
-	test_kvs_key $TEST.X.W.c 42
-'
-test_expect_success 'kvs: symlink: intermediate symlinks are followed by put' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs mkdir $TEST.a &&
-	flux kvs link $TEST.a $TEST.link &&
-	flux kvs readlink $TEST.link >/dev/null &&
-	flux kvs put $TEST.link.X=42 &&
-	flux kvs readlink $TEST.link >/dev/null &&
-	test_kvs_key $TEST.link.X 42 &&
-	test_kvs_key $TEST.a.X 42
-'
-
-# This will fail if individual ops are applied out of order
-test_expect_success 'kvs: symlink: kvs_copy removes symlinked destination' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs mkdir $TEST.a &&
-	flux kvs link $TEST.a $TEST.link &&
-	flux kvs put $TEST.a.X=42 &&
-	flux kvs copy $TEST.a $TEST.link &&
-	! flux kvs readlink $TEST.link >/dev/null &&
-	test_kvs_key $TEST.link.X 42
-'
-
-# This will fail if individual ops are applied out of order
-test_expect_success 'kvs: symlink: kvs_move works' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs mkdir $TEST.a &&
-	flux kvs link $TEST.a $TEST.link &&
-	flux kvs put $TEST.a.X=42 &&
-	flux kvs move $TEST.a $TEST.link &&
-	! flux kvs readlink $TEST.link >/dev/null &&
-	test_kvs_key $TEST.link.X 42 &&
-	! flux kvs dir $TEST.a >/dev/null
-'
-
-test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (top)' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.X=42 &&
-	flux kvs link $TEST.a $TEST.link &&
-	flux kvs copy $TEST.link $TEST.copy &&
-	LINKVAL=$(flux kvs readlink $TEST.copy) &&
-	test "$LINKVAL" = "$TEST.a"
-'
-
-test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (mid)' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.X=42 &&
-	flux kvs link $TEST.a.b $TEST.a.link &&
-	flux kvs copy $TEST.a $TEST.copy &&
-	LINKVAL=$(flux kvs readlink $TEST.copy.link) &&
-	test "$LINKVAL" = "$TEST.a.b"
-'
-
-test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.X=42 &&
-	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
-	flux kvs copy $TEST.a $TEST.copy &&
-	LINKVAL=$(flux kvs readlink $TEST.copy.b.link) &&
-	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
 test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
@@ -436,53 +293,6 @@ test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
 	flux kvs unlink -Rf $TEST.dtree &&
 	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $TEST.dtree &&
 	test $(flux kvs dir -R $TEST.dtree | wc -l) = 81
-'
-
-test_expect_success 'kvs: put key of . fails' '
-	test_must_fail flux kvs put .=1
-'
-
-# Keep the next two tests in order
-test_expect_success 'kvs: symlink: dangling link' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs link $TEST.dangle $TEST.a.b.c
-'
-test_expect_success 'kvs: symlink: readlink on dangling link' '
-	OUTPUT=$(flux kvs readlink $TEST.a.b.c) &&
-	test "$OUTPUT" = "$TEST.dangle"
-'
-test_expect_success 'kvs: symlink: readlink works on non-dangling link' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c="foo" &&
-	flux kvs link $TEST.a.b.c $TEST.link &&
-	OUTPUT=$(flux kvs readlink $TEST.link) &&
-	test "$OUTPUT" = "$TEST.a.b.c"
-'
-
-# Check for limit on link depth
-
-test_expect_success 'kvs: symlink: error on link depth' '
-	flux kvs unlink -Rf $TEST &&
-        flux kvs put $TEST.a=1 &&
-	flux kvs link $TEST.a $TEST.b &&
-	flux kvs link $TEST.b $TEST.c &&
-	flux kvs link $TEST.c $TEST.d &&
-	flux kvs link $TEST.d $TEST.e &&
-	flux kvs link $TEST.e $TEST.f &&
-	flux kvs link $TEST.f $TEST.g &&
-	flux kvs link $TEST.g $TEST.h &&
-	flux kvs link $TEST.h $TEST.i &&
-	flux kvs link $TEST.i $TEST.j &&
-	flux kvs link $TEST.j $TEST.k &&
-	flux kvs link $TEST.k $TEST.l &&
-        test_must_fail flux kvs get $TEST.l
-'
-
-test_expect_success 'kvs: symlink: error on link depth, loop' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs link $TEST.link1 $TEST.link2 &&
-	flux kvs link $TEST.link2 $TEST.link1 &&
-        test_must_fail flux kvs get $TEST.link1
 '
 
 # test synchronization based on commit sequence no.
