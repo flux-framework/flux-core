@@ -44,23 +44,11 @@ test_kvs_type () {
 	test_cmp output expected
 }
 
-test_expect_success 'kvs: get a nonexistent key' '
-	test_must_fail flux kvs get NOT.A.KEY
-'
-
-
 test_expect_success 'kvs: integer put' '
 	flux kvs put $KEY=42 
 '
 test_expect_success 'kvs: integer type' '
 	test_kvs_type $KEY int
-'
-test_expect_success 'kvs: integer get' '
-	test_kvs_key $KEY 42
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
 '
 test_expect_success 'kvs: value can be empty' '
 	flux kvs put $KEY= &&
@@ -80,9 +68,6 @@ test_expect_success 'kvs: string put' '
 '
 test_expect_success 'kvs: string type' '
 	test_kvs_type $KEY string
-'
-test_expect_success 'kvs: string get' '
-	test_kvs_key $KEY "Hello world"
 '
 test_expect_success 'kvs: boolean put (true)' '
 	flux kvs put $KEY=true
@@ -108,9 +93,6 @@ test_expect_success 'kvs: put double' '
 test_expect_success 'kvs: double type' '
 	test_kvs_type $KEY double
 '
-test_expect_success 'kvs: get double' '
-	test_kvs_key $KEY 3.141590
-'
 
 # issue 875
 test_expect_success 'kvs: integer can be read as int, int64, or double' '
@@ -129,23 +111,11 @@ test_expect_success 'kvs: array put' '
 test_expect_success 'kvs: array type' '
 	test_kvs_type $KEY array
 '
-test_expect_success 'kvs: array get' '
-	test_kvs_key $KEY "[1, 3, 5, 7]"
-'
 test_expect_success 'kvs: object put' '
 	flux kvs put $KEY="{\"a\":42}"
 '
 test_expect_success 'kvs: object type' '
 	test_kvs_type $KEY object
-'
-test_expect_success 'kvs: object get' '
-	test_kvs_key $KEY "{\"a\": 42}"
-'
-test_expect_success 'kvs: try to retrieve key as directory should fail' '
-	test_must_fail flux kvs dir $KEY
-'
-test_expect_success 'kvs: try to retrieve a directory as key should fail' '
-	test_must_fail flux kvs get $DIR
 '
 
 test_empty_directory() {
@@ -162,22 +132,6 @@ test_expect_success 'kvs: remove directory' '
 test_expect_success 'kvs: empty directory can be created' '
 	flux kvs mkdir $DIR  &&
 	test_empty_directory $DIR
-'
-test_expect_success 'kvs: put values in a directory then retrieve them' '
-	flux kvs put $DIR.a=69 &&
-        flux kvs put $DIR.b=70 &&
-        flux kvs put $DIR.c=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
-        flux kvs put $DIR.e=true &&
-	flux kvs dir $DIR | sort >output &&
-	cat >expected <<EOF
-$DIR.a = 69
-$DIR.b = 70
-$DIR.c = 3.140000
-$DIR.d = snerg
-$DIR.e = true
-EOF
-	test_cmp expected output
 '
 test_expect_success 'kvs: create a dir with keys and subdir' '
 	flux kvs unlink -Rf $TEST &&
@@ -252,32 +206,6 @@ EOF
 	test_cmp expected output
 '
 
-test_expect_success 'kvs: cleanup' '
-	flux kvs unlink -Rf $TEST
-'
-test_expect_success 'kvs: dropcache works' '
-       flux kvs dropcache
-'
-test_expect_success 'kvs: dropcache --all works' '
-       flux kvs dropcache --all
-'
-test_expect_success 'kvs: symlink: works' '
-	TARGET=$TEST.a.b.c &&
-	flux kvs put $TARGET=\"foo\" &&
-	flux kvs link $TARGET $TEST.Q &&
-	OUTPUT=$(flux kvs get $TEST.Q) &&
-	test "$OUTPUT" = "foo"
-'
-test_expect_success 'kvs: symlink: readlink fails on regular value' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c=42 &&
-	! flux kvs readlink $TEST.a.b.c
-'
-test_expect_success 'kvs: symlink: readlink fails on directory' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs mkdir $TEST.a.b.c &&
-	! flux kvs readlink $TEST.a.b.
-'
 test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
