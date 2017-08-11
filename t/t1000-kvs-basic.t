@@ -59,7 +59,7 @@ test_expect_success 'kvs: integer get' '
 	test_kvs_key $KEY 42
 '
 test_expect_success 'kvs: unlink works' '
-	${KVSBASIC} unlink $KEY &&
+	flux kvs unlink $KEY &&
 	  test_must_fail flux kvs get $KEY
 '
 test_expect_success 'kvs: value can be empty' '
@@ -153,11 +153,11 @@ test_empty_directory() {
 	test "x$OUTPUT" = "x0"
 }
 test_expect_success 'kvs: empty directory remains after key removed' '
-	${KVSBASIC} unlink $KEY &&
+	flux kvs unlink $KEY &&
 	test_empty_directory $DIR
 '
 test_expect_success 'kvs: remove directory' '
-	${KVSBASIC} unlink $TEST
+	flux kvs unlink -R $TEST
 '
 test_expect_success 'kvs: empty directory can be created' '
 	flux kvs mkdir $DIR  &&
@@ -180,7 +180,7 @@ EOF
 	test_cmp expected output
 '
 test_expect_success 'kvs: create a dir with keys and subdir' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $DIR.a=69 &&
         flux kvs put $DIR.b=70 &&
         flux kvs put $DIR.c.d.e.f.g=3.14 &&
@@ -198,7 +198,7 @@ EOF
 '
 
 test_expect_success 'kvs: directory with multiple subdirs' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $DIR.a=69 &&
         flux kvs put $DIR.b.c.d.e.f.g=70 &&
         flux kvs put $DIR.c.a.b=3.14 &&
@@ -216,7 +216,7 @@ EOF
 '
 
 test_expect_success 'kvs: put using no-merge flag' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	${KVSBASIC} put-no-merge $DIR.a=69 &&
         ${KVSBASIC} put-no-merge $DIR.b.c.d.e.f.g=70 &&
         ${KVSBASIC} put-no-merge $DIR.c.a.b=3.14 &&
@@ -234,7 +234,7 @@ EOF
 '
 
 test_expect_success 'kvs: directory with multiple subdirs using dirat' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $DIR.a=69
         flux kvs put $DIR.b.c.d.e.f.g=70 &&
         flux kvs put $DIR.c.a.b=3.14 &&
@@ -253,7 +253,7 @@ EOF
 '
 
 test_expect_success 'kvs: cleanup' '
-	${KVSBASIC} unlink $TEST
+	flux kvs unlink -Rf $TEST
 '
 test_expect_success 'kvs: dropcache works' '
        flux kvs dropcache
@@ -269,36 +269,36 @@ test_expect_success 'kvs: symlink: works' '
 	test "$OUTPUT" = "foo"
 '
 test_expect_success 'kvs: symlink: readlink fails on regular value' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
 	! flux kvs readlink $TEST.a.b.c
 '
 test_expect_success 'kvs: symlink: readlink fails on directory' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a.b.c &&
 	! flux kvs readlink $TEST.a.b.
 '
 test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
 	flux kvs link $TEST.a.b $TEST.Z.Y &&
 	OUTPUT=$(flux kvs get $TEST.Z.Y.c) &&
 	test "$OUTPUT" = "42"
 '
 test_expect_success 'kvs: symlink: path resolution with intermediate symlink and nonexistent key' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs link $TEST.a.b $TEST.Z.Y &&
 	test_must_fail flux kvs get $TEST.Z.Y
 '
 test_expect_success 'kvs: symlink: intermediate symlink points to another symlink' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
 	flux kvs link $TEST.a.b $TEST.Z.Y &&
 	flux kvs link $TEST.Z.Y $TEST.X.W &&
 	test_kvs_key $TEST.X.W.c 42
 '
 test_expect_success 'kvs: symlink: intermediate symlinks are followed by put' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a &&
 	flux kvs link $TEST.a $TEST.link &&
 	flux kvs readlink $TEST.link >/dev/null &&
@@ -310,7 +310,7 @@ test_expect_success 'kvs: symlink: intermediate symlinks are followed by put' '
 
 # This will fail if individual ops are applied out of order
 test_expect_success 'kvs: symlink: kvs_copy removes symlinked destination' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a &&
 	flux kvs link $TEST.a $TEST.link &&
 	flux kvs put $TEST.a.X=42 &&
@@ -321,7 +321,7 @@ test_expect_success 'kvs: symlink: kvs_copy removes symlinked destination' '
 
 # This will fail if individual ops are applied out of order
 test_expect_success 'kvs: symlink: kvs_move works' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a &&
 	flux kvs link $TEST.a $TEST.link &&
 	flux kvs put $TEST.a.X=42 &&
@@ -332,7 +332,7 @@ test_expect_success 'kvs: symlink: kvs_move works' '
 '
 
 test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (top)' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.X=42 &&
 	flux kvs link $TEST.a $TEST.link &&
 	flux kvs copy $TEST.link $TEST.copy &&
@@ -341,7 +341,7 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (top)' '
 '
 
 test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (mid)' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.X=42 &&
 	flux kvs link $TEST.a.b $TEST.a.link &&
 	flux kvs copy $TEST.a $TEST.copy &&
@@ -350,7 +350,7 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (mid)' '
 '
 
 test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.X=42 &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
 	flux kvs copy $TEST.a $TEST.copy &&
@@ -359,46 +359,46 @@ test_expect_success 'kvs: symlink: kvs_copy does not follow symlinks (bottom)' '
 '
 
 test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
 	ROOTREF=$(${KVSBASIC} get-treeobj .) &&
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -R $TEST &&
 	LINKVAL=$(${KVSBASIC} readlinkat $ROOTREF $TEST.a.b.link) &&
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
 test_expect_success 'kvs: get-treeobj: returns directory reference for root' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	${KVSBASIC} get-treeobj . | grep -q "DIRREF"
 '
 
 test_expect_success 'kvs: get-treeobj: returns directory reference for directory' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a &&
 	${KVSBASIC} get-treeobj $TEST.a | grep -q "DIRREF"
 '
 
 test_expect_success 'kvs: get-treeobj: returns value for small value' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a=b &&
 	${KVSBASIC} get-treeobj $TEST.a | grep -q "FILEVAL"
 '
 
 test_expect_success 'kvs: get-treeobj: returns value ref for large value' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	dd if=/dev/zero bs=4096 count=1 | ${KVSBASIC} copy-tokvs $TEST.a - &&
 	${KVSBASIC} get-treeobj $TEST.a | grep -q "FILEREF"
 '
 
 test_expect_success 'kvs: get-treeobj: returns link value for symlink' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.X=42 &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
 	${KVSBASIC} get-treeobj $TEST.a.b.link | grep -q LINKVAL
 '
 
 test_expect_success 'kvs: put-treeobj: can make root snapshot' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	${KVSBASIC} get-treeobj . >snapshot &&
 	${KVSBASIC} put-treeobj $TEST.snap="`cat snapshot`" &&
 	${KVSBASIC} get-treeobj $TEST.snap >snapshot.cpy
@@ -406,7 +406,7 @@ test_expect_success 'kvs: put-treeobj: can make root snapshot' '
 '
 
 test_expect_success 'kvs: put-treeobj: clobbers destination' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a=42 &&
 	${KVSBASIC} get-treeobj . >snapshot2 &&
 	${KVSBASIC} put-treeobj $TEST.a="`cat snapshot2`" &&
@@ -415,33 +415,33 @@ test_expect_success 'kvs: put-treeobj: clobbers destination' '
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: not JSON' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} put-treeobj $TEST.a=xyz
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: unknown type' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"ERSTWHILE\":\"fubar\"}"
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: bad link type' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"LINKVAL\":42}"
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: bad ref type' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"DIRREF\":{}}"
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"DIRREF\":\"sha2-aaa\"}" &&
 	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"DIRREF\":\"sha1-bbb\"}"
 '
 
 test_expect_success 'kvs: getat: fails bad on dirent' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} getat 42 $TEST.a &&
 	test_must_fail ${KVSBASIC} getat "{\"DIRREF\":\"sha2-aaa\"}" $TEST.a &&
 	test_must_fail ${KVSBASIC} getat "{\"DIRREF\":\"sha1-bbb\"}" $TEST.a &&
@@ -449,19 +449,19 @@ test_expect_success 'kvs: getat: fails bad on dirent' '
 '
 
 test_expect_success 'kvs: getat: works on root from get-treeobj' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
 	test $(${KVSBASIC} getat $(${KVSBASIC} get-treeobj .) $TEST.a.b.c) = 42
 '
 
 test_expect_success 'kvs: getat: works on subdir from get-treeobj' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
 	test $(${KVSBASIC} getat $(${KVSBASIC} get-treeobj $TEST.a.b) c) = 42
 '
 
 test_expect_success 'kvs: getat: works on outdated root' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c=42 &&
 	ROOTREF=$(${KVSBASIC} get-treeobj .) &&
 	flux kvs put $TEST.a.b.c=43 &&
@@ -487,7 +487,7 @@ test_expect_success 'kvs: walk 16x3 directory tree' '
 
 test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
 	DIRREF=$(${KVSBASIC} get-treeobj $TEST.dtree) &&
-	${KVSBASIC} unlink $TEST.dtree &&
+	flux kvs unlink -Rf $TEST.dtree &&
 	test $(${KVSBASIC} dirat -r $DIRREF . | wc -l) = 4096
 '
 
@@ -505,7 +505,7 @@ test_expect_success 'kvs: add other types to 2x4 directory and walk' '
 '
 
 test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
-	${KVSBASIC} unlink $TEST.dtree &&
+	flux kvs unlink -Rf $TEST.dtree &&
 	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $TEST.dtree &&
 	test $(flux kvs dir -R $TEST.dtree | wc -l) = 81
 '
@@ -516,7 +516,7 @@ test_expect_success 'kvs: put key of . fails' '
 
 # Keep the next two tests in order
 test_expect_success 'kvs: symlink: dangling link' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs link $TEST.dangle $TEST.a.b.c
 '
 test_expect_success 'kvs: symlink: readlink on dangling link' '
@@ -524,7 +524,7 @@ test_expect_success 'kvs: symlink: readlink on dangling link' '
 	test "$OUTPUT" = "$TEST.dangle"
 '
 test_expect_success 'kvs: symlink: readlink works on non-dangling link' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.c="foo" &&
 	flux kvs link $TEST.a.b.c $TEST.link &&
 	OUTPUT=$(flux kvs readlink $TEST.link) &&
@@ -534,7 +534,7 @@ test_expect_success 'kvs: symlink: readlink works on non-dangling link' '
 # Check for limit on link depth
 
 test_expect_success 'kvs: symlink: error on link depth' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
         flux kvs put $TEST.a=1 &&
 	flux kvs link $TEST.a $TEST.b &&
 	flux kvs link $TEST.b $TEST.c &&
@@ -551,7 +551,7 @@ test_expect_success 'kvs: symlink: error on link depth' '
 '
 
 test_expect_success 'kvs: symlink: error on link depth, loop' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	flux kvs link $TEST.link1 $TEST.link2 &&
 	flux kvs link $TEST.link2 $TEST.link1 &&
         test_must_fail flux kvs get $TEST.link1
@@ -566,7 +566,7 @@ test_expect_success 'kvs: put on rank 0, exists on all ranks' '
 '
 
 test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
-	${KVSBASIC} unlink $TEST.xxx &&
+	flux kvs unlink -Rf $TEST.xxx &&
 	VERS=$(flux kvs version) &&
 	flux exec sh -c "flux kvs wait ${VERS} && ! ${KVSBASIC} exists $TEST.xxx"
 '
@@ -618,27 +618,27 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mix
 
 test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
 	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
-	${KVSBASIC} unlink $TEST.a
+	flux kvs unlink -Rf $TEST.a
 '
 
 test_expect_success 'kvs: watch-selfmod: watch callback modifies watched key' '
 	${FLUX_BUILD_DIR}/t/kvs/watch selfmod $TEST.a &&
-	${KVSBASIC} unlink $TEST.a
+	flux kvs unlink -Rf $TEST.a
 '
 
 test_expect_success 'kvs: watch-unwatch unwatch works' '
 	${FLUX_BUILD_DIR}/t/kvs/watch unwatch $TEST.a &&
-	${KVSBASIC} unlink $TEST.a
+	flux kvs unlink -Rf $TEST.a
 '
 
 test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
 	${FLUX_BUILD_DIR}/t/kvs/watch unwatchloop $TEST.a &&
-	${KVSBASIC} unlink $TEST.a
+	flux kvs unlink -Rf $TEST.a
 '
 
 test_expect_success 'kvs: 256 simultaneous watches works' '
 	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 256 &&
-	${KVSBASIC} unlink $TEST.a
+	flux kvs unlink -Rf $TEST.a
 '
 
 
@@ -665,7 +665,7 @@ test_expect_success 'kvs: async kvs_fence allows puts with fence in progress' '
 
 # base64 data
 test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
-	${KVSBASIC} unlink $TEST &&
+	flux kvs unlink -Rf $TEST &&
 	dd if=/dev/urandom bs=4096 count=1 >random.data &&
 	${KVSBASIC} copy-tokvs $TEST.data random.data &&
 	${KVSBASIC} copy-fromkvs $TEST.data reread.data &&
