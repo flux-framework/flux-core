@@ -228,14 +228,39 @@ static int env_getint (char *name, int dflt)
     return s ? strtol (s, NULL, 10) : dflt;
 }
 
+/* Connect socket `fd` to unix domain socket `file` and fail after `retries`
+ *  attempts with exponential retry backoff starting at 16ms.
+ * Return 0 on success, or -1 on failure.
+ */
+static int connect_sock_with_retry (int fd, const char *file, int retries)
+{
+    int count = 0;
+    struct sockaddr_un addr;
+    useconds_t s = 8 * 1000;
+    int maxdelay = 2000000;
+    do {
+        memset (&addr, 0, sizeof (struct sockaddr_un));
+        addr.sun_family = AF_UNIX;
+        if (strncpy (addr.sun_path, file, sizeof (addr.sun_path) - 1) < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (connect (fd, (struct sockaddr *)&addr, sizeof (addr)) == 0)
+            return 0;
+        if (s < maxdelay)
+            s = 2*s < maxdelay ? 2*s : maxdelay;
+    } while ((++count <= retries) && (usleep (s) == 0));
+    return -1;
+}
+
 /* Path is interpreted as the directory containing the unix domain socket.
  */
 flux_t *connector_init (const char *path, int flags)
 {
     local_ctx_t *c = NULL;
-    struct sockaddr_un addr;
     char sockfile[PATH_MAX + 1];
-    int n, count;
+    int n;
+    int retries = env_getint ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT", 5);
 
     if (!path) {
         errno = EINVAL;
@@ -260,17 +285,8 @@ flux_t *connector_init (const char *path, int flags)
     if (c->fd < 0)
         goto error;
     c->fd_nonblock = -1;
-    for (count=0;;count++) {
-        if (count >= env_getint("FLUX_RETRY_COUNT", 5))
-            goto error;
-        memset (&addr, 0, sizeof (struct sockaddr_un));
-        addr.sun_family = AF_UNIX;
-        strncpy (addr.sun_path, sockfile, sizeof (addr.sun_path) - 1);
-        if (connect (c->fd, (struct sockaddr *)&addr,
-                     sizeof (struct sockaddr_un)) == 0)
-            break;
-        usleep (100*1000);
-    }
+    if (connect_sock_with_retry (c->fd, sockfile, retries) < 0)
+        goto error;
     /* read 1 byte indicating success or failure of auth */
     unsigned char e;
     int rc;

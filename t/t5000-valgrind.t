@@ -30,6 +30,9 @@ VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
 VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh
 BROKER=${FLUX_BUILD_DIR}/src/broker/.libs/lt-flux-broker
 
+# broker run under valgrind may need extra retries in flux_open():
+FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
+
 if ! test -x $BROKER; then
     ${FLUX_BUILD_DIR}/src/broker/flux-broker --help >/dev/null 2>&1
 fi
