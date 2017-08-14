@@ -35,7 +35,7 @@
 #include "service.h"
 
 struct service {
-    svc_cb_f cb;
+    service_send_f cb;
     void *cb_arg;
     char *alias;
 };
@@ -90,7 +90,7 @@ void svc_remove (struct service_switch *sh, const char *name)
 }
 
 int svc_add (struct service_switch *sh, const char *name, const char *alias,
-             svc_cb_f cb, void *arg)
+             service_send_f cb, void *arg)
 {
     struct service *svc;
     int rc;
