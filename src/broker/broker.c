@@ -1419,8 +1419,13 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     if (!(p = module_add (ctx->modhash, path)))
         goto error;
     if (service_add (ctx->services, module_get_name (p),
-                                module_get_service (p), mod_svc_cb, p) < 0)
-        goto error;
+                                    module_get_uuid (p), mod_svc_cb, p) < 0)
+        goto module_remove;
+    if (module_get_service (p)) {
+        if (service_add (ctx->services, module_get_service (p),
+                                        module_get_uuid (p), mod_svc_cb, p) < 0)
+            goto service_remove;
+    }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
         module_add_arg (p, arg);
@@ -1429,15 +1434,17 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
     if (request && module_push_insmod (p, request) < 0) // response deferred
-        goto error;
+        goto service_remove;
     if (module_start (p) < 0)
-        goto error;
+        goto service_remove;
     flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
     free (name);
     return 0;
+service_remove:
+    service_remove_byuuid (ctx->services, module_get_uuid (p));
+module_remove:
+    module_remove (ctx->modhash, p);
 error:
-    if (p)
-        module_remove (ctx->modhash, p);
     free (name);
     return -1;
 }
@@ -1489,7 +1496,7 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
             return -1;
     } else {
         assert (request == NULL);
-        service_remove (ctx->services, module_get_name (p));
+        service_remove_byuuid (ctx->services, module_get_uuid (p));
         module_remove (ctx->modhash, p);
     }
     flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
@@ -2004,7 +2011,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      */
     if (status == FLUX_MODSTATE_EXITED) {
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
-        service_remove (ctx->services, module_get_name (p));
+        service_remove_byuuid (ctx->services, module_get_uuid (p));
         while ((msg = module_pop_rmmod (p))) {
             if (flux_respond (ctx->h, msg, 0, NULL) < 0)
                 flux_log_error (ctx->h, "flux_respond to rmmod %s", name);

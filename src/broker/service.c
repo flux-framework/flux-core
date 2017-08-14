@@ -28,7 +28,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 
@@ -37,110 +36,169 @@
 struct service {
     service_send_f cb;
     void *cb_arg;
-    char *alias;
+    char *uuid;
 };
 
 struct service_switch {
     zhash_t *services;
-    zhash_t *aliases;
 };
 
 struct service_switch *service_switch_create (void)
 {
-    struct service_switch *sh = xzmalloc (sizeof *sh);
-    sh->services = zhash_new ();
-    sh->aliases = zhash_new ();
-    if (!sh->services || !sh->aliases)
-        oom ();
-    return sh;
+    struct service_switch *sw = calloc (1, sizeof *sw);
+    if (!sw)
+        goto error;
+    if (!(sw->services = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    return sw;
+error:
+    service_switch_destroy (sw);
+    return NULL;
 }
 
-void service_switch_destroy (struct service_switch *sh)
+void service_switch_destroy (struct service_switch *sw)
 {
-    if (sh) {
-        zhash_destroy (&sh->services);
-        zhash_destroy (&sh->aliases);
-        free (sh);
+    if (sw) {
+        zhash_destroy (&sw->services);
+        free (sw);
     }
 }
 
 static void service_destroy (struct service *svc)
 {
     if (svc) {
-        if (svc->alias)
-            free (svc->alias);
+        free (svc->uuid);
         free (svc);
     }
 }
 
-static struct service *service_create (void)
-{
-    struct service *svc = xzmalloc (sizeof (*svc));
-    return svc;
-}
-
-void service_remove (struct service_switch *sh, const char *name)
-{
-    struct service *svc = zhash_lookup (sh->services, name);
-    if (svc) {
-        if (svc->alias)
-            zhash_delete (sh->aliases, svc->alias);
-        zhash_delete (sh->services, name);
-    }
-}
-
-int service_add (struct service_switch *sh, const char *name, const char *alias,
-                 service_send_f cb, void *arg)
+static struct service *service_create (const char *uuid)
 {
     struct service *svc;
-    int rc;
-    if (zhash_lookup (sh->services, name)
-            || (alias && zhash_lookup (sh->aliases, alias))) {
-        errno = EEXIST;
-        return -1;
+
+    if (!(svc = calloc (1, sizeof (*svc))))
+        goto error;
+    if (uuid) {
+        if (!(svc->uuid = strdup (uuid)))
+            goto error;
     }
-    svc = service_create ();
+    return svc;
+error:
+    service_destroy (svc);
+    return NULL;
+}
+
+void service_remove (struct service_switch *sw, const char *name)
+{
+    zhash_delete (sw->services, name);
+}
+
+/* Delete all services registered by 'uuid'.
+ */
+void service_remove_byuuid (struct service_switch *sw, const char *uuid)
+{
+    struct service *svc;
+    zlist_t *trash = NULL;
+    const char *key;
+
+    svc = zhash_first (sw->services);
+    while (svc != NULL) {
+        if (svc->uuid && !strcmp (svc->uuid, uuid)) {
+            if (!trash)
+                trash = zlist_new ();
+            if (!trash)
+                break;
+            if (zlist_push (trash, (char *)zhash_cursor (sw->services)) < 0)
+                break;
+        }
+        svc = zhash_next (sw->services);
+    }
+    if (trash) {
+        while ((key = zlist_pop (trash)))
+            zhash_delete (sw->services, key);
+        zlist_destroy (&trash);
+    }
+}
+
+int service_add (struct service_switch *sh, const char *name,
+                 const char *uuid, service_send_f cb, void *arg)
+{
+    struct service *svc = NULL;
+
+    if (strchr (name, '.')) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (zhash_lookup (sh->services, name)) {
+        errno = EEXIST;
+        goto error;
+    }
+    svc = service_create (uuid);
     svc->cb = cb;
     svc->cb_arg = arg;
-    rc = zhash_insert (sh->services, name, svc);
-    assert (rc == 0);
-    zhash_freefn (sh->services, name, (zhash_free_fn *)service_destroy);
-    if (alias) {
-        svc->alias = xstrdup (alias);
-        rc = zhash_insert (sh->aliases, alias, svc);
-        assert (rc == 0);
+    if (zhash_insert (sh->services, name, svc) < 0) {
+        errno = ENOMEM;
+        goto error;
     }
+    zhash_freefn (sh->services, name, (zhash_free_fn *)service_destroy);
     return 0;
+error:
+    service_destroy (svc);
+    return -1;
 }
 
-int service_send (struct service_switch *sh, const flux_msg_t *msg)
+/* Look up a service named 'topic', truncated to 'length' chars.
+ * Avoid an extra malloc here if the substring is short.
+ */
+static struct service *service_lookup_subtopic (struct service_switch *sw,
+                                                const char *topic, int length)
 {
-    const char *topic;
-    int type;
-    struct service *svc;
-    int rc = -1;
+    char buf[16];
+    char *cpy = NULL;
+    char *service;
+    struct service *svc = NULL;
 
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        goto done;
-    if (!(svc = zhash_lookup (sh->services, topic)))
-        svc = zhash_lookup (sh->aliases, topic);
-    if (!svc && strchr (topic, '.')) {
-        char *p, *short_topic = xstrdup (topic);
-        if ((p = strchr (short_topic, '.')))
-            *p = '\0';
-        if (!(svc = zhash_lookup (sh->services, short_topic)))
-            svc = zhash_lookup (sh->aliases, short_topic);
-        free (short_topic);
+    if (length < sizeof (buf))
+        service = buf;
+    else {
+        if (!(cpy = malloc (length + 1)))
+            goto done;
+        service = cpy;
     }
-    if (!svc) {
+    memcpy (service, topic, length);
+    service[length] = '\0';
+
+    if (!(svc = zhash_lookup (sw->services, service))) {
         errno = ENOSYS;
         goto done;
     }
-    rc = svc->cb (msg, svc->cb_arg);
 done:
-    return rc;
+    free (cpy);
+    return svc;
+}
+
+/* Look up a service by first "word" of topic string.
+ * If found, call the service's callback and return its return value.
+ * If not found, return -1 with errno set (usually ENOSYS).
+ */
+int service_send (struct service_switch *sw, const flux_msg_t *msg)
+{
+    const char *topic, *p;
+    int length;
+    struct service *svc;
+
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        return -1;
+    if ((p = strchr (topic, '.')))
+        length = p - topic;
+    else
+        length = strlen (topic);
+    if (!(svc = service_lookup_subtopic (sw, topic, length)))
+        return -1;
+
+    return svc->cb (msg, svc->cb_arg);
 }
 
 /*
