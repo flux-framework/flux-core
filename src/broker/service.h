@@ -12,7 +12,7 @@ int service_add (struct service_switch *sw,
 void service_remove (struct service_switch *sw,
                      const char *name);
 
-int svc_sendmsg (struct service_switch *sw, const flux_msg_t *msg);
+int service_send (struct service_switch *sw, const flux_msg_t *msg);
 
 #endif /* !_BROKER_SERVICE_H */
 

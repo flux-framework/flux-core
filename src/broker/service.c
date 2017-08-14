@@ -113,7 +113,7 @@ int service_add (struct service_switch *sh, const char *name, const char *alias,
     return 0;
 }
 
-int svc_sendmsg (struct service_switch *sh, const flux_msg_t *msg)
+int service_send (struct service_switch *sh, const flux_msg_t *msg)
 {
     const char *topic;
     int type;

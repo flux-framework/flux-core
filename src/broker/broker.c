@@ -2106,7 +2106,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
         if (rc < 0)
             goto error;
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
-        rc = svc_sendmsg (ctx->services, msg);
+        rc = service_send (ctx->services, msg);
         if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
@@ -2115,7 +2115,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
         if (rc < 0)
             goto error;
     } else if (nodeid == FLUX_NODEID_ANY) {
-        rc = svc_sendmsg (ctx->services, msg);
+        rc = service_send (ctx->services, msg);
         if (rc < 0 && errno == ENOSYS) {
             rc = overlay_sendmsg_parent (ctx->overlay, msg);
             if (rc < 0 && errno == EHOSTUNREACH)
@@ -2124,7 +2124,7 @@ static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
         if (rc < 0)
             goto error;
     } else if (nodeid == ctx->rank) {
-        rc = svc_sendmsg (ctx->services, msg);
+        rc = service_send (ctx->services, msg);
         if (rc < 0)
             goto error;
     } else if ((gw = kary_child_route (ctx->tbon.k, ctx->size,
