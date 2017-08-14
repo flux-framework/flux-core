@@ -48,9 +48,9 @@ TESTS = \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
 	t0017-security.t \
-	t1000-kvs-basic.t \
+	t1000-kvs.t \
 	t1001-barrier-basic.t \
-	t1002-kvs-cmd.t \
+	t1002-kvs-extra.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
@@ -119,9 +119,9 @@ check_SCRIPTS = \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
 	t0017-security.t \
-	t1000-kvs-basic.t \
+	t1000-kvs.t \
 	t1001-barrier-basic.t \
-	t1002-kvs-cmd.t \
+	t1002-kvs-extra.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t1007-kz.t \
