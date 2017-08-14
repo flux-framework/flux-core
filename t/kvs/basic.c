@@ -44,24 +44,10 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void cmd_get (flux_t *h, int argc, char **argv);
 void cmd_type (flux_t *h, int argc, char **argv);
-void cmd_put (flux_t *h, int argc, char **argv);
 void cmd_put_no_merge (flux_t *h, int argc, char **argv);
-void cmd_unlink (flux_t *h, int argc, char **argv);
-void cmd_link (flux_t *h, int argc, char **argv);
-void cmd_readlink (flux_t *h, int argc, char **argv);
-void cmd_mkdir (flux_t *h, int argc, char **argv);
-void cmd_exists (flux_t *h, int argc, char **argv);
-void cmd_version (flux_t *h, int argc, char **argv);
-void cmd_wait (flux_t *h, int argc, char **argv);
-void cmd_dropcache (flux_t *h, int argc, char **argv);
-void cmd_dropcache_all (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
-void cmd_copy (flux_t *h, int argc, char **argv);
-void cmd_move (flux_t *h, int argc, char **argv);
-void cmd_dir (flux_t *h, int argc, char **argv);
 void cmd_dirsize (flux_t *h, int argc, char **argv);
 void cmd_get_treeobj (flux_t *h, int argc, char **argv);
 void cmd_put_treeobj (flux_t *h, int argc, char **argv);
@@ -73,25 +59,11 @@ void cmd_readlinkat (flux_t *h, int argc, char **argv);
 void usage (void)
 {
     fprintf (stderr,
-"Usage: basic get                 key\n"
-"       basic type                key\n"
-"       basic put                 key=val\n"
+"Usage: basic type                key\n"
 "       basic put-no-merge        key=val\n"
-"       basic unlink              key\n"
-"       basic link                target link_name\n"
-"       basic readlink            key\n"
-"       basic mkdir               key\n"
-"       basic exists              key\n"
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
-"       basic copy                srckey dstkey\n"
-"       basic move                srckey dstkey\n"
-"       basic dir [-r]            [key]\n"
 "       basic dirsize             key\n"
-"       basic version\n"
-"       basic wait                version\n"
-"       basic dropcache\n"
-"       basic dropcache-all\n"
 "       basic get-treeobj         key\n"
 "       basic put-treeobj         key=treeobj\n"
 "       basic getat               treeobj key\n"
@@ -126,42 +98,14 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!strcmp (cmd, "get"))
-        cmd_get (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "type"))
+    if (!strcmp (cmd, "type"))
         cmd_type (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "put"))
-        cmd_put (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put-no-merge"))
         cmd_put_no_merge (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "unlink"))
-        cmd_unlink (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "link"))
-        cmd_link (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "readlink"))
-        cmd_readlink (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "mkdir"))
-        cmd_mkdir (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "exists"))
-        cmd_exists (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "version"))
-        cmd_version (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "wait"))
-        cmd_wait (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dropcache"))
-        cmd_dropcache (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dropcache-all"))
-        cmd_dropcache_all (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-tokvs"))
         cmd_copy_tokvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-fromkvs"))
         cmd_copy_fromkvs (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "copy"))
-        cmd_copy (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "move"))
-        cmd_move (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dir"))
-        cmd_dir (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirsize"))
         cmd_dirsize (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "get-treeobj"))
@@ -279,22 +223,7 @@ static void output_key_json_str (const char *key,
     json_decref (o);
 }
 
-void cmd_get (flux_t *h, int argc, char **argv)
-{
-    const char *json_str;
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("get: specify one key");
-    if (!(f = flux_kvs_lookup (h, 0, argv[0])))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
-        log_err_exit ("%s", argv[0]);
-    output_key_json_str (NULL, json_str, argv[0]);
-    flux_future_destroy (f);
-}
-
-void cmd_put_common (flux_t *h, int argc, char **argv, int flags)
+void cmd_put_no_merge (flux_t *h, int argc, char **argv)
 {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
@@ -316,142 +245,11 @@ void cmd_put_common (flux_t *h, int argc, char **argv, int flags)
             log_err_exit ("%s", key);
     }
     free (key);
-    if (!(f = flux_kvs_commit (h, flags, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, FLUX_KVS_NO_MERGE, txn))
+        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
-}
-
-void cmd_put (flux_t *h, int argc, char **argv)
-{
-    cmd_put_common (h, argc, argv, 0);
-}
-
-void cmd_put_no_merge (flux_t *h, int argc, char **argv)
-{
-    cmd_put_common (h, argc, argv, FLUX_KVS_NO_MERGE);
-}
-
-void cmd_unlink (flux_t *h, int argc, char **argv)
-{
-    flux_kvs_txn_t *txn;
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("unlink: specify key");
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_unlink (txn, 0, argv[0]) < 0)
-        log_err_exit ("%s", argv[0]);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-}
-
-void cmd_link (flux_t *h, int argc, char **argv)
-{
-    flux_kvs_txn_t *txn;
-    flux_future_t *f;
-
-    if (argc != 2)
-        log_msg_exit ("link: specify target and link_name");
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_symlink (txn, 0, argv[1], argv[0]) < 0)
-        log_err_exit ("%s", argv[1]);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-}
-
-void cmd_readlink (flux_t *h, int argc, char **argv)
-{
-    const char *target;
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("readlink: specify key"); 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[0]))
-            || flux_kvs_lookup_get_unpack (f, "s", &target) < 0)
-        log_err_exit ("%s", argv[0]);
-    else
-        printf ("%s\n", target);
-    flux_future_destroy (f);
-}
-
-void cmd_mkdir (flux_t *h, int argc, char **argv)
-{
-    flux_kvs_txn_t *txn;
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("mkdir: specify directory");
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_mkdir (txn, 0, argv[0]) < 0)
-        log_err_exit ("%s", argv[0]);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL)  < 0)
-        log_err_exit ("kvs_commit");
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-}
-
-void cmd_exists (flux_t *h, int argc, char **argv)
-{
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("exist: specify key");
-    if (!(f = flux_kvs_lookup (h, 0, argv[0])))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_future_get (f, NULL) < 0) {
-        if (errno != ENOTDIR && errno != ENOENT)
-            log_err_exit ("flux_kvs_lookup");
-        if (errno == ENOENT)
-            exit (1);
-    }
-    flux_future_destroy (f);
-}
-
-void cmd_version (flux_t *h, int argc, char **argv)
-{
-    int vers;
-    if (argc != 0)
-        log_msg_exit ("version: takes no arguments");
-    if (kvs_get_version (h, &vers) < 0)
-        log_err_exit ("kvs_get_version");
-    printf ("%d\n", vers);
-}
-
-void cmd_wait (flux_t *h, int argc, char **argv)
-{
-    int vers;
-    if (argc != 1)
-        log_msg_exit ("wait: specify a version");
-    vers = strtoul (argv[0], NULL, 10);
-    if (kvs_wait_version (h, vers) < 0)
-        log_err_exit ("kvs_get_version");
-    //printf ("%d\n", vers);
-}
-
-void cmd_dropcache (flux_t *h, int argc, char **argv)
-{
-    if (argc != 0)
-        log_msg_exit ("dropcache: takes no arguments");
-    if (kvs_dropcache (h) < 0)
-        log_err_exit ("kvs_dropcache");
-}
-
-void cmd_dropcache_all (flux_t *h, int argc, char **argv)
-{
-    if (argc != 0)
-        log_msg_exit ("dropcache-all: takes no arguments");
-    flux_msg_t *msg = flux_event_encode ("kvs.dropcache", NULL);
-    if (!msg || flux_send (h, msg, 0) < 0)
-        log_err_exit ("flux_send");
-    flux_msg_destroy (msg);
 }
 
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
@@ -584,37 +382,6 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
     kvsitr_destroy (itr);
 }
 
-void cmd_dir (flux_t *h, int argc, char **argv)
-{
-    bool ropt = false;
-    flux_future_t *f;
-    const char *json_str;
-    kvsdir_t *dir;
-
-    if (argc > 0) {
-        while (argc) {
-            if (!strcmp (argv[0], "-r")) {
-                ropt = true;
-                argc--;
-                argv++;
-            }
-            else
-                break;
-        }
-    }
-    if (argc != 1)
-        log_msg_exit ("dir: specify directory");
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, argv[0])))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
-        log_err_exit ("%s", argv[0]);
-    if (!(dir = kvsdir_create (h, NULL, argv[0], json_str)))
-        log_err_exit( "kvsdir_create");
-    dump_kvs_dir (dir, ropt);
-    kvsdir_destroy (dir);
-    flux_future_destroy (f);
-}
-
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
@@ -660,60 +427,6 @@ void cmd_dirsize (flux_t *h, int argc, char **argv)
         log_err_exit ("kvsdir_create");
     printf ("%d\n", kvsdir_get_size (dir));
     kvsdir_destroy (dir);
-    flux_future_destroy (f);
-}
-
-void cmd_copy (flux_t *h, int argc, char **argv)
-{
-    flux_future_t *f;
-    flux_kvs_txn_t *txn;
-    const char *json_str;
-
-    if (argc != 2)
-        log_msg_exit ("copy: specify srckey dstkey");
-    const char *srckey = argv[0];
-    const char *dstkey = argv[1];
-
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get (f, &json_str) < 0)
-        log_err_exit ("flux_kvs_lookup %s", srckey);
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, dstkey, json_str) < 0)
-        log_err_exit( "flux_kvs_txn_put");
-    flux_future_destroy (f);
-
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
-}
-
-void cmd_move (flux_t *h, int argc, char **argv)
-{
-    flux_future_t *f;
-    flux_kvs_txn_t *txn;
-    const char *json_str;
-
-    if (argc != 2)
-        log_msg_exit ("move: specify srckey dstkey");
-    const char *srckey = argv[0];
-    const char *dstkey = argv[1];
-
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get (f, &json_str) < 0)
-        log_err_exit ("flux_kvs_lookup %s", srckey);
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, dstkey, json_str) < 0)
-        log_err_exit( "flux_kvs_txn_put");
-    if (flux_kvs_txn_unlink (txn, 0, srckey) < 0)
-        log_err_exit( "flux_kvs_txn_unlink");
-    flux_future_destroy (f);
-
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_kvs_txn_destroy (txn);
     flux_future_destroy (f);
 }
 
