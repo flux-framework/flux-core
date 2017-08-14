@@ -40,14 +40,14 @@ struct svc_struct {
     char *alias;
 };
 
-struct svchash_struct {
+struct service_switch {
     zhash_t *services;
     zhash_t *aliases;
 };
 
-svchash_t *svchash_create (void)
+struct service_switch *service_switch_create (void)
 {
-    svchash_t *sh = xzmalloc (sizeof *sh);
+    struct service_switch *sh = xzmalloc (sizeof *sh);
     sh->services = zhash_new ();
     sh->aliases = zhash_new ();
     if (!sh->services || !sh->aliases)
@@ -55,7 +55,7 @@ svchash_t *svchash_create (void)
     return sh;
 }
 
-void svchash_destroy (svchash_t *sh)
+void service_switch_destroy (struct service_switch *sh)
 {
     if (sh) {
         zhash_destroy (&sh->services);
@@ -79,7 +79,7 @@ static svc_t *svc_create (void)
     return svc;
 }
 
-void svc_remove (svchash_t *sh, const char *name)
+void svc_remove (struct service_switch *sh, const char *name)
 {
     svc_t *svc = zhash_lookup (sh->services, name);
     if (svc) {
@@ -89,7 +89,7 @@ void svc_remove (svchash_t *sh, const char *name)
     }
 }
 
-svc_t *svc_add (svchash_t *sh, const char *name, const char *alias,
+svc_t *svc_add (struct service_switch *sh, const char *name, const char *alias,
                 svc_cb_f cb, void *arg)
 {
     svc_t *svc;
@@ -113,7 +113,7 @@ svc_t *svc_add (svchash_t *sh, const char *name, const char *alias,
     return svc;
 }
 
-int svc_sendmsg (svchash_t *sh, const flux_msg_t *msg)
+int svc_sendmsg (struct service_switch *sh, const flux_msg_t *msg)
 {
     const char *topic;
     int type;

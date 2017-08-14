@@ -130,7 +130,7 @@ typedef struct {
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
-    svchash_t *services;
+    struct service_switch *services;
     heartbeat_t *heartbeat;
     shutdown_t *shutdown;
     double shutdown_grace;
@@ -264,7 +264,8 @@ int main (int argc, char *argv[])
 
     ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
-    ctx.services = svchash_create ();
+    if (!(ctx.services = service_switch_create ()))
+        log_err_exit ("service_switch_create");
     ctx.overlay = overlay_create ();
     ctx.hello = hello_create ();
     ctx.tbon.k = 2; /* binary TBON is default */
@@ -702,7 +703,7 @@ int main (int argc, char *argv[])
         flux_sec_destroy (ctx.sec);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
-    svchash_destroy (ctx.services);
+    service_switch_destroy (ctx.services);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
