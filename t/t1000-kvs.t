@@ -46,8 +46,11 @@ test_expect_success 'kvs: string put' '
 test_expect_success 'kvs: empty string put' '
 	flux kvs put $KEY.emptystring=
 '
-test_expect_success 'kvs: JSON null is converted to string put' '
+test_expect_success 'kvs: null is converted to json null' '
 	flux kvs put $KEY.jsonnull=null
+'
+test_expect_success 'kvs: quoted null is converted to string' '
+	flux kvs put $KEY.strnull=\"null\"
 '
 test_expect_success 'kvs: boolean true put' '
 	flux kvs put $KEY.booleantrue=true
@@ -76,9 +79,12 @@ test_expect_success 'kvs: string get' '
 test_expect_success 'kvs: empty string get' '
 	test_kvs_key $KEY.emptystring ""
 '
-test_expect_success 'kvs: JSON null is converted to string get' '
-        test_kvs_key $KEY.jsonnull "null"
+test_expect_success 'kvs: null is converted to json null' '
+        test_kvs_key $KEY.jsonnull nil
 '
+test_expect_success 'kvs: quoted null is converted to string' '
+        test_kvs_key $KEY.strnull null
+# '
 test_expect_success 'kvs: boolean true get' '
 	test_kvs_key $KEY.booleantrue true
 '
@@ -108,9 +114,10 @@ $KEY.booleantrue = true
 $KEY.double = 3.140000
 $KEY.emptystring = 
 $KEY.integer = 42
-$KEY.jsonnull = null
+$KEY.jsonnull = nil
 $KEY.object = {"a": 42}
 $KEY.string = foo
+$KEY.strnull = null
 EOF
 	test_cmp expected output
 '
@@ -126,6 +133,7 @@ $KEY.integer
 $KEY.jsonnull
 $KEY.object
 $KEY.string
+$KEY.strnull
 EOF
 	test_cmp expected output
 '
@@ -148,6 +156,10 @@ test_expect_success 'kvs: unlink works' '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.jsonnull &&
 	  test_must_fail flux kvs get $KEY.jsonnull
+'
+test_expect_success 'kvs: unlink works' '
+	flux kvs unlink $KEY.strnull &&
+	  test_must_fail flux kvs get $KEY.strnull
 '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.booleantrue &&

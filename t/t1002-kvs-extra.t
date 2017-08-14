@@ -55,8 +55,14 @@ test_expect_success 'kvs: value can be empty' '
 	  test_kvs_key $KEY "" &&
 	  test_kvs_type $KEY string
 '
-test_expect_success 'kvs: put JSON null is converted to string' '
+test_expect_success 'kvs: null is converted to json null' '
 	flux kvs put $KEY=null &&
+	  test_kvs_key $KEY nil &&
+	  test_kvs_type $KEY null
+'
+
+test_expect_success 'kvs: quoted null is converted to string' '
+	flux kvs put $KEY=\"null\" &&
 	  test_kvs_key $KEY null &&
 	  test_kvs_type $KEY string
 '
