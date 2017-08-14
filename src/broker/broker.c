@@ -1418,7 +1418,7 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto error;
-    if (svc_add (ctx->services, module_get_name (p),
+    if (service_add (ctx->services, module_get_name (p),
                                 module_get_service (p), mod_svc_cb, p) < 0)
         goto error;
     arg = argz_next (argz, argz_len, NULL);
@@ -1489,7 +1489,7 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
             return -1;
     } else {
         assert (request == NULL);
-        svc_remove (ctx->services, module_get_name (p));
+        service_remove (ctx->services, module_get_name (p));
         module_remove (ctx->modhash, p);
     }
     flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
@@ -1780,7 +1780,8 @@ static void broker_add_services (broker_ctx_t *ctx)
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (svc_add (ctx->services, svc->name, NULL, route_to_handle, ctx) < 0)
+        if (service_add (ctx->services, svc->name, NULL,
+                          route_to_handle, ctx) < 0)
             log_err_exit ("error registering service for %s", svc->name);
     }
 
@@ -2003,7 +2004,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      */
     if (status == FLUX_MODSTATE_EXITED) {
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
-        svc_remove (ctx->services, module_get_name (p));
+        service_remove (ctx->services, module_get_name (p));
         while ((msg = module_pop_rmmod (p))) {
             if (flux_respond (ctx->h, msg, 0, NULL) < 0)
                 flux_log_error (ctx->h, "flux_respond to rmmod %s", name);

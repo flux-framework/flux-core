@@ -79,7 +79,7 @@ static struct service *svc_create (void)
     return svc;
 }
 
-void svc_remove (struct service_switch *sh, const char *name)
+void service_remove (struct service_switch *sh, const char *name)
 {
     struct service *svc = zhash_lookup (sh->services, name);
     if (svc) {
@@ -89,8 +89,8 @@ void svc_remove (struct service_switch *sh, const char *name)
     }
 }
 
-int svc_add (struct service_switch *sh, const char *name, const char *alias,
-             service_send_f cb, void *arg)
+int service_add (struct service_switch *sh, const char *name, const char *alias,
+                 service_send_f cb, void *arg)
 {
     struct service *svc;
     int rc;
