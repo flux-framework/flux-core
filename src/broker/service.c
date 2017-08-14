@@ -64,7 +64,7 @@ void service_switch_destroy (struct service_switch *sh)
     }
 }
 
-static void svc_destroy (struct service *svc)
+static void service_destroy (struct service *svc)
 {
     if (svc) {
         if (svc->alias)
@@ -73,7 +73,7 @@ static void svc_destroy (struct service *svc)
     }
 }
 
-static struct service *svc_create (void)
+static struct service *service_create (void)
 {
     struct service *svc = xzmalloc (sizeof (*svc));
     return svc;
@@ -99,12 +99,12 @@ int service_add (struct service_switch *sh, const char *name, const char *alias,
         errno = EEXIST;
         return -1;
     }
-    svc = svc_create ();
+    svc = service_create ();
     svc->cb = cb;
     svc->cb_arg = arg;
     rc = zhash_insert (sh->services, name, svc);
     assert (rc == 0);
-    zhash_freefn (sh->services, name, (zhash_free_fn *)svc_destroy);
+    zhash_freefn (sh->services, name, (zhash_free_fn *)service_destroy);
     if (alias) {
         svc->alias = xstrdup (alias);
         rc = zhash_insert (sh->aliases, alias, svc);
