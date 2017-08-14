@@ -1418,11 +1418,9 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto error;
-    if (!svc_add (ctx->services, module_get_name (p),
-                                 module_get_service (p), mod_svc_cb, p)) {
-        errno = EEXIST;
+    if (svc_add (ctx->services, module_get_name (p),
+                                module_get_service (p), mod_svc_cb, p) < 0)
         goto error;
-    }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
         module_add_arg (p, arg);
@@ -1782,7 +1780,7 @@ static void broker_add_services (broker_ctx_t *ctx)
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (!svc_add (ctx->services, svc->name, NULL, route_to_handle, ctx))
+        if (svc_add (ctx->services, svc->name, NULL, route_to_handle, ctx) < 0)
             log_err_exit ("error registering service for %s", svc->name);
     }
 

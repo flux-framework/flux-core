@@ -34,7 +34,7 @@
 
 #include "service.h"
 
-struct svc_struct {
+struct service {
     svc_cb_f cb;
     void *cb_arg;
     char *alias;
@@ -64,7 +64,7 @@ void service_switch_destroy (struct service_switch *sh)
     }
 }
 
-static void svc_destroy (svc_t *svc)
+static void svc_destroy (struct service *svc)
 {
     if (svc) {
         if (svc->alias)
@@ -73,15 +73,15 @@ static void svc_destroy (svc_t *svc)
     }
 }
 
-static svc_t *svc_create (void)
+static struct service *svc_create (void)
 {
-    svc_t *svc = xzmalloc (sizeof (*svc));
+    struct service *svc = xzmalloc (sizeof (*svc));
     return svc;
 }
 
 void svc_remove (struct service_switch *sh, const char *name)
 {
-    svc_t *svc = zhash_lookup (sh->services, name);
+    struct service *svc = zhash_lookup (sh->services, name);
     if (svc) {
         if (svc->alias)
             zhash_delete (sh->aliases, svc->alias);
@@ -89,15 +89,15 @@ void svc_remove (struct service_switch *sh, const char *name)
     }
 }
 
-svc_t *svc_add (struct service_switch *sh, const char *name, const char *alias,
-                svc_cb_f cb, void *arg)
+int svc_add (struct service_switch *sh, const char *name, const char *alias,
+             svc_cb_f cb, void *arg)
 {
-    svc_t *svc;
+    struct service *svc;
     int rc;
     if (zhash_lookup (sh->services, name)
             || (alias && zhash_lookup (sh->aliases, alias))) {
         errno = EEXIST;
-        return NULL;
+        return -1;
     }
     svc = svc_create ();
     svc->cb = cb;
@@ -110,14 +110,14 @@ svc_t *svc_add (struct service_switch *sh, const char *name, const char *alias,
         rc = zhash_insert (sh->aliases, alias, svc);
         assert (rc == 0);
     }
-    return svc;
+    return 0;
 }
 
 int svc_sendmsg (struct service_switch *sh, const flux_msg_t *msg)
 {
     const char *topic;
     int type;
-    svc_t *svc;
+    struct service *svc;
     int rc = -1;
 
     if (flux_msg_get_type (msg, &type) < 0)
