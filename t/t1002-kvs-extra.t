@@ -222,7 +222,8 @@ test_expect_success 'kvs: put-treeobj: fails bad dirent: bad link data' '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: bad ref data' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":42,\"type\":\"dirref\",\"ver\":1}"
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":42,\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}"
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
@@ -236,7 +237,8 @@ test_expect_success 'kvs: getat: fails bad on dirent' '
 	test_must_fail ${KVSBASIC} getat 42 $TEST.a &&
 	test_must_fail ${KVSBASIC} getat "{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
 	test_must_fail ${KVSBASIC} getat "{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"data\":42,\"type\":\"dirref\",\"ver\":1}" $TEST.a
+	test_must_fail ${KVSBASIC} getat "{\"data\":42,\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail ${KVSBASIC} getat "{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}" $TEST.a
 '
 
 test_expect_success 'kvs: getat: works on root from get-treeobj' '
