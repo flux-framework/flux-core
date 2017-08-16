@@ -61,7 +61,8 @@ flux_broker_LDFLAGS = ${broker_ldflags}
 TESTS = test_shutdown.t \
 	test_heartbeat.t \
 	test_hello.t \
-	test_attr.t
+	test_attr.t \
+	test_service.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
@@ -94,3 +95,7 @@ test_hello_t_LDADD = $(test_ldadd)
 test_attr_t_SOURCES = test/attr.c attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
 test_attr_t_LDADD = $(test_ldadd)
+
+test_service_t_SOURCES = test/service.c service.c
+test_service_t_CPPFLAGS = $(test_cppflags)
+test_service_t_LDADD = $(test_ldadd)
