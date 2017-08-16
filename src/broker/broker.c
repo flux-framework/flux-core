@@ -1756,17 +1756,12 @@ static struct flux_msg_handler_spec handlers[] = {
 };
 
 struct internal_service {
-    const char *topic;
+    const char *name;
     const char *nodeset;
 };
 
 static struct internal_service services[] = {
-    { "cmb.rusage",         NULL },
-    { "cmb.ping",           NULL },
-    { "cmb.exec",           NULL },
-    { "cmb.exec.signal",    NULL },
-    { "cmb.exec.write",     NULL },
-    { "cmb.processes",      NULL },
+    { "cmb",                NULL }, // kind of a catch-all, slowly deprecating
     { "log",                NULL },
     { "seq",                "[0]" },
     { "content",            NULL },
@@ -1777,25 +1772,19 @@ static struct internal_service services[] = {
 };
 
 /* Register builtin services (sharing ctx->h and broker thread).
- * First loop is for services that are registered in other files.
- * Second loop is for services registered here.
+ * Register message handlers for some cmb services.  Others are registered
+ * in their own initialization functions.
  */
 static void broker_add_services (broker_ctx_t *ctx)
 {
     struct internal_service *svc;
-    for (svc = &services[0]; svc->topic != NULL; svc++) {
+    for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (!svc_add (ctx->services, svc->topic, NULL, route_to_handle, ctx))
-            log_err_exit ("error registering service for %s", svc->topic);
+        if (!svc_add (ctx->services, svc->name, NULL, route_to_handle, ctx))
+            log_err_exit ("error registering service for %s", svc->name);
     }
 
-    struct flux_msg_handler_spec *spec;
-    for (spec = &handlers[0]; spec->topic_glob != NULL; spec++) {
-        if (!svc_add (ctx->services, spec->topic_glob, NULL,
-                      route_to_handle, ctx))
-            log_err_exit ("error registering service for %s", spec->topic_glob);
-    }
     if (flux_msg_handler_addvec (ctx->h, handlers, ctx) < 0)
         log_err_exit ("error registering message handlers");
 }
