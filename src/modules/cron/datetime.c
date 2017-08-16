@@ -32,8 +32,6 @@
 #include <czmq.h>
 
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cronodate.h"
 
 #include "entry.h"
@@ -54,23 +52,39 @@ void datetime_entry_destroy (struct datetime_entry *dt)
 
 struct datetime_entry * datetime_entry_create ()
 {
-    struct datetime_entry *dt = xzmalloc (sizeof (*dt));
-    dt->h = NULL;
-    dt->w = NULL;
-    dt->d = cronodate_create ();
+    struct datetime_entry *dt = calloc (1, sizeof (*dt));
+    if (dt) {
+        dt->d = cronodate_create ();
+        /*  Fill cronodate set initially. The cronodate object will
+         *  be refined when json arguments from user are processed
+         */
+        cronodate_fillset (dt->d);
+    }
     return (dt);
 }
 
-static struct datetime_entry * datetime_entry_from_json (json_object *o)
+static struct datetime_entry * datetime_entry_from_json (json_t *o)
 {
-    int i;
+    int i, rc = 0;
     struct datetime_entry *dt = datetime_entry_create ();
 
     for (i = 0; i < TM_MAX_ITEM; i++) {
-        const char *range;
-        if (!Jget_str (o, tm_unit_string (i), &range))
-            range = "*";
-        if (cronodate_set (dt->d, i, range) < 0) {
+        json_t *val;
+        /*  Time unit members of the json arguments are optional.
+         *  If missing then the default of "*" is assumed.
+         */
+        if ((val = json_object_get (o, tm_unit_string (i)))) {
+            /*  Value may either be a string range, or single integer.
+             *  Allow either to be encoded in json.
+             */
+            if (json_is_string (val))
+                rc = cronodate_set (dt->d, i, json_string_value (val));
+            else if (json_is_integer (val))
+                rc = cronodate_set_integer (dt->d, i, json_integer_value (val));
+            else
+                rc = -1;
+        }
+        if (rc < 0) {
             datetime_entry_destroy (dt);
             return (NULL);
         }
@@ -117,7 +131,7 @@ static double reschedule_cb (flux_watcher_t *w, double now, void *arg)
     return (next);
 }
 
-static void *cron_datetime_create (flux_t *h, cron_entry_t *e, json_object *arg)
+static void *cron_datetime_create (flux_t *h, cron_entry_t *e, json_t *arg)
 {
     struct datetime_entry *dt = datetime_entry_from_json (arg);
     if (dt == NULL)
@@ -135,15 +149,21 @@ static void *cron_datetime_create (flux_t *h, cron_entry_t *e, json_object *arg)
     return (dt);
 }
 
-static json_object *cron_datetime_to_json (void *arg)
+static json_t *cron_datetime_to_json (void *arg)
 {
     int i;
     struct datetime_entry *dt = arg;
-    json_object *o = Jnew ();
-    if (dt->w)
-        Jadd_double (o, "next_wakeup", flux_watcher_next_wakeup (dt->w));
-    for (i = 0; i < TM_MAX_ITEM; i++)
-        Jadd_str (o, tm_unit_string (i), cronodate_get (dt->d, i));
+    json_t *o = json_object ();
+    if (dt->w) {
+        json_t *x = json_real (flux_watcher_next_wakeup (dt->w));
+        if (x)
+            json_object_set_new (o, "next_wakeup", x);
+    }
+    for (i = 0; i < TM_MAX_ITEM; i++) {
+        json_t *x = json_string (cronodate_get (dt->d, i));
+        if (x)
+            json_object_set_new (o, tm_unit_string (i), x);
+    }
     return (o);
 }
 

@@ -22,7 +22,7 @@ https://ftp.gnu.org/gnu/automake/automake-1.15.tar.gz \
 https://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz"
 
 declare -A extra_configure_opts=(\
-["mpich-3.1.4"]="--disable-fortran --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
+["mpich-3.1.4"]="--disable-fortran --disable-romio --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
 )
 
 checkouts="\

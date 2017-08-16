@@ -28,9 +28,9 @@
 #include "config.h"
 #endif
 
+#include <jansson.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "entry.h"
 
 struct cron_interval {
@@ -46,18 +46,26 @@ static void interval_handler (flux_reactor_t *r, flux_watcher_t *w,
     cron_entry_schedule_task ((cron_entry_t *)arg);
 }
 
-static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_object *arg)
+static void *cron_interval_create (flux_t *h, cron_entry_t *e, json_t *arg)
 {
     struct cron_interval *iv;
     double i;
-    double after;
-
-    if (!(Jget_double (arg, "interval", &i)))
+    double after = -1.;
+    /*  Unpack 'interval' and 'after' arguments. If after was not specified,
+     *   (and thus is still < 0.0), then it is set to interval by default.
+     */
+    if (json_unpack (arg, "{ s:F, s?F }",
+                          "interval", &i,
+                          "after", &after) < 0) {
         return NULL;
-    if (!(Jget_double (arg, "after", &after)))
+    }
+    if (after < 0.0)
         after = i;
 
-    iv = xzmalloc (sizeof (*iv));
+    if ((iv = calloc (1, sizeof (*iv))) == NULL) {
+        flux_log_error (h, "cron interval");
+        return NULL;
+    }
     iv->seconds = i;
     iv->after = after;
     iv->w = flux_timer_watcher_create (flux_get_reactor (h),
@@ -89,15 +97,13 @@ static void cron_interval_stop (void *arg)
     flux_watcher_stop (((struct cron_interval *)arg)->w);
 }
 
-static json_object *cron_interval_to_json (void *arg)
+static json_t *cron_interval_to_json (void *arg)
 {
     struct cron_interval *iv = arg;
-    json_object *o = Jnew ();
-    Jadd_double (o, "interval", iv->seconds);
-    Jadd_double (o, "after",    iv->after);
-    Jadd_double (o, "next_wakeup",
-                 flux_watcher_next_wakeup (iv->w));
-    return (o);
+    return json_pack ("{ s:f, s:f, s:f }",
+                      "interval",    iv->seconds,
+                      "after",       iv->after,
+                      "next_wakeup", flux_watcher_next_wakeup (iv->w));
 }
 
 struct cron_entry_ops cron_interval_operations = {

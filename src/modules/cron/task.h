@@ -25,6 +25,7 @@
 #ifndef HAVE_CRON_TASK_H
 #define HAVE_CRON_TASK_H
 
+#include <jansson.h>
 #include <flux/core.h>
 
 /*  cron_task_t: async task handling for cron
@@ -72,12 +73,13 @@ void cron_task_on_state_change (cron_task_t *t, cron_task_state_f cb);
 void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb);
 
 /*  run cron task `t` as command `cmd`, optional working directory `cwd`
- *   and optional alternate environment `env`.
+ *   and optional alternate environment `env` (encoded as json object for
+ *   efficiency).
  */
 int cron_task_run (cron_task_t *t,
                    int rank, const char *cmd,
                    const char *cwd,
-                   char *const env []);
+                   json_t *env);
 
 /*
  *  Send signal `sig` to cron task t
@@ -94,7 +96,7 @@ int cron_task_status (cron_task_t *t);
 
 /*  return JSON representation of cron task `t`
  */
-json_object *cron_task_to_json (cron_task_t *t);
+json_t *cron_task_to_json (cron_task_t *t);
 
 #endif /* !HAVE_CRON_TASK_H */
 

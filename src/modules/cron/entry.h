@@ -26,8 +26,8 @@
 # define HAVE_CRON_ENTRY_H
 
 #include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
-#include "src/common/libutil/shortjson.h"
 
 typedef struct cron_ctx cron_ctx_t;
 typedef struct cron_entry cron_entry_t;
@@ -37,7 +37,7 @@ typedef struct cron_entry cron_entry_t;
  */
 struct cron_entry_ops {
     // type creator from JSON request "arguments". Returns ptr to type object
-    void *(*create) (flux_t *h, cron_entry_t *e, json_object *arg);
+    void *(*create) (flux_t *h, cron_entry_t *e, json_t *arg);
 
     // destroy type object contained in data
     void (*destroy) (void *data);
@@ -49,7 +49,7 @@ struct cron_entry_ops {
     void (*stop) (void *data);
 
     // return data for entry type as JSON
-    json_object *(*tojson) (void *data);
+    json_t *(*tojson) (void *data);
 };
 
 struct cron_stats {
@@ -75,12 +75,15 @@ struct cron_entry {
     int                 rank;               /* Optional rank on which to run */
     char *              name;               /* Entry name, if given          */
     char *              command;            /* Command to execute            */
+    char *              cwd;                /* Change working directory      */
+    json_t *            env;                /* Optional environment for cmd,
+                                               (encoded as json array)       */
 
     int                 repeat;             /* Total number of times to run  */
 
     unsigned int        stopped:1;          /* This entry is inactive        */
 
-    const char *           typename;        /* Name of this type             */
+    char *                 typename;        /* Name of this type             */
     struct cron_entry_ops  ops;             /* Type-specific operations      */
     void *                 data;            /* Entry type specific data      */
 

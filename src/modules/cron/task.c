@@ -31,9 +31,7 @@
 #include <stdarg.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libsubprocess/zio.h"
 
 #include "task.h"
@@ -88,13 +86,17 @@ void cron_task_destroy (cron_task_t *t)
 
 cron_task_t *cron_task_new (flux_t *h, cron_task_complete_f cb, void *arg)
 {
-    cron_task_t *t = xzmalloc (sizeof (*t));
-    memset (t, 0, sizeof (*t));
+    cron_task_t *t = calloc (1, sizeof (*t));
+    if (t == NULL)
+        return NULL;
+    if ((t->state = strdup ("Initialized")) == NULL) {
+        free (t);
+        return NULL;
+    }
     t->h = h;
     t->match = FLUX_MATCH_RESPONSE;
     t->completion_cb = cb;
     t->arg = arg;
-    t->state = xstrdup ("Initialized");
     clock_gettime (CLOCK_REALTIME, &t->createtime);
     t->timeout = 0.0;
     return (t);
@@ -126,26 +128,28 @@ static void cron_task_state_update (cron_task_t *t, const char *fmt, ...)
     va_start (ap, fmt);
     free (t->state);
     if ((rc = vasprintf (&t->state, fmt, ap) < 0))
-        t->state = xstrdup (fmt);
+        t->state = strdup (fmt);
     va_end (ap);
 }
 
-static int io_handler (flux_t *h, cron_task_t *t,
-    const char *json_str, json_object *resp)
+static int io_handler (flux_t *h, cron_task_t *t, const flux_msg_t *msg)
 {
     const char *stream = "stdout";
+    const char *json_str;
     void *data = NULL;
     bool eof;
     bool is_stderr = false;
     int len;
+
+    if (flux_msg_get_json (msg, &json_str) < 0)
+        return -1;
 
     if ((len = zio_json_decode (json_str, &data, &eof)) < 0) {
         flux_log_error (h, "io decode");
         free (data);
         return (-1);
     }
-    (void) Jget_str (resp, "name", &stream);
-
+    (void) flux_msg_unpack (msg, "{s:s}", "name", &stream);
     if (strcmp (stream, "stderr") == 0)
         is_stderr = true;
 
@@ -162,11 +166,11 @@ static int io_handler (flux_t *h, cron_task_t *t,
     return (0);
 }
 
-static int state_handler (flux_t *h, cron_task_t *t, json_object *resp)
+static int state_handler (flux_t *h, cron_task_t *t, const flux_msg_t *msg)
 {
     const char *state;
 
-    if (!Jget_str (resp, "state", &state)) {
+    if (flux_msg_unpack (msg, "{s:s}", "state", &state) < 0) {
         flux_log_error (h, "unable to get exec state");
         return -1;
     }
@@ -175,18 +179,25 @@ static int state_handler (flux_t *h, cron_task_t *t, json_object *resp)
     if (strcmp (state, "Running") == 0) {
         clock_gettime (CLOCK_REALTIME, &t->runningtime);
         t->running = 1;
-        (void) Jget_int (resp, "pid", &t->pid);
-        (void) Jget_int (resp, "rank", &t->rank);
+        (void) flux_msg_unpack (msg, "{s:i, s:i}",
+                                "pid", &t->pid, "rank", &t->rank);
     }
     else if (strcmp (state, "Exec Failure") == 0) {
-        Jget_int (resp, "exec_errno", &t->exec_errno);
+        if (flux_msg_unpack (msg, "{s:i}", "exec_errno", &t->exec_errno) < 0) {
+            flux_log_error (h,
+                "cron task: state handler unable to get exec errno");
+            t->exec_errno = 0;
+        }
         t->exited = 1;
         t->stderr_closed = t->stdout_closed = 1;
         errno = t->exec_errno;
     }
     else if (strcmp (state, "Exited") == 0) {
         t->exited = 1;
-        Jget_int (resp, "status", &t->status);
+        if (flux_msg_unpack (msg, "{s:i}", "status", &t->status) < 0) {
+            flux_log_error (h, "cron task: state handler failed to get status");
+            t->status = 0;
+        }
         if (WIFSIGNALED (t->status))
             cron_task_state_update (t, "%s", strsignal (WTERMSIG (t->status)));
         else if (WEXITSTATUS (t->status) != 0)
@@ -232,45 +243,53 @@ static void exec_handler (flux_t *h, flux_msg_handler_t *w,
     const char *json_str;
     const char *topic;
     const char *type;
-    json_object *resp = NULL;
+    json_t *resp = NULL;
+    json_error_t error;
 
     if (flux_response_decode (msg, &topic, &json_str) < 0) {
         cron_task_rexec_failed (t, errno);
-        flux_log_error (h, "cron_task: exec_handler");
+        flux_log_error (h, "cron task: exec handler");
+        goto out;
     }
-    else if (!json_str || !(resp = Jfromstr (json_str))) {
+    else if (!json_str || (resp = json_loads (json_str, 0, &error)) == NULL) {
         errno = EPROTO;
         cron_task_rexec_failed (t, errno);
-        flux_log_error (h, "cron_task: exec_handler");
+        flux_log_error (h, "cron task: json decode: %s", error.text);
     }
-    else if (Jget_str (resp, "type", &type) && strcmp (type, "io") == 0) {
-        if (io_handler (h, t, json_str, resp) < 0)
+    else if (json_unpack (resp, "{s:s}", "type", &type) == 0
+             && strcmp (type, "io") == 0) {
+        if (io_handler (h, t, msg) < 0)
             goto out;
     }
-    else if (state_handler (h, t, resp) < 0)
+    else if (state_handler (h, t, msg) < 0)
         goto out;
 
     if (cron_task_completed (t))
         cron_task_handle_completion (t);
-
 out:
     if (resp)
-        Jput (resp);
+        json_decref (resp);
 }
 
 static flux_msg_t *kill_request_create (cron_task_t *t, int sig)
 {
     int e = 0;
     flux_msg_t *msg;
-    json_object *o = Jnew ();
-    Jadd_int (o, "pid", t->pid);
-    Jadd_int (o, "signum", sig);
-    if (!(msg = flux_request_encode ("cmb.exec.signal", Jtostr (o)))
-        || (flux_msg_set_nodeid (msg, t->rank, 0) < 0))
+    char *s = NULL;;
+    json_t *o = json_pack ("{s:i, s:i}", "pid", t->pid, "signum", sig);
+    if (o == NULL)
+        return NULL;
+
+    s = json_dumps (o, JSON_COMPACT);
+    if (!(msg = flux_request_encode ("cmb.exec.signal", s))
+        || (flux_msg_set_nodeid (msg, t->rank, 0) < 0)) {
         e = errno;
-    if (o)
-        Jput (o);
-    errno = e;
+        flux_msg_destroy (msg);
+        errno = e;
+        msg = NULL;
+    }
+    json_decref (o);
+    free (s);
     return (msg);
 }
 
@@ -285,8 +304,10 @@ int cron_task_kill (cron_task_t *t, int sig)
     }
 
     msg = kill_request_create (t, sig);
-    if (!msg || flux_send (h, msg, 0) < 0)
+    if (!msg || flux_send (h, msg, 0) < 0) {
+        flux_log_error (h, "cron_task_kill");
         return (-1);
+    }
     return (0);
 }
 
@@ -324,39 +345,46 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
         cron_task_timeout_start (t);
 }
 
-static json_object *exec_request_create (struct cron_task *t,
+static json_t *exec_request_create (struct cron_task *t,
     const char *command,
     const char *cwd,
-    char *const env[])
+    json_t *env)
 {
-    json_object *o = Jnew ();
-    json_object *cmd = Jnew_ar ();
+    json_t *o;
+    json_t *cmdline = NULL;
 
-    Jadd_ar_str (cmd, "sh");
-    Jadd_ar_str (cmd, "-c");
-    Jadd_ar_str (cmd, command);
+    if ((o = json_object ()) == NULL)
+        return NULL;
 
-    json_object_object_add (o, "cmdline", cmd);
-
-    if (cwd)
-        Jadd_str (o, "cwd", cwd);
-
-    if (env) {
-        json_object *enva = Jnew_ar ();
-        const char *e = env[0];
-        while (e != NULL)
-            Jadd_ar_str (enva, e);
-        json_object_object_add (o, "environ", enva);
+    if ((cmdline = json_pack ("[s,s,s]", "sh", "-c", command)) == NULL
+        || (json_object_set_new (o, "cmdline", cmdline) < 0)) {
+        json_decref (cmdline);
+        goto fail;
     }
+
+    if (cwd) {
+        json_t *x = json_string (cwd);
+        if (x == NULL || json_object_set_new (o, "cwd", x) < 0) {
+            json_decref (x);
+            goto fail;
+        }
+    }
+
+    if (env && json_object_set (o, "env", env) < 0)
+            goto fail;
     return (o);
+fail:
+    json_decref (o);
+    return (NULL);
 }
 
 int cron_task_run (cron_task_t *t,
     int rank, const char *cmd, const char *cwd,
-    char *const env[])
+    json_t *env)
 {
     flux_t *h = t->h;
-    json_object *req = NULL;
+    json_t *req = NULL;
+    char *json_str = NULL;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
@@ -370,7 +398,9 @@ int cron_task_run (cron_task_t *t,
 
     if (!(req = exec_request_create (t, cmd, cwd, env)))
         goto done;
-    if (!(msg = flux_request_encode ("cmb.exec", Jtostr (req))))
+    if (!(json_str = json_dumps (req, JSON_COMPACT)))
+        goto done;
+    if (!(msg = flux_request_encode ("cmb.exec", json_str)))
         goto done;
     if (flux_msg_set_nodeid (msg, rank, 0) < 0)
         goto done;
@@ -389,8 +419,8 @@ int cron_task_run (cron_task_t *t,
     if (t->timeout >= 0.0)
         cron_task_timeout_start (t);
 done:
-    if (req)
-        Jput (req);
+    json_decref (req);
+    free (json_str);
     if (rc < 0) {
         t->rexec_errno = errno;
         cron_task_state_update (t, "Rexec Failure");
@@ -409,10 +439,15 @@ int cron_task_status (cron_task_t *t)
     return (t->status);
 }
 
-static double timespec_to_double (struct timespec *tm)
+static double round_timespec_to_double (struct timespec *tm)
 {
     double s = tm->tv_sec;
-    double ns = tm->tv_nsec/1.0e9 + .5e-9; // round 1/2 epsilon
+    /*  Add .5ns (1/2 the minumim possible value change) to avoid
+     *   underflow which represents something like .5 as .499999...
+     *   (we don't care about overflow since we'll truncate fractional
+     *    part to 9 significant digits *at the most* anyway)
+     */
+    double ns = tm->tv_nsec/1.0e9 + .5e-9;
     return (s + ns);
 }
 
@@ -436,37 +471,58 @@ static const char * cron_task_state_string (cron_task_t *t)
     return ("Exited");
 }
 
-json_object *cron_task_to_json (struct cron_task *t)
+/*
+ *  Encode timespec as a floating point JSON representation in object `o`
+ *   under key `name`.
+ */
+static int add_timespec (json_t *o, const char *name, struct timespec *tm)
 {
-    json_object *o = Jnew ();
+    json_t *n = json_real (round_timespec_to_double (tm));
+    if (n == NULL)
+        return -1;
+    return json_object_set_new (o, name, n);
+}
 
-    Jadd_int (o, "rank", t->rank);
-    Jadd_int (o, "pid", t->pid);
-    Jadd_int (o, "status", t->status);
+json_t *cron_task_to_json (struct cron_task *t)
+{
+    json_t *o = json_pack ("{ s:i, s:i, s:i, s:s }",
+                           "rank", t->rank,
+                           "pid",  t->pid,
+                           "status", t->status,
+                           "state", cron_task_state_string (t));
+
+    if (o == NULL)
+        return NULL;
+
+    if (add_timespec (o, "create-time", &t->createtime) < 0)
+        goto fail;
+
     if (t->rexec_errno)
-        Jadd_int (o, "rexec_errno", t->rexec_errno);
+        json_object_set_new (o, "rexec_errno", json_integer (t->rexec_errno));
     if (t->exec_errno)
-        Jadd_int (o, "exec_errno", t->exec_errno);
+        json_object_set_new (o, "exec_errno", json_integer (t->exec_errno));
     if (t->timedout)
-        Jadd_bool (o, "timedout", true);
+        json_object_set_new (o, "timedout", json_boolean (true));
     if (cron_task_completed (t)) {
         int code = 0;
         if (WIFEXITED (t->status))
             code = WEXITSTATUS (t->status);
         else if (WIFSIGNALED (t->status))
             code = 128 + WTERMSIG (t->status);
-        Jadd_int (o, "code", code);
+        json_object_set_new (o, "code", json_integer (code));
     }
-    Jadd_str (o, "state", cron_task_state_string (t));
-    Jadd_double (o, "create-time", timespec_to_double (&t->createtime));
-    if (t->started)
-        Jadd_double (o, "start-time", timespec_to_double (&t->starttime));
-    if (t->running)
-        Jadd_double (o, "running-time", timespec_to_double (&t->runningtime));
-    if (cron_task_completed (t))
-        Jadd_double (o, "end-time", timespec_to_double (&t->endtime));
+    if (t->started && add_timespec (o, "start-time", &t->starttime) < 0)
+        goto fail;
+    if (t->running && add_timespec (o, "running-time", &t->runningtime) < 0)
+        goto fail;
+    if (cron_task_completed (t)
+        && add_timespec (o, "end-time", &t->endtime) < 0)
+        goto fail;
 
     return (o);
+fail:
+    json_decref (o);
+    return NULL;
 }
 
 /* vi: ts=4 sw=4 expandtab

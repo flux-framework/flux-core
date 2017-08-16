@@ -44,10 +44,9 @@
 #include <ctype.h>
 #include <flux/core.h>
 #include <czmq.h>
+#include <jansson.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/shortjson.h"
 
 #include "task.h"
 #include "entry.h"
@@ -68,8 +67,7 @@ struct cron_ctx {
 /**************************************************************************
  * Forward declarations
  */
-static cron_entry_t *cron_entry_create (cron_ctx_t *ctx,
-    const char *json);
+static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg);
 static void cron_entry_destroy (cron_entry_t *e);
 static int cron_entry_stop (cron_entry_t *e);
 static void cron_entry_completion_handler (flux_t *h, cron_task_t *t,
@@ -87,18 +85,11 @@ void *cron_entry_type_data (cron_entry_t *e)
     return e->data;
 }
 
-static double timespec_to_double (struct timespec *tm)
-{
-    double s = tm->tv_sec;
-    double ns = tm->tv_nsec/1.0e9 + .5e-9; // round 1/2 epsilon
-    return (s + ns);
-}
-
 double get_timestamp (void)
 {
     struct timespec tm;
     clock_gettime (CLOCK_REALTIME, &tm);
-    return timespec_to_double (&tm);
+    return ((double) tm.tv_sec + (tm.tv_nsec/1.0e9));
 }
 
 static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)
@@ -112,7 +103,7 @@ static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)
 static int cron_entry_run_task (cron_entry_t *e)
 {
     flux_t *h = e->ctx->h;
-    if (cron_task_run (e->task, e->rank, e->command, NULL, NULL) < 0) {
+    if (cron_task_run (e->task, e->rank, e->command, e->cwd, e->env) < 0) {
         flux_log_error (h, "cron-%ju: cron_task_run", e->id);
         /* Run "completion" handler since this task is done */
         cron_entry_completion_handler (h, e->task, e);
@@ -314,7 +305,8 @@ static void cron_entry_destroy (cron_entry_t *e)
     /*
      *  Before destroying entry, remove it from entries list:
      */
-    zlist_remove (e->ctx->entries, e);
+    if (e->ctx && e->ctx->entries)
+        zlist_remove (e->ctx->entries, e);
 
     if (e->data) {
         e->ops.destroy (e->data);
@@ -323,13 +315,20 @@ static void cron_entry_destroy (cron_entry_t *e)
 
     free (e->name);
     free (e->command);
+    free (e->typename);
+    free (e->cwd);
 
-    t = zlist_first (e->completed_tasks);
-    while (t) {
-        cron_task_destroy (t);
-        t = zlist_next (e->completed_tasks);
+    if (e->env)
+        json_decref (e->env);
+
+    if (e->completed_tasks) {
+        t = zlist_first (e->completed_tasks);
+        while (t) {
+            cron_task_destroy (t);
+            t = zlist_next (e->completed_tasks);
+        }
+        zlist_destroy (&e->completed_tasks);
     }
-    zlist_destroy (&e->completed_tasks);
 
     free (e);
 }
@@ -409,30 +408,32 @@ static void cron_stats_init (struct cron_stats *s)
 /*
  *  Create a new cron entry from JSON blob
  */
-static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
+static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const flux_msg_t *msg)
 {
     flux_t *h = ctx->h;
     cron_entry_t *e = NULL;
-    json_object *in;
+    json_t *args = NULL;
     const char *name;
     const char *command;
     const char *type;
+    const char *cwd = NULL;
     int saved_errno = EPROTO;
 
-    if (!(in = Jfromstr (json))) {
-        flux_log_error (h, "cron request decode");
+    /* Get required fields "type", "name" and "command" */
+    if (flux_msg_unpack (msg, "{ s:s, s:s, s:s, s:O }",
+            "type", &type,
+            "name", &name,
+            "command", &command,
+            "args", &args) < 0) {
+        flux_log_error (h, "cron.create: Failed to get name/command/args");
         goto done;
     }
 
-    /* Get required fields "name" and "command" */
-    if (!Jget_str (in, "name", &name) ||
-        !Jget_str (in, "command", &command)) {
-        flux_log_error (h, "cron.create: Failed to get name/command");
+    saved_errno = ENOMEM;
+    if ((e = calloc (1, sizeof (*e))) == NULL) {
+        flux_log_error (h, "cron.create: Out of memory");
         goto done;
     }
-
-    e = xzmalloc (sizeof (*e));
-    memset (e, 0, sizeof (*e));
 
     /* Allocate a new ID from this cron entry:
      */
@@ -445,28 +446,39 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
 
     e->ctx = ctx;
     e->stopped = 1;
-    e->name = xstrdup (name);
-    e->command = xstrdup (command);
+    if (!(e->name = strdup (name)) || !(e->command = strdup (command))) {
+        saved_errno = errno;
+        goto out_err;
+    }
     cron_stats_init (&e->stats);
 
-    /* Get optional fields
-     *  "repeat" -- the max number of times we'll run the target command
-     *  "rank"   -- run target command on this rank (default 0)
+    /*
+     *  Set defaults for optional fields:
      */
-    (void) Jget_int (in, "repeat", &e->repeat);
-    (void) Jget_int (in, "rank", &e->rank);
+    e->repeat = 0; /* Max number of times we'll run target command (0 = inf) */
+    e->rank = 0;   /* Rank on which to run commands (default = 0)            */
+    e->task_history_count = 1; /* Default number of entries in history list  */
+    e->stop_on_failure = 0;    /* Whether the cron job is stopped on failure */
+    e->timeout = -1.0;         /* Task timeout (default -1, no timeout)      */
 
-    /* Check to see if we want to keep more than just the status of
-     *  previous run for this cron entry.
-     */
-    if (!Jget_int (in, "task-history-count", &e->task_history_count))
-        e->task_history_count = 1;
+    if (flux_msg_unpack (msg, "{ s?O, s?s, s?i, s?i, s?i, s?i, s?F }",
+            "environ",            &e->env,
+            "cwd",                &cwd,
+            "repeat",             &e->repeat,
+            "rank",               &e->rank,
+            "task-history-count", &e->task_history_count,
+            "stop-on-failure",    &e->stop_on_failure,
+            "timeout",            &e->timeout) < 0) {
+        saved_errno = EPROTO;
+        flux_log_error (h, "cron.create: flux_msg_unpack");
+        goto out_err;
+    }
 
-    if (!Jget_int (in, "stop-on-failure", &e->stop_on_failure))
-        e->stop_on_failure = 0;
-
-    if (!Jget_double (in, "timeout", &e->timeout))
-        e->timeout = -1.0;
+    if (cwd && (e->cwd = strdup (cwd)) == NULL) {
+        flux_log_error (h, "cron.create: strdup (cwd)");
+        errno = ENOMEM;
+        goto out_err;
+    }
 
     /* List for all completed tasks up to task-history-count
      */
@@ -480,24 +492,25 @@ static cron_entry_t *cron_entry_create (cron_ctx_t *ctx, const char *json)
      *  Now, create type-specific data for this entry from type
      *   name and type-specific data in "args" key:
      */
-    if (!Jget_str (in, "type", &type)
-        || (cron_type_operations_lookup (type, &e->ops) < 0)) {
+    if (cron_type_operations_lookup (type, &e->ops) < 0) {
         saved_errno = ENOSYS; /* year,month,day,etc. not supported */
         goto out_err;
     }
-    e->typename = xstrdup (type);
-
-    if (!(e->data = e->ops.create (h, e, Jobj_get (in, "args")))) {
+    if ((e->typename = strdup (type)) == NULL) {
         saved_errno = errno;
         goto out_err;
     }
+    if (!(e->data = e->ops.create (h, e, args))) {
+        flux_log_error (h, "ops.create");
+        saved_errno = errno;
+        goto out_err;
+    }
+    json_decref (args);
 
     // Start the entry watcher for this type:
     cron_entry_start (e);
 
 done:
-    if (in)
-        Jput (in);
     return (e);
 out_err:
     cron_entry_destroy (e);
@@ -542,7 +555,10 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
     flux_log (ctx->h, LOG_INFO,
         "synchronizing cron tasks to event %s", topic);
 
-    ctx->sync_event = xstrdup (topic);
+    if ((ctx->sync_event = strdup (topic)) == NULL) {
+        flux_log_error (ctx->h, "sync_event_init: strdup");
+        return (-1);
+    }
     match.topic_glob = ctx->sync_event;
     ctx->mh = flux_msg_handler_create (ctx->h, match,
                                        deferred_cb, (void *) ctx);
@@ -560,7 +576,11 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
 
 static cron_ctx_t * cron_ctx_create (flux_t *h)
 {
-    cron_ctx_t *ctx = xzmalloc (sizeof (*ctx));
+    cron_ctx_t *ctx = calloc (1, sizeof (*ctx));
+    if (ctx == NULL) {
+        flux_log_error (h, "cron_ctx_create");
+        goto error;
+    }
 
     ctx->sync_event = NULL;
     ctx->last_sync  = 0.0;
@@ -583,66 +603,72 @@ error:
 
 /**************************************************************************/
 
-static json_object *cron_stats_to_json (struct cron_stats *stats)
+static json_t *cron_stats_to_json (struct cron_stats *stats)
 {
-    json_object *o = Jnew ();
-    Jadd_double (o, "ctime", stats->ctime);
-    Jadd_double (o, "starttime", stats->starttime);
-    Jadd_double (o, "lastrun", stats->lastrun);
-    Jadd_int (o, "count", stats->count);
-    Jadd_int (o, "failcount", stats->failcount);
-    Jadd_int (o, "total", stats->total);
-    Jadd_int (o, "success", stats->success);
-    Jadd_int (o, "failure", stats->failure);
-    Jadd_int (o, "deferred", stats->deferred);
-    return (o);
+    return json_pack ("{ s:f, s:f, s:f, s:i, s:i, s:i, s:i, s:i, s:i }",
+                      "ctime", stats->ctime,
+                      "starttime", stats->starttime,
+                      "lastrun", stats->lastrun,
+                      "count", stats->count,
+                      "failcount", stats->failcount,
+                      "total", stats->total,
+                      "success", stats->success,
+                      "failure", stats->failure,
+                      "deferred", stats->deferred);
 }
 
-static json_object *cron_entry_to_json (cron_entry_t *e)
+static json_t *cron_entry_to_json (cron_entry_t *e)
 {
     cron_task_t *t;
-    json_object *o = Jnew ();
-    json_object *to = NULL;
-    json_object *tasks = Jnew_ar ();
+    json_t *o, *to;
+    json_t *tasks;
 
     /*
      *  Common entry contents:
      */
-    Jadd_int64 (o, "id", e->id);
-    Jadd_int   (o, "rank", e->rank);
-    Jadd_str   (o, "name", e->name);
-    Jadd_str   (o, "command", e->command);
-    Jadd_int   (o, "repeat", e->repeat);
-    Jadd_bool  (o, "stopped", e->stopped);
-    Jadd_str   (o, "type", e->typename);
+    if (!(o = json_pack ("{ s:I, s:i, s:s, s:s, s:i, s:b, s:s }",
+                   "id", (json_int_t) e->id,
+                   "rank", e->rank,
+                   "name", e->name,
+                   "command", e->command,
+                   "repeat", e->repeat,
+                   "stopped", e->stopped,
+                   "type", e->typename)))
+        return NULL;
+
     if (e->timeout >= 0.0)
-        Jadd_double (o, "timeout", e->timeout);
+        json_object_set_new (o, "timeout", json_real (e->timeout));
 
     if ((to = cron_stats_to_json (&e->stats)))
-        json_object_object_add (o, "stats", to);
+        json_object_set_new (o, "stats", to);
 
     /*
      *  Add type specific json blob, under typedata key:
      */
     if ((to = e->ops.tojson (e->data)))
-        json_object_object_add (o, "typedata", to);
+        json_object_set_new (o, "typedata", to);
 
     /*
      *  Add all task information, starting with any current task:
      */
+    if (!(tasks = json_array ()))
+        goto fail;
     if (e->task && (to = cron_task_to_json (e->task)))
-        json_object_array_add (tasks, to);
+        json_array_append_new (tasks, to);
 
     t = zlist_first (e->completed_tasks);
     while (t) {
         if ((to = cron_task_to_json (t)))
-            json_object_array_add (tasks, to);
+            json_array_append_new (tasks, to);
         t = zlist_next (e->completed_tasks);
     }
 
-    json_object_object_add (o, "tasks", tasks);
+    json_object_set_new (o, "tasks", tasks);
 
     return (o);
+fail:
+    json_decref (o);
+    return NULL;
 }
 
 
@@ -656,23 +682,12 @@ static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *out = NULL;
+    json_t *out = NULL;
+    char *json_str = NULL;
     int saved_errno = EPROTO;
     int rc = -1;
 
-    if (flux_request_decode (msg, NULL, &json_str) < 0) {
-        flux_log_error (h, "cron request decode");
-        saved_errno = errno;
-        goto done;
-    }
-
-    if (!json_str) {
-        saved_errno = EPROTO;
-        goto done;
-    }
-
-    if (!(e = cron_entry_create (ctx, json_str))) {
+    if (!(e = cron_entry_create (ctx, msg))) {
         saved_errno = errno;
         goto done;
     }
@@ -683,12 +698,14 @@ static void cron_create_handler (flux_t *h, flux_msg_handler_t *w,
     }
 
     rc = 0;
-    out = cron_entry_to_json (e);
+    if ((out = cron_entry_to_json (e))) {
+        json_str = json_dumps (out, JSON_COMPACT);
+        json_decref (out);
+    }
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
         flux_log_error (h, "cron.request: flux_respond");
-    Jput (out);
+    free (json_str);
 }
 
 static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
@@ -766,7 +783,8 @@ static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    json_object *out = NULL;
+    json_t *out = NULL;
+    char *json_str = NULL;
     int kill = false;
     int saved_errno;
     int rc = -1;
@@ -785,10 +803,12 @@ static void cron_delete_handler (flux_t *h, flux_msg_handler_t *w,
     cron_entry_destroy (e);
 
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              rc < 0 ? NULL : Jtostr (out)) < 0)
+    if (out && rc >= 0)
+        json_str = json_dumps (out, JSON_COMPACT);
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
         flux_log_error (h, "cron.delete: flux_respond");
-    Jput (out);
+    free (json_str);
+    json_decref (out);
 }
 
 /*
@@ -799,7 +819,8 @@ static void cron_stop_handler (flux_t *h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    json_object *out = NULL;
+    json_t *out = NULL;
+    char *json_str = NULL;
     int saved_errno = 0;
     int rc = -1;
 
@@ -808,11 +829,14 @@ static void cron_stop_handler (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
     rc = cron_entry_stop (e);
-    out = cron_entry_to_json (e);
+    if ((out = cron_entry_to_json (e))) {
+        json_str = json_dumps (out, JSON_COMPACT);
+        json_decref (out);
+    }
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                              out ? Jtostr (out) : NULL) < 0)
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
         flux_log_error (h, "cron.stop: flux_respond");
+    free (json_str);
 }
 
 /*
@@ -823,7 +847,8 @@ static void cron_start_handler (flux_t *h, flux_msg_handler_t *w,
 {
     cron_entry_t *e;
     cron_ctx_t *ctx = arg;
-    json_object *out = NULL;
+    json_t *out = NULL;
+    char *json_str = NULL;
     int saved_errno = 0;
     int rc = -1;
 
@@ -832,11 +857,14 @@ static void cron_start_handler (flux_t *h, flux_msg_handler_t *w,
         goto done;
     }
     rc = cron_entry_start (e);
-    out = cron_entry_to_json (e);
+    if ((out = cron_entry_to_json (e))) {
+        json_str = json_dumps (out, JSON_COMPACT);
+        json_decref (out);
+    }
 done:
-    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0,
-                      out ? Jtostr (out) : NULL) < 0)
+    if (flux_respond (h, msg, rc < 0 ? saved_errno : 0, json_str) < 0)
         flux_log_error (h, "cron.start: flux_respond");
+    free (json_str);
 }
 
 
@@ -848,23 +876,33 @@ static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
 {
     cron_ctx_t *ctx = arg;
     cron_entry_t *e = NULL;
-    json_object *out = Jnew ();
-    json_object *entries = Jnew_ar ();
+    char *json_str = NULL;
+    json_t *out = json_object ();
+    json_t *entries = json_array ();
+
+    if (out == NULL || entries == NULL) {
+        flux_respond (h, msg, ENOMEM, NULL);
+        flux_log_error (h, "cron.list: Out of memory");
+        return;
+    }
 
     e = zlist_first (ctx->entries);
     while (e) {
-        json_object *entry = cron_entry_to_json (e);
+        json_t *entry = cron_entry_to_json (e);
         if (entry == NULL)
             flux_log_error (h, "cron_entry_to_json");
         else
-            json_object_array_add (entries, entry);
+            json_array_append_new (entries, entry);
         e = zlist_next (ctx->entries);
     }
-    json_object_object_add (out, "entries", entries);
+    json_object_set_new (out, "entries", entries);
 
-    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+    if (!(json_str = json_dumps (out, JSON_COMPACT)))
+        flux_log_error (h, "cron.list: json_dumps");
+    else if (flux_respond (h, msg, 0, json_str) < 0)
         flux_log_error (h, "cron.list: flux_respond");
-    Jput (out);
+    json_decref (out);
+    free (json_str);
 }
 
 /**************************************************************************/
