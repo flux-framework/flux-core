@@ -368,7 +368,7 @@ int l_flux_kvs_put (lua_State *L)
         json_object_put (o);
     }
     if (rc < 0)
-        return lua_pusherror (L, "kvsdir_put (%s): %s",
+        return lua_pusherror (L, "kvs_put (%s): %s",
                                 key, (char *)flux_strerror (errno));
 
     lua_pushboolean (L, true);

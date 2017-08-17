@@ -125,7 +125,6 @@ int fence_add_request_data (fence_t *f, json_t *ops)
         for (i = 0; i < json_array_size (ops); i++) {
             if ((op = json_array_get (ops, i)))
                 if (json_array_append (f->ops, op) < 0) {
-                    json_decref (op);
                     errno = ENOMEM;
                     return -1;
                 }

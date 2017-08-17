@@ -106,7 +106,7 @@ void commit_mgr_basic_tests (void)
 
     ops = json_array ();
     ops_append (ops, "key1", "1");
- 
+
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
 
@@ -472,7 +472,7 @@ void commit_basic_commit_process_test_multiple_fences (void)
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
-    create_ready_commit (cm, "fence2", "key2", "2", 0);
+    create_ready_commit (cm, "fence2", "dir.key2", "2", 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -508,7 +508,8 @@ void commit_basic_commit_process_test_multiple_fences (void)
     ok (commit_iter_dirty_cache_entries (c, cache_count_cb, &count) == 0,
         "commit_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (count == 1,
+    /* why two? 1 for root (new dir added), 1 for dir.key2 (a new dir) */
+    ok (count == 2,
         "correct number of cache entries were dirty");
 
     ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
@@ -518,7 +519,7 @@ void commit_basic_commit_process_test_multiple_fences (void)
         "commit_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "key1", "1");
-    verify_value (cache, newroot, "key2", "2");
+    verify_value (cache, newroot, "dir.key2", "2");
 
     commit_mgr_remove_commit (cm, c);
 
@@ -1607,6 +1608,7 @@ int main (int argc, char *argv[])
      * "normal" situation and is tested throughout
      */
     commit_process_error_callbacks ();
+    commit_process_error_callbacks_partway ();
     commit_process_invalid_operation ();
     commit_process_invalid_hash ();
     commit_process_follow_link ();

@@ -147,8 +147,8 @@ void ops_tests (void)
         "initial fence_get_json_ops call works");
 
     ops = json_array ();
-                           json_array_append_new (ops, json_string ("A"));
-                           json_array_append_new (ops, json_string ("B"));
+    json_array_append_new (ops, json_string ("A"));
+    json_array_append_new (ops, json_string ("B"));
 
     ok (json_equal (ops, o) == true,
         "fence_get_json_ops match");
