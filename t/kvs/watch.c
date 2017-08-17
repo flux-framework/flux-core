@@ -61,6 +61,7 @@ typedef struct {
     int nil_count;
     int stable_count;
     int last_val;
+    int errcount;
 } thd_t;
 
 static void signal_ready (void)
@@ -101,16 +102,19 @@ static int mt_watch_cb (const char *k, const char *json_str, void *arg, int errn
 
     if (errnum != 0) {
         log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        t->errcount++;
         return -1;
     }
     if (!(obj = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
         log_msg ("%d: %s failed to decode value", t->n, __FUNCTION__);
+        t->errcount++;
         return -1;
     }
     val = json_integer_value (obj);
     if (val == t->last_val) {
         log_msg ("%d: %s: called with same value as last time: %d", t->n,
             __FUNCTION__, val);
+        t->errcount++;
         return -1;
     }
     t->last_val = val;
@@ -130,6 +134,7 @@ static int mt_watchnil_cb (const char *k, const char *json_str, void *arg, int e
     thd_t *t = arg;
     if (errnum != ENOENT) {
         log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        t->errcount++;
         return -1;
     }
     t->nil_count++;
@@ -144,6 +149,7 @@ static int mt_watchstable_cb (const char *k, const char *json_ttr, void *arg, in
 
     if (errnum != 0) {
         log_errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        t->errcount++;
         return -1;
     }
     t->stable_count++;
@@ -254,6 +260,10 @@ void test_mt (int argc, char **argv)
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
             log_errn (rc, "pthread_join");
+        if (thd[i].errcount != 0) {
+            log_msg ("%d: error occurred inside callback function", i);
+            errors++;
+        }
         if (thd[i].nil_count != 1) {
             log_msg ("%d: nil callback called %d times (expected one)",
                  i, thd[i].nil_count);
