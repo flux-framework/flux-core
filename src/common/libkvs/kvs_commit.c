@@ -61,18 +61,15 @@ flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
 {
     zuuid_t *uuid;
     flux_future_t *f = NULL;
-    int saved_errno;
+    int saved_errno = 0;
 
-    if (!(uuid = zuuid_new ())) {
-        errno = ENOMEM;
-        goto done;
-    }
-    if (!(f = flux_kvs_fence (h, flags, zuuid_str (uuid), 1, txn)))
-        goto done;
-done:
-    saved_errno = errno;
+    if (!(uuid = zuuid_new ())
+        || !(f = flux_kvs_fence (h, flags, zuuid_str (uuid), 1, txn)))
+        saved_errno = errno;
+
     zuuid_destroy (&uuid);
-    errno = saved_errno;
+    if (saved_errno)
+        errno = saved_errno;
     return f;
 }
 
