@@ -19,6 +19,7 @@ libkvs_la_SOURCES = \
 	kvs_watch.c \
 	jansson_dirent.c \
 	jansson_dirent.h \
+	kvs_commit.c \
 	kvs_txn.c \
 	kvs_txn_private.h
 
@@ -28,11 +29,14 @@ fluxcoreinclude_HEADERS = \
 	kvs_dir.h \
 	kvs_watch.h \
 	kvs_classic.h \
-	kvs_txn.h
+	kvs_txn.h \
+	kvs_commit.h
 
 TESTS = \
 	test_jansson_dirent.t \
-	test_kvs_txn.t
+	test_kvs_txn.t \
+	test_kvs_lookup.t \
+	test_kvs_dir.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -59,3 +63,11 @@ test_jansson_dirent_t_LDADD = $(test_ldadd)
 test_kvs_txn_t_SOURCES = test/kvs_txn.c
 test_kvs_txn_t_CPPFLAGS = $(test_cppflags)
 test_kvs_txn_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_lookup_t_SOURCES = test/kvs_lookup.c
+test_kvs_lookup_t_CPPFLAGS = $(test_cppflags)
+test_kvs_lookup_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_dir_t_SOURCES = test/kvs_dir.c
+test_kvs_dir_t_CPPFLAGS = $(test_cppflags)
+test_kvs_dir_t_LDADD = $(test_ldadd) $(LIBDL)

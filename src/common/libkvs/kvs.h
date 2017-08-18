@@ -10,6 +10,7 @@
 #include "kvs_classic.h"
 #include "kvs_watch.h"
 #include "kvs_txn.h"
+#include "kvs_commit.h"
 
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
