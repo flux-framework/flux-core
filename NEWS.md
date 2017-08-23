@@ -1,3 +1,76 @@
+flux-core version 0.8.0 - 2017-08-23
+------------------------------------
+
+#### Fixes
+ * libflux: remove calls to functions that exit on error (#1060)
+ * fix flux_reactor_run() to return active watcher count (#1085)
+ * fix flux path detection when install path contains symlinks (#1122)
+ * lua: fix refcount bug in kvs bindings (#1116)
+ * kvs: oom() fixes (#1124, #1128)
+ * kvs: Fix forced dirty bit clear error (#1133)
+ * kvs: fix invalid memory read (#1065)
+ * kvs: directory walk return error fixes (#1058)
+ * kvs_classic: fix kvs(dir)_put_double (#1114)
+ * fix memory leaks detected by valgrind (#1076)
+ * avoid deadlock when unloading connector-local module (#1027)
+ * fix several arm7l portability issues (#1023)
+ * optparse: test and allow adjustment of posixly-correct behavior (#1049)
+ * Small improvements for systemd unit file and install paths (#1037)
+ * fix small leak in flux cmd driver (#1067)
+
+#### New Features
+ * add FLUX_MSGFLAG_PRIVATE and allow guests to content load/store (#1032)
+ * allow guests to access hwloc topology (#1043)
+ * libflux: new flux_future_t API (#1083)
+ * libflux: implement RPCs in terms of futures (#1089)
+ * kvs: implement transaction objects (#1107)
+ * connector-local: Fix compiler warning (#1031)
+ * add optional initial program timeout, for test scripts (#1129)
+ * libutil: new dirwalk interface (#1072, #1061, #1059)
+ * connector-local: add exponential backoff to connect retry count (#1148)
+ * support tbon.endpoint and mcast.endpoint attributes (#1030)
+ * content: allow hash type to be configured (#1051)
+
+#### Cleanup
+ * update many broker attribute names (#1042)
+ * consolidate installed libraries and source tree cleanup (#1095)
+ * convert broker from json-c to jansson (#1050)
+ * libflux: rename jansson pack/unpack-based Flux API functions (#1104)
+ * kvs: various code cleanup (#1057, #1073, #1079, #1099, #1119, #1123, #1153)
+ * kvs: refactor kvs commit, lookup, and walk logic (#1066, #1105)
+ * kvs: drop unused, legacy and deprecated functions (#1100, #1116)
+ * kvs: switch from json-c to jansson (#1108, #1153)
+ * Misc Cleanup/Minor Fixes from KVS TreeObject Work (#1152)
+ * cron: avoid use of json-c and xzmalloc (#1143)
+ * Change void * to void ** in flux_msg_get_payload (#1144)
+ * python: make bindings compatible with newer versions of pylint (#1113)
+ * barrier: cleanup (#1092)
+ * tweak watcher structure, add external watcher construction interface
+   (#1082)
+ * drop coprocess programming model (#1081)
+ * split flux_mrpc() out to its own class (#1080)
+ * deprecate some libutil classes (#1047)
+ * cleanup of flux_msg_copy(), flux_rpc_aux_set() etc. (#1056)
+
+#### Testing
+ * update sharness version to upstream 1.0.0 version (#1035)
+ * cleanup kvs tests (#1149)
+ * mitigate slow builds in Travis-CI (#1142)
+ * fix --chain-lint option in sharness tests (#1125)
+ * t2000-wreck.t: fix intermittent failures (#1102, #1109)
+ * kvs: Add json_util unit tests (#1106)
+ * run valgrind if available as part of make check (#1076, #1098)
+ * add FLUX_PMI_SINGLETON env variable to avoid SLURMs libpmi in valgrind
+   test (#1091)
+ * other test improvements (#1087)
+ * update soak test for recent flux changes (#1072)
+ * test/security: Fix test corner case (#1029)
+
+#### Documentation
+ * add missing manpages, minor manpage fixes (#1045)
+ * improve reactor documentation (#1086)
+ * Code comments and documentation cleanup (#1138)
+
 flux-core version 0.7.0 - 2017-04-01
 ------------------------------------
 
