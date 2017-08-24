@@ -181,8 +181,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
 }
 
 /* Store object 'o' under key 'ref' in local cache.
- * Object reference is given to this function, it will either give it
- * to the cache or decref it.
+ * Object reference is still owned by the caller.
  * Returns -1 on error, 0 on success entry already there, 1 on success
  * entry needs to be flushed to content store
  */
@@ -195,29 +194,31 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
         saved_errno = errno;
         log_err ("kvs_util_json_hash");
-        goto decref_done;
+        goto done;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
         if (!(hp = cache_entry_create (NULL))) {
             saved_errno = ENOMEM;
-            goto decref_done;
+            goto done;
         }
         cache_insert (c->cm->cache, ref, hp);
     }
     if (cache_entry_get_valid (hp)) {
         c->cm->noop_stores++;
-        json_decref (o);
         rc = 0;
     } else {
+        json_incref (o);
         if (cache_entry_set_json (hp, o) < 0) {
             int ret;
             saved_errno = errno;
+            json_decref (o);
             ret = cache_remove_entry (c->cm->cache, ref);
             assert (ret == 1);
-            goto decref_done;
+            goto done;
         }
         if (cache_entry_set_dirty (hp, true) < 0) {
-            /* cache_remove_entry will decref object */
+            /* cache entry now owns a reference, cache_remove_entry
+             * will decref object */
             int ret;
             saved_errno = errno;
             ret = cache_remove_entry (c->cm->cache, ref);
@@ -229,8 +230,6 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     *hpp = hp;
     return rc;
 
- decref_done:
-    json_decref (o);
  done:
     errno = saved_errno;
     return rc;
@@ -265,7 +264,6 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
         if (treeobj_is_dir (dir_entry)) {
             if (commit_unroll (c, current_epoch, dir_entry) < 0) /* depth first */
                 return -1;
-            json_incref (dir_entry);
             if ((ret = store_cache (c, current_epoch, dir_entry, ref, &hp)) < 0)
                 return -1;
             if (ret) {
@@ -292,7 +290,6 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if (kvs_util_json_encoded_size (val_data, &size) < 0)
                 return -1;
             if (size > BLOBREF_MAX_STRING_SIZE) {
-                json_incref (val_data);
                 if ((ret = store_cache (c, current_epoch, val_data,
                                         ref, &hp)) < 0)
                     return -1;
@@ -607,10 +604,11 @@ commit_process_t commit_process (commit_t *c,
                 return COMMIT_PROCESS_ERROR;
             }
 
-            /* cache took ownership of rootcpy, we're done, but
-             * may still need to stall user.
+            /* cache now has ownership of rootcpy, we don't need our
+             * rootcpy anymore.  But we may still need to stall user.
              */
             c->state = COMMIT_STATE_PRE_FINISHED;
+            json_decref (c->rootcpy);
             c->rootcpy = NULL;
 
             /* fallthrough */
