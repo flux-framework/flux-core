@@ -24,7 +24,7 @@
 
 /* ev_zmq.c - an aggregate libev watcher for 0MQ sockets */
 
-/* Thanks to Bert JW Reeger for a helpful blog on integrating 0MQ with libev:
+/* Thanks to Bert JW Regeer for a helpful blog on integrating 0MQ with libev:
  *   http://funcptr.net/2013/04/20/embedding-zeromq-in-the-libev-event-loop/
  * Also ref: libzmq zmq_poll() source, czmq zloop() source
  *
