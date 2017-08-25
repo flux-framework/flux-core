@@ -25,15 +25,18 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/ioctl.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <jansson.h>
+#include <czmq.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/readall.h"
+#include "src/common/libkvs/treeobj.h"
 
 int cmd_get (optparse_t *p, int argc, char **argv);
 int cmd_put (optparse_t *p, int argc, char **argv);
@@ -48,8 +51,11 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv);
 int cmd_copy (optparse_t *p, int argc, char **argv);
 int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
+int cmd_ls (optparse_t *p, int argc, char **argv);
 
 static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt);
+
+#define min(a,b) ((a)<(b)?(a):(b))
 
 static struct optparse_option dir_opts[] =  {
     { .name = "recursive", .key = 'R', .has_arg = 0,
@@ -57,6 +63,25 @@ static struct optparse_option dir_opts[] =  {
     },
     { .name = "directory", .key = 'd', .has_arg = 0,
       .usage = "List directory entries and not values",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option ls_opts[] =  {
+    { .name = "recursive", .key = 'R', .has_arg = 0,
+      .usage = "List directory recursively",
+    },
+    { .name = "directory", .key = 'd', .has_arg = 0,
+      .usage = "List directory instead of contents",
+    },
+    { .name = "width", .key = 'w', .has_arg = 1,
+      .usage = "Set output width to COLS.  0 means no limit",
+    },
+    { .name = "1", .key = '1', .has_arg = 0,
+      .usage = "Force one entry per line",
+    },
+    { .name = "classify", .key = 'F', .has_arg = 0,
+      .usage = "Append indicator (one of .@) to entries",
     },
     OPTPARSE_TABLE_END
 };
@@ -115,6 +140,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_dir,
       0,
       dir_opts
+    },
+    { "ls",
+      "[-R] [-d] [-F] [-w COLS] [-1] [key...]",
+      "List directory",
+      cmd_ls,
+      0,
+      ls_opts
     },
     { "unlink",
       "key [key...]",
@@ -814,6 +846,319 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     kvsdir_destroy (dir);
     flux_future_destroy (f);
     return (0);
+}
+
+/* Find longest name in a directory.
+ */
+static int get_dir_maxname (kvsdir_t *dir)
+{
+    kvsitr_t *itr;
+    const char *name;
+    int max = 0;
+
+    if (!(itr = kvsitr_create (dir)))
+        log_err_exit ("kvsitr_create");
+    while ((name = kvsitr_next (itr)))
+        if (max < strlen (name))
+            max = strlen (name);
+    kvsitr_destroy (itr);
+    return max;
+}
+
+/* Find longest name in a list of names.
+ */
+static int get_list_maxname (zlist_t *names)
+{
+    const char *name;
+    int max = 0;
+
+    name = zlist_first (names);
+    while (name) {
+        if (max < strlen (name))
+            max = strlen (name);
+        name = zlist_next (names);
+    }
+    return max;
+}
+
+/* Determine appropriate terminal window width for columnar output.
+ * The options -w COLS or -1 force the width to COLS or 1, respectively.
+ * If not forced, ask the tty how wide it is.  If not on a tty, try the
+ * COLUMNS environment variable.  If not set, assume 80.
+ * N.B. A width of 0 means "unlimited", while a width of 1 effectively
+ * forces one entry per line since entries are never broken across lines.
+ */
+static int get_window_width (optparse_t *p, int fd)
+{
+    struct winsize w;
+    int width;
+    const char *s;
+
+    if (optparse_hasopt (p, "1"))
+        return 1;
+    if ((width = optparse_get_int (p, "width", -1)) >= 0)
+        return width;
+    if (ioctl (fd, TIOCGWINSZ, &w) == 0)
+        return w.ws_col;
+    if ((s = getenv ("COLUMNS")) && (width = strtol (s, NULL, 10)) >= 0)
+        return width;
+    return 80;
+}
+
+/* Return true if at character position 'col', there is insufficient
+ * room for one more column of 'col_width' without exceeding 'win_width'.
+ * Exceptions: 1) win_width of 0 means "unlimited"; 2) col must be > 0.
+ * This is a helper for list_kvs_dir_single() and list_kvs_keys().
+ */
+static bool need_newline (int col, int col_width, int win_width)
+{
+    return (win_width != 0 && col + col_width > win_width && col > 0);
+}
+
+/* List the content of 'dir', arranging output in columns that fit 'win_width',
+ * and using a custom column width selected based on the longest entry name.
+ */
+static void list_kvs_dir_single (kvsdir_t *dir, int win_width, optparse_t *p)
+{
+    kvsitr_t *itr;
+    const char *name;
+    int col_width = get_dir_maxname (dir) + 4;
+    int col = 0;
+    char *namebuf;
+    int last_len = 0;
+
+    if (!(namebuf = malloc (col_width + 2)))
+        log_err_exit ("malloc");
+    if (!(itr = kvsitr_create (dir)))
+        log_err_exit ("kvsitr_create");
+    while ((name = kvsitr_next (itr))) {
+        if (need_newline (col, col_width, win_width)) {
+            printf ("\n");
+            col = 0;
+        }
+        else if (last_len > 0) // pad out last entry to col_width
+            printf ("%*s", col_width - last_len, "");
+        strcpy (namebuf, name);
+        if (optparse_hasopt (p, "classify")) {
+            if (kvsdir_isdir (dir, name))
+                strcat (namebuf, ".");
+            else if (kvsdir_issymlink (dir, name))
+                strcat (namebuf, "@");
+        }
+        printf ("%s", namebuf);
+        last_len = strlen (namebuf);
+        col += col_width;
+    }
+    if (col > 0)
+        printf ("\n");
+    kvsitr_destroy (itr);
+    free (namebuf);
+}
+
+/* List contents of directory pointed to by 'key', descending into subdirs
+ * if -R was specified.  First the directory is listed, then its subdirs.
+ */
+static void list_kvs_dir (flux_t *h, const char *key, optparse_t *p,
+                          int win_width, bool print_label, bool print_vspace)
+{
+    flux_future_t *f;
+    kvsdir_t *dir = NULL;
+    kvsitr_t *itr;
+    const char *name, *json_str;
+
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
+                || flux_kvs_lookup_get (f, &json_str) < 0) {
+        log_err_exit ("%s", key);
+        goto done;
+    }
+    if (!(dir = kvsdir_create (h, NULL, key, json_str)))
+        log_err_exit ("kvsdir_create");
+
+    if (print_label)
+        printf ("%s%s:\n", print_vspace ? "\n" : "", key);
+    list_kvs_dir_single (dir, win_width, p);
+
+    if (optparse_hasopt (p, "recursive")) {
+        if (!(itr = kvsitr_create (dir)))
+            log_err_exit ("kvsitr_create");
+        while ((name = kvsitr_next (itr))) {
+            if (kvsdir_isdir (dir, name)) {
+                char *nkey;
+                if (!(nkey = kvsdir_key_at (dir, name))) {
+                    log_err ("%s: kvsdir_key_at failed", name);
+                    continue;
+                }
+                list_kvs_dir (h, nkey, p, win_width, print_label, true);
+                free (nkey);
+            }
+        }
+        kvsitr_destroy (itr);
+    }
+done:
+    kvsdir_destroy (dir);
+    flux_future_destroy (f);
+}
+
+/* List keys, arranging in columns so that they fit within 'win_width',
+ * and using a custom column width selected based on the longest entry name.
+ * The keys are popped off the list and freed.
+ */
+static void list_kvs_keys (zlist_t *singles, int win_width)
+{
+    char *name;
+    int col_width = get_list_maxname (singles) + 4;
+    int col = 0;
+    int last_len = 0;
+
+    while ((name = zlist_pop (singles))) {
+        if (need_newline (col, col_width, win_width)) {
+            printf ("\n");
+            col = 0;
+        }
+        else if (last_len > 0) // pad out last entry to col_width
+            printf ("%*s", col_width - last_len, "");
+        printf ("%s", name);
+        last_len = strlen (name);
+        col += col_width;
+        free (name);
+    }
+    if (col > 0)
+        printf ("\n");
+}
+
+/* for zlist_sort()
+ */
+static int sort_cmp (void *item1, void *item2)
+{
+    if (!item1 && item2)
+        return -1;
+    if (!item1 && !item2)
+        return 0;
+    if (item1 && !item2)
+        return 1;
+    return strcmp (item1, item2);
+}
+
+/* Put key in 'dirs' or 'singles' list, depending on whether
+ * its contents are to be listed or not.  If -F is specified,
+ * 'singles' key names are decorated based on their type.
+ */
+static int categorize_key (optparse_t *p, const char *key,
+                            zlist_t *dirs, zlist_t *singles)
+{
+    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_future_t *f;
+    const char *json_str;
+    char *nkey;
+    json_t *treeobj = NULL;
+    bool require_directory = false;
+
+    if (!(nkey = malloc (strlen (key) + 2))) // room for decoration char + null
+        log_err_exit ("malloc");
+    strcpy (nkey, key);
+
+    /* If the key has a "." suffix, strip it off, but require
+     * that the key be a directory type.
+     */
+    while (strlen (nkey) > 1 && nkey[strlen (nkey) - 1] == '.') {
+        nkey[strlen (nkey) - 1] = '\0';
+        require_directory = true;
+    }
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, nkey)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_kvs_lookup_get (f, &json_str) < 0) {
+        fprintf (stderr, "%s: %s\n", nkey, flux_strerror (errno));
+        goto error;
+    }
+    if (!(treeobj = treeobj_decode (json_str)))
+        log_err_exit ("%s: metadata decode error", key);
+    if (treeobj_is_dir (treeobj) || treeobj_is_dirref (treeobj)) {
+        if (optparse_hasopt (p, "directory")) {
+            if (optparse_hasopt (p, "classify"))
+                strcat (nkey, ".");
+            if (zlist_append (singles, nkey) < 0)
+                log_err_exit ("zlist_append");
+        }
+        else
+            if (zlist_append (dirs, nkey) < 0)
+                log_err_exit ("zlist_append");
+    }
+    else if (treeobj_is_val (treeobj) || treeobj_is_valref (treeobj)) {
+        if (require_directory) {
+            fprintf (stderr, "%s: Not a directory\n", nkey);
+            goto error;
+        }
+        if (zlist_append (singles, xstrdup (key)) < 0)
+            log_err_exit ("zlist_append");
+    }
+    else if (treeobj_is_symlink (treeobj)) {
+        if (require_directory) {
+            fprintf (stderr, "%s: Not a directory\n", nkey);
+            goto error;
+        }
+        if (optparse_hasopt (p, "classify"))
+            strcat (nkey, "@");
+        if (zlist_append (singles, nkey) < 0)
+            log_err_exit ("zlist_append");
+    }
+    zlist_sort (singles, sort_cmp);
+    zlist_sort (dirs, sort_cmp);
+    json_decref (treeobj);
+    flux_future_destroy (f);
+    return 0;
+error:
+    free (nkey);
+    json_decref (treeobj);
+    flux_future_destroy (f);
+    return -1;
+}
+
+/* Mimic ls(1).
+ * Strategy: sort keys from command line into two lists: 'dirs' for
+ * directories to be expanded, and 'singles' for others.
+ * First display the singles, then display directories, optionally recursing.
+ * Assume "." if no keys were specified on the command line.
+ */
+int cmd_ls (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    int optindex = optparse_option_index (p);
+    int win_width = get_window_width (p, STDOUT_FILENO);
+    zlist_t *dirs, *singles;
+    char *key;
+    bool print_label = false;   // print "name:" before directory contents
+    bool print_vspace = false;  // print vertical space before label
+    int rc = 0;
+
+    if (!(dirs = zlist_new ()) || !(singles = zlist_new ()))
+        log_err_exit ("zlist_new");
+
+    if (optindex == argc) {
+        if (categorize_key (p, ".", dirs, singles) < 0)
+            rc = -1;
+    }
+    while (optindex < argc) {
+        if (categorize_key (p, argv[optindex++], dirs, singles) < 0)
+            rc = -1;
+    }
+    if (zlist_size (singles) > 0) {
+        list_kvs_keys (singles, win_width);
+        print_label = true;
+        print_vspace = true;
+    }
+
+    if (optparse_hasopt (p, "recursive") || zlist_size (dirs) > 1)
+        print_label = true;
+    while ((key = zlist_pop (dirs))) {
+        list_kvs_dir (h, key, p, win_width, print_label, print_vspace);
+        print_vspace = true;
+        free (key);
+    }
+
+    zlist_destroy (&dirs);
+    zlist_destroy (&singles);
+
+    return rc;
 }
 
 int cmd_copy (optparse_t *p, int argc, char **argv)
