@@ -5,11 +5,9 @@
 # macros are not in default aclocal search path.
 #
 echo "Running libtoolize --automake --copy ... "
-libtoolize --automake --copy 
-echo "Running autoreconf --verbose --install -I config"
-autoreconf --verbose --install -I config
-echo "Cleaning up ..."
-mv aclocal.m4 config/
-rm -rf autom4te.cache
+libtoolize --automake --copy || exit
+echo "Running autoreconf --verbose --install"
+autoreconf --verbose --install || exit
+echo "Moving aclocal.m4 to config/ ..."
+mv aclocal.m4 config/ || exit
 echo "Now run ./configure."
-
