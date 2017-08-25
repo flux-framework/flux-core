@@ -55,8 +55,14 @@ test_expect_success 'kvs: value can be empty' '
 	  test_kvs_key $KEY "" &&
 	  test_kvs_type $KEY string
 '
-test_expect_success 'kvs: put JSON null is converted to string' '
+test_expect_success 'kvs: null is converted to json null' '
 	flux kvs put $KEY=null &&
+	  test_kvs_key $KEY nil &&
+	  test_kvs_type $KEY null
+'
+
+test_expect_success 'kvs: quoted null is converted to string' '
+	flux kvs put $KEY=\"null\" &&
 	  test_kvs_key $KEY null &&
 	  test_kvs_type $KEY string
 '
@@ -152,34 +158,34 @@ test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
-test_expect_success 'kvs: get-treeobj: returns directory reference for root' '
+test_expect_success 'kvs: get-treeobj: returns dirref object for root' '
 	flux kvs unlink -Rf $TEST &&
-	${KVSBASIC} get-treeobj . | grep -q "DIRREF"
+	${KVSBASIC} get-treeobj . | grep -q \"dirref\"
 '
 
-test_expect_success 'kvs: get-treeobj: returns directory reference for directory' '
+test_expect_success 'kvs: get-treeobj: returns dirref object for directory' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a &&
-	${KVSBASIC} get-treeobj $TEST.a | grep -q "DIRREF"
+	${KVSBASIC} get-treeobj $TEST.a | grep -q \"dirref\"
 '
 
-test_expect_success 'kvs: get-treeobj: returns value for small value' '
+test_expect_success 'kvs: get-treeobj: returns val object for small value' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a=b &&
-	${KVSBASIC} get-treeobj $TEST.a | grep -q "FILEVAL"
+	${KVSBASIC} get-treeobj $TEST.a | grep -q \"val\"
 '
 
 test_expect_success 'kvs: get-treeobj: returns value ref for large value' '
 	flux kvs unlink -Rf $TEST &&
 	dd if=/dev/zero bs=4096 count=1 | ${KVSBASIC} copy-tokvs $TEST.a - &&
-	${KVSBASIC} get-treeobj $TEST.a | grep -q "FILEREF"
+	${KVSBASIC} get-treeobj $TEST.a | grep -q \"valref\"
 '
 
 test_expect_success 'kvs: get-treeobj: returns link value for symlink' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put $TEST.a.b.X=42 &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
-	${KVSBASIC} get-treeobj $TEST.a.b.link | grep -q LINKVAL
+	${KVSBASIC} get-treeobj $TEST.a.b.link | grep -q \"symlink\"
 '
 
 test_expect_success 'kvs: put-treeobj: can make root snapshot' '
@@ -206,31 +212,33 @@ test_expect_success 'kvs: put-treeobj: fails bad dirent: not JSON' '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: unknown type' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"ERSTWHILE\":\"fubar\"}"
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}"
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: bad link type' '
+test_expect_success 'kvs: put-treeobj: fails bad dirent: bad link data' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"LINKVAL\":42}"
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":42,\"type\":\"symlink\",\"ver\":1}"
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: bad ref type' '
+test_expect_success 'kvs: put-treeobj: fails bad dirent: bad ref data' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"DIRREF\":{}}"
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":42,\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}"
 '
 
 test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"DIRREF\":\"sha2-aaa\"}" &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"DIRREF\":\"sha1-bbb\"}"
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}"
 '
 
 test_expect_success 'kvs: getat: fails bad on dirent' '
 	flux kvs unlink -Rf $TEST &&
 	test_must_fail ${KVSBASIC} getat 42 $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"DIRREF\":\"sha2-aaa\"}" $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"DIRREF\":\"sha1-bbb\"}" $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"DIRVAL\":{}}" $TEST.a
+	test_must_fail ${KVSBASIC} getat "{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail ${KVSBASIC} getat "{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail ${KVSBASIC} getat "{\"data\":42,\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail ${KVSBASIC} getat "{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}" $TEST.a
 '
 
 test_expect_success 'kvs: getat: works on root from get-treeobj' '

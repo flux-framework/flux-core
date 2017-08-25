@@ -29,6 +29,8 @@
 #include <flux/core.h>
 #include <czmq.h>
 
+#include "treeobj.h"
+
 typedef enum {
     WATCH_JSONSTR, WATCH_DIR,
 } watch_type_t;
@@ -50,6 +52,7 @@ typedef struct {
 
 static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
                                const flux_msg_t *msg, void *arg);
+static int decode_val_object (json_t *val, char **json_str);
 
 static void freectx (kvs_watch_ctx_t *ctx)
 {
@@ -212,15 +215,12 @@ static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
         goto done;
     if (!(wp = lookup_watcher (h, matchtag)))
         goto done;
-    if (flux_response_decode (msg, NULL, NULL) < 0)
+    if (flux_response_decode (msg, NULL, NULL) < 0) // handle error response
         goto done;
     if (flux_msg_unpack (msg, "{s:o}", "val", &val) < 0)
         goto done;
-    if (json_typeof (val) != JSON_NULL
-                    && !(json_str = json_dumps (val, JSON_ENCODE_ANY))) {
-        errno = EPROTO;
+    if (decode_val_object (val, &json_str) < 0)
         goto done;
-    }
     if (dispatch_watch (h, wp, json_str) < 0)
         flux_reactor_stop_error (flux_get_reactor (h));
 done:
@@ -255,23 +255,62 @@ error:
     return NULL;
 }
 
-/* json_str set to copy of value (caller must free) */
+/* val will be one of three things:
+ * 1) JSON_NULL, set json_str to string-encoded object (NULL)
+ * 2) RFC 11 dir object, set json_str to string-encoded object
+ * 3) RFC 11 val object, unbase64, verify NULL termination, set json_str
+ * The caller must free returned json_str (if any)
+ */
+static int decode_val_object (json_t *val, char **json_str)
+{
+    char *s;
+    int len;
+
+    assert(json_str != NULL);
+
+    if (json_typeof (val) == JSON_NULL) {
+        s = NULL;
+    }
+    else if (treeobj_is_dir (val)) {
+        if (treeobj_validate (val) < 0)
+            goto error;
+        if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
+            errno = EPROTO;
+            goto error;
+        }
+    }
+    else if (treeobj_is_val (val)) {
+        if (treeobj_validate (val) < 0)
+            goto error;
+        if (treeobj_decode_val (val, (void **)&s, &len) < 0)
+            goto error;
+        if (s[len - 1] != '\0') {
+            free (s);
+            errno = EPROTO;
+            goto error;
+        }
+    }
+    else {
+        errno = EPROTO;
+        goto error;
+    }
+    *json_str = s;
+    return 0;
+error:
+    return -1;
+}
+
 static int kvs_watch_rpc_get (flux_future_t *f, char **json_str)
 {
     json_t *val;
 
     if (flux_rpc_get_unpack (f, "{s:o}", "val", &val) < 0)
-        return -1;
-    if (json_str) {
-        char *s = NULL;
-        if (json_typeof (val) != JSON_NULL
-                            && !(s = json_dumps (val, JSON_ENCODE_ANY))) {
-            errno = EPROTO;
-            return -1;
-        }
-        *json_str = s;
-    }
+        goto error;
+    if (decode_val_object (val, json_str) < 0)
+        goto error;
     return 0;
+error:
+    return -1;
 }
 
 static int kvs_watch_rpc_get_matchtag (flux_future_t *f, uint32_t *matchtag)
@@ -288,19 +327,32 @@ static int kvs_watch_rpc_get_matchtag (flux_future_t *f, uint32_t *matchtag)
     return 0;
 }
 
+/* N.B. somewhat more complicated than it should be (temporarily):
+ * val_in may be NULL, in which case we send a json NULL value in the RPC.
+ * Or val_in is an encoded JSON value, so enclose it in an RFC 11 'val' object.
+ */
 int kvs_watch_once (flux_t *h, const char *key, char **valp)
 {
     char *val_in = NULL;
     char *val_out;
     flux_future_t *f = NULL;
     int rc = -1;
+    json_t *xval_obj = NULL; // the RFC 11 'val' object
+    char *xval_str = NULL;   // the RFC 11 'val' object, encoded as a string
+    int saved_errno;
 
     if (!h || !key || !valp) {
         errno = EINVAL;
         goto done;
     }
     val_in = *valp;
-    if (!(f = kvs_watch_rpc (h, key, val_in, KVS_WATCH_ONCE)))
+    if (val_in) {
+        if (!(xval_obj = treeobj_create_val (val_in, strlen (val_in) + 1)))
+            goto done;
+        if (!(xval_str = treeobj_encode (xval_obj)))
+            goto done;
+    }
+    if (!(f = kvs_watch_rpc (h, key, xval_str, KVS_WATCH_ONCE)))
         goto done;
     if (kvs_watch_rpc_get (f, &val_out) < 0)
         goto done;
@@ -308,7 +360,11 @@ int kvs_watch_once (flux_t *h, const char *key, char **valp)
     *valp = val_out;
     rc = 0;
 done:
+    saved_errno = errno;
+    free (xval_str);
+    json_decref (xval_obj);
     flux_future_destroy (f);
+    errno = saved_errno;
     return rc;
 }
 

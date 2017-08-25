@@ -38,7 +38,7 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libkvs/jansson_dirent.h"
+#include "src/common/libkvs/treeobj.h"
 
 #include "cache.h"
 
@@ -209,7 +209,7 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
  */
 static bool walk (lookup_t *lh)
 {
-    json_t *dir, *ref, *link;
+    json_t *dir;
     walk_level_t *wl = NULL;
     char *pathcomp;
 
@@ -220,8 +220,25 @@ static bool walk (lookup_t *lh)
 
         /* Get directory of dirent */
 
-        if ((ref = json_object_get (wl->dirent, "DIRREF"))) {
-            const char *refstr = json_string_value (ref);
+        if (treeobj_is_dirref (wl->dirent)) {
+            const char *refstr;
+            int refcount;
+
+            if ((refcount = treeobj_get_count (wl->dirent)) < 0) {
+                lh->errnum = errno;
+                goto error;
+            }
+
+            if (refcount != 1) {
+                log_msg ("invalid dirref count: %d", refcount);
+                lh->errnum = EPERM;
+                goto error;
+            }
+
+            if (!(refstr = treeobj_get_blobref (wl->dirent, 0))) {
+                lh->errnum = errno;
+                goto error;
+            }
 
             if (!(dir = cache_lookup_and_get_json (lh->cache,
                                                    refstr,
@@ -231,8 +248,8 @@ static bool walk (lookup_t *lh)
             }
         } else {
             /* Unexpected dirent type */
-            if (json_object_get (wl->dirent, "FILEREF")
-                || json_object_get (wl->dirent, "FILEVAL")) {
+            if (treeobj_is_valref (wl->dirent)
+                || treeobj_is_val (wl->dirent)) {
                 /* don't return ENOENT or ENOTDIR, error to be
                  * determined by caller */
                 goto error;
@@ -250,14 +267,27 @@ static bool walk (lookup_t *lh)
 
         /* Get directory reference of path component from directory */
 
-        if (!(wl->dirent = json_object_get (dir, pathcomp)))
-            /* not necessarily ENOENT, let caller decide */
+        if (!(wl->dirent = treeobj_get_entry (dir, pathcomp))) {
+            /* if entry does not exist, not necessarily ENOENT error,
+             * let caller decide.  If error not ENOENT, return to
+             * caller. */
+            if (errno != ENOENT)
+                lh->errnum = errno;
             goto error;
+        }
 
         /* Resolve dirent if it is a link */
 
-        if ((link = json_object_get (wl->dirent, "LINKVAL"))) {
-            const char *linkstr = json_string_value (link);
+        if (treeobj_is_symlink (wl->dirent)) {
+            json_t *link;
+            const char *linkstr;
+
+            if (!(link = treeobj_get_data (wl->dirent))) {
+                lh->errnum = errno;
+                goto error;
+            }
+
+            linkstr = json_string_value (link);
 
             /* Follow link if in middle of path or if end of path,
              * flags say we can follow it
@@ -369,7 +399,7 @@ lookup_t *lookup_create (struct cache *cache,
     lh->missing_ref = NULL;
     lh->errnum = 0;
 
-    if (!(lh->root_dirent = j_dirent_create ("DIRREF", lh->root_ref))) {
+    if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
         saved_errno = errno;
         goto cleanup;
     }
@@ -519,8 +549,10 @@ int lookup_set_aux_data (lookup_t *lh, void *data) {
 
 bool lookup (lookup_t *lh)
 {
-    json_t *vp, *valtmp = NULL;
+    json_t *valtmp = NULL;
     const char *reftmp;
+    const char *strtmp;
+    int refcount;
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
         errno = EINVAL;
@@ -533,8 +565,7 @@ bool lookup (lookup_t *lh)
             /* special case root */
             if (!strcmp (lh->path, ".")) {
                 if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                    char *tmprootref = (char *)lh->root_dir;
-                    if (!(lh->val = j_dirent_create ("DIRREF", tmprootref))) {
+                    if (!(lh->val = treeobj_create_dirref (lh->root_dir))) {
                         lh->errnum = errno;
                         goto done;
                     }
@@ -576,7 +607,7 @@ bool lookup (lookup_t *lh)
                 goto done;
             }
 
-            if ((vp = json_object_get (lh->wdirent, "DIRREF"))) {
+            if (treeobj_is_dirref (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
                     goto done;
@@ -585,7 +616,19 @@ bool lookup (lookup_t *lh)
                     lh->errnum = EISDIR;
                     goto done;
                 }
-                reftmp = json_string_value (vp);
+                if ((refcount = treeobj_get_count (lh->wdirent)) < 0) {
+                    lh->errnum = errno;
+                    goto done;
+                }
+                if (refcount != 1) {
+                    log_msg ("invalid dirref count: %d", refcount);
+                    lh->errnum = EPERM;
+                    goto done;
+                }
+                if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
                 valtmp = cache_lookup_and_get_json (lh->cache,
                                                     reftmp,
                                                     lh->current_epoch);
@@ -593,42 +636,13 @@ bool lookup (lookup_t *lh)
                     lh->missing_ref = reftmp;
                     goto stall;
                 }
-                if (!(lh->val = json_copy (valtmp))) {
-                    lh->errnum = ENOMEM;
+                if (!treeobj_is_dir (valtmp)) {
+                    /* dirref points to not dir */
+                    lh->errnum = EPERM;
                     goto done;
-                }
-            } else if ((vp = json_object_get (lh->wdirent, "FILEREF"))) {
-                if ((lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EINVAL;
-                    goto done;
-                }
-                if ((lh->flags & FLUX_KVS_READDIR)) {
-                    lh->errnum = ENOTDIR;
-                    goto done;
-                }
-                reftmp = json_string_value (vp);
-                valtmp = cache_lookup_and_get_json (lh->cache,
-                                                    reftmp,
-                                                    lh->current_epoch);
-                if (!valtmp) {
-                    lh->missing_ref = reftmp;
-                    goto stall;
                 }
                 lh->val = json_incref (valtmp);
-            } else if ((vp = json_object_get (lh->wdirent, "DIRVAL"))) {
-                if ((lh->flags & FLUX_KVS_READLINK)) {
-                    lh->errnum = EINVAL;
-                    goto done;
-                }
-                if (!(lh->flags & FLUX_KVS_READDIR)) {
-                    lh->errnum = EISDIR;
-                    goto done;
-                }
-                if (!(lh->val = json_copy (vp))) {
-                    lh->errnum = ENOMEM;
-                    goto done;
-                }
-            } else if ((vp = json_object_get (lh->wdirent, "FILEVAL"))) {
+            } else if (treeobj_is_valref (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
                     goto done;
@@ -637,8 +651,59 @@ bool lookup (lookup_t *lh)
                     lh->errnum = ENOTDIR;
                     goto done;
                 }
-                lh->val = json_incref (vp);
-            } else if ((vp = json_object_get (lh->wdirent, "LINKVAL"))) {
+                if ((refcount = treeobj_get_count (lh->wdirent)) < 0) {
+                    lh->errnum = errno;
+                    goto done;
+                }
+                if (refcount != 1) {
+                    log_msg ("invalid valref count: %d", refcount);
+                    lh->errnum = EPERM;
+                    goto done;
+                }
+                if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
+                valtmp = cache_lookup_and_get_json (lh->cache,
+                                                    reftmp,
+                                                    lh->current_epoch);
+                if (!valtmp) {
+                    lh->missing_ref = reftmp;
+                    goto stall;
+                }
+                if (!json_is_string (valtmp)) {
+                    /* valref points to non-string */
+                    lh->errnum = EPERM;
+                    goto done;
+                }
+
+                /* Place base64 opaque data into treeobj val object */
+                strtmp = json_string_value (valtmp);
+                if (!(lh->val = treeobj_create_val_base64 (strtmp))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
+            } else if (treeobj_is_dir (lh->wdirent)) {
+                if ((lh->flags & FLUX_KVS_READLINK)) {
+                    lh->errnum = EINVAL;
+                    goto done;
+                }
+                if (!(lh->flags & FLUX_KVS_READDIR)) {
+                    lh->errnum = EISDIR;
+                    goto done;
+                }
+                lh->val = json_incref (lh->wdirent);
+            } else if (treeobj_is_val (lh->wdirent)) {
+                if ((lh->flags & FLUX_KVS_READLINK)) {
+                    lh->errnum = EINVAL;
+                    goto done;
+                }
+                if ((lh->flags & FLUX_KVS_READDIR)) {
+                    lh->errnum = ENOTDIR;
+                    goto done;
+                }
+                lh->val = json_incref (lh->wdirent);
+            } else if (treeobj_is_symlink (lh->wdirent)) {
                 /* this should be "impossible" */
                 if (!(lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EPROTO;
@@ -648,7 +713,7 @@ bool lookup (lookup_t *lh)
                     lh->errnum = ENOTDIR;
                     goto done;
                 }
-                lh->val = json_incref (vp);
+                lh->val = json_incref (lh->wdirent);
             } else {
                 char *s = json_dumps (lh->wdirent, 0);
                 log_msg ("%s: corrupt dirent: %s", __FUNCTION__, s);

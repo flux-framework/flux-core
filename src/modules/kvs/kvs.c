@@ -42,7 +42,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libkvs/jansson_dirent.h"
+#include "src/common/libkvs/treeobj.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -705,7 +705,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     json_t *root_dirent = NULL;
     json_t *tmp_dirent = NULL;
     lookup_t *lh = NULL;
-    json_t *root_ref = NULL;
+    const char *root_ref = NULL;
     wait_t *wait = NULL;
     int rc = -1;
     int ret;
@@ -729,8 +729,9 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
          * Otherwise, use the current root.
          */
         if (root_dirent) {
-            if (j_dirent_validate (root_dirent) < 0
-                || !(root_ref = json_object_get (root_dirent, "DIRREF"))) {
+            if (treeobj_validate (root_dirent) < 0
+                || !treeobj_is_dirref (root_dirent)
+                || !(root_ref = treeobj_get_blobref (root_dirent, 0))) {
                 errno = EINVAL;
                 goto done;
             }
@@ -739,7 +740,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
                                   ctx->rootdir,
-                                  json_string_value (root_ref),
+                                  root_ref,
                                   key,
                                   flags)))
             goto done;
@@ -785,8 +786,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (!root_dirent) {
         char *tmprootref = (char *)lookup_get_root_ref (lh);
-        if (!(tmp_dirent = j_dirent_create ("DIRREF", tmprootref))) {
-            flux_log_error (h, "%s: j_dirent_create", __FUNCTION__);
+        if (!(tmp_dirent = treeobj_create_dirref (tmprootref))) {
+            flux_log_error (h, "%s: treeobj_create_dirref", __FUNCTION__);
             goto done;
         }
         root_dirent = tmp_dirent;
@@ -1668,8 +1669,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         json_t *rootdir;
         href_t href;
 
-        if (!(rootdir = json_object ())) {
-            flux_log_error (h, "json_object");
+        if (!(rootdir = treeobj_create_dir ())) {
+            flux_log_error (h, "treeobj_create_dir");
             goto done;
         }
 

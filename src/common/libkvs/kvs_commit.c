@@ -29,8 +29,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "jansson_dirent.h"
-
 #include "kvs_txn_private.h"
 #include "src/common/libutil/blobref.h"
 

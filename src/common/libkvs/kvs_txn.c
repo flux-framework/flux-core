@@ -30,8 +30,32 @@
 #include <string.h>
 
 #include "kvs_txn_private.h"
-#include "jansson_dirent.h"
+#include "treeobj.h"
 
+/* A transaction is an ordered list of operations.
+ * Each operation contains a key and a "dirent" (RFC 11 tree object).
+ * The operation assigns a new dirent to the key.  A NULL dirent removes
+ * the key.  A commit operation accepts a transaction and applies the
+ * whole thing, in order.  If any operation fails, the transaction is
+ * not finalized, thus either all or none of the operations are applied.
+ *
+ * Raw versus JSON values:
+ * All values are base64 encoded per RFC 11, even values that
+ * are themselves JSON.  This is a change from the original design,
+ * which stored only JSON values.  The new design stores only untyped
+ * opaque data.  Because of this history, and because it offers convenience
+ * for KVS use cases, we still have flux_kvs_txn_put() which accepts encoded
+ * JSON, and flux_kvs_txn_pack() which builds a JSON object, then encodes it.
+ * The encoded JSON is converted internally to a string, that is encoded as
+ * base64 and becomes the raw value (with terminating NULL).
+ * An exception is if the FLUX_KVS_TREEOBJ flag is set - then the encoded
+ * or built JSON object is interpreted directly as an RFC 11 tree object.
+ *
+ * NULL or empty values:
+ * A zero length raw value is considered valid.
+ * A NULL JSON string passed to flux_kvs_txn_put() is interpreted as an unlink.
+ * A NULL format string passed to flux_kvs_txn_pack() is invalid.
+ */
 struct flux_kvs_txn {
     json_t *ops;
     int cursor;
@@ -85,7 +109,7 @@ static int validate_op (json_t *op)
     if (json_unpack (op, "{s:n}", "dirent") == 0)
         ; // unlink sets dirent NULL
     else if (json_unpack (op, "{s:o}", "dirent", &dirent) == 0) {
-        if (j_dirent_validate (dirent) < 0)
+        if (treeobj_validate (dirent) < 0)
             goto error;
     } else
         goto error;
@@ -95,39 +119,24 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
-                      const char *key, const char *json_str)
+/* Add an operation on dirent to the transaction.
+ * Takes a reference on dirent so caller retains ownership.
+ */
+static int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
+                                     const char *key, json_t *dirent)
 {
-    json_t *val;
-    json_t *op = NULL;
+    json_t *op;
 
-    if (!txn || !key) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
-        goto error;
-    if (!json_str)
-        return flux_kvs_txn_unlink (txn, flags, key);
-    if (!(val = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-        errno = EINVAL;
-        goto error;
-    }
-    if ((flags & FLUX_KVS_TREEOBJ))
-        op = json_pack ("{s:s s:o}", "key", key,
-                                     "dirent", val);
+    if (!dirent)
+        op = json_pack ("{s:s s:n}", "key", key, "dirent");
     else
-        op = json_pack ("{s:s s:{s:o}}", "key", key,
-                                         "dirent", "FILEVAL", val);
+        op = json_pack ("{s:s s:O}", "key", key, "dirent", dirent);
     if (!op) {
-        json_decref (val);
         errno = ENOMEM;
         goto error;
     }
-    if (validate_op (op) < 0) {
-        json_decref (op);
+    if (validate_op (op) < 0)
         goto error;
-    }
     if (json_array_append_new (txn->ops, op) < 0) {
         json_decref (op);
         errno = ENOMEM;
@@ -138,12 +147,88 @@ error:
     return -1;
 }
 
+int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
+                          const char *key, void *data, int len)
+{
+    json_t *dirent = NULL;
+    int saved_errno;
+
+    if (!txn || !key) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (validate_flags (flags, 0) < 0)
+        goto error;
+    if (!(dirent = treeobj_create_val (data, len)))
+        goto error;
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+        goto error;
+    json_decref (dirent);
+    return 0;
+
+error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
+    return -1;
+}
+
+int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
+                      const char *key, const char *json_str)
+{
+    json_t *dirent = NULL;
+    int saved_errno;
+
+    if (!txn || !key) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!json_str)
+        return flux_kvs_txn_unlink (txn, flags, key);
+    if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
+        goto error;
+    /* If TREEOBJ flag, decoded json_str *is* the dirent.
+     * Its validity will be validated by put_treeobj().
+     * Otherwise, create a 'val' dirent, treating json_str as opaque data.
+     */
+    if ((flags & FLUX_KVS_TREEOBJ)) {
+        if (!(dirent = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+            errno = EINVAL;
+            goto error;
+        }
+    }
+    else {
+        json_t *test;
+
+        /* User must pass in valid json object str, otherwise they
+         * should use flux_kvs_txn_pack() or flux_kvs_txn_put_raw()
+         */
+        if (!(test = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+            errno = EINVAL;
+            goto error;
+        }
+        json_decref (test);
+        if (!(dirent = treeobj_create_val (json_str, strlen (json_str) + 1)))
+            goto error;
+    }
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+        goto error;
+    json_decref (dirent);
+    return 0;
+
+error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
+    return -1;
+}
+
 int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
                        const char *key, const char *fmt, ...)
 {
     va_list ap;
-    json_t *val;
-    json_t *op = NULL;
+    json_t *val, *dirent = NULL;
+    int saved_errno;
 
     if (!txn || !key | !fmt) {
         errno = EINVAL;
@@ -158,35 +243,45 @@ int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if ((flags & FLUX_KVS_TREEOBJ))
-        op = json_pack ("{s:s s:o}", "key", key,
-                                     "dirent", val);
-    else
-        op = json_pack ("{s:s s:{s:o}}", "key", key,
-                                         "dirent", "FILEVAL", val);
-    if (!op) {
+    /* If TREEOBJ flag, the json object *is* the dirent.
+     * Its validity will be validated by put_treeobj().
+     * Otherwise, create a 'val' dirent, treating encoded json object
+     * as opaque data.
+     */
+    if ((flags & FLUX_KVS_TREEOBJ)) {
+        dirent = val;
+    }
+    else {
+        char *s;
+        if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
+            errno = ENOMEM;
+            json_decref (val);
+            goto error;
+        }
         json_decref (val);
-        errno = ENOMEM;
-        goto error;
+        if (!(dirent = treeobj_create_val (s, strlen (s) + 1))) {
+            free (s);
+            goto error;
+        }
+        free (s);
     }
-    if (validate_op (op) < 0) {
-        json_decref (op);
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
         goto error;
-    }
-    if (json_array_append_new (txn->ops, op) < 0) {
-        json_decref (op);
-        errno = ENOMEM;
-        goto error;
-    }
+    json_decref (dirent);
     return 0;
+
 error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
     return -1;
 }
 
 int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
                         const char *key)
 {
-    json_t *op;
+    json_t *dirent = NULL;
+    int saved_errno;
 
     if (!txn || !key) {
         errno = EINVAL;
@@ -194,50 +289,31 @@ int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(op = json_pack ("{s:s s:{s:{}}}", "key", key,
-                                            "dirent", "DIRVAL"))) {
-        errno = ENOMEM;
+    if (!(dirent = treeobj_create_dir ()))
         goto error;
-    }
-    if (validate_op (op) < 0) {
-        json_decref (op);
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
         goto error;
-    }
-    if (json_array_append_new (txn->ops, op) < 0) {
-        json_decref (op);
-        errno = ENOMEM;
-        goto error;
-    }
+    json_decref (dirent);
     return 0;
+
 error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
     return -1;
 }
 
 int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
                          const char *key)
 {
-    json_t *op;
-
     if (!txn || !key) {
         errno = EINVAL;
         goto error;
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(op = json_pack ("{s:s s:n}", "key", key,
-                                       "dirent"))) {
-        errno = ENOMEM;
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, NULL) < 0)
         goto error;
-    }
-    if (validate_op (op) < 0) {
-        json_decref (op);
-        goto error;
-    }
-    if (json_array_append_new (txn->ops, op) < 0) {
-        json_decref (op);
-        errno = ENOMEM;
-        goto error;
-    }
     return 0;
 error:
     return -1;
@@ -246,7 +322,8 @@ error:
 int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
                           const char *key, const char *target)
 {
-    json_t *op;
+    json_t *dirent = NULL;
+    int saved_errno;
 
     if (!txn || !key | !target) {
         errno = EINVAL;
@@ -254,22 +331,15 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(op = json_pack ("{s:s s:{s:s}}", "key", key,
-                                           "dirent", "LINKVAL", target))) {
-        errno = EINVAL;
+    if (!(dirent = treeobj_create_symlink (target)))
         goto error;
-    }
-    if (validate_op (op) < 0) {
-        json_decref (op);
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
         goto error;
-    }
-    if (json_array_append_new (txn->ops, op) < 0) {
-        json_decref (op);
-        errno = ENOMEM;
-        goto error;
-    }
     return 0;
 error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
     return -1;
 }
 

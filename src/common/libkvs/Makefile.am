@@ -17,11 +17,11 @@ libkvs_la_SOURCES = \
 	kvs_dir.c \
 	kvs_classic.c \
 	kvs_watch.c \
-	jansson_dirent.c \
-	jansson_dirent.h \
 	kvs_commit.c \
 	kvs_txn.c \
-	kvs_txn_private.h
+	kvs_txn_private.h \
+	treeobj.h \
+	treeobj.c
 
 fluxcoreinclude_HEADERS = \
 	kvs.h \
@@ -33,10 +33,10 @@ fluxcoreinclude_HEADERS = \
 	kvs_commit.h
 
 TESTS = \
-	test_jansson_dirent.t \
 	test_kvs_txn.t \
 	test_kvs_lookup.t \
-	test_kvs_dir.t
+	test_kvs_dir.t \
+	test_treeobj.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -56,10 +56,6 @@ test_cppflags = \
 	$(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src/common/libtap
 
-test_jansson_dirent_t_SOURCES = test/jansson_dirent.c
-test_jansson_dirent_t_CPPFLAGS = $(test_cppflags)
-test_jansson_dirent_t_LDADD = $(test_ldadd)
-
 test_kvs_txn_t_SOURCES = test/kvs_txn.c
 test_kvs_txn_t_CPPFLAGS = $(test_cppflags)
 test_kvs_txn_t_LDADD = $(test_ldadd) $(LIBDL)
@@ -71,3 +67,7 @@ test_kvs_lookup_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_dir_t_SOURCES = test/kvs_dir.c
 test_kvs_dir_t_CPPFLAGS = $(test_cppflags)
 test_kvs_dir_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_treeobj_t_SOURCES = test/treeobj.c
+test_treeobj_t_CPPFLAGS = $(test_cppflags)
+test_treeobj_t_LDADD = $(test_ldadd) $(LIBDL)
