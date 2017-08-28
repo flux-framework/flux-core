@@ -358,11 +358,20 @@ int flux_future_then (flux_future_t *f, double timeout,
  */
 void *flux_future_aux_get (flux_future_t *f, const char *name)
 {
-    if (!f)
+    void *rv;
+
+    if (!f) {
+        errno = EINVAL;
         return NULL;
-    if (!f->aux)
+    }
+    if (!f->aux) {
+        errno = ENOENT;
         return NULL;
-    return zhash_lookup (f->aux, name);
+    }
+    /* zhash_lookup won't set errno if not found */
+    if (!(rv = zhash_lookup (f->aux, name)))
+        errno = ENOENT;
+    return rv;
 }
 
 /* Store 'aux' object by name.  Allow "anonymous" (name=NULL) objects to
