@@ -120,7 +120,7 @@ test_expect_success 'kvs: put using no-merge flag' '
         ${KVSBASIC} put-no-merge $DIR.d=\"snerg\" &&
         ${KVSBASIC} put-no-merge $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF
+	cat >expected <<EOF &&
 $DIR.a = 69
 $DIR.b.c.d.e.f.g = 70
 $DIR.c.a.b = 3.140000
@@ -132,14 +132,14 @@ EOF
 
 test_expect_success 'kvs: directory with multiple subdirs using dirat' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $DIR.a=69
+	flux kvs put $DIR.a=69 &&
         flux kvs put $DIR.b.c.d.e.f.g=70 &&
         flux kvs put $DIR.c.a.b=3.14 &&
         flux kvs put $DIR.d=\"snerg\" &&
         flux kvs put $DIR.e=true &&
         DIRREF=$(${KVSBASIC} get-treeobj $DIR) &&
 	${KVSBASIC} dirat -r $DIRREF . | sort >output &&
-	cat >expected <<EOF
+	cat >expected <<EOF &&
 a = 69
 b.c.d.e.f.g = 70
 c.a.b = 3.140000
@@ -192,7 +192,7 @@ test_expect_success 'kvs: put-treeobj: can make root snapshot' '
 	flux kvs unlink -Rf $TEST &&
 	${KVSBASIC} get-treeobj . >snapshot &&
 	${KVSBASIC} put-treeobj $TEST.snap="`cat snapshot`" &&
-	${KVSBASIC} get-treeobj $TEST.snap >snapshot.cpy
+	${KVSBASIC} get-treeobj $TEST.snap >snapshot.cpy &&
 	test_cmp snapshot snapshot.cpy
 '
 
@@ -285,7 +285,7 @@ test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
 '
 
 test_expect_success 'kvs: store 2x4 directory tree and walk' '
-	${FLUX_BUILD_DIR}/t/kvs/dtree -h4 -w2 --prefix $TEST.dtree
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h4 -w2 --prefix $TEST.dtree &&
 	test $(flux kvs dir -R $TEST.dtree | wc -l) = 16
 '
 
@@ -426,7 +426,7 @@ test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
 test_expect_success 'kvs: test that KVS_NO_MERGE works with kvs_commit()' '
         THREADS=64 &&
         OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge --nomerge ${THREADS} \
-                $(basename ${SHARNESS_TEST_FILE})`
+                $(basename ${SHARNESS_TEST_FILE})` &&
 	test "$OUTPUT" = "${THREADS}"
 '
 
@@ -437,7 +437,7 @@ test_expect_success 'kvs: commit-merge disabling works' '
         THREADS=64 &&
         flux module remove -r 0 kvs &&
         flux module load -r 0 kvs commit-merge=0 &&
-        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge ${THREADS} $(basename ${SHARNESS_TEST_FILE})`
+        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge ${THREADS} $(basename ${SHARNESS_TEST_FILE})` &&
 	test "$OUTPUT" = "${THREADS}"
 '
 
