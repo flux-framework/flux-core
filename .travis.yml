@@ -15,7 +15,7 @@ matrix:
     - compiler: clang
       env: CPPCHECK=t ARGS=--enable-sanitizer CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
-      env: CC=gcc-4.9
+      env: CC=gcc-4.9 chain_lint=t
     - compiler: clang
       env: ARGS=--enable-caliper CC=clang-3.8 CXX=clang++-3.8
       
