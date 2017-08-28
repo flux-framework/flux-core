@@ -25,7 +25,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/ioctl.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <unistd.h>
