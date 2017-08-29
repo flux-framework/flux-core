@@ -38,7 +38,7 @@ for OPTS in "stdio-delay-commit"; do
   '
 
   test_expect_success "mpi hello oversubscribed with $OPTS" '
-	NTASKS=$((${SIZE}*4)); \
+	NTASKS=$((${SIZE}*4)) && \
 	run_program 5 ${NTASKS} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
 		| tee oversub.$OPTS \
 		&& grep -q "There are ${NTASKS} tasks" oversub.$OPTS

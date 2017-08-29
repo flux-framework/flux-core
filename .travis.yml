@@ -1,6 +1,6 @@
 language: c
 
-sudo: false
+sudo: true
 
 compiler:
   - gcc
@@ -15,7 +15,7 @@ matrix:
     - compiler: clang
       env: CPPCHECK=t ARGS=--enable-sanitizer CC=clang-3.8 CXX=clang++-3.8
     - compiler: gcc
-      env: CC=gcc-4.9
+      env: CC=gcc-4.9 chain_lint=t
     - compiler: clang
       env: ARGS=--enable-caliper CC=clang-3.8 CXX=clang++-3.8
       
@@ -85,6 +85,8 @@ before_install:
 script:
  # Skip build if we already ran coverity-scan
  - test "${TRAVIS_BRANCH}" != 'coverity_scan' || exit 0
+ # Force git to update the shallow clone and include tags so git-describe works
+ - git fetch --unshallow --tags
  - ulimit -c unlimited
  - export CC="ccache $CC"
  - export MAKECMDS="make -j 2 distcheck"

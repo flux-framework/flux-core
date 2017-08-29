@@ -27,20 +27,21 @@ test_expect_success 'event: can subscribe' '
 '
 
 test_expect_success 'version: reports an expected string' '
-        set -x
-	flux version | grep -q "flux-core-[0-9]+\.[0-9]+\.[0-9]"
-	set +x
+	flux version | grep -q "flux-core-[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"
 '
+
+heaptrace_error_check()
+{
+	output=$(flux heaptrace "$@" 2>&1) \
+		|| echo $output | grep -q "Function not implemented"
+}
 
 # heaptrace is only enabled if configured --with-tcmalloc
 #   so ENOSYS is a valid response.  We are at least testing that code path.
 test_expect_success 'heaptrace start' '
-	output=$(flux heaptrace start heaptrace.out 2>&1) \
-		|| echo $output | grep -q "Function not implemented"
-	output=$(flux heaptrace dump "No reason" 2>&1) \
-		|| echo $output | grep -q "Function not implemented"
-	output=$(flux heaptrace stop 2>&1) \
-		|| echo $output | grep -q "Function not implemented"
+	heaptrace_error_check start heaptrace.out &&
+	heaptrace_error_check dump "No reason" &&
+	heaptrace_error_check stop
 '
 
 

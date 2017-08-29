@@ -129,7 +129,7 @@ test_expect_success 'flux-cron event works' '
     $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua t.cron t.cron.complete \
         flux event pub t.cron.trigger &&
     cron_entry_check ${id} stats.count 1 &&
-    cron_entry_check ${id} task.1.state Exited
+    cron_entry_check ${id} task.1.state Exited &&
     $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua t.cron t.cron.complete \
         flux event pub t.cron.trigger &&
     cron_entry_check ${id} stats.count 2 &&
@@ -160,7 +160,7 @@ test_expect_success 'flux-cron event --nth works' '
     cron_entry_check ${id} typedata.counter 3 &&
     $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua t.cron t.cron.trigger \
         flux event pub t.cron.trigger &&
-    cron_entry_check ${id} stats.count 1
+    cron_entry_check ${id} stats.count 1 &&
     cron_entry_check ${id} typedata.counter 4
 '
 
@@ -207,7 +207,7 @@ test_expect_success 'flux-cron can set timeout on tasks' '
     $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua t.cron t.cron.trigger \
         flux event pub t.cron.trigger &&
     sleep 0.1 &&
-    i=0
+    i=0 &&
     while test $i -lt 5; do
         cron_entry_check ${id} task.1.state Timeout
 	rc=$?
@@ -216,7 +216,7 @@ test_expect_success 'flux-cron can set timeout on tasks' '
         i=$((i+1))
 	echo "cron-${id}: $i"
     	flux cron dump ${id}
-    done
+    done &&
     test $rc -eq 0
 '
 test_expect_success 'flux-cron can set stop-on-failure' '
@@ -252,7 +252,7 @@ test_expect_success 'sync and sync_epsilon are set as expected' '
     flux cron sync | grep "cron\.sync.*epsilon=0.025"
 '
 test_expect_success 'tasks do not run until sync event' '
-    id=$(flux_cron event t.cron.trigger flux event pub t.cron.complete)
+    id=$(flux_cron event t.cron.trigger flux event pub t.cron.complete) &&
     test_when_finished "flux cron delete ${id}" &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} stats.count 0 &&

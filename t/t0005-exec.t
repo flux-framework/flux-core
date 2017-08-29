@@ -31,7 +31,8 @@ test_expect_success 'exec to non-existent rank is an error' '
 '
 
 test_expect_success 'exec to valid and invalid ranks works' '
-	flux exec -r 0,$(invalid_rank) echo working 1>stdout 2>stderr </dev/null
+        # But, flux-exec should return failure:
+	! flux exec -r 0,$(invalid_rank) echo working 1>stdout 2>stderr </dev/null &&
 	count1=$(grep -c working stdout) &&
 	count2=$(grep -c "No route to host" stderr) &&
 	test "$count1" = "1" &&
@@ -117,7 +118,7 @@ test_expect_success 'basic IO testing' '
 test_expect_success 'per rank output works' '
 	flux exec -r 1 sh -c "flux comms info | grep rank" | grep ^rank=1\$ &&
 	flux exec -lr 2 sh -c "flux comms info | grep rank" | grep ^2:\ rank=2\$ &&
-	cat >expected <<EOF
+	cat >expected <<EOF &&
 0: rank=0
 1: rank=1
 2: rank=2
@@ -142,6 +143,7 @@ test_expect_success 'I/O -- long lines' '
 	test_cmp output expected
 '
 
+
 test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
@@ -157,18 +159,20 @@ test_expect_success 'signal forwarding works' '
 	test_expect_code 143 run_timeout 5 ./test_signal.sh TERM
 '
 
+flux_exec_bg() { flux exec "$@" </dev/null & lastpid=$!;  }
+
 test_expect_success 'process listing works' '
-	flux exec -r1 sleep 100 </dev/null &
-	p=$! &&
+	flux_exec_bg -r1 sleep 100 &&
+	p=$lastpid &&
 	sleep 1 &&
-	flux ps -r1 | grep ".* 1 .*sleep$" >/dev/null &&
+	flux ps -r1 | grep ".* 1 .*sleep$" &&
 	kill -INT $p &&
 	test_expect_code 130 wait $p
 '
 
 test_expect_success 'process listing works - multiple processes' '
-	flux exec -r0-3 sleep 100 </dev/null &
-	q=$! &&
+	flux_exec_bg -r0-3 sleep 100 &&
+	q=$lastpid &&
 	sleep 1 &&
 	count=$(flux ps | grep -c sleep) &&
 	kill -INT $q &&
@@ -179,8 +183,8 @@ test_expect_success 'process listing works - multiple processes' '
 '
 
 test_expect_success 'process listing works - all ranks' '
-	flux exec -r all sleep 100 </dev/null &
-	q=$! &&
+	flux_exec_bg -r all sleep 100 &&
+	q=$lastpid &&
 	sleep 1 &&
 	count=$(flux ps -r all | grep -c sleep) &&
 	kill -INT $q &&
@@ -190,13 +194,13 @@ test_expect_success 'process listing works - all ranks' '
 '
 
 test_expect_success 'process listing fails on invalid rank' '
-	flux ps -r $(invalid_rank) 2> stderr
+	flux ps -r $(invalid_rank) 2> stderr &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'process listing with valid and invalid ranks' '
-	flux exec -r 0,$(invalid_rank) sleep 100 </dev/null &
-	q=$! &&
+	flux_exec_bg -r 0,$(invalid_rank) sleep 100 &&
+	q=$lastpid &&
 	sleep 1 &&
 	flux ps -r 0,$(invalid_rank) 1> stdout 2> stderr &&
 	count1=$(grep -c sleep stdout) &&
@@ -209,8 +213,8 @@ test_expect_success 'process listing with valid and invalid ranks' '
 '
 
 test_expect_success 'flux-exec disconnect terminates all running processes' '
-	flux exec -r0-3 sleep 100 </dev/null &
-	q=$! &&
+	flux_exec_bg -r0-3 sleep 100 &&
+	q=$lastpid &&
 	sleep 1 &&
 	count=$(flux ps | grep -c sleep) &&
 	kill -9 $q &&
@@ -232,7 +236,7 @@ test_expect_success 'stdin broadcast -- multiple lines' '
 	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
 	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do
-		sed -n "s/^$i: //p" output > output.$i
+		sed -n "s/^$i: //p" output > output.$i &&
 		test_cmp expected output.$i
 	done
 '

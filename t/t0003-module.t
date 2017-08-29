@@ -99,52 +99,52 @@ test_expect_success 'module: insmod returns initialization error' '
 '
 
 test_expect_success 'module: list fails on invalid rank' '
-	flux module list -r $(invalid_rank) 2> stderr
+	flux module list -r $(invalid_rank) 2> stderr &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'module: load fails on invalid rank' '
-	flux module load -r $(invalid_rank) \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so 2> stderr
+	test_must_fail flux module load -r $(invalid_rank) \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so 2> stderr &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'module: remove fails on invalid rank' '
 	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-	flux module remove -r $(invalid_rank) parent 2> stderr
-	flux module remove parent
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so &&
+	flux module remove -r $(invalid_rank) parent 2> stderr &&
+	flux module remove parent &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'module: load works on valid and invalid rank' '
-	flux module load -r 0,$(invalid_rank) \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so 1> stdout 2> stderr
+	test_must_fail flux module load -r 0,$(invalid_rank) \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so >stdout 2>stderr &&
 	flux module list -r 0 | grep parent &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'module: list works on valid and invalid rank' '
-	flux module list -r 0,$(invalid_rank) 1> stdout 2> stderr
+	flux module list -r 0,$(invalid_rank) 1> stdout 2> stderr &&
 	grep "parent" stdout &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'module: remove works on valid and invalid rank' '
-	flux module load -r 0,$(invalid_rank) \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-	flux module remove -r 0,$(invalid_rank) parent 2> stderr
+	! flux module load -r 0,$(invalid_rank) \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so &&
+	flux module remove -r 0,$(invalid_rank) parent 2> stderr &&
 	! flux module list -r 0 | grep parent &&
 	grep "No route to host" stderr
 '
 
 test_expect_success 'module: load fails on invalid module' '
-	flux module load nosuchmodule 2> stderr
+	! flux module load nosuchmodule 2> stderr &&
 	grep "nosuchmodule: not found in module search path" stderr
 '
 
 test_expect_success 'module: remove fails on invalid module' '
-	flux module remove nosuchmodule 2> stderr
+	flux module remove nosuchmodule 2> stderr &&
 	grep "nosuchmodule: No such file or directory" stderr
 '
 
@@ -207,14 +207,14 @@ test_expect_success 'flux module stats --parse "#event (tx)" counts events' '
 
 test_expect_success 'flux module stats --clear works' '
 	flux event pub xyz &&
-	flux module stats --clear $TESTMOD
+	flux module stats --clear $TESTMOD &&
 	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
 	test "$EVENT_TX" = 0
 '
 
 test_expect_success 'flux module stats --clear-all works' '
 	flux event pub xyz &&
-	flux module stats --clear-all $TESTMOD
+	flux module stats --clear-all $TESTMOD &&
 	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
 	test "$EVENT_TX" = 0
 '
@@ -275,9 +275,9 @@ test_expect_success 'flux module load "noexist" fails' '
 
 test_expect_success 'flux module detects bad nodeset' '
 	! flux module load -r smurf kvs 2>badns-load.out &&
-	grep -q "target nodeset" badns-load.out
+	grep -q "target nodeset" badns-load.out &&
 	! flux module remove -r smurf kvs 2>badns-remove.out &&
-	grep -q "target nodeset" badns-remove.out
+	grep -q "target nodeset" badns-remove.out &&
 	! flux module list -r smurf 2>badns-list.out &&
 	grep -q "target nodeset" badns-list.out
 '

@@ -60,7 +60,7 @@ test_expect_success 'libfaketime works' '
     flux logger "libfaketime-test" &&
     test "$(date +%s)" = $(date +%s --date="Jun 4 1991 00:00:00") &&
     date +%s &&
-    flux dmesg | grep libfaketime-test
+    flux dmesg | grep libfaketime-test &&
     echo $now > ${FAKETIME_TIMESTAMP_FILE}
 '
 test_expect_success 'load cron module' '
