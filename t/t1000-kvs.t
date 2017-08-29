@@ -279,6 +279,123 @@ EOF
 '
 
 #
+# ls tests
+#
+test_expect_success 'kvs: ls -1F DIR works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=69 &&
+	flux kvs mkdir $DIR.b &&
+	flux kvs link b $DIR.c &&
+	flux kvs ls -1F $DIR >output &&
+	cat >expected <<-EOF &&
+	a
+	b.
+	c@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=69 &&
+	flux kvs mkdir $DIR.b &&
+	flux kvs link b $DIR.c &&
+	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c >output &&
+	cat >expected <<-EOF &&
+	$DIR.a
+	$DIR.b.
+	$DIR.c@
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls -1RF shows directory titles' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=69 &&
+	flux kvs put $DIR.b.d=42 &&
+	flux kvs link b $DIR.c &&
+	flux kvs ls -1RF $DIR | grep : | wc -l >output &&
+	cat >expected <<-EOF &&
+	2
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls with no options adjusts output width to 80' '
+	flux kvs unlink -Rf $DIR &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h1 -w50 &&
+	flux kvs ls $DIR | wc -wl >output &&
+	cat >expected <<-EOF &&
+	      5      50
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls -w40 adjusts output width to 40' '
+	flux kvs unlink -Rf $DIR &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h1 -w50 &&
+	flux kvs ls -w40 $DIR | wc -wl >output &&
+	cat >expected <<-EOF &&
+	     10      50
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls with COLUMNS=20 adjusts output width to 20' '
+	flux kvs unlink -Rf $DIR &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h1 -w50 &&
+	COLUMNS=20 flux kvs ls $DIR | wc -wl >output &&
+	cat >expected <<-EOF &&
+	     25      50
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls -R lists deep directory hierarchy' '
+	flux kvs unlink -Rf $DIR &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h8 -w1 &&
+	flux kvs ls -R $DIR >output &&
+	cat >expected <<-EOF &&
+	$DIR:
+	0000
+
+	$DIR.0000:
+	0000
+
+	$DIR.0000.0000:
+	0000
+
+	$DIR.0000.0000.0000:
+	0000
+
+	$DIR.0000.0000.0000.0000:
+	0000
+
+	$DIR.0000.0000.0000.0000.0000:
+	0000
+
+	$DIR.0000.0000.0000.0000.0000.0000:
+	0000
+
+	$DIR.0000.0000.0000.0000.0000.0000.0000:
+	0000
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls key. works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs mkdir $DIR.a &&
+	flux kvs ls -d $DIR.a. >output &&
+	cat >expected <<-EOF &&
+	$DIR.a
+	EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: ls key. fails if key is not a directory' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=42 &&
+	test_must_fail flux kvs ls -d $DIR.a.
+'
+test_expect_success 'kvs: ls key. fails if key does not exist' '
+	flux kvs unlink -Rf $DIR &&
+	test_must_fail flux kvs ls $DIR.a
+'
+
+#
 # get corner case tests
 #
 
