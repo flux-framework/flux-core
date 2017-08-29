@@ -20,6 +20,14 @@ void errors (void)
     errno = 0;
     ok (flux_kvs_lookupat (NULL, 0, NULL, NULL) == NULL && errno == EINVAL,
         "flux_kvs_lookupat fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_lookup_get (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_kvs_lookup_get fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_lookup_get_unpack (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_kvs_lookup_get_unpack fails on bad input");
 }
 
 int main (int argc, char *argv[])

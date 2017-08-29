@@ -50,18 +50,36 @@ void test_simple (void)
     if (!f)
         BAIL_OUT ("flux_future_create failed");
 
+    /* before aux is set */
+    errno = 0;
+    char *p = flux_future_aux_get (f, "foo");
+    ok (p == NULL
+        && errno == ENOENT,
+        "flux_future_aux_get of wrong value returns ENOENT");
+
     /* aux */
     errno = 0;
     ok (flux_future_aux_set (f, NULL, "bar", NULL) < 0
          && errno == EINVAL,
         "flux_future_aux_set anon w/o destructor is EINVAL");
+    errno = 0;
+    ok (flux_future_aux_set (NULL, "foo", "bar", aux_destroy) < 0
+         && errno == EINVAL,
+        "flux_future_aux_set w/ NULL future is EINVAL");
     aux_destroy_called = 0;
     aux_destroy_arg = NULL;
     ok (flux_future_aux_set (f, "foo", "bar", aux_destroy) == 0,
         "flux_future_aux_set works");
-    char *p = flux_future_aux_get (f, "baz");
-    ok (p == NULL,
-        "flux_future_aux_get of wrong value returns NULL");
+    errno = 0;
+    p = flux_future_aux_get (NULL, "baz");
+    ok (p == NULL
+        && errno == EINVAL,
+        "flux_future_aux_get with bad input returns EINVAL");
+    errno = 0;
+    p = flux_future_aux_get (f, "baz");
+    ok (p == NULL
+        && errno == ENOENT,
+        "flux_future_aux_get of wrong value returns ENOENT");
     p = flux_future_aux_get (f, "foo");
     ok (p != NULL && !strcmp (p, "bar"),
         "flux_future_aux_get of known returns it");
@@ -70,6 +88,9 @@ void test_simple (void)
         "flux_future_aux_set with NULL key works");
 
     /* wait_for/get - no future_init; artificially call fulfill */
+    errno = 0;
+    ok (flux_future_wait_for (NULL, 0.) < 0 && errno == EINVAL,
+        "flux_future_wait_for w/ NULL future returns EINVAL");
     errno = 0;
     ok (flux_future_wait_for (f, 0.) < 0 && errno == ETIMEDOUT,
         "flux_future_wait_for initially times out");
@@ -87,6 +108,10 @@ void test_simple (void)
         "flux_future_get with NULL results argument also works");
 
     /* continuation (result already ready) */
+    errno = 0;
+    ok (flux_future_then (NULL, -1., contin, "nerp") < 0
+        && errno == EINVAL,
+        "flux_future_then w/ NULL future returns EINVAL");
     contin_called = 0;
     contin_arg = NULL;
     contin_get_rc = -42;

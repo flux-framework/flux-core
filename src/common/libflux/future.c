@@ -232,7 +232,8 @@ error:
  */
 void flux_future_set_flux (flux_future_t *f, flux_t *h)
 {
-    f->h = h;
+    if (f)
+        f->h = h;
 }
 
 /* Context dependent get of flux handle.
@@ -243,7 +244,7 @@ flux_t *flux_future_get_flux (flux_future_t *f)
 {
     flux_t *h = NULL;
 
-    if (!f->h) {
+    if (!f || !f->h) {
         errno = EINVAL;
         goto done;
     }
@@ -275,6 +276,10 @@ done:
  */
 int flux_future_wait_for (flux_future_t *f, double timeout)
 {
+    if (!f) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!f->result_valid && !f->result_errnum_valid) {
         if (timeout == 0.) { // don't setup 'now' context in this case
             errno = ETIMEDOUT;
@@ -330,7 +335,7 @@ int flux_future_get (flux_future_t *f, void *result)
 int flux_future_then (flux_future_t *f, double timeout,
                       flux_continuation_f cb, void *arg)
 {
-    if (!f->r || !cb || f->then != NULL) {
+    if (!f || !f->r || !cb || f->then != NULL) {
         errno = EINVAL;
         return -1;
     }
@@ -353,9 +358,20 @@ int flux_future_then (flux_future_t *f, double timeout,
  */
 void *flux_future_aux_get (flux_future_t *f, const char *name)
 {
-    if (!f->aux)
+    void *rv;
+
+    if (!f) {
+        errno = EINVAL;
         return NULL;
-    return zhash_lookup (f->aux, name);
+    }
+    if (!f->aux) {
+        errno = ENOENT;
+        return NULL;
+    }
+    /* zhash_lookup won't set errno if not found */
+    if (!(rv = zhash_lookup (f->aux, name)))
+        errno = ENOENT;
+    return rv;
 }
 
 /* Store 'aux' object by name.  Allow "anonymous" (name=NULL) objects to
@@ -368,7 +384,7 @@ int flux_future_aux_set (flux_future_t *f, const char *name,
 {
     char name_buf[32];
 
-    if (!name && !destroy) {
+    if (!f || (!name && !destroy)) {
         errno = EINVAL;
         return -1;
     }
@@ -393,33 +409,37 @@ int flux_future_aux_set (flux_future_t *f, const char *name,
 
 void flux_future_fulfill (flux_future_t *f, void *result, flux_free_f free_fn)
 {
-    if (f->result) {
-        if (f->result_free)
-            f->result_free (f->result);
+    if (f) {
+        if (f->result) {
+            if (f->result_free)
+                f->result_free (f->result);
+        }
+        f->result = result;
+        f->result_free = free_fn;
+        f->result_valid = true;
+        now_context_clear_timer (f->now);
+        then_context_clear_timer (f->then);
+        if (f->now)
+            flux_reactor_stop (f->now->r);
+        /* in "then" context, the main reactor prepare/check/idle watchers
+         * will run continuation in the next reactor loop for fairness.
+         */
     }
-    f->result = result;
-    f->result_free = free_fn;
-    f->result_valid = true;
-    now_context_clear_timer (f->now);
-    then_context_clear_timer (f->then);
-    if (f->now)
-        flux_reactor_stop (f->now->r);
-    /* in "then" context, the main reactor prepare/check/idle watchers
-     * will run continuation in the next reactor loop for fairness.
-     */
 }
 
 void flux_future_fulfill_error (flux_future_t *f, int errnum)
 {
-    f->result_errnum = errnum;
-    f->result_errnum_valid = true;
-    now_context_clear_timer (f->now);
-    then_context_clear_timer (f->then);
-    if (f->now)
-        flux_reactor_stop (f->now->r);
-    /* in "then" context, the main reactor prepare/check/idle watchers
-     * will run continuation in the next reactor loop for fairness.
-     */
+    if (f) {
+        f->result_errnum = errnum;
+        f->result_errnum_valid = true;
+        now_context_clear_timer (f->now);
+        then_context_clear_timer (f->then);
+        if (f->now)
+            flux_reactor_stop (f->now->r);
+        /* in "then" context, the main reactor prepare/check/idle watchers
+         * will run continuation in the next reactor loop for fairness.
+         */
+    }
 }
 
 /* timer - for flux_future_then() timeout
