@@ -43,7 +43,7 @@
 #include "connector.h"
 #include "message.h"
 #include "tagpool.h"
-#include "dispatch.h" // for flux_sleep_on ()
+#include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
 

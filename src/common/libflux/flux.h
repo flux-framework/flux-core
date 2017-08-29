@@ -4,7 +4,7 @@
 #include "types.h"
 #include "handle.h"
 #include "reactor.h"
-#include "dispatch.h"
+#include "msg_handler.h"
 #include "connector.h"
 #include "security.h"
 #include "reduce.h"

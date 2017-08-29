@@ -4,7 +4,7 @@
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/handle.h"
 #include "src/common/libflux/reactor.h"
-#include "src/common/libflux/dispatch.h"
+#include "src/common/libflux/msg_handler.h"
 
 /* FluxMsgHandler indicates msg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.

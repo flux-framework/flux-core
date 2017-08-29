@@ -4,7 +4,7 @@
 #include "reactor.h"
 #include "types.h"
 #include "handle.h"
-#include "dispatch.h"
+#include "msg_handler.h"
 
 typedef struct flux_future flux_future_t;
 

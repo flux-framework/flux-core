@@ -1,5 +1,5 @@
-#ifndef _FLUX_CORE_DISPATCH_H
-#define _FLUX_CORE_DISPATCH_H
+#ifndef _FLUX_CORE_MSG_HANDLER_H
+#define _FLUX_CORE_MSG_HANDLER_H
 
 #include "message.h"
 #include "handle.h"
@@ -42,7 +42,7 @@ void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
  */
 int flux_dispatch_requeue (flux_t *h);
 
-#endif /* !_FLUX_CORE_DISPATCH_H */
+#endif /* !_FLUX_CORE_MSG_HANDLER_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
