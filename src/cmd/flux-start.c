@@ -208,6 +208,8 @@ int main (int argc, char *argv[])
         status = exec_broker (command, len, broker_path);
         break;
     case BOOTSTRAP_SELFPMI:
+        if (!optparse_hasopt (ctx.opts, "size"))
+            log_msg_exit ("--size must be specified for --bootstrap=selfpmi");
         status = start_session (command, len, broker_path);
         break;
     default:
