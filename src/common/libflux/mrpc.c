@@ -40,7 +40,7 @@
 #include "message.h"
 #include "info.h"
 #include "reactor.h"
-#include "dispatch.h"
+#include "msg_handler.h"
 #include "mrpc.h"
 
 #include "src/common/libutil/nodeset.h"

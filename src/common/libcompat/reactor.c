@@ -34,7 +34,7 @@
 
 #include "src/common/libflux/handle.h"
 #include "src/common/libflux/reactor.h"
-#include "src/common/libflux/dispatch.h"
+#include "src/common/libflux/msg_handler.h"
 #include "src/common/libflux/message.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"

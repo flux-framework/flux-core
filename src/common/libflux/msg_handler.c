@@ -33,7 +33,7 @@
 
 #include "message.h"
 #include "reactor.h"
-#include "dispatch.h"
+#include "msg_handler.h"
 #include "response.h"
 #include "info.h"
 #include "flog.h"

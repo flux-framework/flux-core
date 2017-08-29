@@ -52,7 +52,7 @@ fluxcoreinclude_HEADERS = \
 	handle.h \
 	connector.h \
 	reactor.h \
-	dispatch.h \
+	msg_handler.h \
 	reduce.h \
 	security.h \
 	message.h \
@@ -82,7 +82,7 @@ libflux_la_SOURCES = \
 	attr.c \
 	handle.c \
 	reactor.c \
-	dispatch.c \
+	msg_handler.c \
 	reduce.c \
 	security.c \
 	message.c \

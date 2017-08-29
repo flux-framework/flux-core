@@ -41,7 +41,7 @@
 #include "info.h"
 #include "rpc.h"
 #include "reactor.h"
-#include "dispatch.h"
+#include "msg_handler.h"
 
 #include "src/common/libutil/nodeset.h"
 
