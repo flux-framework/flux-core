@@ -16,6 +16,7 @@ SYNOPSIS
      int typemask;
      char *topic_glob;
      flux_msg_handler_f cb;
+     uint32_t rolemask;
      flux_msg_handler_t *w;
  };
 
