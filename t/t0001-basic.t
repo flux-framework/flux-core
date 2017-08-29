@@ -69,6 +69,9 @@ test_expect_success 'flux-start with size 2 has a peer' "
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
 	flux start ${ARGS} --size=1 --bootstrap=selfpmi /bin/true
 "
+test_expect_success 'flux-start --bootstrap=selfpmi fails (no size specified)' "
+	test_must_fail flux start ${ARGS} --bootstrap=selfpmi /bin/true
+"
 test_expect_success 'flux-start --size=1 --boostrap=pmi fails' "
 	test_must_fail flux start ${ARGS} --size=1 --bootstrap=pmi /bin/true
 "
