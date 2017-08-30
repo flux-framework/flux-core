@@ -87,6 +87,16 @@ void test_empty (void)
     ok (kvsdir_get_size (dir) == 0,
         "kvsdir_get_size returns zero");
 
+    errno = 0;
+    ok (kvsitr_create (NULL) == NULL && errno == EINVAL,
+        "kvsitr_create with NULL dir fails with EINVAL");
+    ok (kvsitr_next (NULL) == NULL,
+        "kvsitr_next on NULL iterator returns NULL");
+    lives_ok ({kvsitr_rewind (NULL);},
+        "kvsitr_rewind on NULL iterator doesn't crash");
+    lives_ok ({kvsitr_destroy (NULL);},
+        "kvsitr_destroy on NULL iterator doesn't crash");
+
     itr = kvsitr_create (dir);
     ok (itr != NULL,
         "kvsitr_create works");
