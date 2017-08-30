@@ -44,8 +44,8 @@ struct kvsdir_struct {
 };
 
 struct kvsdir_iterator_struct {
-    json_t *dirdata;
-    void *iter;
+    zlist_t *keys;
+    bool reset;
 };
 
 void kvsdir_incref (kvsdir_t *dir)
@@ -140,18 +140,45 @@ const char *kvsdir_rootref (kvsdir_t *dir)
 void kvsitr_destroy (kvsitr_t *itr)
 {
     if (itr) {
+        int saved_errno = errno;
+        zlist_destroy (&itr->keys);
         free (itr);
+        errno = saved_errno;
     }
+}
+
+static int sort_cmp (void *item1, void *item2)
+{
+    if (!item1 && item2)
+        return -1;
+    if (!item1 && !item2)
+        return 0;
+    if (item1 && !item2)
+        return 1;
+    return strcmp (item1, item2);
 }
 
 kvsitr_t *kvsitr_create (kvsdir_t *dir)
 {
-    kvsitr_t *itr;
+    kvsitr_t *itr = NULL;
+    const char *key;
+    json_t *dirdata, *value;
 
+    if (!dir) {
+        errno = EINVAL;
+        goto error;
+    }
     if (!(itr = calloc (1, sizeof (*itr))))
         goto error;
-    itr->dirdata = treeobj_get_data (dir->dirobj);
-    itr->iter = json_object_iter (itr->dirdata);
+    if (!(itr->keys = zlist_new ()))
+        goto error;
+    dirdata = treeobj_get_data (dir->dirobj);
+    json_object_foreach (dirdata, key, value) {
+        if (zlist_push (itr->keys, (char *)key) < 0)
+            goto error;
+    }
+    zlist_sort (itr->keys, sort_cmp);
+    itr->reset = true;
     return itr;
 error:
     kvsitr_destroy (itr);
@@ -160,16 +187,21 @@ error:
 
 void kvsitr_rewind (kvsitr_t *itr)
 {
-    itr->iter = json_object_iter (itr->dirdata);
+    if (itr)
+        itr->reset = true;
 }
 
 const char *kvsitr_next (kvsitr_t *itr)
 {
     const char *name = NULL;
 
-    if (itr->iter) {
-        name = json_object_iter_key (itr->iter);
-        itr->iter = json_object_iter_next (itr->dirdata, itr->iter);
+    if (itr) {
+        if (itr->reset)
+            name = zlist_first (itr->keys);
+        else
+            name = zlist_next (itr->keys);
+        if (name)
+            itr->reset = false;
     }
     return name;
 }

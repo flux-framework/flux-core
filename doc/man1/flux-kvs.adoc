@@ -50,6 +50,14 @@ Retrieve the value stored under 'key'.  If nothing has been stored under
 Store 'value' under 'key' and commit it.  If it already has a value,
 overwrite it.
 
+*ls* [-R] [-d] [-F] [-w COLS] [-1] ['key' ...]::
+Display directory referred to by _key_, or "." (root) if unspecified.
+Options are roughly equivalent to a subset of ls(1) options.
+'-R' lists directory recursively.  '-d' displays directory not its contents.
+'-F' classifies files with one character suffix (. is directory, @ is symlink).
+'-w COLS' sets the terminal width in characters.  '-1' causes output to be
+displayed in one column.
+
 *dir* [-R] [-d] ['key']::
 Display all keys and their values under the directory 'key'.
 If 'key' does not exist or is not a directory, display an error message.
