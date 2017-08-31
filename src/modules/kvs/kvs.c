@@ -1392,14 +1392,13 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     flux_msg_t *msg = NULL;
     int saved_errno, rc = -1;
 
+    assert (ctx->rank == 0);
+
     if (event_includes_rootdir) {
-        bool stall;
-        if (load (ctx, ctx->rootdir, NULL, &root, &stall) < 0) {
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: load", __FUNCTION__);
-            goto done;
-        }
-        FASSERT (ctx->h, stall == false);
+        struct cache_entry *hp;
+        if ((hp = cache_lookup (ctx->cache, ctx->rootdir, ctx->epoch)))
+            root = cache_entry_get_json (hp);
+        assert (root != NULL); // root entry is always in cache on rank 0
     }
     else {
         if (!(nullobj = json_null ())) {
