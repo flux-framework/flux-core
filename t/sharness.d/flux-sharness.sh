@@ -24,6 +24,37 @@ test_size_large() {
     echo ${size}
 }
 
+
+#
+#  Tests using test_under_flux() and which load their own modules should
+#   ensure those modules are unloaded at the end of the test for proper
+#   cleanup and test coverage (also as a general principle, module unload
+#   should be something explicitly tested).
+#
+#  The functions below ensure that every module loaded at "test_done" time
+#   when test_under_flux() was used was also loaded before test_under_flux
+#   was called.
+#
+flux_module_list() {
+    flux module list | awk '!/^Module/{print $1}' | sort
+}
+
+check_module_list() {
+    flux_module_list > module-list.final
+    while read module; do
+       grep "^$module$" module-list.initial >/dev/null 2>&1 \
+            || bad="${bad}${bad:+ }$module"
+    done < module-list.final
+    if test -n "$bad"; then
+        test -n "$logfile" \
+            && say_color error >&3 \
+                 "Error: manually loaded module(s) not unloaded: $bad"
+        # This function is run under test_eval_ so redirect
+        #  error message to &5 (saved stdout) so text doesn't disappear:
+        error >&5 2>&1 "manually loaded module(s) not unloaded: $bad"
+    fi
+}
+
 #
 #  Reinvoke a test file under a flux comms instance
 #
@@ -35,6 +66,8 @@ test_under_flux() {
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
         cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
+        flux_module_list > module-list.initial
+        cleanup check_module_list
         return
     fi
     quiet="-o -q,-Slog-filename=${log_file},-Slog-forward-level=7"
