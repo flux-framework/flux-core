@@ -175,8 +175,8 @@ static void content_load_completion (flux_future_t *f, void *arg)
     const char *blobref;
     struct cache_entry *hp;
 
-    if (flux_rpc_get_raw (f, &data, &size) < 0) {
-        flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
+    if (flux_content_load_get (f, &data, &size) < 0) {
+        flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
         goto done;
     }
     blobref = flux_future_aux_get (f, "ref");
@@ -222,8 +222,7 @@ static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref)
     char *refcpy;
     int saved_errno;
 
-    if (!(f = flux_rpc_raw (ctx->h, "content.load",
-                    ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_content_load (ctx->h, ref, 0)))
         goto error;
     if (!(refcpy = strdup (ref))) {
         errno = ENOMEM;
@@ -301,18 +300,12 @@ static int content_store_get (flux_future_t *f, void *arg)
     kvs_ctx_t *ctx = arg;
     struct cache_entry *hp;
     const char *blobref;
-    int blobref_size;
     int rc = -1;
     int saved_errno, ret;
 
-    if (flux_rpc_get_raw (f, (void **)&blobref, &blobref_size) < 0) {
+    if (flux_content_store_get (f, &blobref) < 0) {
         saved_errno = errno;
-        flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
-        goto done;
-    }
-    if (!blobref || blobref[blobref_size - 1] != '\0') {
-        saved_errno = EPROTO;
-        flux_log_error (ctx->h, "%s: invalid blobref", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: flux_content_store_get", __FUNCTION__);
         goto done;
     }
     //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
@@ -377,8 +370,7 @@ static int content_store_request_send (kvs_ctx_t *ctx, json_t *val,
 
     size = strlen (data) + 1;
 
-    if (!(f = flux_rpc_raw (ctx->h, "content.store",
-                            data, size, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_content_store (ctx->h, data, size, 0)))
         goto error;
     if (now) {
         if (content_store_get (f, ctx) < 0)
