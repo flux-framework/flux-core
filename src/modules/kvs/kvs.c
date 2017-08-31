@@ -166,7 +166,7 @@ error:
     return NULL;
 }
 
-static int content_load_get (flux_future_t *f, void *arg)
+static void content_load_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *o;
@@ -174,16 +174,13 @@ static int content_load_get (flux_future_t *f, void *arg)
     int size;
     const char *blobref;
     struct cache_entry *hp;
-    int saved_errno, rc = -1;
 
     if (flux_rpc_get_raw (f, &data, &size) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_raw", __FUNCTION__);
         goto done;
     }
     blobref = flux_future_aux_get (f, "ref");
     if (!(o = json_loads ((char *)data, JSON_DECODE_ANY, NULL))) {
-        saved_errno = EPROTO;
         flux_log_error (ctx->h, "%s: json_loads", __FUNCTION__);
         goto done;
     }
@@ -193,7 +190,6 @@ static int content_load_get (flux_future_t *f, void *arg)
      * logic error dealng with error paths using cache_remove_entry().
      */
     if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
-        saved_errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto done;
     }
@@ -211,60 +207,40 @@ static int content_load_get (flux_future_t *f, void *arg)
      * this error scenario appropriately.
      */
     if (cache_entry_set_json (hp, o) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: cache_entry_set_json", __FUNCTION__);
         goto done;
     }
-    rc = 0;
 done:
     flux_future_destroy (f);
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
 }
 
-static void content_load_completion (flux_future_t *f, void *arg)
-{
-    (void)content_load_get (f, arg);
-}
-
-/* If now is true, perform the load rpc synchronously;
- * otherwise arrange for a continuation to handle the response.
+/* Send content load request and setup contination to handle response.
  */
-static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref, bool now)
+static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref)
 {
     flux_future_t *f = NULL;
     char *refcpy;
     int saved_errno;
 
-    //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, ref);
     if (!(f = flux_rpc_raw (ctx->h, "content.load",
                     ref, strlen (ref) + 1, FLUX_NODEID_ANY, 0)))
-        return -1;
+        goto error;
     if (!(refcpy = strdup (ref))) {
-        flux_future_destroy (f);
         errno = ENOMEM;
-        return -1;
+        goto error;
     }
     if (flux_future_aux_set (f, "ref", refcpy, free) < 0) {
-        saved_errno = errno;
         free (refcpy);
-        flux_future_destroy (f);
-        errno = saved_errno;
-        return -1;
+        goto error;
     }
-    if (now) {
-        if (content_load_get (f, ctx) < 0) {
-            flux_log_error (ctx->h, "%s: content_load_get", __FUNCTION__);
-            return -1;
-        }
-    } else if (flux_future_then (f, -1., content_load_completion, ctx) < 0) {
-        saved_errno = errno;
-        flux_future_destroy (f);
-        errno = saved_errno;
-        return -1;
-    }
+    if (flux_future_then (f, -1., content_load_completion, ctx) < 0)
+        goto error;
     return 0;
+error:
+    saved_errno = errno;
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return -1;
 }
 
 /* Return 0 on success, -1 on error.  Set stall variable appropriately */
@@ -274,6 +250,8 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     int saved_errno, ret;
 
+    assert (wait != NULL);
+
     /* Create an incomplete hash entry if none found.
      */
     if (!hp) {
@@ -282,7 +260,7 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
             return -1;
         }
         cache_insert (ctx->cache, ref, hp);
-        if (content_load_request_send (ctx, ref, wait ? false : true) < 0) {
+        if (content_load_request_send (ctx, ref) < 0) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: content_load_request_send",
                             __FUNCTION__);
@@ -295,14 +273,9 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
         ctx->faults++;
     }
     /* If hash entry is incomplete (either created above or earlier),
-     * arrange to stall caller if wait_t was provided.
+     * arrange to stall caller.
      */
     if (!cache_entry_get_valid (hp)) {
-        if (!wait) {
-            flux_log (ctx->h, LOG_ERR, "synchronous load(), invalid cache entry");
-            errno = ENODATA; /* better errno than this? */
-            return -1;
-        }
         if (cache_entry_wait_valid (hp, wait) < 0) {
             /* no cleanup in this path, if an rpc was sent, it will
              * complete, but not call a waiter on this load.  Return
