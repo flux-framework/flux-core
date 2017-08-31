@@ -120,6 +120,35 @@ test_expect_success 'test_under_flux works' '
 	) &&
 	grep "size=2" test-under-flux/out
 '
+
+test_expect_success 'test_under_flux fails if loaded modules are not unloaded' '
+    mkdir -p test-under-flux && (
+		cd test-under-flux &&
+		cat >.test.modcheck.t <<-EOF &&
+		#!/bin/sh
+		test_description="test_under_flux with module loaded, but not unloaded"
+		. "\$SHARNESS_TEST_SRCDIR"/sharness.sh
+		test_under_flux 2 minimal
+		test_expect_success "flux module load kvs" "
+			flux module load -r 0 kvs
+		"
+		test_done
+		EOF
+		chmod +x .test.modcheck.t &&
+		SHARNESS_TEST_DIRECTORY=`pwd` &&
+		export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
+		test_expect_code 1 ./.test.modcheck.t 2>err.modcheck \
+			| grep -v sharness: >out.modcheck
+	) &&
+	cat >expected.modcheck <<-EOF &&
+	ok 1 - flux module load kvs
+	# passed all 1 test(s)
+	1..1
+	error: manually loaded module(s) not unloaded: kvs
+	EOF
+	test_cmp expected.modcheck test-under-flux/out.modcheck
+'
+
 test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes' '
 	ATTR_VAL=`flux start ${ARGS} -o,--setattr=foo-test=42 flux getattr foo-test` &&
 	test $ATTR_VAL -eq 42
