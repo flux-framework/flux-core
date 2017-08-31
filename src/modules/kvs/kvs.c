@@ -688,8 +688,7 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
     /* "touch" root */
-    if (load (ctx, ctx->rootdir, NULL, NULL, NULL) < 0)
-        flux_log_error (ctx->h, "%s: load", __FUNCTION__);
+    (void)cache_lookup (ctx->cache, ctx->rootdir, ctx->epoch);
 
     if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
