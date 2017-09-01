@@ -605,7 +605,7 @@ error:
 
 static json_t *cron_stats_to_json (struct cron_stats *stats)
 {
-    return json_pack ("{ s:f, s:f, s:f, s:i, s:i, s:i, s:i, s:i, s:i }",
+    return json_pack ("{ s:f, s:f, s:f, s:I, s:I, s:I, s:I, s:I, s:I }",
                       "ctime", stats->ctime,
                       "starttime", stats->starttime,
                       "lastrun", stats->lastrun,
