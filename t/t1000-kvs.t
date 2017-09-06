@@ -469,6 +469,40 @@ test_expect_success 'kvs: empty directory remains after key removed' '
 '
 
 #
+# test key normalization
+#
+test_expect_success 'kvs: put with leading path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put ......$DIR.a.b.c=42 &&
+	test_kvs_key $DIR.a.b.c 42
+'
+test_expect_success 'kvs: put with trailing path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b.c........=43 &&
+	test_kvs_key $DIR.a.b.c 43
+'
+test_expect_success 'kvs: put with extra embedded path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.....a....b...c=44 &&
+	test_kvs_key $DIR.a.b.c 44
+'
+test_expect_success 'kvs: get with leading path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b.c=42 &&
+	test_kvs_key ......$DIR.a.b.c 42
+'
+test_expect_success 'kvs: get with trailing path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b.c=43 &&
+	test_kvs_key $DIR.a.b.c........ 43
+'
+test_expect_success 'kvs: get with extra embedded path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.b.c=44 &&
+	test_kvs_key $DIR.....a....b...c 44
+'
+
+#
 # link/readlink tests
 #
 
