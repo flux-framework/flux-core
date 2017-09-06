@@ -41,6 +41,7 @@
 #include "src/common/libkvs/treeobj.h"
 
 #include "cache.h"
+#include "kvs_util.h"
 
 #include "lookup.h"
 
@@ -387,7 +388,7 @@ lookup_t *lookup_create (struct cache *cache,
         lh->root_ref_copy = NULL;
         lh->root_ref = lh->root_dir;
     }
-    if (!(lh->path = strdup (path))) {
+    if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
         saved_errno = ENOMEM;
         goto cleanup;
     }
