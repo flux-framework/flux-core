@@ -923,7 +923,7 @@ stall:
 }
 
 typedef struct {
-    const char *key;
+    char *key;
     char *sender;
 } unwatch_param_t;
 
@@ -931,6 +931,7 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
 {
     unwatch_param_t *p = arg;
     char *sender = NULL;
+    char *normkey = NULL;
     json_t *val;
     const char *key, *topic;
     int flags;
@@ -947,12 +948,14 @@ static bool unwatch_cmp (const flux_msg_t *msg, void *arg)
         goto done;
     if (strcmp (sender, p->sender) != 0)
         goto done;
-    if (strcmp (p->key, key) != 0)
+    if (!(normkey = kvs_util_normalize_key (key, NULL)))
+        goto done;
+    if (strcmp (p->key, normkey) != 0)
         goto done;
     match = true;
 done:
-    if (sender)
-        free (sender);
+    free (sender);
+    free (normkey);
     return match;
 }
 
@@ -960,15 +963,23 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    const char *key;
     unwatch_param_t p = { NULL, NULL };
-    int rc = -1;
+    int errnum = 0;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "key", &p.key) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "key", &key) < 0) {
+        errnum = errno;
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto done;
     }
-    if (flux_msg_get_route_first (msg, &p.sender) < 0)
+    if (!(p.key = kvs_util_normalize_key (key, NULL))) {
+        errnum = errno;
         goto done;
+    }
+    if (flux_msg_get_route_first (msg, &p.sender) < 0) {
+        errnum = errno;
+        goto done;
+    }
     /* N.B. impossible for a watch to be on watchlist and cache waiter
      * at the same time (i.e. on watchlist means we're watching, if on
      * cache waiter we're not done processing towards being on the
@@ -977,19 +988,20 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
      * deal.  The current state is still maintained.
      */
     if (wait_destroy_msg (ctx->watchlist, unwatch_cmp, &p) < 0) {
+        errnum = errno;
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
         goto done;
     }
     if (cache_wait_destroy_msg (ctx->cache, unwatch_cmp, &p) < 0) {
+        errnum = errno;
         flux_log_error (h, "%s: cache_wait_destroy_msg", __FUNCTION__);
         goto done;
     }
-    rc = 0;
 done:
-    if (flux_respond (h, msg, rc < 0 ? errno : 0, NULL) < 0)
+    if (flux_respond (h, msg, errnum, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    if (p.sender)
-        free (p.sender);
+    free (p.key);
+    free (p.sender);
 }
 
 struct finalize_data {

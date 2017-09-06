@@ -321,16 +321,17 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                                json_t *rootdir, const char *key,
                                json_t *dirent, const char **missing_ref)
 {
-    char *cpy = strdup (key);
-    char *next, *name = cpy;
+    char *cpy = NULL;
+    char *next, *name;
     json_t *dir = rootdir;
     json_t *subdir = NULL, *dir_entry;
     int saved_errno, rc = -1;
 
-    if (!cpy) {
-        saved_errno = ENOMEM;
+    if (!(cpy = kvs_util_normalize_key (key, NULL))) {
+        saved_errno = errno;
         goto done;
     }
+    name = cpy;
 
     /* Special case root
      */
