@@ -90,3 +90,46 @@ error:
     free (s);
     return rc;
 }
+
+char *kvs_util_normalize_key (const char *key, bool *want_directory)
+{
+    const char sep = '.';
+    char *cpy = strdup (key);
+    int i, len = strlen (key) + 1;
+    bool has_sep_suffix = false;
+
+    if (cpy) {
+        /* Transform duplicate path separators into a single one.
+         */
+        for (i = 0; i < len; ) {
+            if (cpy[i] == sep && cpy[i + 1] == sep) {
+                memmove (&cpy[i], &cpy[i + 1], len - i - 1);
+                len--;
+            }
+            else
+                i++;
+        }
+        /* Eliminate leading path separator
+         */
+        if (len > 2 && cpy[0] == sep) {
+            memmove (&cpy[0], &cpy[1], len - 1);
+            len--;
+        }
+        /* Eliminate trailing path separator
+         */
+        if (len > 2 && cpy[len - 2] == sep) {
+            cpy[len - 2] = '\0';
+            len--;
+            has_sep_suffix = true;
+        }
+        if (cpy[0] == '.')
+            has_sep_suffix = true;
+        if (want_directory)
+            *want_directory = has_sep_suffix;
+    }
+    return cpy;
+}
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
