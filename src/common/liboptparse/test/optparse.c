@@ -830,6 +830,33 @@ test two: unrecognized option '--unknown'\n\
 Try `test two --help' for more information.\n",
     "bad argument error message is expected");
 
+    // Test unknown short option prints expected error
+    char *av41[] = { "test", "two", "-X", NULL };
+    ac = sizeof (av41) / sizeof (av41[0]) - 1;
+
+    diag ("parsing test two -X");
+    n = optparse_run_subcommand (a, ac, av41);
+    ok (n == -1, "optparse_run_subcommand with bad short opt returns error");
+
+    usage_output_is ("\
+test two: unrecognized option '-X'\n\
+Try `test two --help' for more information.\n",
+    "bad argument error message is expected");
+
+    // Test unknown short option with good option prints expected error
+    char *av42[] = { "test", "two", "-Zt", "foo", NULL};
+    ac = sizeof (av42) / sizeof (av42[0]) - 1;
+
+    diag ("parsing test two -Zt foo");
+    n = optparse_run_subcommand (a, ac, av42);
+    ok (n == -1,
+        "optparse_run_subcommand with bad short opt mixed with good fails");
+
+    usage_output_is ("\
+test two: unrecognized option '-Z'\n\
+Try `test two --help' for more information.\n",
+    "bad argument error message is expected");
+
     // Test no subcommand (and subcommand required) prints error
     char *av5[] = { "test", NULL };
     ac = sizeof (av5) / sizeof (av5[0]) - 1;
@@ -1076,7 +1103,7 @@ void test_non_option_arguments (void)
 int main (int argc, char *argv[])
 {
 
-    plan (245);
+    plan (251);
 
     test_convenience_accessors (); /* 35 tests */
     test_usage_output (); /* 42 tests */
@@ -1084,7 +1111,7 @@ int main (int argc, char *argv[])
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 56 tests */
+    test_subcommand (); /* 62 tests */
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
