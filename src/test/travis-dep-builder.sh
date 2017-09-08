@@ -31,13 +31,13 @@ https://github.com/danmar/cppcheck.git \
 https://github.com/LLNL/Caliper.git"
 
 declare -A checkout_sha1=(\
-["libfaketime"]="b68f2820c4091075fbc205965ec6976f6d241aaa" \
+["libfaketime"]="5d41d41da8f67e396f630280b180cdfb8e56abbc" \
 ["cppcheck"]="7466a49b216d4ba5e25b48381d85a8c3b2d3a228" \
 ["Caliper"]="be6b488bedb75012e60d3062f8cd2749032985fe" \
 )
 
 declare -A extra_make_opts=(\
-["libfaketime"]="LIBDIRNAME=/lib"
+["libfaketime"]="LIBDIRNAME=/lib CC=gcc"
 ["cppcheck"]="CFGDIR=/${prefix}/etc/cppcheck CXX=g++ CC=gcc"
 )
 

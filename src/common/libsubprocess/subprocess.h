@@ -66,8 +66,7 @@ struct subprocess_manager * subprocess_manager_create (void);
 /*
  *  Set value for item [item] in subprocess manager [sm]
  */
-int subprocess_manager_set (struct subprocess_manager *sm,
-	sm_item_t item, ...);
+int subprocess_manager_set (struct subprocess_manager *sm, int item, ...);
 
 /*
  *  Free memory associated with a subprocess manager object:

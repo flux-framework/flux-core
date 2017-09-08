@@ -995,7 +995,7 @@ optparse_err_t optparse_add_doc (optparse_t *p, const char *doc, int group)
     return optparse_add_option (p, &o);
 }
 
-optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
+optparse_err_t optparse_set (optparse_t *p, int item, ...)
 {
     optparse_err_t e = OPTPARSE_SUCCESS;
     va_list vargs;
@@ -1074,7 +1074,7 @@ static void * lookup_recursive (optparse_t *p, const char *key)
 }
 
 
-optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...)
+optparse_err_t optparse_get (optparse_t *p, int item, ...)
 {
     optparse_err_t e = OPTPARSE_SUCCESS;
     va_list vargs;

@@ -1082,7 +1082,7 @@ subprocess_manager_reap_all (struct subprocess_manager *sm)
 }
 
 int
-subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
+subprocess_manager_set (struct subprocess_manager *sm, int item, ...)
 {
     va_list ap;
 
