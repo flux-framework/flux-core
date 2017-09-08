@@ -243,9 +243,9 @@ optparse_err_t optparse_add_option_table (optparse_t *p,
  */
 optparse_err_t optparse_add_doc (optparse_t *p, const char *doc, int group);
 
-optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...);
+optparse_err_t optparse_set (optparse_t *p, int item, ...);
 
-optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...);
+optparse_err_t optparse_get (optparse_t *p, int item, ...);
 
 /*   Set and get arbitrary ancillary data associated with an optparse
  *    object. optparse_get_data () returns NULL if data not found.
