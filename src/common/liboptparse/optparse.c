@@ -1279,8 +1279,12 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
         struct option_info *opt;
         struct optparse_option *o;
         if (c == '?') {
-            (*p->log_fn) ("%s: unrecognized option '%s'\n",
-                          fullname, argv[d.optind-1]);
+            if (d.optopt != '\0')
+                (*p->log_fn) ("%s: unrecognized option '-%c'\n",
+                              fullname,  d.optopt);
+            else
+                (*p->log_fn) ("%s: unrecognized option '%s'\n",
+                              fullname, argv[d.optind-1]);
             (*p->log_fn) ("Try `%s --help' for more information.\n", fullname);
             d.optind = -1;
             break;
