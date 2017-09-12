@@ -204,7 +204,7 @@ static flux_future_t *flux_rpc_msg (flux_t *h,
     flux_future_t *f;
     int msgflags = 0;
 
-    if (!(f = flux_future_create (flux_get_reactor (h), initialize_cb, NULL)))
+    if (!(f = flux_future_create (initialize_cb, NULL)))
         goto error;
     if (!(rpc = rpc_create (h, flags)))
         goto error;

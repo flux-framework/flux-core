@@ -26,11 +26,15 @@ void result_destroy (void *arg)
 int contin_called;
 void *contin_arg;
 int contin_get_rc;
+flux_reactor_t *contin_reactor;
+flux_t *contin_flux;
 void *contin_get_result;
 void contin (flux_future_t *f, void *arg)
 {
     contin_called = 1;
     contin_arg = arg;
+    contin_flux = flux_future_get_flux (f);
+    contin_reactor = flux_future_get_reactor (f);
     contin_get_rc = flux_future_get (f, &contin_get_result);
 }
 
@@ -44,11 +48,14 @@ void test_simple (void)
         BAIL_OUT ("flux_reactor_create failed");
 
     /* create */
-    f = flux_future_create (r, NULL, NULL);
+    f = flux_future_create (NULL, NULL);
     ok (f != NULL,
         "flux_future_create works");
     if (!f)
         BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
+    ok (flux_future_get_reactor (f) == r,
+        "flux_future_get_reactor matches what was set");
 
     /* before aux is set */
     errno = 0;
@@ -116,6 +123,7 @@ void test_simple (void)
     contin_arg = NULL;
     contin_get_rc = -42;
     contin_get_result = NULL;
+    contin_reactor = NULL;
     ok (flux_future_then (f, -1., contin, "nerp") == 0,
         "flux_future_then registered continuation");
     ok (flux_reactor_run (r, 0) == 0,
@@ -125,6 +133,8 @@ void test_simple (void)
     ok (contin_get_rc == 0 && contin_get_result != NULL
         && !strcmp (contin_get_result, "Hello"),
         "continuation obtained correct result with flux_future_get");
+    ok (contin_reactor == r,
+        "flux_future_get_reactor from continuation returned set reactor");
 
     /* destructors */
     flux_future_destroy (f);
@@ -142,7 +152,7 @@ void test_timeout_now (void)
 {
     flux_future_t *f;
 
-    f = flux_future_create (NULL, NULL, NULL);
+    f = flux_future_create (NULL, NULL);
     ok (f != NULL,
         "flux_future_create works");
     if (!f)
@@ -172,11 +182,12 @@ void test_timeout_then (void)
     if (!r)
         BAIL_OUT ("flux_reactor_create failed");
 
-    f = flux_future_create (r, NULL, NULL);
+    f = flux_future_create (NULL, NULL);
     ok (f != NULL,
         "flux_future_create works");
     if (!f)
         BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
 
     ok (flux_future_then (f, 0.1, timeout_contin, &errnum) == 0,
         "flux_future_then registered continuation with timeout");
@@ -201,6 +212,8 @@ void simple_init_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 int simple_init_called;
 void *simple_init_arg;
+flux_reactor_t *simple_init_reactor;
+flux_reactor_t *simple_init_r;
 void simple_init (flux_future_t *f, flux_reactor_t *r, void *arg)
 {
     flux_watcher_t *w;
@@ -208,6 +221,8 @@ void simple_init (flux_future_t *f, flux_reactor_t *r, void *arg)
     simple_init_called++;
     simple_init_arg = arg;
 
+    simple_init_reactor = flux_future_get_reactor (f);
+    simple_init_r = r;
     w = flux_timer_watcher_create (r, 0.1, 0., simple_init_timer_cb, f);
     if (!w)
         goto error;
@@ -227,13 +242,15 @@ void test_init_now (void)
     flux_future_t *f;
     char *result;
 
-    f = flux_future_create (NULL, simple_init, "testarg");
+    f = flux_future_create (simple_init, "testarg");
     ok (f != NULL,
         "flux_future_create works");
     if (!f)
         BAIL_OUT ("flux_future_create failed");
     simple_init_called = 0;
     simple_init_arg = NULL;
+    simple_init_r = NULL;
+    simple_init_reactor = NULL;
     result = NULL;
     ok (flux_future_get (f, &result) == 0,
         "flux_future_get worked");
@@ -242,6 +259,10 @@ void test_init_now (void)
     ok (simple_init_called == 1 && simple_init_arg != NULL
         && !strcmp (simple_init_arg, "testarg"),
         "init was called once with correct arg");
+    ok (simple_init_reactor != NULL,
+        "flux_future_get_reactor returned tmp reactor in init");
+    ok (simple_init_r == simple_init_reactor,
+        "flux_future_get_reactor got same reactor as argument");
 
     flux_future_destroy (f);
 
@@ -266,13 +287,16 @@ void test_init_then (void)
     if (!r)
         BAIL_OUT ("flux_reactor_create failed");
 
-    f = flux_future_create (r, simple_init, "testarg");
+    f = flux_future_create (simple_init, "testarg");
     ok (f != NULL,
         "flux_future_create works");
     if (!f)
         BAIL_OUT ("flux_future_create failed");
+    flux_future_set_reactor (f, r);
     simple_init_called = 0;
     simple_init_arg = &f;
+    simple_init_r = NULL;
+    simple_init_reactor = NULL;
     simple_contin_result = NULL;
     simple_contin_called = 0;
     simple_contin_rc = -42;
@@ -281,6 +305,10 @@ void test_init_then (void)
     ok (simple_init_called == 1 && simple_init_arg != NULL
         && !strcmp (simple_init_arg, "testarg"),
         "init was called once with correct arg");
+    ok (simple_init_reactor == r,
+        "flux_future_get_reactor return set reactor in init");
+    ok (simple_init_r == simple_init_reactor,
+        "flux_future_get_reactor got same reactor as argument");
     ok (flux_reactor_run (r, 0) == 0,
         "reactor successfully run");
     ok (simple_contin_called == 1,
