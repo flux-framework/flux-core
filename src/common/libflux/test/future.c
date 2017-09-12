@@ -318,6 +318,188 @@ void test_init_then (void)
     diag ("%s: init works in reactor context", __FUNCTION__);
 }
 
+/* mumble - a 0.1s timer wrapped in a future.
+ */
+
+void mumble_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    flux_future_t *f = arg;
+    flux_future_fulfill (f, xstrdup ("Hello"), free);
+}
+
+void mumble_init (flux_future_t *f, void *arg)
+{
+    flux_reactor_t *r = flux_future_get_reactor (f);
+    flux_watcher_t *w;
+    if (!(w = flux_timer_watcher_create (r, 0.1, 0., mumble_timer_cb, f)))
+        goto error;
+    if (flux_future_aux_set (f, NULL, w,
+                             (flux_free_f)flux_watcher_destroy) < 0) {
+        flux_watcher_destroy (w);
+        goto error;
+    }
+    flux_watcher_start (w);
+    return;
+error:
+    flux_future_fulfill_error (f, errno);
+}
+
+flux_future_t *mumble_create (void)
+{
+    return flux_future_create (mumble_init, NULL);
+}
+
+int fclass_contin_rc;
+void fclass_contin (flux_future_t *f, void *arg)
+{
+    fclass_contin_rc = flux_future_get (f, arg);
+}
+
+void test_fclass_synchronous (char *tag, flux_future_t *f, const char *expected)
+{
+    char *s;
+
+    ok (flux_future_wait_for (f, -1.) == 0,
+        "%s: flux_future_wait_for returned successfully", tag);
+    ok (flux_future_get (f, &s) == 0 && s != NULL && !strcmp (s, expected),
+        "%s: flux_future_get worked", tag);
+}
+
+void test_fclass_asynchronous (char *tag,
+                               flux_future_t *f, const char *expected)
+{
+    flux_reactor_t *r;
+    char *s;
+
+    r = flux_reactor_create (0);
+    if (!r)
+        BAIL_OUT ("flux_reactor_create failed");
+
+    flux_future_set_reactor (f, r);
+    s = NULL;
+    fclass_contin_rc = 42;
+    ok (flux_future_then (f, -1., fclass_contin, &s) == 0,
+        "%s: flux_future_then worked", tag);
+    ok (flux_reactor_run (r, 0) == 0,
+        "%s: flux_reactor_run returned", tag);
+    ok (fclass_contin_rc == 0,
+        "%s: continuation called flux_future_get with success", tag);
+    ok (s != NULL && !strcmp (s, expected),
+        "%s: continuation fetched expected value", tag);
+
+    flux_reactor_destroy (r);
+}
+
+void test_mumble (void)
+{
+    flux_future_t *f;
+
+    f = mumble_create ();
+    ok (f != NULL,
+        "mumble_create worked");
+    test_fclass_synchronous ("mumble", f, "Hello");
+    flux_future_destroy (f);
+
+    f = mumble_create ();
+    ok (f != NULL,
+        "mumble_create worked");
+    test_fclass_asynchronous ("mumble", f, "Hello");
+    flux_future_destroy (f);
+}
+
+/* incept - two mumbles wrapped in a future, wrapped in an engima.
+ * No not the last bit.
+ */
+struct incept {
+    flux_future_t *f1;
+    flux_future_t *f2;
+    int count;
+};
+void ic_free (struct incept *ic)
+{
+    if (ic) {
+        flux_future_destroy (ic->f1);
+        flux_future_destroy (ic->f2);
+        free (ic);
+    }
+}
+struct incept *ic_alloc (void)
+{
+    struct incept *ic = xzmalloc (sizeof (*ic));
+    ic->f1 = mumble_create ();
+    ic->f2 = mumble_create ();
+    if (!ic->f2 || !ic->f1) {
+        ic_free (ic);
+        return NULL;
+    }
+    return ic;
+}
+void incept_mumble_contin (flux_future_t *f, void *arg)
+{
+    flux_future_t *incept_f = arg;
+    struct incept *ic = flux_future_aux_get (incept_f, "ic");
+    if (ic == NULL)
+        goto error;
+    if (--ic->count == 0)
+        flux_future_fulfill (incept_f, xstrdup ("Blorg"), free);
+    return;
+error:
+    flux_future_fulfill_error (incept_f, errno);
+}
+void incept_init (flux_future_t *f, void *arg)
+{
+    flux_reactor_t *r = flux_future_get_reactor (f);
+    struct incept *ic = arg;
+
+    flux_future_set_reactor (ic->f1, r);
+    flux_future_set_reactor (ic->f2, r);
+    if (flux_future_then (ic->f1, -1., incept_mumble_contin, f) < 0)
+        goto error;
+    if (flux_future_then (ic->f2, -1., incept_mumble_contin, f) < 0)
+        goto error;
+    return;
+error:
+    flux_future_fulfill_error (f, errno);
+}
+flux_future_t *incept_create (void)
+{
+    flux_future_t *f = NULL;
+    struct incept *ic;
+
+    if (!(ic = ic_alloc ()))
+        goto error;
+    if (!(f = flux_future_create (incept_init, ic))) {
+        ic_free (ic);
+        goto error;
+    }
+    if (flux_future_aux_set (f, "ic", ic, (flux_free_f)ic_free) < 0) {
+        ic_free (ic);
+        goto error;
+    }
+    ic->count = 2;
+    return f;
+error:
+    flux_future_destroy (f);
+    return NULL;
+}
+
+void test_mumble_inception (void)
+{
+    flux_future_t *f;
+
+    f = incept_create ();
+    ok (f != NULL,
+        "incept_create worked");
+    test_fclass_synchronous ("incept", f, "Blorg");
+    flux_future_destroy (f);
+
+    f = incept_create ();
+    ok (f != NULL,
+        "incept_create worked");
+    test_fclass_asynchronous ("incept", f, "Blorg");
+    flux_future_destroy (f);
+}
 
 int main (int argc, char *argv[])
 {
@@ -329,6 +511,9 @@ int main (int argc, char *argv[])
 
     test_init_now ();
     test_init_then ();
+
+    test_mumble ();
+    test_mumble_inception ();
 
     done_testing();
     return (0);
