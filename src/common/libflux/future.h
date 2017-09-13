@@ -6,6 +6,10 @@
 #include "handle.h"
 #include "msg_handler.h"
 
+/* Interfaces useful for all classes that return futures.
+ * See flux_future_then(3).
+ */
+
 typedef struct flux_future flux_future_t;
 
 typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
@@ -21,6 +25,9 @@ void *flux_future_aux_get (flux_future_t *f, const char *name);
 int flux_future_aux_set (flux_future_t *f, const char *name,
                          void *aux, flux_free_f destroy);
 
+/* Functions primarily used by implementors of classes that return futures.
+ * See flux_future_create(3).
+ */
 
 typedef void (*flux_future_init_f)(flux_future_t *f, void *arg);
 
