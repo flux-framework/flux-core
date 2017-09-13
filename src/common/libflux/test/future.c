@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <string.h>
+#include <czmq.h>
 
 #include "future.h"
 #include "reactor.h"
@@ -318,7 +319,7 @@ void test_init_then (void)
     diag ("%s: init works in reactor context", __FUNCTION__);
 }
 
-/* mumble - a 0.1s timer wrapped in a future.
+/* mumble - a 0.01s timer wrapped in a future.
  */
 
 void mumble_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -332,7 +333,7 @@ void mumble_init (flux_future_t *f, void *arg)
 {
     flux_reactor_t *r = flux_future_get_reactor (f);
     flux_watcher_t *w;
-    if (!(w = flux_timer_watcher_create (r, 0.1, 0., mumble_timer_cb, f)))
+    if (!(w = flux_timer_watcher_create (r, 0.01, 0., mumble_timer_cb, f)))
         goto error;
     if (flux_future_aux_set (f, NULL, w,
                              (flux_free_f)flux_watcher_destroy) < 0) {
@@ -501,6 +502,125 @@ void test_mumble_inception (void)
     flux_future_destroy (f);
 }
 
+/* walk - multiple mumbles wrapped in a future, executed serially
+ * The next future is created in the current future's contination.
+ */
+struct walk {
+    zlist_t *f; // stack of futures
+    int count;  // number of steps requested
+};
+void walk_free (struct walk *walk)
+{
+    if (walk) {
+        if (walk->f) {
+            flux_future_t *f;
+            while ((f = zlist_pop (walk->f)))
+                flux_future_destroy (f);
+            zlist_destroy (&walk->f);
+        }
+        free (walk);
+    }
+}
+struct walk *walk_alloc (void)
+{
+    struct walk *walk = xzmalloc (sizeof (*walk));
+    if (!(walk->f = zlist_new ())) {
+        walk_free (walk);
+        return NULL;
+    }
+    return walk;
+}
+void walk_mumble_contin (flux_future_t *f, void *arg)
+{
+    flux_future_t *walk_f = arg;
+    struct walk *walk = flux_future_aux_get (walk_f, "walk");
+
+    if (walk == NULL)
+        goto error;
+    if (--walk->count > 0) {
+        flux_reactor_t *r = flux_future_get_reactor (walk_f);
+        flux_future_t *nf;
+        if (!(nf = mumble_create ()))
+            goto error;
+        flux_future_set_reactor (nf, r);
+        if (flux_future_then (nf, -1., walk_mumble_contin, walk_f) < 0) {
+            flux_future_destroy (nf);
+            goto error;
+        }
+        if (zlist_push (walk->f, nf) < 0) {
+            flux_future_destroy (nf);
+            goto error;
+        }
+    }
+    else
+        flux_future_fulfill (walk_f, xstrdup ("Nerg"), free);
+    diag ("%s: count=%d", __FUNCTION__, walk->count);
+    return;
+error:
+    flux_future_fulfill_error (walk_f, errno);
+}
+void walk_init (flux_future_t *f, void *arg)
+{
+    flux_reactor_t *r = flux_future_get_reactor (f);
+    struct walk *walk = arg;
+
+    assert (walk->count > 0);
+
+    flux_future_t *nf;
+    if (!(nf = mumble_create ()))
+        goto error;
+    flux_future_set_reactor (nf, r);
+    if (flux_future_then (nf, -1., walk_mumble_contin, f) < 0) {
+        flux_future_destroy (nf);
+        goto error;
+    }
+    if (zlist_push (walk->f, nf) < 0) {
+        flux_future_destroy (nf);
+        goto error;
+    }
+    return;
+error:
+    flux_future_fulfill_error (f, errno);
+}
+flux_future_t *walk_create (int count)
+{
+    flux_future_t *f = NULL;
+    struct walk *walk;
+
+    if (!(walk = walk_alloc ()))
+        goto error;
+    if (!(f = flux_future_create (walk_init, walk))) {
+        walk_free (walk);
+        goto error;
+    }
+    if (flux_future_aux_set (f, "walk", walk, (flux_free_f)walk_free) < 0) {
+        walk_free (walk);
+        goto error;
+    }
+    walk->count = count;
+    return f;
+error:
+    flux_future_destroy (f);
+    return NULL;
+}
+
+void test_walk (void)
+{
+    flux_future_t *f;
+
+    f = walk_create (4);
+    ok (f != NULL,
+        "walk_create worked");
+    test_fclass_synchronous ("walk", f, "Nerg");
+    flux_future_destroy (f);
+
+    f = walk_create (10);
+    ok (f != NULL,
+        "walk_create worked");
+    test_fclass_asynchronous ("walk", f, "Nerg");
+    flux_future_destroy (f);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -514,6 +634,7 @@ int main (int argc, char *argv[])
 
     test_mumble ();
     test_mumble_inception ();
+    test_walk ();
 
     done_testing();
     return (0);
