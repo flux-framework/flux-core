@@ -333,7 +333,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         }
         f->now->running = true;
         if (f->init && !f->now->init_called) {
-            f->init (f, f->now->r, f->init_arg); // might set error
+            f->init (f, f->init_arg); // might set error
             f->now->init_called = true;
         }
         if (!f->result_valid && !f->result_errnum_valid) {
@@ -384,7 +384,7 @@ int flux_future_then (flux_future_t *f, double timeout,
     f->then->continuation = cb;
     f->then->continuation_arg = arg;
     if (f->init)
-        f->init (f, f->then->r, f->init_arg); // might set error
+        f->init (f, f->init_arg); // might set error
     if (f->result_errnum_valid) {
         errno = f->result_errnum;
         return -1;

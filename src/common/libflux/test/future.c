@@ -212,16 +212,15 @@ void simple_init_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 int simple_init_called;
 void *simple_init_arg;
-flux_reactor_t *simple_init_reactor;
 flux_reactor_t *simple_init_r;
-void simple_init (flux_future_t *f, flux_reactor_t *r, void *arg)
+void simple_init (flux_future_t *f, void *arg)
 {
+    flux_reactor_t *r = flux_future_get_reactor (f);
     flux_watcher_t *w;
 
     simple_init_called++;
     simple_init_arg = arg;
 
-    simple_init_reactor = flux_future_get_reactor (f);
     simple_init_r = r;
     w = flux_timer_watcher_create (r, 0.1, 0., simple_init_timer_cb, f);
     if (!w)
@@ -250,7 +249,6 @@ void test_init_now (void)
     simple_init_called = 0;
     simple_init_arg = NULL;
     simple_init_r = NULL;
-    simple_init_reactor = NULL;
     result = NULL;
     ok (flux_future_get (f, &result) == 0,
         "flux_future_get worked");
@@ -259,10 +257,8 @@ void test_init_now (void)
     ok (simple_init_called == 1 && simple_init_arg != NULL
         && !strcmp (simple_init_arg, "testarg"),
         "init was called once with correct arg");
-    ok (simple_init_reactor != NULL,
+    ok (simple_init_r != NULL,
         "flux_future_get_reactor returned tmp reactor in init");
-    ok (simple_init_r == simple_init_reactor,
-        "flux_future_get_reactor got same reactor as argument");
 
     flux_future_destroy (f);
 
@@ -296,7 +292,6 @@ void test_init_then (void)
     simple_init_called = 0;
     simple_init_arg = &f;
     simple_init_r = NULL;
-    simple_init_reactor = NULL;
     simple_contin_result = NULL;
     simple_contin_called = 0;
     simple_contin_rc = -42;
@@ -305,10 +300,8 @@ void test_init_then (void)
     ok (simple_init_called == 1 && simple_init_arg != NULL
         && !strcmp (simple_init_arg, "testarg"),
         "init was called once with correct arg");
-    ok (simple_init_reactor == r,
+    ok (simple_init_r == r,
         "flux_future_get_reactor return set reactor in init");
-    ok (simple_init_r == simple_init_reactor,
-        "flux_future_get_reactor got same reactor as argument");
     ok (flux_reactor_run (r, 0) == 0,
         "reactor successfully run");
     ok (simple_contin_called == 1,

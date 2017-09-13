@@ -22,8 +22,7 @@ int flux_future_aux_set (flux_future_t *f, const char *name,
                          void *aux, flux_free_f destroy);
 
 
-typedef void (*flux_future_init_f)(flux_future_t *f,
-                                   flux_reactor_t *r, void *arg);
+typedef void (*flux_future_init_f)(flux_future_t *f, void *arg);
 
 flux_future_t *flux_future_create (flux_future_init_f cb, void *arg);
 

@@ -173,7 +173,7 @@ error:
 /* Callback to initialize future in main or alternate reactor contexts.
  * Install a message handler for the response.
  */
-static void initialize_cb (flux_future_t *f, flux_reactor_t *r, void *arg)
+static void initialize_cb (flux_future_t *f, void *arg)
 {
     struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
     flux_msg_handler_t *w;
