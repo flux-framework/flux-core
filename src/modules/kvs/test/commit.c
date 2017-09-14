@@ -72,7 +72,7 @@ void commit_mgr_basic_tests (void)
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     ok (commit_mgr_get_noop_stores (cm) == 0,
@@ -216,7 +216,7 @@ void commit_mgr_merge_tests (void)
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     /* test successful merge */
@@ -320,7 +320,7 @@ void commit_basic_tests (void)
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
@@ -394,6 +394,7 @@ void verify_value (struct cache *cache,
                              root_ref,
                              root_ref,
                              key,
+                             NULL,
                              0)) != NULL,
         "lookup_create key %s", key);
 
@@ -426,7 +427,7 @@ void commit_basic_commit_process_test (void)
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
@@ -471,7 +472,7 @@ void commit_basic_commit_process_test_multiple_fences (void)
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
@@ -544,7 +545,7 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "foo.key1", "1", 0);
@@ -607,7 +608,7 @@ void commit_basic_root_not_dir (void)
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "val", "42", 0);
@@ -675,7 +676,7 @@ void commit_process_root_missing (void)
 
     json_decref (rootdir);
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "key1", "1", 0);
@@ -780,7 +781,7 @@ void commit_process_missing_ref (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "dir.val", "52", 0);
@@ -873,7 +874,7 @@ void commit_process_error_callbacks (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "dir.val", "52", 0);
@@ -955,7 +956,7 @@ void commit_process_error_callbacks_partway (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "dir.fileA", "52", 0);
@@ -1001,7 +1002,7 @@ void commit_process_invalid_operation (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", ".", "52", 0);
@@ -1041,7 +1042,7 @@ void commit_process_invalid_hash (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "foobar", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "foobar", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "dir.fileval", "52", 0);
@@ -1105,7 +1106,7 @@ void commit_process_follow_link (void) {
     cache_insert (cache, root_ref, cache_entry_create (root));
 
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "symlink.val", "52", 0);
@@ -1161,7 +1162,7 @@ void commit_process_dirval_test (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "dir.val", "52", 0);
@@ -1226,7 +1227,7 @@ void commit_process_delete_test (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     /* NULL value --> delete */
@@ -1272,7 +1273,7 @@ void commit_process_delete_nosubdir_test (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     /* subdir doesn't exist for this key */
@@ -1333,7 +1334,7 @@ void commit_process_delete_filevalinpath_test (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     /* val is in path */
@@ -1397,7 +1398,7 @@ void commit_process_bad_dirrefs (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     create_ready_commit (cm, "fence1", "dir.val", "52", 0);
@@ -1447,7 +1448,7 @@ void commit_process_big_fileval (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     memset (bigstr, '\0', bigstrsize);
@@ -1553,7 +1554,7 @@ void commit_process_giant_dir (void) {
 
     cache_insert (cache, root_ref, cache_entry_create (root));
 
-    ok ((cm = commit_mgr_create (cache, "sha1", &test_global)) != NULL,
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
     /* make three ready commits */

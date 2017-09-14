@@ -1,18 +1,21 @@
 #ifndef _FLUX_KVS_LOOKUP_H
 #define _FLUX_KVS_LOOKUP_H
 
+#include <flux/core.h>
 #include "cache.h"
 
 typedef struct lookup lookup_t;
 
 /* Initialize a lookup handle
  * - If root_ref is same as root_dir, can be set to NULL.
+ * - flux_t is optional, if NULL logging will go to stderr
  */
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
                          const char *root_dir,
                          const char *root_ref,
                          const char *path,
+                         flux_t *h,
                          int flags);
 
 /* Destroy a lookup handle */

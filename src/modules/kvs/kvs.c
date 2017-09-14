@@ -41,7 +41,6 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
-#include "src/common/libutil/log.h"
 #include "src/common/libkvs/treeobj.h"
 
 #include "waitqueue.h"
@@ -127,7 +126,7 @@ static kvs_ctx_t *getctx (flux_t *h)
         }
         ctx->cache = cache_create ();
         ctx->watchlist = wait_queue_create ();
-        ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, ctx);
+        ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, h, ctx);
         if (!ctx->cache || !ctx->watchlist || !ctx->cm) {
             saved_errno = ENOMEM;
             goto error;
@@ -706,6 +705,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   ctx->rootdir,
                                   root_ref,
                                   key,
+                                  h,
                                   flags)))
             goto done;
 
@@ -811,6 +811,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
                                   ctx->rootdir,
                                   NULL,
                                   key,
+                                  h,
                                   flags)))
             goto done;
 

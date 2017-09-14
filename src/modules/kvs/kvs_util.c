@@ -35,7 +35,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/log.h"
 
 #include "types.h"
 

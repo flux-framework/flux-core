@@ -26,6 +26,7 @@ void basic_api (void)
                              "root.foo",
                              "ref.bar",
                              "path.baz",
+                             NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
     ok (lookup_validate (lh) == true,
@@ -68,6 +69,7 @@ void basic_api (void)
                              "root.bar",
                              NULL,
                              "path.baz",
+                             NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
 
@@ -94,6 +96,7 @@ void basic_api_errors (void)
                        NULL,
                        NULL,
                        NULL,
+                       NULL,
                        0) == NULL,
         "lookup_create fails on bad input");
 
@@ -105,6 +108,7 @@ void basic_api_errors (void)
                              "root.foo",
                              "ref.bar",
                              "path.baz",
+                             NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
 
@@ -312,6 +316,7 @@ void lookup_root (void) {
                              root_ref,
                              root_ref,
                              ".",
+                             NULL,
                              0)) != NULL,
         "lookup_create on root, no flags, works");
     check (lh, true, EISDIR, NULL, NULL, "root no flags");
@@ -322,6 +327,7 @@ void lookup_root (void) {
                              root_ref,
                              root_ref,
                              ".",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_READDIR, works");
     check (lh, true, 0, root, NULL, "root w/ FLUX_KVS_READDIR");
@@ -332,6 +338,7 @@ void lookup_root (void) {
                              root_ref,
                              root_ref,
                              ".",
+                             NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on root w/ flag = FLUX_KVS_TREEOBJ, works");
     test = treeobj_create_dirref (root_ref);
@@ -400,6 +407,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on path dirref");
     check (lh, true, 0, dirref, NULL, "lookup dirref");
@@ -410,6 +418,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.valref",
+                             NULL,
                              0)) != NULL,
         "lookup_create on path dirref.valref");
     test = treeobj_create_val ("abcd", 4);
@@ -422,6 +431,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.val",
+                             NULL,
                              0)) != NULL,
         "lookup_create on path dirref.val");
     test = treeobj_create_val ("foo", 3);
@@ -434,6 +444,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.dir",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on path dirref.dir");
     check (lh, true, 0, dir, NULL, "lookup dirref.dir");
@@ -444,6 +455,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.symlink",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create on path dirref.symlink");
     test = treeobj_create_symlink ("baz");
@@ -456,6 +468,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref",
+                             NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dirref (treeobj)");
     test = treeobj_create_dirref (dirref_ref);
@@ -468,6 +481,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.valref",
+                             NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dirref.valref (treeobj)");
     test = treeobj_create_valref (valref_ref);
@@ -480,6 +494,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.val",
+                             NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dirref.val (treeobj)");
     test = treeobj_create_val ("foo", 3);
@@ -492,6 +507,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.dir",
+                             NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dirref.dir (treeobj)");
     check (lh, true, 0, dir, NULL, "lookup dirref.dir treeobj");
@@ -502,6 +518,7 @@ void lookup_basic (void) {
                              root_ref,
                              root_ref,
                              "dirref.symlink",
+                             NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create on path dirref.symlink (treeobj)");
     test = treeobj_create_symlink ("baz");
@@ -592,6 +609,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "foo",
+                             NULL,
                              0)) != NULL,
         "lookup_create on bad path in path");
     check (lh, true, 0, NULL, NULL, "lookup bad path");
@@ -603,6 +621,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "val.foo",
+                             NULL,
                              0)) != NULL,
         "lookup_create on val in path");
     check (lh, true, 0, NULL, NULL, "lookup val in path");
@@ -614,6 +633,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "valref.foo",
+                             NULL,
                              0)) != NULL,
         "lookup_create on valref in path");
     check (lh, true, 0, NULL, NULL, "lookup valref in path");
@@ -624,6 +644,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dir.foo",
+                             NULL,
                              0)) != NULL,
         "lookup_create on dir in path");
     check (lh, true, EPERM, NULL, NULL, "lookup dir in path");
@@ -634,6 +655,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "symlink1",
+                             NULL,
                              0)) != NULL,
         "lookup_create on link loop");
     check (lh, true, ELOOP, NULL, NULL, "lookup infinite links");
@@ -644,6 +666,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dirref",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create on dirref");
     check (lh, true, EINVAL, NULL, NULL, "lookup dirref, expecting link");
@@ -654,6 +677,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dir",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create on dir");
     check (lh, true, EINVAL, NULL, NULL, "lookup dir, expecting link");
@@ -664,6 +688,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "valref",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create on valref");
     check (lh, true, EINVAL, NULL, NULL, "lookup valref, expecting link");
@@ -674,6 +699,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "val",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create on val");
     check (lh, true, EINVAL, NULL, NULL, "lookup val, expecting link");
@@ -684,6 +710,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dirref",
+                             NULL,
                              0)) != NULL,
         "lookup_create on dirref");
     check (lh, true, EISDIR, NULL, NULL, "lookup dirref, not expecting dirref");
@@ -694,6 +721,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dir",
+                             NULL,
                              0)) != NULL,
         "lookup_create on dir");
     check (lh, true, EISDIR, NULL, NULL, "lookup dir, not expecting dir");
@@ -704,6 +732,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "valref",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on valref");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup valref, expecting dir");
@@ -714,6 +743,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "val",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on val");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup val, expecting dir");
@@ -724,6 +754,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "symlink",
+                             NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_READDIR)) != NULL,
         "lookup_create on symlink");
     check (lh, true, ENOTDIR, NULL, NULL, "lookup symlink, expecting dir");
@@ -734,6 +765,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dirref_bad",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_bad");
     check (lh, true, EPERM, NULL, NULL, "lookup dirref_bad");
@@ -744,6 +776,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "valref_bad",
+                             NULL,
                              0)) != NULL,
         "lookup_create on valref_bad");
     check (lh, true, EPERM, NULL, NULL, "lookup valref_bad");
@@ -754,6 +787,7 @@ void lookup_errors (void) {
                              root_ref,
                              valref_ref,
                              "val",
+                             NULL,
                              0)) != NULL,
         "lookup_create on bad root_ref");
     check (lh, true, EINVAL, NULL, NULL, "lookup bad root_ref");
@@ -764,6 +798,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dirref_multi",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_multi");
     check (lh, true, EPERM, NULL, NULL, "lookup dirref_multi");
@@ -775,6 +810,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "dirref_multi.foo",
+                             NULL,
                              0)) != NULL,
         "lookup_create on dirref_multi, part of path");
     check (lh, true, EPERM, NULL, NULL, "lookup dirref_multi, part of path");
@@ -785,6 +821,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "valref_multi",
+                             NULL,
                              0)) != NULL,
         "lookup_create on valref_multi");
     check (lh, true, EPERM, NULL, NULL, "lookup valref_multi");
@@ -797,6 +834,7 @@ void lookup_errors (void) {
                              root_ref,
                              root_ref,
                              "valref_multi.foo",
+                             NULL,
                              0)) != NULL,
         "lookup_create on valref_multi, part of path");
     check (lh, true, 0, NULL, NULL, "lookup valref_multi, part of path");
@@ -893,6 +931,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref.symlink",
+                             NULL,
                              0)) != NULL,
         "lookup_create link to val via two links");
     test = treeobj_create_val ("foo", 3);
@@ -905,6 +944,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref.val",
+                             NULL,
                              0)) != NULL,
         "lookup_create link to val");
     test = treeobj_create_val ("foo", 3);
@@ -917,6 +957,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref.valref",
+                             NULL,
                              0)) != NULL,
         "lookup_create link to valref");
     test = treeobj_create_val ("abcd", 4);
@@ -929,6 +970,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref.dir",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dir");
     check (lh, true, 0, dir, NULL, "dirref1.link2dirref.dir");
@@ -939,6 +981,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref.dirref",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dirref");
     check (lh, true, 0, dirref3, NULL, "dirref1.link2dirref.dirref");
@@ -949,6 +992,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref.symlink",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create link to symlink");
     test = treeobj_create_symlink ("dirref2.val");
@@ -961,6 +1005,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2val",
+                             NULL,
                              0)) != NULL,
         "lookup_create link to val (last part path)");
     test = treeobj_create_val ("foo", 3);
@@ -973,6 +1018,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2valref",
+                             NULL,
                              0)) != NULL,
         "lookup_create link to valref (last part path)");
     test = treeobj_create_val ("abcd", 4);
@@ -985,6 +1031,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dir",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dir (last part path)");
     check (lh, true, 0, dir, NULL, "dirref1.link2dir");
@@ -995,6 +1042,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2dirref",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create link to dirref (last part path)");
     check (lh, true, 0, dirref2, NULL, "dirref1.link2dirref");
@@ -1005,6 +1053,7 @@ void lookup_links (void) {
                              root_ref,
                              root_ref,
                              "dirref1.link2symlink",
+                             NULL,
                              FLUX_KVS_READLINK)) != NULL,
         "lookup_create link to symlink (last part path)");
     test = treeobj_create_symlink ("dirref2.symlink");
@@ -1063,6 +1112,7 @@ void lookup_alt_root (void) {
                              root_ref,
                              dirref1_ref,
                              "val",
+                             NULL,
                              0)) != NULL,
         "lookup_create val w/ dirref1 root_ref");
     test = treeobj_create_val ("foo", 3);
@@ -1075,6 +1125,7 @@ void lookup_alt_root (void) {
                              root_ref,
                              dirref2_ref,
                              "val",
+                             NULL,
                              0)) != NULL,
         "lookup_create val w/ dirref2 root_ref");
     test = treeobj_create_val ("bar", 3);
@@ -1112,6 +1163,7 @@ void lookup_stall_root (void) {
                              root_ref,
                              root_ref,
                              ".",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
     check_stall (lh, false, EAGAIN, NULL, root_ref, "root \".\" stall");
@@ -1127,6 +1179,7 @@ void lookup_stall_root (void) {
                              root_ref,
                              root_ref,
                              ".",
+                             NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
     check (lh, true, 0, root, NULL, "root \".\" #2");
@@ -1196,6 +1249,7 @@ void lookup_stall (void) {
                              root_ref,
                              root_ref,
                              "dirref1.val",
+                             NULL,
                              0)) != NULL,
         "lookup_create stalltest dirref1.val");
     check_stall (lh, false, EAGAIN, NULL, root_ref, "dirref1.val stall #1");
@@ -1218,6 +1272,7 @@ void lookup_stall (void) {
                              root_ref,
                              root_ref,
                              "dirref1.val",
+                             NULL,
                              0)) != NULL,
         "lookup_create dirref1.val");
     test = treeobj_create_val ("foo", 3);
@@ -1230,6 +1285,7 @@ void lookup_stall (void) {
                              root_ref,
                              root_ref,
                              "symlink.val",
+                             NULL,
                              0)) != NULL,
         "lookup_create stalltest symlink.val");
     check_stall (lh, false, EAGAIN, NULL, dirref2_ref, "symlink.val stall");
@@ -1247,6 +1303,7 @@ void lookup_stall (void) {
                              root_ref,
                              root_ref,
                              "symlink.val",
+                             NULL,
                              0)) != NULL,
         "lookup_create symlink.val");
     test = treeobj_create_val ("bar", 3);
@@ -1259,6 +1316,7 @@ void lookup_stall (void) {
                              root_ref,
                              root_ref,
                              "dirref1.valref",
+                             NULL,
                              0)) != NULL,
         "lookup_create stalltest dirref1.valref");
     check_stall (lh, false, EAGAIN, NULL, valref_ref, "dirref1.valref stall");
@@ -1276,6 +1334,7 @@ void lookup_stall (void) {
                              root_ref,
                              root_ref,
                              "dirref1.valref",
+                             NULL,
                              0)) != NULL,
         "lookup_create stalltest dirref1.valref");
     test = treeobj_create_val ("abcd", 4);

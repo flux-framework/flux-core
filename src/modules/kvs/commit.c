@@ -36,7 +36,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libutil/log.h"
 #include "src/common/libkvs/treeobj.h"
 
 #include "commit.h"
@@ -48,6 +47,7 @@ struct commit_mgr {
     int noop_stores;            /* for kvs.stats.get, etc.*/
     zhash_t *fences;
     zlist_t *ready;
+    flux_t *h;
     void *aux;
 };
 
@@ -164,7 +164,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
         if (kvs_util_json_hash (c->cm->hash_name,
                                 cache_entry_get_json (hp),
                                 ref) < 0)
-            log_err ("kvs_util_json_hash");
+            flux_log_error (c->cm->h, "kvs_util_json_hash");
         else {
             ret = cache_remove_entry (c->cm->cache, ref);
             assert (ret == 1);
@@ -193,7 +193,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
 
     if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
         saved_errno = errno;
-        log_err ("kvs_util_json_hash");
+        flux_log_error (c->cm->h, "kvs_util_json_hash");
         goto done;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
@@ -377,7 +377,8 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
 
             if (refcount != 1) {
-                log_msg ("invalid dirref count: %d", refcount);
+                flux_log (c->cm->h, LOG_ERR, "invalid dirref count: %d",
+                          refcount);
                 saved_errno = EPERM;
                 goto done;
             }
@@ -626,7 +627,7 @@ commit_process_t commit_process (commit_t *c,
         case COMMIT_STATE_FINISHED:
             break;
         default:
-            log_msg ("invalid commit state: %d", c->state);
+            flux_log (c->cm->h, LOG_ERR, "invalid commit state: %d", c->state);
             c->errnum = EPERM;
             return COMMIT_PROCESS_ERROR;
     }
@@ -699,6 +700,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
 
 commit_mgr_t *commit_mgr_create (struct cache *cache,
                                  const char *hash_name,
+                                 flux_t *h,
                                  void *aux)
 {
     commit_mgr_t *cm;
@@ -718,6 +720,7 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
         saved_errno = ENOMEM;
         goto error;
     }
+    cm->h = h;
     cm->aux = aux;
     return cm;
 
