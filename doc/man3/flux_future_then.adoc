@@ -37,14 +37,17 @@ occurred.  Flux futures were inspired by similar constructs in other
 programming environments mentioned in RESOURCES, but are not a faithful
 implementation of any particular one.
 
-Generally other Flux classes return futures, and provide a class-specific
+Generally other Flux classes return futures, and may provide class-specific
 access function for results. The functions described in this page can be
 used to access, synchronize, and destroy futures returned from any such class.
 Authors of classes that return futures are referred to `flux_future_create(3)`.
 
 `flux_future_then()` sets up a continuation callback _cb_ that is called
 with opaque argument _arg_ once the future is fulfilled.  The continuation
-is registered on the main reactor passed in to `flux_future_create()`.
+is registered on the reactor passed to a class-specific create function
+(some create functions accept a flux_t handle, and the reactor is
+derived from that).
+
 The continuation will normally use `flux_future_get()` or a class-specific
 access function to obtain the result from the future container without
 blocking.  `flux_future_then()` may only be called once on a given future.

@@ -211,8 +211,7 @@ void flux_future_destroy (flux_future_t *f)
 
 /* Create a future.
  */
-flux_future_t *flux_future_create (flux_reactor_t *r,
-                                   flux_future_init_f cb, void *arg)
+flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
 {
     flux_future_t *f = calloc (1, sizeof (*f));
     if (!f) {
@@ -221,19 +220,58 @@ flux_future_t *flux_future_create (flux_reactor_t *r,
     }
     f->init = cb;
     f->init_arg = arg;
-    f->r = r;
     return f;
 error:
     flux_future_destroy (f);
     return NULL;
 }
 
-/* Set flux handle
+/* Set the flux reactor to be used for 'then' context.
+ * In 'now' context, reactor will be a temporary one.
+ */
+void flux_future_set_reactor (flux_future_t *f, flux_reactor_t *r)
+{
+    if (f)
+        f->r = r;
+}
+
+/* Context dependent get of reactor.
+ * If "now" context, return one off reactor.
+ * If "then" context, return the one that was set.
+ */
+flux_reactor_t *flux_future_get_reactor (flux_future_t *f)
+{
+    flux_reactor_t *r;
+
+    if (!f)
+        goto inval;
+    if (!f->now || !f->now->running) {
+        if (!f->r)
+            goto inval;
+        r = f->r;
+    }
+    else {
+        if (!f->now->r)
+            goto inval;
+        r = f->now->r;
+    }
+    return r;
+inval:
+    errno = EINVAL;
+    return NULL;
+}
+
+/* Set the flux handle to be used for 'then' context.
+ * In 'now' context, handle will be a clone of this one,
+ * associated with the temporary reactor.
  */
 void flux_future_set_flux (flux_future_t *f, flux_t *h)
 {
-    if (f)
+    if (f) {
         f->h = h;
+        if (!f->r)
+            f->r = flux_get_reactor (h);
+    }
 }
 
 /* Context dependent get of flux handle.
@@ -295,7 +333,7 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         }
         f->now->running = true;
         if (f->init && !f->now->init_called) {
-            f->init (f, f->now->r, f->init_arg); // might set error
+            f->init (f, f->init_arg); // might set error
             f->now->init_called = true;
         }
         if (!f->result_valid && !f->result_errnum_valid) {
@@ -346,7 +384,7 @@ int flux_future_then (flux_future_t *f, double timeout,
     f->then->continuation = cb;
     f->then->continuation_arg = arg;
     if (f->init)
-        f->init (f, f->then->r, f->init_arg); // might set error
+        f->init (f, f->init_arg); // might set error
     if (f->result_errnum_valid) {
         errno = f->result_errnum;
         return -1;

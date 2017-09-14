@@ -6,6 +6,10 @@
 #include "handle.h"
 #include "msg_handler.h"
 
+/* Interfaces useful for all classes that return futures.
+ * See flux_future_then(3).
+ */
+
 typedef struct flux_future flux_future_t;
 
 typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
@@ -21,12 +25,13 @@ void *flux_future_aux_get (flux_future_t *f, const char *name);
 int flux_future_aux_set (flux_future_t *f, const char *name,
                          void *aux, flux_free_f destroy);
 
+/* Functions primarily used by implementors of classes that return futures.
+ * See flux_future_create(3).
+ */
 
-typedef void (*flux_future_init_f)(flux_future_t *f,
-                                   flux_reactor_t *r, void *arg);
+typedef void (*flux_future_init_f)(flux_future_t *f, void *arg);
 
-flux_future_t *flux_future_create (flux_reactor_t *r,
-                                   flux_future_init_f cb, void *arg);
+flux_future_t *flux_future_create (flux_future_init_f cb, void *arg);
 
 int flux_future_get (flux_future_t *f, void *result);
 
@@ -36,6 +41,8 @@ void flux_future_fulfill_error (flux_future_t *f, int errnum);
 void flux_future_set_flux (flux_future_t *f, flux_t *h);
 flux_t *flux_future_get_flux (flux_future_t *f);
 
+void flux_future_set_reactor (flux_future_t *f, flux_reactor_t *r);
+flux_reactor_t *flux_future_get_reactor (flux_future_t *f);
 
 #endif /* !_FLUX_CORE_FUTURE_H */
 
