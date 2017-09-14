@@ -30,7 +30,7 @@ static int foo_cb (const flux_msg_t *msg, void *arg)
 int main (int argc, char **argv)
 {
     struct service_switch *sw;
-    flux_msg_t *msg;
+    flux_msg_t *msg, *msg2, *msg3;
 
     plan (NO_PLAN);
 
@@ -82,14 +82,51 @@ int main (int argc, char **argv)
     flux_msg_destroy (msg);
 
  #define SVC_NAME "reallylongservicenamewowthisisimpressive"
+ #define SVC_ALT1 "alt1"
+ #define SVC_ALT2 "alt2"
+    ok (service_add (sw, SVC_NAME, "fakeuuid", foo_cb, NULL) == 0,
+        "service_add works for long service name");
+    ok (service_add (sw, SVC_ALT1, "fakeuuid", foo_cb, NULL) == 0,
+        "service_add works for alternate service name 1");
+    ok (service_add (sw, SVC_ALT2, "fakeuuid", foo_cb, NULL) == 0,
+        "service_add works for alternate service name 2");
+
     msg = flux_request_encode (SVC_NAME ".baz", NULL);
     if (!msg)
         BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
-    ok (service_add (sw, SVC_NAME, NULL, foo_cb, NULL) == 0,
-        "service_add works for long service name");
+    msg2 = flux_request_encode (SVC_ALT1 ".oooh", NULL);
+    if (!msg2)
+        BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
+    msg3 = flux_request_encode (SVC_ALT2 ".vroom", NULL);
+    if (!msg3)
+        BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
+
     foo_cb_rc = 0;
-    ok (service_send (sw, msg) == 0,
+    foo_cb_called = 0;
+    ok (service_send (sw, msg) == 0 && foo_cb_called == 1,
         "service_send matched long service name");
+    ok (service_send (sw, msg2) == 0 && foo_cb_called == 2,
+        "service_send matched first alternate name");
+    ok (service_send (sw, msg3) == 0 && foo_cb_called == 3,
+        "service_send matched second alternate name");
+
+    service_remove_byuuid (sw, "fakeuuid");
+
+    foo_cb_rc = 0;
+    foo_cb_called = 0;
+    errno = 0;
+    ok (service_send (sw, msg) < 0 && errno == ENOSYS && foo_cb_called == 0,
+        "service_send to long service name fails after remove_byuuid");
+    errno = 0;
+    ok (service_send (sw, msg2) < 0 && errno == ENOSYS && foo_cb_called == 0,
+        "service_send to first alternate name fails after remove_byuuid");
+    errno = 0;
+    ok (service_send (sw, msg3) < 0  && errno == ENOSYS && foo_cb_called == 0,
+        "service_send to second alternate name fails after remove_byuuid");
+
+    flux_msg_destroy (msg);
+    flux_msg_destroy (msg2);
+    flux_msg_destroy (msg3);
 
     service_switch_destroy (sw);
 
