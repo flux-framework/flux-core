@@ -29,6 +29,8 @@ void flux_log_set_appname (flux_t *h, const char *s);
 void flux_log_set_procid (flux_t *h, const char *s);
 
 /* Log a message at the specified level, as defined for syslog(3).
+ *
+ * Flux handle is optional, if set to NULL output to stderr.
  */
 int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap);
 int flux_log (flux_t *h, int level, const char *fmt, ...)
@@ -37,6 +39,8 @@ int flux_log (flux_t *h, int level, const char *fmt, ...)
 /* Log a message at LOG_ERR level, appending a colon, space, and error string.
  * The system 'errno' is assumed to be valid and contain an error code
  * that can be decoded with zmq_strerror(3).
+ *
+ * Flux handle is optional, if set to NULL output to stderr.
  */
 void flux_log_verror (flux_t *h, const char *fmt, va_list ap);
 void flux_log_error (flux_t *h, const char *fmt, ...)
