@@ -355,4 +355,11 @@ test_expect_success 'instance can stop cleanly with subscribers (#1025)' '
 	flux start ${ARGS} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub hb &"
 '
 
+# test for issue #1191
+test_expect_success 'passing NULL to flux_log functions logs to stderr (#1191)' '
+        ${FLUX_BUILD_DIR}/t/loop/logstderr > std.out 2> std.err &&
+        grep "warning: hello" std.err &&
+        grep "err: world: No such file or directory" std.err
+'
+
 test_done

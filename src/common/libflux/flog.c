@@ -134,7 +134,7 @@ done:
 
 int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
 {
-    logctx_t *ctx = getctx (h);
+    logctx_t *ctx;
     int saved_errno = errno;
     uint32_t rank;
     int len;
@@ -143,7 +143,15 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     struct stdlog_header hdr;
     int rpc_flags = FLUX_RPC_NORESPONSE;
 
-    if (!ctx) {
+    if (!h) {
+        char buf[FLUX_MAX_LOGBUF + 1];
+        const char *lstr = stdlog_severity_to_string (LOG_PRI (level));
+
+        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+        return fprintf (stderr, "%s: %s\n", lstr, buf);
+    }
+
+    if (!(ctx = getctx (h))) {
         errno = ENOMEM;
         goto fatal;
     }

@@ -164,6 +164,7 @@ check_PROGRAMS = \
 	loop/reactor.t \
 	loop/reduce.t \
 	loop/log.t \
+	loop/logstderr \
 	rpc/rpc.t \
 	rpc/mrpc.t \
 	rolemask/loop.t \
@@ -236,6 +237,11 @@ loop_dispatch_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_log_t_SOURCES = loop/log.c
 loop_log_t_CPPFLAGS = $(test_cppflags)
 loop_log_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_logstderr_SOURCES = loop/logstderr.c
+loop_logstderr_CPPFLAGS = $(test_cppflags)
+loop_logstderr_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 loop_reactor_t_SOURCES = loop/reactor.c
 loop_reactor_t_CPPFLAGS = $(test_cppflags)

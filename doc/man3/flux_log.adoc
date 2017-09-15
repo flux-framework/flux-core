@@ -23,8 +23,9 @@ void flux_log_set_procid (flux_t *h, const char *s);
 DESCRIPTION
 -----------
 
-`flux_log()` creates RFC 5424 format log messages and sends them
-to the Flux message broker on 'h' for handling.
+`flux_log()` creates RFC 5424 format log messages.  The log messages
+are sent to the Flux message broker on 'h' for handling if it is
+specified.  If 'h' is NULL, the log message is output to stderr.
 
 The 'level' parameter should be set to one of the syslog(3) severity
 levels, which are, in order of decreasing importance:
@@ -43,9 +44,9 @@ the 'level' to direct `flux_log()` to wait for a response from the broker
 indicating whether the log request was accepted or not.  Otherwise, log
 requests are "fire and forget".
 
-Log messages are are added to the broker's circular buffer which
-can be accessed with flux-dmesg(3).  From there, a message's disposition
-is up to the broker's log configuration.
+When 'h' is specified, log messages are are added to the broker's
+circular buffer which can be accessed with flux-dmesg(3).  From there,
+a message's disposition is up to the broker's log configuration.
 
 `flux_log_set_procid()` may be used to override the default procid,
 which is initialized to the calling process's PID.
@@ -61,8 +62,9 @@ A Flux log message is formatted as a Flux request with a "raw" payload,
 as defined by Flux RFC 3.  The raw payload is formatted according to
 Internet RFC 5424.
 
-The following Syslog header fields are set in a Flux log messages when it is
-created within `flux_log()`:
+If the Flux handle 'h' is specified, the following Syslog header
+fields are set in a Flux log messages when it is created within
+`flux_log()`:
 
 PRI::
 Set to the user-specified severity level combined with the facility,
