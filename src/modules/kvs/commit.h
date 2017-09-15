@@ -1,6 +1,7 @@
 #ifndef _FLUX_KVS_COMMIT_H
 #define _FLUX_KVS_COMMIT_H
 
+#include <flux/core.h>
 #include <czmq.h>
 
 #include "cache.h"
@@ -96,8 +97,10 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp);
  * commit_mgr_t API
  */
 
+/* flux_t is optional, if NULL logging will go to stderr */
 commit_mgr_t *commit_mgr_create (struct cache *cache,
                                  const char *hash_name,
+                                 flux_t *h,
                                  void *aux);
 
 void commit_mgr_destroy (commit_mgr_t *cm);

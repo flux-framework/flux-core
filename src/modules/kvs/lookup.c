@@ -37,7 +37,6 @@
 #include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/log.h"
 #include "src/common/libkvs/treeobj.h"
 
 #include "cache.h"
@@ -70,6 +69,9 @@ struct lookup {
     char *root_ref_copy;
 
     char *path;
+
+    flux_t *h;
+
     int flags;
 
     void *aux;
@@ -231,7 +233,7 @@ static bool walk (lookup_t *lh)
             }
 
             if (refcount != 1) {
-                log_msg ("invalid dirref count: %d", refcount);
+                flux_log (lh->h, LOG_ERR, "invalid dirref count: %d", refcount);
                 lh->errnum = EPERM;
                 goto error;
             }
@@ -257,9 +259,10 @@ static bool walk (lookup_t *lh)
             }
             else {
                 char *s = json_dumps (wl->dirent, 0);
-                log_msg ("%s: unknown/unexpected dirent type: "
-                         "lh->path=%s pathcomp=%s: wl->dirent=%s ",
-                         __FUNCTION__, lh->path, pathcomp, s);
+                flux_log (lh->h, LOG_ERR,
+                          "%s: unknown/unexpected dirent type: "
+                          "lh->path=%s pathcomp=%s: wl->dirent=%s ",
+                          __FUNCTION__, lh->path, pathcomp, s);
                 free (s);
                 lh->errnum = EPERM;
                 goto error;
@@ -353,6 +356,7 @@ lookup_t *lookup_create (struct cache *cache,
                          const char *root_dir,
                          const char *root_ref,
                          const char *path,
+                         flux_t *h,
                          int flags)
 {
     lookup_t *lh = NULL;
@@ -392,6 +396,7 @@ lookup_t *lookup_create (struct cache *cache,
         saved_errno = ENOMEM;
         goto cleanup;
     }
+    lh->h = h;
     lh->flags = flags;
 
     lh->aux = NULL;
@@ -622,7 +627,8 @@ bool lookup (lookup_t *lh)
                     goto done;
                 }
                 if (refcount != 1) {
-                    log_msg ("invalid dirref count: %d", refcount);
+                    flux_log (lh->h, LOG_ERR, "invalid dirref count: %d",
+                              refcount);
                     lh->errnum = EPERM;
                     goto done;
                 }
@@ -657,7 +663,8 @@ bool lookup (lookup_t *lh)
                     goto done;
                 }
                 if (refcount != 1) {
-                    log_msg ("invalid valref count: %d", refcount);
+                    flux_log (lh->h, LOG_ERR, "invalid valref count: %d",
+                              refcount);
                     lh->errnum = EPERM;
                     goto done;
                 }
@@ -717,7 +724,8 @@ bool lookup (lookup_t *lh)
                 lh->val = json_incref (lh->wdirent);
             } else {
                 char *s = json_dumps (lh->wdirent, 0);
-                log_msg ("%s: corrupt dirent: %s", __FUNCTION__, s);
+                flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %s",
+                          __FUNCTION__, s);
                 free (s);
                 lh->errnum = EPERM;
                 goto done;
@@ -727,7 +735,10 @@ bool lookup (lookup_t *lh)
         case LOOKUP_STATE_FINISHED:
             break;
         default:
-            log_msg_exit ("%s: invalid state %d", __FUNCTION__, lh->state);
+            flux_log (lh->h, LOG_ERR, "%s: invalid state %d",
+                      __FUNCTION__, lh->state);
+            lh->errnum = EPERM;
+            goto done;
     }
 
 done:
