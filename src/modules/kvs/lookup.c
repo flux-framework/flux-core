@@ -79,6 +79,7 @@ struct lookup {
     /* potential return values from lookup */
     json_t *val;           /* value of lookup */
     const char *missing_ref;    /* on stall, missing ref to load */
+    bool missing_ref_raw;       /* if true, missing ref points to raw data */
     int errnum;                 /* errnum if error */
 
     /* API internal */
@@ -224,6 +225,7 @@ static bool walk (lookup_t *lh)
         /* Get directory of dirent */
 
         if (treeobj_is_dirref (wl->dirent)) {
+            struct cache_entry *hp;
             const char *refstr;
             int refcount;
 
@@ -243,13 +245,23 @@ static bool walk (lookup_t *lh)
                 goto error;
             }
 
-            if (!(dir = cache_lookup_and_get_json (lh->cache,
-                                                   refstr,
-                                                   lh->current_epoch))) {
+            if (!(hp = cache_lookup (lh->cache, refstr, lh->current_epoch))
+                || !cache_entry_get_valid (hp)) {
                 lh->missing_ref = refstr;
+                lh->missing_ref_raw = false;
                 goto stall;
             }
-
+            if (!(dir = cache_entry_get_json (hp))) {
+                /* dirref pointed to non json error, special case when
+                 * root_dirent is bad, is EINVAL from user.
+                 */
+                flux_log (lh->h, LOG_ERR, "dirref points to non-json");
+                if (wl->depth == 0 && wl->dirent == lh->root_dirent)
+                    lh->errnum = EINVAL;
+                else
+                    lh->errnum = EPERM;
+                goto error;
+            }
             if (!treeobj_is_dir (dir)) {
                 /* dirref pointed to non-dir error, special case when
                  * root_dirent is bad, is EINVAL from user.
@@ -414,6 +426,7 @@ lookup_t *lookup_create (struct cache *cache,
 
     lh->val = NULL;
     lh->missing_ref = NULL;
+    lh->missing_ref_raw = false;
     lh->errnum = 0;
 
     if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
@@ -487,14 +500,17 @@ json_t *lookup_get_value (lookup_t *lh)
     return NULL;
 }
 
-const char *lookup_get_missing_ref (lookup_t *lh)
+const char *lookup_get_missing_ref (lookup_t *lh, bool *ref_raw)
 {
     if (lh
         && lh->magic == LOOKUP_MAGIC
         && (lh->state == LOOKUP_STATE_CHECK_ROOT
             || lh->state == LOOKUP_STATE_WALK
-            || lh->state == LOOKUP_STATE_VALUE))
+            || lh->state == LOOKUP_STATE_VALUE)) {
+        if (ref_raw)
+            (*ref_raw) = lh->missing_ref_raw;
         return lh->missing_ref;
+    }
     return NULL;
 }
 
@@ -569,7 +585,7 @@ bool lookup (lookup_t *lh)
 {
     json_t *valtmp = NULL;
     const char *reftmp;
-    const char *strtmp;
+    struct cache_entry *hp;
     int refcount;
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
@@ -592,16 +608,23 @@ bool lookup (lookup_t *lh)
                         lh->errnum = EISDIR;
                         goto done;
                     }
-                    valtmp = cache_lookup_and_get_json (lh->cache,
-                                                        lh->root_ref,
-                                                        lh->current_epoch);
-                    if (!valtmp) {
+                    if (!(hp = cache_lookup (lh->cache,
+                                             lh->root_ref,
+                                             lh->current_epoch))
+                        || !cache_entry_get_valid (hp)) {
                         lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
+                        lh->missing_ref_raw = false;
                         goto stall;
                     }
-                    if (!treeobj_is_dir (valtmp)) {
+                    if (!(valtmp = cache_entry_get_json (hp))) {
+                        flux_log (lh->h, LOG_ERR, "root_ref points to non-json");
                         lh->errnum = EINVAL;
+                        goto done;
+                    }
+                    if (!treeobj_is_dir (valtmp)) {
+                        /* root_ref points to not dir */
+                        lh->errnum = EPERM;
                         goto done;
                     }
                     lh->val = json_incref (valtmp);
@@ -652,12 +675,16 @@ bool lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto done;
                 }
-                valtmp = cache_lookup_and_get_json (lh->cache,
-                                                    reftmp,
-                                                    lh->current_epoch);
-                if (!valtmp) {
+                if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+                    || !cache_entry_get_valid (hp)) {
                     lh->missing_ref = reftmp;
+                    lh->missing_ref_raw = false;
                     goto stall;
+                }
+                if (!(valtmp = cache_entry_get_json (hp))) {
+                    flux_log (lh->h, LOG_ERR, "dirref points to non-json");
+                    lh->errnum = EPERM;
+                    goto done;
                 }
                 if (!treeobj_is_dir (valtmp)) {
                     /* dirref points to not dir */
@@ -666,6 +693,9 @@ bool lookup (lookup_t *lh)
                 }
                 lh->val = json_incref (valtmp);
             } else if (treeobj_is_valref (lh->wdirent)) {
+                void *valdata;
+                int len;
+
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
                     goto done;
@@ -688,22 +718,18 @@ bool lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto done;
                 }
-                valtmp = cache_lookup_and_get_json (lh->cache,
-                                                    reftmp,
-                                                    lh->current_epoch);
-                if (!valtmp) {
+                if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+                    || !cache_entry_get_valid (hp)) {
                     lh->missing_ref = reftmp;
+                    lh->missing_ref_raw = true;
                     goto stall;
                 }
-                if (!json_is_string (valtmp)) {
-                    /* valref points to non-string */
+                if (!(valdata = cache_entry_get_raw (hp, &len))) {
+                    flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
                     lh->errnum = EPERM;
                     goto done;
                 }
-
-                /* Place base64 opaque data into treeobj val object */
-                strtmp = json_string_value (valtmp);
-                if (!(lh->val = treeobj_create_val_base64 (strtmp))) {
+                if (!(lh->val = treeobj_create_val (valdata, len))) {
                     lh->errnum = errno;
                     goto done;
                 }

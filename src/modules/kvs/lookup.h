@@ -34,8 +34,12 @@ int lookup_get_errnum (lookup_t *lh);
 json_t *lookup_get_value (lookup_t *lh);
 
 /* Get missing ref after a lookup stall, missing reference can then be
- * used to load reference into the KVS cache */
-const char *lookup_get_missing_ref (lookup_t *lh);
+ * used to load reference into the KVS cache
+ *
+ * If the missing references points to raw data, 'ref_raw' will be set
+ * to true, otherwise false.
+ */
+const char *lookup_get_missing_ref (lookup_t *lh, bool *ref_raw);
 
 /* Convenience function to get cache from earlier instantiation.
  * Convenient if replaying RPC and don't have it presently.
