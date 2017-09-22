@@ -60,13 +60,21 @@ struct cache {
     zhash_t *zh;
 };
 
-struct cache_entry *cache_entry_create (json_t *o)
+struct cache_entry *cache_entry_create (void)
 {
     struct cache_entry *hp = calloc (1, sizeof (*hp));
     if (!hp) {
         errno = ENOMEM;
         return NULL;
     }
+    return hp;
+}
+
+struct cache_entry *cache_entry_create_json (json_t *o)
+{
+    struct cache_entry *hp = cache_entry_create ();
+    if (!hp)
+        return NULL;
     if (o)
         hp->data = o;
     return hp;

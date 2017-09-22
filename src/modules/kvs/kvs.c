@@ -252,7 +252,7 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
     /* Create an incomplete hash entry if none found.
      */
     if (!hp) {
-        if (!(hp = cache_entry_create (NULL))) {
+        if (!(hp = cache_entry_create ())) {
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             return -1;
         }
@@ -1349,8 +1349,9 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
              * no consistency issue by not caching.  We will still
              * set new root below via setroot().
              */
-            if (!(hp = cache_entry_create (json_incref (root)))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+            if (!(hp = cache_entry_create_json (json_incref (root)))) {
+                flux_log_error (ctx->h, "%s: cache_entry_create_json",
+                                __FUNCTION__);
                 json_decref (root);
                 return;
             }
@@ -1570,7 +1571,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(hp = cache_entry_create (NULL))) {
+        if (!(hp = cache_entry_create ())) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto decref_done;

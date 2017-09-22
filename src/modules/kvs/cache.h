@@ -11,9 +11,11 @@ struct cache;
 
 
 /* Create/destroy cache entry.
- * If non-NULL, create transfers ownership of 'o' to the cache entry.
+ * In cache_entry_create_json(), create transfers ownership of 'o' to
+ * the cache entry.  If 'o' is NULL, calls cache_entry_create().
  */
-struct cache_entry *cache_entry_create (json_t *o);
+struct cache_entry *cache_entry_create (void);
+struct cache_entry *cache_entry_create_json (json_t *o);
 void cache_entry_destroy (void *arg);
 
 /* Return true if cache entry contains valid json.

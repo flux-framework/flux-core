@@ -309,11 +309,11 @@ void lookup_root (void) {
 
     opaque_data = get_json_base64_string ("abcd");
     kvs_util_json_hash ("sha1", opaque_data, valref_ref);
-    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
+    cache_insert (cache, valref_ref, cache_entry_create_json (opaque_data));
 
     root = treeobj_create_dir ();
     kvs_util_json_hash ("sha1", root, root_ref);
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
@@ -397,7 +397,7 @@ void lookup_basic (void) {
 
     opaque_data = get_json_base64_string ("abcd");
     kvs_util_json_hash ("sha1", opaque_data, valref_ref);
-    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
+    cache_insert (cache, valref_ref, cache_entry_create_json (opaque_data));
 
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
@@ -409,13 +409,13 @@ void lookup_basic (void) {
     treeobj_insert_entry (dirref, "symlink", treeobj_create_symlink ("baz"));
 
     kvs_util_json_hash ("sha1", dirref, dirref_ref);
-    cache_insert (cache, dirref_ref, cache_entry_create (dirref));
+    cache_insert (cache, dirref_ref, cache_entry_create_json (dirref));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
 
     kvs_util_json_hash ("sha1", root, root_ref);
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* lookup dir via dirref */
     ok ((lh = lookup_create (cache,
@@ -585,12 +585,12 @@ void lookup_errors (void) {
 
     opaque_data = get_json_base64_string ("abcd");
     kvs_util_json_hash ("sha1", opaque_data, valref_ref);
-    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
+    cache_insert (cache, valref_ref, cache_entry_create_json (opaque_data));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
     kvs_util_json_hash ("sha1", dirref, dirref_ref);
-    cache_insert (cache, dirref_ref, cache_entry_create (dirref));
+    cache_insert (cache, dirref_ref, cache_entry_create_json (dirref));
 
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("baz", 3));
@@ -616,7 +616,7 @@ void lookup_errors (void) {
     treeobj_insert_entry (root, "valref_multi", valref_multi);
 
     kvs_util_json_hash ("sha1", root, root_ref);
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
      * decides what to do with entry not found */
@@ -918,12 +918,12 @@ void lookup_links (void) {
 
     opaque_data = get_json_base64_string ("abcd");
     kvs_util_json_hash ("sha1", opaque_data, valref_ref);
-    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
+    cache_insert (cache, valref_ref, cache_entry_create_json (opaque_data));
 
     dirref3 = treeobj_create_dir ();
     treeobj_insert_entry (dirref3, "val", treeobj_create_val ("baz", 3));
     kvs_util_json_hash ("sha1", dirref3, dirref3_ref);
-    cache_insert (cache, dirref3_ref, cache_entry_create (dirref3));
+    cache_insert (cache, dirref3_ref, cache_entry_create_json (dirref3));
 
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
@@ -935,7 +935,7 @@ void lookup_links (void) {
     treeobj_insert_entry (dirref2, "dirref", treeobj_create_dirref (dirref3_ref));
     treeobj_insert_entry (dirref2, "symlink", treeobj_create_symlink ("dirref2.val"));
     kvs_util_json_hash ("sha1", dirref2, dirref2_ref);
-    cache_insert (cache, dirref2_ref, cache_entry_create (dirref2));
+    cache_insert (cache, dirref2_ref, cache_entry_create_json (dirref2));
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "link2dirref", treeobj_create_symlink ("dirref2"));
@@ -944,13 +944,13 @@ void lookup_links (void) {
     treeobj_insert_entry (dirref1, "link2dir", treeobj_create_symlink ("dirref2.dir"));
     treeobj_insert_entry (dirref1, "link2symlink", treeobj_create_symlink ("dirref2.symlink"));
     kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
-    cache_insert (cache, dirref1_ref, cache_entry_create (dirref1));
+    cache_insert (cache, dirref1_ref, cache_entry_create_json (dirref1));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
     kvs_util_json_hash ("sha1", root, root_ref);
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* lookup val, follow two links */
     ok ((lh = lookup_create (cache,
@@ -1120,18 +1120,18 @@ void lookup_alt_root (void) {
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
     kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
-    cache_insert (cache, dirref1_ref, cache_entry_create (dirref1));
+    cache_insert (cache, dirref1_ref, cache_entry_create_json (dirref1));
 
     dirref2 = treeobj_create_dir ();
     treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
     kvs_util_json_hash ("sha1", dirref2, dirref2_ref);
-    cache_insert (cache, dirref2_ref, cache_entry_create (dirref2));
+    cache_insert (cache, dirref2_ref, cache_entry_create_json (dirref2));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
     kvs_util_json_hash ("sha1", root, root_ref);
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
@@ -1195,7 +1195,7 @@ void lookup_stall_root (void) {
         "lookup_create stalltest \".\"");
     check_stall (lh, EAGAIN, root_ref, "root \".\" stall");
 
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* lookup root ".", should succeed */
     check (lh, 0, root, "root \".\" #1");
@@ -1281,12 +1281,12 @@ void lookup_stall (void) {
         "lookup_create stalltest dirref1.val");
     check_stall (lh, EAGAIN, root_ref, "dirref1.val stall #1");
 
-    cache_insert (cache, root_ref, cache_entry_create (root));
+    cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* next call to lookup, should stall */
     check_stall (lh, EAGAIN, dirref1_ref, "dirref1.val stall #2");
 
-    cache_insert (cache, dirref1_ref, cache_entry_create (dirref1));
+    cache_insert (cache, dirref1_ref, cache_entry_create_json (dirref1));
 
     /* final call to lookup, should succeed */
     test = treeobj_create_val ("foo", 3);
@@ -1317,7 +1317,7 @@ void lookup_stall (void) {
         "lookup_create stalltest symlink.val");
     check_stall (lh, EAGAIN, dirref2_ref, "symlink.val stall");
 
-    cache_insert (cache, dirref2_ref, cache_entry_create (dirref2));
+    cache_insert (cache, dirref2_ref, cache_entry_create_json (dirref2));
 
     /* lookup symlink.val, should succeed */
     test = treeobj_create_val ("bar", 3);
@@ -1348,7 +1348,7 @@ void lookup_stall (void) {
         "lookup_create stalltest dirref1.valref");
     check_stall (lh, EAGAIN, valref_ref, "dirref1.valref stall");
 
-    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
+    cache_insert (cache, valref_ref, cache_entry_create_json (opaque_data));
 
     /* lookup dirref1.valref, should succeed */
     test = treeobj_create_val ("abcd", 4);
