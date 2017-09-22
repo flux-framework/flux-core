@@ -99,8 +99,9 @@ int cache_entry_set_dirty (struct cache_entry *hp, bool val)
                 }
             }
         }
+        return 0;
     }
-    return 0;
+    return -1;
 }
 
 int cache_entry_clear_dirty (struct cache_entry *hp)
@@ -155,8 +156,9 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
             json_decref (hp->o);
             hp->o = NULL;
         }
+        return 0;
     }
-    return 0;
+    return -1;
 }
 
 void cache_entry_destroy (void *arg)

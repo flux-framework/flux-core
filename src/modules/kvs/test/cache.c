@@ -43,12 +43,32 @@ void cache_entry_tests (void)
     struct cache_entry *e;
     json_t *otmp, *o1, *o2;
 
+    /* corner case tests */
+    ok (cache_entry_set_json (NULL, NULL) < 0,
+        "cache_entry_set_json fails with bad input");
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
 
     /* Play with one entry.
      * N.B.: json ref is NOT incremented by create or get_json.
      */
+
+    /* test empty cache entry */
+
+    ok ((e = cache_entry_create (NULL)) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_get_valid (e) == false,
+        "cache entry initially non-valid");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry initially not dirty");
+    ok (cache_entry_set_dirty (e, true) < 0,
+        "cache_entry_set_dirty fails b/c entry non-valid");
+    ok ((otmp = cache_entry_get_json (e)) == NULL,
+        "cache_entry_get_json returns NULL, no json set");
+    cache_entry_destroy (e);
+    e = NULL;
+
+    /* test cache entry filled with json initially */
 
     o1 = json_object ();
     json_object_set_new (o1, "foo", json_integer (42));
@@ -84,7 +104,8 @@ void cache_entry_tests (void)
     ok (json_integer_value (otmp) == 42,
         "expected json object found");
 
-    cache_entry_set_json (e, NULL);
+    ok (cache_entry_set_json (e, NULL) == 0,
+        "cache_entry_set_json success");
     ok (cache_entry_get_json (e) == NULL,
         "cache entry no longer has json object");
 
