@@ -110,6 +110,8 @@ void waiter_tests (void)
         "cache entry invalid, adding waiter");
     ok (cache_entry_clear_dirty (e) < 0,
         "cache_entry_clear_dirty returns error, b/c no object set");
+    ok (cache_entry_force_clear_dirty (e) < 0,
+        "cache_entry_force_clear_dirty returns error, b/c no object set");
     o = json_object ();
     json_object_set_new (o, "foo", json_integer (42));
     ok (cache_entry_wait_valid (e, w) == 0,
