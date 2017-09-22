@@ -52,6 +52,7 @@ struct cache_entry {
     waitqueue_t *waitlist_notdirty;
     waitqueue_t *waitlist_valid;
     void *data;             /* value object/data */
+    int len;
     cache_data_type_t type; /* what does data point to */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
@@ -83,6 +84,25 @@ struct cache_entry *cache_entry_create_json (json_t *o)
     return hp;
 }
 
+struct cache_entry *cache_entry_create_raw (void *data, int len)
+{
+    struct cache_entry *hp;
+
+    if ((data && len <= 0) || (!data && len)) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!(hp = cache_entry_create ()))
+        return NULL;
+    if (data) {
+        hp->data = data;
+        hp->len = len;
+    }
+    hp->type = CACHE_DATA_TYPE_RAW;
+    return hp;
+}
+
 int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t)
 {
     if (hp) {
@@ -96,6 +116,11 @@ int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t)
 bool cache_entry_is_type_json (struct cache_entry *hp)
 {
     return (hp && hp->type == CACHE_DATA_TYPE_JSON);
+}
+
+bool cache_entry_is_type_raw (struct cache_entry *hp)
+{
+    return (hp && hp->type == CACHE_DATA_TYPE_RAW);
 }
 
 bool cache_entry_get_valid (struct cache_entry *hp)
@@ -190,6 +215,49 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
     return -1;
 }
 
+void *cache_entry_get_raw (struct cache_entry *hp, int *len)
+{
+    if (!hp || !hp->data || hp->type != CACHE_DATA_TYPE_RAW)
+        return NULL;
+    if (len)
+        (*len) = hp->len;
+    return hp->data;
+}
+
+int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
+{
+    if ((data && len <= 0) || (!data && len)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (hp
+        && (hp->type == CACHE_DATA_TYPE_NONE
+            || hp->type == CACHE_DATA_TYPE_RAW)) {
+        if ((data && hp->data) || (!data && !hp->data)) {
+            free (data); /* no-op, 'data' is assumed identical to hp->data */
+        } else if (data && !hp->data) {
+            hp->data = data;
+            hp->len = len;
+            if (hp->waitlist_valid) {
+                if (wait_runqueue (hp->waitlist_valid) < 0) {
+                    /* set back to orig */
+                    hp->data = NULL;
+                    hp->len = 0;
+                    return -1;
+                }
+            }
+        } else if (!data && hp->data) {
+            free (hp->data);
+            hp->data = NULL;
+            hp->len = 0;
+        }
+        hp->type = CACHE_DATA_TYPE_RAW;
+        return 0;
+    }
+    return -1;
+}
+
 void cache_entry_destroy (void *arg)
 {
     struct cache_entry *hp = arg;
@@ -197,6 +265,8 @@ void cache_entry_destroy (void *arg)
         if (hp->data) {
             if (hp->type == CACHE_DATA_TYPE_JSON)
                 json_decref (hp->data);
+            else if (hp->type == CACHE_DATA_TYPE_RAW)
+                free (hp->data);
         }
         if (hp->waitlist_notdirty)
             wait_queue_destroy (hp->waitlist_notdirty);
@@ -330,15 +400,20 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
     while ((ref = zlist_pop (keys))) {
         hp = zhash_lookup (cache->zh, ref);
         if (cache_entry_get_valid (hp)) {
-            /* must pass JSON_ENCODE_ANY, object could be anything */
-            char *s = json_dumps (hp->data, JSON_ENCODE_ANY);
-            int obj_size;
-            if (!s) {
-                saved_errno = ENOMEM;
-                goto cleanup;
+            int obj_size = 0;
+
+            if (hp->type == CACHE_DATA_TYPE_JSON) {
+                /* must pass JSON_ENCODE_ANY, object could be anything */
+                char *s = json_dumps (hp->data, JSON_ENCODE_ANY);
+                if (!s) {
+                    saved_errno = ENOMEM;
+                    goto cleanup;
+                }
+                obj_size = strlen (s);
+                free (s);
             }
-            obj_size = strlen (s);
-            free (s);
+            else if (hp->type == CACHE_DATA_TYPE_RAW)
+                obj_size = hp->len;
             size += obj_size;
             tstat_push (ts, obj_size);
         } else
