@@ -41,6 +41,8 @@ if test "$GCC" = yes; then
   AC_SUBST([GCCWARN])
 fi
 X_AC_ENABLE_SANITIZER
+AC_PROG_CXX
+CXXFLAGS="$CXXFLAGS -std=c++11"
 LT_INIT
 AC_PROG_AWK
 
@@ -171,6 +173,9 @@ X_AC_MUNGE
 X_AC_JANSSON
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
+PKG_CHECK_MODULES([YAMLCPP], [yaml-cpp >= 0.5.1],
+    [enable_jobspec=yes], [enable_jobspec=no])
+AM_CONDITIONAL([ENABLE_JOBSPEC], [test "$enable_jobspec" = yes])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_CODE_COVERAGE
@@ -265,6 +270,8 @@ AC_CONFIG_FILES( \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
+  src/common/libjobspec/Makefile \
+  src/common/libjobspec/flux-jobspec.pc \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
@@ -288,6 +295,7 @@ AC_CONFIG_FILES( \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \
   src/modules/userdb/Makefile \
+  src/modules/job-ingest/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
@@ -312,6 +320,9 @@ AC_CONFIG_FILES(
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \
 ])
+
+AC_CONFIG_FILES([etc/rc1], [chmod +x etc/rc1])
+AC_CONFIG_FILES([etc/rc3], [chmod +x etc/rc3])
 
 AC_OUTPUT
 

@@ -13,6 +13,7 @@ flux module load -r all job
 flux module load -r 0 cron sync=hb
 
 flux module load -r 0 userdb ${FLUX_USERDB_OPTIONS}
+@ENABLE_JOBSPEC_TRUE@flux module load -r 0 job-ingest
 
 wait $pids
 

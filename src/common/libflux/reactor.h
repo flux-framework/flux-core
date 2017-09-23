@@ -168,7 +168,6 @@ void * flux_watcher_impl (flux_watcher_t *w);
  */
 struct flux_watcher_ops * flux_watcher_ops (flux_watcher_t *w);
 
-
 #endif /* !_FLUX_CORE_REACTOR_H */
 
 /*

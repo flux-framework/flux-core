@@ -69,6 +69,18 @@ fluxcmd_PROGRAMS = \
 	flux-start \
 	flux-jstat
 
+if ENABLE_JOBSPEC
+fluxcmd_PROGRAMS += \
+	flux-jobspec-submit \
+	flux-jobspec-validate
+
+flux_jobspec_submit_SOURCES = flux-jobspec-submit.cpp
+flux_jobspec_validate_SOURCES = flux-jobspec-validate.cpp
+flux_jobspec_validate_LDADD = \
+        $(top_builddir)/src/common/libjobspec/libjobspec.la \
+        $(YAMLCPP_LIBS)
+endif
+
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
