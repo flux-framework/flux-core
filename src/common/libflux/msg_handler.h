@@ -27,7 +27,7 @@ void flux_msg_handler_deny_rolemask (flux_msg_handler_t *w, uint32_t rolemask);
 
 struct flux_msg_handler_spec {
     int typemask;
-    char *topic_glob;
+    const char *topic_glob;
     flux_msg_handler_f cb;
     uint32_t rolemask;
     flux_msg_handler_t *w;
