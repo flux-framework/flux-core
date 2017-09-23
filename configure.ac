@@ -295,6 +295,7 @@ AC_CONFIG_FILES( \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \
   src/modules/userdb/Makefile \
+  src/modules/job-ingest/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
@@ -319,6 +320,9 @@ AC_CONFIG_FILES(
 AC_CONFIG_LINKS([ \
   t/fluxometer.lua:t/fluxometer.lua \
 ])
+
+AC_CONFIG_FILES([etc/rc1], [chmod +x etc/rc1])
+AC_CONFIG_FILES([etc/rc3], [chmod +x etc/rc3])
 
 AC_OUTPUT
 

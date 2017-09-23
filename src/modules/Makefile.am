@@ -7,7 +7,8 @@ SUBDIRS = \
  resource-hwloc \
  cron \
  aggregator \
- userdb
+ userdb \
+ job-ingest
 
 if HAVE_PYTHON
 SUBDIRS += pymod

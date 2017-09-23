@@ -2,6 +2,7 @@
 /flux-comms
 /flux-comms-stats
 /flux-event
+/flux-jobspec-submit
 /flux-jobspec-validate
 /flux-jstat
 /flux-keygen
