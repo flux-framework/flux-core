@@ -8,4 +8,5 @@ check-local: all
 
 noinst_HEADERS = \
 	include/flux/core.h \
-	include/flux/optparse.h
+	include/flux/optparse.h \
+	include/flux/jobspec.hpp

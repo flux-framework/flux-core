@@ -272,6 +272,8 @@ AC_CONFIG_FILES( \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
+  src/common/libjobspec/Makefile \
+  src/common/libjobspec/flux-jobspec.pc \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
