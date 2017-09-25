@@ -34,5 +34,4 @@ pkgconfig_DATA = flux-core.pc flux-pmi.pc flux-optparse.pc
 endif
 
 EXTRA_DIST = \
-	gen-cmdhelp.pl \
-	flux.service
+	gen-cmdhelp.pl
