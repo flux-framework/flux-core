@@ -565,7 +565,10 @@ int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
         if (!tab[i].typemask && !tab[i].topic_glob && !tab[i].cb)
             break; /* FLUX_MSGHANDLER_TABLE_END */
         match.typemask = tab[i].typemask;
-        match.topic_glob = tab[i].topic_glob;
+        /* flux_msg_handler_create() will make a copy of the topic_glob
+         * so it is safe to temporarily remove "const" from
+         * tab[i].topic_glob with a cast. */
+        match.topic_glob = (char *)tab[i].topic_glob;
         tab[i].w = flux_msg_handler_create (h, match, tab[i].cb, arg);
         if (!tab[i].w)
             goto error;
