@@ -6,17 +6,38 @@
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
 
+typedef enum {
+    CACHE_DATA_TYPE_NONE,
+    CACHE_DATA_TYPE_JSON,
+} cache_data_type_t;
+
 struct cache_entry;
 struct cache;
 
 
 /* Create/destroy cache entry.
- * In cache_entry_create_json(), create transfers ownership of 'o' to
- * the cache entry.  If 'o' is NULL, calls cache_entry_create().
+ *
+ * cache_entry_create() creates an entry, setting the cache entry type
+ * to CACHE_DATA_TYPE_NONE.
+ *
+ * cache_entry_create_json() creates an entry, setting the cache entry
+ * type to CACHE_DATA_TYPE_JSON.  The create transfers ownership of 'o' to
+ * the cache entry.  If 'o' is NULL, no data is set, but the type is
+ * still set to CACHE_DATA_TYPE_JSON and only json can be used for the entry.
  */
 struct cache_entry *cache_entry_create (void);
 struct cache_entry *cache_entry_create_json (json_t *o);
 void cache_entry_destroy (void *arg);
+
+/* Return what data type is stored in the cache entry or will be
+ * stored in the cache entry.  CACHE_DATA_TYPE_NONE means it has not
+ * yet been determined.  Returns 0 on success, -1 on error.
+ *
+ * For convenience, cache_entry_is_type_json() checks specifically if
+ * an entry is of type json.
+ */
+int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t);
+bool cache_entry_is_type_json (struct cache_entry *hp);
 
 /* Return true if cache entry contains valid json.
  * False would indicate that a load RPC is in progress.
@@ -48,8 +69,13 @@ int cache_entry_clear_dirty (struct cache_entry *hp);
 int cache_entry_force_clear_dirty (struct cache_entry *hp);
 
 /* Accessors for cache entry data.
- * If non-NULL, set transfers ownership of 'o' to the cache entry.
- * An invalid->valid transition runs the entry's wait queue, if any.
+ *
+ * json get accessor must have type of CACHE_DATA_TYPE_JSON to
+ * retrieve json object.  json set accessor must have type of
+ * CACHE_DATA_TYPE_NONE or CACHE_DATA_TYPE_JSON to set json object.
+ * After setting, the type is converted to CACHE_DATA_TYPE_JSON.  If
+ * non-NULL, set transfers ownership of 'o' to the cache entry.  An
+ * invalid->valid transition runs the entry's wait queue, if any.
  * cache_entry_set_json() returns -1 on error, 0 on success
  */
 json_t *cache_entry_get_json (struct cache_entry *hp);

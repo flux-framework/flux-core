@@ -52,6 +52,7 @@ struct cache_entry {
     waitqueue_t *waitlist_notdirty;
     waitqueue_t *waitlist_valid;
     void *data;             /* value object/data */
+    cache_data_type_t type; /* what does data point to */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
 };
@@ -67,6 +68,7 @@ struct cache_entry *cache_entry_create (void)
         errno = ENOMEM;
         return NULL;
     }
+    hp->type = CACHE_DATA_TYPE_NONE;
     return hp;
 }
 
@@ -77,7 +79,23 @@ struct cache_entry *cache_entry_create_json (json_t *o)
         return NULL;
     if (o)
         hp->data = o;
+    hp->type = CACHE_DATA_TYPE_JSON;
     return hp;
+}
+
+int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t)
+{
+    if (hp) {
+        if (t)
+            (*t) = hp->type;
+        return 0;
+    }
+    return -1;
+}
+
+bool cache_entry_is_type_json (struct cache_entry *hp)
+{
+    return (hp && hp->type == CACHE_DATA_TYPE_JSON);
 }
 
 bool cache_entry_get_valid (struct cache_entry *hp)
@@ -141,14 +159,16 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp)
 
 json_t *cache_entry_get_json (struct cache_entry *hp)
 {
-    if (!hp || !hp->data)
+    if (!hp || !hp->data || hp->type != CACHE_DATA_TYPE_JSON)
         return NULL;
     return hp->data;
 }
 
 int cache_entry_set_json (struct cache_entry *hp, json_t *o)
 {
-    if (hp) {
+    if (hp
+        && (hp->type == CACHE_DATA_TYPE_NONE
+            || hp->type == CACHE_DATA_TYPE_JSON)) {
         if ((o && hp->data) || (!o && !hp->data)) {
             json_decref (o); /* no-op, 'o' is assumed identical to hp->data */
         } else if (o && !hp->data) {
@@ -164,6 +184,7 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
             json_decref (hp->data);
             hp->data = NULL;
         }
+        hp->type = CACHE_DATA_TYPE_JSON;
         return 0;
     }
     return -1;
@@ -173,8 +194,10 @@ void cache_entry_destroy (void *arg)
 {
     struct cache_entry *hp = arg;
     if (hp) {
-        if (hp->data)
-            json_decref (hp->data);
+        if (hp->data) {
+            if (hp->type == CACHE_DATA_TYPE_JSON)
+                json_decref (hp->data);
+        }
         if (hp->waitlist_notdirty)
             wait_queue_destroy (hp->waitlist_notdirty);
         if (hp->waitlist_valid)

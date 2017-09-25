@@ -42,8 +42,11 @@ void cache_entry_tests (void)
 {
     struct cache_entry *e;
     json_t *otmp, *o1, *o2;
+    cache_data_type_t t;
 
     /* corner case tests */
+    ok (cache_entry_type (NULL, NULL) < 0,
+        "cache_entry_type fails with bad input");
     ok (cache_entry_set_json (NULL, NULL) < 0,
         "cache_entry_set_json fails with bad input");
     cache_entry_destroy (NULL);
@@ -57,6 +60,12 @@ void cache_entry_tests (void)
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
+    ok (cache_entry_type (e, &t) == 0,
+        "cache_entry_type success");
+    ok (t == CACHE_DATA_TYPE_NONE,
+        "cache_entry_type returns NONE");
+    ok (cache_entry_is_type_json (e) == false,
+        "cache_entry_is_type_json returns false");
     ok (cache_entry_get_valid (e) == false,
         "cache entry initially non-valid");
     ok (cache_entry_get_dirty (e) == false,
@@ -72,6 +81,12 @@ void cache_entry_tests (void)
 
     ok ((e = cache_entry_create_json (NULL)) != NULL,
         "cache_entry_create_json w/ NULL input works");
+    ok (cache_entry_type (e, &t) == 0,
+        "cache_entry_type success");
+    ok (t == CACHE_DATA_TYPE_JSON,
+        "cache_entry_type returns JSON");
+    ok (cache_entry_is_type_json (e) == true,
+        "cache_entry_is_type_json returns true");
     ok (cache_entry_get_valid (e) == false,
         "cache entry initially non-valid");
     ok (cache_entry_get_dirty (e) == false,
@@ -85,15 +100,20 @@ void cache_entry_tests (void)
     cache_entry_destroy (e);
     e = NULL;
 
-    /* test empty cache entry created by cache_entry_create_json(),
-     * later filled with data.
+    /* test empty cache entry created, later filled with data.
      */
 
     o1 = json_object ();
     json_object_set_new (o1, "foo", json_integer (42));
 
-    ok ((e = cache_entry_create_json (NULL)) != NULL,
-        "cache_entry_create_json w/ NULL input works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_type (e, &t) == 0,
+        "cache_entry_type success");
+    ok (t == CACHE_DATA_TYPE_NONE,
+        "cache_entry_type returns NONE");
+    ok (cache_entry_is_type_json (e) == false,
+        "cache_entry_is_type_json returns false");
     ok (cache_entry_get_valid (e) == false,
         "cache entry initially non-valid");
     ok (cache_entry_get_dirty (e) == false,
@@ -106,8 +126,14 @@ void cache_entry_tests (void)
         "cache_entry_get_json returns NULL, no json set");
     ok (cache_entry_set_json (e, o1) == 0,
         "cache_entry_set_json success");
+    ok (cache_entry_type (e, &t) == 0,
+        "cache_entry_type success");
+    ok (t == CACHE_DATA_TYPE_JSON,
+        "cache_entry_type returns JSON");
     ok (cache_entry_get_valid (e) == true,
         "cache entry now valid after cache_entry_set_json call");
+    ok (cache_entry_is_type_json (e) == true,
+        "cache_entry_is_type_json returns true");
     cache_entry_destroy (e);   /* destroys o1 */
     e = NULL;
 
@@ -118,6 +144,12 @@ void cache_entry_tests (void)
 
     ok ((e = cache_entry_create_json (o1)) != NULL,
         "cache_entry_create_json w/ non-NULL input works");
+    ok (cache_entry_type (e, &t) == 0,
+        "cache_entry_type success");
+    ok (t == CACHE_DATA_TYPE_JSON,
+        "cache_entry_type returns JSON");
+    ok (cache_entry_is_type_json (e) == true,
+        "cache_entry_is_type_json returns true");
     ok (cache_entry_get_valid (e) == true,
         "cache entry initially valid");
     ok (cache_entry_get_dirty (e) == false,
