@@ -9,7 +9,7 @@ AM_CPPFLAGS = \
 AM_LDFLAGS = \
 	-avoid-version -module $(san_ld_zdef_flag) \
 	$(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib \
-	$(CODE_COVERAGE_LDFLAGS)
+	$(CODE_COVERAGE_LIBS)
 
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
 SUFFIXES = _build.py
