@@ -1,6 +1,6 @@
 
 AM_CPPFLAGS = \
-	@GCCWARN@ \
+	$(WARNING_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) \
