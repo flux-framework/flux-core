@@ -249,6 +249,17 @@ static bool walk (lookup_t *lh)
                 lh->missing_ref = refstr;
                 goto stall;
             }
+
+            if (!treeobj_is_dir (dir)) {
+                /* dirref pointed to non-dir error, special case when
+                 * root_dirent is bad, is EINVAL from user.
+                 */
+                if (wl->depth == 0 && wl->dirent == lh->root_dirent)
+                    lh->errnum = EINVAL;
+                else
+                    lh->errnum = EPERM;
+                goto error;
+            }
         } else {
             /* Unexpected dirent type */
             if (treeobj_is_valref (wl->dirent)
@@ -588,6 +599,10 @@ bool lookup (lookup_t *lh)
                         lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
                         goto stall;
+                    }
+                    if (!treeobj_is_dir (valtmp)) {
+                        lh->errnum = EINVAL;
+                        goto done;
                     }
                     lh->val = json_incref (valtmp);
                 }

@@ -288,9 +288,11 @@ void check_stall (lookup_t *lh,
 /* lookup tests on root dir */
 void lookup_root (void) {
     json_t *root;
+    json_t *opaque_data;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
+    href_t valref_ref;
     href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
@@ -298,9 +300,16 @@ void lookup_root (void) {
 
     /* This cache is
      *
+     * valref_ref
+     * "abcd"
+     *
      * root_ref
      * treeobj dir, no entries
      */
+
+    opaque_data = get_json_base64_string ("abcd");
+    kvs_util_json_hash ("sha1", opaque_data, valref_ref);
+    cache_insert (cache, valref_ref, cache_entry_create (opaque_data));
 
     root = treeobj_create_dir ();
     kvs_util_json_hash ("sha1", root, root_ref);
@@ -340,6 +349,17 @@ void lookup_root (void) {
     test = treeobj_create_dirref (root_ref);
     check (lh, 0, test, "root w/ FLUX_KVS_TREEOBJ");
     json_decref (test);
+
+    /* flags = FLUX_KVS_READDIR, bad root_ref, should error EINVAL */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             valref_ref,
+                             ".",
+                             NULL,
+                             FLUX_KVS_READDIR)) != NULL,
+        "lookup_create on root w/ flag = FLUX_KVS_READDIR, bad root_ref, should EINVAL");
+    check (lh, EINVAL, NULL, "root w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
 
     cache_destroy (cache);
 }
@@ -765,6 +785,17 @@ void lookup_errors (void) {
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_bad");
     check (lh, EPERM, NULL, "lookup dirref_bad");
+
+    /* Lookup a dirref that doesn't point to a dir, in middle of path, should get EPERM. */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref_bad.val",
+                             NULL,
+                             FLUX_KVS_READDIR)) != NULL,
+        "lookup_create on dirref_bad, in middle of path");
+    check (lh, EPERM, NULL, "lookup dirref_bad, in middle of path");
 
     /* Lookup a valref that doesn't point to a base64 string, should get EPERM */
     ok ((lh = lookup_create (cache,
