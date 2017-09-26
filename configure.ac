@@ -41,6 +41,7 @@ if test "$GCC" = yes; then
   AC_SUBST([WARNING_CFLAGS])
 fi
 AC_PROG_CXX
+AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
 if test "$GXX" = "yes"; then
   WARNING_CXXFLAGS=$WARNING_CFLAGS
   AC_SUBST([WARNING_CXXFLAGS])
