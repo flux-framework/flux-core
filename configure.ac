@@ -40,6 +40,11 @@ if test "$GCC" = yes; then
   WARNING_CFLAGS="-Wall -Werror -Werror=missing-field-initializers -Wno-strict-aliasing -Wno-error=deprecated-declarations"
   AC_SUBST([WARNING_CFLAGS])
 fi
+AC_PROG_CXX
+if test "$GXX" = "yes"; then
+  WARNING_CXXFLAGS=$WARNING_CFLAGS
+  AC_SUBST([WARNING_CXXFLAGS])
+fi
 X_AC_ENABLE_SANITIZER
 LT_INIT
 AC_PROG_AWK
