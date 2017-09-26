@@ -545,7 +545,8 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch)
     return -1;
 }
 
-int lookup_set_aux_data (lookup_t *lh, void *data) {
+int lookup_set_aux_data (lookup_t *lh, void *data)
+{
     if (lh && lh->magic == LOOKUP_MAGIC) {
         lh->aux = data;
         return 0;
