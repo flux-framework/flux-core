@@ -864,7 +864,7 @@ void lookup_links (void) {
 
     /* This cache is
      *
-     * opaque_data
+     * valref_ref
      * "abcd"
      *
      * dirref3_ref
