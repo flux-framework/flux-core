@@ -242,8 +242,7 @@ error:
 }
 
 /* Return 0 on success, -1 on error.  Set stall variable appropriately */
-static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
-                 bool *stall)
+static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     int saved_errno, ret;
@@ -287,8 +286,6 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, json_t **op,
         return 0;
     }
 
-    if (op)
-        *op = cache_entry_get_json (hp);
     if (stall)
         *stall = false;
     return 0;
@@ -413,7 +410,7 @@ static int commit_load_cb (commit_t *c, const char *ref, void *data)
     struct commit_cb_data *cbd = data;
     bool stall;
 
-    if (load (cbd->ctx, ref, cbd->wait, NULL, &stall) < 0) {
+    if (load (cbd->ctx, ref, cbd->wait, &stall) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: load", __FUNCTION__);
         return -1;
@@ -731,7 +728,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 
         if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, lh)))
             goto done;
-        if (load (ctx, missing_ref, wait, NULL, &stall) < 0) {
+        if (load (ctx, missing_ref, wait, &stall) < 0) {
             flux_log_error (h, "%s: load", __FUNCTION__);
             goto done;
         }
@@ -839,7 +836,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
         if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, lh)))
             goto done;
-        if (load (ctx, missing_ref, wait, NULL, &stall) < 0) {
+        if (load (ctx, missing_ref, wait, &stall) < 0) {
             flux_log_error (h, "%s: load", __FUNCTION__);
             goto done;
         }
