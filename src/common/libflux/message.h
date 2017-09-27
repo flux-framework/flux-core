@@ -160,7 +160,7 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic);
  * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
 int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
-                          void **buf, int *size);
+                          const void **buf, int *size);
 int flux_msg_set_payload (flux_msg_t *msg, int flags,
                           const void *buf, int size);
 bool flux_msg_has_payload (const flux_msg_t *msg);

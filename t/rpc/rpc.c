@@ -63,7 +63,7 @@ void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
-    void *d = NULL;
+    const void *d = NULL;
     int l = 0;
 
     if (flux_request_decode_raw (msg, NULL, &d, &l) < 0) {
@@ -260,8 +260,8 @@ void test_encoding (flux_t *h)
     flux_future_destroy (r);
 
     /* working with-payload RPC (raw) */
-    void *d;
-    char data[] = "aaaaaaaaaaaaaaaaaaaa";
+    const void *d;
+    const char data[] = "aaaaaaaaaaaaaaaaaaaa";
     int l, len = strlen (data);
     ok ((r = flux_rpc_raw (h, "rpctest.rawecho", data, len,
                           FLUX_NODEID_ANY, 0)) != NULL,

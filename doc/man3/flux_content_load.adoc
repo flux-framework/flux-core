@@ -17,7 +17,7 @@ SYNOPSIS
                                    int flags);
 
  int flux_content_load_get (flux_future_t *f,
-                            void **buf,
+                            const void **buf,
                             size_t *len);
 
 

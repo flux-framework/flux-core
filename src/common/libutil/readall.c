@@ -32,7 +32,7 @@
 
 #include "readall.h"
 
-int write_all (int fd, uint8_t *buf, int len)
+int write_all (int fd, const uint8_t *buf, int len)
 {
     int n;
     int count = 0;

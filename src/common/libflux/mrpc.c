@@ -241,7 +241,7 @@ done:
     return rc;
 }
 
-int flux_mrpc_get_raw (flux_mrpc_t *mrpc, void **data, int *len)
+int flux_mrpc_get_raw (flux_mrpc_t *mrpc, const void **data, int *len)
 {
     int rc = -1;
 

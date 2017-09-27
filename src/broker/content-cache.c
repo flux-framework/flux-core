@@ -273,7 +273,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
 {
     content_cache_t *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
-    void *data = NULL;
+    const void *data = NULL;
     int len = 0;
     int saved_errno;
     int rc = -1;
@@ -359,7 +359,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *w,
     int saved_errno = 0;
     int rc = -1;
 
-    if (flux_request_decode_raw (msg, NULL, (void **)&blobref,
+    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref,
                                  &blobref_size) < 0) {
         saved_errno = errno;
         goto done;
@@ -518,7 +518,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
-    void *data;
+    const void *data;
     int len;
     struct cache_entry *e = NULL;
     char blobref[BLOBREF_MAX_STRING_SIZE];

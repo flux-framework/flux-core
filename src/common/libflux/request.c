@@ -75,10 +75,10 @@ done:
 }
 
 int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
-                             void **data, int *len)
+                             const void **data, int *len)
 {
     const char *ts;
-    void *d = NULL;
+    const void *d = NULL;
     int l = 0;
     int rc = -1;
 

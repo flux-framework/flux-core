@@ -28,7 +28,7 @@ int flux_request_unpack (const flux_msg_t *msg, const char **topic,
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_request_decode_raw (const flux_msg_t *msg, const char **topic,
-                             void **data, int *len);
+                             const void **data, int *len);
 
 /* Encode a request message.
  * If json_str is non-NULL, assign the json payload.
