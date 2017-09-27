@@ -98,7 +98,7 @@ done:
     return rc;
 }
 
-int flux_rpc_get_raw (flux_future_t *f, void **data, int *len)
+int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len)
 {
     const flux_msg_t *msg;
     int rc = -1;

@@ -169,7 +169,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *o;
-    void *data;
+    const void *data;
     int size;
     const char *blobref;
     struct cache_entry *hp;

@@ -27,7 +27,7 @@ int flux_response_decode (const flux_msg_t *msg, const char **topic,
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_response_decode_raw (const flux_msg_t *msg, const char **topic,
-                              void **data, int *len);
+                              const void **data, int *len);
 
 flux_msg_t *flux_response_encode (const char *topic, int errnum,
                                   const char *json_str);

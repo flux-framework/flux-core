@@ -1061,7 +1061,8 @@ int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
     return rc;
 }
 
-int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void **buf, int *size)
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags,
+                          const void **buf, int *size)
 {
     zframe_t *zf;
     uint8_t msgflags;
@@ -1124,7 +1125,7 @@ done:
 
 int flux_msg_get_json (const flux_msg_t *msg, const char **s)
 {
-    char *buf;
+    const char *buf;
     int size;
     int flags;
     int rc = -1;
@@ -1133,7 +1134,7 @@ int flux_msg_get_json (const flux_msg_t *msg, const char **s)
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_payload (msg, &flags, (void **)&buf, &size) < 0) {
+    if (flux_msg_get_payload (msg, &flags, (const void **)&buf, &size) < 0) {
         errno = 0;
         *s = NULL;
     } else {
@@ -1403,7 +1404,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
      */
     if (flux_msg_has_payload (msg)) {
         const char *json_str;
-        void *buf;
+        const void *buf;
         int size, flags;
         if (flux_msg_get_json (msg, &json_str) == 0)
             fprintf (f, "%s[%3.3zu] %s\n", prefix, strlen (json_str), json_str);

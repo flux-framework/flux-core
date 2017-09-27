@@ -230,7 +230,8 @@ void check_payload_json_formatted (void)
 void check_payload (void)
 {
     flux_msg_t *msg;
-    void *pay[1024], *buf;
+    const void *buf;
+    void *pay[1024];
     int plen = sizeof (pay), len;
     int flags;
 
@@ -610,8 +611,8 @@ void check_copy (void)
     int type;
     const char *topic;
     int cpylen, flags;
-    char buf[] = "xxxxxxxxxxxxxxxxxx";
-    void *cpybuf;
+    const char buf[] = "xxxxxxxxxxxxxxxxxx";
+    const void *cpybuf;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
         "created no-payload keepalive");

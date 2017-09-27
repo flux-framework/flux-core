@@ -328,7 +328,7 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *w,
     t_req_ctx_t *ctx = arg;
     const char *topic;
     int type, size;
-    void *buf;
+    const void *buf;
     uint32_t nodeid;
     int flags;
 

@@ -246,7 +246,7 @@ void load_cb (flux_t *h, flux_msg_handler_t *w,
               const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;
-    char *blobref = "-";
+    const char *blobref = "-";
     int blobref_size;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_len;
@@ -258,7 +258,7 @@ void load_cb (flux_t *h, flux_msg_handler_t *w,
     //delay cancellation to ensure lock-correctness in sqlite
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
 
-    if (flux_request_decode_raw (msg, NULL, (void **)&blobref,
+    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref,
                                  &blobref_size) < 0) {
         flux_log_error (h, "load: request decode failed");
         goto done;
@@ -327,7 +327,7 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
                const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;
-    void *data;
+    const void *data;
     int size, hash_len;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     char blobref[BLOBREF_MAX_STRING_SIZE] = "-";
@@ -492,7 +492,7 @@ void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
             flux_log_error (h, "shutdown: store");
             continue;
         }
-        if (flux_rpc_get_raw (f, (void **)&blobref, &blobref_size) < 0) {
+        if (flux_rpc_get_raw (f, (const void **)&blobref, &blobref_size) < 0) {
             flux_log_error (h, "shutdown: store");
             flux_future_destroy (f);
             continue;
