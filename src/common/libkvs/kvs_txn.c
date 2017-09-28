@@ -148,7 +148,7 @@ error:
 }
 
 int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
-                          const char *key, void *data, int len)
+                          const char *key, const void *data, int len)
 {
     json_t *dirent = NULL;
     int saved_errno;
