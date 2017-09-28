@@ -36,6 +36,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libutil/base64.h"
 #include "src/common/libkvs/treeobj.h"
 
 #include "commit.h"
@@ -182,22 +183,46 @@ static void cleanup_dirty_cache_list (commit_t *c)
 
 /* Store object 'o' under key 'ref' in local cache.
  * Object reference is still owned by the caller.
+ * 'is_raw' indicates this data is a json string w/ base64 value and
+ * should be flushed to the content store as raw data.
  * Returns -1 on error, 0 on success entry already there, 1 on success
  * entry needs to be flushed to content store
  */
 static int store_cache (commit_t *c, int current_epoch, json_t *o,
-                        href_t ref, struct cache_entry **hpp)
+                        bool is_raw, href_t ref, struct cache_entry **hpp)
 {
     struct cache_entry *hp;
     int saved_errno, rc = -1;
+    const char *xdata;
+    char *data = NULL;
+    int xlen, len;
 
-    if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
-        saved_errno = errno;
-        flux_log_error (c->cm->h, "kvs_util_json_hash");
-        goto done;
+    if (is_raw) {
+        xdata = json_string_value (o);
+        xlen = strlen (xdata);
+        len = base64_decode_length (xlen);
+        if (!(data = malloc (len))) {
+            saved_errno = errno;
+            flux_log_error (c->cm->h, "malloc");
+            goto done;
+        }
+        if (base64_decode_block (data, &len, xdata, xlen) < 0) {
+            free (data);
+            saved_errno = errno;
+            flux_log_error (c->cm->h, "base64_decode_block");
+            goto done;
+        }
+        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
+    }
+    else {
+        if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
+            saved_errno = errno;
+            flux_log_error (c->cm->h, "kvs_util_json_hash");
+            goto done;
+        }
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
-        if (!(hp = cache_entry_create (NULL))) {
+        if (!(hp = cache_entry_create ())) {
             saved_errno = ENOMEM;
             goto done;
         }
@@ -205,20 +230,34 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     }
     if (cache_entry_get_valid (hp)) {
         c->cm->noop_stores++;
+        if (is_raw)
+            free (data);
         rc = 0;
     } else {
-        json_incref (o);
-        if (cache_entry_set_json (hp, o) < 0) {
-            int ret;
-            saved_errno = errno;
-            json_decref (o);
-            ret = cache_remove_entry (c->cm->cache, ref);
-            assert (ret == 1);
-            goto done;
+        if (is_raw) {
+            if (cache_entry_set_raw (hp, data, len) < 0) {
+                int ret;
+                saved_errno = errno;
+                free (data);
+                ret = cache_remove_entry (c->cm->cache, ref);
+                assert (ret == 1);
+                goto done;
+            }
+        }
+        else {
+            json_incref (o);
+            if (cache_entry_set_json (hp, o) < 0) {
+                int ret;
+                saved_errno = errno;
+                json_decref (o);
+                ret = cache_remove_entry (c->cm->cache, ref);
+                assert (ret == 1);
+                goto done;
+            }
         }
         if (cache_entry_set_dirty (hp, true) < 0) {
-            /* cache entry now owns a reference, cache_remove_entry
-             * will decref object */
+            /* cache entry now owns data, cache_remove_entry
+             * will decref/free object/data */
             int ret;
             saved_errno = errno;
             ret = cache_remove_entry (c->cm->cache, ref);
@@ -264,7 +303,8 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
         if (treeobj_is_dir (dir_entry)) {
             if (commit_unroll (c, current_epoch, dir_entry) < 0) /* depth first */
                 return -1;
-            if ((ret = store_cache (c, current_epoch, dir_entry, ref, &hp)) < 0)
+            if ((ret = store_cache (c, current_epoch, dir_entry,
+                                    false, ref, &hp)) < 0)
                 return -1;
             if (ret) {
                 if (zlist_push (c->item_callback_list, hp) < 0) {
@@ -291,7 +331,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                 return -1;
             if (size > BLOBREF_MAX_STRING_SIZE) {
                 if ((ret = store_cache (c, current_epoch, val_data,
-                                        ref, &hp)) < 0)
+                                        true, ref, &hp)) < 0)
                     return -1;
                 if (ret) {
                     if (zlist_push (c->item_callback_list, hp) < 0) {
@@ -592,6 +632,7 @@ commit_process_t commit_process (commit_t *c,
             else if ((sret = store_cache (c,
                                           current_epoch,
                                           c->rootcpy,
+                                          false,
                                           c->newroot,
                                           &hp)) < 0)
                      c->errnum = errno;

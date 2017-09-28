@@ -270,6 +270,30 @@ test_expect_success 'kvs: kvsdir_get_size works' '
 	test "$OUTPUT" = "3"
 '
 
+# kvs reads/writes of raw data to/from content store work
+
+# largevalhash includes string quotes and NUL char at end
+largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+largevalhash="sha1-79da8e5c9dbe65c6460377d3f09b8f535ceb7d9d"
+
+test_expect_success 'kvs: large put stores raw data into content store' '
+	flux kvs unlink -Rf $TEST &&
+ 	flux kvs put $TEST.largeval=$largeval &&
+ 	${KVSBASIC} get-treeobj $TEST.largeval | grep -q \"valref\" &&
+ 	${KVSBASIC} get-treeobj $TEST.largeval | grep -q ${largevalhash} &&
+        flux content load ${largevalhash} | grep $largeval
+'
+
+# TODO - convert to using "flux content store", see issue1216
+test_expect_success 'kvs: valref that points to content store data can be read' '
+        flux kvs unlink -Rf $TEST &&
+ 	flux kvs put $TEST.largeval=$largeval &&
+	${KVSBASIC} put-treeobj $TEST.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        flux kvs get $TEST.largeval2 | grep $largeval
+'
+
+# dtree tests
+
 test_expect_success 'kvs: store 16x3 directory tree' '
 	${FLUX_BUILD_DIR}/t/kvs/dtree -h3 -w16 --prefix $TEST.dtree
 '
