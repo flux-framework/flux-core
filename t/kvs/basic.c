@@ -34,7 +34,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/base64.h"
 #include "src/common/libutil/readall.h"
 
 
@@ -274,27 +273,21 @@ void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
             log_err_exit ("%s", file);
         (void)close (fd);
     }
-    int s_len = base64_encode_length (len);
-    char *s_buf = xzmalloc (s_len);
-    if (base64_encode_block (s_buf, &s_len, buf, len) < 0)
-        log_err_exit ("base64_encode_block error");
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_pack (txn, 0, key, "{s:s}", "data", s_buf) < 0)
-        log_err_exit ("flux_kvs_txn_pack");
+    if (flux_kvs_txn_put_raw (txn, 0, key, buf, len) < 0)
+        log_err_exit ("flux_kvs_txn_put_raw");
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_kvs_txn_destroy (txn);
     free (buf);
-    free (s_buf);
 }
 
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
 {
     char *file, *key;
-    int fd, len, s_len;
-    uint8_t *buf;
-    const char *s_buf;
+    int fd, len;
+    const uint8_t *buf;
     flux_future_t *f;
 
     if (argc != 2)
@@ -303,13 +296,8 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
     file = argv[1];
     if (!(f = flux_kvs_lookup (h, 0, key)))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get_unpack (f, "{s:s}", "data", &s_buf) < 0)
+    if (flux_kvs_lookup_get_raw (f, (const void **)&buf, &len) < 0)
         log_err_exit ("%s", key);
-    s_len = strlen (s_buf);
-    len = base64_decode_length (s_len);
-    buf = xzmalloc (len);
-    if (base64_decode_block (buf, &len, s_buf, s_len) < 0)
-        log_err_exit ("%s: base64 decode error", key);
     if (!strcmp (file, "-")) {
         if (write_all (STDOUT_FILENO, buf, len) < 0)
             log_err_exit ("stdout");
@@ -321,7 +309,6 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
         if (close (fd) < 0)
             log_err_exit ("%s", file);
     }
-    free (buf);
     flux_future_destroy (f);
 }
 
