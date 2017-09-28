@@ -261,6 +261,12 @@ test_expect_success 'kvs: getat: works on outdated root' '
 	test $(${KVSBASIC} getat $ROOTREF $TEST.a.b.c) = 42
 '
 
+test_expect_success 'kvs: zero size raw value can be stored and retrieved' '
+	flux kvs unlink -Rf $TEST &&
+	${KVSBASIC} copy-tokvs $TEST.empty -  </dev/null &&
+	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
+'
+
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
 	flux kvs put $TEST.dirsize.a=1 &&
