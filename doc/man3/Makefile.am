@@ -239,6 +239,7 @@ flux_kvs_txn_put.3: flux_kvs_txn_create.3
 flux_kvs_txn_pack.3: flux_kvs_txn_create.3
 flux_kvs_txn_mkdir.3: flux_kvs_txn_create.3
 flux_kvs_txn_unlink.3: flux_kvs_txn_create.3
+flux_kvs_txn_symlink.3: flux_kvs_txn_create.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
