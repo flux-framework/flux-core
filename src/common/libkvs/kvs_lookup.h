@@ -13,6 +13,7 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
 
 int flux_kvs_lookup_get (flux_future_t *f, const char **json_str);
 int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
+int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len);
 
 #endif /* !_FLUX_CORE_KVS_LOOKUP_H */
 
