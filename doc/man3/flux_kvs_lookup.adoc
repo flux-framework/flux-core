@@ -5,7 +5,7 @@ flux_kvs_lookup(3)
 
 NAME
 ----
-flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack - look up KVS key
+flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack, flux_kvs_lookup_get_raw - look up KVS key
 
 
 SYNOPSIS
@@ -20,6 +20,8 @@ SYNOPSIS
  int flux_kvs_lookup_get (flux_future_t *f, const char **json_str);
 
  int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
+
+ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len);
 
 
 DESCRIPTION
@@ -48,6 +50,9 @@ _json_str_ may be a JSON object, array, or bare value.
 the returned JSON is parsed according to variable arguments in Jansson
 `json_unpack()` format.
 
+`flux_kvs_lookup_get_raw()` is identical to `flux_kvs_lookup_get()` except
+the raw value is returned without decoding.
+
 These functions may be used asynchronously.
 See `flux_future_then(3)` for details.
 
@@ -75,8 +80,9 @@ RETURN VALUE
 `flux_kvs_lookup()` and `flux_kvs_lookupat()` return a
 `flux_future_t` on success, or NULL on failure with errno set appropriately.
 
-`flux_kvs_lookup_get()` and `flux_kvs_lookup_getat()`
-return 0 on success, or -1 on failure with errno set appropriately.
+`flux_kvs_lookup_get()`, `flux_kvs_lookup_get_unpack()`, and
+`flux_kvs_lookup_get_raw()` return 0 on success, or -1 on failure with
+errno set appropriately.
 
 
 ERRORS
