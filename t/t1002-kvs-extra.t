@@ -284,10 +284,9 @@ test_expect_success 'kvs: large put stores raw data into content store' '
         flux content load ${largevalhash} | grep $largeval
 '
 
-# TODO - convert to using "flux content store", see issue1216
 test_expect_success 'kvs: valref that points to content store data can be read' '
         flux kvs unlink -Rf $TEST &&
- 	flux kvs put $TEST.largeval=$largeval &&
+	echo "$largeval" | flux content store &&
 	${KVSBASIC} put-treeobj $TEST.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
         flux kvs get $TEST.largeval2 | grep $largeval
 '
