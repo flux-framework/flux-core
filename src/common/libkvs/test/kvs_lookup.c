@@ -28,6 +28,10 @@ void errors (void)
     errno = 0;
     ok (flux_kvs_lookup_get_unpack (NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_lookup_get_unpack fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_lookup_get_raw (NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_kvs_lookup_get_raw fails on bad input");
 }
 
 int main (int argc, char *argv[])

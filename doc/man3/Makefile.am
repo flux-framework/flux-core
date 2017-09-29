@@ -126,13 +126,15 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_lookupat.3 \
 	flux_kvs_lookup_get.3 \
 	flux_kvs_lookup_get_unpack.3 \
+	flux_kvs_lookup_get_raw.3 \
 	flux_kvs_fence.3 \
 	flux_kvs_txn_destroy.3 \
 	flux_kvs_txn_put.3 \
 	flux_kvs_txn_pack.3 \
 	flux_kvs_txn_mkdir.3 \
 	flux_kvs_txn_unlink.3 \
-	flux_kvs_txn_symlink.3
+	flux_kvs_txn_symlink.3 \
+	flux_kvs_txn_put_raw.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -231,14 +233,17 @@ flux_rpc_get.3: flux_rpc.3
 flux_rpc_get_unpack.3: flux_rpc.3
 flux_rpc_get_raw.3: flux_rpc.3
 flux_kvs_lookupat.3: flux_kvs_lookup.3
-flux_kvs_get.3: flux_kvs_lookup.3
-flux_kvs_getf.3: flux_kvs_lookup.3
+flux_kvs_lookup_get.3: flux_kvs_lookup.3
+flux_kvs_lookup_get_unpack.3: flux_kvs_lookup.3
+flux_kvs_lookup_get_raw.3: flux_kvs_lookup.3
 flux_kvs_fence.3: flux_kvs_commit.3
 flux_kvs_txn_destroy.3: flux_kvs_txn_create.3
 flux_kvs_txn_put.3: flux_kvs_txn_create.3
 flux_kvs_txn_pack.3: flux_kvs_txn_create.3
 flux_kvs_txn_mkdir.3: flux_kvs_txn_create.3
 flux_kvs_txn_unlink.3: flux_kvs_txn_create.3
+flux_kvs_txn_symlink.3: flux_kvs_txn_create.3
+flux_kvs_txn_put_raw.3: flux_kvs_txn_create.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c

@@ -5,7 +5,7 @@ flux_kvs_txn_create(3)
 
 NAME
 ----
-flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink - operate on a KVS transaction object
+flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink, flux_kvs_txn_put_raw - operate on a KVS transaction object
 
 
 SYNOPSIS
@@ -30,6 +30,10 @@ SYNOPSIS
 
  int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
                            const char *key, const char *target);
+
+ int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
+                           const char *key, const void *data, int len);
+
 
 
 DESCRIPTION
@@ -65,6 +69,9 @@ all its contents are removed as well.
 `flux_kvs_txn_symlink()` sets _key_ to a symbolic link pointing to _target_,
 another key.  _target_ need not exist.
 
+`flux_kvs_txn_put_raw()` sets _key_ to a value containing raw data
+referred to by _data_ of length _len_.
+
 
 FLAGS
 -----
@@ -90,8 +97,8 @@ RETURN VALUE
 or NULL on failure with errno set appropriately.
 
 `flux_kvs_txn_put()`, `flux_kvs_txn_pack()`, `flux_kvs_txn_mkdir()`,
-`flux_kvs_txn_unlink()`, and `flux_kvs_txn_symlink()` returns 0 on success,
-or -1 on failure with errno set appropriately.
+`flux_kvs_txn_unlink()`, `flux_kvs_txn_symlink()`, and `flux_kvs_txn_put_raw()`
+returns 0 on success, or -1 on failure with errno set appropriately.
 
 ERRORS
 ------

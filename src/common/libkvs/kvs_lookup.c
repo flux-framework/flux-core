@@ -244,6 +244,32 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     return rc;
 }
 
+int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
+{
+    struct lookup_ctx *ctx;
+
+    if (!(ctx = flux_future_aux_get (f, auxkey))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(ctx->treeobj)) {
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    if (!ctx->val_valid) {
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
+                                              &ctx->val_len) < 0)
+            return -1;
+        ctx->val_valid = true;
+    }
+    if (data)
+        *data = ctx->val_data;
+    if (len)
+        *len = ctx->val_len;
+    return 0;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
