@@ -223,10 +223,9 @@ error:
     return -1;
 }
 
-int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
-                       const char *key, const char *fmt, ...)
+int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
+                        const char *key, const char *fmt, va_list ap)
 {
-    va_list ap;
     json_t *val, *dirent = NULL;
     int saved_errno;
 
@@ -236,9 +235,7 @@ int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
     }
     if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
         goto error;
-    va_start (ap, fmt);
     val = json_vpack_ex (NULL, 0, fmt, ap);
-    va_end (ap);
     if (!val) {
         errno = EINVAL;
         goto error;
@@ -275,6 +272,22 @@ error:
     json_decref (dirent);
     errno = saved_errno;
     return -1;
+}
+
+int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
+                       const char *key, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    if (!txn || !key || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
+    va_start (ap, fmt);
+    rc = flux_kvs_txn_vpack (txn, flags, key, fmt, ap);
+    va_end (ap);
+    return rc;
 }
 
 int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
