@@ -41,9 +41,9 @@
 
 static int l_kvsdir_commit (lua_State *L);
 
-static kvsdir_t *lua_get_kvsdir (lua_State *L, int index)
+static flux_kvsdir_t *lua_get_kvsdir (lua_State *L, int index)
 {
-    kvsdir_t **dirp = luaL_checkudata (L, index, "CMB.kvsdir");
+    flux_kvsdir_t **dirp = luaL_checkudata (L, index, "CMB.kvsdir");
     return (*dirp);
 }
 
@@ -56,15 +56,15 @@ int l_kvsdir_instantiate (lua_State *L)
 
 static int l_kvsdir_destroy (lua_State *L)
 {
-    kvsdir_t *d = lua_get_kvsdir (L, -1);
+    flux_kvsdir_t *d = lua_get_kvsdir (L, -1);
     if (d)
         kvsdir_destroy (d);
     return (0);
 }
 
-int lua_push_kvsdir (lua_State *L, kvsdir_t *dir)
+int lua_push_kvsdir (lua_State *L, flux_kvsdir_t *dir)
 {
-    kvsdir_t **new;
+    flux_kvsdir_t **new;
     if (dir == NULL)
         return lua_pusherror (L, "No such file or directory");
     new = lua_newuserdata (L, sizeof (*new));
@@ -72,7 +72,7 @@ int lua_push_kvsdir (lua_State *L, kvsdir_t *dir)
     return l_kvsdir_instantiate (L);
 }
 
-int lua_push_kvsdir_external (lua_State *L, kvsdir_t *dir)
+int lua_push_kvsdir_external (lua_State *L, flux_kvsdir_t *dir)
 {
     /*
      *  This kvsdir object has been created external to Lua, so take
@@ -85,8 +85,8 @@ int lua_push_kvsdir_external (lua_State *L, kvsdir_t *dir)
 static int l_kvsdir_kvsdir_new (lua_State *L)
 {
     const char *key;
-    kvsdir_t *new;
-    kvsdir_t *d;
+    flux_kvsdir_t *new;
+    flux_kvsdir_t *d;
 
     d = lua_get_kvsdir (L, 1);
     key = luaL_checkstring (L, 2);
@@ -100,7 +100,7 @@ static int l_kvsdir_kvsdir_new (lua_State *L)
 
 static int l_kvsdir_tostring (lua_State *L)
 {
-    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     lua_pushstring (L, kvsdir_key (d));
     return (1);
 }
@@ -108,7 +108,7 @@ static int l_kvsdir_tostring (lua_State *L)
 static int l_kvsdir_newindex (lua_State *L)
 {
     int rc;
-    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     const char *key = lua_tostring (L, 2);
 
     /*
@@ -180,7 +180,7 @@ static int l_kvsdir_iterator (lua_State *L)
 
 static int l_kvsdir_next (lua_State *L)
 {
-    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     kvsitr_t **iptr;
 
     lua_pop (L, 1);
@@ -203,7 +203,7 @@ static int l_kvsdir_next (lua_State *L)
 
 static int l_kvsdir_commit (lua_State *L)
 {
-    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     if (lua_isnoneornil (L, 2)) {
         if (kvs_commit (kvsdir_handle (d), 0) < 0)
             return lua_pusherror (L, "kvs_commit: %s",
@@ -215,7 +215,7 @@ static int l_kvsdir_commit (lua_State *L)
 
 static int l_kvsdir_unlink (lua_State *L)
 {
-    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     const char *key = luaL_checkstring (L, 2);
     if (kvsdir_unlink (d, key) < 0)
             return lua_pusherror (L, "unlink: %s",
@@ -231,7 +231,7 @@ static int l_kvsdir_watch (lua_State *L)
     void *h;
     char *key;
     char *json_str = NULL;
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
 
     dir = lua_get_kvsdir (L, 1);
     h = kvsdir_handle (dir);
@@ -262,7 +262,7 @@ err:
 static int l_kvsdir_watch_dir (lua_State *L)
 {
     flux_t *h;
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
 
     dir = lua_get_kvsdir (L, 1);
     h = kvsdir_handle (dir);
@@ -274,7 +274,7 @@ static int l_kvsdir_index (lua_State *L)
 {
     int rc;
     flux_t *f;
-    kvsdir_t *d;
+    flux_kvsdir_t *d;
     const char *key = lua_tostring (L, 2);
     char *fullkey = NULL;
     char *json_str = NULL;

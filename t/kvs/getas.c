@@ -94,7 +94,7 @@ void dirgetas (flux_t *h, const char *dirkey, const char *key, const char *type)
     flux_future_t *f;
     const char *json_str;
     char *fullkey;
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, dirkey))
             || flux_kvs_lookup_get (f, &json_str) < 0

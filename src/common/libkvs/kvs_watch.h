@@ -12,7 +12,7 @@ enum kvs_watch_flags {
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
                          int errnum);
-typedef int (*kvs_set_dir_f)(const char *key, kvsdir_t *dir, void *arg,
+typedef int (*kvs_set_dir_f)(const char *key, flux_kvsdir_t *dir, void *arg,
                              int errnum);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
@@ -44,7 +44,7 @@ int kvs_unwatch (flux_t *h, const char *key);
  * FIXME: add more types.
  */
 int kvs_watch_once (flux_t *h, const char *key, char **json_str);
-int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
+int kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
 
 #ifdef __cplusplus

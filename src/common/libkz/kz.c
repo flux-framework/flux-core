@@ -72,7 +72,7 @@ struct kz_struct {
     char *stream;
     flux_t *h;
     int seq;
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
@@ -367,7 +367,8 @@ done:
     return rc;
 }
 
-static int kvswatch_cb (const char *key, kvsdir_t *dir, void *arg, int errnum)
+static int kvswatch_cb (const char *key, flux_kvsdir_t *dir,
+                        void *arg, int errnum)
 {
     kz_t *kz = arg;
 

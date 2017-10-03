@@ -414,7 +414,7 @@ static void topo_request_cb (flux_t *h,
                              void *arg)
 {
     resource_ctx_t *ctx = (resource_ctx_t *)arg;
-    kvsdir_t *kd = NULL;
+    flux_kvsdir_t *kd = NULL;
     char *buffer = NULL;
     int buflen;
     hwloc_topology_t global = NULL;

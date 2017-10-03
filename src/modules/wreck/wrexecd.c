@@ -69,7 +69,7 @@ struct task_info {
     pid_t    pid;
 
     flux_t   *f;              /* local flux handle for task */
-    kvsdir_t *kvs;            /* kvs handle to this task's dir in kvs */
+    flux_kvsdir_t *kvs;       /* kvs handle to this task's dir in kvs */
     int      status;
     int      exited;          /* non-zero if this task exited */
 
@@ -86,8 +86,8 @@ struct prog_ctx {
     flux_t   *flux;
 
     char *kvspath;          /* basedir path in kvs for this lwj.id */
-    kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
-    kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
+    flux_kvsdir_t *kvs;     /* Handle to this job's dir in kvs */
+    flux_kvsdir_t *resources; /* Handle to this node's resource dir in kvs */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -825,7 +825,7 @@ static int *cores_per_node_create (struct prog_ctx *ctx, int *nodeids, int n)
 static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
 {
     int n = 0;
-    kvsdir_t *rank = NULL;
+    flux_kvsdir_t *rank = NULL;
     kvsitr_t *i;
     const char *key;
     int *nodeids;
@@ -881,7 +881,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 
 int prog_ctx_options_init (struct prog_ctx *ctx)
 {
-    kvsdir_t *opts;
+    flux_kvsdir_t *opts;
     kvsitr_t *i;
     const char *opt;
 
@@ -1651,7 +1651,7 @@ static int l_push_environ (lua_State *L, int index)
     return (1);
 }
 
-static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
+static flux_kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 {
     struct task_info *t;
 
@@ -1753,8 +1753,8 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {
-        kvsdir_t *d;
-	if (t == NULL)
+        flux_kvsdir_t *d;
+        if (t == NULL)
             return lua_pusherror (L, "Not in task context");
         if (!(d = prog_ctx_kvsdir (ctx)))
             return lua_pusherror (L, (char *)flux_strerror (errno));

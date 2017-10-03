@@ -328,7 +328,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
     json_decref (o);
 }
 
-static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
+static void dump_kvs_dir (flux_kvsdir_t *dir, bool ropt)
 {
     flux_future_t *f;
     kvsitr_t *itr;
@@ -350,7 +350,7 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
 
         } else if (kvsdir_isdir (dir, name)) {
             if (ropt) {
-                kvsdir_t *ndir;
+                flux_kvsdir_t *ndir;
                 if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                     log_err_exit ("%s", key);
                 dump_kvs_dir (ndir, ropt);
@@ -372,7 +372,7 @@ static void dump_kvs_dir (kvsdir_t *dir, bool ropt)
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
-    kvsdir_t *dir = NULL;
+    flux_kvsdir_t *dir = NULL;
     const char *json_str;
     flux_future_t *f;
 
@@ -402,7 +402,7 @@ void cmd_dirsize (flux_t *h, int argc, char **argv)
 {
     flux_future_t *f;
     const char *json_str;
-    kvsdir_t *dir = NULL;
+    flux_kvsdir_t *dir = NULL;
 
     if (argc != 1)
         log_msg_exit ("dirsize: specify one directory");

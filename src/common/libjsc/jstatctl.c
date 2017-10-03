@@ -301,7 +301,7 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
 
 static int jobid_exist (flux_t *h, int64_t j)
 {
-    kvsdir_t *d;
+    flux_kvsdir_t *d;
     jscctx_t *ctx = getctx (h);
     const char *path = jscctx_jobid_path (ctx, j);
     if (path == NULL)

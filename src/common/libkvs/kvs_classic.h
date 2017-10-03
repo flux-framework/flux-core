@@ -8,7 +8,7 @@ extern "C" {
 /* These interfaces are on their way to being deprecated */
 
 int kvs_get (flux_t *h, const char *key, char **json_str);
-int kvs_get_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
+int kvs_get_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
             __attribute__ ((format (printf, 3, 4)));
 
 int kvs_put (flux_t *h, const char *key, const char *json_str);
@@ -22,19 +22,20 @@ int kvs_mkdir (flux_t *h, const char *key);
 int kvs_commit (flux_t *h, int flags);
 int kvs_fence (flux_t *h, const char *name, int nprocs, int flags);
 
-int kvsdir_get (kvsdir_t *dir, const char *key, char **json_str);
-int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
+int kvsdir_get (flux_kvsdir_t *dir, const char *key, char **json_str);
+int kvsdir_get_dir (flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
+                    const char *fmt, ...)
                     __attribute__ ((format (printf, 3, 4)));
 
-int kvsdir_put (kvsdir_t *dir, const char *key, const char *json_str);
-int kvsdir_put_string (kvsdir_t *dir, const char *key, const char *val);
-int kvsdir_put_int (kvsdir_t *dir, const char *key, int val);
-int kvsdir_put_int64 (kvsdir_t *dir, const char *key, int64_t val);
-int kvsdir_put_double (kvsdir_t *dir, const char *key, double val);
-int kvsdir_put_boolean (kvsdir_t *dir, const char *key, bool val);
+int kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str);
+int kvsdir_put_string (flux_kvsdir_t *dir, const char *key, const char *val);
+int kvsdir_put_int (flux_kvsdir_t *dir, const char *key, int val);
+int kvsdir_put_int64 (flux_kvsdir_t *dir, const char *key, int64_t val);
+int kvsdir_put_double (flux_kvsdir_t *dir, const char *key, double val);
+int kvsdir_put_boolean (flux_kvsdir_t *dir, const char *key, bool val);
 
-int kvsdir_unlink (kvsdir_t *dir, const char *key);
-int kvsdir_mkdir (kvsdir_t *dir, const char *key);
+int kvsdir_unlink (flux_kvsdir_t *dir, const char *key);
+int kvsdir_mkdir (flux_kvsdir_t *dir, const char *key);
 
 #ifdef __cplusplus
 }

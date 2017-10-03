@@ -254,7 +254,7 @@ static int l_flux_new (lua_State *L)
 static int l_flux_kvsdir_new (lua_State *L)
 {
     const char *path = ".";
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
     flux_t *f = lua_get_flux (L, 1);
 
     if (lua_isstring (L, 2)) {
@@ -310,7 +310,7 @@ static int l_flux_kvs_type (lua_State *L)
     flux_t *f;
     const char *key;
     char *val;
-    kvsdir_t *d;
+    flux_kvsdir_t *d;
     flux_future_t *future;
     const char *target;
 
@@ -1058,7 +1058,7 @@ static int l_msghandler_newindex (lua_State *L)
     return (0);
 }
 
-static int kvswatch_cb_common (const char *key, kvsdir_t *dir,
+static int kvswatch_cb_common (const char *key, flux_kvsdir_t *dir,
         json_object *val, void *arg, int errnum)
 {
     int rc;
@@ -1102,7 +1102,8 @@ static int kvswatch_cb_common (const char *key, kvsdir_t *dir,
     return rc;
 }
 
-static int l_kvsdir_watcher (const char *key, kvsdir_t *dir, void *arg, int errnum)
+static int l_kvsdir_watcher (const char *key, flux_kvsdir_t *dir,
+                             void *arg, int errnum)
 {
     return kvswatch_cb_common (key, dir, NULL, arg, errnum);
 }

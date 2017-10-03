@@ -103,7 +103,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             super(self.__class__, self).__init__(ffi, lib,
                                                  handle=handle,
                                                  match=ffi.typeof(
-                                                     'kvsdir_t *'),
+                                                     'flux_kvsdir_t *'),
                                                  prefixes=[
                                                      'kvsdir_',
                                                  ],
@@ -113,7 +113,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                 raise ValueError("flux_handle must be a valid Flux object or "
                                  "handle must be a valid kvsdir cdata pointer")
             if handle is None:
-                directory = ffi.new("kvsdir_t *[1]")
+                directory = ffi.new("flux_kvsdir_t *[1]")
                 RAW.kvs_get_dir(flux_handle, directory, path)
                 self.handle = directory[0]
                 if self.handle is None or self.handle == ffi.NULL:

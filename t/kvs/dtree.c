@@ -44,7 +44,7 @@ static const struct option longopts[] = {
 };
 
 void dtree (flux_t *h, const char *prefix, int width, int height);
-void dtree_mkdir (flux_t *h, kvsdir_t *dir, int width, int height);
+void dtree_mkdir (flux_t *h, flux_kvsdir_t *dir, int width, int height);
 
 void usage (void)
 {
@@ -91,7 +91,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     if (Dopt) {
-        kvsdir_t *dir;
+        flux_kvsdir_t *dir;
         if (kvs_mkdir (h, prefix) < 0)
             log_err_exit ("kvs_mkdir %s", prefix);
         if (kvs_commit (h, 0) < 0)
@@ -128,14 +128,14 @@ void dtree (flux_t *h, const char *prefix, int width, int height)
 }
 
 /* This version creates intermediate directories and references them
- * using kvsdir_t objects.  This is a less efficient method but provides
+ * using flux_kvsdir_t objects.  This is a less efficient method but provides
  * alternate code coverage.
  */
-void dtree_mkdir (flux_t *h, kvsdir_t *dir, int width, int height)
+void dtree_mkdir (flux_t *h, flux_kvsdir_t *dir, int width, int height)
 {
     int i;
     char key[16];
-    kvsdir_t *ndir;
+    flux_kvsdir_t *ndir;
 
     for (i = 0; i < width; i++) {
         snprintf (key, sizeof (key), "%.4x", i);

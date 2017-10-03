@@ -183,7 +183,7 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, const char *json_str)
     switch (wp->type) {
         case WATCH_DIR: {
             kvs_set_dir_f set = wp->set;
-            kvsdir_t *dir = NULL;
+            flux_kvsdir_t *dir = NULL;
             if (json_str) {
                 if (!(dir = kvsdir_create (h, NULL, wp->key, json_str)))
                     goto done;
@@ -368,11 +368,11 @@ done:
     return rc;
 }
 
-static int watch_once_dir (flux_t *h, const char *key, kvsdir_t **dirp)
+static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
 {
     const char *val_in = NULL;
     char *val_out = NULL;
-    kvsdir_t *dir_out = NULL;
+    flux_kvsdir_t *dir_out = NULL;
     flux_future_t *f = NULL;
     int rc = -1;
 
@@ -403,7 +403,7 @@ done:
     return rc;
 }
 
-int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
+int kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
 {
     va_list ap;
     char *key;

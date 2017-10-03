@@ -222,7 +222,7 @@ static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
     char buf [64];
     json_object_iter i;
     json_object *o;
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
 
     if (kvs_get_dir (h, &dir, "%s", kvspath) < 0) {
         flux_log_error (h, "kvs_get_dir (%s)", kvspath);
@@ -518,7 +518,7 @@ static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
 
 static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
 {
-    kvsdir_t *tmp;
+    flux_kvsdir_t *tmp;
     /*
      *  If no 'rank' subdir exists for this lwj, then we are running
      *   without resource assignment so we run everywhere
