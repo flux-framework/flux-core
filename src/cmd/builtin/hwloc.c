@@ -236,28 +236,36 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
     const char *key_prefix = "config.resource.hwloc.xml";
     char key[64];
     char path[PATH_MAX];
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
     int n;
 
     if (flux_get_size (h, &size) < 0)
         log_err_exit ("flux_get_size");
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
     for (rank = 0; rank < size; rank++) {
         n = snprintf (key, sizeof (key), "%s.%"PRIu32, key_prefix, rank);
         assert (n < sizeof (key));
         if (dirpath == NULL) {
             /* Remove any per rank xml and reload default xml */
-            if (flux_kvs_unlink (h, key) < 0)
-                log_err_exit ("flux_kvs_unlink");
+            if (flux_kvs_txn_unlink (txn, 0, key) < 0)
+                log_err_exit ("flux_kvs_txn_unlink");
             continue;
         }
         n = snprintf (path, sizeof (path), "%s/%"PRIu32".xml", dirpath, rank);
         assert (n < sizeof (path));
         if (access (path, R_OK) < 0)
             log_err_exit ("%s", path);
-        if (flux_kvs_put_string (h, key, path) < 0)
-            log_err_exit ("flux_kvs_put_string");
+        if (flux_kvs_txn_pack (txn, 0, key, "s", path) < 0)
+            log_err_exit ("flux_kvs_txn_pack");
     }
-    if (flux_kvs_commit_anon (h, 0) < 0)
-        log_err_exit ("flux_kvs_commit_anon");
+    if (!(f = flux_kvs_commit (h, 0, txn)))
+        log_err_exit ("flux_kvs_commit request");
+    if (flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit response");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 }
 
 static bool hwloc_reload_bool_value (const char *walk_topology)
