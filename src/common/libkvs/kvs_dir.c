@@ -34,7 +34,7 @@
 
 #include "treeobj.h"
 
-struct kvsdir_struct {
+struct kvsdir {
     flux_t *handle;
     char *rootref; /* optional snapshot reference */
     char *key;
@@ -43,7 +43,7 @@ struct kvsdir_struct {
     int usecount;
 };
 
-struct kvsdir_iterator_struct {
+struct kvsdir_iterator {
     zlist_t *keys;
     bool reset;
 };

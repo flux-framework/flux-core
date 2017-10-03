@@ -5,8 +5,8 @@
 extern "C" {
 #endif
 
-typedef struct kvsdir_struct kvsdir_t;
-typedef struct kvsdir_iterator_struct kvsitr_t;
+typedef struct kvsdir kvsdir_t;
+typedef struct kvsdir_iterator kvsitr_t;
 
 /* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
  */
