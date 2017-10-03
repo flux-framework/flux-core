@@ -185,12 +185,12 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, const char *json_str)
             kvs_set_dir_f set = wp->set;
             flux_kvsdir_t *dir = NULL;
             if (json_str) {
-                if (!(dir = kvsdir_create (h, NULL, wp->key, json_str)))
+                if (!(dir = flux_kvsdir_create (h, NULL, wp->key, json_str)))
                     goto done;
             }
             rc = set (wp->key, dir, wp->arg, errnum);
             if (dir)
-                kvsdir_destroy (dir);
+                flux_kvsdir_destroy (dir);
             break;
         }
         case WATCH_JSONSTR: {
@@ -381,7 +381,7 @@ static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
         goto done;
     }
     if (*dirp) {
-        if (!(val_in = kvsdir_tostring (*dirp)))
+        if (!(val_in = flux_kvsdir_tostring (*dirp)))
             goto done;
     }
     if (!(f = kvs_watch_rpc (h, key, val_in,
@@ -390,11 +390,11 @@ static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
     if (kvs_watch_rpc_get (f, &val_out) < 0)
         goto done;
     if (val_out) {
-        if (!(dir_out = kvsdir_create (h, NULL, key, val_out)))
+        if (!(dir_out = flux_kvsdir_create (h, NULL, key, val_out)))
             goto done;
     }
     if (*dirp)
-        kvsdir_destroy (*dirp);
+        flux_kvsdir_destroy (*dirp);
     *dirp = dir_out;
     rc = 0;
 done:

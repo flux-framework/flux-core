@@ -311,7 +311,7 @@ static int jobid_exist (flux_t *h, int64_t j)
                      path, flux_strerror (errno));
         return -1;
     }
-    kvsdir_destroy (d);
+    flux_kvsdir_destroy (d);
     return 0;
 }
 

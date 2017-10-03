@@ -11,8 +11,8 @@ class KVSWrapper(Wrapper):
     pass
 
 RAW = KVSWrapper(ffi, lib, prefixes=['kvs', 'kvs_'])
-# override error check behavior for kvsitr_next
-RAW.kvsitr_next.set_error_check(lambda x: False)
+# override error check behavior for flux_kvsitr_next
+RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 
 def get_key_direct(flux_handle, key):
@@ -99,13 +99,13 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     class InnerWrapper(Wrapper):
 
         def __init__(self, flux_handle=None, path='.', handle=None):
-            dest = RAW.kvsdir_destroy
+            dest = RAW.flux_kvsdir_destroy
             super(self.__class__, self).__init__(ffi, lib,
                                                  handle=handle,
                                                  match=ffi.typeof(
                                                      'flux_kvsdir_t *'),
                                                  prefixes=[
-                                                     'kvsdir_',
+                                                     'flux_kvsdir_',
                                                  ],
                                                  destructor=dest)
 
@@ -160,16 +160,16 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         def __init__(self, kvsdir):
             self.kvsdir = kvsdir
             self.itr = None
-            self.itr = RAW.kvsitr_create(kvsdir.handle)
+            self.itr = RAW.flux_kvsitr_create(kvsdir.handle)
 
         def __del__(self):
-            RAW.kvsitr_destroy(self.itr)
+            RAW.flux_kvsitr_destroy(self.itr)
 
         def __iter__(self):
             return self
 
         def __next__(self):
-            ret = RAW.kvsitr_next(self.itr)
+            ret = RAW.flux_kvsitr_next(self.itr)
             if ret is None or ret == ffi.NULL:
                 raise StopIteration()
             return ffi.string(ret)

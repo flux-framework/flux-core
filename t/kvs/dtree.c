@@ -99,7 +99,7 @@ int main (int argc, char *argv[])
         if (kvs_get_dir (h, &dir, "%s", prefix) < 0)
             log_err_exit ("kvs_get_dir %s", prefix);
         dtree_mkdir (h, dir, width, height);
-        kvsdir_destroy (dir);
+        flux_kvsdir_destroy (dir);
     } else {
         dtree (h, prefix, width, height);
     }
@@ -140,17 +140,17 @@ void dtree_mkdir (flux_t *h, flux_kvsdir_t *dir, int width, int height)
     for (i = 0; i < width; i++) {
         snprintf (key, sizeof (key), "%.4x", i);
         if (height == 1) {
-            if (kvsdir_put_int (dir, key, 1) < 0)
-                log_err_exit ("kvsdir_put_int %s", key);
+            if (flux_kvsdir_put_int (dir, key, 1) < 0)
+                log_err_exit ("flux_kvsdir_put_int %s", key);
         } else {
-            if (kvsdir_mkdir (dir, key) < 0)
-                log_err_exit ("kvsdir_mkdir %s", key);
+            if (flux_kvsdir_mkdir (dir, key) < 0)
+                log_err_exit ("flux_kvsdir_mkdir %s", key);
             if (kvs_commit (h, 0) < 0)
                 log_err_exit ("kvs_commit");
-            if (kvsdir_get_dir (dir, &ndir, "%s", key) < 0)
-                log_err_exit ("kvsdir_get_dir");
+            if (flux_kvsdir_get_dir (dir, &ndir, "%s", key) < 0)
+                log_err_exit ("flux_kvsdir_get_dir");
             dtree_mkdir (h, ndir, width, height - 1);
-            kvsdir_destroy (ndir);
+            flux_kvsdir_destroy (ndir);
         }
     }
 }

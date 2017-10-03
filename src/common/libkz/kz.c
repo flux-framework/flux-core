@@ -87,7 +87,7 @@ static void kz_destroy (kz_t *kz)
     if (kz->name)
         free (kz->name);
     if (kz->dir)
-        kvsdir_destroy (kz->dir);
+        flux_kvsdir_destroy (kz->dir);
     if (kz->grpname)
         free (kz->grpname);
     free (kz);
@@ -266,7 +266,7 @@ static char *getnext_blocking (kz_t *kz)
             if (errno != ENOENT)
                 break;
             if (kz->dir) {
-                kvsdir_destroy (kz->dir);
+                flux_kvsdir_destroy (kz->dir);
                 kz->dir = NULL;
             }
         }

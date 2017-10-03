@@ -445,10 +445,10 @@ static void topo_request_cb (flux_t *h,
     }
     hwloc_topology_set_custom (global);
 
-    flux_kvsitr_t *base_iter = kvsitr_create (kd);
+    flux_kvsitr_t *base_iter = flux_kvsitr_create (kd);
     const char *base_key = NULL;
-    while ((base_key = kvsitr_next (base_iter))) {
-        char *key = kvsdir_key_at (kd, base_key);
+    while ((base_key = flux_kvsitr_next (base_iter))) {
+        char *key = flux_kvsdir_key_at (kd, base_key);
         const char *xml = NULL;
         hwloc_topology_t rank;
         flux_future_t *f;
@@ -484,8 +484,8 @@ static void topo_request_cb (flux_t *h,
         count++;
     }
 
-    kvsitr_destroy (base_iter);
-    kvsdir_destroy (kd);
+    flux_kvsitr_destroy (base_iter);
+    flux_kvsdir_destroy (kd);
 
     hwloc_topology_load (global);
     if (hwloc_topology_export_xmlbuffer (global, &buffer, &buflen) < 0) {

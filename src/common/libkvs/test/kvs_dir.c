@@ -30,86 +30,86 @@ void test_empty (void)
     const char *key;
 
     errno = 0;
-    dir = kvsdir_create (NULL, NULL, NULL, NULL);
+    dir = flux_kvsdir_create (NULL, NULL, NULL, NULL);
     ok (dir == NULL && errno == EINVAL,
-        "kvsdir_create with all NULL args fails with EINVAL");
+        "flux_kvsdir_create with all NULL args fails with EINVAL");
 
     errno = 0;
-    dir = kvsdir_create (NULL, NULL, "foo", "{}");
+    dir = flux_kvsdir_create (NULL, NULL, "foo", "{}");
     ok (dir == NULL && errno == EINVAL,
-        "kvsdir_create with empty JSON objects fails with EINVAL");
+        "flux_kvsdir_create with empty JSON objects fails with EINVAL");
 
     errno = 0;
-    dir = kvsdir_create (NULL, NULL, "foo", "foo");
+    dir = flux_kvsdir_create (NULL, NULL, "foo", "foo");
     ok (dir == NULL && errno == EINVAL,
         "kvsdir_create with bad JSON objects fails with EINVAL");
 
     errno = 0;
-    dir = kvsdir_create (NULL, NULL, "foo",
+    dir = flux_kvsdir_create (NULL, NULL, "foo",
                          "{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}");
     ok (dir == NULL && errno == EINVAL,
-        "kvsdir_create with invalid treeobj fails with EINVAL");
+        "flux_kvsdir_create with invalid treeobj fails with EINVAL");
 
     errno = 0;
-    dir = kvsdir_create (NULL, NULL, "foo",
+    dir = flux_kvsdir_create (NULL, NULL, "foo",
                          "{\"data\":\"MQA=\",\"type\":\"val\",\"ver\":1}");
     ok (dir == NULL && errno == EINVAL,
-        "kvsdir_create with non-dir treeobj fails with EINVAL");
+        "flux_kvsdir_create with non-dir treeobj fails with EINVAL");
 
     if (!(o = treeobj_create_dir ()))
         BAIL_OUT ("treeobj_create_dir failed");
     if (!(s = json_dumps (o, JSON_COMPACT)))
         BAIL_OUT ("json_dumps failed on new treeobj");
-    dir = kvsdir_create (NULL, NULL, "foo", s);
+    dir = flux_kvsdir_create (NULL, NULL, "foo", s);
     free (s);
 
     ok (dir != NULL,
-        "kvsdir_create with empty directory works");
-    diag ("%s", kvsdir_tostring (dir));
+        "flux_kvsdir_create with empty directory works");
+    diag ("%s", flux_kvsdir_tostring (dir));
 
-    ok (!kvsdir_exists (dir, "noexist"),
-        "kvsdir_exists on nonexistent key returns false");
-    ok (!kvsdir_isdir (dir, "noexist"),
-        "kvsdir_isdir on nonexistent key returns false");
-    ok (!kvsdir_issymlink (dir, "noexist"),
-        "kvsdir_issymlink on nonexistent key returns false");
+    ok (!flux_kvsdir_exists (dir, "noexist"),
+        "flux_kvsdir_exists on nonexistent key returns false");
+    ok (!flux_kvsdir_isdir (dir, "noexist"),
+        "flux_kvsdir_isdir on nonexistent key returns false");
+    ok (!flux_kvsdir_issymlink (dir, "noexist"),
+        "flux_kvsdir_issymlink on nonexistent key returns false");
 
-    key = kvsdir_key (dir);
+    key = flux_kvsdir_key (dir);
     ok (key != NULL && !strcmp (key, "foo"),
-        "kvsdir_key returns the key we put in");
-    key = kvsdir_key_at (dir, "a.b.c");
+        "flux_kvsdir_key returns the key we put in");
+    key = flux_kvsdir_key_at (dir, "a.b.c");
     ok (key != NULL && !strcmp (key, "foo.a.b.c"),
-        "kvsdir_key_at a.b.c returns foo.a.b.c");
-    ok (kvsdir_handle (dir) == NULL,
-        "kvsdir_handle returns NULL since that's what we put in");
-    ok (kvsdir_rootref (dir) == NULL,
-        "kvsdir_rootref returns NULL since that's what we put in");
-    ok (kvsdir_get_size (dir) == 0,
-        "kvsdir_get_size returns zero");
+        "flux_kvsdir_key_at a.b.c returns foo.a.b.c");
+    ok (flux_kvsdir_handle (dir) == NULL,
+        "flux_kvsdir_handle returns NULL since that's what we put in");
+    ok (flux_kvsdir_rootref (dir) == NULL,
+        "flux_kvsdir_rootref returns NULL since that's what we put in");
+    ok (flux_kvsdir_get_size (dir) == 0,
+        "flux_kvsdir_get_size returns zero");
 
     errno = 0;
-    ok (kvsitr_create (NULL) == NULL && errno == EINVAL,
-        "kvsitr_create with NULL dir fails with EINVAL");
-    ok (kvsitr_next (NULL) == NULL,
-        "kvsitr_next on NULL iterator returns NULL");
-    lives_ok ({kvsitr_rewind (NULL);},
-        "kvsitr_rewind on NULL iterator doesn't crash");
-    lives_ok ({kvsitr_destroy (NULL);},
-        "kvsitr_destroy on NULL iterator doesn't crash");
+    ok (flux_kvsitr_create (NULL) == NULL && errno == EINVAL,
+        "flux_kvsitr_create with NULL dir fails with EINVAL");
+    ok (flux_kvsitr_next (NULL) == NULL,
+        "flux_kvsitr_next on NULL iterator returns NULL");
+    lives_ok ({flux_kvsitr_rewind (NULL);},
+        "flux_kvsitr_rewind on NULL iterator doesn't crash");
+    lives_ok ({flux_kvsitr_destroy (NULL);},
+        "flux_kvsitr_destroy on NULL iterator doesn't crash");
 
-    itr = kvsitr_create (dir);
+    itr = flux_kvsitr_create (dir);
     ok (itr != NULL,
-        "kvsitr_create works");
-    ok (kvsitr_next (itr) == NULL,
-        "kvsitr_next returns NULL on first call");
-    ok (kvsitr_next (itr) == NULL,
-        "kvsitr_next returns NULL on second call");
-    kvsitr_rewind (itr);
-    ok (kvsitr_next (itr) == NULL,
-        "kvsitr_next returns NULL after rewind");
-    kvsitr_destroy (itr);
+        "flux_kvsitr_create works");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on first call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on second call");
+    flux_kvsitr_rewind (itr);
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL after rewind");
+    flux_kvsitr_destroy (itr);
 
-    kvsdir_destroy (dir);
+    flux_kvsdir_destroy (dir);
 }
 
 void test_full (void)
@@ -139,66 +139,66 @@ void test_full (void)
 
     if (!(s = json_dumps (o, JSON_COMPACT)))
         BAIL_OUT ("json_dumps failed on new treeobj");
-    dir = kvsdir_create (NULL, NULL, "foo", s);
+    dir = flux_kvsdir_create (NULL, NULL, "foo", s);
     free (s);
     ok (dir != NULL,
-        "kvsdir_create works");
-    diag ("%s", kvsdir_tostring (dir));
+        "flux_kvsdir_create works");
+    diag ("%s", flux_kvsdir_tostring (dir));
 
-    ok (!kvsdir_exists (dir, "noexist"),
-        "kvsdir_exists on nonexistent key returns false");
-    ok (kvsdir_exists (dir, "foo"),
-        "kvsdir_exists on existing symlink returns true");
-    ok (kvsdir_exists (dir, "bar"),
-        "kvsdir_exists on existing val returns true");
-    ok (kvsdir_exists (dir, "baz"),
-        "kvsdir_exists on existing dir returns true");
+    ok (!flux_kvsdir_exists (dir, "noexist"),
+        "flux_kvsdir_exists on nonexistent key returns false");
+    ok (flux_kvsdir_exists (dir, "foo"),
+        "flux_kvsdir_exists on existing symlink returns true");
+    ok (flux_kvsdir_exists (dir, "bar"),
+        "flux_kvsdir_exists on existing val returns true");
+    ok (flux_kvsdir_exists (dir, "baz"),
+        "flux_kvsdir_exists on existing dir returns true");
 
-    ok (!kvsdir_isdir (dir, "noexist"),
-        "kvsdir_isdir on nonexistent key returns false");
-    ok (!kvsdir_isdir (dir, "foo"),
-        "kvsdir_isdir on existing symlink returns false");
-    ok (!kvsdir_isdir (dir, "bar"),
-        "kvsdir_isdir on existing val returns false");
-    ok (kvsdir_isdir (dir, "baz"),
-        "kvsdir_isdir on existing symlink returns true");
+    ok (!flux_kvsdir_isdir (dir, "noexist"),
+        "flux_kvsdir_isdir on nonexistent key returns false");
+    ok (!flux_kvsdir_isdir (dir, "foo"),
+        "flux_kvsdir_isdir on existing symlink returns false");
+    ok (!flux_kvsdir_isdir (dir, "bar"),
+        "flux_kvsdir_isdir on existing val returns false");
+    ok (flux_kvsdir_isdir (dir, "baz"),
+        "flux_kvsdir_isdir on existing symlink returns true");
 
-    ok (!kvsdir_issymlink (dir, "noexist"),
-        "kvsdir_issymlink on nonexistent key returns false");
-    ok (kvsdir_issymlink (dir, "foo"),
-        "kvsdir_issymlink on existing symlink returns true");
-    ok (!kvsdir_issymlink (dir, "bar"),
-        "kvsdir_issymlink on existing val returns false");
-    ok (!kvsdir_issymlink (dir, "baz"),
-        "kvsdir_issymlink on existing dir returns false");
+    ok (!flux_kvsdir_issymlink (dir, "noexist"),
+        "flux_kvsdir_issymlink on nonexistent key returns false");
+    ok (flux_kvsdir_issymlink (dir, "foo"),
+        "flux_kvsdir_issymlink on existing symlink returns true");
+    ok (!flux_kvsdir_issymlink (dir, "bar"),
+        "flux_kvsdir_issymlink on existing val returns false");
+    ok (!flux_kvsdir_issymlink (dir, "baz"),
+        "flux_kvsdir_issymlink on existing dir returns false");
 
-    ok (kvsdir_get_size (dir) == 3,
-        "kvsdir_get_size returns 3");
+    ok (flux_kvsdir_get_size (dir) == 3,
+        "flux_kvsdir_get_size returns 3");
 
-    itr = kvsitr_create (dir);
+    itr = flux_kvsitr_create (dir);
     ok (itr != NULL,
-        "kvsitr_create works");
-    ok (kvsitr_next (itr) != NULL,
-        "kvsitr_next returns non-NULL on first call");
-    ok (kvsitr_next (itr) != NULL,
-        "kvsitr_next returns non-NULL on second call");
-    ok (kvsitr_next (itr) != NULL,
-        "kvsitr_next returns non-NULL on third call");
-    ok (kvsitr_next (itr) == NULL,
-        "kvsitr_next returns NULL on fourth call");
+        "flux_kvsitr_create works");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns non-NULL on first call");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns non-NULL on second call");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns non-NULL on third call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on fourth call");
 
-    kvsitr_rewind (itr);
-    ok (kvsitr_next (itr) != NULL,
-        "kvsitr_next returns non-NULL after rewind");
-    ok (kvsitr_next (itr) != NULL,
-        "kvsitr_next returns non-NULL on second call");
-    ok (kvsitr_next (itr) != NULL,
-        "kvsitr_next returns non-NULL on third call");
-    ok (kvsitr_next (itr) == NULL,
-        "kvsitr_next returns NULL on fourth call");
-    kvsitr_destroy (itr);
+    flux_kvsitr_rewind (itr);
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns non-NULL after rewind");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns non-NULL on second call");
+    ok (flux_kvsitr_next (itr) != NULL,
+        "flux_kvsitr_next returns non-NULL on third call");
+    ok (flux_kvsitr_next (itr) == NULL,
+        "flux_kvsitr_next returns NULL on fourth call");
+    flux_kvsitr_destroy (itr);
 
-    kvsdir_destroy (dir);
+    flux_kvsdir_destroy (dir);
 }
 
 int main (int argc, char *argv[])

@@ -48,12 +48,12 @@ struct flux_kvsitr {
     bool reset;
 };
 
-void kvsdir_incref (flux_kvsdir_t *dir)
+void flux_kvsdir_incref (flux_kvsdir_t *dir)
 {
     dir->usecount++;
 }
 
-void kvsdir_destroy (flux_kvsdir_t *dir)
+void flux_kvsdir_destroy (flux_kvsdir_t *dir)
 {
     if (dir && --dir->usecount == 0) {
         int saved_errno = errno;
@@ -69,8 +69,8 @@ void kvsdir_destroy (flux_kvsdir_t *dir)
  * so that subsequent kvsdir_get_* accesses can be relative to that
  * snapshot.  Otherwise, they are relative to the current root.
  */
-flux_kvsdir_t *kvsdir_create (flux_t *handle, const char *rootref,
-                              const char *key, const char *json_str)
+flux_kvsdir_t *flux_kvsdir_create (flux_t *handle, const char *rootref,
+                                   const char *key, const char *json_str)
 {
     flux_kvsdir_t *dir;
 
@@ -102,11 +102,11 @@ flux_kvsdir_t *kvsdir_create (flux_t *handle, const char *rootref,
 
     return dir;
 error:
-    kvsdir_destroy (dir);
+    flux_kvsdir_destroy (dir);
     return NULL;
 }
 
-const char *kvsdir_tostring (flux_kvsdir_t *dir)
+const char *flux_kvsdir_tostring (flux_kvsdir_t *dir)
 {
     if (!dir->dirobj_string) {
         if (!(dir->dirobj_string = json_dumps (dir->dirobj, JSON_COMPACT))) {
@@ -117,27 +117,27 @@ const char *kvsdir_tostring (flux_kvsdir_t *dir)
     return dir->dirobj_string;
 }
 
-int kvsdir_get_size (flux_kvsdir_t *dir)
+int flux_kvsdir_get_size (flux_kvsdir_t *dir)
 {
     return treeobj_get_count (dir->dirobj);
 }
 
-const char *kvsdir_key (flux_kvsdir_t *dir)
+const char *flux_kvsdir_key (flux_kvsdir_t *dir)
 {
     return dir->key;
 }
 
-void *kvsdir_handle (flux_kvsdir_t *dir)
+void *flux_kvsdir_handle (flux_kvsdir_t *dir)
 {
     return dir->handle;
 }
 
-const char *kvsdir_rootref (flux_kvsdir_t *dir)
+const char *flux_kvsdir_rootref (flux_kvsdir_t *dir)
 {
     return dir->rootref;
 }
 
-void kvsitr_destroy (flux_kvsitr_t *itr)
+void flux_kvsitr_destroy (flux_kvsitr_t *itr)
 {
     if (itr) {
         int saved_errno = errno;
@@ -158,7 +158,7 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
-flux_kvsitr_t *kvsitr_create (flux_kvsdir_t *dir)
+flux_kvsitr_t *flux_kvsitr_create (flux_kvsdir_t *dir)
 {
     flux_kvsitr_t *itr = NULL;
     const char *key;
@@ -181,17 +181,17 @@ flux_kvsitr_t *kvsitr_create (flux_kvsdir_t *dir)
     itr->reset = true;
     return itr;
 error:
-    kvsitr_destroy (itr);
+    flux_kvsitr_destroy (itr);
     return NULL;
 }
 
-void kvsitr_rewind (flux_kvsitr_t *itr)
+void flux_kvsitr_rewind (flux_kvsitr_t *itr)
 {
     if (itr)
         itr->reset = true;
 }
 
-const char *kvsitr_next (flux_kvsitr_t *itr)
+const char *flux_kvsitr_next (flux_kvsitr_t *itr)
 {
     const char *name = NULL;
 
@@ -206,14 +206,14 @@ const char *kvsitr_next (flux_kvsitr_t *itr)
     return name;
 }
 
-bool kvsdir_exists (flux_kvsdir_t *dir, const char *name)
+bool flux_kvsdir_exists (flux_kvsdir_t *dir, const char *name)
 {
     if (treeobj_get_entry (dir->dirobj, name))
         return true;
     return false;
 }
 
-bool kvsdir_isdir (flux_kvsdir_t *dir, const char *name)
+bool flux_kvsdir_isdir (flux_kvsdir_t *dir, const char *name)
 {
     json_t *obj = treeobj_get_entry (dir->dirobj, name);
 
@@ -224,7 +224,7 @@ bool kvsdir_isdir (flux_kvsdir_t *dir, const char *name)
     return false;
 }
 
-bool kvsdir_issymlink (flux_kvsdir_t *dir, const char *name)
+bool flux_kvsdir_issymlink (flux_kvsdir_t *dir, const char *name)
 {
     json_t *obj = treeobj_get_entry (dir->dirobj, name);
 
@@ -236,7 +236,7 @@ bool kvsdir_issymlink (flux_kvsdir_t *dir, const char *name)
 }
 
 
-char *kvsdir_key_at (flux_kvsdir_t *dir, const char *name)
+char *flux_kvsdir_key_at (flux_kvsdir_t *dir, const char *name)
 {
     char *s;
 

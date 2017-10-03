@@ -230,21 +230,21 @@ static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
     }
 
     json_object_object_foreachC (req, i) {
-        rc = kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
+        rc = flux_kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
         if (rc < 0) {
-            flux_log_error (h, "addd_jobinfo: kvsdir_put (key=%s)", i.key);
+            flux_log_error (h, "addd_jobinfo: flux_kvsdir_put (key=%s)", i.key);
             goto out;
         }
     }
 
     o = json_object_new_string (realtime_string (buf, sizeof (buf)));
     /* Not a fatal error if create-time addition fails */
-    if (kvsdir_put (dir, "create-time", json_object_to_json_string (o)) < 0)
-        flux_log_error (h, "add_jobinfo: kvsdir_put (create-time)");
+    if (flux_kvsdir_put (dir, "create-time", json_object_to_json_string (o)) < 0)
+        flux_log_error (h, "add_jobinfo: flux_kvsdir_put (create-time)");
     json_object_put (o);
 
 out:
-    kvsdir_destroy (dir);
+    flux_kvsdir_destroy (dir);
     return (rc);
 }
 
@@ -528,10 +528,10 @@ static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
                   kvspath, strerror (errno));
         return (true);
     }
-    kvsdir_destroy (tmp);
+    flux_kvsdir_destroy (tmp);
     if (kvs_get_dir (h, &tmp, "%s.rank.%d", kvspath, broker_rank) < 0)
         return (false);
-    kvsdir_destroy (tmp);
+    flux_kvsdir_destroy (tmp);
     return (true);
 }
 
