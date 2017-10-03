@@ -331,7 +331,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
 static void dump_kvs_dir (flux_kvsdir_t *dir, bool ropt)
 {
     flux_future_t *f;
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     flux_t *h = kvsdir_handle (dir);
     const char *rootref = kvsdir_rootref (dir);

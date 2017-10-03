@@ -24,7 +24,7 @@ void jdiag (json_t *o)
 void test_empty (void)
 {
     flux_kvsdir_t *dir;
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     json_t *o;
     char *s;
     const char *key;
@@ -115,7 +115,7 @@ void test_empty (void)
 void test_full (void)
 {
     flux_kvsdir_t *dir;
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     json_t *o, *dirent;
     char *s;
 

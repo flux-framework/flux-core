@@ -144,16 +144,16 @@ static int l_kvsdir_newindex (lua_State *L)
     return (0);
 }
 
-static kvsitr_t *lua_to_kvsitr (lua_State *L, int index)
+static flux_kvsitr_t *lua_to_kvsitr (lua_State *L, int index)
 {
-    kvsitr_t **iptr = luaL_checkudata (L, index, "CMB.kvsitr");
+    flux_kvsitr_t **iptr = luaL_checkudata (L, index, "CMB.kvsitr");
     return (*iptr);
 }
 
 /* gc metamethod for iterator */
 static int l_kvsitr_destroy (lua_State *L)
 {
-    kvsitr_t *i = lua_to_kvsitr (L, 1);
+    flux_kvsitr_t *i = lua_to_kvsitr (L, 1);
     kvsitr_destroy (i);
     return (0);
 }
@@ -161,7 +161,7 @@ static int l_kvsitr_destroy (lua_State *L)
 static int l_kvsdir_iterator (lua_State *L)
 {
     const char *key;
-    kvsitr_t *i;
+    flux_kvsitr_t *i;
 
     /* Get kvsitr from upvalue index on stack:
      */
@@ -181,11 +181,11 @@ static int l_kvsdir_iterator (lua_State *L)
 static int l_kvsdir_next (lua_State *L)
 {
     flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
-    kvsitr_t **iptr;
+    flux_kvsitr_t **iptr;
 
     lua_pop (L, 1);
 
-    /* Push a kvsitr_t onto top of stack and set its metatable.
+    /* Push a flux_kvsitr_t onto top of stack and set its metatable.
      */
     iptr = lua_newuserdata (L, sizeof (*iptr));
     *iptr = kvsitr_create (d);

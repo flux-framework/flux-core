@@ -776,7 +776,7 @@ static void dump_kvs_dir (flux_kvsdir_t *dir, bool Ropt, bool dopt)
     const char *rootref = kvsdir_rootref (dir);
     flux_t *h = kvsdir_handle (dir);
     flux_future_t *f;
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     char *key;
 
@@ -851,7 +851,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
  */
 static int get_dir_maxname (flux_kvsdir_t *dir)
 {
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     int max = 0;
 
@@ -920,7 +920,7 @@ static bool need_newline (int col, int col_width, int win_width)
 static void list_kvs_dir_single (flux_kvsdir_t *dir, int win_width,
                                  optparse_t *p)
 {
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     int col_width = get_dir_maxname (dir) + 4;
     int col = 0;
@@ -963,7 +963,7 @@ static void list_kvs_dir (flux_t *h, const char *key, optparse_t *p,
 {
     flux_future_t *f;
     flux_kvsdir_t *dir = NULL;
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name, *json_str;
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))

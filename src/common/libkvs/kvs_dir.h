@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 typedef struct flux_kvsdir flux_kvsdir_t;
-typedef struct kvsdir_iterator kvsitr_t;
+typedef struct flux_kvsitr flux_kvsitr_t;
 
 /* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
  */
@@ -20,10 +20,10 @@ const char *kvsdir_tostring (flux_kvsdir_t *dir);
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.
  * kvsitr_next() returns NULL when the last item is reached.
  */
-kvsitr_t *kvsitr_create (flux_kvsdir_t *dir);
-void kvsitr_destroy (kvsitr_t *itr);
-const char *kvsitr_next (kvsitr_t *itr);
-void kvsitr_rewind (kvsitr_t *itr);
+flux_kvsitr_t *kvsitr_create (flux_kvsdir_t *dir);
+void kvsitr_destroy (flux_kvsitr_t *itr);
+const char *kvsitr_next (flux_kvsitr_t *itr);
+void kvsitr_rewind (flux_kvsitr_t *itr);
 
 /* Test attributes of 'name', relative to kvsdir object.
  * This is intended for testing names returned by kvsitr_next (no recursion).

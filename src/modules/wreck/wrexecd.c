@@ -826,7 +826,7 @@ static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
 {
     int n = 0;
     flux_kvsdir_t *rank = NULL;
-    kvsitr_t *i;
+    flux_kvsitr_t *i;
     const char *key;
     int *nodeids;
     uint32_t size;
@@ -882,7 +882,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 int prog_ctx_options_init (struct prog_ctx *ctx)
 {
     flux_kvsdir_t *opts;
-    kvsitr_t *i;
+    flux_kvsitr_t *i;
     const char *opt;
 
     if (kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)

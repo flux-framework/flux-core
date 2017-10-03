@@ -43,7 +43,7 @@ struct flux_kvsdir {
     int usecount;
 };
 
-struct kvsdir_iterator {
+struct flux_kvsitr {
     zlist_t *keys;
     bool reset;
 };
@@ -137,7 +137,7 @@ const char *kvsdir_rootref (flux_kvsdir_t *dir)
     return dir->rootref;
 }
 
-void kvsitr_destroy (kvsitr_t *itr)
+void kvsitr_destroy (flux_kvsitr_t *itr)
 {
     if (itr) {
         int saved_errno = errno;
@@ -158,9 +158,9 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
-kvsitr_t *kvsitr_create (flux_kvsdir_t *dir)
+flux_kvsitr_t *kvsitr_create (flux_kvsdir_t *dir)
 {
-    kvsitr_t *itr = NULL;
+    flux_kvsitr_t *itr = NULL;
     const char *key;
     json_t *dirdata, *value;
 
@@ -185,13 +185,13 @@ error:
     return NULL;
 }
 
-void kvsitr_rewind (kvsitr_t *itr)
+void kvsitr_rewind (flux_kvsitr_t *itr)
 {
     if (itr)
         itr->reset = true;
 }
 
-const char *kvsitr_next (kvsitr_t *itr)
+const char *kvsitr_next (flux_kvsitr_t *itr)
 {
     const char *name = NULL;
 

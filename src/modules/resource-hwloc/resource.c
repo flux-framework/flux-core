@@ -445,7 +445,7 @@ static void topo_request_cb (flux_t *h,
     }
     hwloc_topology_set_custom (global);
 
-    kvsitr_t *base_iter = kvsitr_create (kd);
+    flux_kvsitr_t *base_iter = kvsitr_create (kd);
     const char *base_key = NULL;
     while ((base_key = kvsitr_next (base_iter))) {
         char *key = kvsdir_key_at (kd, base_key);
