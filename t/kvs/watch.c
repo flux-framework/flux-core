@@ -168,16 +168,16 @@ void *thread (void *arg)
     /* The first kvs.watch reply is handled synchronously, then other kvs.watch
      * replies will arrive asynchronously and be handled by the reactor.
      */
-    if (kvs_watch (t->h, key, mt_watch_cb, t) < 0) {
-        log_err ("%d: kvs_watch", t->n);
+    if (flux_kvs_watch (t->h, key, mt_watch_cb, t) < 0) {
+        log_err ("%d: flux_kvs_watch", t->n);
         goto done;
     }
-    if (kvs_watch (t->h, "nonexistent-key", mt_watchnil_cb, t) < 0) {
-        log_err ("%d: kvs_watch", t->n);
+    if (flux_kvs_watch (t->h, "nonexistent-key", mt_watchnil_cb, t) < 0) {
+        log_err ("%d: flux_kvs_watch", t->n);
         goto done;
     }
-    if (kvs_watch (t->h, key_stable, mt_watchstable_cb, t) < 0) {
-        log_err ("%d: kvs_watch", t->n);
+    if (flux_kvs_watch (t->h, key_stable, mt_watchstable_cb, t) < 0) {
+        log_err ("%d: flux_kvs_watch", t->n);
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (t->h), 0) < 0) {
@@ -225,14 +225,14 @@ void test_mt (int argc, char **argv)
         log_err_exit ("flux_open");
 
     /* Set initial value of 'key' to -1 */
-    if (kvs_put_int (h, key, -1) < 0)
-        log_err_exit ("kvs_put_int %s", key);
+    if (flux_kvs_put_int (h, key, -1) < 0)
+        log_err_exit ("flux_kvs_put_int %s", key);
     key_stable = xasprintf ("%s-stable", key);
-    if (kvs_put_int (h, key_stable, 0) < 0)
-        log_err_exit ("kvs_put_int %s", key);
+    if (flux_kvs_put_int (h, key_stable, 0) < 0)
+        log_err_exit ("flux_kvs_put_int %s", key);
 
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (flux_kvs_commit_anon (h, 0) < 0)
+        log_err_exit ("flux_kvs_commit_anon");
 
     for (i = 0; i < nthreads; i++) {
         thd[i].n = i;
@@ -245,10 +245,10 @@ void test_mt (int argc, char **argv)
     wait_ready ();
 
     for (i = 0; i < changes; i++) {
-        if (kvs_put_int (h, key, i) < 0)
-            log_err_exit ("kvs_put_int %s", key);
-        if (kvs_commit (h, 0) < 0)
-            log_err_exit ("kvs_commit");
+        if (flux_kvs_put_int (h, key, i) < 0)
+            log_err_exit ("flux_kvs_put_int %s", key);
+        if (flux_kvs_commit_anon (h, 0) < 0)
+            log_err_exit ("flux_kvs_commit_anon");
     }
 
     /* Verify that callbacks were called the correct number of times.
@@ -300,11 +300,11 @@ static int selfmod_watch_cb (const char *key, const char *json_str, void *arg, i
         log_msg_exit ("%s: failed to decode json value", __FUNCTION__);
     val = json_integer_value (obj);
     flux_t *h = arg;
-    if (kvs_put_int (h, key, val + 1) < 0)
-        log_err_exit ("%s: kvs_put_int", __FUNCTION__);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("%s: kvs_commit", __FUNCTION__);
-    json_decref (obj);    
+    if (flux_kvs_put_int (h, key, val + 1) < 0)
+        log_err_exit ("%s: flux_kvs_put_int", __FUNCTION__);
+    if (flux_kvs_commit_anon (h, 0) < 0)
+        log_err_exit ("%s: flux_kvs_commit_anon", __FUNCTION__);
+    json_decref (obj);
     return (val == 0 ? -1 : 0);
 }
 
@@ -321,12 +321,12 @@ void test_selfmod (int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (kvs_put_int (h, key, -1) < 0)
-        log_err_exit ("kvs_put_int");
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
-    if (kvs_watch (h, key, selfmod_watch_cb, h) < 0)
-        log_err_exit ("kvs_watch");
+    if (flux_kvs_put_int (h, key, -1) < 0)
+        log_err_exit ("flux_kvs_put_int");
+    if (flux_kvs_commit_anon (h, 0) < 0)
+        log_err_exit ("flux_kvs_commit_anon");
+    if (flux_kvs_watch (h, key, selfmod_watch_cb, h) < 0)
+        log_err_exit ("flux_kvs_watch");
 
     log_msg ("reactor: start");
     flux_reactor_run (flux_get_reactor (h), 0);
@@ -353,19 +353,19 @@ static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct timer_ctx *ctx = arg;
     static int count = 0;
     log_msg ("%s", __FUNCTION__);
-    if (kvs_put_int (ctx->h, ctx->key, count++) < 0)
-        log_err_exit ("%s: kvs_put_int", __FUNCTION__);
-    if (kvs_commit (ctx->h, 0) < 0)
-        log_err_exit ("%s: kvs_commit", __FUNCTION__);
+    if (flux_kvs_put_int (ctx->h, ctx->key, count++) < 0)
+        log_err_exit ("%s: flux_kvs_put_int", __FUNCTION__);
+    if (flux_kvs_commit_anon (ctx->h, 0) < 0)
+        log_err_exit ("%s: flux_kvs_commit_anon", __FUNCTION__);
     if (count == 10) {
-        if (kvs_unwatch (ctx->h, ctx->key) < 0)
-            log_err_exit ("%s: kvs_unwatch", __FUNCTION__);
+        if (flux_kvs_unwatch (ctx->h, ctx->key) < 0)
+            log_err_exit ("%s: flux_kvs_unwatch", __FUNCTION__);
     } else if (count == 20)
         flux_reactor_stop (r);
 }
 
 /* Timer pops every 1 ms, writing a new value to key.
- * After 10 calls, it calls kvs_unwatch().
+ * After 10 calls, it calls flux_kvs_unwatch().
  * After 20 calls, it calls flux_reactor_stop().
  * The kvs_unwatch_cb() counts the number of times it is called, should be 10.
  */
@@ -384,8 +384,8 @@ void test_unwatch (int argc, char **argv)
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     r = flux_get_reactor (ctx.h);
-    if (kvs_watch (ctx.h, ctx.key, unwatch_watch_cb, &count) < 0)
-        log_err_exit ("kvs_watch %s", ctx.key);
+    if (flux_kvs_watch (ctx.h, ctx.key, unwatch_watch_cb, &count) < 0)
+        log_err_exit ("flux_kvs_watch %s", ctx.key);
     if (!(timer = flux_timer_watcher_create (r, 0.001, 0.001,
                                              unwatch_timer_cb, &ctx)))
         log_err_exit ("flux_timer_watcher_create");
@@ -421,10 +421,10 @@ void test_unwatchloop (int argc, char **argv)
         log_err_exit ("flux_open");
     uint32_t avail = flux_matchtag_avail (h, 0);
     for (i = 0; i < 1000; i++) {
-        if (kvs_watch (h, key, unwatchloop_cb, NULL) < 0)
-            log_err_exit ("kvs_watch[%d] %s", i, key);
-        if (kvs_unwatch (h, key) < 0)
-            log_err_exit ("kvs_unwatch[%d] %s", i, key);
+        if (flux_kvs_watch (h, key, unwatchloop_cb, NULL) < 0)
+            log_err_exit ("flux_kvs_watch[%d] %s", i, key);
+        if (flux_kvs_unwatch (h, key) < 0)
+            log_err_exit ("flux_kvs_unwatch[%d] %s", i, key);
     }
     uint32_t leaked = avail - flux_matchtag_avail (h, 0);
     if (leaked > 0)
@@ -474,8 +474,8 @@ void test_simulwatch (int argc, char **argv)
     if (get_watch_stats (h, &start) < 0)
         log_err_exit ("kvs.stats.get");
     for (i = 0; i < max; i++) {
-        if (kvs_watch (h, key, simulwatch_cb, &count) < 0)
-            log_err_exit ("kvs_watch[%d] %s", i, key);
+        if (flux_kvs_watch (h, key, simulwatch_cb, &count) < 0)
+            log_err_exit ("flux_kvs_watch[%d] %s", i, key);
         if ((i % 4096 == 0 && i > 0 && i + 4096 < max))
             log_msg ("%d of %d watchers registered (continuing)", i, max);
     }
@@ -488,7 +488,7 @@ void test_simulwatch (int argc, char **argv)
     if (fin - start != count)
         exit_rc = 1;
     log_msg ("%d of %d watchers running", fin - start, count);
-    if (kvs_unwatch (h, key) < 0)
+    if (flux_kvs_unwatch (h, key) < 0)
         log_err_exit ("kvs.unwatch");
     if (get_watch_stats (h, &fin) < 0)
         log_err_exit ("kvs.stats.get");

@@ -22,15 +22,15 @@ typedef int (*kvs_set_dir_f)(const char *key, flux_kvsdir_t *dir, void *arg,
  * callback is freed when the callback returns.  If a value is unset, the
  * callback gets errnum = ENOENT.
  */
-int kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg);
-int kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
-                   const char *fmt, ...)
-        __attribute__ ((format (printf, 4, 5)));
+int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg);
+int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
+                        const char *fmt, ...)
+                        __attribute__ ((format (printf, 4, 5)));
 
 /* Cancel a kvs_watch, freeing server-side state, and unregistering any
  * callback.  Returns 0 on success, or -1 with errno set on error.
  */
-int kvs_unwatch (flux_t *h, const char *key);
+int flux_kvs_unwatch (flux_t *h, const char *key);
 
 /* While the above callback interface makes sense in plugin context,
  * the following is better for API context.  'json_str', 'dirp', and
@@ -43,9 +43,10 @@ int kvs_unwatch (flux_t *h, const char *key);
  * *valp.
  * FIXME: add more types.
  */
-int kvs_watch_once (flux_t *h, const char *key, char **json_str);
-int kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
-        __attribute__ ((format (printf, 3, 4)));
+int flux_kvs_watch_once (flux_t *h, const char *key, char **json_str);
+int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
+                             const char *fmt, ...)
+                             __attribute__ ((format (printf, 3, 4)));
 
 #ifdef __cplusplus
 }

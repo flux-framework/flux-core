@@ -306,8 +306,8 @@ static int jobid_exist (flux_t *h, int64_t j)
     const char *path = jscctx_jobid_path (ctx, j);
     if (path == NULL)
         return -1;
-    if (kvs_get_dir (h, &d, "%s", path) < 0) {
-        flux_log (h, LOG_DEBUG, "kvs_get_dir(%s): %s",
+    if (flux_kvs_get_dir (h, &d, "%s", path) < 0) {
+        flux_log (h, LOG_DEBUG, "flux_kvs_get_dir(%s): %s",
                      path, flux_strerror (errno));
         return -1;
     }
@@ -463,7 +463,7 @@ static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_object **o)
     int rc = 0;
     char *json_str = NULL;
     char *key = lwj_key (h, j, ".%ju.procdesc", i);
-    if (kvs_get (h, key, &json_str) < 0
+    if (flux_kvs_get (h, key, &json_str) < 0
             || !(*o = Jfromstr (json_str))) {
         flux_log_error (h, "extract %s", key);
         rc = -1;
@@ -693,9 +693,9 @@ static int update_state (flux_t *h, int64_t j, json_object *o)
     if ((st >= J_FOR_RENT) || (st < J_NULL)) return -1;
 
     key = lwj_key (h, j, ".state");
-    if (kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0)
+    if (flux_kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0)
         flux_log_error (h, "update %s", key);
-    else if (kvs_commit (h, 0) < 0)
+    else if (flux_kvs_commit_anon (h, 0) < 0)
         flux_log_error (h, "commit %s", key);
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
@@ -729,13 +729,13 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
     key1 = lwj_key (h, j, ".nnodes");
     key2 = lwj_key (h, j, ".ntasks");
     key3 = lwj_key (h, j, ".walltime");
-    if (kvs_put_int64 (h, key1, nnodes) < 0)
+    if (flux_kvs_put_int64 (h, key1, nnodes) < 0)
         flux_log_error (h, "update %s", key1);
-    else if (kvs_put_int64 (h, key2, ntasks) < 0)
+    else if (flux_kvs_put_int64 (h, key2, ntasks) < 0)
         flux_log_error (h, "update %s", key2);
-    else if (kvs_put_int64 (h, key3, walltime) < 0)
+    else if (flux_kvs_put_int64 (h, key3, walltime) < 0)
         flux_log_error (h, "update %s", key3);
-    else if (kvs_commit (h, 0) < 0)
+    else if (flux_kvs_commit_anon (h, 0) < 0)
         flux_log_error (h, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
@@ -751,9 +751,9 @@ static int update_rdl (flux_t *h, int64_t j, const char *rs)
 {
     int rc = -1;
     char *key = lwj_key (h, j, ".rdl");
-    if (kvs_put_string (h, key, rs) < 0)
+    if (flux_kvs_put_string (h, key, rs) < 0)
         flux_log_error (h, "update %s", key);
-    else if (kvs_commit (h, 0) < 0)
+    else if (flux_kvs_commit_anon (h, 0) < 0)
         flux_log_error (h, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
@@ -817,12 +817,12 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
     }
 
     FOREACH_ZHASH (rtab, key, ncores) {
-        if ( (rc = kvs_put_int64 (h, key, *ncores)) < 0) {
+        if ( (rc = flux_kvs_put_int64 (h, key, *ncores)) < 0) {
             flux_log_error (h, "put %s", key);
             goto done;
         }
     }
-    if (kvs_commit (h, 0) < 0) {
+    if (flux_kvs_commit_anon (h, 0) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
         goto done;
     }
@@ -850,7 +850,7 @@ static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
     if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
 
     key = lwj_key (h, j, ".%d.procdesc", r);
-    if (kvs_get (h, key, &json_str) < 0
+    if (flux_kvs_get (h, key, &json_str) < 0
             || !(d = Jfromstr (json_str))) {
         flux_log_error (h, "extract %s", key);
         goto done;
@@ -864,7 +864,7 @@ static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
         goto done;
     }
     Jadd_int64 (d, "nodeid", (int64_t)hrank);
-    if (kvs_put (h, key, Jtostr (d)) < 0) {
+    if (flux_kvs_put (h, key, Jtostr (d)) < 0) {
         flux_log_error (h, "put %s", key);
         goto done;
     }
@@ -900,7 +900,7 @@ static int update_pdesc (flux_t *h, int64_t j, json_object *o)
         if ( (rc = update_1pdesc (h, i, j, pde, h_arr, e_arr)) < 0)
             goto done;
     }
-    if (kvs_commit (h, 0) < 0) {
+    if (flux_kvs_commit_anon (h, 0) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
         goto done;
     }

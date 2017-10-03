@@ -205,8 +205,8 @@ static int l_kvsdir_commit (lua_State *L)
 {
     flux_kvsdir_t *d = lua_get_kvsdir (L, 1);
     if (lua_isnoneornil (L, 2)) {
-        if (kvs_commit (flux_kvsdir_handle (d), 0) < 0)
-            return lua_pusherror (L, "kvs_commit: %s",
+        if (flux_kvs_commit_anon (flux_kvsdir_handle (d), 0) < 0)
+            return lua_pusherror (L, "flux_kvs_commit_anon: %s",
                                   (char *)flux_strerror (errno));
     }
     lua_pushboolean (L, true);
@@ -239,7 +239,7 @@ static int l_kvsdir_watch (lua_State *L)
 
     if (lua_isnoneornil (L, 3)) {
         /* Need to fetch initial value */
-        if (((rc = kvs_get (h, key, &json_str)) < 0) && (errno != ENOENT))
+        if (((rc = flux_kvs_get (h, key, &json_str)) < 0) && (errno != ENOENT))
             goto err;
     }
     else {
@@ -247,11 +247,11 @@ static int l_kvsdir_watch (lua_State *L)
         lua_value_to_json_string (L, -1, &json_str);
     }
 
-    rc = kvs_watch_once (h, key, &json_str);
+    rc = flux_kvs_watch_once (h, key, &json_str);
 err:
     free (key);
     if (rc < 0)
-        return lua_pusherror (L, "kvs_watch: %s",
+        return lua_pusherror (L, "flux_kvs_watch: %s",
                               (char *)flux_strerror (errno));
 
     json_object_string_to_lua (L, json_str);
@@ -267,7 +267,7 @@ static int l_kvsdir_watch_dir (lua_State *L)
     dir = lua_get_kvsdir (L, 1);
     h = flux_kvsdir_handle (dir);
 
-    return l_pushresult (L, kvs_watch_once_dir (h, &dir, "%s",
+    return l_pushresult (L, flux_kvs_watch_once_dir (h, &dir, "%s",
                          flux_kvsdir_key (dir)));
 }
 
@@ -291,7 +291,7 @@ static int l_kvsdir_index (lua_State *L)
     f = flux_kvsdir_handle (d);
     fullkey = flux_kvsdir_key_at (d, key);
 
-    if (kvs_get (f, fullkey, &json_str) == 0)
+    if (flux_kvs_get (f, fullkey, &json_str) == 0)
         rc = json_object_string_to_lua (L, json_str);
     else if (errno == EISDIR)
         rc = l_kvsdir_kvsdir_new (L);

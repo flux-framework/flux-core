@@ -120,10 +120,10 @@ int main (int argc, char *argv[])
         prefix = xasprintf ("kvstorture-%"PRIu32, rank);
     }
 
-    if (kvs_unlink (h, prefix) < 0)
-        log_err_exit ("kvs_unlink %s", prefix);
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (flux_kvs_unlink (h, prefix) < 0)
+        log_err_exit ("flux_kvs_unlink %s", prefix);
+    if (flux_kvs_commit_anon (h, 0) < 0)
+        log_err_exit ("flux_kvs_commit_anon");
 
     val = xzmalloc (size);
 
@@ -133,8 +133,8 @@ int main (int argc, char *argv[])
             oom ();
         fill (val, i, size);
         vo = json_object_new_string (val);
-        if (kvs_put (h, key, json_object_to_json_string (vo)) < 0)
-            log_err_exit ("kvs_put %s", key);
+        if (flux_kvs_put (h, key, json_object_to_json_string (vo)) < 0)
+            log_err_exit ("flux_kvs_put %s", key);
         if (verbose)
             log_msg ("%s = %s", key, val);
         if (vo)
@@ -146,7 +146,7 @@ int main (int argc, char *argv[])
              monotime_since (t0)/1000, count, size);
 
     monotime (&t0);
-    if (kvs_commit (h, 0) < 0)
+    if (flux_kvs_commit_anon (h, 0) < 0)
         log_err_exit ("kvs_commit");
     if (!quiet)
         log_msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);
@@ -156,8 +156,8 @@ int main (int argc, char *argv[])
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        if (kvs_get (h, key, &json_str) < 0)
-            log_err_exit ("kvs_get '%s'", key);
+        if (flux_kvs_get (h, key, &json_str) < 0)
+            log_err_exit ("flux_kvs_get '%s'", key);
         if (!(vo = json_tokener_parse (json_str)))
             log_msg_exit ("json_tokener_parse");
         free (json_str);

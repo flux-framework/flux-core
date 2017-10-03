@@ -31,7 +31,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-int kvs_get (flux_t *h, const char *key, char **valp)
+int flux_kvs_get (flux_t *h, const char *key, char **valp)
 {
     flux_future_t *f;
     const char *json_str;
@@ -53,7 +53,7 @@ done:
     return rc;
 }
 
-int kvs_get_dir (flux_t *h, flux_kvsdir_t **dir, const char *fmt, ...)
+int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dir, const char *fmt, ...)
 {
     flux_future_t *f = NULL;
     const char *json_str;
@@ -175,7 +175,7 @@ static void clear_default_txn (flux_t *h)
     flux_aux_set (h, default_txn_auxkey, NULL, NULL);
 }
 
-int kvs_commit (flux_t *h, int flags)
+int flux_kvs_commit_anon (flux_t *h, int flags)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     flux_future_t *f;
@@ -193,7 +193,7 @@ int kvs_commit (flux_t *h, int flags)
     return rc;
 }
 
-int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
+int flux_kvs_fence_anon (flux_t *h, const char *name, int nprocs, int flags)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     flux_future_t *f;
@@ -211,7 +211,7 @@ int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
     return rc;
 }
 
-int kvs_put (flux_t *h, const char *key, const char *json_str)
+int flux_kvs_put (flux_t *h, const char *key, const char *json_str)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -219,7 +219,7 @@ int kvs_put (flux_t *h, const char *key, const char *json_str)
     return flux_kvs_txn_put (txn, 0, key, json_str);
 }
 
-int kvs_put_string (flux_t *h, const char *key, const char *val)
+int flux_kvs_put_string (flux_t *h, const char *key, const char *val)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -227,7 +227,7 @@ int kvs_put_string (flux_t *h, const char *key, const char *val)
     return flux_kvs_txn_pack (txn, 0, key, "s", val);
 }
 
-int kvs_put_int (flux_t *h, const char *key, int val)
+int flux_kvs_put_int (flux_t *h, const char *key, int val)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -235,7 +235,7 @@ int kvs_put_int (flux_t *h, const char *key, int val)
     return flux_kvs_txn_pack (txn, 0, key, "i", val);
 }
 
-int kvs_put_int64 (flux_t *h, const char *key, int64_t val)
+int flux_kvs_put_int64 (flux_t *h, const char *key, int64_t val)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -243,7 +243,7 @@ int kvs_put_int64 (flux_t *h, const char *key, int64_t val)
     return flux_kvs_txn_pack (txn, 0, key, "I", val);
 }
 
-int kvs_unlink (flux_t *h, const char *key)
+int flux_kvs_unlink (flux_t *h, const char *key)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -251,7 +251,7 @@ int kvs_unlink (flux_t *h, const char *key)
     return flux_kvs_txn_unlink (txn, 0, key);
 }
 
-int kvs_symlink (flux_t *h, const char *key, const char *target)
+int flux_kvs_symlink (flux_t *h, const char *key, const char *target)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -259,7 +259,7 @@ int kvs_symlink (flux_t *h, const char *key, const char *target)
     return flux_kvs_txn_symlink (txn, 0, key, target);
 }
 
-int kvs_mkdir (flux_t *h, const char *key)
+int flux_kvs_mkdir (flux_t *h, const char *key)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)

@@ -245,19 +245,19 @@ static void config_hwloc_paths (flux_t *h, const char *dirpath)
         assert (n < sizeof (key));
         if (dirpath == NULL) {
             /* Remove any per rank xml and reload default xml */
-            if (kvs_unlink (h, key) < 0)
-                log_err_exit ("kvs_unlink");
+            if (flux_kvs_unlink (h, key) < 0)
+                log_err_exit ("flux_kvs_unlink");
             continue;
         }
         n = snprintf (path, sizeof (path), "%s/%"PRIu32".xml", dirpath, rank);
         assert (n < sizeof (path));
         if (access (path, R_OK) < 0)
             log_err_exit ("%s", path);
-        if (kvs_put_string (h, key, path) < 0)
-            log_err_exit ("kvs_put_string");
+        if (flux_kvs_put_string (h, key, path) < 0)
+            log_err_exit ("flux_kvs_put_string");
     }
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (flux_kvs_commit_anon (h, 0) < 0)
+        log_err_exit ("flux_kvs_commit_anon");
 }
 
 static bool hwloc_reload_bool_value (const char *walk_topology)

@@ -164,13 +164,13 @@ static int load_xml_to_kvs (flux_t *h, resource_ctx_t *ctx)
     int buflen = 0, ret = -1;
 
     xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, ctx->rank);
-    (void)kvs_unlink (h, xml_path);
+    (void)flux_kvs_unlink (h, xml_path);
     if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
         flux_log (h, LOG_ERR, "hwloc_topology_export_xmlbuffer");
         goto done;
     }
-    if (kvs_put_string (h, xml_path, buffer) < 0) {
-        flux_log (h, LOG_ERR, "kvs_put_string");
+    if (flux_kvs_put_string (h, xml_path, buffer) < 0) {
+        flux_log (h, LOG_ERR, "flux_kvs_put_string");
         goto done;
     }
     ret = 0;
@@ -237,7 +237,7 @@ static int walk_topology (flux_t *h,
     new_path = xasprintf ("%s.%s_%u", path, type, obj->logical_index);
 
     os_index_path = xasprintf ("%s.os_index", new_path);
-    kvs_put_int (h, os_index_path, obj->os_index);
+    flux_kvs_put_int (h, os_index_path, obj->os_index);
 
     // Tokenize the string, break out key/value pairs and store appropriately
     for (token = buf, end = strstr (token, ":-!:"); end && token;
@@ -252,7 +252,7 @@ static int walk_topology (flux_t *h,
                 int kvs_ret = -1;
                 value++;
 
-                kvs_ret = kvs_put_string (h, value_path, value);
+                kvs_ret = flux_kvs_put_string (h, value_path, value);
 
                 free (value_path);
                 if (kvs_ret < 0)
@@ -282,7 +282,7 @@ static int put_hostname (flux_t *h, const char *base, const char *hostname)
     char *key;
     if (asprintf (&key, "%s.HostName", base) < 0)
         return (-1);
-    rc = kvs_put_string (h, key, hostname);
+    rc = flux_kvs_put_string (h, key, hostname);
     free (key);
     return (rc);
 }
@@ -294,13 +294,13 @@ static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx)
     int depth = hwloc_topology_get_depth (ctx->topology);
 
     base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, ctx->rank);
-    (void)kvs_unlink (h, base_path);
+    (void)flux_kvs_unlink (h, base_path);
     for (i = 0; i < depth; ++i) {
         int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
         hwloc_obj_type_t t = hwloc_get_depth_type (ctx->topology, i);
         char *obj_path =
             xasprintf ("%s.%s", base_path, hwloc_obj_type_string (t));
-        kvs_put_int (h, obj_path, nobj);
+        flux_kvs_put_int (h, obj_path, nobj);
         free (obj_path);
     }
     if (ctx->walk_topology &&
@@ -322,7 +322,7 @@ static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx)
             flux_log_error (h, "failed to record hostname for this rank");
 
         free (kvs_hostname);
-        (void) kvs_unlink (h, host_path);
+        (void) flux_kvs_unlink (h, host_path);
         if (ctx->walk_topology &&
             walk_topology (h,
                            ctx->topology,
@@ -355,12 +355,12 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         goto done;
     }
     completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, ctx->rank);
-    if (kvs_put_int (h, completion_path, 1) < 0) {
-        flux_log_error (h, "%s: kvs_put_int", __FUNCTION__);
+    if (flux_kvs_put_int (h, completion_path, 1) < 0) {
+        flux_log_error (h, "%s: flux_kvs_put_int", __FUNCTION__);
         goto done;
     }
-    if (kvs_commit (h, 0) < 0) {
-        flux_log_error (h, "%s: kvs_commit", __FUNCTION__);
+    if (flux_kvs_commit_anon (h, 0) < 0) {
+        flux_log_error (h, "%s: flux_kvs_commit_anon", __FUNCTION__);
         goto done;
     }
     flux_log (h, LOG_DEBUG, "loaded");
@@ -434,7 +434,7 @@ static void topo_request_cb (flux_t *h,
         goto done;
     }
 
-    if (kvs_get_dir (h, &kd, "resource.hwloc.xml") < 0) {
+    if (flux_kvs_get_dir (h, &kd, "resource.hwloc.xml") < 0) {
         flux_log (h, LOG_ERR, "xml dir is not available");
         goto done;
     }

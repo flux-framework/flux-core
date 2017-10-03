@@ -250,12 +250,12 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
         flux_log (h, LOG_ERR, "sink: aggregate_tojson failed");
         return (-1);
     }
-    if ((rc = kvs_put (h, ag->key, Jtostr (o))) < 0) {
-        flux_log_error (h, "sink: kvs_put");
+    if ((rc = flux_kvs_put (h, ag->key, Jtostr (o))) < 0) {
+        flux_log_error (h, "sink: flux_kvs_put");
         goto out;
     }
-    if ((rc = kvs_commit (h, 0)) < 0)
-        flux_log_error (h, "sink: kvs_commit");
+    if ((rc = flux_kvs_commit_anon (h, 0)) < 0)
+        flux_log_error (h, "sink: flux_kvs_commit_anon");
 out:
     Jput (o);
     return (rc);

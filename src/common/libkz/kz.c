@@ -98,7 +98,7 @@ static bool key_exists (flux_t *h, const char *key)
     char *json_str = NULL;
     bool ret = false;
 
-    if (kvs_get (h, key, &json_str) == 0 || errno == EISDIR)
+    if (flux_kvs_get (h, key, &json_str) == 0 || errno == EISDIR)
         ret = true;
     if (json_str)
         free (json_str);
@@ -122,18 +122,18 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
             if (!(flags & KZ_FLAGS_TRUNC)) {
                 errno = EEXIST;
                 goto error;
-            } else if (kvs_unlink (h, name) < 0)
+            } else if (flux_kvs_unlink (h, name) < 0)
                 goto error;
         }
-        if (kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
+        if (flux_kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
-            if (kvs_commit (h, 0) < 0)
+            if (flux_kvs_commit_anon (h, 0) < 0)
                 goto error;
         }
     } else if ((flags & KZ_FLAGS_READ)) {
         if (!(flags & KZ_FLAGS_NOEXIST)) {
-            if (kvs_get_dir (h, &kz->dir, "%s", name) < 0)
+            if (flux_kvs_get_dir (h, &kz->dir, "%s", name) < 0)
                 goto error;
         }
     }
@@ -149,7 +149,7 @@ static int kz_fence (kz_t *kz)
     int rc;
     if (asprintf (&name, "%s.%d", kz->grpname, kz->fencecount++) < 0)
         oom ();
-    rc = kvs_fence (kz->h, name, kz->nprocs, 0);
+    rc = flux_kvs_fence_anon (kz->h, name, kz->nprocs, 0);
     free (name);
     return rc;
 }
@@ -188,10 +188,10 @@ static int putnext (kz_t *kz, const char *json_str)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
         oom ();
-    if (kvs_put (kz->h, key, json_str) < 0)
+    if (flux_kvs_put (kz->h, key, json_str) < 0)
         goto done;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
-        if (kvs_commit (kz->h, 0) < 0)
+        if (flux_kvs_commit_anon (kz->h, 0) < 0)
             goto done;
     }
     rc = 0;
@@ -243,7 +243,7 @@ static char *getnext (kz_t *kz)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
         oom ();
-    if (kvs_get (kz->h, key, &json_str) < 0) {
+    if (flux_kvs_get (kz->h, key, &json_str) < 0) {
         if (errno == ENOENT)
             errno = EAGAIN;
         goto done;
@@ -262,7 +262,7 @@ static char *getnext_blocking (kz_t *kz)
     while (!(json_str = getnext (kz))) {
         if (errno != EAGAIN)
             break;
-        if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
+        if (flux_kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
             if (errno != ENOENT)
                 break;
             if (kz->dir) {
@@ -323,7 +323,7 @@ int kz_flush (kz_t *kz)
 {
     int rc = 0;
     if ((kz->flags & KZ_FLAGS_WRITE))
-        rc = kvs_commit (kz->h, 0);
+        rc = flux_kvs_commit_anon (kz->h, 0);
     return rc;
 }
 
@@ -341,11 +341,11 @@ int kz_close (kz_t *kz)
                 errno = EPROTO;
                 goto done;
             }
-            if (kvs_put (kz->h, key, json_str) < 0)
+            if (flux_kvs_put (kz->h, key, json_str) < 0)
                 goto done;
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
-            if (kvs_commit (kz->h, 0) < 0)
+            if (flux_kvs_commit_anon (kz->h, 0) < 0)
                 goto done;
         }
         if (kz->nprocs > 0 && kz->grpname) {
@@ -354,7 +354,7 @@ int kz_close (kz_t *kz)
         }
     }
     if (kz->watching) {
-        (void)kvs_unwatch (kz->h, kz->name);
+        (void)flux_kvs_unwatch (kz->h, kz->name);
         kz->watching = false;
     }
     rc = 0;
@@ -388,7 +388,7 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
     if (!kz->watching) {
-        if (kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
+        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
             return -1;
         kz->watching = true;
     }

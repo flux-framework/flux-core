@@ -111,7 +111,7 @@ static int watch_count_cb (const char *key, const char *json_str, void *arg, int
     }
 
     if (changecount == threadcount)
-        kvs_unwatch (t->h, key);
+        flux_kvs_unwatch (t->h, key);
     return 0;
 }
 
@@ -157,8 +157,8 @@ void *watchthread (void *arg)
 
     r = flux_get_reactor (t->h);
 
-    if (kvs_watch (t->h, key, watch_count_cb, t) < 0)
-        log_err_exit ("kvs_watch %s", key);
+    if (flux_kvs_watch (t->h, key, watch_count_cb, t) < 0)
+        log_err_exit ("flux_kvs_watch %s", key);
 
     pw = flux_prepare_watcher_create (r, watch_prepare_cb, NULL);
 
@@ -191,11 +191,11 @@ void *committhread (void *arg)
     if (!(t->h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (kvs_put_int (t->h, key, t->n) < 0)
+    if (flux_kvs_put_int (t->h, key, t->n) < 0)
         log_err_exit ("%s", key);
 
-    if (kvs_commit (t->h, nopt ? FLUX_KVS_NO_MERGE : 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (flux_kvs_commit_anon (t->h, nopt ? FLUX_KVS_NO_MERGE : 0) < 0)
+        log_err_exit ("flux_kvs_commit_anon");
 
     flux_close (t->h);
     return NULL;

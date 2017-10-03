@@ -266,7 +266,7 @@ static int l_flux_kvsdir_new (lua_State *L)
         path = lua_tostring (L, 2);
     }
 
-    if (kvs_get_dir (f, &dir, "%s", path) < 0)
+    if (flux_kvs_get_dir (f, &dir, "%s", path) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     return lua_push_kvsdir (L, dir);
 }
@@ -284,7 +284,7 @@ static int l_flux_kvs_symlink (lua_State *L)
     if (!(target = lua_tostring (L, 3)))
         return lua_pusherror (L, "target expected in arg #3");
 
-    if (kvs_symlink (f, key, target) < 0)
+    if (flux_kvs_symlink (f, key, target) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
@@ -299,7 +299,7 @@ static int l_flux_kvs_unlink (lua_State *L)
     if (!(key = lua_tostring (L, 2)))
         return lua_pusherror (L, "key expected in arg #2");
 
-    if (kvs_unlink (f, key) < 0)
+    if (flux_kvs_unlink (f, key) < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
@@ -327,12 +327,12 @@ static int l_flux_kvs_type (lua_State *L)
         return (2);
     }
     flux_future_destroy (future);
-    if (kvs_get_dir (f, &d, "%s", key) == 0) {
+    if (flux_kvs_get_dir (f, &d, "%s", key) == 0) {
         lua_pushstring (L, "dir");
         lua_push_kvsdir (L, d);
         return (2);
     }
-    if (kvs_get (f, key, &val) == 0) {
+    if (flux_kvs_get (f, key, &val) == 0) {
         json_object *o;
         lua_pushstring (L, "file");
         if (val && (o = json_tokener_parse (val))) {
@@ -349,7 +349,7 @@ static int l_flux_kvs_type (lua_State *L)
 int l_flux_kvs_commit (lua_State *L)
 {
     flux_t *f = lua_get_flux (L, 1);
-    if (kvs_commit (f, 0) < 0)
+    if (flux_kvs_commit_anon (f, 0) < 0)
          return lua_pusherror (L, (char *)flux_strerror (errno));
     lua_pushboolean (L, true);
     return (1);
@@ -364,16 +364,16 @@ int l_flux_kvs_put (lua_State *L)
         return lua_pusherror (L, "key required");
 
     if (lua_isnil (L, 3))
-        rc = kvs_put (f, key, NULL);
+        rc = flux_kvs_put (f, key, NULL);
     else {
         json_object *o;
         if (lua_value_to_json (L, 3, &o) < 0)
             return lua_pusherror (L, "Unable to convert to json");
-        rc = kvs_put (f, key, json_object_to_json_string (o));
+        rc = flux_kvs_put (f, key, json_object_to_json_string (o));
         json_object_put (o);
     }
     if (rc < 0)
-        return lua_pusherror (L, "kvs_put (%s): %s",
+        return lua_pusherror (L, "flux_kvs_put (%s): %s",
                                 key, (char *)flux_strerror (errno));
 
     lua_pushboolean (L, true);
@@ -389,8 +389,9 @@ int l_flux_kvs_get (lua_State *L)
 
     if (key == NULL)
         return lua_pusherror (L, "key required");
-    if (kvs_get (f, key, &json_str) < 0)
-        return lua_pusherror (L, "kvs_get: %s", (char *)flux_strerror (errno));
+    if (flux_kvs_get (f, key, &json_str) < 0)
+        return lua_pusherror (L, "flux_kvs_get: %s",
+                              (char *)flux_strerror (errno));
     if (!(o = json_tokener_parse (json_str))
         || (json_object_to_lua (L, o) < 0)) {
         free (json_str);
@@ -1124,7 +1125,7 @@ static int l_kvswatcher_remove (lua_State *L)
     struct l_flux_ref *kw = luaL_checkudata (L, 1, "FLUX.kvswatcher");
     l_flux_ref_gettable (kw, "kvswatcher");
     lua_getfield (L, -1, "key");
-    if (kvs_unwatch (kw->flux, lua_tostring (L, -1)) < 0)
+    if (flux_kvs_unwatch (kw->flux, lua_tostring (L, -1)) < 0)
         return (lua_pusherror (L, "kvs_unwatch: %s",
                                (char *)flux_strerror (errno)));
     /*
@@ -1160,9 +1161,9 @@ static int l_kvswatcher_add (lua_State *L)
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
     lua_getfield (L, 2, "isdir");
     if (lua_toboolean (L, -1))
-        rc = kvs_watch_dir (f, l_kvsdir_watcher, (void *) kw, "%s", key);
+        rc = flux_kvs_watch_dir (f, l_kvsdir_watcher, (void *) kw, "%s", key);
     else
-        rc = kvs_watch (f, key, l_kvswatcher, (void *) kw);
+        rc = flux_kvs_watch (f, key, l_kvswatcher, (void *) kw);
     if (rc < 0) {
         l_flux_ref_destroy (kw, "kvswatcher");
         return lua_pusherror (L, (char *)flux_strerror (errno));

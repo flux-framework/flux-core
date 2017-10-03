@@ -553,8 +553,8 @@ int cmd_version (optparse_t *p, int argc, char **argv)
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
-    if (kvs_get_version (h, &vers) < 0)
-        log_err_exit ("kvs_get_version");
+    if (flux_kvs_get_version (h, &vers) < 0)
+        log_err_exit ("flux_kvs_get_version");
     printf ("%d\n", vers);
     return (0);
 }
@@ -576,8 +576,8 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 1))
         log_msg_exit ("wait: specify a version");
     vers = strtoul (argv[optindex], NULL, 10);
-    if (kvs_wait_version (h, vers) < 0)
-        log_err_exit ("kvs_get_version");
+    if (flux_kvs_wait_version (h, vers) < 0)
+        log_err_exit ("flux_kvs_get_version");
     return (0);
 }
 
@@ -638,13 +638,13 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     key = argv[optindex];
 
-    rc = kvs_get (h, key, &json_str);
+    rc = flux_kvs_get (h, key, &json_str);
     if (rc < 0 && (errno != ENOENT && errno != EISDIR))
         log_err_exit ("%s", key);
 
     /* key is a directory, setup for dir logic appropriately */
     if (rc < 0 && errno == EISDIR) {
-        rc = kvs_get_dir (h, &dir, "%s", key);
+        rc = flux_kvs_get_dir (h, &dir, "%s", key);
         if (rc < 0 && errno != ENOENT)
             log_err_exit ("%s", key);
         isdir = true;
@@ -661,7 +661,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     while (count && (rc == 0 || (rc < 0 && errno == ENOENT))) {
         if (isdir) {
-            rc = kvs_watch_once_dir (h, &dir, "%s", key);
+            rc = flux_kvs_watch_once_dir (h, &dir, "%s", key);
             if (rc < 0 && (errno != ENOENT && errno != ENOTDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 if (dir)
@@ -685,7 +685,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                     flux_kvsdir_destroy (dir);
                 dir = NULL;
 
-                rc = kvs_get (h, key, &json_str);
+                rc = flux_kvs_get (h, key, &json_str);
                 if (rc < 0 && errno != ENOENT)
                     printf ("%s: %s\n", key, flux_strerror (errno));
                 else
@@ -693,7 +693,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
             }
         }
         else {
-            rc = kvs_watch_once (h, key, &json_str);
+            rc = flux_kvs_watch_once (h, key, &json_str);
             if (rc < 0 && (errno != ENOENT && errno != EISDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 free (json_str);
@@ -721,7 +721,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                     prev_output_iskey = false;
                 }
 
-                rc = kvs_get_dir (h, &dir, "%s", key);
+                rc = flux_kvs_get_dir (h, &dir, "%s", key);
                 if (rc < 0 && errno != ENOENT)
                     printf ("%s: %s\n", key, flux_strerror (errno));
                 else /* rc == 0 || (rc < 0 && errno == ENOENT) */
@@ -749,8 +749,8 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
         flux_msg_destroy (msg);
     }
     else {
-        if (kvs_dropcache (h) < 0)
-            log_err_exit ("kvs_dropcache");
+        if (flux_kvs_dropcache (h) < 0)
+            log_err_exit ("flux_kvs_dropcache");
     }
     return (0);
 }

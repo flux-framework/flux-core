@@ -205,11 +205,11 @@ static int archive_lwj (struct prog_ctx *ctx)
     }
     /*  Link lwj-complete.<hb>.id -> src
      */
-    if (kvs_symlink (ctx->flux, link, to) < 0)
-        flux_log_error (ctx->flux, "kvs_symlink (%s -> %s)", link, to);
+    if (flux_kvs_symlink (ctx->flux, link, to) < 0)
+        flux_log_error (ctx->flux, "flux_kvs_symlink (%s -> %s)", link, to);
 
-    if ((rc = kvs_commit (ctx->flux, 0)) < 0)
-        flux_log_error (ctx->flux, "kvs_commit");
+    if ((rc = flux_kvs_commit_anon (ctx->flux, 0)) < 0)
+        flux_log_error (ctx->flux, "flux_kvs_commit_anon");
 out:
     free (link);
     return (rc);
@@ -237,7 +237,7 @@ static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va
     if (fatal) {
         // best effort
         if (flux_kvsdir_put_int (ctx->kvs, "fatalerror", fatal) == 0)
-            (void)kvs_commit (ctx->flux, 0);
+            (void)flux_kvs_commit_anon (ctx->flux, 0);
     }
 }
 
@@ -1057,8 +1057,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%"PRId64, ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
-    if (kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
-        wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
+    if (flux_kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
+        wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
@@ -1080,7 +1080,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         if (rc < 0) {
             if (errno == ENOENT)
                 return (-1);
-            wlog_fatal (ctx, 1, "kvs_get_dir (%s.rank.%d): %s",
+            wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s.rank.%d): %s",
                         ctx->kvspath, ctx->noderank, flux_strerror (errno));
         }
     }
@@ -1216,10 +1216,10 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         wlog_fatal (ctx, 1, "update_job_state");
 
     /* Wait for all wrexecds to finish and commit */
-    if (kvs_fence (ctx->flux, name, ctx->nnodes, 0) < 0)
-        wlog_fatal (ctx, 1, "kvs_fence");
+    if (flux_kvs_fence_anon (ctx->flux, name, ctx->nnodes, 0) < 0)
+        wlog_fatal (ctx, 1, "flux_kvs_fence_anon");
 
-    /* Also emit event to avoid racy kvs_watch for clients */
+    /* Also emit event to avoid racy flux_kvs_watch for clients */
     if (ctx->nodeid == 0)
         send_job_state_event (ctx, state);
 
@@ -1259,7 +1259,7 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
     rc = flux_kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
     free (key);
     json_object_put (o);
-    //kvs_commit (ctx->flux, 0);
+    //flux_kvs_commit_anon (ctx->flux, 0);
 
     if (rc < 0)
         return wlog_err (ctx, "kvs_put failure");
@@ -1307,7 +1307,7 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
      *  exit_status dir so reactor loop can exit
      */
     if (Jget_int (o, "count", &count) && count == ctx->total_ntasks) {
-        kvs_unwatch (h, key);
+        flux_kvs_unwatch (h, key);
         prog_ctx_remove_completion_ref (ctx, "exit_status");
     }
 
@@ -1354,15 +1354,15 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
         return (-1);
     }
 
-    /*  Add completion reference *before*  kvs_watch() since
+    /*  Add completion reference *before*  flux_kvs_watch() since
      *   callback may be called synchronously and thus the cb
      *   may attempt to unreference this completion ref before
      *   we return
      */
     prog_ctx_add_completion_ref (ctx, "exit_status");
 
-    if ((rc = kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
-        flux_log_error (h, "kvs_watch_dir");
+    if ((rc = flux_kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
+        flux_log_error (h, "flux_kvs_watch_dir");
     free (key);
     return (rc);
 }
@@ -1407,28 +1407,28 @@ int send_exit_message (struct task_info *t)
 
     if (asprintf (&key, "%s.%d.exit_status", ctx->kvspath, t->globalid) < 0)
         return (-1);
-    if (kvs_put_int (ctx->flux, key, t->status) < 0)
+    if (flux_kvs_put_int (ctx->flux, key, t->status) < 0)
         return (-1);
     free (key);
 
     if (WIFSIGNALED (t->status)) {
         if (asprintf (&key, "%s.%d.exit_sig", ctx->kvspath, t->globalid) < 0)
             return (-1);
-        if (kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
+        if (flux_kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
             return (-1);
         free (key);
     }
     else {
         if (asprintf (&key, "%s.%d.exit_code", ctx->kvspath, t->globalid) < 0)
             return (-1);
-        if (kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
+        if (flux_kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
             return (-1);
         free (key);
     }
 
     if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
-        wlog_debug (ctx, "kvs_commit on task exit");
-        if (kvs_commit (ctx->flux, 0) < 0)
+        wlog_debug (ctx, "flux_kvs_commit_anon on task exit");
+        if (flux_kvs_commit_anon (ctx->flux, 0) < 0)
             return (-1);
     }
 
@@ -1661,10 +1661,10 @@ static flux_kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 
     t = prog_ctx_current_task (ctx);
     if (!t->kvs) {
-        if ( (kvs_get_dir (prog_ctx_flux_handle (ctx), &t->kvs,
+        if ( (flux_kvs_get_dir (prog_ctx_flux_handle (ctx), &t->kvs,
                            "%s.%d", ctx->kvspath, t->globalid) < 0)
           && (errno != ENOENT))
-            wlog_err (ctx, "kvs_get_dir (%s.%d): %s",
+            wlog_err (ctx, "flux_kvs_get_dir (%s.%d): %s",
                       ctx->kvspath, t->globalid, flux_strerror (errno));
     }
     return (t->kvs);
@@ -1955,8 +1955,9 @@ int rexecd_init (struct prog_ctx *ctx)
 
     /*  Wait for all nodes to finish calling init plugins:
      */
-    if (kvs_fence (ctx->flux, name, ctx->nnodes, 0) < 0)
-        wlog_fatal (ctx, 1, "kvs_fence %s: %s", name, flux_strerror (errno));
+    if (flux_kvs_fence_anon (ctx->flux, name, ctx->nnodes, 0) < 0)
+        wlog_fatal (ctx, 1, "flux_kvs_fence_anon %s: %s",
+                    name, flux_strerror (errno));
 
     /*  Now, check for `fatalerror` key in the kvs, which indicates
      *   one or more nodes encountered a fatal error and we should abort

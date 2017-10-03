@@ -133,12 +133,12 @@ static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
     }
 
     flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
-    if ((rc = kvs_put_string (h, key, state)) < 0) {
+    if ((rc = flux_kvs_put_string (h, key, state)) < 0) {
         flux_log_error (h, "kvs_put_string (%s)", key);
         goto out;
     }
 
-    if ((rc = kvs_commit (h, 0)) < 0)
+    if ((rc = flux_kvs_commit_anon (h, 0)) < 0)
         flux_log_error (h, "kvs_job_set_state: kvs_commit");
 
 out:
@@ -224,7 +224,7 @@ static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
     json_object *o;
     flux_kvsdir_t *dir;
 
-    if (kvs_get_dir (h, &dir, "%s", kvspath) < 0) {
+    if (flux_kvs_get_dir (h, &dir, "%s", kvspath) < 0) {
         flux_log_error (h, "kvs_get_dir (%s)", kvspath);
         return (-1);
     }
@@ -303,7 +303,7 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
         goto out;
     }
 
-    if (kvs_commit (h, 0) < 0) {
+    if (flux_kvs_commit_anon (h, 0) < 0) {
         flux_log_error (h, "job_request: kvs_commit");
         goto out;
     }
@@ -523,13 +523,13 @@ static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
      *  If no 'rank' subdir exists for this lwj, then we are running
      *   without resource assignment so we run everywhere
      */
-    if (kvs_get_dir (h, &tmp, "%s.rank", kvspath) < 0) {
+    if (flux_kvs_get_dir (h, &tmp, "%s.rank", kvspath) < 0) {
         flux_log (h, LOG_INFO, "No dir %s.rank: %s",
                   kvspath, strerror (errno));
         return (true);
     }
     flux_kvsdir_destroy (tmp);
-    if (kvs_get_dir (h, &tmp, "%s.rank.%d", kvspath, broker_rank) < 0)
+    if (flux_kvs_get_dir (h, &tmp, "%s.rank.%d", kvspath, broker_rank) < 0)
         return (false);
     flux_kvsdir_destroy (tmp);
     return (true);

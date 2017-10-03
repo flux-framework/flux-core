@@ -92,19 +92,19 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_open");
     if (Dopt) {
         flux_kvsdir_t *dir;
-        if (kvs_mkdir (h, prefix) < 0)
-            log_err_exit ("kvs_mkdir %s", prefix);
-        if (kvs_commit (h, 0) < 0)
-            log_err_exit ("kvs_commit");
-        if (kvs_get_dir (h, &dir, "%s", prefix) < 0)
-            log_err_exit ("kvs_get_dir %s", prefix);
+        if (flux_kvs_mkdir (h, prefix) < 0)
+            log_err_exit ("flux_kvs_mkdir %s", prefix);
+        if (flux_kvs_commit_anon (h, 0) < 0)
+            log_err_exit ("flux_kvs_commit_anon");
+        if (flux_kvs_get_dir (h, &dir, "%s", prefix) < 0)
+            log_err_exit ("flux_kvs_get_dir %s", prefix);
         dtree_mkdir (h, dir, width, height);
         flux_kvsdir_destroy (dir);
     } else {
         dtree (h, prefix, width, height);
     }
-    if (kvs_commit (h, 0) < 0)
-       log_err_exit ("kvs_commit");
+    if (flux_kvs_commit_anon (h, 0) < 0)
+       log_err_exit ("flux_kvs_commit_anon");
     flux_close (h);
 }
 
@@ -119,7 +119,7 @@ void dtree (flux_t *h, const char *prefix, int width, int height)
     for (i = 0; i < width; i++) {
         key = xasprintf ("%s.%.4x", prefix, i);
         if (height == 1) {
-            if (kvs_put_int (h, key, 1) < 0)
+            if (flux_kvs_put_int (h, key, 1) < 0)
                 log_err_exit ("kvs_put %s", key);
         } else
             dtree (h, key, width, height - 1);
@@ -145,7 +145,7 @@ void dtree_mkdir (flux_t *h, flux_kvsdir_t *dir, int width, int height)
         } else {
             if (flux_kvsdir_mkdir (dir, key) < 0)
                 log_err_exit ("flux_kvsdir_mkdir %s", key);
-            if (kvs_commit (h, 0) < 0)
+            if (flux_kvs_commit_anon (h, 0) < 0)
                 log_err_exit ("kvs_commit");
             if (flux_kvsdir_get_dir (dir, &ndir, "%s", key) < 0)
                 log_err_exit ("flux_kvsdir_get_dir");

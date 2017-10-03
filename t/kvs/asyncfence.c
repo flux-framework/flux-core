@@ -18,25 +18,25 @@ void kput (flux_t *h, const char *s, int val)
 {
     char key[128];
     snprintf (key, sizeof (key), "test.asyncfence.%s", s);
-    if (kvs_put_int (h, key, val) < 0)
-        log_err_exit ("kvs_put_int %s=%d", key, val);
-    log_msg ("kvs_put_int %s=%d", key, val);
+    if (flux_kvs_put_int (h, key, val) < 0)
+        log_err_exit ("flux_kvs_put_int %s=%d", key, val);
+    log_msg ("flux_kvs_put_int %s=%d", key, val);
 }
 
 void kcommit (flux_t *h)
 {
-    if (kvs_commit (h, 0) < 0)
-        log_err_exit ("kvs_commit");
-    log_msg ("kvs_commit");
+    if (flux_kvs_commit_anon (h, 0) < 0)
+        log_err_exit ("flux_kvs_commit_anon");
+    log_msg ("flux_kvs_commit_anon");
 }
 
 void kfence (flux_t *h, const char *s)
 {
     char name[128];
     snprintf (name, sizeof (name), "test.asyncfence.%s", s);
-    if (kvs_fence (h, name, 1, 0) < 0)
-        log_err_exit ("kvs_fence %s", name);
-    log_msg ("kvs_fence %s", name);
+    if (flux_kvs_fence_anon (h, name, 1, 0) < 0)
+        log_err_exit ("flux_kvs_fence_anon %s", name);
+    log_msg ("flux_kvs_fence_anon %s", name);
 }
 
 void kget_xfail (flux_t *h, const char *s)
@@ -76,7 +76,7 @@ void kunlink (flux_t *h, const char *s)
 {
     char key[128];
     snprintf (key, sizeof (key), "test.asyncfence.%s", s);
-    if (kvs_unlink (h, key) < 0)
+    if (flux_kvs_unlink (h, key) < 0)
         log_err_exit ("kvs_unlink %s", key);
     log_msg ("kvs_unlink %s", key);
 }
@@ -121,7 +121,7 @@ int main (int argc, char *argv[])
 
     /* Clean up
      */
-    kvs_unlink (h, "test.asyncfence");
+    flux_kvs_unlink (h, "test.asyncfence");
     kcommit (h);
 
     flux_close (h);

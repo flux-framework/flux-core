@@ -10,14 +10,14 @@ class KVSWrapper(Wrapper):
     # across wrappers
     pass
 
-RAW = KVSWrapper(ffi, lib, prefixes=['kvs', 'kvs_'])
+RAW = KVSWrapper(ffi, lib, prefixes=['flux_kvs', 'flux_kvs_'])
 # override error check behavior for flux_kvsitr_next
 RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 
 def get_key_direct(flux_handle, key):
     valp = ffi.new('char *[1]')
-    RAW.get(flux_handle, key, valp)
+    RAW.flux_kvs_get(flux_handle, key, valp)
     if valp[0] == ffi.NULL:
         return None
     else:
@@ -63,15 +63,15 @@ def get(flux_handle, key):
 
 def put(flux_handle, key, value):
     json_str = json.dumps(value)
-    RAW.put(flux_handle, key, json_str)
+    RAW.flux_kvs_put(flux_handle, key, json_str)
 
 
 def commit(flux_handle, flags=0):
-    return RAW.kvs_commit(flux_handle, flags)
+    return RAW.flux_kvs_commit_anon(flux_handle, flags)
 
 
 def dropcache(flux_handle):
-    return RAW.dropcache(flux_handle)
+    return RAW.flux_kvs_dropcache(flux_handle)
 
 
 def watch_once(flux_handle, key):
@@ -82,11 +82,11 @@ def watch_once(flux_handle, key):
     if isdir(flux_handle, key):
         directory = get_dir(flux_handle)
         # The wrapper automatically unpacks directory's handle
-        RAW.watch_once_dir(flux_handle, directory)
+        RAW.flux_kvs_watch_once_dir(flux_handle, directory)
         return directory
     else:
         out_json_str = ffi.new('char *[1]')
-        RAW.watch_once(flux_handle, key, out_json_str)
+        RAW.flux_kvs_watch_once(flux_handle, key, out_json_str)
         if out_json_str[0] == ffi.NULL:
             return None
         else:
@@ -114,7 +114,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                                  "handle must be a valid kvsdir cdata pointer")
             if handle is None:
                 directory = ffi.new("flux_kvsdir_t *[1]")
-                RAW.kvs_get_dir(flux_handle, directory, path)
+                RAW.flux_kvs_get_dir(flux_handle, directory, path)
                 self.handle = directory[0]
                 if self.handle is None or self.handle == ffi.NULL:
                     raise EnvironmentError("No such file or directory")
@@ -305,9 +305,10 @@ KVSWATCHES = {}
 def watch(flux_handle, key, fun, arg):
     warg = (fun, arg)
     KVSWATCHES[key] = warg
-    return RAW.watch(flux_handle, key, kvs_watch_wrapper, ffi.new_handle(warg))
+    return RAW.flux_kvs_watch(flux_handle, key, kvs_watch_wrapper,
+                              ffi.new_handle(warg))
 
 
 def unwatch(flux_handle, key):
     KVSWATCHES.pop(key, None)
-    return RAW.unwatch(flux_handle, key)
+    return RAW.flux_kvs_unwatch(flux_handle, key)
