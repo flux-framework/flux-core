@@ -210,6 +210,8 @@ void test_mt (int argc, char **argv)
     int i, rc;
     flux_t *h;
     int errors = 0;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
 
     if (argc != 3) {
         fprintf (stderr, "Usage: mt nthreads changes key\n");
@@ -225,14 +227,17 @@ void test_mt (int argc, char **argv)
         log_err_exit ("flux_open");
 
     /* Set initial value of 'key' to -1 */
-    if (flux_kvs_put_int (h, key, -1) < 0)
-        log_err_exit ("flux_kvs_put_int %s", key);
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_pack (txn, 0, key, "i", -1) < 0)
+        log_err_exit ("flux_kvs_txn_pack %s", key);
     key_stable = xasprintf ("%s-stable", key);
-    if (flux_kvs_put_int (h, key_stable, 0) < 0)
-        log_err_exit ("flux_kvs_put_int %s", key);
-
-    if (flux_kvs_commit_anon (h, 0) < 0)
-        log_err_exit ("flux_kvs_commit_anon");
+    if (flux_kvs_txn_pack (txn, 0, key_stable, "i", 0) < 0)
+        log_err_exit ("flux_kvs_txn_pack %s", key);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 
     for (i = 0; i < nthreads; i++) {
         thd[i].n = i;
@@ -245,10 +250,14 @@ void test_mt (int argc, char **argv)
     wait_ready ();
 
     for (i = 0; i < changes; i++) {
-        if (flux_kvs_put_int (h, key, i) < 0)
-            log_err_exit ("flux_kvs_put_int %s", key);
-        if (flux_kvs_commit_anon (h, 0) < 0)
-            log_err_exit ("flux_kvs_commit_anon");
+        if (!(txn = flux_kvs_txn_create ()))
+            log_err_exit ("flux_kvs_txn_create");
+        if (flux_kvs_txn_pack (txn, 0, key, "i", i) < 0)
+            log_err_exit ("flux_kvs_txn_pack %s", key);
+        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+            log_err_exit ("flux_kvs_commit");
+        flux_future_destroy (f);
+        flux_kvs_txn_destroy (txn);
     }
 
     /* Verify that callbacks were called the correct number of times.
@@ -293,6 +302,8 @@ static int selfmod_watch_cb (const char *key, const char *json_str, void *arg, i
 {
     int val;
     json_t *obj;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
 
     log_msg ("%s: value = %s errnum = %d", __FUNCTION__, json_str, errnum);
 
@@ -300,10 +311,14 @@ static int selfmod_watch_cb (const char *key, const char *json_str, void *arg, i
         log_msg_exit ("%s: failed to decode json value", __FUNCTION__);
     val = json_integer_value (obj);
     flux_t *h = arg;
-    if (flux_kvs_put_int (h, key, val + 1) < 0)
-        log_err_exit ("%s: flux_kvs_put_int", __FUNCTION__);
-    if (flux_kvs_commit_anon (h, 0) < 0)
-        log_err_exit ("%s: flux_kvs_commit_anon", __FUNCTION__);
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_pack (txn, 0, key, "i", val + 1) < 0)
+        log_err_exit ("%s: flux_kvs_txn_pack", __FUNCTION__);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("%s: flux_kvs_commit", __FUNCTION__);
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     json_decref (obj);
     return (val == 0 ? -1 : 0);
 }
@@ -312,6 +327,8 @@ void test_selfmod (int argc, char **argv)
 {
     flux_t *h;
     char *key;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
 
     if (argc != 1) {
         fprintf (stderr, "Usage: selfmod key\n");
@@ -321,10 +338,14 @@ void test_selfmod (int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (flux_kvs_put_int (h, key, -1) < 0)
-        log_err_exit ("flux_kvs_put_int");
-    if (flux_kvs_commit_anon (h, 0) < 0)
-        log_err_exit ("flux_kvs_commit_anon");
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_pack (txn, 0, key, "i", -1) < 0)
+        log_err_exit ("flux_kvs_txn_pack");
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     if (flux_kvs_watch (h, key, selfmod_watch_cb, h) < 0)
         log_err_exit ("flux_kvs_watch");
 
@@ -352,11 +373,20 @@ static void unwatch_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct timer_ctx *ctx = arg;
     static int count = 0;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
+
     log_msg ("%s", __FUNCTION__);
-    if (flux_kvs_put_int (ctx->h, ctx->key, count++) < 0)
-        log_err_exit ("%s: flux_kvs_put_int", __FUNCTION__);
-    if (flux_kvs_commit_anon (ctx->h, 0) < 0)
-        log_err_exit ("%s: flux_kvs_commit_anon", __FUNCTION__);
+
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_pack (txn, 0, ctx->key, "i", count++) < 0)
+        log_err_exit ("%s: flux_kvs_txn_pack", __FUNCTION__);
+    if (!(f = flux_kvs_commit (ctx->h, 0, txn))
+                || flux_future_get (f, NULL) < 0)
+        log_err_exit ("%s: flux_kvs_commit", __FUNCTION__);
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
     if (count == 10) {
         if (flux_kvs_unwatch (ctx->h, ctx->key) < 0)
             log_err_exit ("%s: flux_kvs_unwatch", __FUNCTION__);
