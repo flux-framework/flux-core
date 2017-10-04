@@ -187,16 +187,22 @@ void *watchthread (void *arg)
 void *committhread (void *arg)
 {
     thd_t *t = arg;
+    flux_kvs_txn_t *txn;
+    flux_future_t *f;
 
     if (!(t->h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (flux_kvs_put_int (t->h, key, t->n) < 0)
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_pack (txn, 0, key, "i", t->n) < 0)
         log_err_exit ("%s", key);
+    if (!(f = flux_kvs_commit (t->h, nopt ? FLUX_KVS_NO_MERGE : 0, txn))
+            || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
 
-    if (flux_kvs_commit_anon (t->h, nopt ? FLUX_KVS_NO_MERGE : 0) < 0)
-        log_err_exit ("flux_kvs_commit_anon");
-
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     flux_close (t->h);
     return NULL;
 }
