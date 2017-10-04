@@ -495,12 +495,6 @@ test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
 '
 
 
-# async fence
-
-test_expect_success 'kvs: async kvs_fence allows puts with fence in progress' '
-	${FLUX_BUILD_DIR}/t/kvs/asyncfence
-'
-
 # base64 data
 test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
 	flux kvs unlink -Rf $TEST &&
