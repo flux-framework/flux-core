@@ -43,8 +43,8 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void dtree (flux_t *h, const char *prefix, int width, int height);
-void dtree_mkdir (flux_t *h, flux_kvsdir_t *dir, int width, int height);
+void dtree (flux_kvs_txn_t *txn, const char *prefix, int width, int height);
+void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height);
 
 void usage (void)
 {
@@ -91,27 +91,48 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     if (Dopt) {
-        flux_kvsdir_t *dir;
-        if (flux_kvs_mkdir (h, prefix) < 0)
-            log_err_exit ("flux_kvs_mkdir %s", prefix);
-        if (flux_kvs_commit_anon (h, 0) < 0)
-            log_err_exit ("flux_kvs_commit_anon");
-        if (flux_kvs_get_dir (h, &dir, "%s", prefix) < 0)
-            log_err_exit ("flux_kvs_get_dir %s", prefix);
+        const flux_kvsdir_t *dir;
+        flux_kvs_txn_t *txn;
+        flux_future_t *f;
+
+        if (!(txn = flux_kvs_txn_create ()))
+            log_err_exit ("flux_kvs_txn_create");
+        if (flux_kvs_txn_mkdir (txn, 0, prefix) < 0)
+            log_err_exit ("flux_kvs_txn_mkdir %s", prefix);
+        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+            log_err_exit ("flux_kvs_commit");
+        flux_future_destroy (f);
+        flux_kvs_txn_destroy (txn);
+
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, prefix))
+                || flux_kvs_lookup_get_dir (f, &dir) < 0)
+            log_err_exit ("flux_kvs_lookup %s", prefix);
+
         dtree_mkdir (h, dir, width, height);
-        flux_kvsdir_destroy (dir);
+
+        flux_future_destroy (f);
+
+        if (flux_kvs_commit_anon (h, 0) < 0)
+           log_err_exit ("flux_kvs_commit_anon");
     } else {
-        dtree (h, prefix, width, height);
+        flux_kvs_txn_t *txn;
+        flux_future_t *f;
+
+        if (!(txn = flux_kvs_txn_create ()))
+            log_err_exit ("flux_kvs_txn_create");
+        dtree (txn, prefix, width, height);
+        if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+           log_err_exit ("flux_kvs_commit");
+        flux_future_destroy (f);
+        flux_kvs_txn_destroy (txn);
     }
-    if (flux_kvs_commit_anon (h, 0) < 0)
-       log_err_exit ("flux_kvs_commit_anon");
     flux_close (h);
 }
 
 /* This version simply puts keys and values, creating intermediate
  * directories as a side effect.
  */
-void dtree (flux_t *h, const char *prefix, int width, int height)
+void dtree (flux_kvs_txn_t *txn, const char *prefix, int width, int height)
 {
     int i;
     char *key;
@@ -119,10 +140,10 @@ void dtree (flux_t *h, const char *prefix, int width, int height)
     for (i = 0; i < width; i++) {
         key = xasprintf ("%s.%.4x", prefix, i);
         if (height == 1) {
-            if (flux_kvs_put_int (h, key, 1) < 0)
-                log_err_exit ("kvs_put %s", key);
+            if (flux_kvs_txn_pack (txn, 0, key, "i", 1) < 0)
+                log_err_exit ("flux_kvs_txn_pack %s", key);
         } else
-            dtree (h, key, width, height - 1);
+            dtree (txn, key, width, height - 1);
         free (key);
     }
 }
@@ -131,7 +152,7 @@ void dtree (flux_t *h, const char *prefix, int width, int height)
  * using flux_kvsdir_t objects.  This is a less efficient method but provides
  * alternate code coverage.
  */
-void dtree_mkdir (flux_t *h, flux_kvsdir_t *dir, int width, int height)
+void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height)
 {
     int i;
     char key[16];
