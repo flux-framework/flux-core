@@ -1,5 +1,5 @@
 #ifndef _FLUX_CORE_KEEPALIVE_H
-#define _FLUX_CORE_KEEPALIVE_H 1
+#define _FLUX_CORE_KEEPALIVE_H
 
 flux_msg_t *flux_keepalive_encode (int errnum, int status);
 
