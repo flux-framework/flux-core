@@ -1,8 +1,6 @@
 #ifndef _FLUX_CORE_ATTR_H
 #define _FLUX_CORE_ATTR_H
 
-#include <stdbool.h>
-
 #include "handle.h"
 
 /* Flags can only be set by the broker.

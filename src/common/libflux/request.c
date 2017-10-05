@@ -26,6 +26,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
+#include <stdarg.h>
 #include "request.h"
 #include "message.h"
 #include "info.h"

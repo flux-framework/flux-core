@@ -1,11 +1,6 @@
 #ifndef _FLUX_CORE_CONNECTOR_H
 #define _FLUX_CORE_CONNECTOR_H
 
-#include <stdbool.h>
-
-#include "message.h"
-#include "handle.h"
-
 /**
  ** Only handle implementation stuff below.
  ** Flux_t handle users should not use these interfaces.

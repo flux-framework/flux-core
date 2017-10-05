@@ -1,9 +1,6 @@
 #ifndef _FLUX_CORE_RESPONSE_H
 #define _FLUX_CORE_RESPONSE_H
 
-#include <stdbool.h>
-#include <stdarg.h>
-
 #include "message.h"
 #include "handle.h"
 

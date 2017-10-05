@@ -1,9 +1,6 @@
 #ifndef _FLUX_CORE_EVENT_H
 #define _FLUX_CORE_EVENT_H
 
-#include <stdbool.h>
-#include <stdarg.h>
-
 #include "message.h"
 
 /* Decode an event message.

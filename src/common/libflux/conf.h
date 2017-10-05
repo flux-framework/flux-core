@@ -1,8 +1,6 @@
 #ifndef _FLUX_CORE_CONF_H
 #define _FLUX_CORE_CONF_H
 
-#include <stdarg.h>
-
 enum {
     CONF_FLAG_INTREE=1,
 };

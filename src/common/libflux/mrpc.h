@@ -2,7 +2,6 @@
 #define _FLUX_CORE_MRPC_H
 
 #include <stdbool.h>
-#include <stdarg.h>
 
 #include "handle.h"
 #include "rpc.h"

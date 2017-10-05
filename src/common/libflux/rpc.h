@@ -1,9 +1,6 @@
 #ifndef _FLUX_CORE_RPC_H
 #define _FLUX_CORE_RPC_H
 
-#include <stdbool.h>
-#include <stdarg.h>
-
 #include "handle.h"
 #include "future.h"
 

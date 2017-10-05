@@ -1,9 +1,6 @@
 #ifndef _FLUX_CORE_REQUEST_H
 #define _FLUX_CORE_REQUEST_H
 
-#include <stdbool.h>
-#include <stdarg.h>
-
 #include "message.h"
 
 /* Decode a request message with optional json payload.

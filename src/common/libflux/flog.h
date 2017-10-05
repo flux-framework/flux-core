@@ -2,7 +2,6 @@
 #define _FLUX_CORE_FLOG_H
 
 #include <stdarg.h>
-#include <stdbool.h>
 #include <syslog.h>
 #include <stdlib.h>
 #include <errno.h>
