@@ -157,20 +157,24 @@ error:
     return NULL;
 }
 
-static int load_xml_to_kvs (flux_t *h, resource_ctx_t *ctx)
+static int load_xml_to_kvs (flux_t *h, resource_ctx_t *ctx,
+                            flux_kvs_txn_t *txn)
 {
     char *xml_path = NULL;
     char *buffer = NULL;
     int buflen = 0, ret = -1;
 
     xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, ctx->rank);
-    (void)flux_kvs_unlink (h, xml_path);
-    if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
-        flux_log (h, LOG_ERR, "hwloc_topology_export_xmlbuffer");
+    if (flux_kvs_txn_unlink (txn, 0, xml_path) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_unlink", __FUNCTION__);
         goto done;
     }
-    if (flux_kvs_put_string (h, xml_path, buffer) < 0) {
-        flux_log (h, LOG_ERR, "flux_kvs_put_string");
+    if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
+        flux_log_error (h, "%s: hwloc_topology_export_xmlbuffer", __FUNCTION__);
+        goto done;
+    }
+    if (flux_kvs_txn_pack (txn, 0, xml_path, "s", buffer) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
         goto done;
     }
     ret = 0;
@@ -221,7 +225,8 @@ static char *escape_and_join_kvs_path (const char *base,
 static int walk_topology (flux_t *h,
                           hwloc_topology_t topology,
                           hwloc_obj_t obj,
-                          const char *path)
+                          const char *path,
+                          flux_kvs_txn_t *txn)
 {
     int ret = -1;
     int size_buf = hwloc_obj_attr_snprintf (NULL, 0, obj, ":-!:", 1) + 1;
@@ -237,7 +242,10 @@ static int walk_topology (flux_t *h,
     new_path = xasprintf ("%s.%s_%u", path, type, obj->logical_index);
 
     os_index_path = xasprintf ("%s.os_index", new_path);
-    flux_kvs_put_int (h, os_index_path, obj->os_index);
+    if (flux_kvs_txn_pack (txn, 0, os_index_path, "i", obj->os_index) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
+        goto done;
+    }
 
     // Tokenize the string, break out key/value pairs and store appropriately
     for (token = buf, end = strstr (token, ":-!:"); end && token;
@@ -252,18 +260,20 @@ static int walk_topology (flux_t *h,
                 int kvs_ret = -1;
                 value++;
 
-                kvs_ret = flux_kvs_put_string (h, value_path, value);
+                kvs_ret = flux_kvs_txn_pack (txn, 0, value_path, "s", value);
 
                 free (value_path);
-                if (kvs_ret < 0)
+                if (kvs_ret < 0) {
+                    flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
                     goto done;
+                }
             }
         }
     }
 
     // Recurse into the children of this object
     while ((prev = hwloc_get_next_child (topology, obj, prev))) {
-        if (walk_topology (h, topology, prev, new_path) < 0)
+        if (walk_topology (h, topology, prev, new_path, txn) < 0)
             goto done;
     }
 
@@ -276,38 +286,48 @@ done:
     return ret;
 }
 
-static int put_hostname (flux_t *h, const char *base, const char *hostname)
+static int put_hostname (flux_t *h, const char *base, const char *hostname,
+                         flux_kvs_txn_t *txn)
 {
     int rc;
     char *key;
     if (asprintf (&key, "%s.HostName", base) < 0)
         return (-1);
-    rc = flux_kvs_put_string (h, key, hostname);
+    rc = flux_kvs_txn_pack (txn, 0, key, "s", hostname);
     free (key);
     return (rc);
 }
 
-static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx)
+static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx,
+                             flux_kvs_txn_t *txn)
 {
     char *base_path = NULL;
     int ret = -1, i;
     int depth = hwloc_topology_get_depth (ctx->topology);
 
     base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, ctx->rank);
-    (void)flux_kvs_unlink (h, base_path);
+    if (flux_kvs_txn_unlink (txn, 0, base_path) < 0) {
+        flux_log_error (h, "%s: flux_kvs_unlink", __FUNCTION__);
+        goto done;
+    }
     for (i = 0; i < depth; ++i) {
         int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
         hwloc_obj_type_t t = hwloc_get_depth_type (ctx->topology, i);
         char *obj_path =
             xasprintf ("%s.%s", base_path, hwloc_obj_type_string (t));
-        flux_kvs_put_int (h, obj_path, nobj);
+        if (flux_kvs_txn_pack (txn, 0, obj_path, "i", nobj) < 0) {
+            flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
+            free (obj_path);
+            goto done;
+        }
         free (obj_path);
     }
     if (ctx->walk_topology &&
         walk_topology (h,
                        ctx->topology,
                        hwloc_get_root_obj (ctx->topology),
-                       base_path) < 0) {
+                       base_path,
+                       txn) < 0) {
         flux_log (h, LOG_ERR, "walk_topology");
         goto done;
     }
@@ -318,36 +338,55 @@ static int load_info_to_kvs (flux_t *h, resource_ctx_t *ctx)
         char *kvs_hostname = escape_kvs_key (hostname);
         char *host_path = xasprintf ("resource.hwloc.by_host.%s", kvs_hostname);
 
-        if (put_hostname (h, base_path, hostname) < 0)
-            flux_log_error (h, "failed to record hostname for this rank");
-
+        if (put_hostname (h, base_path, hostname, txn) < 0) {
+            flux_log_error (h, "%s: put_hostname", __FUNCTION__);
+            free (kvs_hostname);
+            free (host_path);
+            goto done;
+        }
         free (kvs_hostname);
-        (void) flux_kvs_unlink (h, host_path);
+
+        if (flux_kvs_txn_unlink (txn, 0, host_path) < 0) {
+            flux_log_error (h, "%s: flux_kvs_txn_unlink", __FUNCTION__);
+            free (host_path);
+            goto done;
+        }
         if (ctx->walk_topology &&
             walk_topology (h,
                            ctx->topology,
                            hwloc_get_root_obj (ctx->topology),
-                           host_path) < 0) {
+                           host_path,
+                           txn) < 0) {
             flux_log (h, LOG_ERR, "walk_topology");
+            free (host_path);
             goto done;
         }
         free (host_path);
     }
     ret = 0;
 done:
-    if (base_path)
-        free (base_path);
+    free (base_path);
     return ret;
 }
 
 static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
 {
     uint32_t size;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
     char *completion_path = NULL;
     int rc = -1;
 
-    if (load_xml_to_kvs (h, ctx) < 0 || load_info_to_kvs (h, ctx) < 0) {
-        flux_log_error (h, "%s: failed to load xml/info to kvs", __FUNCTION__);
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "%s: flux_kvs_txn_create", __FUNCTION__);
+        goto done;
+    }
+    if (load_xml_to_kvs (h, ctx, txn) < 0) {
+        flux_log_error (h, "%s: failed to load xml to kvs", __FUNCTION__);
+        goto done;
+    }
+    if (load_info_to_kvs (h, ctx, txn) < 0) {
+        flux_log_error (h, "%s: failed to load info to kvs", __FUNCTION__);
         goto done;
     }
     if (flux_get_size (h, &size) < 0) {
@@ -355,18 +394,20 @@ static int load_hwloc (flux_t *h, resource_ctx_t *ctx)
         goto done;
     }
     completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, ctx->rank);
-    if (flux_kvs_put_int (h, completion_path, 1) < 0) {
-        flux_log_error (h, "%s: flux_kvs_put_int", __FUNCTION__);
+    if (flux_kvs_txn_pack (txn, 0, completion_path, "i", 1) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
         goto done;
     }
-    if (flux_kvs_commit_anon (h, 0) < 0) {
-        flux_log_error (h, "%s: flux_kvs_commit_anon", __FUNCTION__);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
         goto done;
     }
     flux_log (h, LOG_DEBUG, "loaded");
     ctx->loaded = true;
     rc = 0;
 done:
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     if (completion_path)
         free (completion_path);
     return rc;
@@ -414,7 +455,8 @@ static void topo_request_cb (flux_t *h,
                              void *arg)
 {
     resource_ctx_t *ctx = (resource_ctx_t *)arg;
-    flux_kvsdir_t *kd = NULL;
+    flux_future_t *df = NULL;
+    const flux_kvsdir_t *kd;
     char *buffer = NULL;
     int buflen;
     hwloc_topology_t global = NULL;
@@ -433,12 +475,11 @@ static void topo_request_cb (flux_t *h,
         errno = EINVAL;
         goto done;
     }
-
-    if (flux_kvs_get_dir (h, &kd, "resource.hwloc.xml") < 0) {
+    if (!(df = flux_kvs_lookup (h, FLUX_KVS_READDIR, "resource.hwloc.xml"))
+                || flux_kvs_lookup_get_dir (df, &kd) < 0) {
         flux_log (h, LOG_ERR, "xml dir is not available");
         goto done;
     }
-
     if (hwloc_topology_init (&global) < 0) {
         flux_log (h, LOG_ERR, "hwloc_topology_init failed");
         goto done;
@@ -485,7 +526,6 @@ static void topo_request_cb (flux_t *h,
     }
 
     flux_kvsitr_destroy (base_iter);
-    flux_kvsdir_destroy (kd);
 
     hwloc_topology_load (global);
     if (hwloc_topology_export_xmlbuffer (global, &buffer, &buflen) < 0) {
@@ -534,6 +574,7 @@ done:
     }
     if (global)
         hwloc_topology_destroy (global);
+    flux_future_destroy (df);
 }
 
 static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
