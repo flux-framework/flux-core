@@ -310,6 +310,21 @@ int flux_kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str)
     return rc;
 }
 
+int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
+                      const char *fmt, ...)
+{
+    struct dir_put dp;
+    int rc;
+    va_list ap;
+    if (dir_put_init (dir, key, &dp) < 0)
+        return -1;
+    va_start (ap, fmt);
+    rc = flux_kvs_txn_vpack (dp.txn, 0, dp.key, fmt, ap);
+    va_end (ap);
+    dir_put_fini (&dp);
+    return rc;
+}
+
 int flux_kvsdir_put_string (flux_kvsdir_t *dir, const char *key, const char *val)
 {
     struct dir_put dp;

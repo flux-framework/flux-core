@@ -28,6 +28,8 @@ int flux_kvsdir_get_dir (flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
                     __attribute__ ((format (printf, 3, 4)));
 
 int flux_kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str);
+int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
+                      const char *fmt, ...);
 int flux_kvsdir_put_string (flux_kvsdir_t *dir, const char *key,
                             const char *val);
 int flux_kvsdir_put_int (flux_kvsdir_t *dir, const char *key, int val);
