@@ -119,14 +119,14 @@ static int l_kvsdir_newindex (lua_State *L)
     else if (lua_type (L, 3) == LUA_TNUMBER) {
         double val = lua_tonumber (L, 3);
         if (floor (val) == val)
-            rc = flux_kvsdir_put_int64 (d, key, (int64_t) val);
+            rc = flux_kvsdir_pack (d, key, "I", (int64_t) val);
         else
-            rc = flux_kvsdir_put_double (d, key, val);
+            rc = flux_kvsdir_pack (d, key, "f", val);
     }
     else if (lua_isboolean (L, 3))
-        rc = flux_kvsdir_put_boolean (d, key, lua_toboolean (L, 3));
+        rc = flux_kvsdir_pack (d, key, "b", (int)lua_toboolean (L, 3));
     else if (lua_isstring (L, 3))
-        rc = flux_kvsdir_put_string (d, key, lua_tostring (L, 3));
+        rc = flux_kvsdir_pack (d, key, "s", lua_tostring (L, 3));
     else if (lua_istable (L, 3)) {
         char *json_str;
         lua_value_to_json_string (L, 3, &json_str);

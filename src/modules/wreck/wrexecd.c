@@ -236,7 +236,7 @@ static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va
 
     if (fatal) {
         // best effort
-        if (flux_kvsdir_put_int (ctx->kvs, "fatalerror", fatal) == 0)
+        if (flux_kvsdir_pack (ctx->kvs, "fatalerror", "i", fatal) == 0)
             (void)flux_kvs_commit_anon (ctx->flux, 0);
     }
 }
@@ -1186,9 +1186,8 @@ out:
 int update_job_state (struct prog_ctx *ctx, const char *state)
 {
     char buf [64];
+    char *timestr = realtime_string (buf, sizeof (buf));
     char *key;
-    json_object *to =
-        json_object_new_string (realtime_string (buf, sizeof (buf)));
 
     assert (ctx->nodeid == 0);
 
@@ -1199,13 +1198,11 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     if (asprintf (&key, "%s-time", state) < 0) {
         wlog_err (ctx, "update_job_state: asprintf: %s", strerror (errno));
-        json_object_put (to);
         return (-1);
     }
-    if (flux_kvsdir_put (ctx->kvs, key, json_object_to_json_string (to)) < 0)
+    if (flux_kvsdir_pack (ctx->kvs, key, "s", timestr) < 0)
         return (-1);
     free (key);
-    json_object_put (to);
 
     return (0);
 }

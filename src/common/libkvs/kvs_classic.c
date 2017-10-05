@@ -301,61 +301,6 @@ int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
     return rc;
 }
 
-int flux_kvsdir_put_string (flux_kvsdir_t *dir, const char *key, const char *val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "s", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int flux_kvsdir_put_int (flux_kvsdir_t *dir, const char *key, int val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "i", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int flux_kvsdir_put_int64 (flux_kvsdir_t *dir, const char *key, int64_t val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "I", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int flux_kvsdir_put_double (flux_kvsdir_t *dir, const char *key, double val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "f", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int flux_kvsdir_put_boolean (flux_kvsdir_t *dir, const char *key, bool val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "b", (int)val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
 int flux_kvsdir_unlink (flux_kvsdir_t *dir, const char *key)
 {
     struct dir_put dp;

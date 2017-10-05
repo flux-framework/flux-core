@@ -161,8 +161,8 @@ void dtree_mkdir (flux_t *h, const flux_kvsdir_t *dir, int width, int height)
     for (i = 0; i < width; i++) {
         snprintf (key, sizeof (key), "%.4x", i);
         if (height == 1) {
-            if (flux_kvsdir_put_int (dir, key, 1) < 0)
-                log_err_exit ("flux_kvsdir_put_int %s", key);
+            if (flux_kvsdir_pack (dir, key, "i", 1) < 0)
+                log_err_exit ("flux_kvsdir_pack %s", key);
         } else {
             if (flux_kvsdir_mkdir (dir, key) < 0)
                 log_err_exit ("flux_kvsdir_mkdir %s", key);

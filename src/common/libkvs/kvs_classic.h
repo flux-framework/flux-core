@@ -27,13 +27,6 @@ int flux_kvsdir_get_dir (flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
 int flux_kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str);
 int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
                       const char *fmt, ...);
-int flux_kvsdir_put_string (flux_kvsdir_t *dir, const char *key,
-                            const char *val);
-int flux_kvsdir_put_int (flux_kvsdir_t *dir, const char *key, int val);
-int flux_kvsdir_put_int64 (flux_kvsdir_t *dir, const char *key, int64_t val);
-int flux_kvsdir_put_double (flux_kvsdir_t *dir, const char *key, double val);
-int flux_kvsdir_put_boolean (flux_kvsdir_t *dir, const char *key, bool val);
-
 int flux_kvsdir_unlink (flux_kvsdir_t *dir, const char *key);
 int flux_kvsdir_mkdir (flux_kvsdir_t *dir, const char *key);
 
