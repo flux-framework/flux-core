@@ -235,8 +235,10 @@ out:
 
 static int aggregate_sink (flux_t *h, struct aggregate *ag)
 {
-    int rc = 0;
-    json_object *o;
+    int rc = -1;
+    json_object *o = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
 
     flux_log (h, LOG_INFO, "sink: %s: count=%d total=%d",
                 ag->key, ag->count, ag->total);
@@ -244,19 +246,28 @@ static int aggregate_sink (flux_t *h, struct aggregate *ag)
     /* Fail on key == "." */
     if (strcmp (ag->key, ".") == 0) {
         flux_log (h, LOG_ERR, "sink: refusing to sink to rootdir");
-        return (-1);
+        goto out;
     }
     if (!(o = aggregate_tojson (ag))) {
         flux_log (h, LOG_ERR, "sink: aggregate_tojson failed");
-        return (-1);
-    }
-    if ((rc = flux_kvs_put (h, ag->key, Jtostr (o))) < 0) {
-        flux_log_error (h, "sink: flux_kvs_put");
         goto out;
     }
-    if ((rc = flux_kvs_commit_anon (h, 0)) < 0)
-        flux_log_error (h, "sink: flux_kvs_commit_anon");
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "sink: flux_kvs_txn_create");
+        goto out;
+    }
+    if (flux_kvs_txn_put (txn, 0, ag->key, Jtostr (o)) < 0) {
+        flux_log_error (h, "sink: flux_kvs_txn_put");
+        goto out;
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "sink: flux_kvs_commit");
+        goto out;
+    }
+    rc = 0;
 out:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
     Jput (o);
     return (rc);
 }
