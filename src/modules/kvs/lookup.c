@@ -500,18 +500,19 @@ json_t *lookup_get_value (lookup_t *lh)
     return NULL;
 }
 
-const char *lookup_get_missing_ref (lookup_t *lh, bool *ref_raw)
+int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 {
     if (lh
         && lh->magic == LOOKUP_MAGIC
         && (lh->state == LOOKUP_STATE_CHECK_ROOT
             || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)) {
-        if (ref_raw)
-            (*ref_raw) = lh->missing_ref_raw;
-        return lh->missing_ref;
+        if (cb (lh, lh->missing_ref, lh->missing_ref_raw, data) < 0)
+            return -1;
+        return 0;
     }
-    return NULL;
+    errno = EINVAL;
+    return -1;
 }
 
 struct cache *lookup_get_cache (lookup_t *lh)

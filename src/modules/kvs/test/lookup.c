@@ -12,6 +12,35 @@
 #include "src/modules/kvs/types.h"
 #include "src/common/libutil/blobref.h"
 
+struct lookup_ref_data
+{
+    const char *ref;
+    bool raw_data;
+};
+
+int lookup_ref (lookup_t *c,
+                const char *ref,
+                bool raw_data,
+                void *data)
+{
+    struct lookup_ref_data *ld = data;
+    if (ld) {
+        ld->ref = ref;
+        ld->raw_data = raw_data;
+    }
+    return 0;
+}
+
+int lookup_ref_error (lookup_t *c,
+                      const char *ref,
+                      bool raw_data,
+                      void *data)
+{
+    /* pick a weird errno */
+    errno = EMLINK;
+    return -1;
+}
+
 void basic_api (void)
 {
     struct cache *cache;
@@ -116,8 +145,8 @@ void basic_api_errors (void)
         "lookup_get_errnum returns EINVAL b/c lookup not yet started");
     ok (lookup_get_value (lh) == NULL,
         "lookup_get_value fails b/c lookup not yet started");
-    ok (lookup_get_missing_ref (lh, NULL) == NULL,
-        "lookup_get_missing_ref fails b/c lookup not yet started");
+    ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
+        "lookup_iter_missing_refs fails b/c lookup not yet started");
 
     ok (lookup_validate (NULL) == false,
         "lookup_validate fails on NULL pointer");
@@ -127,8 +156,8 @@ void basic_api_errors (void)
         "lookup_get_errnum returns EINVAL on NULL pointer");
     ok (lookup_get_value (NULL) == NULL,
         "lookup_get_value fails on NULL pointer");
-    ok (lookup_get_missing_ref (NULL, NULL) == NULL,
-        "lookup_get_missing_ref fails on NULL pointer");
+    ok (lookup_iter_missing_refs (NULL, lookup_ref, NULL) < 0,
+        "lookup_iter_missing_refs fails on NULL pointer");
     ok (lookup_get_cache (NULL) == NULL,
         "lookup_get_cache fails on NULL pointer");
     ok (lookup_get_current_epoch (NULL) < 0,
@@ -162,8 +191,8 @@ void basic_api_errors (void)
         "lookup_get_errnum returns EINVAL on bad pointer");
     ok (lookup_get_value (lh) == NULL,
         "lookup_get_value fails on bad pointer");
-    ok (lookup_get_missing_ref (lh, NULL) == NULL,
-        "lookup_get_missing_ref fails on bad pointer");
+    ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
+        "lookup_iter_missing_refs fails on bad pointer");
     ok (lookup_get_cache (lh) == NULL,
         "lookup_get_cache fails on bad pointer");
     ok (lookup_get_current_epoch (lh) < 0,
@@ -198,6 +227,7 @@ void check_common (lookup_t *lh,
                    bool destroy_lookup)
 {
     json_t *val;
+    struct lookup_ref_data ld = { .ref = NULL, .raw_data = false };
 
     ok (lookup (lh) == lookup_result,
         "%s: lookup matched result", msg);
@@ -221,26 +251,23 @@ void check_common (lookup_t *lh,
         json_decref (val);             /* just in case error */
     }
     if (missing_ref_result) {
-        const char *missing_ref;
-        bool ref_raw;
+        ok (lookup_iter_missing_refs (lh, lookup_ref, &ld) == 0,
+            "%s: lookup_iter_missing_refs success", msg);
 
-        ok ((missing_ref = lookup_get_missing_ref (lh, &ref_raw)) != NULL,
-            "%s: lookup_get_missing_ref returns expected non-NULL result", msg);
-
-        if (missing_ref) {
-            ok (strcmp (missing_ref_result, missing_ref) == 0,
+        if (ld.ref) {
+            ok (strcmp (ld.ref, missing_ref_result) == 0,
                 "%s: missing ref returned matched expectation", msg);
         }
         else {
             ok (false, "%s: missing ref returned matched expectation", msg);
         }
 
-        ok (ref_raw == missing_ref_raw,
-            "%s: lookup_get_missing_ref returned expected ref_raw", msg);
+        ok (ld.raw_data == missing_ref_raw,
+            "%s: missing ref raw_data bool returned expected value", msg);
     }
     else {
-        ok (lookup_get_missing_ref (lh, NULL) == NULL,
-            "%s: lookup_get_missing_ref returns NULL as expected", msg);
+        ok (lookup_iter_missing_refs (lh, lookup_ref, &ld) < 0,
+            "%s: lookup_iter_missing_refs fails as expected", msg);
     }
 
     if (destroy_lookup)
@@ -1208,6 +1235,7 @@ void lookup_stall (void) {
     struct cache *cache;
     lookup_t *lh;
     href_t valref_ref;
+    href_t valrefmisc_ref;
     href_t dirref1_ref;
     href_t dirref2_ref;
     href_t root_ref;
@@ -1220,9 +1248,13 @@ void lookup_stall (void) {
      * valref_ref
      * "abcd"
      *
+     * valrefmisc_ref
+     * "foobar"
+     *
      * dirref1_ref
      * "val" : val to "foo"
      * "valref" : valref to valref_ref
+     * "valrefmisc" : valref to valrefmisc_ref
      *
      * dirref2_ref
      * "val" : val to "bar"
@@ -1235,10 +1267,12 @@ void lookup_stall (void) {
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "foobar", 4, valrefmisc_ref, sizeof (href_t));
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
     treeobj_insert_entry (dirref1, "valref", treeobj_create_valref (valref_ref));
+    treeobj_insert_entry (dirref1, "valrefmisc", treeobj_create_valref (valrefmisc_ref));
     kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
 
     dirref2 = treeobj_create_dir ();
@@ -1350,6 +1384,25 @@ void lookup_stall (void) {
     test = treeobj_create_val ("abcd", 4);
     check (lh, 0, test, "dirref1.valref #2");
     json_decref (test);
+
+    /* lookup dirref1.valrefmisc, should stall */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valrefmisc",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valrefmisc");
+    /* don't call check_stall, this is primarily to test if callback
+     * functions returning errors are caught */
+    ok (lookup (lh) == false,
+        "dirref1.valrefmisc: lookup stalled");
+    errno = 0;
+    ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0
+        && errno == EMLINK,
+        "dirref1.valrefmisc: error & errno properly returned from callback error");
+    lookup_destroy (lh);
 
     cache_destroy (cache);
 }

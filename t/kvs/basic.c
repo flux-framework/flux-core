@@ -255,7 +255,7 @@ void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
 {
     char *file, *key;
     int fd, len;
-    uint8_t *buf;
+    uint8_t *buf = NULL;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
 
@@ -287,7 +287,7 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
 {
     char *file, *key;
     int fd, len;
-    const uint8_t *buf;
+    const uint8_t *buf = NULL;
     flux_future_t *f;
 
     if (argc != 2)
