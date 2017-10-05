@@ -40,7 +40,6 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libjson-c/json.h"
 
 
 #define OPTIONS "hc:s:p:qv"
@@ -73,11 +72,11 @@ int main (int argc, char *argv[])
     char *key, *val;
     bool quiet = false;
     struct timespec t0;
-    json_object *vo = NULL;
-    char *json_str;
     char *prefix = NULL;
     bool verbose = false;
     const char *s;
+    flux_future_t *f;
+    flux_kvs_txn_t *txn;
 
     log_init ("torture");
 
@@ -119,26 +118,28 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_get_rank");
         prefix = xasprintf ("kvstorture-%"PRIu32, rank);
     }
-
-    if (flux_kvs_unlink (h, prefix) < 0)
-        log_err_exit ("flux_kvs_unlink %s", prefix);
-    if (flux_kvs_commit_anon (h, 0) < 0)
-        log_err_exit ("flux_kvs_commit_anon");
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
+    if (flux_kvs_txn_unlink (txn, 0, prefix) < 0)
+        log_err_exit ("flux_kvs_txn_unlink");
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
 
     val = xzmalloc (size);
 
     monotime (&t0);
+    if (!(txn = flux_kvs_txn_create ()))
+        log_err_exit ("flux_kvs_txn_create");
     for (i = 0; i < count; i++) {
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        vo = json_object_new_string (val);
-        if (flux_kvs_put (h, key, json_object_to_json_string (vo)) < 0)
-            log_err_exit ("flux_kvs_put %s", key);
+        if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
+            log_err_exit ("flux_kvs_txn_pack");
         if (verbose)
             log_msg ("%s = %s", key, val);
-        if (vo)
-            json_object_put (vo);
         free (key);
     }
     if (!quiet)
@@ -146,8 +147,10 @@ int main (int argc, char *argv[])
              monotime_since (t0)/1000, count, size);
 
     monotime (&t0);
-    if (flux_kvs_commit_anon (h, 0) < 0)
-        log_err_exit ("kvs_commit");
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+        log_err_exit ("flux_kvs_commit");
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     if (!quiet)
         log_msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);
 
@@ -156,20 +159,15 @@ int main (int argc, char *argv[])
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        if (flux_kvs_get (h, key, &json_str) < 0)
+        if (!(f = flux_kvs_lookup (h, 0, key))
+                            || flux_kvs_lookup_get_unpack (f, "s", &s) < 0)
             log_err_exit ("flux_kvs_get '%s'", key);
-        if (!(vo = json_tokener_parse (json_str)))
-            log_msg_exit ("json_tokener_parse");
-        free (json_str);
-        s = json_object_get_string (vo);
         if (verbose)
             log_msg ("%s = %s", key, s);
         if (strcmp (s, val) != 0)
-            log_msg_exit ("kvs_get: key '%s' wrong value '%s'",
-                      key, json_object_get_string (vo));
-        if (vo)
-            json_object_put (vo);
+            log_msg_exit ("kvs_get: key '%s' wrong value '%s'", key, s);
         free (key);
+        flux_future_destroy (f);
     }
     if (!quiet)
         log_msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
