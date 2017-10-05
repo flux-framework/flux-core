@@ -95,13 +95,17 @@ static void kz_destroy (kz_t *kz)
 
 static bool key_exists (flux_t *h, const char *key)
 {
-    char *json_str = NULL;
     bool ret = false;
+    flux_future_t *f = NULL;
 
-    if (flux_kvs_get (h, key, &json_str) == 0 || errno == EISDIR)
-        ret = true;
-    if (json_str)
-        free (json_str);
+    if (!(f = flux_kvs_lookup (h, 0, key)) || flux_future_get (f, NULL) < 0) {
+        if (errno == EISDIR)
+            ret = true;
+        goto done;
+    }
+    ret = true;
+done:
+    flux_future_destroy (f);
     return ret;
 }
 
@@ -133,8 +137,16 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
         }
     } else if ((flags & KZ_FLAGS_READ)) {
         if (!(flags & KZ_FLAGS_NOEXIST)) {
-            if (flux_kvs_get_dir (h, &kz->dir, "%s", name) < 0)
+            const flux_kvsdir_t *dir;
+            flux_future_t *f;
+
+            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, name))
+                || flux_kvs_lookup_get_dir (f, &dir) < 0
+                || !(kz->dir = flux_kvsdir_copy (dir))) {
+                flux_future_destroy (f);
                 goto error;
+            }
+            flux_future_destroy (f);
         }
     }
     return kz;
@@ -234,8 +246,10 @@ done:
 
 static char *getnext (kz_t *kz)
 {
-    char *json_str = NULL;
+    const char *json_str;
     char *key = NULL;
+    flux_future_t *f = NULL;
+    char *result = NULL;
 
     if (!(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
@@ -243,16 +257,20 @@ static char *getnext (kz_t *kz)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
         oom ();
-    if (flux_kvs_get (kz->h, key, &json_str) < 0) {
+    if (!(f = flux_kvs_lookup (kz->h, 0, key))
+                        || flux_kvs_lookup_get (f, &json_str) < 0) {
         if (errno == ENOENT)
             errno = EAGAIN;
         goto done;
-    } else
-        kz->seq++;
+    }
+    if (!(result = strdup (json_str)))
+        goto done;
+    kz->seq++;
 done:
+    flux_future_destroy (f);
     if (key)
         free (key);
-    return json_str;
+    return result;
 }
 
 static char *getnext_blocking (kz_t *kz)
