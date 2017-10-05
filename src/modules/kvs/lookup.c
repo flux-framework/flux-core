@@ -633,6 +633,150 @@ int lookup_set_aux_data (lookup_t *lh, void *data)
     return -1;
 }
 
+/* return 0 on success, -1 on failure.  On success, stall should be
+ * checked */
+static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
+{
+    struct cache_entry *hp;
+    const char *reftmp;
+    void *valdata;
+    int len;
+
+    if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
+        lh->errnum = errno;
+        return -1;
+    }
+    if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+        || !cache_entry_get_valid (hp)) {
+        lh->valref_missing_refs = lh->wdirent;
+        (*stall) = true;
+        return 0;
+    }
+    if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
+        flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
+        lh->errnum = EPERM;
+        return -1;
+    }
+    if (!(lh->val = treeobj_create_val (valdata, len))) {
+        lh->errnum = errno;
+        return -1;
+    }
+    (*stall) = false;
+    return 0;
+}
+
+static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
+                                            int *total_len, bool *stall)
+{
+    struct cache_entry *hp;
+    const char *reftmp;
+    int total = 0;
+    int len;
+    int i;
+
+    for (i = 0; i < refcount; i++) {
+        if (!(reftmp = treeobj_get_blobref (lh->wdirent, i))) {
+            lh->errnum = errno;
+            return -1;
+        }
+        if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+            || !cache_entry_get_valid (hp)) {
+            lh->valref_missing_refs = lh->wdirent;
+            (*stall) = true;
+            return 0;
+        }
+
+        if (cache_entry_get_raw (hp, NULL, &len) < 0) {
+            flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
+            lh->errnum = EPERM;
+            return -1;
+        }
+
+        /* cache ensures all lens >= 0 */
+        if (len > (INT_MAX - total)) {
+            lh->errnum = EOVERFLOW;
+            return -1;
+        }
+        total += len;
+    }
+
+    (*total_len) = total;
+    (*stall) = false;
+    return 0;
+}
+
+static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
+                                            int total_len)
+{
+    struct cache_entry *hp;
+    const char *reftmp;
+    void *valdata;
+    int len;
+    char *valbuf = NULL;
+    int pos = 0;
+    int i;
+
+    if (!(valbuf = malloc (total_len))) {
+        lh->errnum = errno;
+        return NULL;
+    }
+
+    for (i = 0; i < refcount; i++) {
+        int ret;
+
+        /* this function should only be called if all cache entries
+         * known to be valid & raw, thus assert checks below */
+
+        reftmp = treeobj_get_blobref (lh->wdirent, i);
+        assert (reftmp);
+
+        hp = cache_lookup (lh->cache, reftmp, lh->current_epoch);
+        assert (hp);
+        assert (cache_entry_get_valid (hp));
+
+        ret = cache_entry_get_raw (hp, &valdata, &len);
+        assert (ret == 0);
+
+        memcpy (valbuf + pos, valdata, len);
+        pos += len;
+        assert (pos <= total_len);
+    }
+
+    return valbuf;
+}
+
+/* return 0 on success, -1 on failure.  On success, stall should be
+ * check */
+static int get_multi_blobref_valref_value (lookup_t *lh, int refcount,
+                                           bool *stall)
+{
+    char *valbuf = NULL;
+    int total_len = 0;
+    int rc = -1;
+
+    if (get_multi_blobref_valref_length (lh, refcount, &total_len, stall) < 0)
+        goto done;
+
+    if ((*stall) == true) {
+        rc = 0;
+        goto done;
+    }
+
+    if (!(valbuf = get_multi_blobref_valref_data (lh, refcount, total_len)))
+        goto done;
+
+    if (!(lh->val = treeobj_create_val (valbuf, total_len))) {
+        lh->errnum = errno;
+        goto done;
+    }
+
+    (*stall) = false;
+    rc = 0;
+done:
+    free (valbuf);
+    return rc;
+}
+
 bool lookup (lookup_t *lh)
 {
     json_t *valtmp = NULL;
@@ -743,8 +887,7 @@ bool lookup (lookup_t *lh)
                 }
                 lh->val = json_incref (valtmp);
             } else if (treeobj_is_valref (lh->wdirent)) {
-                void *valdata;
-                int len;
+                bool stall;
 
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
@@ -758,29 +901,25 @@ bool lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto done;
                 }
-                if (refcount != 1) {
+                if (!refcount) {
                     flux_log (lh->h, LOG_ERR, "invalid valref count: %d",
                               refcount);
                     lh->errnum = EPERM;
                     goto done;
                 }
-                if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
-                    lh->errnum = errno;
-                    goto done;
+                if (refcount == 1) {
+                    if (get_single_blobref_valref_value (lh, &stall) < 0)
+                        goto done;
+                    if (stall)
+                        goto stall;
                 }
-                if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
-                    || !cache_entry_get_valid (hp)) {
-                    lh->valref_missing_refs = lh->wdirent;
-                    goto stall;
-                }
-                if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
-                    flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
-                    lh->errnum = EPERM;
-                    goto done;
-                }
-                if (!(lh->val = treeobj_create_val (valdata, len))) {
-                    lh->errnum = errno;
-                    goto done;
+                else {
+                    if (get_multi_blobref_valref_value (lh,
+                                                        refcount,
+                                                        &stall) < 0)
+                        goto done;
+                    if (stall)
+                        goto stall;
                 }
             } else if (treeobj_is_dir (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
