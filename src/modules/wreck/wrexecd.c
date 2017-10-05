@@ -1194,7 +1194,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     wlog_debug (ctx, "updating job state to %s", state);
 
-    if (flux_kvsdir_put_string (ctx->kvs, "state", state) < 0)
+    if (flux_kvsdir_pack (ctx->kvs, "state", "s", state) < 0)
         return (-1);
 
     if (asprintf (&key, "%s-time", state) < 0) {

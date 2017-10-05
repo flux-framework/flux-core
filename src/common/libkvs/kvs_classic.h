@@ -12,9 +12,6 @@ int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
                       __attribute__ ((format (printf, 3, 4)));
 
 int flux_kvs_put (flux_t *h, const char *key, const char *json_str);
-int flux_kvs_put_string (flux_t *h, const char *key, const char *val);
-int flux_kvs_put_int (flux_t *h, const char *key, int val);
-int flux_kvs_put_int64 (flux_t *h, const char *key, int64_t val);
 int flux_kvs_unlink (flux_t *h, const char *key);
 int flux_kvs_symlink (flux_t *h, const char *key, const char *target);
 int flux_kvs_mkdir (flux_t *h, const char *key);

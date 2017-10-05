@@ -219,30 +219,6 @@ int flux_kvs_put (flux_t *h, const char *key, const char *json_str)
     return flux_kvs_txn_put (txn, 0, key, json_str);
 }
 
-int flux_kvs_put_string (flux_t *h, const char *key, const char *val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "s", val);
-}
-
-int flux_kvs_put_int (flux_t *h, const char *key, int val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "i", val);
-}
-
-int flux_kvs_put_int64 (flux_t *h, const char *key, int64_t val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "I", val);
-}
-
 int flux_kvs_unlink (flux_t *h, const char *key)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
