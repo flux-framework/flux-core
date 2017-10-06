@@ -1,6 +1,10 @@
 #ifndef _FLUX_KVS_CLASSIC_H
 #define _FLUX_KVS_CLASSIC_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* These interfaces are on their way to being deprecated */
 
 int kvs_get (flux_t *h, const char *key, char **json_str);
@@ -32,6 +36,9 @@ int kvsdir_put_boolean (kvsdir_t *dir, const char *key, bool val);
 int kvsdir_unlink (kvsdir_t *dir, const char *key);
 int kvsdir_mkdir (kvsdir_t *dir, const char *key);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_KVS_CLASSIC_H */
 

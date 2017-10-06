@@ -4,6 +4,10 @@
 #include "message.h"
 #include "handle.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Decode a response message, with optional json payload.
  * If topic is non-NULL, assign the response topic string.
  * If json_str is non-NULL, assign the payload if one exists or set to
@@ -55,6 +59,10 @@ int flux_respond_pack (flux_t *h, const flux_msg_t *request,
  */
 int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       int errnum, const void *data, int len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_RESPONSE_H */
 

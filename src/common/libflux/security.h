@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_sec_struct flux_sec_t;
 
 enum {
@@ -109,6 +113,10 @@ int flux_sec_munge (flux_sec_t *c, const char *inbuf, size_t insize,
                     char **outbuf, size_t *outsize);
 int flux_sec_unmunge (flux_sec_t *c, const char *inbuf, size_t insize,
                       char **outbuf, size_t *outsize);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _FLUX_CORE_SECURITY_H */
 

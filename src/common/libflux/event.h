@@ -3,6 +3,10 @@
 
 #include "message.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Decode an event message.
  * If topic is non-NULL, assign the event topic string.
  * If json_str is non-NULL, assign the payload or set to NULL if none
@@ -29,6 +33,10 @@ flux_msg_t *flux_event_encode (const char *topic, const char *json_str);
  * payload directly.  Returns message or NULL on failure with errno set.
  */
 flux_msg_t *flux_event_pack (const char *topic, const char *fmt, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !FLUX_CORE_EVENT_H */
 

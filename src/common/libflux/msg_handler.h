@@ -4,6 +4,10 @@
 #include "message.h"
 #include "handle.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_msg_handler flux_msg_handler_t;
 
 typedef void (*flux_msg_handler_f)(flux_t *h, flux_msg_handler_t *w,
@@ -41,6 +45,10 @@ void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
 /* Requeue any unmatched messages, if handle was cloned.
  */
 int flux_dispatch_requeue (flux_t *h);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_MSG_HANDLER_H */
 

@@ -8,6 +8,10 @@
 #include "types.h"
 #include "security.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_msg flux_msg_t;
 //typedef struct _zmsg_t flux_msg_t;
 
@@ -306,6 +310,10 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  * Caller must free the returned string.
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

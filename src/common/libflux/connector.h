@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_CONNECTOR_H
 #define _FLUX_CORE_CONNECTOR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  ** Only handle implementation stuff below.
  ** Flux_t handle users should not use these interfaces.
@@ -25,6 +29,10 @@ struct flux_handle_ops {
 
 flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_CONNECTOR_H */
 

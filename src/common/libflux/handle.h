@@ -8,6 +8,10 @@
 #include "types.h"
 #include "message.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_handle_struct flux_t;
 
 typedef struct {
@@ -170,6 +174,10 @@ int flux_event_unsubscribe (flux_t *h, const char *topic);
  */
 void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs);
 void flux_clr_msgcounters (flux_t *h);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

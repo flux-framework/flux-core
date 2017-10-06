@@ -9,6 +9,10 @@
 
 #include "handle.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Module states, for embedding in keepalive messages (rfc 5)
  */
 enum {
@@ -109,6 +113,10 @@ int flux_rmmod_json_decode (const char *json_str, char **name);
 char *flux_insmod_json_encode (const char *path, int argc, char **argv);
 int flux_insmod_json_decode (const char *json_str, char **path,
                              char **argz, size_t *argz_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !FLUX_CORE_MODULE_H */
 

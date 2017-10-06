@@ -4,6 +4,10 @@
 #include "handle.h"
 #include "future.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
     FLUX_RPC_NORESPONSE = 1,
 };
@@ -24,6 +28,9 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
 
 int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_RPC_H */
 

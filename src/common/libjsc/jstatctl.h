@@ -27,6 +27,10 @@
 
 #include <flux/core.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Define the job states (an abstraction independent of
  * underlying task and program execution services (RFC 8)
@@ -119,6 +123,10 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb);
  * A convenience routine (returning the internal state name correponding to "s.")
  */
 const char *jsc_job_num2state (job_state_t s);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /*! _FLUX_CORE_JSTATCTRL_H */
 

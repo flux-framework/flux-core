@@ -7,6 +7,10 @@
 
 #include "handle.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Reactor
  */
 
@@ -168,6 +172,9 @@ void * flux_watcher_impl (flux_watcher_t *w);
  */
 struct flux_watcher_ops * flux_watcher_ops (flux_watcher_t *w);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 

@@ -6,6 +6,10 @@
 #include "handle.h"
 #include "rpc.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_mrpc_struct flux_mrpc_t;
 typedef void (*flux_mrpc_continuation_f)(flux_mrpc_t *mrpc, void *arg);
 
@@ -80,6 +84,10 @@ int flux_mrpc_next (flux_mrpc_t *mrpc);
 void *flux_mrpc_aux_get (flux_mrpc_t *mrpc, const char *name);
 int flux_mrpc_aux_set (flux_mrpc_t *mrpc, const char *name,
                       void *aux, flux_free_f destroy);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_MRPC_H */
 

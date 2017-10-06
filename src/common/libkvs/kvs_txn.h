@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_KVS_TXN_H
 #define _FLUX_CORE_KVS_TXN_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_kvs_txn flux_kvs_txn_t;
 
 flux_kvs_txn_t *flux_kvs_txn_create (void);
@@ -23,6 +27,10 @@ int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
 
 int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
                           const char *key, const char *target);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_KVS_TXN_H */
 
