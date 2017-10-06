@@ -1,0 +1,20 @@
+version: 1
+resources:
+  - type: slot
+    label: 4GB-node
+    count: 2
+    with:
+    - type: node
+      count: 1
+      with:
+        - type: memory
+          count: 4
+          unit: GB
+tasks:
+  - command: app
+    slot: 4GB-node
+    count:
+      total: 10
+attributes:
+  system:
+    duration: 1 hour

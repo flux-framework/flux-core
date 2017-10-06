@@ -1,0 +1,16 @@
+version: 1
+resources:
+  - type: slot
+    label: default
+    count: 10
+    with:
+      - type: core
+        count: 2
+tasks:
+  - command: myapp
+    slot: default
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1 hour

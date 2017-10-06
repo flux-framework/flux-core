@@ -1,0 +1,19 @@
+version: 1
+resources:
+  - type: switch
+    count: 3
+    with:
+      - type: slot
+        count: 1
+        label: default
+        with:
+          - type: core
+            count: 1
+tasks:
+  - command: [ "flux", "start" ]
+    slot: default
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1h

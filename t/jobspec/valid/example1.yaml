@@ -1,0 +1,19 @@
+version: 1
+resources:
+  - type: node
+    count: 4
+    with:
+      - type: slot
+        count: 1
+        label: default
+        with:
+          - type: core
+            count: 2
+tasks:
+  - command: app
+    slot: default
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1 hour
