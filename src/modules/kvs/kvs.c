@@ -785,7 +785,15 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
         assert (ret == 0);
     }
     else {
+        int err;
+
         lh = arg;
+
+        /* error in prior load(), waited for in flight rpcs to complete */
+        if ((err = lookup_get_aux_errnum (lh))) {
+            errno = err;
+            goto done;
+        }
 
         ctx = lookup_get_aux_data (lh);
         assert (ctx);
@@ -806,6 +814,13 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 
         if (lookup_iter_missing_refs (lh, lookup_load_cb, &cbd) < 0) {
             errno = cbd.errnum;
+
+            /* rpcs already in flight, stall for them to complete */
+            if (wait_get_usecount (wait) > 0) {
+                lookup_set_aux_errnum (lh, cbd.errnum);
+                goto stall;
+            }
+
             goto done;
         }
 
@@ -892,7 +907,15 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
         assert (ret == 0);
     }
     else {
+        int err;
+
         lh = arg;
+
+        /* error in prior load(), waited for in flight rpcs to complete */
+        if ((err = lookup_get_aux_errnum (lh))) {
+            errno = err;
+            goto done;
+        }
 
         ctx = lookup_get_aux_data (lh);
         assert (ctx);
@@ -915,6 +938,13 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
         if (lookup_iter_missing_refs (lh, lookup_load_cb, &cbd) < 0) {
             errno = cbd.errnum;
+
+            /* rpcs already in flight, stall for them to complete */
+            if (wait_get_usecount (wait) > 0) {
+                lookup_set_aux_errnum (lh, cbd.errnum);
+                goto stall;
+            }
+
             goto done;
         }
 
