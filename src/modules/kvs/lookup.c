@@ -78,8 +78,13 @@ struct lookup {
 
     /* potential return values from lookup */
     json_t *val;           /* value of lookup */
-    const char *missing_ref;    /* on stall, missing ref to load */
-    bool missing_ref_raw;       /* if true, missing ref points to raw data */
+
+    /* if valref_missing_refs is true, iterate on refs, else
+     * return missing_ref string.
+     */
+    json_t *valref_missing_refs;
+    const char *missing_ref;
+
     int errnum;                 /* errnum if error */
 
     /* API internal */
@@ -248,7 +253,6 @@ static bool walk (lookup_t *lh)
             if (!(hp = cache_lookup (lh->cache, refstr, lh->current_epoch))
                 || !cache_entry_get_valid (hp)) {
                 lh->missing_ref = refstr;
-                lh->missing_ref_raw = false;
                 goto stall;
             }
             if (!(dir = cache_entry_get_json (hp))) {
@@ -425,8 +429,8 @@ lookup_t *lookup_create (struct cache *cache,
     lh->aux = NULL;
 
     lh->val = NULL;
+    lh->valref_missing_refs = NULL;
     lh->missing_ref = NULL;
-    lh->missing_ref_raw = false;
     lh->errnum = 0;
 
     if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
@@ -507,8 +511,38 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
         && (lh->state == LOOKUP_STATE_CHECK_ROOT
             || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)) {
-        if (cb (lh, lh->missing_ref, lh->missing_ref_raw, data) < 0)
-            return -1;
+        if (lh->valref_missing_refs) {
+            int refcount, i;
+
+            if (!treeobj_is_valref (lh->valref_missing_refs)) {
+                errno = EPERM;
+                return -1;
+            }
+
+            refcount = treeobj_get_count (lh->valref_missing_refs);
+            assert (refcount > 0);
+
+            for (i = 0; i < refcount; i++) {
+                struct cache_entry *hp;
+                const char *ref;
+
+                if (!(ref = treeobj_get_blobref (lh->valref_missing_refs, i)))
+                    return -1;
+
+                if (!(hp = cache_lookup (lh->cache, ref, lh->current_epoch))
+                    || !cache_entry_get_valid (hp)) {
+
+                    /* valref points to raw data, raw_data flag is always
+                     * true */
+                    if (cb (lh, ref, true, data) < 0)
+                        return -1;
+                }
+            }
+        }
+        else {
+            if (cb (lh, lh->missing_ref, false, data) < 0)
+                return -1;
+        }
         return 0;
     }
     errno = EINVAL;
@@ -615,7 +649,6 @@ bool lookup (lookup_t *lh)
                         || !cache_entry_get_valid (hp)) {
                         lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
-                        lh->missing_ref_raw = false;
                         goto stall;
                     }
                     if (!(valtmp = cache_entry_get_json (hp))) {
@@ -679,7 +712,6 @@ bool lookup (lookup_t *lh)
                 if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
                     || !cache_entry_get_valid (hp)) {
                     lh->missing_ref = reftmp;
-                    lh->missing_ref_raw = false;
                     goto stall;
                 }
                 if (!(valtmp = cache_entry_get_json (hp))) {
@@ -721,8 +753,7 @@ bool lookup (lookup_t *lh)
                 }
                 if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
                     || !cache_entry_get_valid (hp)) {
-                    lh->missing_ref = reftmp;
-                    lh->missing_ref_raw = true;
+                    lh->valref_missing_refs = lh->wdirent;
                     goto stall;
                 }
                 if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
