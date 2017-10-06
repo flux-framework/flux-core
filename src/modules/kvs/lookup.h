@@ -36,6 +36,12 @@ bool lookup_validate (lookup_t *lh);
  * an error occurred or not */
 int lookup_get_errnum (lookup_t *lh);
 
+/* if user wishes to stall, but needs future knowledge to fail and
+ * what error caused the failure.
+ */
+int lookup_get_aux_errnum (lookup_t *lh);
+int lookup_set_aux_errnum (lookup_t *lh, int errnum);
+
 /* Get resulting value of lookup() after lookup() returns true.  The
  * json object returned gives a reference to the caller and must be
  * json_decref()'ed to free memory. */

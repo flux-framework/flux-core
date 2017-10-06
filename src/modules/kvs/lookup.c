@@ -86,6 +86,7 @@ struct lookup {
     const char *missing_ref;
 
     int errnum;                 /* errnum if error */
+    int aux_errnum;
 
     /* API internal */
     json_t *root_dirent;
@@ -490,6 +491,22 @@ int lookup_get_errnum (lookup_t *lh)
             || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)
             return EAGAIN;
+    }
+    return EINVAL;
+}
+
+int lookup_get_aux_errnum (lookup_t *lh)
+{
+    if (lh && lh->magic == LOOKUP_MAGIC)
+        return lh->aux_errnum;
+    return EINVAL;
+}
+
+int lookup_set_aux_errnum (lookup_t *lh, int errnum)
+{
+    if (lh && lh->magic == LOOKUP_MAGIC) {
+        lh->aux_errnum = errnum;
+        return lh->aux_errnum;
     }
     return EINVAL;
 }

@@ -88,6 +88,12 @@ void basic_api (void)
         "lookup_set_aux_data works");
     ok (lookup_get_aux_data (lh) == lh,
         "lookup_get_aux_data returns works");
+    ok (lookup_get_aux_errnum (lh) == 0,
+        "lookup_get_aux_errnum returns no error");
+    ok (lookup_set_aux_errnum (lh, EINVAL) == EINVAL,
+        "lookup_set_aux_errnum works");
+    ok (lookup_get_aux_errnum (lh) == EINVAL,
+        "lookup_get_aux_errnum gets EINVAL");
 
     lookup_destroy (lh);
 
