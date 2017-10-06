@@ -49,6 +49,8 @@ addons:
       - apport # for coredumps
       - gdb
       - valgrind
+      - libyaml-cpp-dev
+      - libboost-dev # for yaml-cpp 0.5.1. >=0.5.2 no longer need boost
 
   coverity_scan:
     project:
