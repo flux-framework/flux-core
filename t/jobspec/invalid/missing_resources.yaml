@@ -1,0 +1,7 @@
+version: 1
+tasks:
+  - command: app
+    slot: foo
+    count:
+      per_slot: 1
+attributes:
