@@ -1,8 +1,6 @@
 #ifndef _FLUX_CORE_KVS_H
 #define _FLUX_CORE_KVS_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include <flux/core.h>
 
 #include "kvs_lookup.h"
@@ -11,6 +9,10 @@
 #include "kvs_watch.h"
 #include "kvs_txn.h"
 #include "kvs_commit.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
@@ -25,6 +27,10 @@ int kvs_wait_version (flux_t *h, int version);
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_dropcache (flux_t *h);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_KVS_H */
 
