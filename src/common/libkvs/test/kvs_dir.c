@@ -29,6 +29,9 @@ void test_empty (void)
     char *s;
     const char *key;
 
+    lives_ok ({flux_kvsdir_destroy (NULL);},
+        "flux_kvsdir_destroy with NULL paramter doesn't crash");
+
     errno = 0;
     dir = flux_kvsdir_create (NULL, NULL, NULL, NULL);
     ok (dir == NULL && errno == EINVAL,
@@ -198,7 +201,18 @@ void test_full (void)
         "flux_kvsitr_next returns NULL on fourth call");
     flux_kvsitr_destroy (itr);
 
+    flux_kvsdir_t *cpy = flux_kvsdir_copy (dir);
+    ok (cpy != NULL,
+        "flux_kvsdir_copy was successful");
+    ok (flux_kvsdir_get_size (cpy) == 3,
+        "flux_kvsdir_get_size on copy returns 3");
+
     flux_kvsdir_destroy (dir);
+
+    ok (flux_kvsdir_get_size (cpy) == 3,
+        "flux_kvsdir_get_size on copy still returns 3 after orig freed");
+
+    flux_kvsdir_destroy (cpy);
 }
 
 int main (int argc, char *argv[])

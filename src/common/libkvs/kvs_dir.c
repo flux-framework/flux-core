@@ -66,6 +66,12 @@ void flux_kvsdir_destroy (flux_kvsdir_t *dir)
     }
 }
 
+flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
+{
+    return flux_kvsdir_create (dir->handle, dir->rootref,
+                               dir->key, dir->json_str);
+}
+
 /* If rootref is non-NULL, the kvsdir records the root reference
  * so that subsequent kvsdir_get_* accesses can be relative to that
  * snapshot.  Otherwise, they are relative to the current root.

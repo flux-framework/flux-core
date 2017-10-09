@@ -8,10 +8,9 @@ extern "C" {
 typedef struct flux_kvsdir flux_kvsdir_t;
 typedef struct flux_kvsitr flux_kvsitr_t;
 
-/* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
- */
 flux_kvsdir_t *flux_kvsdir_create (flux_t *handle, const char *rootref,
                                    const char *key, const char *json_str);
+flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir);
 void flux_kvsdir_destroy (flux_kvsdir_t *dir);
 void flux_kvsdir_incref (flux_kvsdir_t *dir);
 const char *flux_kvsdir_tostring (const flux_kvsdir_t *dir);
