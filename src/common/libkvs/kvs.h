@@ -1,8 +1,6 @@
 #ifndef _FLUX_CORE_KVS_H
 #define _FLUX_CORE_KVS_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include <flux/core.h>
 
 #include "kvs_lookup.h"
