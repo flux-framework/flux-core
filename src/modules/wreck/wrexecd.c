@@ -1048,6 +1048,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 {
     const char *lua_pattern;
     char name [128];
+    flux_future_t *f;
+    const flux_kvsdir_t *dir;
     /*
      * Connect to CMB over api socket
      */
@@ -1057,10 +1059,14 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%"PRId64, ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
-    if (flux_kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
+    if (!(f = flux_kvs_lookup (ctx->flux, FLUX_KVS_READDIR, ctx->kvspath))
+            || flux_kvs_lookup_get_dir (f, &dir) < 0
+            || !(ctx->kvs = flux_kvsdir_copy (dir))) {
         wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
+    flux_future_destroy (f);
+
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
     /*
@@ -1616,6 +1622,7 @@ static int l_push_environ (lua_State *L, int index)
 
 static flux_kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 {
+    flux_t *h = prog_ctx_flux_handle (ctx);
     struct task_info *t;
 
     if (!ctx->in_task)
@@ -1623,11 +1630,19 @@ static flux_kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 
     t = prog_ctx_current_task (ctx);
     if (!t->kvs) {
-        if ( (flux_kvs_get_dir (prog_ctx_flux_handle (ctx), &t->kvs,
-                           "%s.%d", ctx->kvspath, t->globalid) < 0)
-          && (errno != ENOENT))
-            wlog_err (ctx, "flux_kvs_get_dir (%s.%d): %s",
-                      ctx->kvspath, t->globalid, flux_strerror (errno));
+        char *key = NULL;
+        flux_future_t *f = NULL;
+        const flux_kvsdir_t *dir;
+        if (asprintf (&key, "%s.%d", ctx->kvspath, t->globalid) < 0
+                    || !(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
+                    || flux_kvs_lookup_get_dir (f, &dir) < 0
+                    || !(t->kvs = flux_kvsdir_copy (dir))) {
+            if (errno != ENOENT)
+                wlog_err (ctx, "flux_kvs_lookup (%s): %s",
+                          key ? key : "?", flux_strerror (errno));
+        }
+        flux_future_destroy (f);
+        free (key);
     }
     return (t->kvs);
 }
