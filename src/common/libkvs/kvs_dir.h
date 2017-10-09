@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_KVS_DIR_H
 #define _FLUX_CORE_KVS_DIR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct kvsdir_struct kvsdir_t;
 typedef struct kvsdir_iterator_struct kvsitr_t;
 
@@ -41,6 +45,10 @@ const char *kvsdir_rootref (kvsdir_t *dir);
 /* Get the number of keys in a directory.
  */
 int kvsdir_get_size (kvsdir_t *dir);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_KVS_DIR_H */
 

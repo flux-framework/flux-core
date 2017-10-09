@@ -27,6 +27,7 @@
 #endif
 #include <errno.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #include "event.h"
 #include "message.h"

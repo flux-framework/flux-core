@@ -3,6 +3,10 @@
 
 #include "handle.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_reduce_struct flux_reduce_t;
 
 struct flux_reduce_ops {
@@ -39,6 +43,10 @@ int flux_reduce_push (flux_reduce_t *r, void *item);
 int flux_reduce_opt_get (flux_reduce_t *r, int option, void *val, size_t size);
 
 int flux_reduce_opt_set (flux_reduce_t *r, int option, void *val, size_t size);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _FLUX_CORE_REDUCE_H */
 

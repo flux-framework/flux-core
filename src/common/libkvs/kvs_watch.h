@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_KVS_WATCH_H
 #define _FLUX_CORE_KVS_WATCH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum kvs_watch_flags {
     KVS_WATCH_ONCE = 4,
     KVS_WATCH_FIRST = 8,
@@ -42,6 +46,10 @@ int kvs_unwatch (flux_t *h, const char *key);
 int kvs_watch_once (flux_t *h, const char *key, char **json_str);
 int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
         __attribute__ ((format (printf, 3, 4)));
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_KVS_WATCH_H */
 

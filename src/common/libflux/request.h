@@ -1,10 +1,11 @@
 #ifndef _FLUX_CORE_REQUEST_H
 #define _FLUX_CORE_REQUEST_H
 
-#include <stdbool.h>
-#include <stdarg.h>
-
 #include "message.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Decode a request message with optional json payload.
  * If topic is non-NULL, assign the request topic string.
@@ -41,6 +42,10 @@ flux_msg_t *flux_request_encode (const char *topic, const char *json_str);
  */
 flux_msg_t *flux_request_encode_raw (const char *topic,
                                      const void *data, int len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_REQUEST_H */
 

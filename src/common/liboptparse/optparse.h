@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /******************************************************************************
  *  Datatypes:
  *****************************************************************************/
@@ -369,5 +373,9 @@ const char *optparse_get_str (optparse_t *p, const char *name,
  *    not valid.
  */
 int optparse_option_index (optparse_t *p);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _UTIL_OPTPARSE_H */

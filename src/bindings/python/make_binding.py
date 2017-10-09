@@ -48,7 +48,33 @@ def process_header(f):
           new_lines.append(l)
         lines = new_lines
 
+      in_ifdef = False
+      in_ifndef = False
       for l in lines:
+        # The compiler can't handle the 'extern "C" {' directive,
+        # so we need to manually honor the '#ifdef __cplusplus'
+        # preprocessor block to make the directive disappear.
+        # Assumes no nesting of preprocessor conditionals below
+        # __cplusplus conditionals.  Can handle either #ifdef or
+        # #ifndef, and the associated #else.
+        if in_ifndef:
+          if re.match("#\s*else", l):
+            in_ifndef = False
+            in_ifdef = True
+            continue
+          else:
+            pass # allow the line to be included
+        elif in_ifdef:
+          if re.match("#\s*(endif|else)", l):
+            in_ifdef = False
+          continue
+        elif re.match("#\s*ifdef\s+__cplusplus", l):
+          in_ifdef = True
+          continue
+        elif re.match("#\s*ifndef\s+__cplusplus", l):
+          in_ifndef = True
+          continue
+
         m = re.search('#include\s*"([^"]*)"', l)
         if m:
           process_header(m.group(1))

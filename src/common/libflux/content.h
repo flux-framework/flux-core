@@ -3,6 +3,10 @@
 
 #include <flux/core.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* flags */
 enum {
     CONTENT_FLAG_CACHE_BYPASS = 1,/* request direct to backing store */
@@ -31,6 +35,10 @@ flux_future_t *flux_content_store (flux_t *h,
  * Returns 0 on success, -1 on failure with errno set.
  */
 int flux_content_store_get (flux_future_t *f, const char **blobref);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_CONTENT_H */
 

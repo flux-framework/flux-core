@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>

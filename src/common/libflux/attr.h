@@ -1,9 +1,11 @@
 #ifndef _FLUX_CORE_ATTR_H
 #define _FLUX_CORE_ATTR_H
 
-#include <stdbool.h>
-
 #include "handle.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Flags can only be set by the broker.
  */
@@ -24,6 +26,9 @@ const char *flux_attr_first (flux_t *h);
 
 const char *flux_attr_next (flux_t *h);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_ATTR_H */
 

@@ -2,12 +2,16 @@
 #define _FLUX_CORE_FLOG_H
 
 #include <stdarg.h>
-#include <stdbool.h>
 #include <syslog.h>
 #include <stdlib.h>
 #include <errno.h>
 
 #include "handle.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define FLUX_MAX_LOGBUF     2048
 
@@ -72,6 +76,10 @@ void flux_log_fprint (const char *buf, int len, void *arg);
  * Flux errno space includes POSIX errno + zeromq errors.
  */
 const char *flux_strerror (int errnum);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_FLOG_H */
 
