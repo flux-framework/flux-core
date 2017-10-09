@@ -1,0 +1,20 @@
+version: 1
+resources:
+  - type: slot
+    count:
+      min: 3
+      max: 30
+      operator: "+"
+      operand: 1
+    label: default
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: [ "flux", "start" ]
+    slot: default
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1 hour

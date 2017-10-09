@@ -1,0 +1,16 @@
+version: 1
+resources:
+  - type: slot
+    count: 1
+    label:
+      - foo
+      - bar
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: app
+    slot: foo
+    count:
+      per_slot: 1
+attributes:

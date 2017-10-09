@@ -1,0 +1,22 @@
+version: 1
+resources:
+  - type: slot
+    count: 4
+    label: nodelevel
+    with:
+    - type: node
+      count: 1
+      with:
+        - type: socket
+          count: 2
+          with:
+            - type: core
+              count: 4
+tasks:
+  - command: [ "flux", "start" ]
+    slot: nodelevel
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1 hour

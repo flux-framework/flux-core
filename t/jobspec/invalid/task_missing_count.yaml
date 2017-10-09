@@ -1,0 +1,12 @@
+version: 1
+resources:
+  - type: slot
+    count: 1
+    label: foo
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: app
+    slot: foo
+attributes:

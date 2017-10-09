@@ -13,6 +13,10 @@ SUBDIRS = libtap \
 	  libcompat \
 	  liboptparse
 
+if ENABLE_JOBSPEC
+SUBDIRS += libjobspec
+endif
+
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
 
@@ -36,6 +40,9 @@ libflux_internal_la_LIBADD = \
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la libflux-optparse.la
+if ENABLE_JOBSPEC
+lib_LTLIBRARIES += libflux-jobspec.la
+endif
 fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
 libflux_core_la_SOURCES =
@@ -58,6 +65,11 @@ libflux_optparse_la_LDFLAGS = \
         -Wl,--version-script=$(srcdir)/libflux-optparse.map \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
+
+if ENABLE_JOBSPEC
+libflux_jobspec_la_SOURCES =
+libflux_jobspec_la_LIBADD = $(builddir)/libjobspec/libjobspec.la
+endif
 
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \

@@ -1,0 +1,17 @@
+version: 1
+resources:
+  - type: slot
+    count:
+      max: 2
+      operator: "+"
+      operand: 1
+    label: foo
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: app
+    slot: foo
+    count:
+      per_slot: 1
+attributes:

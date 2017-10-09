@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: flux-jobspec
+Description: Flux Resource Manager Jobspec Parser
+Version: @PACKAGE_VERSION@
+Requires: Yaml-cpp
+Libs: -L${libdir} -lflux-jobspec
+Cflags: -I${includedir}

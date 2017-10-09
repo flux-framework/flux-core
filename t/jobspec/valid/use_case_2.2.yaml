@@ -1,0 +1,16 @@
+version: 1
+resources:
+  - type: slot
+    count: 4
+    label: myslot
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: hostname
+    slot: myslot
+    count:
+      total: 5
+attributes:
+  system:
+    duration: 1 hour

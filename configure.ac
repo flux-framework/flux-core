@@ -175,6 +175,7 @@ AX_LUA_LIBS
 X_AC_ZEROMQ
 X_AC_MUNGE
 X_AC_JANSSON
+X_AC_YAMLCPP
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 LX_FIND_MPI
@@ -271,6 +272,8 @@ AC_CONFIG_FILES( \
   src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/common/liboptparse/Makefile \
+  src/common/libjobspec/Makefile \
+  src/common/libjobspec/flux-jobspec.pc \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \

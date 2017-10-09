@@ -1,0 +1,19 @@
+version: 1
+resources:
+  - type: slot
+    label: default
+    count: 10
+    with:
+    - type: memory
+      count: 2
+      unit: GB
+    - type: core
+      count: 1
+tasks:
+  - command: app
+    slot: default
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1 hour

@@ -1,0 +1,35 @@
+version: 1
+resources:
+  - type: node
+    count: 1
+    with:
+      - type: slot
+        label: read-db
+        count: 10
+        with:
+          - type: core
+            count: 1
+          - type: memory
+            count: 4
+            unit: GB
+      - type: slot
+        label: db
+        count: 1
+        with:
+          - type: core
+            count: 6
+          - type: memory
+            count: 24
+            unit: GB
+tasks:
+  - command: read-db
+    slot: read-db
+    count:
+      per_slot: 1
+  - command: db
+    slot: db
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1 hour

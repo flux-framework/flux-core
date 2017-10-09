@@ -9,6 +9,10 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	$(ZMQ_CFLAGS)
 
+AM_CXXFLAGS = \
+	$(WARNING_CXXFLAGS) \
+	$(CODE_COVERAGE_CXXFLAGS)
+
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \
@@ -68,6 +72,16 @@ fluxcmd_PROGRAMS = \
 	flux-kvs \
 	flux-start \
 	flux-jstat
+
+if ENABLE_JOBSPEC
+fluxcmd_PROGRAMS += \
+	flux-jobspec-validate
+
+flux_jobspec_validate_SOURCES = flux-jobspec-validate.cpp
+flux_jobspec_validate_LDADD = \
+        $(top_builddir)/src/common/libjobspec/libjobspec.la \
+        $(YAMLCPP_LIBS)
+endif
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
