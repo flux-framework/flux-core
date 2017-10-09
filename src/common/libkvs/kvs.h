@@ -3,8 +3,8 @@
 
 #include <flux/core.h>
 
-#include "kvs_lookup.h"
 #include "kvs_dir.h"
+#include "kvs_lookup.h"
 #include "kvs_classic.h"
 #include "kvs_watch.h"
 #include "kvs_txn.h"
