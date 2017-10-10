@@ -254,8 +254,11 @@ static int l_flux_new (lua_State *L)
 static int l_flux_kvsdir_new (lua_State *L)
 {
     const char *path = ".";
-    flux_kvsdir_t *dir;
+    const flux_kvsdir_t *dir;
+    flux_kvsdir_t *cpy;
     flux_t *f = lua_get_flux (L, 1);
+    flux_future_t *fut = NULL;
+    int rc;
 
     if (lua_isstring (L, 2)) {
         /*
@@ -265,10 +268,16 @@ static int l_flux_kvsdir_new (lua_State *L)
             return (2);
         path = lua_tostring (L, 2);
     }
-
-    if (flux_kvs_get_dir (f, &dir, "%s", path) < 0)
-        return lua_pusherror (L, (char *)flux_strerror (errno));
-    return lua_push_kvsdir (L, dir);
+    if (!(fut = flux_kvs_lookup (f, FLUX_KVS_READDIR, path))
+            || flux_kvs_lookup_get_dir (fut, &dir) < 0
+            || !(cpy = flux_kvsdir_copy (dir))) {
+        rc = lua_pusherror (L, (char *)flux_strerror (errno));
+        goto done;
+    }
+    rc = lua_push_kvsdir (L, cpy);
+done:
+    flux_future_destroy (fut);
+    return rc;
 }
 
 static int l_flux_kvs_symlink (lua_State *L)
@@ -309,8 +318,9 @@ static int l_flux_kvs_type (lua_State *L)
 {
     flux_t *f;
     const char *key;
-    char *val;
-    flux_kvsdir_t *d;
+    const flux_kvsdir_t *dir;
+    const char *json_str;
+    flux_kvsdir_t *cpy;
     flux_future_t *future;
     const char *target;
 
@@ -327,22 +337,29 @@ static int l_flux_kvs_type (lua_State *L)
         return (2);
     }
     flux_future_destroy (future);
-    if (flux_kvs_get_dir (f, &d, "%s", key) == 0) {
+    if ((future = flux_kvs_lookup (f, FLUX_KVS_READDIR, key))
+            && flux_kvs_lookup_get_dir (future, &dir) == 0
+            && (cpy = flux_kvsdir_copy (dir))) {
         lua_pushstring (L, "dir");
-        lua_push_kvsdir (L, d);
+        lua_push_kvsdir (L, cpy);
+        flux_future_destroy (future);
         return (2);
     }
-    if (flux_kvs_get (f, key, &val) == 0) {
+    flux_future_destroy (future);
+    if ((future = flux_kvs_lookup (f, 0, key))
+            && flux_kvs_lookup_get (future, &json_str) == 0) {
         json_object *o;
         lua_pushstring (L, "file");
-        if (val && (o = json_tokener_parse (val))) {
+        if (json_str && (o = json_tokener_parse (json_str))) {
             json_object_to_lua (L, o);
             json_object_put (o);
         }
         else
             lua_pushnil (L);
+        flux_future_destroy (future);
         return (2);
     }
+    flux_future_destroy (future);
     return lua_pusherror (L, "key does not exist");
 }
 
@@ -382,25 +399,34 @@ int l_flux_kvs_put (lua_State *L)
 
 int l_flux_kvs_get (lua_State *L)
 {
-    char *json_str;
-    json_object *o;
+    flux_future_t *fut = NULL;
+    const char *json_str;
+    json_object *o = NULL;
     flux_t *f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
+    int rc;
 
-    if (key == NULL)
-        return lua_pusherror (L, "key required");
-    if (flux_kvs_get (f, key, &json_str) < 0)
-        return lua_pusherror (L, "flux_kvs_get: %s",
+    if (key == NULL) {
+        rc = lua_pusherror (L, "key required");
+        goto done;
+    }
+    if (!(fut = flux_kvs_lookup (f, 0, key))
+            || flux_kvs_lookup_get (fut, &json_str) < 0) {
+        rc = lua_pusherror (L, "flux_kvs_lookup: %s",
                               (char *)flux_strerror (errno));
+        goto done;
+    }
     if (!(o = json_tokener_parse (json_str))
         || (json_object_to_lua (L, o) < 0)) {
-        free (json_str);
-        return lua_pusherror (L, "json_tokener_parse: %s",
+        rc = lua_pusherror (L, "json_tokener_parse: %s",
                               (char *)flux_strerror (errno));
+        goto done;
     }
-    free (json_str);
+    rc = 1;
+done:
     json_object_put (o);
-    return (1);
+    flux_future_destroy (fut);
+    return (rc);
 }
 
 static int l_flux_barrier (lua_State *L)
