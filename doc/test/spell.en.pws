@@ -401,3 +401,4 @@ nprocs
 procs
 txn
 kvsdir
+vpack
