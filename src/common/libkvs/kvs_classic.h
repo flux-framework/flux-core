@@ -19,16 +19,18 @@ int flux_kvs_mkdir (flux_t *h, const char *key);
 int flux_kvs_commit_anon (flux_t *h, int flags);
 int flux_kvs_fence_anon (flux_t *h, const char *name, int nprocs, int flags);
 
-int flux_kvsdir_get (flux_kvsdir_t *dir, const char *key, char **json_str);
-int flux_kvsdir_get_dir (flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
+int flux_kvsdir_get (const flux_kvsdir_t *dir,
+                    const char *key, char **json_str);
+int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
                     const char *fmt, ...)
                     __attribute__ ((format (printf, 3, 4)));
 
-int flux_kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str);
-int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
-                      const char *fmt, ...);
-int flux_kvsdir_unlink (flux_kvsdir_t *dir, const char *key);
-int flux_kvsdir_mkdir (flux_kvsdir_t *dir, const char *key);
+int flux_kvsdir_put (const flux_kvsdir_t *dir, const char *key,
+                    const char *json_str);
+int flux_kvsdir_pack (const flux_kvsdir_t *dir, const char *key,
+                    const char *fmt, ...);
+int flux_kvsdir_unlink (const flux_kvsdir_t *dir, const char *key);
+int flux_kvsdir_mkdir (const flux_kvsdir_t *dir, const char *key);
 
 #ifdef __cplusplus
 }

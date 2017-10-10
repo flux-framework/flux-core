@@ -89,7 +89,7 @@ done:
     return rc;
 }
 
-int flux_kvsdir_get (flux_kvsdir_t *dir, const char *name, char **valp)
+int flux_kvsdir_get (const flux_kvsdir_t *dir, const char *name, char **valp)
 {
     flux_t *h = flux_kvsdir_handle (dir);
     const char *rootref = flux_kvsdir_rootref (dir);
@@ -117,8 +117,8 @@ done:
     return rc;
 }
 
-int flux_kvsdir_get_dir (flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
-                    const char *fmt, ...)
+int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
+                         const char *fmt, ...)
 {
     flux_t *h = flux_kvsdir_handle (dir);
     const char *rootref = flux_kvsdir_rootref (dir);
@@ -256,7 +256,8 @@ static void dir_put_fini (struct dir_put *sp)
     errno = saved_errno;
 }
 
-static int dir_put_init (flux_kvsdir_t *dir, const char *key, struct dir_put *dp)
+static int dir_put_init (const flux_kvsdir_t *dir, const char *key,
+                         struct dir_put *dp)
 {
     memset (dp, 0, sizeof (struct dir_put));
     if (!dir || !key) {
@@ -275,7 +276,8 @@ static int dir_put_init (flux_kvsdir_t *dir, const char *key, struct dir_put *dp
     return 0;
 }
 
-int flux_kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str)
+int flux_kvsdir_put (const flux_kvsdir_t *dir, const char *key,
+                     const char *json_str)
 {
     struct dir_put dp;
     int rc;
@@ -286,7 +288,7 @@ int flux_kvsdir_put (flux_kvsdir_t *dir, const char *key, const char *json_str)
     return rc;
 }
 
-int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
+int flux_kvsdir_pack (const flux_kvsdir_t *dir, const char *key,
                       const char *fmt, ...)
 {
     struct dir_put dp;
@@ -301,7 +303,7 @@ int flux_kvsdir_pack (flux_kvsdir_t *dir, const char *key,
     return rc;
 }
 
-int flux_kvsdir_unlink (flux_kvsdir_t *dir, const char *key)
+int flux_kvsdir_unlink (const flux_kvsdir_t *dir, const char *key)
 {
     struct dir_put dp;
     int rc;
@@ -312,7 +314,7 @@ int flux_kvsdir_unlink (flux_kvsdir_t *dir, const char *key)
     return rc;
 }
 
-int flux_kvsdir_mkdir (flux_kvsdir_t *dir, const char *key)
+int flux_kvsdir_mkdir (const flux_kvsdir_t *dir, const char *key)
 {
     struct dir_put dp;
     int rc;
