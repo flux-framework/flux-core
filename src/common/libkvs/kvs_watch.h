@@ -5,45 +5,76 @@
 extern "C" {
 #endif
 
+/* Watch a KVS key for changes.
+ *
+ * There are two distinct interfaces, one that registers a callback that
+ * is triggered when the key changes, and one that accepts an initial value
+ * and returns a new value when it changes.
+ *
+ * N.B. These interfaces and the internal watch mechanisms are long overdue
+ * for an overhaul.
+ */
+
 enum kvs_watch_flags {
     KVS_WATCH_ONCE = 4,
     KVS_WATCH_FIRST = 8,
 };
+
+/* User callbacks for flux_kvs_watch() and flux_kvs_watch_dir() respectively.
+ * The value passed to these functions is only valid for the duration of the
+ * call.  'arg' and 'key' are the same as the arguments passed to the watch
+ * functions.  If 'errnum' is non-zero, then the value is invalid; for example,
+ * ENOENT - key no longer exists
+ * ENOTDIR - key is not a directory (kvs_set_dir_f)
+ * EISDIR - key is a directory (kvs_set_f)
+ * These functions should normally return 0.  flux_reactor_stop_error() is
+ * called internally if -1 is returned (errno must be set).
+ */
 
 typedef int (*kvs_set_f)(const char *key, const char *json_str, void *arg,
                          int errnum);
 typedef int (*kvs_set_dir_f)(const char *key, flux_kvsdir_t *dir, void *arg,
                              int errnum);
 
-/* kvs_watch* is like kvs_get* except the registered callback is called
- * to set the value.  It will be called immediately to set the initial
- * value and again each time the value changes.
- * Any storage associated with the value given the
- * callback is freed when the callback returns.  If a value is unset, the
- * callback gets errnum = ENOENT.
+/* Register 'set' callback on non-directory 'key'.
+ * Callback is triggered once during registration to get the initial value.
+ * Once the reactor is (re-)entered, it will then be called each time the
+ * key changes.
  */
 int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg);
+
+/* Register 'set' callback on directory 'key'.
+ * Callback is triggered once during registration to get the initial value,
+ * and thereafter, each time the directory changes. Note that due to the
+ * KVS's hash tree namespace organization, this function will be called
+ * whenever any key under this directory changes, since that forces the
+ * hash references to change on parents, all the way to the root.
+ */
 int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
                         const char *fmt, ...)
                         __attribute__ ((format (printf, 4, 5)));
 
-/* Cancel a kvs_watch, freeing server-side state, and unregistering any
- * callback.  Returns 0 on success, or -1 with errno set on error.
+/* Cancel a flux_kvs_watch(), freeing server-side state, and unregistering
+ * any callback.  Returns 0 on success, or -1 with errno set on error.
  */
 int flux_kvs_unwatch (flux_t *h, const char *key);
 
-/* While the above callback interface makes sense in plugin context,
- * the following is better for API context.  'json_str', 'dirp', and
- * 'valp' are IN/OUT parameters.  You should first read the current
- * value, then pass it into the respective kvs_watch_once call, which
- * will return with a new value when it changes.  (The original value
- * is freed inside the function; the new one must be freed by the
- * caller).  *json_str, *dirp, and *valp may be passed in with a NULL
- * value.  If the key is not set, ENOENT is returned without affecting
- * *valp.
- * FIXME: add more types.
+/* Block until 'key' changes from value represented by '*json_str'.
+ * 'json_str' is an IN/OUT parameter;  that is, it used to construct
+ * the watch RPC, then upon receipt of a watch response, it is freed
+ * and set to the new value.  Upon return, the caller should free
+ * the new value.
+ *
+ * 'json_str' may initially point to a NULL value.  The function will
+ * wait until 'key' exists then return its new value.
+ *
+ * If 'key' initially exists, then is removed, the function fails with
+ * ENOENT and the initial value is not freed.
  */
 int flux_kvs_watch_once (flux_t *h, const char *key, char **json_str);
+
+/* Same as above except value is a directory pointed to by 'dirp'.
+ */
 int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
                              const char *fmt, ...)
                              __attribute__ ((format (printf, 3, 4)));
