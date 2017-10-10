@@ -230,6 +230,79 @@ static void usage (void)
     exit (1);
 }
 
+void parse_command_line_arguments(int argc, char *argv[],
+                                  broker_ctx_t *ctx, int *sec_typemask)
+{
+    int c;
+    int e;
+    char *endptr;
+
+    while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (c) {
+        case 's':   /* --security=MODE */
+            if (!strcmp (optarg, "none")) {
+                *sec_typemask = 0;
+            } else if (!strcmp (optarg, "plain")) {
+                *sec_typemask |= FLUX_SEC_TYPE_PLAIN;
+                *sec_typemask &= ~FLUX_SEC_TYPE_CURVE;
+            } else if (!strcmp (optarg, "curve")) {
+                *sec_typemask |= FLUX_SEC_TYPE_CURVE;
+                *sec_typemask &= ~FLUX_SEC_TYPE_PLAIN;
+            } else {
+                log_msg_exit ("--security arg must be none|plain|curve");
+            }
+            break;
+        case 'v':   /* --verbose */
+            ctx->verbose = true;
+            break;
+        case 'q':   /* --quiet */
+            ctx->quiet = true;
+            break;
+        case 'X':   /* --module-path PATH */
+            if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
+                log_err_exit ("setting conf.module_path attribute");
+            break;
+        case 'k':   /* --k-ary k */
+            errno = 0;
+            ctx->tbon.k = strtoul (optarg, &endptr, 10);
+            if (errno || *endptr != '\0')
+                log_err_exit ("k-ary '%s'", optarg);
+            if (ctx->tbon.k < 1)
+                usage ();
+            break;
+        case 'H':   /* --heartrate SECS */
+            if (heartbeat_set_ratestr (ctx->heartbeat, optarg) < 0)
+                log_err_exit ("heartrate `%s'", optarg);
+            break;
+        case 'g':   /* --shutdown-grace SECS */
+            errno = 0;
+            ctx->shutdown_grace = strtod (optarg, &endptr);
+            if (errno || *endptr != '\0')
+                log_err_exit ("shutdown-grace '%s'", optarg);
+            if (ctx->shutdown_grace < 0)
+                usage ();
+            break;
+        case 'S': { /* --setattr ATTR=VAL */
+            char *val, *attr = xstrdup (optarg);
+            if ((val = strchr (attr, '=')))
+                *val++ = '\0';
+            if (attr_add (ctx->attrs, attr, val, 0) < 0)
+                if (attr_set (ctx->attrs, attr, val, true) < 0)
+                    log_err_exit ("setattr %s=%s", attr, val);
+            free (attr);
+            break;
+        }
+        default:
+            usage ();
+        }
+    }
+    if (optind < argc) {
+        if ((e = argz_create (argv + optind, &ctx->init_shell_cmd,
+                              &ctx->init_shell_cmd_len)) != 0)
+            log_errn_exit (e, "argz_create");
+    }
+}
+
 static int setup_profiling (const char *program, int rank)
 {
 #if HAVE_CALIPER
@@ -248,12 +321,9 @@ static int setup_profiling (const char *program, int rank)
 
 int main (int argc, char *argv[])
 {
-    int c;
     broker_ctx_t ctx;
     zlist_t *sigwatchers;
     int sec_typemask = FLUX_SEC_TYPE_CURVE | FLUX_SEC_TYPE_MUNGE;
-    int e;
-    char *endptr;
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
@@ -289,70 +359,7 @@ int main (int argc, char *argv[])
         oom ();
     subprocess_manager_set (ctx.sm, SM_WAIT_FLAGS, WNOHANG);
 
-    while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (c) {
-            case 's':   /* --security=MODE */
-                if (!strcmp (optarg, "none")) {
-                    sec_typemask = 0;
-                } else if (!strcmp (optarg, "plain")) {
-                    sec_typemask |= FLUX_SEC_TYPE_PLAIN;
-                    sec_typemask &= ~FLUX_SEC_TYPE_CURVE;
-                } else if (!strcmp (optarg, "curve")) {
-                    sec_typemask |= FLUX_SEC_TYPE_CURVE;
-                    sec_typemask &= ~FLUX_SEC_TYPE_PLAIN;
-                } else {
-                    log_msg_exit ("--security arg must be none|plain|curve");
-                }
-                break;
-            case 'v':   /* --verbose */
-                ctx.verbose = true;
-                break;
-            case 'q':   /* --quiet */
-                ctx.quiet = true;
-                break;
-            case 'X':   /* --module-path PATH */
-                if (attr_set (ctx.attrs, "conf.module_path", optarg, true) < 0)
-                    log_err_exit ("setting conf.module_path attribute");
-                break;
-            case 'k':   /* --k-ary k */
-                errno = 0;
-                ctx.tbon.k = strtoul (optarg, &endptr, 10);
-                if (errno || *endptr != '\0')
-                    log_err_exit ("k-ary '%s'", optarg);
-                if (ctx.tbon.k < 1)
-                    usage ();
-                break;
-            case 'H':   /* --heartrate SECS */
-                if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
-                    log_err_exit ("heartrate `%s'", optarg);
-                break;
-            case 'g':   /* --shutdown-grace SECS */
-                errno = 0;
-                ctx.shutdown_grace = strtod (optarg, &endptr);
-                if (errno || *endptr != '\0')
-                    log_err_exit ("shutdown-grace '%s'", optarg);
-                if (ctx.shutdown_grace < 0)
-                    usage ();
-                break;
-            case 'S': { /* --setattr ATTR=VAL */
-                char *val, *attr = xstrdup (optarg);
-                if ((val = strchr (attr, '=')))
-                    *val++ = '\0';
-                if (attr_add (ctx.attrs, attr, val, 0) < 0)
-                    if (attr_set (ctx.attrs, attr, val, true) < 0)
-                        log_err_exit ("setattr %s=%s", attr, val);
-                free (attr);
-                break;
-            }
-            default:
-                usage ();
-        }
-    }
-    if (optind < argc) {
-        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd,
-                                             &ctx.init_shell_cmd_len)) != 0)
-            log_errn_exit (e, "argz_create");
-    }
+    parse_command_line_arguments(argc, argv, &ctx, &sec_typemask);
 
     /* Record the instance owner: the effective uid of the broker.
      * Set default rolemask for messages sent with flux_send()
