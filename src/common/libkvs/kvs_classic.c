@@ -53,15 +53,16 @@ done:
     return rc;
 }
 
-int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dir, const char *fmt, ...)
+int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
 {
     flux_future_t *f = NULL;
-    const char *json_str;
+    const flux_kvsdir_t *dir;
+    flux_kvsdir_t *cpy;
     va_list ap;
     char *key = NULL;
     int rc = -1;
 
-    if (!h || !dir || !fmt) {
+    if (!h || !dirp || !fmt) {
         errno = EINVAL;
         goto done;
     }
@@ -78,10 +79,11 @@ int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dir, const char *fmt, ...)
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, k)))
         goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         goto done;
-    if (!(*dir = flux_kvsdir_create (h, NULL, k, json_str)))
+    if (!(cpy = flux_kvsdir_copy (dir)))
         goto done;
+    *dirp = cpy;
     rc = 0;
 done:
     free (key);
@@ -124,7 +126,8 @@ int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
     const char *rootref = flux_kvsdir_rootref (dir);
     flux_future_t *f = NULL;
     va_list ap;
-    const char *json_str;
+    const flux_kvsdir_t *subdir;
+    flux_kvsdir_t *cpy;
     char *name = NULL;
     char *key = NULL;
     int rc = -1;
@@ -139,10 +142,11 @@ int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
         goto done;
     if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
         goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (flux_kvs_lookup_get_dir (f, &subdir) < 0)
         goto done;
-    if (!(*dirp = flux_kvsdir_create (h, rootref, key, json_str)))
+    if (!(cpy = flux_kvsdir_copy (subdir)))
         goto done;
+    *dirp = cpy;
     rc = 0;
 done:
     free (key);
