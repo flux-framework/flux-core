@@ -595,13 +595,6 @@ int main (int argc, char *argv[])
     if (overlay_connect (ctx.overlay) < 0)
         log_err_exit ("overlay_connect");
 
-    {
-        const char *rundir;
-        if (attr_get (ctx.attrs, "broker.rundir", &rundir, NULL) < 0) {
-            log_msg_exit ("broker.rundir attribute is not set");
-        }
-    }
-
     shutdown_set_handle (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
