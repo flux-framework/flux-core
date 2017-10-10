@@ -328,7 +328,7 @@ static void dump_kvs_val (const char *key, const char *json_str)
     json_decref (o);
 }
 
-static void dump_kvs_dir (flux_kvsdir_t *dir, bool ropt)
+static void dump_kvs_dir (const flux_kvsdir_t *dir, bool ropt)
 {
     flux_future_t *f;
     flux_kvsitr_t *itr;
@@ -350,19 +350,21 @@ static void dump_kvs_dir (flux_kvsdir_t *dir, bool ropt)
 
         } else if (flux_kvsdir_isdir (dir, name)) {
             if (ropt) {
-                flux_kvsdir_t *ndir;
-                if (flux_kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
+                const flux_kvsdir_t *ndir;
+                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref))
+                        || flux_kvs_lookup_get_dir (f, &ndir) < 0)
                     log_err_exit ("%s", key);
                 dump_kvs_dir (ndir, ropt);
-                flux_kvsdir_destroy (ndir);
+                flux_future_destroy (f);
             } else
                 printf ("%s.\n", key);
         } else {
-            char *json_str;
-            if (flux_kvsdir_get (dir, name, &json_str) < 0)
+            const char *json_str;
+            if (!(f = flux_kvs_lookupat (h, 0, key, rootref))
+                    || flux_kvs_lookup_get (f, &json_str) < 0)
                 log_err_exit ("%s", key);
             dump_kvs_val (key, json_str);
-            free (json_str);
+            flux_future_destroy (f);
         }
         free (key);
     }
@@ -372,8 +374,7 @@ static void dump_kvs_dir (flux_kvsdir_t *dir, bool ropt)
 void cmd_dirat (flux_t *h, int argc, char **argv)
 {
     bool ropt = false;
-    flux_kvsdir_t *dir = NULL;
-    const char *json_str;
+    const flux_kvsdir_t *dir;
     flux_future_t *f;
 
     if (argc > 0) {
@@ -390,30 +391,24 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
     if (argc != 2)
         log_msg_exit ("dir: specify treeobj and directory");
     if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, argv[1], argv[0]))
-            || flux_kvs_lookup_get (f, &json_str) < 0
-            || !(dir = flux_kvsdir_create (h, argv[0], argv[1], json_str)))
+            || flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", argv[1]);
     dump_kvs_dir (dir, ropt);
-    flux_kvsdir_destroy (dir);
     flux_future_destroy (f);
 }
 
 void cmd_dirsize (flux_t *h, int argc, char **argv)
 {
     flux_future_t *f;
-    const char *json_str;
-    flux_kvsdir_t *dir = NULL;
+    const flux_kvsdir_t *dir = NULL;
 
     if (argc != 1)
         log_msg_exit ("dirsize: specify one directory");
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, argv[0])))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", argv[0]);
-    if (!(dir = flux_kvsdir_create (h, NULL, argv[0], json_str)))
-        log_err_exit ("flux_kvsdir_create");
     printf ("%d\n", flux_kvsdir_get_size (dir));
-    flux_kvsdir_destroy (dir);
     flux_future_destroy (f);
 }
 
