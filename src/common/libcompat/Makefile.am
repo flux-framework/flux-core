@@ -16,7 +16,5 @@ libcompat_la_SOURCES = \
 	handle.h \
 	reactor.c \
 	reactor.h \
-	request.c \
-	request.h \
 	rpc.c \
 	rpc.h
