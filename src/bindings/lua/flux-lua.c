@@ -41,7 +41,6 @@
 
 #include "flux/core.h"
 
-#include "src/common/libcompat/request.h"
 #include "src/common/libcompat/reactor.h"
 #include "src/common/libcompat/handle.h"
 #include "src/common/libcompat/rpc.h"
@@ -465,6 +464,32 @@ static int l_flux_index (lua_State *L)
     return 1;
 }
 
+static int send_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
+                              const char *topic, const char *json_str)
+{
+    flux_msg_t *msg;
+    int msgflags = 0;
+    int rc = -1;
+
+    if (!(msg = flux_request_encode (topic, json_str)))
+        goto done;
+    if (flux_msg_set_matchtag (msg, matchtag) < 0)
+        goto done;
+    if (nodeid == FLUX_NODEID_UPSTREAM) {
+        msgflags |= FLUX_MSGFLAG_UPSTREAM;
+        if (flux_get_rank (h, &nodeid) < 0)
+            goto done;
+    }
+    if (flux_msg_set_nodeid (msg, nodeid, msgflags) < 0)
+        goto done;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
 static int l_flux_send (lua_State *L)
 {
     int rc;
@@ -488,7 +513,8 @@ static int l_flux_send (lua_State *L)
     if (matchtag == FLUX_MATCHTAG_NONE)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
-    rc = flux_json_request (f, nodeid, matchtag, tag, o);
+    rc = send_json_request (f, nodeid, matchtag, tag,
+                            o ? json_object_to_json_string (o) : NULL);
     json_object_put (o);
     if (rc < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
@@ -834,7 +860,17 @@ static int l_f_zi_resp_cb (lua_State *L,
     struct zmsg_info *zi, json_object *resp, void *arg)
 {
     flux_t *f = arg;
-    return l_pushresult (L, flux_json_respond (f, resp, zmsg_info_zmsg (zi)));
+    flux_msg_t **msgp = zmsg_info_zmsg (zi);
+    const char *json_str = NULL;
+    int rc;
+
+    if (resp)
+        json_str = json_object_to_json_string (resp);
+    if ((rc = flux_respond (f, *msgp, 0, json_str)) == 0) {
+        flux_msg_destroy (*msgp);
+        *msgp = NULL;
+    }
+    return l_pushresult (L, rc);
 }
 
 static int create_and_push_zmsg_info (lua_State *L,
