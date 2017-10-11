@@ -62,25 +62,32 @@ struct cache {
     zhash_t *zh;
 };
 
-struct cache_entry *cache_entry_create (void)
+struct cache_entry *cache_entry_create (cache_data_type_t t)
 {
-    struct cache_entry *hp = calloc (1, sizeof (*hp));
-    if (!hp) {
+    struct cache_entry *hp;
+
+    if (t != CACHE_DATA_TYPE_NONE
+        && t != CACHE_DATA_TYPE_JSON
+        && t != CACHE_DATA_TYPE_RAW) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!(hp = calloc (1, sizeof (*hp)))) {
         errno = ENOMEM;
         return NULL;
     }
-    hp->type = CACHE_DATA_TYPE_NONE;
+    hp->type = t;
     return hp;
 }
 
 struct cache_entry *cache_entry_create_json (json_t *o)
 {
-    struct cache_entry *hp = cache_entry_create ();
+    struct cache_entry *hp = cache_entry_create (CACHE_DATA_TYPE_JSON);
     if (!hp)
         return NULL;
     if (o)
         hp->data = o;
-    hp->type = CACHE_DATA_TYPE_JSON;
     return hp;
 }
 
@@ -93,13 +100,13 @@ struct cache_entry *cache_entry_create_raw (void *data, int len)
         return NULL;
     }
 
-    if (!(hp = cache_entry_create ()))
+    if (!(hp = cache_entry_create (CACHE_DATA_TYPE_RAW)))
         return NULL;
+
     if (data) {
         hp->data = data;
         hp->len = len;
     }
-    hp->type = CACHE_DATA_TYPE_RAW;
     return hp;
 }
 

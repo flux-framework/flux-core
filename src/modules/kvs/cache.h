@@ -19,7 +19,9 @@ struct cache;
 /* Create/destroy cache entry.
  *
  * cache_entry_create() creates an entry, setting the cache entry type
- * to CACHE_DATA_TYPE_NONE.
+ * to specified type.  CACHE_DATA_TYPE_NONE indicates user is not yet
+ * sure of the type of data to be stored, and it will be determined later
+ * when cache_entry_set_X() function is called.
  *
  * cache_entry_create_json() creates an entry, setting the cache entry
  * type to CACHE_DATA_TYPE_JSON.  The create transfers ownership of
@@ -30,10 +32,10 @@ struct cache;
  * cache_entry_create_raw() creates an entry, setting the cache entry
  * type to CACHE_DATA_TYPE_RAW.  The create transfers ownership of
  * 'data' to the cache entry.  On destroy, free() will be called on
- * 'data'.  If 'data' is NULL, no data is set, but the type is still
- * set to CACHE_DATA_TYPE_RAW and only raw can be used for the entry.
+ * 'data'.  If 'data' is NULL, 'len' must be zero.  If 'data' is
+ * non-NULL, 'len' must be > 0.
  */
-struct cache_entry *cache_entry_create (void);
+struct cache_entry *cache_entry_create (cache_data_type_t t);
 struct cache_entry *cache_entry_create_json (json_t *o);
 struct cache_entry *cache_entry_create_raw (void *data, int len);
 void cache_entry_destroy (void *arg);

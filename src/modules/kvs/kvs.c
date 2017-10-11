@@ -276,15 +276,15 @@ static int load (kvs_ctx_t *ctx, const href_t ref, bool is_raw, wait_t *wait,
      */
     if (!hp) {
         if (is_raw) {
-            if (!(hp = cache_entry_create_raw (NULL, 0))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create_raw",
+            if (!(hp = cache_entry_create (CACHE_DATA_TYPE_RAW))) {
+                flux_log_error (ctx->h, "%s: cache_entry_create",
                                 __FUNCTION__);
                 return -1;
             }
         }
         else {
-            if (!(hp = cache_entry_create_json (NULL))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create_json",
+            if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
+                flux_log_error (ctx->h, "%s: cache_entry_create",
                                 __FUNCTION__);
                 return -1;
             }
@@ -1628,7 +1628,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(hp = cache_entry_create ())) {
+        if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto decref_done;
