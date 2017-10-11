@@ -42,7 +42,6 @@
 #include "flux/core.h"
 
 #include "src/common/libcompat/reactor.h"
-#include "src/common/libcompat/rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libkz/kz.h"
@@ -588,26 +587,41 @@ static int l_flux_rpc (lua_State *L)
     json_object *o = NULL;
     json_object *resp = NULL;
     int nodeid;
+    flux_future_t *fut = NULL;
+    const char *json_str;
+    int rc;
 
-    if (lua_value_to_json (L, 3, &o) < 0)
-        return lua_pusherror (L, "JSON conversion error");
+    if (lua_value_to_json (L, 3, &o) < 0) {
+        rc = lua_pusherror (L, "JSON conversion error");
+        goto done;
+    }
 
     if (lua_gettop (L) > 3)
         nodeid = lua_tonumber (L, 4);
     else
         nodeid = FLUX_NODEID_ANY;
 
-    if (tag == NULL || o == NULL)
-        return lua_pusherror (L, "Invalid args");
-
-    if (flux_json_rpc (f, nodeid, tag, o, &resp) < 0) {
-        json_object_put (o);
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+    if (tag == NULL || o == NULL) {
+        rc = lua_pusherror (L, "Invalid args");
+        goto done;
     }
-    json_object_put (o);
+
+    if (!(fut = flux_rpc (f, tag, json_object_to_json_string (o), nodeid, 0))
+            || flux_rpc_get (fut, &json_str) < 0) {
+        rc = lua_pusherror (L, (char *)flux_strerror (errno));
+        goto done;
+    }
+    if (!json_str || !(resp = json_tokener_parse (json_str))) {
+        rc = lua_pusherror (L, (char *)flux_strerror (EPROTO));
+        goto done;
+    }
     json_object_to_lua (L, resp);
     json_object_put (resp);
-    return (1);
+    rc = 1;
+done:
+    json_object_put (o);
+    flux_future_destroy (fut);
+    return (rc);
 }
 
 static void push_attr_flags (lua_State *L, int flags)
