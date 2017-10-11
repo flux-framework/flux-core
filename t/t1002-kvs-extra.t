@@ -297,6 +297,13 @@ test_expect_success 'kvs: valref that points to content store data can be read' 
         flux kvs get $TEST.largeval2 | grep $largeval
 '
 
+test_expect_success 'kvs: valref that points to zero size content store data can be read' '
+	flux kvs unlink -Rf $TEST &&
+        hashval=`flux content store </dev/null` &&
+	${KVSBASIC} put-treeobj $TEST.empty="{\"data\":[\"${hashval}\"],\"type\":\"valref\",\"ver\":1}" &&
+	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
+'
+
 # dtree tests
 
 test_expect_success 'kvs: store 16x3 directory tree' '
