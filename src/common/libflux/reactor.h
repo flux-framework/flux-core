@@ -166,11 +166,11 @@ flux_watcher_t * flux_watcher_create (flux_reactor_t *r, size_t data_size,
 
 /*  Return pointer to implementation data reserved by watcher object 'w'.
  */
-void * flux_watcher_data (flux_watcher_t *w);
+void * flux_watcher_get_data (flux_watcher_t *w);
 
 /*  Return pointer to flux_watcher_ops structure for this watcher.
  */
-struct flux_watcher_ops * flux_watcher_ops (flux_watcher_t *w);
+struct flux_watcher_ops * flux_watcher_get_ops (flux_watcher_t *w);
 
 #ifdef __cplusplus
 }
