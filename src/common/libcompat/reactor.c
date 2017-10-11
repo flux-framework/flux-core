@@ -177,17 +177,6 @@ int flux_msghandler_add (flux_t *h, int typemask, const char *pattern,
     return msghandler_add (h, typemask, pattern, cb, arg);
 }
 
-int flux_msghandler_addvec (flux_t *h, msghandler_t *hv, int len, void *arg)
-{
-    int i;
-
-    for (i = 0; i < len; i++)
-        if (msghandler_add (h, hv[i].typemask, hv[i].pattern,
-                                    hv[i].cb, arg) < 0)
-            return -1;
-    return 0;
-}
-
 void flux_msghandler_remove (flux_t *h, int typemask, const char *pattern)
 {
     struct ctx *ctx = getctx (h);
@@ -315,14 +304,6 @@ void flux_tmouthandler_remove (flux_t *h, int timer_id)
         flux_watcher_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);
     }
-}
-
-/* Newly deprecated message stuff
- */
-
-int flux_reactor_start (flux_t *h)
-{
-    return flux_reactor_run (flux_get_reactor (h), 0);
 }
 
 /*
