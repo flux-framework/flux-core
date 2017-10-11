@@ -153,20 +153,20 @@ struct flux_watcher_ops {
     void (*destroy) (flux_watcher_t *w);
 };
 
-/*  Create a custom watcher on reactor 'r' with 'impl_size' bytes reserved
+/*  Create a custom watcher on reactor 'r' with 'data_size' bytes reserved
  *   for the implementor, implementation operations in 'ops' and user
  *   watcher callback and data 'fn' and 'arg'.
  *
  *  Caller retrieves pointer to allocated implementation data with
- *   flux_watcher_impl (w).
+ *   flux_watcher_data (w).
  */
-flux_watcher_t * flux_watcher_create (flux_reactor_t *r, size_t impl_size,
+flux_watcher_t * flux_watcher_create (flux_reactor_t *r, size_t data_size,
                                       struct flux_watcher_ops *ops,
                                       flux_watcher_f fn, void *arg);
 
 /*  Return pointer to implementation data reserved by watcher object 'w'.
  */
-void * flux_watcher_impl (flux_watcher_t *w);
+void * flux_watcher_data (flux_watcher_t *w);
 
 /*  Return pointer to flux_watcher_ops structure for this watcher.
  */
