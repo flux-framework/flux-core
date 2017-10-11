@@ -13,6 +13,4 @@ noinst_LTLIBRARIES = libcompat.la
 
 libcompat_la_SOURCES = \
 	reactor.c \
-	reactor.h \
-	rpc.c \
-	rpc.h
+	reactor.h
