@@ -32,7 +32,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-#include "compat.h"
+#include "rpc.h"
 
 int flux_json_rpc (flux_t *h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out)

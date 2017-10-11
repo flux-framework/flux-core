@@ -6,6 +6,15 @@
 #include "src/common/libflux/reactor.h"
 #include "src/common/libflux/msg_handler.h"
 
+#define flux_msghandler_add         compat_msghandler_add
+#define flux_msghandler_addvec      compat_msghandler_addvec
+#define flux_msghandler_remove      compat_msghandler_remove
+#define flux_fdhandler_add          compat_fdhandler_add
+#define flux_fdhandler_remove       compat_fdhandler_remove
+#define flux_tmouthandler_add       compat_tmouthandler_add
+#define flux_tmouthandler_remove    compat_tmouthandler_remove
+#define flux_reactor_start          compat_reactor_start
+
 /* FluxMsgHandler indicates msg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.

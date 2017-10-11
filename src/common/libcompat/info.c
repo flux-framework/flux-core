@@ -35,7 +35,6 @@
 #include "src/common/libflux/handle.h"
 #include "src/common/libflux/info.h"
 #include "info.h"
-#include "compat.h"
 
 int flux_rank (flux_t *h)
 {

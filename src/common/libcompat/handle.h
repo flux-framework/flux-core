@@ -6,6 +6,10 @@
 
 #include "src/common/libflux/message.h"
 
+#define flux_sendmsg                compat_sendmsg
+#define flux_recvmsg                compat_recvmsg
+#define flux_recvmsg_match          compat_recvmsg_match
+
 int flux_sendmsg (flux_t *h, flux_msg_t **msg)
                   __attribute__ ((deprecated));
 

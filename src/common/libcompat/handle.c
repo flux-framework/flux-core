@@ -31,7 +31,7 @@
 #include "src/common/libflux/handle.h"
 #include "src/common/libflux/message.h"
 
-#include "compat.h"
+#include "handle.h"
 
 int flux_sendmsg (flux_t *h, flux_msg_t **msg)
 {

@@ -5,6 +5,9 @@
 #include <czmq.h>
 #include <stdint.h>
 
+#define flux_json_rpc               compat_rpc
+#define flux_json_multrpc           compat_multrpc
+
 /* Send a request to 'nodeid' addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
  * Wait for a response.  If response has non-zero errnum, set errno to that

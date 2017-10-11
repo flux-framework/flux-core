@@ -36,7 +36,11 @@
 #include <lauxlib.h>
 
 #include "flux/core.h"
-#include "src/common/libcompat/compat.h"
+
+#include "src/common/libcompat/request.h"
+#include "src/common/libcompat/reactor.h"
+#include "src/common/libcompat/handle.h"
+#include "src/common/libcompat/rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libkz/kz.h"

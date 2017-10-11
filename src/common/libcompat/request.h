@@ -5,6 +5,9 @@
 #include <czmq.h>
 #include <stdint.h>
 
+#define flux_json_request           compat_request
+#define flux_json_respond           compat_respond
+
 /* Request and response messages are constructed according to Flux RFC 3.
  * https://github.com/flux-framework/rfc/blob/master/spec_3.adoc
  * See also message.h.

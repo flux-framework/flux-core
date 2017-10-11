@@ -33,7 +33,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-#include "compat.h"
+#include "request.h"
 
 int flux_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, json_object *in)

@@ -40,7 +40,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 
-#include "compat.h"
+#include "reactor.h"
 
 
 #define HASHKEY_LEN 80
