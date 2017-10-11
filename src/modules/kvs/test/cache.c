@@ -81,7 +81,7 @@ void cache_entry_basic_tests (void)
     ok ((otmp = cache_entry_get_json (e)) == NULL,
         "cache_entry_get_json returns NULL, no json set");
     ok (cache_entry_get_raw (e, NULL) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
+        "cache_entry_get_raw returns NULL, no data set");
     cache_entry_destroy (e);
     e = NULL;
 }
