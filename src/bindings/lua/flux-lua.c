@@ -42,7 +42,6 @@
 #include "flux/core.h"
 
 #include "src/common/libcompat/reactor.h"
-#include "src/common/libcompat/handle.h"
 #include "src/common/libcompat/rpc.h"
 
 #include "src/common/libutil/shortjson.h"
@@ -539,7 +538,7 @@ static int l_flux_recv (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(msg = flux_recvmsg_match (f, match, false)))
+    if (!(msg = flux_recv (f, match, 0)))
         goto error;
 
     if (flux_msg_get_errnum (msg, &errnum) < 0)
@@ -691,7 +690,7 @@ static int l_flux_send_event (lua_State *L)
     event = luaL_checkstring (L, -1);
 
     msg = flux_event_encode (event, json_str);
-    if (!msg || flux_sendmsg (f, &msg) < 0)
+    if (!msg || flux_send (f, msg, 0) < 0)
         rc = -1;
     if (o)
         json_object_put (o);
@@ -713,7 +712,7 @@ static int l_flux_recv_event (lua_State *L)
     };
     flux_msg_t *msg = NULL;
 
-    if (!(msg = flux_recvmsg_match (f, match, 0)))
+    if (!(msg = flux_recv (f, match, 0)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_topic (msg, &topic) < 0
@@ -895,7 +894,7 @@ static int l_flux_recvmsg (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(msg = flux_recvmsg_match (f, match, false)))
+    if (!(msg = flux_recv (f, match, 0)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_type (msg, &type) < 0)
