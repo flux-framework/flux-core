@@ -29,12 +29,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <math.h>
 
 #include <lua.h>
 #include <lauxlib.h>
 
 #include <flux/core.h>
-#include "src/common/libcompat/compat.h"
 
 #include "json-lua.h"
 #include "lutil.h"

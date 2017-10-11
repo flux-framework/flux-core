@@ -1,10 +1,14 @@
 #ifndef _FLUX_COMPAT_REACTOR_H
 #define _FLUX_COMPAT_REACTOR_H
 
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/handle.h"
-#include "src/common/libflux/reactor.h"
-#include "src/common/libflux/msg_handler.h"
+#include <flux/core.h>
+
+#define flux_msghandler_add         compat_msghandler_add
+#define flux_msghandler_remove      compat_msghandler_remove
+#define flux_fdhandler_add          compat_fdhandler_add
+#define flux_fdhandler_remove       compat_fdhandler_remove
+#define flux_tmouthandler_add       compat_tmouthandler_add
+#define flux_tmouthandler_remove    compat_tmouthandler_remove
 
 /* FluxMsgHandler indicates msg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
@@ -28,12 +32,6 @@ typedef struct {
 int flux_msghandler_add (flux_t *h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
                          __attribute__ ((deprecated));
-
-/* Register a batch of FluxMsgHandler's
- */
-int flux_msghandler_addvec (flux_t *h, msghandler_t *handlers, int len,
-                            void *arg)
-                            __attribute__ ((deprecated));
 
 /* Unregister a FluxMsgHandler callback.  Only the first callback with
  * identical typemask and pattern is removed.
@@ -67,11 +65,6 @@ int flux_tmouthandler_add (flux_t *h, unsigned long msec, bool oneshot,
 void flux_tmouthandler_remove (flux_t *h, int timer_id)
                                __attribute__ ((deprecated));
 
-
-/* Start the reactor.
- */
-int flux_reactor_start (flux_t *h)
-                        __attribute__ ((deprecated));
 
 #endif /* !_FLUX_COMPAT_REACTOR_H */
 

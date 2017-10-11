@@ -25,18 +25,23 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 
 #include <sys/signalfd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include <lua.h>
 #include <lauxlib.h>
 
 #include "flux/core.h"
-#include "src/common/libcompat/compat.h"
+
+#include "src/common/libcompat/reactor.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libkz/kz.h"
@@ -457,6 +462,32 @@ static int l_flux_index (lua_State *L)
     return 1;
 }
 
+static int send_json_request (flux_t *h, uint32_t nodeid, uint32_t matchtag,
+                              const char *topic, const char *json_str)
+{
+    flux_msg_t *msg;
+    int msgflags = 0;
+    int rc = -1;
+
+    if (!(msg = flux_request_encode (topic, json_str)))
+        goto done;
+    if (flux_msg_set_matchtag (msg, matchtag) < 0)
+        goto done;
+    if (nodeid == FLUX_NODEID_UPSTREAM) {
+        msgflags |= FLUX_MSGFLAG_UPSTREAM;
+        if (flux_get_rank (h, &nodeid) < 0)
+            goto done;
+    }
+    if (flux_msg_set_nodeid (msg, nodeid, msgflags) < 0)
+        goto done;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
 static int l_flux_send (lua_State *L)
 {
     int rc;
@@ -480,7 +511,8 @@ static int l_flux_send (lua_State *L)
     if (matchtag == FLUX_MATCHTAG_NONE)
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
-    rc = flux_json_request (f, nodeid, matchtag, tag, o);
+    rc = send_json_request (f, nodeid, matchtag, tag,
+                            o ? json_object_to_json_string (o) : NULL);
     json_object_put (o);
     if (rc < 0)
         return lua_pusherror (L, (char *)flux_strerror (errno));
@@ -505,7 +537,7 @@ static int l_flux_recv (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(msg = flux_recvmsg_match (f, match, false)))
+    if (!(msg = flux_recv (f, match, 0)))
         goto error;
 
     if (flux_msg_get_errnum (msg, &errnum) < 0)
@@ -555,26 +587,41 @@ static int l_flux_rpc (lua_State *L)
     json_object *o = NULL;
     json_object *resp = NULL;
     int nodeid;
+    flux_future_t *fut = NULL;
+    const char *json_str;
+    int rc;
 
-    if (lua_value_to_json (L, 3, &o) < 0)
-        return lua_pusherror (L, "JSON conversion error");
+    if (lua_value_to_json (L, 3, &o) < 0) {
+        rc = lua_pusherror (L, "JSON conversion error");
+        goto done;
+    }
 
     if (lua_gettop (L) > 3)
         nodeid = lua_tonumber (L, 4);
     else
         nodeid = FLUX_NODEID_ANY;
 
-    if (tag == NULL || o == NULL)
-        return lua_pusherror (L, "Invalid args");
-
-    if (flux_json_rpc (f, nodeid, tag, o, &resp) < 0) {
-        json_object_put (o);
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+    if (tag == NULL || o == NULL) {
+        rc = lua_pusherror (L, "Invalid args");
+        goto done;
     }
-    json_object_put (o);
+
+    if (!(fut = flux_rpc (f, tag, json_object_to_json_string (o), nodeid, 0))
+            || flux_rpc_get (fut, &json_str) < 0) {
+        rc = lua_pusherror (L, (char *)flux_strerror (errno));
+        goto done;
+    }
+    if (!json_str || !(resp = json_tokener_parse (json_str))) {
+        rc = lua_pusherror (L, (char *)flux_strerror (EPROTO));
+        goto done;
+    }
     json_object_to_lua (L, resp);
     json_object_put (resp);
-    return (1);
+    rc = 1;
+done:
+    json_object_put (o);
+    flux_future_destroy (fut);
+    return (rc);
 }
 
 static void push_attr_flags (lua_State *L, int flags)
@@ -657,7 +704,7 @@ static int l_flux_send_event (lua_State *L)
     event = luaL_checkstring (L, -1);
 
     msg = flux_event_encode (event, json_str);
-    if (!msg || flux_sendmsg (f, &msg) < 0)
+    if (!msg || flux_send (f, msg, 0) < 0)
         rc = -1;
     if (o)
         json_object_put (o);
@@ -679,7 +726,7 @@ static int l_flux_recv_event (lua_State *L)
     };
     flux_msg_t *msg = NULL;
 
-    if (!(msg = flux_recvmsg_match (f, match, 0)))
+    if (!(msg = flux_recv (f, match, 0)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_topic (msg, &topic) < 0
@@ -826,7 +873,17 @@ static int l_f_zi_resp_cb (lua_State *L,
     struct zmsg_info *zi, json_object *resp, void *arg)
 {
     flux_t *f = arg;
-    return l_pushresult (L, flux_json_respond (f, resp, zmsg_info_zmsg (zi)));
+    flux_msg_t **msgp = zmsg_info_zmsg (zi);
+    const char *json_str = NULL;
+    int rc;
+
+    if (resp)
+        json_str = json_object_to_json_string (resp);
+    if ((rc = flux_respond (f, *msgp, 0, json_str)) == 0) {
+        flux_msg_destroy (*msgp);
+        *msgp = NULL;
+    }
+    return l_pushresult (L, rc);
 }
 
 static int create_and_push_zmsg_info (lua_State *L,
@@ -851,7 +908,7 @@ static int l_flux_recvmsg (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(msg = flux_recvmsg_match (f, match, false)))
+    if (!(msg = flux_recv (f, match, 0)))
         return lua_pusherror (L, (char *)flux_strerror (errno));
 
     if (flux_msg_get_type (msg, &type) < 0)
