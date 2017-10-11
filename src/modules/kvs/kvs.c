@@ -481,7 +481,7 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
 
     is_raw = cache_entry_is_type_raw (hp);
     if (is_raw)
-        storedata = cache_entry_get_raw (hp, &storedatalen);
+        cache_entry_get_raw (hp, &storedata, &storedatalen);
     else
         storedata = cache_entry_get_json (hp);
 

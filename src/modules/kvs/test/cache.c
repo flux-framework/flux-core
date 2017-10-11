@@ -84,8 +84,8 @@ void cache_entry_basic_tests (void)
         "cache_entry_set_dirty fails b/c entry non-valid");
     ok ((otmp = cache_entry_get_json (e)) == NULL,
         "cache_entry_get_json returns NULL, no json set");
-    ok (cache_entry_get_raw (e, NULL) == NULL,
-        "cache_entry_get_raw returns NULL, no data set");
+    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
+        "cache_entry_get_raw fails, no data set");
     cache_entry_destroy (e);
     e = NULL;
 }
@@ -276,8 +276,8 @@ void cache_entry_raw_tests (void)
         "cache_entry_set_dirty fails b/c entry non-valid");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry does not set dirty, b/c no data");
-    ok ((data = cache_entry_get_raw (e, NULL)) == NULL,
-        "cache_entry_get_raw returns NULL, no data set");
+    ok (cache_entry_get_raw (e, (void **)&data, NULL) < 0,
+        "cache_entry_get_raw fails, no data set");
     cache_entry_destroy (e);
     e = NULL;
 
@@ -303,8 +303,8 @@ void cache_entry_raw_tests (void)
         "cache_entry_set_dirty fails b/c entry non-valid");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry does not set dirty, b/c no data");
-    ok (cache_entry_get_raw (e, NULL) == NULL,
-        "cache_entry_get_raw returns NULL, no data set");
+    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
+        "cache_entry_get_raw fails, no data set");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
     ok (cache_entry_type (e, &t) == 0,
@@ -350,8 +350,8 @@ void cache_entry_raw_tests (void)
     ok (cache_entry_set_json (e, o1) < 0,
         "cache_entry_set_json fails on cache entry with type raw");
     json_decref (o1);
-    ok (cache_entry_get_raw (e, NULL) == NULL,
-        "cache_entry_get_raw returns NULL, no data set");
+    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
+        "cache_entry_get_raw fails, no data set");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
     ok (cache_entry_get_valid (e) == true,
@@ -394,15 +394,15 @@ void cache_entry_raw_tests (void)
     ok (cache_entry_get_dirty (e) == false,
         "cache entry succcessfully now not dirty");
 
-    ok ((data = cache_entry_get_raw (e, &len)) != NULL,
+    ok (cache_entry_get_raw (e, (void **)&data, &len) == 0,
         "raw data retrieved from cache entry");
-    ok (strcmp (data, "abcd") == 0,
+    ok (data && strcmp (data, "abcd") == 0,
         "raw data matches expected string");
-    ok (len == strlen (data) + 1,
+    ok (data && (len == strlen (data) + 1),
         "raw data length matches expected length");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
-    ok (cache_entry_get_raw (e, NULL) == NULL,
+    ok (cache_entry_get_raw (e, (void **)&data, &len) < 0,
         "cache entry no longer has data object");
 
     cache_entry_destroy (e); /* destroys data */

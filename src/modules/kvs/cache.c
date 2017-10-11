@@ -227,13 +227,15 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
     return -1;
 }
 
-void *cache_entry_get_raw (struct cache_entry *hp, int *len)
+int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len)
 {
     if (!hp || !hp->data || hp->type != CACHE_DATA_TYPE_RAW)
-        return NULL;
+        return -1;
+    if (data)
+        (*data) = hp->data;
     if (len)
         (*len) = hp->len;
-    return hp->data;
+    return 0;
 }
 
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)

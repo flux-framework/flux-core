@@ -107,7 +107,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
 json_t *cache_entry_get_json (struct cache_entry *hp);
 int cache_entry_set_json (struct cache_entry *hp, json_t *o);
 
-void *cache_entry_get_raw (struct cache_entry *hp, int *len);
+int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
 
 /* Arrange for message handler represented by 'wait' to be restarted

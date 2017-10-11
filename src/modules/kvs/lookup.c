@@ -724,7 +724,7 @@ bool lookup (lookup_t *lh)
                     lh->missing_ref_raw = true;
                     goto stall;
                 }
-                if (!(valdata = cache_entry_get_raw (hp, &len))) {
+                if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
                     flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
                     lh->errnum = EPERM;
                     goto done;
