@@ -274,15 +274,15 @@ static void watcher_stop_safe (flux_watcher_t *w)
 
 static void handle_start (flux_watcher_t *w)
 {
-    ev_flux_start (w->r->loop, (ev_flux *)w->impl);
+    ev_flux_start (w->r->loop, (struct ev_flux *)w->impl);
 }
 
 static void handle_stop (flux_watcher_t *w)
 {
-    ev_flux_stop (w->r->loop, (ev_flux *)w->impl);
+    ev_flux_stop (w->r->loop, (struct ev_flux *)w->impl);
 }
 
-static void handle_cb (struct ev_loop *loop, ev_flux *fw, int revents)
+static void handle_cb (struct ev_loop *loop, struct ev_flux *fw, int revents)
 {
     struct flux_watcher *w = fw->data;
     if (w->fn)
@@ -299,7 +299,7 @@ flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
                                             flux_t *h, int events,
                                             flux_watcher_f cb, void *arg)
 {
-    ev_flux *fw;
+    struct ev_flux *fw;
     flux_watcher_t *w;
     if (!(w = flux_watcher_create (r, sizeof (*fw), &handle_watcher, cb, arg)))
         return NULL;
@@ -313,7 +313,7 @@ flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
 flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w)
 {
     assert (flux_watcher_ops (w) == &handle_watcher);
-    ev_flux *fw = w->impl;
+    struct ev_flux *fw = w->impl;
     return fw->h;
 }
 
