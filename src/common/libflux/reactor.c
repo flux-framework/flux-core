@@ -194,7 +194,7 @@ flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
         return NULL;
     w->r = r;
     w->ops = ops;
-    w->impl = (char *)w + sizeof (*w);
+    w->impl = w + 1;
     w->fn = fun;
     w->arg = arg;
     reactor_usecount_incr (r);
