@@ -83,11 +83,16 @@ struct cache_entry *cache_entry_create (cache_data_type_t t)
 
 struct cache_entry *cache_entry_create_json (json_t *o)
 {
-    struct cache_entry *hp = cache_entry_create (CACHE_DATA_TYPE_JSON);
-    if (!hp)
+    struct cache_entry *hp;
+
+    if (!o) {
+        errno = EINVAL;
         return NULL;
-    if (o)
-        hp->data = o;
+    }
+
+    if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON)))
+        return NULL;
+    hp->data = o;
     return hp;
 }
 

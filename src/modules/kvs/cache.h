@@ -26,8 +26,7 @@ struct cache;
  * cache_entry_create_json() creates an entry, setting the cache entry
  * type to CACHE_DATA_TYPE_JSON.  The create transfers ownership of
  * 'o' to the cache entry.  On destroy, json_decref() will be called
- * on 'o'.  If 'o' is NULL, no data is set, but the type is still set
- * to CACHE_DATA_TYPE_JSON and only json can be used for the entry.
+ * on 'o'.  'o' cannot be NULL.
  *
  * cache_entry_create_raw() creates an entry, setting the cache entry
  * type to CACHE_DATA_TYPE_RAW.  The create transfers ownership of
