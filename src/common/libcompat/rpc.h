@@ -1,9 +1,8 @@
 #ifndef _FLUX_JSONC_RPC_H
 #define _FLUX_JSONC_RPC_H
 
+#include <flux/core.h>
 #include "src/common/libjson-c/json.h"
-#include <czmq.h>
-#include <stdint.h>
 
 #define flux_json_rpc               compat_rpc
 #define flux_json_multrpc           compat_multrpc

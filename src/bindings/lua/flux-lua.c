@@ -25,12 +25,16 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 
 #include <sys/signalfd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include <lua.h>
 #include <lauxlib.h>

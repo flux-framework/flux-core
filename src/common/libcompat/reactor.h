@@ -1,10 +1,7 @@
 #ifndef _FLUX_COMPAT_REACTOR_H
 #define _FLUX_COMPAT_REACTOR_H
 
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/handle.h"
-#include "src/common/libflux/reactor.h"
-#include "src/common/libflux/msg_handler.h"
+#include <flux/core.h>
 
 #define flux_msghandler_add         compat_msghandler_add
 #define flux_msghandler_addvec      compat_msghandler_addvec

@@ -1,9 +1,7 @@
 #ifndef _FLUX_COMPAT_INFO_H
 #define _FLUX_COMPAT_INFO_H
 
-#include <stdbool.h>
-
-#include "src/common/libflux/handle.h"
+#include <flux/core.h>
 
 #define flux_rank                   compat_rank
 #define flux_size                   compat_size

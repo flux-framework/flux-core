@@ -1,9 +1,9 @@
 #ifndef _FLUX_JSONC_REQUEST_H
 #define _FLUX_JSONC_REQUEST_H
 
-#include "src/common/libjson-c/json.h"
-#include <czmq.h>
+#include <flux/core.h>
 #include <stdint.h>
+#include "src/common/libjson-c/json.h"
 
 #define flux_json_request           compat_request
 #define flux_json_respond           compat_respond

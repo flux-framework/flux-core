@@ -2,9 +2,7 @@
 #define _FLUX_COMPAT_HANDLE_H
 
 #include <stdbool.h>
-#include <string.h>
-
-#include "src/common/libflux/message.h"
+#include <flux/core.h>
 
 #define flux_sendmsg                compat_sendmsg
 #define flux_recvmsg                compat_recvmsg
