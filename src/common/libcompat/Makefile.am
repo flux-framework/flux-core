@@ -12,8 +12,6 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libcompat.la
 
 libcompat_la_SOURCES = \
-	handle.c \
-	handle.h \
 	reactor.c \
 	reactor.h \
 	rpc.c \
