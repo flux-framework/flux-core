@@ -90,13 +90,14 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  *
  * json set accessor must have type of CACHE_DATA_TYPE_NONE or
  * CACHE_DATA_TYPE_JSON to set json object.  After setting, the type
- * is converted to CACHE_DATA_TYPE_JSON.  If non-NULL, set transfers
- * ownership of 'o' to the cache entry.
+ * is converted to CACHE_DATA_TYPE_JSON.  'o' must be non-NULL.  Set
+ * transfers ownership of 'o' to the cache entry.
  *
  * raw set accessor must have type of CACHE_DATA_TYPE_NONE or
  * CACHE_DATA_TYPE_RAW to set raw data.  After setting, the type is
- * converted to CACHE_DATA_TYPE_RAW.  If non-NULL, set transfers
- * ownership of 'data' to the cache entry.
+ * converted to CACHE_DATA_TYPE_RAW.  If 'data' is NULL, 'len' must be
+ * zero.  If 'data' is non-NULL, 'len' must be > 0.  If non-NULL, set
+ * transfers ownership of 'data' to the cache entry.
  *
  * cache_entry_clear_data () will clear any data in the entry.
  *

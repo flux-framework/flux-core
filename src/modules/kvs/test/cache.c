@@ -246,8 +246,8 @@ void cache_entry_json_tests (void)
     ok (json_integer_value (otmp) == 42,
         "expected json object found");
 
-    ok (cache_entry_set_json (e, NULL) == 0,
-        "cache_entry_set_json success");
+    ok (cache_entry_clear_data (e) == 0,
+        "cache_entry_clear_data success");
     ok (cache_entry_get_json (e) == NULL,
         "cache entry no longer has json object");
 

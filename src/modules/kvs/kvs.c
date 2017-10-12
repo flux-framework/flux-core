@@ -1637,6 +1637,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
+        assert (o);
         if (cache_entry_set_json (hp, o) < 0) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_set_json",

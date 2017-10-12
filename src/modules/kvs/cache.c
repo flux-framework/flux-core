@@ -204,11 +204,12 @@ json_t *cache_entry_get_json (struct cache_entry *hp)
 int cache_entry_set_json (struct cache_entry *hp, json_t *o)
 {
     if (hp
+        && o
         && (hp->type == CACHE_DATA_TYPE_NONE
             || hp->type == CACHE_DATA_TYPE_JSON)) {
-        if ((o && hp->data) || (!o && !hp->data)) {
+        if (hp->data) {
             json_decref (o); /* no-op, 'o' is assumed identical to hp->data */
-        } else if (o && !hp->data) {
+        } else { /* !hp->data */
             hp->data = o;
             if (hp->waitlist_valid) {
                 if (wait_runqueue (hp->waitlist_valid) < 0) {
@@ -217,9 +218,6 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
                     return -1;
                 }
             }
-        } else if (!o && hp->data) {
-            json_decref (hp->data);
-            hp->data = NULL;
         }
         hp->type = CACHE_DATA_TYPE_JSON;
         return 0;
