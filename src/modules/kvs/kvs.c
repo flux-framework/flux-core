@@ -203,13 +203,15 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * this error scenario appropriately.
      */
     if (cache_entry_is_type_raw (hp)) {
-        char *datacpy;
+        char *datacpy = NULL;
 
-        if (!(datacpy = malloc (size))) {
-            flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
-            goto done;
+        if (size) {
+            if (!(datacpy = malloc (size))) {
+                flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
+                goto done;
+            }
+            memcpy (datacpy, data, size);
         }
-        memcpy (datacpy, data, size);
 
         if (cache_entry_set_raw (hp, datacpy, size) < 0) {
             flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
