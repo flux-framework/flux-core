@@ -11,8 +11,14 @@ void overlay_destroy (overlay_t *ov);
  */
 void overlay_set_sec (overlay_t *ov, flux_sec_t *sec);
 void overlay_set_rank (overlay_t *ov, uint32_t rank);
+void overlay_set_size (overlay_t *ov, uint32_t size);
 void overlay_set_flux (overlay_t *ov, flux_t *h);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
+
+/* Accessors
+ */
+uint32_t overlay_get_rank (overlay_t *ov);
+uint32_t overlay_get_size (overlay_t *ov);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  */

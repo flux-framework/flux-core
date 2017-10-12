@@ -52,6 +52,7 @@ struct overlay_struct {
     flux_msg_handler_t *heartbeat;
     int epoch;
 
+    uint32_t size;
     uint32_t rank;
 
     struct endpoint *parent;    /* DEALER - requests to parent */
@@ -132,6 +133,21 @@ void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
 void overlay_set_rank (overlay_t *ov, uint32_t rank)
 {
     ov->rank = rank;
+}
+
+uint32_t overlay_get_rank (overlay_t *ov)
+{
+    return ov->rank;
+}
+
+void overlay_set_size (overlay_t *ov, uint32_t size)
+{
+    ov->size = size;
+}
+
+uint32_t overlay_get_size (overlay_t *ov)
+{
+    return ov->size;
 }
 
 void overlay_set_flux (overlay_t *ov, flux_t *h)
