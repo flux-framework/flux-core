@@ -30,6 +30,13 @@ int attr_delete (attr_t *attrs, const char *name, bool force);
  */
 int attr_add (attr_t *attrs, const char *name, const char *val, int flags);
 
+/* Helper functions to add a non-string attribute.  It performs the conversion
+ *  to a string on the caller's behalf.
+ */
+int attr_add_int (attr_t *attrs, const char *name, int val, int flags);
+int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val,
+                     int flags);
+
 /* Get/set an attribute.
  */
 int attr_get (attr_t *attrs, const char *name, const char **val, int *flags);

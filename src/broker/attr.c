@@ -241,6 +241,17 @@ static int set_int (const char *name, const char *val, void *arg)
     return 0;
 }
 
+int attr_add_int (attr_t *attrs, const char *name, int val, int flags)
+{
+    char val_string[32];
+    int n;
+
+    n = snprintf (val_string, sizeof (val_string), "%d", val);
+    assert (n <= sizeof(val_string));
+
+    return attr_add (attrs, name, val_string, flags);
+}
+
 int attr_add_active_int (attr_t *attrs, const char *name, int *val, int flags)
 {
     return attr_add_active (attrs, name, flags, get_int, set_int, val);
@@ -272,6 +283,15 @@ static int set_uint32 (const char *name, const char *val, void *arg)
     }
     *i = n;
     return 0;
+}
+
+int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val, int flags)
+{
+    char val_string[32];
+
+    snprintf (val_string, sizeof (val_string), "%"PRIu32, val);
+
+    return attr_add (attrs, name, val_string, flags);
 }
 
 int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,

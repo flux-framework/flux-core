@@ -17,7 +17,7 @@ is (err, nil, "error is nil")
 --
 local attrval, flags = f:getattr "size"
 is (attrval, "1", "correctly got broker size attr")
-ok (flags.FLUX_ATTRFLAG_ACTIVE, "FLUX_ATTRFLAG_ACTIVE is set")
+ok (not flags.FLUX_ATTRFLAG_ACTIVE, "FLUX_ATTRFLAG_ACTIVE is not set")
 ok (flags.FLUX_ATTRFLAG_IMMUTABLE, "FLUX_ATTRFLAG_IMMUTABLE is set")
 
 local v,err = f:getattr "nosuchthing"

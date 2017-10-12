@@ -499,19 +499,19 @@ int main (int argc, char *argv[])
             || attr_add_active (ctx.attrs, "mcast.relay-endpoint",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active_uint32 (ctx.attrs, "rank", &ctx.rank,
+            || attr_add_uint32 (ctx.attrs, "rank", ctx.rank,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add_active_uint32 (ctx.attrs, "size", &ctx.size,
+            || attr_add_uint32 (ctx.attrs, "size", ctx.size,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add_active_int (ctx.attrs, "tbon.arity", &ctx.tbon.k,
+            || attr_add_int (ctx.attrs, "tbon.arity", ctx.tbon.k,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add_active_int (ctx.attrs, "tbon.level", &ctx.tbon.level,
+            || attr_add_int (ctx.attrs, "tbon.level", ctx.tbon.level,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add_active_int (ctx.attrs, "tbon.maxlevel",
-                                &ctx.tbon.maxlevel,
+            || attr_add_int (ctx.attrs, "tbon.maxlevel",
+                                ctx.tbon.maxlevel,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
-            || attr_add_active_int (ctx.attrs, "tbon.descendants",
-                                &ctx.tbon.descendants,
+            || attr_add_int (ctx.attrs, "tbon.descendants",
+                                ctx.tbon.descendants,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
         log_err_exit ("configuring attributes");
@@ -1114,7 +1114,6 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
     int *clique_ranks = NULL;
     const char *child_uri, *relay_uri;
     int kvsname_len, key_len, val_len;
-    char *id = NULL;
     char *kvsname = NULL;
     char *key = NULL;
     char *val = NULL;
@@ -1154,8 +1153,8 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
     /* Get id string.
      */
     if (attr_get (attrs, "session-id", NULL, NULL) < 0) {
-        id = xasprintf ("%d", appnum);
-        if (attr_add (attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add_int (attrs, "session-id", appnum,
+                          FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
     }
 
@@ -1370,8 +1369,6 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
     rc = 0;
 done:
     *elapsed_sec = monotime_since (start_time) / 1000;
-    if (id)
-        free (id);
     if (clique_ranks)
         free (clique_ranks);
     if (kvsname)
