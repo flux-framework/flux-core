@@ -332,7 +332,7 @@ void cache_entry_raw_tests (void)
     e = NULL;
 }
 
-void waiter_tests (void)
+void waiter_json_tests (void)
 {
     struct cache_entry *e;
     json_t *o;
@@ -359,6 +359,74 @@ void waiter_tests (void)
         "cache_entry_wait_valid success");
     ok (cache_entry_set_json (e, o) == 0,
         "cache_entry_set_json success");
+    ok (cache_entry_get_valid (e) == true,
+        "cache entry set valid with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_clear_dirty (e) == 1,
+        "cache_entry_clear_dirty returns 1, b/c of a waiter");
+    ok (cache_entry_set_dirty (e, false) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_force_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty returns 0 w/ waiter");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 0,
+        "waiter callback not called on force clear dirty");
+
+    cache_entry_destroy (e); /* destroys o */
+}
+
+void waiter_raw_tests (void)
+{
+    struct cache_entry *e;
+    char *data;
+    wait_t *w;
+    int count;
+
+    /* Test cache entry waiters.
+     * N.B. waiter is destroyed when run.
+     */
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create created empty object");
+    ok (cache_entry_get_valid (e) == false,
+        "cache entry invalid, adding waiter");
+    ok (cache_entry_clear_dirty (e) < 0,
+        "cache_entry_clear_dirty returns error, b/c no object set");
+    ok (cache_entry_force_clear_dirty (e) < 0,
+        "cache_entry_force_clear_dirty returns error, b/c no object set");
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
+    data = strdup ("abcd");
+    ok (cache_entry_set_raw (e, data, 4) == 0,
+        "cache_entry_set_raw success");
     ok (cache_entry_get_valid (e) == true,
         "cache entry set valid with one waiter");
     ok (count == 1,
@@ -600,7 +668,8 @@ int main (int argc, char *argv[])
     cache_entry_basic_tests ();
     cache_entry_json_tests ();
     cache_entry_raw_tests ();
-    waiter_tests ();
+    waiter_json_tests ();
+    waiter_raw_tests ();
     cache_expiration_tests ();
     cache_remove_entry_tests ();
 
