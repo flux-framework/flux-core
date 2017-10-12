@@ -55,6 +55,8 @@ void cache_entry_basic_tests (void)
         "cache_entry_type fails with bad input");
     ok (cache_entry_set_json (NULL, NULL) < 0,
         "cache_entry_set_json fails with bad input");
+    ok (cache_entry_clear_data (NULL) < 0,
+        "cache_entry_clear_data fails with bad input");
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
     ok ((e = cache_entry_create_raw (NULL, 0)) != NULL,
@@ -194,6 +196,10 @@ void cache_entry_json_tests (void)
         "cache_entry_set_json success");
     ok (cache_entry_get_valid (e) == true,
         "cache entry now valid after cache_entry_set_json call");
+    ok (cache_entry_clear_data (e) == 0,
+        "cache_entry_clear_data success");
+    ok (cache_entry_get_valid (e) == false,
+        "cache entry invalid after clear");
     cache_entry_destroy (e);   /* destroys o1 */
     e = NULL;
 
@@ -356,6 +362,10 @@ void cache_entry_raw_tests (void)
         "cache_entry_set_raw success");
     ok (cache_entry_get_valid (e) == true,
         "cache entry now valid after cache_entry_set_raw call");
+    ok (cache_entry_clear_data (e) == 0,
+        "cache_entry_clear_data success");
+    ok (cache_entry_get_valid (e) == false,
+        "cache entry invalid after clear");
     cache_entry_destroy (e);   /* destroys data */
     e = NULL;
 

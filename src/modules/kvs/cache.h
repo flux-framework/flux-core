@@ -98,17 +98,21 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * converted to CACHE_DATA_TYPE_RAW.  If non-NULL, set transfers
  * ownership of 'data' to the cache entry.
  *
+ * cache_entry_clear_data () will clear any data in the entry.
+ *
  * An invalid->valid transition runs the entry's wait queue, if any in
  * both set accessors.
  *
- * cache_entry_set_json() & cache_entry_set_raw() returns -1 on error,
- * 0 on success
+ * cache_entry_set_json() & cache_entry_set_raw() &
+ * cache_entry_clear_data() returns -1 on error, 0 on success
  */
 json_t *cache_entry_get_json (struct cache_entry *hp);
 int cache_entry_set_json (struct cache_entry *hp, json_t *o);
 
 int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
+
+int cache_entry_clear_data (struct cache_entry *hp);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a

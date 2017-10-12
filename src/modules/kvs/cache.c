@@ -272,6 +272,22 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
     return -1;
 }
 
+int cache_entry_clear_data (struct cache_entry *hp)
+{
+    if (hp) {
+        if (hp->data) {
+            if (hp->type == CACHE_DATA_TYPE_JSON)
+                json_decref (hp->data);
+            else if (hp->type == CACHE_DATA_TYPE_RAW)
+                free (hp->data);
+        }
+        hp->data = NULL;
+        hp->len = 0;
+        return 0;
+    }
+    return -1;
+}
+
 void cache_entry_destroy (void *arg)
 {
     struct cache_entry *hp = arg;
