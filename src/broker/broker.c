@@ -1103,16 +1103,24 @@ done:
 static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
                      double *elapsed_sec)
 {
-    int spawned, size, rank, appnum;
-    int relay_rank = -1, parent_rank;
+    int spawned;
+    int size;
+    int rank;
+    int appnum;
+    int relay_rank = -1;
+    int parent_rank;
     int clique_size;
     int *clique_ranks = NULL;
-    const char *child_uri, *relay_uri;
-    int kvsname_len, key_len, val_len;
+    const char *child_uri;
+    const char *relay_uri;
+    int kvsname_len;
+    int key_len;
+    int val_len;
     char *kvsname = NULL;
     char *key = NULL;
     char *val = NULL;
-    int e, rc = -1;
+    int e;
+    int rc = -1;
     struct timespec start_time;
     const char *attrtbonendpoint;
     char *tbonendpoint = NULL;
