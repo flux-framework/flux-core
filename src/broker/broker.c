@@ -185,7 +185,7 @@ static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
-static char *calc_endpoint (attr_t *attrs, const char *endpoint);
+static char *format_endpoint (attr_t *attrs, const char *endpoint);
 
 static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
                      double *elapsed_sec);
@@ -1036,7 +1036,7 @@ done:
  *
  * Caller is responsible for freeing memory of returned value.
  */
-static char * calc_endpoint (attr_t *attrs, const char *endpoint)
+static char * format_endpoint (attr_t *attrs, const char *endpoint)
 {
     char ipaddr[HOST_NAME_MAX + 1];
     char *ptr, *buf, *rv = NULL;
@@ -1174,8 +1174,8 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
         goto done;
     }
 
-    if (!(tbonendpoint = calc_endpoint (attrs, attrtbonendpoint))) {
-        log_msg ("calc_endpoint error");
+    if (!(tbonendpoint = format_endpoint (attrs, attrtbonendpoint))) {
+        log_msg ("format_endpoint error");
         goto done;
     }
 
@@ -1191,8 +1191,8 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
         goto done;
     }
 
-    if (!(mcastendpoint = calc_endpoint (attrs, attrmcastendpoint))) {
-        log_msg ("calc_endpoint error");
+    if (!(mcastendpoint = format_endpoint (attrs, attrmcastendpoint))) {
+        log_msg ("format_endpoint error");
         goto done;
     }
 
