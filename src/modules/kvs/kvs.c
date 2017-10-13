@@ -516,7 +516,7 @@ static void commit_apply (commit_t *c)
     int errnum = 0;
     commit_process_t ret;
 
-    if (commit_get_aux_errnum (c))
+    if ((errnum = commit_get_aux_errnum (c)))
         goto done;
 
     if ((ret = commit_process (c,

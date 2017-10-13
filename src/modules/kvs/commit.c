@@ -684,7 +684,7 @@ stall_store:
     return COMMIT_PROCESS_DIRTY_CACHE_ENTRIES;
 }
 
-int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data)
+int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
 {
     const char *ref;
     int saved_errno, rc = 0;
@@ -712,7 +712,7 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data)
 }
 
 int commit_iter_dirty_cache_entries (commit_t *c,
-                                     commit_cache_entry_cb cb,
+                                     commit_cache_entry_f cb,
                                      void *data)
 {
     struct cache_entry *hp;

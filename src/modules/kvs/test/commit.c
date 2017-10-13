@@ -827,12 +827,17 @@ void commit_process_missing_ref (void) {
 
 int ref_error_cb (commit_t *c, const char *ref, void *data)
 {
+    /* pick a weird errno */
+    errno = ENOTTY;
     return -1;
 }
 
 int cache_error_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
     commit_cleanup_dirty_cache_entry (c, hp);
+
+    /* pick a weird errno */
+    errno = EXDEV;
     return -1;
 }
 
@@ -885,8 +890,10 @@ void commit_process_error_callbacks (void) {
     ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_LOAD_MISSING_REFS,
         "commit_process returns COMMIT_PROCESS_LOAD_MISSING_REFS");
 
-    ok (commit_iter_missing_refs (c, ref_error_cb, NULL) < 0,
-        "commit_iter_missing_refs errors on callback error");
+    errno = 0;
+    ok (commit_iter_missing_refs (c, ref_error_cb, NULL) < 0
+        && errno == ENOTTY,
+        "commit_iter_missing_refs errors on callback error & returns correct errno");
 
     /* insert cache entry now, want don't want missing refs on next
      * commit_process call */
@@ -895,8 +902,10 @@ void commit_process_error_callbacks (void) {
     ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_error_cb, NULL) < 0,
-        "commit_iter_dirty_cache_entries errors on callback error");
+    errno = 0;
+    ok (commit_iter_dirty_cache_entries (c, cache_error_cb, NULL) < 0
+        && errno == EXDEV,
+        "commit_iter_dirty_cache_entries errors on callback error & returns correct errno");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -914,6 +923,8 @@ int cache_error_partway_cb (commit_t *c, struct cache_entry *hp, void *data)
     if (epd->total_calls > 1)
         return -1;
     epd->success_returns++;
+    /* pick a weird errno */
+    errno = EDOM;
     return 0;
 }
 
@@ -972,8 +983,10 @@ void commit_process_error_callbacks_partway (void) {
     ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_error_partway_cb, &epd) < 0,
-        "commit_iter_dirty_cache_entries errors on callback error");
+    errno = 0;
+    ok (commit_iter_dirty_cache_entries (c, cache_error_partway_cb, &epd) < 0
+        && errno == EDOM,
+        "commit_iter_dirty_cache_entries errors on callback error & returns correct errno");
 
     ok (epd.total_calls == 2,
         "correct number of total calls to dirty cache callback");

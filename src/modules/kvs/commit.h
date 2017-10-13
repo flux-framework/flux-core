@@ -22,9 +22,9 @@ typedef enum {
  * commit_t API
  */
 
-typedef int (*commit_ref_cb)(commit_t *c, const char *ref, void *data);
+typedef int (*commit_ref_f)(commit_t *c, const char *ref, void *data);
 
-typedef int (*commit_cache_entry_cb)(commit_t *c,
+typedef int (*commit_cache_entry_f)(commit_t *c,
                                      struct cache_entry *hp,
                                      void *data);
 
@@ -75,7 +75,7 @@ commit_process_t commit_process (commit_t *c,
  *
  * return -1 in callback to break iteration
  */
-int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data);
+int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data);
 
 /* on commit stall, iterate through all dirty cache entries that need
  * to be pushed to the content store.
@@ -83,7 +83,7 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_cb cb, void *data);
  * return -1 in callback to break iteration
  */
 int commit_iter_dirty_cache_entries (commit_t *c,
-                                     commit_cache_entry_cb cb,
+                                     commit_cache_entry_f cb,
                                      void *data);
 
 /* convenience function for cleaning up a dirty cache entry that was
