@@ -190,8 +190,6 @@ static char *format_endpoint (attr_t *attrs, const char *endpoint);
 static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
                      double *elapsed_sec);
 
-static int attr_get_overlay (const char *name, const char **val, void *arg);
-
 static void init_attrs (attr_t *attrs, pid_t pid);
 
 static const struct flux_handle_ops broker_handle_ops;
@@ -488,12 +486,9 @@ int main (int argc, char *argv[])
 
     /* Configure attributes.
      */
-    if (attr_add_active (ctx.attrs, "tbon.parent-endpoint", 0,
-                                attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_active (ctx.attrs, "mcast.relay-endpoint",
-                                FLUX_ATTRFLAG_IMMUTABLE,
-                                attr_get_overlay, NULL, ctx.overlay) < 0
-            || attr_add_uint32 (ctx.attrs, "rank", rank,
+    if (overlay_register_attrs(ctx.overlay, ctx.attrs) < 0)
+        log_err_exit ("registering overlay attributes");
+    if (attr_add_uint32 (ctx.attrs, "rank", rank,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
             || attr_add_uint32 (ctx.attrs, "size", size,
                                 FLUX_ATTRFLAG_IMMUTABLE) < 0
@@ -1530,24 +1525,6 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
         flux_watcher_stop (w);
         flux_watcher_destroy (w);
     }
-}
-
-static int attr_get_overlay (const char *name, const char **val, void *arg)
-{
-    overlay_t *overlay = arg;
-    int rc = -1;
-
-    if (!strcmp (name, "tbon.parent-endpoint"))
-        *val = overlay_get_parent (overlay);
-    else if (!strcmp (name, "mcast.relay-endpoint"))
-        *val = overlay_get_relay (overlay);
-    else {
-        errno = ENOENT;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
 }
 
 /**

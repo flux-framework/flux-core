@@ -1,6 +1,8 @@
 #ifndef _BROKER_OVERLAY_H
 #define _BROKER_OVERLAY_H
 
+#include "attr.h"
+
 typedef struct overlay_struct overlay_t;
 typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
 
@@ -82,6 +84,16 @@ int overlay_connect (overlay_t *ov);
  * to true).  The new parent is moved to the top of the parent stack.
  */
 int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled);
+
+/* Add attributes to 'attrs' that directly retrieve information from
+ * "overlay" through callbacks registered with 'attrs'.
+ * The currently added attributes keys are "tbon.parent-endpoint" and
+ * "mcast.relay-endpoint".
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int overlay_register_attrs (overlay_t *overlay, attr_t *attrs);
+
 
 #endif /* !_BROKER_OVERLAY_H */
 

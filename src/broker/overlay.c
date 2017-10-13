@@ -38,6 +38,7 @@
 
 #include "heartbeat.h"
 #include "overlay.h"
+#include "attr.h"
 
 struct endpoint {
     zsock_t *zs;
@@ -603,6 +604,39 @@ int overlay_bind (overlay_t *ov)
     rc = 0;
 done:
     return rc;
+}
+
+/* A callback of type attr_get_f to allow retrieving some information
+ * from an overlay_t through attr_get().
+ */
+static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
+{
+    overlay_t *overlay = arg;
+    int rc = -1;
+
+    if (!strcmp (name, "tbon.parent-endpoint"))
+        *val = overlay_get_parent(overlay);
+    else if (!strcmp (name, "mcast.relay-endpoint"))
+        *val = overlay_get_relay(overlay);
+    else {
+        errno = ENOENT;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
+{
+    if (attr_add_active (attrs, "tbon.parent-endpoint", 0,
+                         overlay_attr_get_cb, NULL, overlay) < 0)
+        return -1;
+    if (attr_add_active (attrs, "mcast.relay-endpoint",
+                         FLUX_ATTRFLAG_IMMUTABLE,
+                         overlay_attr_get_cb, NULL, overlay) < 0)
+        return -1;
+    return 0;
 }
 
 /*
