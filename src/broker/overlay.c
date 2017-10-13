@@ -52,8 +52,8 @@ struct overlay_struct {
     flux_msg_handler_t *heartbeat;
     int epoch;
 
+    uint32_t size;
     uint32_t rank;
-    char rankstr[16];
 
     struct endpoint *parent;    /* DEALER - requests to parent */
     overlay_cb_f parent_cb;
@@ -133,7 +133,21 @@ void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
 void overlay_set_rank (overlay_t *ov, uint32_t rank)
 {
     ov->rank = rank;
-    snprintf (ov->rankstr, sizeof (ov->rankstr), "%"PRIu32, rank);
+}
+
+uint32_t overlay_get_rank (overlay_t *ov)
+{
+    return ov->rank;
+}
+
+void overlay_set_size (overlay_t *ov, uint32_t size)
+{
+    ov->size = size;
+}
+
+uint32_t overlay_get_size (overlay_t *ov)
+{
+    return ov->size;
 }
 
 void overlay_set_flux (overlay_t *ov, flux_t *h)
@@ -521,6 +535,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
 static int connect_parent (overlay_t *ov, struct endpoint *ep)
 {
     int savederr;
+    char rankstr[16];
 
     if (!(ep->zs = zsock_new_dealer (NULL)))
         goto error;
@@ -530,7 +545,8 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
         errno = savederr;
         goto error;
     }
-    zsock_set_identity (ep->zs, ov->rankstr);
+    snprintf (rankstr, sizeof (rankstr), "%"PRIu32, ov->rank);
+    zsock_set_identity (ep->zs, rankstr);
     if (zsock_connect (ep->zs, "%s", ep->uri) < 0)
         goto error;
     if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
