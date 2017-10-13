@@ -479,8 +479,6 @@ int main (int argc, char *argv[])
     if (create_dummyattrs (ctx.h, rank, size) < 0)
         log_err_exit ("creating dummy attributes");
 
-    overlay_set_rank (ctx.overlay, rank);
-
     /* Registers message handlers and obtains rank.
      */
     if (content_cache_set_flux (ctx.cache, ctx.h) < 0)
