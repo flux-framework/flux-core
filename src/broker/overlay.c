@@ -629,7 +629,8 @@ done:
 
 int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
 {
-    if (attr_add_active (attrs, "tbon.parent-endpoint", 0,
+    if (attr_add_active (attrs, "tbon.parent-endpoint",
+                         FLUX_ATTRFLAG_READONLY,
                          overlay_attr_get_cb, NULL, overlay) < 0)
         return -1;
     if (attr_add_active (attrs, "mcast.relay-endpoint",
