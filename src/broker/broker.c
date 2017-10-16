@@ -116,7 +116,6 @@ typedef struct {
      */
     bool verbose;
     bool quiet;
-    pid_t pid;
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
@@ -337,9 +336,7 @@ int main (int argc, char *argv[])
     if (!(ctx.runlevel = runlevel_create ()))
         oom ();
 
-    ctx.pid = getpid();
-
-    init_attrs (ctx.attrs, ctx.pid);
+    init_attrs (ctx.attrs, getpid());
 
     if (!(ctx.sm = subprocess_manager_create ()))
         oom ();
