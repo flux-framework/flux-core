@@ -98,7 +98,6 @@ typedef struct {
      */
     flux_t *h;
     flux_reactor_t *reactor;
-    zlist_t *sigwatchers;
 
     /* Sockets.
      */
