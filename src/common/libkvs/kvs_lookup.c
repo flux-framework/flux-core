@@ -56,6 +56,7 @@ static void free_ctx (struct lookup_ctx *ctx)
 {
     if (ctx) {
         free (ctx->key);
+        free (ctx->atref);
         free (ctx->treeobj_str);
         free (ctx->val_data);
         json_decref (ctx->val_obj);
