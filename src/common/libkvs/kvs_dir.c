@@ -109,27 +109,27 @@ error:
     return NULL;
 }
 
-const char *flux_kvsdir_tostring (flux_kvsdir_t *dir)
+const char *flux_kvsdir_tostring (const flux_kvsdir_t *dir)
 {
     return dir->json_str;
 }
 
-int flux_kvsdir_get_size (flux_kvsdir_t *dir)
+int flux_kvsdir_get_size (const flux_kvsdir_t *dir)
 {
     return treeobj_get_count (dir->dirobj);
 }
 
-const char *flux_kvsdir_key (flux_kvsdir_t *dir)
+const char *flux_kvsdir_key (const flux_kvsdir_t *dir)
 {
     return dir->key;
 }
 
-void *flux_kvsdir_handle (flux_kvsdir_t *dir)
+void *flux_kvsdir_handle (const flux_kvsdir_t *dir)
 {
     return dir->handle;
 }
 
-const char *flux_kvsdir_rootref (flux_kvsdir_t *dir)
+const char *flux_kvsdir_rootref (const flux_kvsdir_t *dir)
 {
     return dir->rootref;
 }
@@ -155,7 +155,7 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
-flux_kvsitr_t *flux_kvsitr_create (flux_kvsdir_t *dir)
+flux_kvsitr_t *flux_kvsitr_create (const flux_kvsdir_t *dir)
 {
     flux_kvsitr_t *itr = NULL;
     const char *key;
@@ -203,14 +203,14 @@ const char *flux_kvsitr_next (flux_kvsitr_t *itr)
     return name;
 }
 
-bool flux_kvsdir_exists (flux_kvsdir_t *dir, const char *name)
+bool flux_kvsdir_exists (const flux_kvsdir_t *dir, const char *name)
 {
     if (treeobj_get_entry (dir->dirobj, name))
         return true;
     return false;
 }
 
-bool flux_kvsdir_isdir (flux_kvsdir_t *dir, const char *name)
+bool flux_kvsdir_isdir (const flux_kvsdir_t *dir, const char *name)
 {
     json_t *obj = treeobj_get_entry (dir->dirobj, name);
 
@@ -221,7 +221,7 @@ bool flux_kvsdir_isdir (flux_kvsdir_t *dir, const char *name)
     return false;
 }
 
-bool flux_kvsdir_issymlink (flux_kvsdir_t *dir, const char *name)
+bool flux_kvsdir_issymlink (const flux_kvsdir_t *dir, const char *name)
 {
     json_t *obj = treeobj_get_entry (dir->dirobj, name);
 
@@ -233,7 +233,7 @@ bool flux_kvsdir_issymlink (flux_kvsdir_t *dir, const char *name)
 }
 
 
-char *flux_kvsdir_key_at (flux_kvsdir_t *dir, const char *name)
+char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *name)
 {
     char *s;
 
