@@ -203,13 +203,15 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * this error scenario appropriately.
      */
     if (cache_entry_is_type_raw (hp)) {
-        char *datacpy;
+        char *datacpy = NULL;
 
-        if (!(datacpy = malloc (size))) {
-            flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
-            goto done;
+        if (size) {
+            if (!(datacpy = malloc (size))) {
+                flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
+                goto done;
+            }
+            memcpy (datacpy, data, size);
         }
-        memcpy (datacpy, data, size);
 
         if (cache_entry_set_raw (hp, datacpy, size) < 0) {
             flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
@@ -276,15 +278,15 @@ static int load (kvs_ctx_t *ctx, const href_t ref, bool is_raw, wait_t *wait,
      */
     if (!hp) {
         if (is_raw) {
-            if (!(hp = cache_entry_create_raw (NULL, 0))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create_raw",
+            if (!(hp = cache_entry_create (CACHE_DATA_TYPE_RAW))) {
+                flux_log_error (ctx->h, "%s: cache_entry_create",
                                 __FUNCTION__);
                 return -1;
             }
         }
         else {
-            if (!(hp = cache_entry_create_json (NULL))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create_json",
+            if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
+                flux_log_error (ctx->h, "%s: cache_entry_create",
                                 __FUNCTION__);
                 return -1;
             }
@@ -481,7 +483,7 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
 
     is_raw = cache_entry_is_type_raw (hp);
     if (is_raw)
-        storedata = cache_entry_get_raw (hp, &storedatalen);
+        cache_entry_get_raw (hp, &storedata, &storedatalen);
     else
         storedata = cache_entry_get_json (hp);
 
@@ -1628,14 +1630,16 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(hp = cache_entry_create ())) {
+        if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
             saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+            flux_log_error (ctx->h, "%s: cache_entry_create_json_empty",
+                            __FUNCTION__);
             goto decref_done;
         }
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
+        assert (o);
         if (cache_entry_set_json (hp, o) < 0) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_set_json",

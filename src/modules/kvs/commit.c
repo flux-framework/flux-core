@@ -222,7 +222,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
-        if (!(hp = cache_entry_create ())) {
+        if (!(hp = cache_entry_create (CACHE_DATA_TYPE_NONE))) {
             saved_errno = ENOMEM;
             goto done;
         }
