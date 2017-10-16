@@ -9,12 +9,11 @@ typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
 overlay_t *overlay_create (void);
 void overlay_destroy (overlay_t *ov);
 
-/* These need to be set before connect/bind.
+/* These need to be called before connect/bind.
  */
 void overlay_set_sec (overlay_t *ov, flux_sec_t *sec);
-void overlay_set_rank (overlay_t *ov, uint32_t rank);
-void overlay_set_size (overlay_t *ov, uint32_t size);
 void overlay_set_flux (overlay_t *ov, flux_t *h);
+void overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
 
 /* Accessors
@@ -85,10 +84,12 @@ int overlay_connect (overlay_t *ov);
  */
 int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled);
 
-/* Add attributes to 'attrs' that directly retrieve information from
- * "overlay" through callbacks registered with 'attrs'.
- * The currently added attributes keys are "tbon.parent-endpoint" and
- * "mcast.relay-endpoint".
+/* Add attributes to 'attrs' to reveal information about the overlay
+ * network.  Two of the attributes directly retrieve information from
+ * "overlay" through callbacks registered with 'attrs': "tbon.parent-endpoint"
+ * and "mcast.relay-endpoint".  The rest are simple non-active attributes:
+ * "rank", "size", "tbon.arity", "tbon.level", "tbon.maxlevel", and
+ * "tbon.descendants".
  *
  * Returns 0 on success, -1 on error.
  */
