@@ -743,7 +743,7 @@ void lookup_errors (void) {
         "lookup_create on valref in path");
     check (lh, 0, NULL, "lookup valref in path");
 
-    /* Lookup path w/ dir in middle, should get EPERM */
+    /* Lookup path w/ dir in middle, should get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -752,7 +752,7 @@ void lookup_errors (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create on dir in path");
-    check (lh, EPERM, NULL, "lookup dir in path");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup dir in path");
 
     /* Lookup path w/ infinite link loop, should get ELOOP */
     ok ((lh = lookup_create (cache,
@@ -864,7 +864,7 @@ void lookup_errors (void) {
         "lookup_create on symlink");
     check (lh, ENOTDIR, NULL, "lookup symlink, expecting dir");
 
-    /* Lookup a dirref that doesn't point to a dir, should get EPERM. */
+    /* Lookup a dirref that doesn't point to a dir, should get ENOTRECOVERABLE. */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -873,9 +873,10 @@ void lookup_errors (void) {
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_bad");
-    check (lh, EPERM, NULL, "lookup dirref_bad");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup dirref_bad");
 
-    /* Lookup a dirref that doesn't point to a dir, in middle of path, should get EPERM. */
+    /* Lookup a dirref that doesn't point to a dir, in middle of path,
+     * should get ENOTRECOVERABLE. */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -884,9 +885,10 @@ void lookup_errors (void) {
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_bad, in middle of path");
-    check (lh, EPERM, NULL, "lookup dirref_bad, in middle of path");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup dirref_bad, in middle of path");
 
-    /* Lookup a valref that doesn't point to raw data, should get EPERM */
+    /* Lookup a valref that doesn't point to raw data, should get
+     * ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -895,10 +897,10 @@ void lookup_errors (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create on valref_bad");
-    check (lh, EPERM, NULL, "lookup valref_bad");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup valref_bad");
 
     /* Lookup a valref multiple blobref that doesn't point to raw
-     * data, should get EPERM */
+     * data, should get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -907,7 +909,7 @@ void lookup_errors (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create on valref_multi_bad");
-    check (lh, EPERM, NULL, "lookup valref_multi_bad");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup valref_multi_bad");
 
     /* Lookup a valref multiple blobref that points to buffers that will
      * over int, should get EOVERFLOW.
@@ -933,7 +935,7 @@ void lookup_errors (void) {
         "lookup_create on bad root_ref");
     check (lh, EINVAL, NULL, "lookup bad root_ref");
 
-    /* Lookup dirref with multiple blobrefs, should get EPERM */
+    /* Lookup dirref with multiple blobrefs, should get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -942,10 +944,10 @@ void lookup_errors (void) {
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_multi");
-    check (lh, EPERM, NULL, "lookup dirref_multi");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup dirref_multi");
 
     /* Lookup path w/ dirref w/ multiple blobrefs in middle, should
-     * get EPERM */
+     * get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
@@ -954,7 +956,7 @@ void lookup_errors (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create on dirref_multi, part of path");
-    check (lh, EPERM, NULL, "lookup dirref_multi, part of path");
+    check (lh, ENOTRECOVERABLE, NULL, "lookup dirref_multi, part of path");
 
     cache_destroy (cache);
 }

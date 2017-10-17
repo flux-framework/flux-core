@@ -1426,8 +1426,8 @@ void commit_process_bad_dirrefs (void) {
     ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
         "commit_process returns COMMIT_PROCESS_ERROR again");
 
-    ok (commit_get_errnum (c) == EPERM,
-        "commit_get_errnum return EPERM");
+    ok (commit_get_errnum (c) == ENOTRECOVERABLE,
+        "commit_get_errnum return ENOTRECOVERABLE");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);

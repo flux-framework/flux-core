@@ -388,7 +388,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         *next++ = '\0';
 
         if (!treeobj_is_dir (dir)) {
-            saved_errno = EPERM;
+            saved_errno = ENOTRECOVERABLE;
             goto done;
         }
 
@@ -419,7 +419,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             if (refcount != 1) {
                 flux_log (c->cm->h, LOG_ERR, "invalid dirref count: %d",
                           refcount);
-                saved_errno = EPERM;
+                saved_errno = ENOTRECOVERABLE;
                 goto done;
             }
 
@@ -669,7 +669,7 @@ commit_process_t commit_process (commit_t *c,
             break;
         default:
             flux_log (c->cm->h, LOG_ERR, "invalid commit state: %d", c->state);
-            c->errnum = EPERM;
+            c->errnum = ENOTRECOVERABLE;
             return COMMIT_PROCESS_ERROR;
     }
 
