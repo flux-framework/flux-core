@@ -17,16 +17,24 @@ test_expect_success 'Hydra runs hello world' '
 	mpiexec.hydra -n 4 echo "Hello World"
 '
 
+count_uniq_lines() { sort $1 | uniq | wc -l; }
+
 test_expect_success 'Hydra sets PMI_FD to unique value' '
-	test `mpiexec.hydra -n 4 printenv PMI_FD | sort | uniq | wc -l` -eq 4
+	mpiexec.hydra -n 4 printenv PMI_FD > out &&
+	test_debug "cat out" &&
+	test $(count_uniq_lines out) -eq 4
 '
 
 test_expect_success 'Hydra sets PMI_RANK to unique value' '
-	test `mpiexec.hydra -n 4 printenv PMI_RANK | sort | uniq | wc -l` -eq 4
+	mpiexec.hydra -n 4 printenv PMI_RANK > out2 &&
+	test_debug "cat out2" &&
+	test $(count_uniq_lines out2) -eq 4
 '
 
 test_expect_success 'Hydra sets PMI_SIZE to uniform value' '
-	test `mpiexec.hydra -n 4 printenv PMI_SIZE | sort | uniq | wc -l` -eq 1
+	mpiexec.hydra -n 4 printenv PMI_SIZE > out3 &&
+	test_debug "cat out3" &&
+	test $(count_uniq_lines out3) -eq 1
 '
 
 test_expect_success 'Flux libpmi-client wire protocol works with Hydra' '
@@ -36,6 +44,7 @@ test_expect_success 'Flux libpmi-client wire protocol works with Hydra' '
 test_expect_success 'Hydra can launch Flux' '
 	mpiexec.hydra -n 4 flux start \
 		flux comms info >flux_out &&
+	test_debug "cat flux_out" &&
 	grep size=4 flux_out
 '
 
