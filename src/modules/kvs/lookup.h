@@ -6,6 +6,14 @@
 
 typedef struct lookup lookup_t;
 
+/* ref - missing reference
+ * raw_data - true if reference points to raw data
+ */
+typedef int (*lookup_ref_f)(lookup_t *c,
+                            const char *ref,
+                            bool raw_data,
+                            void *data);
+
 /* Initialize a lookup handle
  * - If root_ref is same as root_dir, can be set to NULL.
  * - flux_t is optional, if NULL logging will go to stderr
@@ -28,18 +36,23 @@ bool lookup_validate (lookup_t *lh);
  * an error occurred or not */
 int lookup_get_errnum (lookup_t *lh);
 
+/* if user wishes to stall, but needs future knowledge to fail and
+ * what error caused the failure.
+ */
+int lookup_get_aux_errnum (lookup_t *lh);
+int lookup_set_aux_errnum (lookup_t *lh, int errnum);
+
 /* Get resulting value of lookup() after lookup() returns true.  The
  * json object returned gives a reference to the caller and must be
  * json_decref()'ed to free memory. */
 json_t *lookup_get_value (lookup_t *lh);
 
-/* Get missing ref after a lookup stall, missing reference can then be
- * used to load reference into the KVS cache
+/* On lookup stall, get missing reference that should be loaded into
+ * the KVS cache via callback function.
  *
- * If the missing references points to raw data, 'ref_raw' will be set
- * to true, otherwise false.
+ * return -1 in callback to break iteration
  */
-const char *lookup_get_missing_ref (lookup_t *lh, bool *ref_raw);
+int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data);
 
 /* Convenience function to get cache from earlier instantiation.
  * Convenient if replaying RPC and don't have it presently.

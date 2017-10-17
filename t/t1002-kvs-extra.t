@@ -304,6 +304,62 @@ test_expect_success 'kvs: valref that points to zero size content store data can
 	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
 '
 
+test_expect_success 'kvs: valref that doesnt point to raw data fails' '
+	flux kvs unlink -Rf $TEST &&
+        flux kvs mkdir $TEST.a.b.c &&
+        dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+	${KVSBASIC} put-treeobj $TEST.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        test_must_fail ${KVSBASIC} copy-fromkvs $TEST.value -
+'
+
+# multi-blobref valrefs
+
+test_expect_success 'kvs: multi blob-ref valref can be read' '
+        flux kvs unlink -Rf $TEST &&
+	hashval1=`echo -n "abcd" | flux content store` &&
+	hashval2=`echo -n "efgh" | flux content store` &&
+	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
+        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcdefgh" &&
+        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
+'
+
+test_expect_success 'kvs: multi blob-ref valref with an empty blobref on left, can be read' '
+        flux kvs unlink -Rf $TEST &&
+	hashval1=`flux content store < /dev/null` &&
+	hashval2=`echo -n "abcd" | flux content store` &&
+	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
+        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcd" &&
+        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 4
+'
+
+test_expect_success 'kvs: multi blob-ref valref with an empty blobref on right, can be read' '
+        flux kvs unlink -Rf $TEST &&
+	hashval1=`echo -n "abcd" | flux content store` &&
+	hashval2=`flux content store < /dev/null` &&
+	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
+        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcd" &&
+        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 4
+'
+
+test_expect_success 'kvs: multi blob-ref valref with an empty blobref in middle, can be read' '
+        flux kvs unlink -Rf $TEST &&
+	hashval1=`echo -n "abcd" | flux content store` &&
+	hashval2=`flux content store < /dev/null` &&
+	hashval3=`echo -n "efgh" | flux content store` &&
+	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\", \"${hashval3}\"],\"type\":\"valref\",\"ver\":1}" &&
+        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcdefgh" &&
+        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
+'
+
+test_expect_success 'kvs: multi blob-ref valref with a blobref that doesnt point to raw data fails' '
+        flux kvs unlink -Rf $TEST &&
+	hashval1=`echo -n "abcd" | flux content store` &&
+        flux kvs mkdir $TEST.a.b.c &&
+        dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        test_must_fail ${KVSBASIC} copy-fromkvs $TEST.multival -
+'
+
 # dtree tests
 
 test_expect_success 'kvs: store 16x3 directory tree' '

@@ -2,6 +2,7 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
+#include <limits.h>
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
@@ -11,6 +12,37 @@
 #include "src/modules/kvs/kvs_util.h"
 #include "src/modules/kvs/types.h"
 #include "src/common/libutil/blobref.h"
+
+struct lookup_ref_data
+{
+    const char *ref;
+    bool raw_data;
+    int count;
+};
+
+int lookup_ref (lookup_t *c,
+                const char *ref,
+                bool raw_data,
+                void *data)
+{
+    struct lookup_ref_data *ld = data;
+    if (ld) {
+        ld->ref = ref;
+        ld->raw_data = raw_data;
+        ld->count++;
+    }
+    return 0;
+}
+
+int lookup_ref_error (lookup_t *c,
+                      const char *ref,
+                      bool raw_data,
+                      void *data)
+{
+    /* pick a weird errno */
+    errno = EMLINK;
+    return -1;
+}
 
 void basic_api (void)
 {
@@ -59,6 +91,12 @@ void basic_api (void)
         "lookup_set_aux_data works");
     ok (lookup_get_aux_data (lh) == lh,
         "lookup_get_aux_data returns works");
+    ok (lookup_get_aux_errnum (lh) == 0,
+        "lookup_get_aux_errnum returns no error");
+    ok (lookup_set_aux_errnum (lh, EINVAL) == EINVAL,
+        "lookup_set_aux_errnum works");
+    ok (lookup_get_aux_errnum (lh) == EINVAL,
+        "lookup_get_aux_errnum gets EINVAL");
 
     lookup_destroy (lh);
 
@@ -116,8 +154,8 @@ void basic_api_errors (void)
         "lookup_get_errnum returns EINVAL b/c lookup not yet started");
     ok (lookup_get_value (lh) == NULL,
         "lookup_get_value fails b/c lookup not yet started");
-    ok (lookup_get_missing_ref (lh, NULL) == NULL,
-        "lookup_get_missing_ref fails b/c lookup not yet started");
+    ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
+        "lookup_iter_missing_refs fails b/c lookup not yet started");
 
     ok (lookup_validate (NULL) == false,
         "lookup_validate fails on NULL pointer");
@@ -127,8 +165,8 @@ void basic_api_errors (void)
         "lookup_get_errnum returns EINVAL on NULL pointer");
     ok (lookup_get_value (NULL) == NULL,
         "lookup_get_value fails on NULL pointer");
-    ok (lookup_get_missing_ref (NULL, NULL) == NULL,
-        "lookup_get_missing_ref fails on NULL pointer");
+    ok (lookup_iter_missing_refs (NULL, lookup_ref, NULL) < 0,
+        "lookup_iter_missing_refs fails on NULL pointer");
     ok (lookup_get_cache (NULL) == NULL,
         "lookup_get_cache fails on NULL pointer");
     ok (lookup_get_current_epoch (NULL) < 0,
@@ -162,8 +200,8 @@ void basic_api_errors (void)
         "lookup_get_errnum returns EINVAL on bad pointer");
     ok (lookup_get_value (lh) == NULL,
         "lookup_get_value fails on bad pointer");
-    ok (lookup_get_missing_ref (lh, NULL) == NULL,
-        "lookup_get_missing_ref fails on bad pointer");
+    ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
+        "lookup_iter_missing_refs fails on bad pointer");
     ok (lookup_get_cache (lh) == NULL,
         "lookup_get_cache fails on bad pointer");
     ok (lookup_get_current_epoch (lh) < 0,
@@ -192,12 +230,14 @@ void check_common (lookup_t *lh,
                    bool lookup_result,
                    int get_errnum_result,
                    json_t *get_value_result,
+                   int missing_ref_count,
                    const char *missing_ref_result,
                    bool missing_ref_raw,
                    const char *msg,
                    bool destroy_lookup)
 {
     json_t *val;
+    struct lookup_ref_data ld = { .ref = NULL, .raw_data = false, .count = 0 };
 
     ok (lookup (lh) == lookup_result,
         "%s: lookup matched result", msg);
@@ -220,28 +260,41 @@ void check_common (lookup_t *lh,
             "%s: lookup_get_value returns NULL as expected", msg);
         json_decref (val);             /* just in case error */
     }
-    if (missing_ref_result) {
-        const char *missing_ref;
-        bool ref_raw;
+    if (missing_ref_count == 1) {
+        if (missing_ref_result) {
+            ok (lookup_iter_missing_refs (lh, lookup_ref, &ld) == 0,
+            "%s: lookup_iter_missing_refs success", msg);
 
-        ok ((missing_ref = lookup_get_missing_ref (lh, &ref_raw)) != NULL,
-            "%s: lookup_get_missing_ref returns expected non-NULL result", msg);
+            ok (ld.count == missing_ref_count,
+                "%s: missing ref returned one missing refs", msg);
 
-        if (missing_ref) {
-            ok (strcmp (missing_ref_result, missing_ref) == 0,
-                "%s: missing ref returned matched expectation", msg);
+            if (ld.ref) {
+                ok (strcmp (ld.ref, missing_ref_result) == 0,
+                    "%s: missing ref returned matched expectation", msg);
+            }
+            else {
+                ok (false, "%s: missing ref returned matched expectation", msg);
+            }
+
+            ok (ld.raw_data == missing_ref_raw,
+                "%s: missing ref raw_data bool returned expected value", msg);
         }
         else {
-            ok (false, "%s: missing ref returned matched expectation", msg);
+            ok (lookup_iter_missing_refs (lh, lookup_ref, &ld) < 0,
+                "%s: lookup_iter_missing_refs fails as expected", msg);
         }
-
-        ok (ref_raw == missing_ref_raw,
-            "%s: lookup_get_missing_ref returned expected ref_raw", msg);
     }
     else {
-        ok (lookup_get_missing_ref (lh, NULL) == NULL,
-            "%s: lookup_get_missing_ref returns NULL as expected", msg);
+        /* if missing_ref is > 1, we only care about number of missing refs,
+         * as order isn't important.
+         */
+        ok (lookup_iter_missing_refs (lh, lookup_ref, &ld) == 0,
+            "%s: lookup_iter_missing_refs fails as expected", msg);
+
+        ok (ld.count == missing_ref_count,
+            "%s: missing ref returned number of expected missing refs", msg);
     }
+
 
     if (destroy_lookup)
         lookup_destroy (lh);
@@ -256,6 +309,7 @@ void check (lookup_t *lh,
                   true,
                   get_errnum_result,
                   get_value_result,
+                  1,
                   NULL,
                   false,        /* doesn't matter */
                   msg,
@@ -264,6 +318,7 @@ void check (lookup_t *lh,
 
 void check_stall (lookup_t *lh,
                   int get_errnum_result,
+                  int missing_ref_count,
                   const char *missing_ref_result,
                   bool missing_ref_raw,
                   const char *msg)
@@ -272,6 +327,7 @@ void check_stall (lookup_t *lh,
                   false,
                   get_errnum_result,
                   NULL,
+                  missing_ref_count,
                   missing_ref_result,
                   missing_ref_raw,
                   msg,
@@ -360,10 +416,12 @@ void lookup_basic (void) {
     json_t *root;
     json_t *dirref;
     json_t *dir;
+    json_t *valref_multi;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
     href_t valref_ref;
+    href_t valref2_ref;
     href_t dirref_ref;
     href_t root_ref;
 
@@ -375,8 +433,12 @@ void lookup_basic (void) {
      * valref_ref
      * "abcd"
      *
+     * valref2_ref
+     * "efgh"
+     *
      * dirref_ref
      * "valref" : valref to valref_ref
+     * "valref_multi" : valref to [ valref_ref, valref2_ref ]
      * "val" : val to "foo"
      * "dir" : dir w/ "val" : val to "bar"
      * "symlink" : symlink to "baz"
@@ -388,6 +450,9 @@ void lookup_basic (void) {
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
     cache_insert (cache, valref_ref, cache_entry_create_raw (strdup ("abcd"), 4));
 
+    blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (href_t));
+    cache_insert (cache, valref2_ref, cache_entry_create_raw (strdup ("efgh"), 4));
+
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("bar", 3));
 
@@ -396,6 +461,11 @@ void lookup_basic (void) {
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("foo", 3));
     treeobj_insert_entry (dirref, "dir", dir);
     treeobj_insert_entry (dirref, "symlink", treeobj_create_symlink ("baz"));
+
+    valref_multi = treeobj_create_valref (valref_ref);
+    treeobj_append_blobref (valref_multi, valref2_ref);
+
+    treeobj_insert_entry (dirref, "valref_multi", valref_multi);
 
     kvs_util_json_hash ("sha1", dirref, dirref_ref);
     cache_insert (cache, dirref_ref, cache_entry_create_json (dirref));
@@ -428,6 +498,19 @@ void lookup_basic (void) {
         "lookup_create on path dirref.valref");
     test = treeobj_create_val ("abcd", 4);
     check (lh, 0, test, "lookup dirref.valref");
+    json_decref (test);
+
+    /* Lookup value via valref with multiple blobrefs */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref.valref_multi",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create on valref_multi");
+    test = treeobj_create_val ("abcdefgh", 8);
+    check (lh, 0, test, "lookup valref_multi");
     json_decref (test);
 
     /* lookup value via val */
@@ -538,12 +621,14 @@ void lookup_errors (void) {
     json_t *root;
     json_t *dirref;
     json_t *dir;
-    json_t *valref_multi;
     json_t *dirref_multi;
+    json_t *valref_multi_bad;
+    json_t *valref_multi_overflow;
     struct cache *cache;
     lookup_t *lh;
     href_t dirref_ref;
     href_t valref_ref;
+    href_t valref_long_ref;
     href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
@@ -553,6 +638,9 @@ void lookup_errors (void) {
      *
      * valref_ref
      * "abcd"
+     *
+     * valref_long_ref
+     * "long", but invalid length on buffer
      *
      * dirref_ref
      * "val" : val to "bar"
@@ -567,12 +655,22 @@ void lookup_errors (void) {
      * "dir" : dir w/ "val" : val to "baz"
      * "dirref_bad" : dirref to valref_ref
      * "valref_bad" : valref to dirref_ref
+     * "valref_multi_bad" : [ valref_ref, dirref_ref ]
+     * "valref_multi_overflow" : [ valref_long_ref, valref_long_ref ]
      * "dirref_multi" : dirref to [ dirref_ref, dirref_ref ]
-     * "valref_multi" : valref to [ valref_ref, valref_ref ]
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
     cache_insert (cache, valref_ref, cache_entry_create_raw (strdup ("abcd"), 4));
+
+    /* achu: Note that I am abusing internal knowledge that cache
+     * entries blindly store pointers and lengths.  Obviously the
+     * "real" length of the buffer below is length 4, but I'm storing
+     * a huge number.
+     */
+    blobref_hash ("sha1", "long", 4, valref_long_ref, sizeof (href_t));
+    cache_insert (cache, valref_long_ref,
+                  cache_entry_create_raw (strdup ("long"), INT_MAX - 32));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
@@ -593,14 +691,18 @@ void lookup_errors (void) {
     treeobj_insert_entry (root, "dirref_bad", treeobj_create_dirref (valref_ref));
     treeobj_insert_entry (root, "valref_bad", treeobj_create_valref (dirref_ref));
 
-    valref_multi = treeobj_create_valref (valref_ref);
-    treeobj_append_blobref (valref_multi, valref_ref);
+    valref_multi_bad = treeobj_create_valref (valref_ref);
+    treeobj_append_blobref (valref_multi_bad, dirref_ref);
+    treeobj_insert_entry (root, "valref_multi_bad", valref_multi_bad);
+
+    valref_multi_overflow = treeobj_create_valref (valref_long_ref);
+    treeobj_append_blobref (valref_multi_overflow, valref_long_ref);
+    treeobj_insert_entry (root, "valref_multi_overflow", valref_multi_overflow);
 
     dirref_multi = treeobj_create_dirref (dirref_ref);
     treeobj_append_blobref (dirref_multi, dirref_ref);
 
     treeobj_insert_entry (root, "dirref_multi", dirref_multi);
-    treeobj_insert_entry (root, "valref_multi", valref_multi);
 
     kvs_util_json_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, cache_entry_create_json (root));
@@ -795,6 +897,31 @@ void lookup_errors (void) {
         "lookup_create on valref_bad");
     check (lh, EPERM, NULL, "lookup valref_bad");
 
+    /* Lookup a valref multiple blobref that doesn't point to raw
+     * data, should get EPERM */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "valref_multi_bad",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create on valref_multi_bad");
+    check (lh, EPERM, NULL, "lookup valref_multi_bad");
+
+    /* Lookup a valref multiple blobref that points to buffers that will
+     * over int, should get EOVERFLOW.
+     */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "valref_multi_overflow",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create on valref_multi_overflow");
+    check (lh, EOVERFLOW, NULL, "lookup valref_multi_overflow");
+
     /* Lookup with an invalid root_ref, should get EINVAL */
     ok ((lh = lookup_create (cache,
                              1,
@@ -828,30 +955,6 @@ void lookup_errors (void) {
                              0)) != NULL,
         "lookup_create on dirref_multi, part of path");
     check (lh, EPERM, NULL, "lookup dirref_multi, part of path");
-
-    /* Lookup valref with multiple blobrefs, should get EPERM */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             root_ref,
-                             root_ref,
-                             "valref_multi",
-                             NULL,
-                             0)) != NULL,
-        "lookup_create on valref_multi");
-    check (lh, EPERM, NULL, "lookup valref_multi");
-
-    /* Lookup path w/ valref w/ multiple blobrefs in middle, Not
-     * ENOENT - caller of lookup decides what to do with entry not
-     * found */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             root_ref,
-                             root_ref,
-                             "valref_multi.foo",
-                             NULL,
-                             0)) != NULL,
-        "lookup_create on valref_multi, part of path");
-    check (lh, 0, NULL, "lookup valref_multi, part of path");
 
     cache_destroy (cache);
 }
@@ -1178,7 +1281,7 @@ void lookup_stall_root (void) {
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create stalltest \".\"");
-    check_stall (lh, EAGAIN, root_ref, false, "root \".\" stall");
+    check_stall (lh, EAGAIN, 1, root_ref, false, "root \".\" stall");
 
     cache_insert (cache, root_ref, cache_entry_create_json (root));
 
@@ -1202,12 +1305,18 @@ void lookup_stall_root (void) {
 /* lookup stall tests */
 void lookup_stall (void) {
     json_t *root;
+    json_t *valref_tmp;
     json_t *dirref1;
     json_t *dirref2;
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-    href_t valref_ref;
+    href_t valref1_ref;
+    href_t valref2_ref;
+    href_t valref3_ref;
+    href_t valref4_ref;
+    href_t valrefmisc1_ref;
+    href_t valrefmisc2_ref;
     href_t dirref1_ref;
     href_t dirref2_ref;
     href_t root_ref;
@@ -1217,12 +1326,29 @@ void lookup_stall (void) {
 
     /* This cache is
      *
-     * valref_ref
+     * valref1_ref
      * "abcd"
+     *
+     * valref2_ref
+     * "efgh"
+     *
+     * valref3_ref
+     * "ijkl"
+     *
+     * valref4_ref
+     * "mnop"
+     *
+     * valrefmisc1_ref
+     * "foobar"
+     *
+     * valrefmisc2_ref
+     * "foobaz"
      *
      * dirref1_ref
      * "val" : val to "foo"
      * "valref" : valref to valref_ref
+     * "valrefmisc" : valref to valrefmisc1_ref
+     * "valrefmisc_multi" : valref to [ valrefmisc1_ref, valrefmisc2_ref ]
      *
      * dirref2_ref
      * "val" : val to "bar"
@@ -1234,11 +1360,27 @@ void lookup_stall (void) {
      *
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "abcd", 4, valref1_ref, sizeof (href_t));
+    blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (href_t));
+    blobref_hash ("sha1", "ijkl", 4, valref3_ref, sizeof (href_t));
+    blobref_hash ("sha1", "mnop", 4, valref4_ref, sizeof (href_t));
+    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref, sizeof (href_t));
+    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref, sizeof (href_t));
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
-    treeobj_insert_entry (dirref1, "valref", treeobj_create_valref (valref_ref));
+    treeobj_insert_entry (dirref1, "valref", treeobj_create_valref (valref1_ref));
+    valref_tmp = treeobj_create_valref (valref1_ref);
+    treeobj_append_blobref (valref_tmp, valref2_ref);
+    treeobj_insert_entry (dirref1, "valref_multi", valref_tmp);
+    valref_tmp = treeobj_create_valref (valref3_ref);
+    treeobj_append_blobref (valref_tmp, valref4_ref);
+    treeobj_insert_entry (dirref1, "valref_multi2", valref_tmp);
+    treeobj_insert_entry (dirref1, "valrefmisc", treeobj_create_valref (valrefmisc1_ref));
+    valref_tmp = treeobj_create_valref (valrefmisc1_ref);
+    treeobj_append_blobref (valref_tmp, valrefmisc2_ref);
+    treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp);
+
     kvs_util_json_hash ("sha1", dirref1, dirref1_ref);
 
     dirref2 = treeobj_create_dir ();
@@ -1262,12 +1404,12 @@ void lookup_stall (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create stalltest dirref1.val");
-    check_stall (lh, EAGAIN, root_ref, false, "dirref1.val stall #1");
+    check_stall (lh, EAGAIN, 1, root_ref, false, "dirref1.val stall #1");
 
     cache_insert (cache, root_ref, cache_entry_create_json (root));
 
     /* next call to lookup, should stall */
-    check_stall (lh, EAGAIN, dirref1_ref, false, "dirref1.val stall #2");
+    check_stall (lh, EAGAIN, 1, dirref1_ref, false, "dirref1.val stall #2");
 
     cache_insert (cache, dirref1_ref, cache_entry_create_json (dirref1));
 
@@ -1298,7 +1440,7 @@ void lookup_stall (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create stalltest symlink.val");
-    check_stall (lh, EAGAIN, dirref2_ref, false, "symlink.val stall");
+    check_stall (lh, EAGAIN, 1, dirref2_ref, false, "symlink.val stall");
 
     cache_insert (cache, dirref2_ref, cache_entry_create_json (dirref2));
 
@@ -1329,9 +1471,9 @@ void lookup_stall (void) {
                              NULL,
                              0)) != NULL,
         "lookup_create stalltest dirref1.valref");
-    check_stall (lh, EAGAIN, valref_ref, true, "dirref1.valref stall");
+    check_stall (lh, EAGAIN, 1, valref1_ref, true, "dirref1.valref stall");
 
-    cache_insert (cache, valref_ref, cache_entry_create_raw (strdup ("abcd"), 4));
+    cache_insert (cache, valref1_ref, cache_entry_create_raw (strdup ("abcd"), 4));
 
     /* lookup dirref1.valref, should succeed */
     test = treeobj_create_val ("abcd", 4);
@@ -1350,6 +1492,110 @@ void lookup_stall (void) {
     test = treeobj_create_val ("abcd", 4);
     check (lh, 0, test, "dirref1.valref #2");
     json_decref (test);
+
+    /* lookup dirref1.valref_multi, should stall */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valref_multi",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valref_multi");
+    /* should only be one missing ref, as we loaded one of the refs in
+     * the 'valref' above */
+    check_stall (lh, EAGAIN, 1, valref2_ref, true, "dirref1.valref_multi stall");
+
+    cache_insert (cache, valref2_ref, cache_entry_create_raw (strdup ("efgh"), 4));
+
+    /* lookup dirref1.valref_multi, should succeed */
+    test = treeobj_create_val ("abcdefgh", 8);
+    check (lh, 0, test, "dirref1.valref_multi #1");
+    json_decref (test);
+
+    /* lookup dirref1.valref_multi, now fully cached, should succeed */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valref_multi",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valref");
+    test = treeobj_create_val ("abcdefgh", 8);
+    check (lh, 0, test, "dirref1.valref_multi #2");
+    json_decref (test);
+
+    /* lookup dirref1.valref_multi2, should stall */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valref_multi2",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valref_multi2");
+    /* should two missing refs, as we have not loaded either here */
+    check_stall (lh, EAGAIN, 2, NULL, true, "dirref1.valref_multi2 stall");
+
+    cache_insert (cache, valref3_ref, cache_entry_create_raw (strdup ("ijkl"), 4));
+    cache_insert (cache, valref4_ref, cache_entry_create_raw (strdup ("mnop"), 4));
+
+    /* lookup dirref1.valref_multi2, should succeed */
+    test = treeobj_create_val ("ijklmnop", 8);
+    check (lh, 0, test, "dirref1.valref_multi2 #1");
+    json_decref (test);
+
+    /* lookup dirref1.valref_multi2, now fully cached, should succeed */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valref_multi2",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valref");
+    test = treeobj_create_val ("ijklmnop", 8);
+    check (lh, 0, test, "dirref1.valref_multi2 #2");
+    json_decref (test);
+
+    /* lookup dirref1.valrefmisc, should stall */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valrefmisc",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valrefmisc");
+    /* don't call check_stall, this is primarily to test if callback
+     * functions returning errors are caught */
+    ok (lookup (lh) == false,
+        "dirref1.valrefmisc: lookup stalled");
+    errno = 0;
+    ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0
+        && errno == EMLINK,
+        "dirref1.valrefmisc: error & errno properly returned from callback error");
+    lookup_destroy (lh);
+
+    /* lookup dirref1.valrefmisc_multi, should stall */
+    ok ((lh = lookup_create (cache,
+                             1,
+                             root_ref,
+                             root_ref,
+                             "dirref1.valrefmisc_multi",
+                             NULL,
+                             0)) != NULL,
+        "lookup_create stalltest dirref1.valrefmisc_multi");
+    /* don't call check_stall, this is primarily to test if callback
+     * functions returning errors are caught */
+    ok (lookup (lh) == false,
+        "dirref1.valrefmisc_multi: lookup stalled");
+    errno = 0;
+    ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0
+        && errno == EMLINK,
+        "dirref1.valrefmisc_multi: error & errno properly returned from callback error");
+    lookup_destroy (lh);
 
     cache_destroy (cache);
 }
