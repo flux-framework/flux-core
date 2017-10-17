@@ -91,7 +91,7 @@ script:
  - git fetch --unshallow --tags
  - ulimit -c unlimited
  - export CC="ccache $CC"
- - export MAKECMDS="make -j 2 distcheck"
+ - export MAKECMDS="make distcheck"
  # Ensure travis builds libev such that libfaketime will work:
  # (force libev to *not* use syscall interface for clock_gettime())
  - export CPPFLAGS="-DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
