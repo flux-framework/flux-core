@@ -177,8 +177,7 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static char *format_endpoint (attr_t *attrs, const char *endpoint);
 
-static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
-                     double *elapsed_sec);
+static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k);
 
 static void init_attrs (attr_t *attrs, pid_t pid);
 
@@ -420,8 +419,11 @@ int main (int argc, char *argv[])
     /* Boot with PMI.
      */
     double pmi_elapsed_sec;
-    if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k, &pmi_elapsed_sec) < 0)
+    struct timespec pmi_start_time;
+    monotime (&pmi_start_time);
+    if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
         log_msg_exit ("bootstrap failed");
+    pmi_elapsed_sec = monotime_since (pmi_start_time) / 1000;
     uint32_t rank = overlay_get_rank(ctx.overlay);
     uint32_t size = overlay_get_size(ctx.overlay);
 
@@ -1063,8 +1065,7 @@ done:
     return (rv);
 }
 
-static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
-                     double *elapsed_sec)
+static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
 {
     int spawned;
     int size;
@@ -1084,13 +1085,10 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
     char *val = NULL;
     int e;
     int rc = -1;
-    struct timespec start_time;
     const char *attrtbonendpoint;
     char *tbonendpoint = NULL;
     const char *attrmcastendpoint;
     char *mcastendpoint = NULL;
-
-    monotime (&start_time);
 
     if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
         log_msg ("PMI_Init: %s", pmi_strerror (e));
@@ -1332,7 +1330,6 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
     PMI_Finalize ();
     rc = 0;
 done:
-    *elapsed_sec = monotime_since (start_time) / 1000;
     if (clique_ranks)
         free (clique_ranks);
     if (kvsname)
