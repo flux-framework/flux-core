@@ -1397,44 +1397,6 @@ static int aggregator_push_task_exit (struct task_info *t)
     return (rc);
 }
 
-int send_exit_message (struct task_info *t)
-{
-    char *key;
-    struct prog_ctx *ctx = t->ctx;
-
-    if (!prog_ctx_getopt (ctx, "no-aggregate-task-exit"))
-        return aggregator_push_task_exit (t);
-
-    if (asprintf (&key, "%s.%d.exit_status", ctx->kvspath, t->globalid) < 0)
-        return (-1);
-    if (flux_kvs_put_int (ctx->flux, key, t->status) < 0)
-        return (-1);
-    free (key);
-
-    if (WIFSIGNALED (t->status)) {
-        if (asprintf (&key, "%s.%d.exit_sig", ctx->kvspath, t->globalid) < 0)
-            return (-1);
-        if (flux_kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
-            return (-1);
-        free (key);
-    }
-    else {
-        if (asprintf (&key, "%s.%d.exit_code", ctx->kvspath, t->globalid) < 0)
-            return (-1);
-        if (flux_kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
-            return (-1);
-        free (key);
-    }
-
-    if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
-        wlog_debug (ctx, "flux_kvs_commit_anon on task exit");
-        if (flux_kvs_commit_anon (ctx->flux, 0) < 0)
-            return (-1);
-    }
-
-    return (0);
-}
-
 void prog_ctx_unsetenv (struct prog_ctx *ctx, const char *name)
 {
     envz_remove (&ctx->envz, &ctx->envz_len, name);
@@ -1892,7 +1854,7 @@ int task_exit (struct task_info *t, int status)
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
 
 
-    if (send_exit_message (t) < 0)
+    if (aggregator_push_task_exit (t) < 0)
         wlog_err (ctx, "Sending exit message failed!");
 
     prog_ctx_remove_completion_ref (t->ctx, "task.%d.exit", t->id);
