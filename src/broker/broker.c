@@ -115,7 +115,6 @@ typedef struct {
     /* Misc
      */
     bool verbose;
-    bool quiet;
     int event_recv_seq;
     int event_send_seq;
     bool event_active;          /* primary event source is active */
@@ -242,7 +241,6 @@ void parse_command_line_arguments(int argc, char *argv[],
             ctx->verbose = true;
             break;
         case 'q':   /* --quiet */
-            ctx->quiet = true;
             break;
         case 'X':   /* --module-path PATH */
             if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
