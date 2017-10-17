@@ -304,6 +304,14 @@ test_expect_success 'kvs: valref that points to zero size content store data can
 	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
 '
 
+test_expect_success 'kvs: valref that doesnt point to raw data fails' '
+	flux kvs unlink -Rf $TEST &&
+        flux kvs mkdir $TEST.a.b.c &&
+        dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+	${KVSBASIC} put-treeobj $TEST.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        test_must_fail ${KVSBASIC} copy-fromkvs $TEST.value -
+'
+
 # dtree tests
 
 test_expect_success 'kvs: store 16x3 directory tree' '
