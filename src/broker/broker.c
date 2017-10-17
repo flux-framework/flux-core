@@ -1114,7 +1114,7 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k,
 
     overlay_init (overlay, (uint32_t)size, (uint32_t)rank, tbon_k);
 
-    /* Get id string.
+    /* Set session-id attribute from PMI appnum if not already set.
      */
     if (attr_get (attrs, "session-id", NULL, NULL) < 0) {
         if (attr_add_int (attrs, "session-id", appnum,
