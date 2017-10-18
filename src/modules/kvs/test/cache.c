@@ -41,7 +41,6 @@ void cache_tests (void)
 void cache_entry_basic_tests (void)
 {
     struct cache_entry *e;
-    json_t *otmp;
 
     /* corner case tests */
     ok (cache_entry_create_raw (NULL, 5) == NULL,
@@ -61,23 +60,6 @@ void cache_entry_basic_tests (void)
         "cache_entry_set_raw fails with bad input");
     ok (cache_entry_set_raw (e, NULL, 5) < 0,
         "cache_entry_set_raw fails with bad input");
-    cache_entry_destroy (e);
-    e = NULL;
-
-    /* test empty cache entry created by cache_entry_create() */
-
-    ok ((e = cache_entry_create ()) != NULL,
-        "cache_entry_create works");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
-        "cache_entry_get_raw fails, no data set");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
     cache_entry_destroy (e);
     e = NULL;
 }
@@ -128,16 +110,6 @@ void cache_entry_raw_tests (void)
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
-        "cache_entry_get_raw fails, no data set");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
     ok (cache_entry_get_valid (e) == true,
