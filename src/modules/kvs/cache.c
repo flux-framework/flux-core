@@ -47,12 +47,7 @@
 
 #include "waitqueue.h"
 #include "cache.h"
-
-typedef enum {
-    CACHE_DATA_TYPE_NONE,
-    CACHE_DATA_TYPE_RAW,
-    CACHE_DATA_TYPE_JSON,
-} cache_data_type_t;
+#include "kvs_util.h"
 
 struct cache_entry {
     waitqueue_t *waitlist_notdirty;
@@ -63,7 +58,6 @@ struct cache_entry {
     bool entry_valid;       /* flag indicating if raw data or json
                              * set, don't use data == NULL as test, as
                              * zero length data can be valid */
-    cache_data_type_t type; /* what does data point to */
     int lastuse_epoch;      /* time of last use for cache expiry */
     uint8_t dirty:1;
 };
@@ -80,7 +74,6 @@ struct cache_entry *cache_entry_create (void)
         errno = ENOMEM;
         return NULL;
     }
-    hp->type = CACHE_DATA_TYPE_NONE;
     return hp;
 }
 
@@ -102,7 +95,6 @@ struct cache_entry *cache_entry_create_raw (void *data, int len)
     }
     /* true even if data == NULL */
     hp->entry_valid = true;
-    hp->type = CACHE_DATA_TYPE_RAW;
     return hp;
 }
 
@@ -117,9 +109,14 @@ struct cache_entry *cache_entry_create_json (json_t *o)
 
     if (!(hp = cache_entry_create ()))
         return NULL;
+
+    if (!(hp->data = kvs_util_json_dumps (o))) {
+        cache_entry_destroy (hp);
+        return NULL;
+    }
+    hp->len = strlen (hp->data) + 1;
     hp->o = o;
     hp->entry_valid = true;
-    hp->type = CACHE_DATA_TYPE_JSON;
     return hp;
 }
 
@@ -184,7 +181,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp)
 
 int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len)
 {
-    if (!hp || !hp->entry_valid || hp->type != CACHE_DATA_TYPE_RAW)
+    if (!hp || !hp->entry_valid)
         return -1;
     if (data)
         (*data) = hp->data;
@@ -200,9 +197,7 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
         return -1;
     }
 
-    if (hp
-        && (hp->type == CACHE_DATA_TYPE_NONE
-            || hp->type == CACHE_DATA_TYPE_RAW)) {
+    if (hp) {
         if (hp->entry_valid) {
             if ((data && hp->data) || (!data && !hp->data))
                 free (data); /* no-op, 'data' is assumed identical to hp->data */
@@ -228,7 +223,6 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
                 }
             }
         }
-        hp->type = CACHE_DATA_TYPE_RAW;
         return 0;
     }
     return -1;
@@ -236,36 +230,53 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
 
 json_t *cache_entry_get_json (struct cache_entry *hp)
 {
-    if (!hp || !hp->entry_valid || hp->type != CACHE_DATA_TYPE_JSON)
+    if (!hp || !hp->entry_valid || !hp->data)
         return NULL;
-    /* should be non-NULL for json */
-    assert (hp->o);
+    if (!hp->o) {
+        if (!(hp->o = json_loads (hp->data, JSON_DECODE_ANY, NULL)))
+            return NULL;
+    }
     return hp->o;
 }
 
 int cache_entry_set_json (struct cache_entry *hp, json_t *o)
 {
-    if (hp
-        && o
-        && (hp->type == CACHE_DATA_TYPE_NONE
-            || hp->type == CACHE_DATA_TYPE_JSON)) {
+    if (hp && o) {
         if (hp->entry_valid) {
-            assert (hp->o);
-            json_decref (o); /* no-op, 'o' is assumed identical to hp->o */
+            if (!hp->data) {
+                /* attempt to change already valid cache entry,
+                 * cannot, must call cache_entry_clear_data() */
+                errno = EBADE;
+                return -1;
+            }
+            else
+                /* no-op, 'o' is assumed identical to current data */
+                json_decref (o);
+
+            assert (hp->data);
+            assert (hp->len > 0);
         } else {
+            assert (!hp->data);
             assert (!hp->o);
+
+            if (!(hp->data = kvs_util_json_dumps (o)))
+                return -1;
+
+            hp->len = strlen (hp->data) + 1;
             hp->o = o;
             hp->entry_valid = true;
+
             if (hp->waitlist_valid) {
                 if (wait_runqueue (hp->waitlist_valid) < 0) {
                     /* set back to orig */
+                    hp->data = NULL;
+                    hp->len = 0;
                     hp->o = NULL;
                     hp->entry_valid = false;
                     return -1;
                 }
             }
         }
-        hp->type = CACHE_DATA_TYPE_JSON;
         return 0;
     }
     return -1;
@@ -429,18 +440,9 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
         if (cache_entry_get_valid (hp)) {
             int obj_size = 0;
 
-            if (hp->type == CACHE_DATA_TYPE_RAW)
+            if (hp->entry_valid)
                 obj_size = hp->len;
-            else if (hp->type == CACHE_DATA_TYPE_JSON) {
-                /* must pass JSON_ENCODE_ANY, object could be anything */
-                char *s = json_dumps (hp->o, JSON_ENCODE_ANY);
-                if (!s) {
-                    saved_errno = ENOMEM;
-                    goto cleanup;
-                }
-                obj_size = strlen (s);
-                free (s);
-            }
+
             size += obj_size;
             tstat_push (ts, obj_size);
         } else

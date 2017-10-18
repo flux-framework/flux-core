@@ -70,6 +70,7 @@ test_cache_t_CPPFLAGS = $(test_cppflags)
 test_cache_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
 test_lookup_t_SOURCES = test/lookup.c

@@ -19,8 +19,10 @@ struct cache;
  * On destroy, free() will be called on 'data'.  If 'data' is NULL,
  * 'len' must be zero.  If 'data' is non-NULL, 'len' must be > 0.
  *
- * cache_entry_create_json() creates an entry storing the data
- * associated with a json object.  The create transfers ownership of
+ * cache_entry_create_json() is a convenience function that will take
+ * a json object and extract the raw data string from it and store
+ * that in the cache entry.  The json object 'o' is also cached
+ * internally for later retrieval.  The create transfers ownership of
  * 'o' to the cache entry.  On destroy, json_decref() will be called
  * on 'o'.  'o' cannot be NULL.
  *
@@ -32,8 +34,8 @@ struct cache_entry *cache_entry_create_raw (void *data, int len);
 struct cache_entry *cache_entry_create_json (json_t *o);
 void cache_entry_destroy (void *arg);
 
-/* Return true if cache entry contains valid raw or json data.
- * False would indicate that a load RPC is in progress.
+/* Return true if cache entry contains valid data.  False would
+ * indicate that a load RPC is in progress.
  */
 bool cache_entry_get_valid (struct cache_entry *hp);
 
@@ -67,10 +69,18 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * if it is non-NULL.  If 'data' is non-NULL, 'len' must be > 0.  If
  * 'data' is NULL, 'len' must be zero.
  *
- * json set accessor transfers ownership of 'o' to the cache entry.
- * 'o' must be non-NULL.
+ * json set accessor is a convenience function that will take a json
+ * object and extract the raw data string from it and store that in
+ * the cache entry.  The json object 'o' is also cached internally for
+ * later retrieval.  The create transfers ownership of 'o' to the
+ * cache entry. 'o' must be non-NULL.
  *
- * cache_entry_clear_data () will clear any data in the entry.
+ * json get accessor is a convenience function that will return the
+ * json object equivalent of the raw data stored internally.  If the
+ * internal raw data is not a valid json object (i.e. improperly
+ * formatted or zero length), an error will be result.
+ *
+ * cache_entry_clear_data () will clear all data in the entry.
  *
  * An invalid->valid transition runs the entry's wait queue, if any in
  * both set accessors.
