@@ -110,7 +110,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * An invalid->valid transition runs the entry's wait queue, if any in
  * both set accessors.
  *
- * Generally speaking, a cache entry can only bet set once.  If you
+ * Generally speaking, a cache entry can only be set once.  If you
  * wish to set it again, you must run cache_entry_clear_data() before
  * doing so.
  *
