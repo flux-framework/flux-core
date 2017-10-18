@@ -134,7 +134,7 @@ void cache_entry_json_tests (void)
     o1 = json_object ();
     json_object_set_new (o1, "foo", json_integer (42));
     o2 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
+    json_object_set_new (o2, "foo", json_integer (42));
 
     ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
         "cache_entry_create works");
