@@ -48,6 +48,12 @@
 #include "waitqueue.h"
 #include "cache.h"
 
+typedef enum {
+    CACHE_DATA_TYPE_NONE,
+    CACHE_DATA_TYPE_JSON,
+    CACHE_DATA_TYPE_RAW,
+} cache_data_type_t;
+
 struct cache_entry {
     waitqueue_t *waitlist_notdirty;
     waitqueue_t *waitlist_valid;
@@ -64,22 +70,15 @@ struct cache {
     zhash_t *zh;
 };
 
-struct cache_entry *cache_entry_create (cache_data_type_t t)
+struct cache_entry *cache_entry_create (void)
 {
     struct cache_entry *hp;
-
-    if (t != CACHE_DATA_TYPE_NONE
-        && t != CACHE_DATA_TYPE_JSON
-        && t != CACHE_DATA_TYPE_RAW) {
-        errno = EINVAL;
-        return NULL;
-    }
 
     if (!(hp = calloc (1, sizeof (*hp)))) {
         errno = ENOMEM;
         return NULL;
     }
-    hp->type = t;
+    hp->type = CACHE_DATA_TYPE_NONE;
     return hp;
 }
 
@@ -92,10 +91,11 @@ struct cache_entry *cache_entry_create_json (json_t *o)
         return NULL;
     }
 
-    if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON)))
+    if (!(hp = cache_entry_create ()))
         return NULL;
     hp->data = o;
     hp->data_valid = true;
+    hp->type = CACHE_DATA_TYPE_JSON;
     return hp;
 }
 
@@ -108,7 +108,7 @@ struct cache_entry *cache_entry_create_raw (void *data, int len)
         return NULL;
     }
 
-    if (!(hp = cache_entry_create (CACHE_DATA_TYPE_RAW)))
+    if (!(hp = cache_entry_create ()))
         return NULL;
 
     if (data) {
@@ -117,27 +117,8 @@ struct cache_entry *cache_entry_create_raw (void *data, int len)
     }
     /* true even if data == NULL */
     hp->data_valid = true;
+    hp->type = CACHE_DATA_TYPE_RAW;
     return hp;
-}
-
-int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t)
-{
-    if (hp) {
-        if (t)
-            (*t) = hp->type;
-        return 0;
-    }
-    return -1;
-}
-
-bool cache_entry_is_type_json (struct cache_entry *hp)
-{
-    return (hp && hp->type == CACHE_DATA_TYPE_JSON);
-}
-
-bool cache_entry_is_type_raw (struct cache_entry *hp)
-{
-    return (hp && hp->type == CACHE_DATA_TYPE_RAW);
 }
 
 bool cache_entry_get_valid (struct cache_entry *hp)

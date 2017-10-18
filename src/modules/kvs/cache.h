@@ -6,56 +6,31 @@
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
 
-typedef enum {
-    CACHE_DATA_TYPE_NONE,
-    CACHE_DATA_TYPE_JSON,
-    CACHE_DATA_TYPE_RAW,
-} cache_data_type_t;
-
 struct cache_entry;
 struct cache;
 
 
 /* Create/destroy cache entry.
  *
- * cache_entry_create() creates an entry, setting the cache entry type
- * to specified type.  CACHE_DATA_TYPE_NONE indicates user is not yet
- * sure of the type of data to be stored, and it will be determined
- * later when cache_entry_set_X() function is called.
- * cache_entry_get_valid() will return false after
- * cache_entry_create() is initially called, regardless of the type
- * passed in.
+ * cache_entry_create() creates an empty cache entry.
  *
- * cache_entry_create_json() creates an entry, setting the cache entry
- * type to CACHE_DATA_TYPE_JSON.  The create transfers ownership of
+ * cache_entry_create_json() creates an entry storing the data
+ * associated with a json object.  The create transfers ownership of
  * 'o' to the cache entry.  On destroy, json_decref() will be called
  * on 'o'.  'o' cannot be NULL.
  *
- * cache_entry_create_raw() creates an entry, setting the cache entry
- * type to CACHE_DATA_TYPE_RAW.  The create transfers ownership of
- * 'data' to the cache entry.  On destroy, free() will be called on
- * 'data'.  If 'data' is NULL, 'len' must be zero.  If 'data' is
- * non-NULL, 'len' must be > 0.
+ * cache_entry_create_raw() creates an entry storing the data passed
+ * in.  The create transfers ownership of 'data' to the cache entry.
+ * On destroy, free() will be called on 'data'.  If 'data' is NULL,
+ * 'len' must be zero.  If 'data' is non-NULL, 'len' must be > 0.
  *
  * cache_entry_get_valid() will return true on entries when
  * cache_entry_create_json() and cache_entry_get_raw() return success.
  */
-struct cache_entry *cache_entry_create (cache_data_type_t t);
+struct cache_entry *cache_entry_create (void);
 struct cache_entry *cache_entry_create_json (json_t *o);
 struct cache_entry *cache_entry_create_raw (void *data, int len);
 void cache_entry_destroy (void *arg);
-
-/* Return what data type is stored in the cache entry or will be
- * stored in the cache entry.  CACHE_DATA_TYPE_NONE means it has not
- * yet been determined.  Returns 0 on success, -1 on error.
- *
- * For convenience, cache_entry_is_type_json() checks specifically if
- * an entry is of type json.  cache_entry_is_type_raw() checks
- * specifically if an entry is of type raw.
- */
-int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t);
-bool cache_entry_is_type_json (struct cache_entry *hp);
-bool cache_entry_is_type_raw (struct cache_entry *hp);
 
 /* Return true if cache entry contains valid json or raw data.
  * False would indicate that a load RPC is in progress.
@@ -88,22 +63,12 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
 
 /* Accessors for cache entry data.
  *
- * json get accessor must have type of CACHE_DATA_TYPE_JSON to
- * retrieve json object.
+ * json set accessor transfers ownership of 'o' to the cache entry.
+ * 'o' must be non-NULL.
  *
- * raw get accessor must have type of CACHE_DATA_TYPE_RAW to
- * retrieve raw data.
- *
- * json set accessor must have type of CACHE_DATA_TYPE_NONE or
- * CACHE_DATA_TYPE_JSON to set json object.  After setting, the type
- * is converted to CACHE_DATA_TYPE_JSON.  'o' must be non-NULL.  Set
- * transfers ownership of 'o' to the cache entry.
- *
- * raw set accessor must have type of CACHE_DATA_TYPE_NONE or
- * CACHE_DATA_TYPE_RAW to set raw data.  After setting, the type is
- * converted to CACHE_DATA_TYPE_RAW.  If 'data' is NULL, 'len' must be
- * zero.  If 'data' is non-NULL, 'len' must be > 0.  If non-NULL, set
- * transfers ownership of 'data' to the cache entry.
+ * raw set accessor transfers ownership of 'data' to the cache entry
+ * if it is non-NULL.  If 'data' is non-NULL, 'len' must be > 0.  If
+ * 'data' is NULL, 'len' must be zero.
  *
  * cache_entry_clear_data () will clear any data in the entry.
  *
