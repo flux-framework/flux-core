@@ -92,21 +92,18 @@ int main (int argc, char *argv[])
 void dirgetas (flux_t *h, const char *dirkey, const char *key, const char *type)
 {
     flux_future_t *f;
-    const char *json_str;
     char *fullkey;
-    kvsdir_t *dir;
+    const flux_kvsdir_t *dir;
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, dirkey))
-            || flux_kvs_lookup_get (f, &json_str) < 0
-            || !(dir = kvsdir_create (h, NULL, dirkey, json_str)))
+            || flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("flux_kvs_lookup %s", dirkey);
 
-    fullkey = kvsdir_key_at (dir, key);
+    fullkey = flux_kvsdir_key_at (dir, key);
 
     getas (h, fullkey, type);
 
     free (fullkey);
-    kvsdir_destroy (dir);
     flux_future_destroy (f);
 }
 

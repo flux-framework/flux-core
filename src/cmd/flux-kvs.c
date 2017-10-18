@@ -52,7 +52,7 @@ int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
 int cmd_ls (optparse_t *p, int argc, char **argv);
 
-static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt);
+static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt);
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
@@ -404,24 +404,21 @@ static int unlink_safety_check (flux_t *h, const char *key, bool Ropt,
                                 bool fopt, bool *unlinkable)
 {
     flux_future_t *f;
-    kvsdir_t *dir = NULL;
-    const char *json_str;
+    const flux_kvsdir_t *dir = NULL;
     int rc = -1;
 
     *unlinkable = false;
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
         goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0) {
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
         if (errno == ENOENT && fopt)
             goto out;
         if (errno != ENOTDIR)
             goto done;
     }
     else if (!Ropt) {
-        if (!(dir = kvsdir_create (h, NULL, key, json_str)))
-            goto done;
-        if (kvsdir_get_size (dir) > 0) {
+        if (flux_kvsdir_get_size (dir) > 0) {
             errno = ENOTEMPTY;
             goto done;
         }
@@ -430,8 +427,6 @@ static int unlink_safety_check (flux_t *h, const char *key, bool Ropt,
 out:
     rc = 0;
 done:
-    if (dir)
-        kvsdir_destroy (dir);
     flux_future_destroy (f);
     return rc;
 }
@@ -553,8 +548,8 @@ int cmd_version (optparse_t *p, int argc, char **argv)
 
     h = (flux_t *)optparse_get_data (p, "flux_handle");
 
-    if (kvs_get_version (h, &vers) < 0)
-        log_err_exit ("kvs_get_version");
+    if (flux_kvs_get_version (h, &vers) < 0)
+        log_err_exit ("flux_kvs_get_version");
     printf ("%d\n", vers);
     return (0);
 }
@@ -576,8 +571,8 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     if (optindex != (argc - 1))
         log_msg_exit ("wait: specify a version");
     vers = strtoul (argv[optindex], NULL, 10);
-    if (kvs_wait_version (h, vers) < 0)
-        log_err_exit ("kvs_get_version");
+    if (flux_kvs_wait_version (h, vers) < 0)
+        log_err_exit ("flux_kvs_get_version");
     return (0);
 }
 
@@ -592,7 +587,7 @@ static void watch_dump_key (const char *json_str,
     *prev_output_iskey = true;
 }
 
-static void watch_dump_kvsdir (kvsdir_t *dir, bool Ropt, bool dopt,
+static void watch_dump_kvsdir (flux_kvsdir_t *dir, bool Ropt, bool dopt,
                                const char *arg) {
     if (!dir) {
         output_key_json_str (NULL, NULL, arg);
@@ -608,7 +603,7 @@ static void watch_dump_kvsdir (kvsdir_t *dir, bool Ropt, bool dopt,
 int cmd_watch (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
-    kvsdir_t *dir = NULL;
+    flux_kvsdir_t *dir = NULL;
     char *json_str = NULL;
     char *key;
     int count;
@@ -638,13 +633,13 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     key = argv[optindex];
 
-    rc = kvs_get (h, key, &json_str);
+    rc = flux_kvs_get (h, key, &json_str);
     if (rc < 0 && (errno != ENOENT && errno != EISDIR))
         log_err_exit ("%s", key);
 
     /* key is a directory, setup for dir logic appropriately */
     if (rc < 0 && errno == EISDIR) {
-        rc = kvs_get_dir (h, &dir, "%s", key);
+        rc = flux_kvs_get_dir (h, &dir, "%s", key);
         if (rc < 0 && errno != ENOENT)
             log_err_exit ("%s", key);
         isdir = true;
@@ -661,16 +656,16 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
 
     while (count && (rc == 0 || (rc < 0 && errno == ENOENT))) {
         if (isdir) {
-            rc = kvs_watch_once_dir (h, &dir, "%s", key);
+            rc = flux_kvs_watch_once_dir (h, &dir, "%s", key);
             if (rc < 0 && (errno != ENOENT && errno != ENOTDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 if (dir)
-                    kvsdir_destroy (dir);
+                    flux_kvsdir_destroy (dir);
                 dir = NULL;
             }
             else if (rc < 0 && errno == ENOENT) {
                 if (dir)
-                    kvsdir_destroy (dir);
+                    flux_kvsdir_destroy (dir);
                 dir = NULL;
                 watch_dump_kvsdir (dir, Ropt, dopt, key);
             }
@@ -682,10 +677,10 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                  * reset logic to the 'key' part of this loop */
                 isdir = false;
                 if (dir)
-                    kvsdir_destroy (dir);
+                    flux_kvsdir_destroy (dir);
                 dir = NULL;
 
-                rc = kvs_get (h, key, &json_str);
+                rc = flux_kvs_get (h, key, &json_str);
                 if (rc < 0 && errno != ENOENT)
                     printf ("%s: %s\n", key, flux_strerror (errno));
                 else
@@ -693,7 +688,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
             }
         }
         else {
-            rc = kvs_watch_once (h, key, &json_str);
+            rc = flux_kvs_watch_once (h, key, &json_str);
             if (rc < 0 && (errno != ENOENT && errno != EISDIR)) {
                 printf ("%s: %s\n", key, flux_strerror (errno));
                 free (json_str);
@@ -721,7 +716,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
                     prev_output_iskey = false;
                 }
 
-                rc = kvs_get_dir (h, &dir, "%s", key);
+                rc = flux_kvs_get_dir (h, &dir, "%s", key);
                 if (rc < 0 && errno != ENOENT)
                     printf ("%s: %s\n", key, flux_strerror (errno));
                 else /* rc == 0 || (rc < 0 && errno == ENOENT) */
@@ -731,7 +726,7 @@ int cmd_watch (optparse_t *p, int argc, char **argv)
         count--;
     }
     if (dir)
-        kvsdir_destroy (dir);
+        flux_kvsdir_destroy (dir);
     free (json_str);
     return (0);
 }
@@ -749,8 +744,8 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
         flux_msg_destroy (msg);
     }
     else {
-        if (kvs_dropcache (h) < 0)
-            log_err_exit ("kvs_dropcache");
+        if (flux_kvs_dropcache (h) < 0)
+            log_err_exit ("flux_kvs_dropcache");
     }
     return (0);
 }
@@ -771,19 +766,19 @@ static void dump_kvs_val (const char *key, const char *json_str)
     json_decref (o);
 }
 
-static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt)
+static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt)
 {
-    const char *rootref = kvsdir_rootref (dir);
-    flux_t *h = kvsdir_handle (dir);
+    const char *rootref = flux_kvsdir_rootref (dir);
+    flux_t *h = flux_kvsdir_handle (dir);
     flux_future_t *f;
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     char *key;
 
-    itr = kvsitr_create (dir);
-    while ((name = kvsitr_next (itr))) {
-        key = kvsdir_key_at (dir, name);
-        if (kvsdir_issymlink (dir, name)) {
+    itr = flux_kvsitr_create (dir);
+    while ((name = flux_kvsitr_next (itr))) {
+        key = flux_kvsdir_key_at (dir, name);
+        if (flux_kvsdir_issymlink (dir, name)) {
             const char *link;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
                     || flux_kvs_lookup_get (f, &link) < 0)
@@ -791,29 +786,31 @@ static void dump_kvs_dir (kvsdir_t *dir, bool Ropt, bool dopt)
             printf ("%s -> %s\n", key, link);
             flux_future_destroy (f);
 
-        } else if (kvsdir_isdir (dir, name)) {
+        } else if (flux_kvsdir_isdir (dir, name)) {
             if (Ropt) {
-                kvsdir_t *ndir;
-                if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
+                const flux_kvsdir_t *ndir;
+                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref))
+                        || flux_kvs_lookup_get_dir (f, &ndir) < 0)
                     log_err_exit ("%s", key);
                 dump_kvs_dir (ndir, Ropt, dopt);
-                kvsdir_destroy (ndir);
+                flux_future_destroy (f);
             } else
                 printf ("%s.\n", key);
         } else {
             if (!dopt) {
-                char *json_str;
-                if (kvsdir_get (dir, name, &json_str) < 0)
+                const char *json_str;
+                if (!(f = flux_kvs_lookupat (h, 0, key, rootref))
+                        || flux_kvs_lookup_get (f, &json_str) < 0)
                     log_err_exit ("%s", key);
                 dump_kvs_val (key, json_str);
-                free (json_str);
+                flux_future_destroy (f);
             }
             else
                 printf ("%s\n", key);
         }
         free (key);
     }
-    kvsitr_destroy (itr);
+    flux_kvsitr_destroy (itr);
 }
 
 int cmd_dir (optparse_t *p, int argc, char **argv)
@@ -821,9 +818,9 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     bool Ropt;
     bool dopt;
-    const char *key, *json_str;
+    const char *key;
     flux_future_t *f;
-    kvsdir_t *dir;
+    const flux_kvsdir_t *dir;
     int optindex;
 
     optindex = optparse_option_index (p);
@@ -837,30 +834,27 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
         log_msg_exit ("dir: specify zero or one directory");
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
-                || flux_kvs_lookup_get (f, &json_str) < 0)
+                || flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", key);
-    if (!(dir = kvsdir_create (h, NULL, key, json_str)))
-        log_err_exit ("kvsdir_create");
     dump_kvs_dir (dir, Ropt, dopt);
-    kvsdir_destroy (dir);
     flux_future_destroy (f);
     return (0);
 }
 
 /* Find longest name in a directory.
  */
-static int get_dir_maxname (kvsdir_t *dir)
+static int get_dir_maxname (const flux_kvsdir_t *dir)
 {
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     int max = 0;
 
-    if (!(itr = kvsitr_create (dir)))
-        log_err_exit ("kvsitr_create");
-    while ((name = kvsitr_next (itr)))
+    if (!(itr = flux_kvsitr_create (dir)))
+        log_err_exit ("flux_kvsitr_create");
+    while ((name = flux_kvsitr_next (itr)))
         if (max < strlen (name))
             max = strlen (name);
-    kvsitr_destroy (itr);
+    flux_kvsitr_destroy (itr);
     return max;
 }
 
@@ -917,9 +911,10 @@ static bool need_newline (int col, int col_width, int win_width)
 /* List the content of 'dir', arranging output in columns that fit 'win_width',
  * and using a custom column width selected based on the longest entry name.
  */
-static void list_kvs_dir_single (kvsdir_t *dir, int win_width, optparse_t *p)
+static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
+                                 optparse_t *p)
 {
-    kvsitr_t *itr;
+    flux_kvsitr_t *itr;
     const char *name;
     int col_width = get_dir_maxname (dir) + 4;
     int col = 0;
@@ -928,9 +923,9 @@ static void list_kvs_dir_single (kvsdir_t *dir, int win_width, optparse_t *p)
 
     if (!(namebuf = malloc (col_width + 2)))
         log_err_exit ("malloc");
-    if (!(itr = kvsitr_create (dir)))
-        log_err_exit ("kvsitr_create");
-    while ((name = kvsitr_next (itr))) {
+    if (!(itr = flux_kvsitr_create (dir)))
+        log_err_exit ("flux_kvsitr_create");
+    while ((name = flux_kvsitr_next (itr))) {
         if (need_newline (col, col_width, win_width)) {
             printf ("\n");
             col = 0;
@@ -939,9 +934,9 @@ static void list_kvs_dir_single (kvsdir_t *dir, int win_width, optparse_t *p)
             printf ("%*s", col_width - last_len, "");
         strcpy (namebuf, name);
         if (optparse_hasopt (p, "classify")) {
-            if (kvsdir_isdir (dir, name))
+            if (flux_kvsdir_isdir (dir, name))
                 strcat (namebuf, ".");
-            else if (kvsdir_issymlink (dir, name))
+            else if (flux_kvsdir_issymlink (dir, name))
                 strcat (namebuf, "@");
         }
         printf ("%s", namebuf);
@@ -950,7 +945,7 @@ static void list_kvs_dir_single (kvsdir_t *dir, int win_width, optparse_t *p)
     }
     if (col > 0)
         printf ("\n");
-    kvsitr_destroy (itr);
+    flux_kvsitr_destroy (itr);
     free (namebuf);
 }
 
@@ -961,40 +956,36 @@ static void list_kvs_dir (flux_t *h, const char *key, optparse_t *p,
                           int win_width, bool print_label, bool print_vspace)
 {
     flux_future_t *f;
-    kvsdir_t *dir = NULL;
-    kvsitr_t *itr;
-    const char *name, *json_str;
+    const flux_kvsdir_t *dir;
+    flux_kvsitr_t *itr;
+    const char *name;
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
-                || flux_kvs_lookup_get (f, &json_str) < 0) {
+                || flux_kvs_lookup_get_dir (f, &dir) < 0) {
         log_err_exit ("%s", key);
         goto done;
     }
-    if (!(dir = kvsdir_create (h, NULL, key, json_str)))
-        log_err_exit ("kvsdir_create");
-
     if (print_label)
         printf ("%s%s:\n", print_vspace ? "\n" : "", key);
     list_kvs_dir_single (dir, win_width, p);
 
     if (optparse_hasopt (p, "recursive")) {
-        if (!(itr = kvsitr_create (dir)))
-            log_err_exit ("kvsitr_create");
-        while ((name = kvsitr_next (itr))) {
-            if (kvsdir_isdir (dir, name)) {
+        if (!(itr = flux_kvsitr_create (dir)))
+            log_err_exit ("flux_kvsitr_create");
+        while ((name = flux_kvsitr_next (itr))) {
+            if (flux_kvsdir_isdir (dir, name)) {
                 char *nkey;
-                if (!(nkey = kvsdir_key_at (dir, name))) {
-                    log_err ("%s: kvsdir_key_at failed", name);
+                if (!(nkey = flux_kvsdir_key_at (dir, name))) {
+                    log_err ("%s: flux_kvsdir_key_at failed", name);
                     continue;
                 }
                 list_kvs_dir (h, nkey, p, win_width, print_label, true);
                 free (nkey);
             }
         }
-        kvsitr_destroy (itr);
+        flux_kvsitr_destroy (itr);
     }
 done:
-    kvsdir_destroy (dir);
     flux_future_destroy (f);
 }
 

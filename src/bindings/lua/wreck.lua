@@ -37,7 +37,6 @@ local lwj_options = {
     ['stop-children-in-exec'] = "Start tasks in STOPPED state for debugger",
     ['no-pmi-server'] =         "Do not start simple-pmi server",
     ['trace-pmi-server'] =      "Log simple-pmi server protocol exchange",
-    ['no-aggregate-task-exit'] ="Do not use aggregator for task exit messages",
 }
 
 local default_opts = {

@@ -5,7 +5,7 @@ flux_kvs_txn_create(3)
 
 NAME
 ----
-flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink, flux_kvs_txn_put_raw - operate on a KVS transaction object
+flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_vpack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink, flux_kvs_txn_put_raw - operate on a KVS transaction object
 
 
 SYNOPSIS
@@ -21,6 +21,9 @@ SYNOPSIS
 
  int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
                         const char *key, const char *fmt, ...);
+
+ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
+                         const char *key, const char *fmt, va_list ap);
 
  int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
                          const char *key);
@@ -59,7 +62,8 @@ equivalent to calling `flux_kvs_txn_unlink()` on _key_.
 
 `flux_kvs_txn_pack()` is identical to `flux_kvs_txn_put()`, except
 `json_pack()` style arguments (see below) are used to construct the
-value.
+value.  `flux_kvs_txn_vpack()` is a variant that accepts a _va_list_
+argument.
 
 `flux_kvs_txn_mkdir()` sets _key_ to an empty directory.
 

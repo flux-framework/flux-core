@@ -5,7 +5,7 @@ flux_kvs_lookup(3)
 
 NAME
 ----
-flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack, flux_kvs_lookup_get_raw - look up KVS key
+flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack, flux_kvs_lookup_get_raw, flux_kvs_lookup_get_dir - look up KVS key
 
 
 SYNOPSIS
@@ -22,6 +22,8 @@ SYNOPSIS
  int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
 
  int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len);
+
+ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dir);
 
 
 DESCRIPTION
@@ -52,6 +54,9 @@ the returned JSON is parsed according to variable arguments in Jansson
 
 `flux_kvs_lookup_get_raw()` is identical to `flux_kvs_lookup_get()` except
 the raw value is returned without decoding.
+
+`flux_kvs_lookup_get_dir()` is identical to `flux_kvs_lookup_get()` except
+a directory object is returned.
 
 These functions may be used asynchronously.
 See `flux_future_then(3)` for details.

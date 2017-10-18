@@ -173,7 +173,6 @@ check_PROGRAMS = \
 	kvs/dtree \
 	kvs/getas \
 	kvs/blobref \
-	kvs/asyncfence \
 	kvs/hashtest \
 	kvs/watch \
 	kvs/watch_disconnect \
@@ -289,11 +288,6 @@ kvs_getas_LDADD = \
 kvs_blobref_SOURCES = kvs/blobref.c
 kvs_blobref_CPPFLAGS = $(test_cppflags)
 kvs_blobref_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
-kvs_asyncfence_SOURCES = kvs/asyncfence.c
-kvs_asyncfence_CPPFLAGS = $(test_cppflags)
-kvs_asyncfence_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_watch_SOURCES = kvs/watch.c

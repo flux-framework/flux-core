@@ -69,7 +69,7 @@ struct task_info {
     pid_t    pid;
 
     flux_t   *f;              /* local flux handle for task */
-    kvsdir_t *kvs;            /* kvs handle to this task's dir in kvs */
+    flux_kvsdir_t *kvs;       /* kvs handle to this task's dir in kvs */
     int      status;
     int      exited;          /* non-zero if this task exited */
 
@@ -86,8 +86,8 @@ struct prog_ctx {
     flux_t   *flux;
 
     char *kvspath;          /* basedir path in kvs for this lwj.id */
-    kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
-    kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
+    flux_kvsdir_t *kvs;     /* Handle to this job's dir in kvs */
+    flux_kvsdir_t *resources; /* Handle to this node's resource dir in kvs */
     int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
@@ -205,11 +205,11 @@ static int archive_lwj (struct prog_ctx *ctx)
     }
     /*  Link lwj-complete.<hb>.id -> src
      */
-    if (kvs_symlink (ctx->flux, link, to) < 0)
-        flux_log_error (ctx->flux, "kvs_symlink (%s -> %s)", link, to);
+    if (flux_kvs_symlink (ctx->flux, link, to) < 0)
+        flux_log_error (ctx->flux, "flux_kvs_symlink (%s -> %s)", link, to);
 
-    if ((rc = kvs_commit (ctx->flux, 0)) < 0)
-        flux_log_error (ctx->flux, "kvs_commit");
+    if ((rc = flux_kvs_commit_anon (ctx->flux, 0)) < 0)
+        flux_log_error (ctx->flux, "flux_kvs_commit_anon");
 out:
     free (link);
     return (rc);
@@ -236,8 +236,8 @@ static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va
 
     if (fatal) {
         // best effort
-        if (kvsdir_put_int (ctx->kvs, "fatalerror", fatal) == 0)
-            (void)kvs_commit (ctx->flux, 0);
+        if (flux_kvsdir_pack (ctx->kvs, "fatalerror", "i", fatal) == 0)
+            (void)flux_kvs_commit_anon (ctx->flux, 0);
     }
 }
 
@@ -560,7 +560,7 @@ void task_io_flush (struct task_info *t)
 void task_info_destroy (struct task_info *t)
 {
     if (t->kvs)
-        kvsdir_destroy (t->kvs);
+        flux_kvsdir_destroy (t->kvs);
     if (t->f)
         flux_close (t->f);
     wreck_pmi_close (t);
@@ -637,9 +637,9 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         free (ctx->topic);
 
     if (ctx->kvs)
-        kvsdir_destroy (ctx->kvs);
+        flux_kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
-        kvsdir_destroy (ctx->resources);
+        flux_kvsdir_destroy (ctx->resources);
 
     if (ctx->fdw)
         flux_watcher_destroy (ctx->fdw);
@@ -825,8 +825,8 @@ static int *cores_per_node_create (struct prog_ctx *ctx, int *nodeids, int n)
 static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
 {
     int n = 0;
-    kvsdir_t *rank = NULL;
-    kvsitr_t *i;
+    flux_kvsdir_t *rank = NULL;
+    flux_kvsitr_t *i;
     const char *key;
     int *nodeids;
     uint32_t size;
@@ -835,18 +835,18 @@ static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
         return (NULL);
     nodeids = xzmalloc (size * sizeof (int));
 
-    if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0)
+    if (flux_kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0)
         wlog_fatal (ctx, 1, "get_dir (%s.rank) failed: %s",
-                    kvsdir_key (ctx->kvs),
+                    flux_kvsdir_key (ctx->kvs),
                     flux_strerror (errno));
 
-    i = kvsitr_create (rank);
-    while ((key = kvsitr_next (i))) {
+    i = flux_kvsitr_create (rank);
+    while ((key = flux_kvsitr_next (i))) {
         nodeids[n] = atoi (key);
         n++;
     }
-    kvsitr_destroy (i);
-    kvsdir_destroy (rank);
+    flux_kvsitr_destroy (i);
+    flux_kvsdir_destroy (rank);
     ctx->nnodes = n;
     qsort (nodeids, n, sizeof (int), &cmp_int);
 
@@ -881,19 +881,19 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 
 int prog_ctx_options_init (struct prog_ctx *ctx)
 {
-    kvsdir_t *opts;
-    kvsitr_t *i;
+    flux_kvsdir_t *opts;
+    flux_kvsitr_t *i;
     const char *opt;
 
-    if (kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)
+    if (flux_kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)
         return (0); /* Assume ENOENT */
-    i = kvsitr_create (opts);
-    while ((opt = kvsitr_next (i))) {
+    i = flux_kvsitr_create (opts);
+    while ((opt = flux_kvsitr_next (i))) {
         char *json_str;
         json_object *v;
         char s [64];
 
-        if (kvsdir_get (opts, opt, &json_str) < 0) {
+        if (flux_kvsdir_get (opts, opt, &json_str) < 0) {
             wlog_err (ctx, "skipping option '%s': %s", opt, flux_strerror (errno));
             continue;
         }
@@ -927,8 +927,8 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
         free (json_str);
         json_object_put (v);
     }
-    kvsitr_destroy (i);
-    kvsdir_destroy (opts);
+    flux_kvsitr_destroy (i);
+    flux_kvsdir_destroy (opts);
     return (0);
 }
 
@@ -960,9 +960,10 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     prog_ctx_kz_err_open (ctx);
 
     if (prog_ctx_options_init (ctx) < 0)
-        wlog_fatal (ctx, 1, "failed to read %s.options", kvsdir_key (ctx->kvs));
+        wlog_fatal (ctx, 1, "failed to read %s.options",
+                    flux_kvsdir_key (ctx->kvs));
 
-    if (kvsdir_get (ctx->kvs, "cmdline", &json_str) < 0)
+    if (flux_kvsdir_get (ctx->kvs, "cmdline", &json_str) < 0)
         wlog_fatal (ctx, 1, "kvs_get: cmdline");
 
     if (!(v = json_tokener_parse (json_str)))
@@ -971,7 +972,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         wlog_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
-    key = kvsdir_key_at (ctx->kvs, "ntasks");
+    key = flux_kvsdir_key_at (ctx->kvs, "ntasks");
     if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
              || flux_kvs_lookup_get_unpack (f, "i", &ctx->total_ntasks) < 0)
         wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
@@ -983,7 +984,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
      */
     if (ctx->resources) {
         f = NULL;
-        key = kvsdir_key_at (ctx->resources, "cores");
+        key = flux_kvsdir_key_at (ctx->resources, "cores");
         if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
                  || flux_kvs_lookup_get_unpack (f, "i", &ctx->nprocs) < 0)
             wlog_fatal (ctx, 1, "Failed to get resources for this node");
@@ -992,7 +993,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     }
     else {
         f = NULL;
-        key = kvsdir_key_at (ctx->kvs, "tasks-per-node");
+        key = flux_kvsdir_key_at (ctx->kvs, "tasks-per-node");
         if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
                  || flux_kvs_lookup_get_unpack (f, "i", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
@@ -1047,6 +1048,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 {
     const char *lua_pattern;
     char name [128];
+    flux_future_t *f;
+    const flux_kvsdir_t *dir;
     /*
      * Connect to CMB over api socket
      */
@@ -1056,10 +1059,14 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     snprintf (name, sizeof (name) - 1, "lwj.%"PRId64, ctx->id);
     flux_log_set_appname (ctx->flux, name);
 
-    if (kvs_get_dir (ctx->flux, &ctx->kvs, "%s", ctx->kvspath) < 0) {
-        wlog_fatal (ctx, 1, "kvs_get_dir (%s): %s",
+    if (!(f = flux_kvs_lookup (ctx->flux, FLUX_KVS_READDIR, ctx->kvspath))
+            || flux_kvs_lookup_get_dir (f, &dir) < 0
+            || !(ctx->kvs = flux_kvsdir_copy (dir))) {
+        wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s): %s",
                    ctx->kvspath, flux_strerror (errno));
     }
+    flux_future_destroy (f);
+
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
     /*
@@ -1072,14 +1079,14 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
      *   to do on this node and we'll just exit.
      *
      */
-    if (kvsdir_isdir (ctx->kvs, "rank")) {
-        int rc = kvsdir_get_dir (ctx->kvs,
+    if (flux_kvsdir_isdir (ctx->kvs, "rank")) {
+        int rc = flux_kvsdir_get_dir (ctx->kvs,
                                  &ctx->resources,
                                  "rank.%d", ctx->noderank);
         if (rc < 0) {
             if (errno == ENOENT)
                 return (-1);
-            wlog_fatal (ctx, 1, "kvs_get_dir (%s.rank.%d): %s",
+            wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s.rank.%d): %s",
                         ctx->kvspath, ctx->noderank, flux_strerror (errno));
         }
     }
@@ -1179,26 +1186,23 @@ out:
 int update_job_state (struct prog_ctx *ctx, const char *state)
 {
     char buf [64];
+    char *timestr = realtime_string (buf, sizeof (buf));
     char *key;
-    json_object *to =
-        json_object_new_string (realtime_string (buf, sizeof (buf)));
 
     assert (ctx->nodeid == 0);
 
     wlog_debug (ctx, "updating job state to %s", state);
 
-    if (kvsdir_put_string (ctx->kvs, "state", state) < 0)
+    if (flux_kvsdir_pack (ctx->kvs, "state", "s", state) < 0)
         return (-1);
 
     if (asprintf (&key, "%s-time", state) < 0) {
         wlog_err (ctx, "update_job_state: asprintf: %s", strerror (errno));
-        json_object_put (to);
         return (-1);
     }
-    if (kvsdir_put (ctx->kvs, key, json_object_to_json_string (to)) < 0)
+    if (flux_kvsdir_pack (ctx->kvs, key, "s", timestr) < 0)
         return (-1);
     free (key);
-    json_object_put (to);
 
     return (0);
 }
@@ -1215,10 +1219,10 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         wlog_fatal (ctx, 1, "update_job_state");
 
     /* Wait for all wrexecds to finish and commit */
-    if (kvs_fence (ctx->flux, name, ctx->nnodes, 0) < 0)
-        wlog_fatal (ctx, 1, "kvs_fence");
+    if (flux_kvs_fence_anon (ctx->flux, name, ctx->nnodes, 0) < 0)
+        wlog_fatal (ctx, 1, "flux_kvs_fence_anon");
 
-    /* Also emit event to avoid racy kvs_watch for clients */
+    /* Also emit event to avoid racy flux_kvs_watch for clients */
     if (ctx->nodeid == 0)
         send_job_state_event (ctx, state);
 
@@ -1255,10 +1259,10 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
                     flux_strerror (errno));
     }
 
-    rc = kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
+    rc = flux_kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
     free (key);
     json_object_put (o);
-    //kvs_commit (ctx->flux, 0);
+    //flux_kvs_commit_anon (ctx->flux, 0);
 
     if (rc < 0)
         return wlog_err (ctx, "kvs_put failure");
@@ -1306,7 +1310,7 @@ exitstatus_watcher (const char *key, const char *str, void *arg, int err)
      *  exit_status dir so reactor loop can exit
      */
     if (Jget_int (o, "count", &count) && count == ctx->total_ntasks) {
-        kvs_unwatch (h, key);
+        flux_kvs_unwatch (h, key);
         prog_ctx_remove_completion_ref (ctx, "exit_status");
     }
 
@@ -1353,15 +1357,15 @@ static int wait_for_task_exit_aggregate (struct prog_ctx *ctx)
         return (-1);
     }
 
-    /*  Add completion reference *before*  kvs_watch() since
+    /*  Add completion reference *before*  flux_kvs_watch() since
      *   callback may be called synchronously and thus the cb
      *   may attempt to unreference this completion ref before
      *   we return
      */
     prog_ctx_add_completion_ref (ctx, "exit_status");
 
-    if ((rc = kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
-        flux_log_error (h, "kvs_watch_dir");
+    if ((rc = flux_kvs_watch (h, key, exitstatus_watcher, ctx)) < 0)
+        flux_log_error (h, "flux_kvs_watch_dir");
     free (key);
     return (rc);
 }
@@ -1394,44 +1398,6 @@ static int aggregator_push_task_exit (struct task_info *t)
     if (t->ctx->noderank == 0 && t->id == 0)
         rc = wait_for_task_exit_aggregate (t->ctx);
     return (rc);
-}
-
-int send_exit_message (struct task_info *t)
-{
-    char *key;
-    struct prog_ctx *ctx = t->ctx;
-
-    if (!prog_ctx_getopt (ctx, "no-aggregate-task-exit"))
-        return aggregator_push_task_exit (t);
-
-    if (asprintf (&key, "%s.%d.exit_status", ctx->kvspath, t->globalid) < 0)
-        return (-1);
-    if (kvs_put_int (ctx->flux, key, t->status) < 0)
-        return (-1);
-    free (key);
-
-    if (WIFSIGNALED (t->status)) {
-        if (asprintf (&key, "%s.%d.exit_sig", ctx->kvspath, t->globalid) < 0)
-            return (-1);
-        if (kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
-            return (-1);
-        free (key);
-    }
-    else {
-        if (asprintf (&key, "%s.%d.exit_code", ctx->kvspath, t->globalid) < 0)
-            return (-1);
-        if (kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
-            return (-1);
-        free (key);
-    }
-
-    if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
-        wlog_debug (ctx, "kvs_commit on task exit");
-        if (kvs_commit (ctx->flux, 0) < 0)
-            return (-1);
-    }
-
-    return (0);
 }
 
 void prog_ctx_unsetenv (struct prog_ctx *ctx, const char *name)
@@ -1651,8 +1617,9 @@ static int l_push_environ (lua_State *L, int index)
     return (1);
 }
 
-static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
+static flux_kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 {
+    flux_t *h = prog_ctx_flux_handle (ctx);
     struct task_info *t;
 
     if (!ctx->in_task)
@@ -1660,11 +1627,19 @@ static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 
     t = prog_ctx_current_task (ctx);
     if (!t->kvs) {
-        if ( (kvs_get_dir (prog_ctx_flux_handle (ctx), &t->kvs,
-                           "%s.%d", ctx->kvspath, t->globalid) < 0)
-          && (errno != ENOENT))
-            wlog_err (ctx, "kvs_get_dir (%s.%d): %s",
-                      ctx->kvspath, t->globalid, flux_strerror (errno));
+        char *key = NULL;
+        flux_future_t *f = NULL;
+        const flux_kvsdir_t *dir;
+        if (asprintf (&key, "%s.%d", ctx->kvspath, t->globalid) < 0
+                    || !(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
+                    || flux_kvs_lookup_get_dir (f, &dir) < 0
+                    || !(t->kvs = flux_kvsdir_copy (dir))) {
+            if (errno != ENOENT)
+                wlog_err (ctx, "flux_kvs_lookup (%s): %s",
+                          key ? key : "?", flux_strerror (errno));
+        }
+        flux_future_destroy (f);
+        free (key);
     }
     return (t->kvs);
 }
@@ -1753,8 +1728,8 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {
-        kvsdir_t *d;
-	if (t == NULL)
+        flux_kvsdir_t *d;
+        if (t == NULL)
             return lua_pusherror (L, "Not in task context");
         if (!(d = prog_ctx_kvsdir (ctx)))
             return lua_pusherror (L, (char *)flux_strerror (errno));
@@ -1891,7 +1866,7 @@ int task_exit (struct task_info *t, int status)
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
 
 
-    if (send_exit_message (t) < 0)
+    if (aggregator_push_task_exit (t) < 0)
         wlog_err (ctx, "Sending exit message failed!");
 
     prog_ctx_remove_completion_ref (t->ctx, "task.%d.exit", t->id);
@@ -1954,17 +1929,18 @@ int rexecd_init (struct prog_ctx *ctx)
 
     /*  Wait for all nodes to finish calling init plugins:
      */
-    if (kvs_fence (ctx->flux, name, ctx->nnodes, 0) < 0)
-        wlog_fatal (ctx, 1, "kvs_fence %s: %s", name, flux_strerror (errno));
+    if (flux_kvs_fence_anon (ctx->flux, name, ctx->nnodes, 0) < 0)
+        wlog_fatal (ctx, 1, "flux_kvs_fence_anon %s: %s",
+                    name, flux_strerror (errno));
 
     /*  Now, check for `fatalerror` key in the kvs, which indicates
      *   one or more nodes encountered a fatal error and we should abort
      */
-    key = kvsdir_key_at (ctx->kvs, "fatalerror");
+    key = flux_kvsdir_key_at (ctx->kvs, "fatalerror");
     if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
              || (flux_kvs_lookup_get_unpack (f, "i", &errnum) < 0 && errno != ENOENT)) {
         errnum = 1;
-        wlog_msg (ctx, "Error: kvsdir_get (fatalerror): %s\n", flux_strerror (errno));
+        wlog_msg (ctx, "Error: flux_kvsdir_get (fatalerror): %s\n", flux_strerror (errno));
     }
     flux_future_destroy (f);
     free (key);

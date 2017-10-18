@@ -143,7 +143,7 @@ static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
     return zhash_lookup (ctx->watchers, k);
 }
 
-int kvs_unwatch (flux_t *h, const char *key)
+int flux_kvs_unwatch (flux_t *h, const char *key)
 {
     flux_future_t *f = NULL;
     int rc = -1;
@@ -183,14 +183,14 @@ static int dispatch_watch (flux_t *h, kvs_watcher_t *wp, const char *json_str)
     switch (wp->type) {
         case WATCH_DIR: {
             kvs_set_dir_f set = wp->set;
-            kvsdir_t *dir = NULL;
+            flux_kvsdir_t *dir = NULL;
             if (json_str) {
-                if (!(dir = kvsdir_create (h, NULL, wp->key, json_str)))
+                if (!(dir = flux_kvsdir_create (h, NULL, wp->key, json_str)))
                     goto done;
             }
             rc = set (wp->key, dir, wp->arg, errnum);
             if (dir)
-                kvsdir_destroy (dir);
+                flux_kvsdir_destroy (dir);
             break;
         }
         case WATCH_JSONSTR: {
@@ -331,7 +331,7 @@ static int kvs_watch_rpc_get_matchtag (flux_future_t *f, uint32_t *matchtag)
  * val_in may be NULL, in which case we send a json NULL value in the RPC.
  * Or val_in is an encoded JSON value, so enclose it in an RFC 11 'val' object.
  */
-int kvs_watch_once (flux_t *h, const char *key, char **valp)
+int flux_kvs_watch_once (flux_t *h, const char *key, char **valp)
 {
     char *val_in = NULL;
     char *val_out;
@@ -368,11 +368,11 @@ done:
     return rc;
 }
 
-static int watch_once_dir (flux_t *h, const char *key, kvsdir_t **dirp)
+static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
 {
     const char *val_in = NULL;
     char *val_out = NULL;
-    kvsdir_t *dir_out = NULL;
+    flux_kvsdir_t *dir_out = NULL;
     flux_future_t *f = NULL;
     int rc = -1;
 
@@ -381,7 +381,7 @@ static int watch_once_dir (flux_t *h, const char *key, kvsdir_t **dirp)
         goto done;
     }
     if (*dirp) {
-        if (!(val_in = kvsdir_tostring (*dirp)))
+        if (!(val_in = flux_kvsdir_tostring (*dirp)))
             goto done;
     }
     if (!(f = kvs_watch_rpc (h, key, val_in,
@@ -390,11 +390,11 @@ static int watch_once_dir (flux_t *h, const char *key, kvsdir_t **dirp)
     if (kvs_watch_rpc_get (f, &val_out) < 0)
         goto done;
     if (val_out) {
-        if (!(dir_out = kvsdir_create (h, NULL, key, val_out)))
+        if (!(dir_out = flux_kvsdir_create (h, NULL, key, val_out)))
             goto done;
     }
     if (*dirp)
-        kvsdir_destroy (*dirp);
+        flux_kvsdir_destroy (*dirp);
     *dirp = dir_out;
     rc = 0;
 done:
@@ -403,7 +403,8 @@ done:
     return rc;
 }
 
-int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
+int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
+                             const char *fmt, ...)
 {
     va_list ap;
     char *key;
@@ -421,7 +422,7 @@ int kvs_watch_once_dir (flux_t *h, kvsdir_t **dirp, const char *fmt, ...)
     return rc;
 }
 
-int kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
+int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg)
 {
     flux_future_t *f;
     uint32_t matchtag;
@@ -469,8 +470,8 @@ error:
     return -1;
 }
 
-int kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
-                   const char *fmt, ...)
+int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
+                        const char *fmt, ...)
 {
     va_list ap;
     char *key;

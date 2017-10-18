@@ -27,7 +27,7 @@
 #endif
 #include <flux/core.h>
 
-int kvs_get_version (flux_t *h, int *versionp)
+int flux_kvs_get_version (flux_t *h, int *versionp)
 {
     flux_future_t *f;
     int version;
@@ -45,7 +45,7 @@ done:
     return rc;
 }
 
-int kvs_wait_version (flux_t *h, int version)
+int flux_kvs_wait_version (flux_t *h, int version)
 {
     flux_future_t *f;
     int ret = -1;
@@ -63,7 +63,7 @@ done:
     return ret;
 }
 
-int kvs_dropcache (flux_t *h)
+int flux_kvs_dropcache (flux_t *h)
 {
     flux_future_t *f;
     int rc = -1;

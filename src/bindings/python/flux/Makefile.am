@@ -42,6 +42,7 @@ _jsc_build.py: $(top_srcdir)/src/common/libjsc/jstatctl.h $(MAKE_BINDING) _core_
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libjsc \
 	  			  --package flux \
 	                          --modname _jsc \
+				  --add_sub '.*va_list.*|||' \
 				  --include_ffi _core_build \
 				  jstatctl.h
 
@@ -54,6 +55,7 @@ _kvs_build.py: $(top_srcdir)/src/common/libkvs/kvs.h $(MAKE_BINDING) _core_build
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libkvs \
 	  			  --package flux \
 	                          --modname _kvs \
+				  --add_sub '.*va_list.*|||' \
 				  --include_ffi _core_build \
 				  kvs.h
 
@@ -66,6 +68,7 @@ _kz_build.py: $(top_srcdir)/src/common/libkz/kz.h $(MAKE_BINDING) _core_build.py
 	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir)/src/common/libkz \
 				  --package flux \
 	                          --modname _kz \
+				  --add_sub '.*va_list.*|||' \
 				  --include_ffi _core_build \
 				  --add_sub '.*KZ_FLAGS_DELAYCOMMIT.*,|||KZ_FLAGS_DELAYCOMMIT = 0x0c00' \
 				  kz.h

@@ -301,18 +301,23 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
 
 static int jobid_exist (flux_t *h, int64_t j)
 {
-    kvsdir_t *d;
+    flux_future_t *f = NULL;
     jscctx_t *ctx = getctx (h);
     const char *path = jscctx_jobid_path (ctx, j);
+    int rc = -1;
+
     if (path == NULL)
-        return -1;
-    if (kvs_get_dir (h, &d, "%s", path) < 0) {
-        flux_log (h, LOG_DEBUG, "kvs_get_dir(%s): %s",
+        goto done;
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
+                                || flux_kvs_lookup_get (f, NULL) < 0) {
+        flux_log (h, LOG_DEBUG, "flux_kvs_lookup(%s): %s",
                      path, flux_strerror (errno));
-        return -1;
+        goto done;
     }
-    kvsdir_destroy (d);
-    return 0;
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
 }
 
 static bool fetch_rank_pdesc (json_object *src, int64_t *p, int64_t *n,
@@ -460,18 +465,20 @@ static int extract_raw_state (flux_t *h, int64_t j, int64_t *s)
 
 static int extract_raw_pdesc (flux_t *h, int64_t j, int64_t i, json_object **o)
 {
-    int rc = 0;
-    char *json_str = NULL;
+    flux_future_t *f = NULL;
+    const char *json_str;
     char *key = lwj_key (h, j, ".%ju.procdesc", i);
-    if (kvs_get (h, key, &json_str) < 0
-            || !(*o = Jfromstr (json_str))) {
+    int rc = -1;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get (f, &json_str) < 0
+             || !(*o = Jfromstr (json_str))) {
         flux_log_error (h, "extract %s", key);
-        rc = -1;
-        if (json_str)
-            free (json_str);
-        if (*o)
-            Jput (*o);
+        goto done;
     }
+    rc = 0;
+done:
+    flux_future_destroy (f);
     free (key);
     return rc;
 }
@@ -687,26 +694,40 @@ static int update_state (flux_t *h, int64_t j, json_object *o)
 {
     int rc = -1;
     int64_t st = 0;
-    char *key;
+    char *key = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_STATE_PAIR_NSTATE, &st)) return -1;
-    if ((st >= J_FOR_RENT) || (st < J_NULL)) return -1;
-
-    key = lwj_key (h, j, ".state");
-    if (kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0)
-        flux_log_error (h, "update %s", key);
-    else if (kvs_commit (h, 0) < 0)
-        flux_log_error (h, "commit %s", key);
-    else {
-        flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
-              jsc_job_num2state ((job_state_t)st));
-        rc = 0;
+    if (!Jget_int64 (o, JSC_STATE_PAIR_NSTATE, &st))
+        goto done;
+    if ((st >= J_FOR_RENT) || (st < J_NULL))
+        goto done;
+    if (!(key = lwj_key (h, j, ".state")))
+        goto done;
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "txn_create");
+        goto done;
     }
-    free (key);
+    if (flux_kvs_txn_pack (txn, 0, key, "s",
+                           jsc_job_num2state ((job_state_t)st)) < 0) {
+        flux_log_error (h, "update %s", key);
+        goto done;
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "commit %s", key);
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new state: %s", j,
+          jsc_job_num2state ((job_state_t)st));
+    rc = 0;
 
     if (send_state_event (h, st, j) < 0)
         flux_log_error (h, "send state event");
 
+done:
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
+    free (key);
     return rc;
 }
 
@@ -716,33 +737,53 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
     int64_t nnodes = 0;
     int64_t ntasks = 0;
     int64_t walltime = 0;
-    char *key1;
-    char *key2;
-    char *key3;
+    char *key1 = NULL;
+    char *key2 = NULL;
+    char *key3 = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_RDESC_NNODES, &nnodes)) return -1;
-    if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks)) return -1;
-    if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime)) return -1;
-
-    if ((nnodes < 0) || (ntasks < 0) || (walltime < 0)) return -1;
-
+    if (!Jget_int64 (o, JSC_RDESC_NNODES, &nnodes))
+        goto done;
+    if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks))
+        goto done;
+    if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime))
+        goto done;
+    if ((nnodes < 0) || (ntasks < 0) || (walltime < 0))
+        goto done;
     key1 = lwj_key (h, j, ".nnodes");
     key2 = lwj_key (h, j, ".ntasks");
     key3 = lwj_key (h, j, ".walltime");
-    if (kvs_put_int64 (h, key1, nnodes) < 0)
-        flux_log_error (h, "update %s", key1);
-    else if (kvs_put_int64 (h, key2, ntasks) < 0)
-        flux_log_error (h, "update %s", key2);
-    else if (kvs_put_int64 (h, key3, walltime) < 0)
-        flux_log_error (h, "update %s", key3);
-    else if (kvs_commit (h, 0) < 0)
-        flux_log_error (h, "commit failed");
-    else {
-        flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
-        rc = 0;
+    if (!key1 || !key2 || !key3)
+        goto done;
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "txn_create");
+        goto done;
     }
+    if (flux_kvs_txn_pack (txn, 0, key1, "I", nnodes) < 0) {
+        flux_log_error (h, "update %s", key1);
+        goto done;
+    }
+    if (flux_kvs_txn_pack (txn, 0, key2, "I", ntasks) < 0) {
+        flux_log_error (h, "update %s", key2);
+        goto done;
+    }
+    if (flux_kvs_txn_pack (txn, 0, key3, "I", walltime) < 0) {
+        flux_log_error (h, "update %s", key3);
+        goto done;
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "commit failed");
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     free (key1);
     free (key2);
+    free (key3);
 
     return rc;
 }
@@ -751,14 +792,27 @@ static int update_rdl (flux_t *h, int64_t j, const char *rs)
 {
     int rc = -1;
     char *key = lwj_key (h, j, ".rdl");
-    if (kvs_put_string (h, key, rs) < 0)
-        flux_log_error (h, "update %s", key);
-    else if (kvs_commit (h, 0) < 0)
-        flux_log_error (h, "commit failed");
-    else {
-        flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
-        rc = 0;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "txn_create");
+        goto done;
     }
+    if (flux_kvs_txn_pack (txn, 0, key, "s", rs) < 0) {
+        flux_log_error (h, "update %s", key);
+        goto done;
+    }
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "commit failed");
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new rdl.", j);
+    rc = 0;
+
+done:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
     free (key);
 
     return rc;
@@ -798,6 +852,8 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
     const char *key = NULL;
     zhash_t *rtab = NULL;
     int64_t *ncores = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
 
     if (!(rtab = zhash_new ()))
         oom ();
@@ -816,30 +872,38 @@ static int update_rdl_alloc (flux_t *h, int64_t j, json_object *o)
             goto done;
     }
 
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "txn_create");
+        goto done;
+    }
     FOREACH_ZHASH (rtab, key, ncores) {
-        if ( (rc = kvs_put_int64 (h, key, *ncores)) < 0) {
+        if ( (rc = flux_kvs_txn_pack (txn, 0, key, "I", *ncores)) < 0) {
             flux_log_error (h, "put %s", key);
             goto done;
         }
     }
-    if (kvs_commit (h, 0) < 0) {
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
         goto done;
     }
     rc = 0;
 
 done:
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
     zhash_destroy (&rtab);
     return rc;
 }
 
-static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
+static int update_1pdesc (flux_t *h, flux_kvs_txn_t *txn,
+              int r, int64_t j, json_object *o,
 			  json_object *ha, json_object *ea)
 {
+    flux_future_t *f = NULL;
     int rc = -1;
     json_object *d = NULL;
     char *key;
-    char *json_str = NULL;
+    const char *json_str;
     const char *hn = NULL, *en = NULL;
     int64_t pid = 0, hindx = 0, eindx = 0, hrank = 0;
 
@@ -850,7 +914,9 @@ static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
     if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
 
     key = lwj_key (h, j, ".%d.procdesc", r);
-    if (kvs_get (h, key, &json_str) < 0
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get (f, &json_str) < 0
             || !(d = Jfromstr (json_str))) {
         flux_log_error (h, "extract %s", key);
         goto done;
@@ -864,18 +930,17 @@ static int update_1pdesc (flux_t *h, int r, int64_t j, json_object *o,
         goto done;
     }
     Jadd_int64 (d, "nodeid", (int64_t)hrank);
-    if (kvs_put (h, key, Jtostr (d)) < 0) {
+    if (flux_kvs_txn_put (txn, 0, key, Jtostr (d)) < 0) {
         flux_log_error (h, "put %s", key);
         goto done;
     }
     rc = 0;
 
 done:
+    flux_future_destroy (f);
     free (key);
     if (d)
         Jput (d);
-    if (json_str)
-        free (json_str);
     return rc;
 }
 
@@ -888,25 +953,36 @@ static int update_pdesc (flux_t *h, int64_t j, json_object *o)
     json_object *e_arr = NULL;
     json_object *pd_arr = NULL;
     json_object *pde = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
 
-    if (!Jget_int64 (o, JSC_PDESC_SIZE, &size)) return -1;
-    if (!Jget_obj (o, JSC_PDESC_PDARRAY, &pd_arr)) return -1;
-    if (!Jget_obj (o, JSC_PDESC_HOSTNAMES, &h_arr)) return -1;
-    if (!Jget_obj (o, JSC_PDESC_EXECS, &e_arr)) return -1;
-
+    if (!Jget_int64 (o, JSC_PDESC_SIZE, &size))
+        goto done;
+    if (!Jget_obj (o, JSC_PDESC_PDARRAY, &pd_arr))
+        goto done;
+    if (!Jget_obj (o, JSC_PDESC_HOSTNAMES, &h_arr))
+        goto done;
+    if (!Jget_obj (o, JSC_PDESC_EXECS, &e_arr))
+        goto done;
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "txn_create");
+        goto done;
+    }
     for (i=0; i < (int) size; ++i) {
         if (!Jget_ar_obj (pd_arr, i, &pde))
             goto done;
-        if ( (rc = update_1pdesc (h, i, j, pde, h_arr, e_arr)) < 0)
+        if ( (rc = update_1pdesc (h, txn, i, j, pde, h_arr, e_arr)) < 0)
             goto done;
     }
-    if (kvs_commit (h, 0) < 0) {
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log (h, LOG_ERR, "update_pdesc commit failed");
         goto done;
     }
     rc = 0;
 
 done:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
     return rc;
 }
 

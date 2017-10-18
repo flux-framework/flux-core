@@ -72,7 +72,7 @@ struct kz_struct {
     char *stream;
     flux_t *h;
     int seq;
-    kvsdir_t *dir;
+    flux_kvsdir_t *dir;
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
@@ -87,7 +87,7 @@ static void kz_destroy (kz_t *kz)
     if (kz->name)
         free (kz->name);
     if (kz->dir)
-        kvsdir_destroy (kz->dir);
+        flux_kvsdir_destroy (kz->dir);
     if (kz->grpname)
         free (kz->grpname);
     free (kz);
@@ -95,13 +95,17 @@ static void kz_destroy (kz_t *kz)
 
 static bool key_exists (flux_t *h, const char *key)
 {
-    char *json_str = NULL;
     bool ret = false;
+    flux_future_t *f = NULL;
 
-    if (kvs_get (h, key, &json_str) == 0 || errno == EISDIR)
-        ret = true;
-    if (json_str)
-        free (json_str);
+    if (!(f = flux_kvs_lookup (h, 0, key)) || flux_future_get (f, NULL) < 0) {
+        if (errno == EISDIR)
+            ret = true;
+        goto done;
+    }
+    ret = true;
+done:
+    flux_future_destroy (f);
     return ret;
 }
 
@@ -122,19 +126,27 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
             if (!(flags & KZ_FLAGS_TRUNC)) {
                 errno = EEXIST;
                 goto error;
-            } else if (kvs_unlink (h, name) < 0)
+            } else if (flux_kvs_unlink (h, name) < 0)
                 goto error;
         }
-        if (kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
+        if (flux_kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
-            if (kvs_commit (h, 0) < 0)
+            if (flux_kvs_commit_anon (h, 0) < 0)
                 goto error;
         }
     } else if ((flags & KZ_FLAGS_READ)) {
         if (!(flags & KZ_FLAGS_NOEXIST)) {
-            if (kvs_get_dir (h, &kz->dir, "%s", name) < 0)
+            const flux_kvsdir_t *dir;
+            flux_future_t *f;
+
+            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, name))
+                || flux_kvs_lookup_get_dir (f, &dir) < 0
+                || !(kz->dir = flux_kvsdir_copy (dir))) {
+                flux_future_destroy (f);
                 goto error;
+            }
+            flux_future_destroy (f);
         }
     }
     return kz;
@@ -149,7 +161,7 @@ static int kz_fence (kz_t *kz)
     int rc;
     if (asprintf (&name, "%s.%d", kz->grpname, kz->fencecount++) < 0)
         oom ();
-    rc = kvs_fence (kz->h, name, kz->nprocs, 0);
+    rc = flux_kvs_fence_anon (kz->h, name, kz->nprocs, 0);
     free (name);
     return rc;
 }
@@ -188,10 +200,10 @@ static int putnext (kz_t *kz, const char *json_str)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
         oom ();
-    if (kvs_put (kz->h, key, json_str) < 0)
+    if (flux_kvs_put (kz->h, key, json_str) < 0)
         goto done;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
-        if (kvs_commit (kz->h, 0) < 0)
+        if (flux_kvs_commit_anon (kz->h, 0) < 0)
             goto done;
     }
     rc = 0;
@@ -234,8 +246,10 @@ done:
 
 static char *getnext (kz_t *kz)
 {
-    char *json_str = NULL;
+    const char *json_str;
     char *key = NULL;
+    flux_future_t *f = NULL;
+    char *result = NULL;
 
     if (!(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
@@ -243,16 +257,20 @@ static char *getnext (kz_t *kz)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
         oom ();
-    if (kvs_get (kz->h, key, &json_str) < 0) {
+    if (!(f = flux_kvs_lookup (kz->h, 0, key))
+                        || flux_kvs_lookup_get (f, &json_str) < 0) {
         if (errno == ENOENT)
             errno = EAGAIN;
         goto done;
-    } else
-        kz->seq++;
+    }
+    if (!(result = strdup (json_str)))
+        goto done;
+    kz->seq++;
 done:
+    flux_future_destroy (f);
     if (key)
         free (key);
-    return json_str;
+    return result;
 }
 
 static char *getnext_blocking (kz_t *kz)
@@ -262,11 +280,11 @@ static char *getnext_blocking (kz_t *kz)
     while (!(json_str = getnext (kz))) {
         if (errno != EAGAIN)
             break;
-        if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
+        if (flux_kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
             if (errno != ENOENT)
                 break;
             if (kz->dir) {
-                kvsdir_destroy (kz->dir);
+                flux_kvsdir_destroy (kz->dir);
                 kz->dir = NULL;
             }
         }
@@ -323,7 +341,7 @@ int kz_flush (kz_t *kz)
 {
     int rc = 0;
     if ((kz->flags & KZ_FLAGS_WRITE))
-        rc = kvs_commit (kz->h, 0);
+        rc = flux_kvs_commit_anon (kz->h, 0);
     return rc;
 }
 
@@ -341,11 +359,11 @@ int kz_close (kz_t *kz)
                 errno = EPROTO;
                 goto done;
             }
-            if (kvs_put (kz->h, key, json_str) < 0)
+            if (flux_kvs_put (kz->h, key, json_str) < 0)
                 goto done;
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
-            if (kvs_commit (kz->h, 0) < 0)
+            if (flux_kvs_commit_anon (kz->h, 0) < 0)
                 goto done;
         }
         if (kz->nprocs > 0 && kz->grpname) {
@@ -354,7 +372,7 @@ int kz_close (kz_t *kz)
         }
     }
     if (kz->watching) {
-        (void)kvs_unwatch (kz->h, kz->name);
+        (void)flux_kvs_unwatch (kz->h, kz->name);
         kz->watching = false;
     }
     rc = 0;
@@ -367,7 +385,8 @@ done:
     return rc;
 }
 
-static int kvswatch_cb (const char *key, kvsdir_t *dir, void *arg, int errnum)
+static int kvswatch_cb (const char *key, flux_kvsdir_t *dir,
+                        void *arg, int errnum)
 {
     kz_t *kz = arg;
 
@@ -387,7 +406,7 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
     if (!kz->watching) {
-        if (kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
+        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
             return -1;
         kz->watching = true;
     }

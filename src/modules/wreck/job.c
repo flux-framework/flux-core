@@ -48,6 +48,8 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
 
+#define MAX_JOB_PATH    1024
+
 /*
  *  lwj directory hierarchy parameters:
  *   XXX: should be in module context struct perhaps, but
@@ -91,7 +93,7 @@ static inline uint64_t prefix64 (uint64_t n, int a, int b)
  */
 static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
 {
-    char buf [1024] = "lwj";
+    char buf [MAX_JOB_PATH] = "lwj";
     int len = 3;
     int nleft = sizeof (buf) - len;
     int i, n;
@@ -114,42 +116,6 @@ static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
 static char * id_to_path (uint64_t id)
 {
     return (lwj_to_path (id, kvs_dir_levels, kvs_bits_per_dir));
-}
-
-static int kvs_job_set_state (flux_t *h, unsigned long jobid, const char *state)
-{
-    int rc = -1;
-    char *key = NULL;
-    char *target = NULL;
-
-    if (!(target = id_to_path (jobid))) {
-        flux_log_error (h, "lwj_to_path");
-        return (-1);
-    }
-
-    if ((asprintf (&key, "%s.state", target) < 0)) {
-        flux_log_error (h, "kvs_job_set_state: asprintf");
-        goto out;
-    }
-
-    flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
-    if ((rc = kvs_put_string (h, key, state)) < 0) {
-        flux_log_error (h, "kvs_put_string (%s)", key);
-        goto out;
-    }
-
-    if ((rc = kvs_commit (h, 0)) < 0)
-        flux_log_error (h, "kvs_job_set_state: kvs_commit");
-
-out:
-    free (key);
-    free (target);
-    return rc;
-}
-
-static int kvs_job_new (flux_t *h, unsigned long jobid)
-{
-    return kvs_job_set_state (h, jobid, "reserved");
 }
 
 static int64_t next_jobid (flux_t *h)
@@ -216,35 +182,33 @@ static void send_create_event (flux_t *h, int64_t id,
     wait_for_event (h, id, topic);
 }
 
-static int add_jobinfo (flux_t *h, const char *kvspath, json_object *req)
+static int add_jobinfo_txn (flux_kvs_txn_t *txn,
+                            const char *kvs_path, json_object *req)
 {
-    int rc = 0;
+    int rc = -1;
     char buf [64];
     json_object_iter i;
-    json_object *o;
-    kvsdir_t *dir;
-
-    if (kvs_get_dir (h, &dir, "%s", kvspath) < 0) {
-        flux_log_error (h, "kvs_get_dir (%s)", kvspath);
-        return (-1);
-    }
+    char key[MAX_JOB_PATH];
 
     json_object_object_foreachC (req, i) {
-        rc = kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
-        if (rc < 0) {
-            flux_log_error (h, "addd_jobinfo: kvsdir_put (key=%s)", i.key);
+        if (snprintf (key, sizeof (key), "%s.%s", kvs_path, i.key)
+                                                        >= sizeof (key))
             goto out;
-        }
+        if (flux_kvs_txn_put (txn, 0, key,
+                              json_object_to_json_string (i.val)) < 0)
+            goto out;
     }
 
-    o = json_object_new_string (realtime_string (buf, sizeof (buf)));
     /* Not a fatal error if create-time addition fails */
-    if (kvsdir_put (dir, "create-time", json_object_to_json_string (o)) < 0)
-        flux_log_error (h, "add_jobinfo: kvsdir_put (create-time)");
-    json_object_put (o);
-
+    if (snprintf (key, sizeof (key), "%s.create-time", kvs_path)
+                                                        >= sizeof (key))
+        goto out_ok;
+    if (flux_kvs_txn_pack (txn, 0, key, "s",
+                           realtime_string (buf, sizeof (buf))) < 0)
+        goto out_ok;
+out_ok:
+    rc = 0;
 out:
-    kvsdir_destroy (dir);
     return (rc);
 }
 
@@ -271,57 +235,120 @@ static bool sched_loaded (flux_t *h)
     return (v);
 }
 
-static int do_submit_job (flux_t *h, unsigned long id, const char *path)
+static int do_submit_job (flux_t *h, unsigned long jobid, const char *kvs_path,
+                          const char **statep)
 {
-    if (kvs_job_set_state (h, id, "submitted") < 0) {
-        flux_log_error (h, "kvs_job_set_state");
-        return (-1);
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+    const char *state = "submitted";
+    char key[MAX_JOB_PATH];
+    int rc = -1;
+
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "%s: flux_kvs_txn_create", __FUNCTION__);
+        goto done;
     }
-    send_create_event (h, id, path, "wreck.state.submitted");
-    return (0);
+    if (snprintf (key, sizeof (key), "%s.state", kvs_path) >= sizeof (key)) {
+        flux_log (h, LOG_ERR, "%s: key overflow", __FUNCTION__);
+        goto done;
+    }
+    if (flux_kvs_txn_pack (txn, 0, key, "s", state) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
+        goto done;
+    }
+
+    send_create_event (h, jobid, kvs_path, "wreck.state.submitted");
+    *statep = state;
+    rc = 0;
+
+done:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+    return (rc);
+}
+
+static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
+                          json_object* req, const char **statep)
+{
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+    const char *state = "reserved";
+    char key[MAX_JOB_PATH];
+    int rc = -1;
+
+    if (!(txn = flux_kvs_txn_create ())) {
+        flux_log_error (h, "%s: id_to_path", __FUNCTION__);
+        goto done;
+    }
+    if (snprintf (key, sizeof (key), "%s.state", kvs_path) >= sizeof (key)) {
+        flux_log (h, LOG_ERR, "%s: key overflow", __FUNCTION__);
+        goto done;
+    }
+    if (flux_kvs_txn_pack (txn, 0, key, "s", state) < 0) {
+        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
+        goto done;
+    }
+    if (add_jobinfo_txn (txn, kvs_path, req) < 0) {
+        flux_log_error (h, "%s: add_jobinfo_txn", __FUNCTION__);
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
+    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
+        goto done;
+    }
+
+    send_create_event (h, jobid, kvs_path, "wreck.state.reserved");
+    *statep = state;
+    rc = 0;
+
+done:
+    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (f);
+    return (rc);
 }
 
 static void handle_job_create (flux_t *h, const flux_msg_t *msg,
-                               const char *topic, json_object *o)
+                               const char *topic, json_object *req)
 {
     int64_t id;
-    char *state;
-    char *kvs_path;
+    const char *state;
+    char *kvs_path = NULL;
 
     if ((id = next_jobid (h)) < 0) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "job_request: flux_respond");
-        return;
+        flux_log_error (h, "%s: next_jobid", __FUNCTION__);
+        goto error;
+    }
+    if (!(kvs_path = id_to_path (id))) {
+        flux_log_error (h, "%s: id_to_path", __FUNCTION__);
+        goto error;
     }
 
-    kvs_path = id_to_path (id);
+    /* Create job with state "reserved" */
+    if (do_create_job (h, id, kvs_path, req, &state) < 0)
+        goto error;
 
-    if ( (kvs_job_new (h, id) < 0)
-      || (add_jobinfo (h, kvs_path, o) < 0)) {
-        if (flux_respond (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "job_request: flux_respond");
-        goto out;
+    /* If called as "job.submit", transition to "submitted" */
+    if (strcmp (topic, "job.submit") == 0) {
+        if (do_submit_job (h, id, kvs_path, &state) < 0)
+            goto error;
     }
-
-    if (kvs_commit (h, 0) < 0) {
-        flux_log_error (h, "job_request: kvs_commit");
-        goto out;
-    }
-
-    /* Send a wreck.state.reserved event for listeners */
-    state = "reserved";
-    send_create_event (h, id, kvs_path, "wreck.state.reserved");
-    if ((strcmp (topic, "job.submit") == 0)
-            && (do_submit_job (h, id, kvs_path) != -1))
-        state = "submitted";
-
 
     /* Generate reply with new jobid */
     if (flux_respond_pack (h, msg, "{s:I,s:s,s:s}", "jobid", id,
                                                     "state", state,
                                                     "kvs_path", kvs_path) < 0)
         flux_log_error (h, "flux_respond_pack");
-out:
+    free (kvs_path);
+    return;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "job_request: flux_respond");
     free (kvs_path);
 }
 
@@ -518,21 +545,28 @@ static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
 
 static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
 {
-    kvsdir_t *tmp;
+    char key[MAX_JOB_PATH];
+    flux_future_t *f = NULL;
+    const flux_kvsdir_t *dir;
+    bool result = false;
     /*
      *  If no 'rank' subdir exists for this lwj, then we are running
      *   without resource assignment so we run everywhere
      */
-    if (kvs_get_dir (h, &tmp, "%s.rank", kvspath) < 0) {
+    snprintf (key, sizeof (key), "%s.rank", kvspath);
+    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
+            || flux_kvs_lookup_get_dir (f, &dir) < 0) {
         flux_log (h, LOG_INFO, "No dir %s.rank: %s",
-                  kvspath, strerror (errno));
-        return (true);
+                  kvspath, flux_strerror (errno));
+        result = true;
+        goto done;
     }
-    kvsdir_destroy (tmp);
-    if (kvs_get_dir (h, &tmp, "%s.rank.%d", kvspath, broker_rank) < 0)
-        return (false);
-    kvsdir_destroy (tmp);
-    return (true);
+    snprintf (key, sizeof (key), "%d", broker_rank);
+    if (flux_kvsdir_isdir (dir, key))
+        result = true;
+done:
+    flux_future_destroy (f);
+    return result;
 }
 
 static int64_t id_from_tag (const char *tag)

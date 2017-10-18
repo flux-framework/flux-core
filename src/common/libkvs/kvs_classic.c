@@ -31,7 +31,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-int kvs_get (flux_t *h, const char *key, char **valp)
+int flux_kvs_get (flux_t *h, const char *key, char **valp)
 {
     flux_future_t *f;
     const char *json_str;
@@ -53,15 +53,16 @@ done:
     return rc;
 }
 
-int kvs_get_dir (flux_t *h, kvsdir_t **dir, const char *fmt, ...)
+int flux_kvs_get_dir (flux_t *h, flux_kvsdir_t **dirp, const char *fmt, ...)
 {
     flux_future_t *f = NULL;
-    const char *json_str;
+    const flux_kvsdir_t *dir;
+    flux_kvsdir_t *cpy;
     va_list ap;
     char *key = NULL;
     int rc = -1;
 
-    if (!h || !dir || !fmt) {
+    if (!h || !dirp || !fmt) {
         errno = EINVAL;
         goto done;
     }
@@ -78,10 +79,11 @@ int kvs_get_dir (flux_t *h, kvsdir_t **dir, const char *fmt, ...)
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, k)))
         goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         goto done;
-    if (!(*dir = kvsdir_create (h, NULL, k, json_str)))
+    if (!(cpy = flux_kvsdir_copy (dir)))
         goto done;
+    *dirp = cpy;
     rc = 0;
 done:
     free (key);
@@ -89,16 +91,16 @@ done:
     return rc;
 }
 
-int kvsdir_get (kvsdir_t *dir, const char *name, char **valp)
+int flux_kvsdir_get (const flux_kvsdir_t *dir, const char *name, char **valp)
 {
-    flux_t *h = kvsdir_handle (dir);
-    const char *rootref = kvsdir_rootref (dir);
+    flux_t *h = flux_kvsdir_handle (dir);
+    const char *rootref = flux_kvsdir_rootref (dir);
     flux_future_t *f = NULL;
     const char *json_str;
     char *key;
     int rc = -1;
 
-    if (!(key = kvsdir_key_at (dir, name)))
+    if (!(key = flux_kvsdir_key_at (dir, name)))
         goto done;
     if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
         goto done;
@@ -117,13 +119,15 @@ done:
     return rc;
 }
 
-int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
+int flux_kvsdir_get_dir (const flux_kvsdir_t *dir, flux_kvsdir_t **dirp,
+                         const char *fmt, ...)
 {
-    flux_t *h = kvsdir_handle (dir);
-    const char *rootref = kvsdir_rootref (dir);
+    flux_t *h = flux_kvsdir_handle (dir);
+    const char *rootref = flux_kvsdir_rootref (dir);
     flux_future_t *f = NULL;
     va_list ap;
-    const char *json_str;
+    const flux_kvsdir_t *subdir;
+    flux_kvsdir_t *cpy;
     char *name = NULL;
     char *key = NULL;
     int rc = -1;
@@ -134,14 +138,15 @@ int kvsdir_get_dir (kvsdir_t *dir, kvsdir_t **dirp, const char *fmt, ...)
     va_end (ap);
     if (!name)
         goto done;
-    if (!(key = kvsdir_key_at (dir, name)))
+    if (!(key = flux_kvsdir_key_at (dir, name)))
         goto done;
     if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref)))
         goto done;
-    if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (flux_kvs_lookup_get_dir (f, &subdir) < 0)
         goto done;
-    if (!(*dirp = kvsdir_create (h, rootref, key, json_str)))
+    if (!(cpy = flux_kvsdir_copy (subdir)))
         goto done;
+    *dirp = cpy;
     rc = 0;
 done:
     free (key);
@@ -174,7 +179,7 @@ static void clear_default_txn (flux_t *h)
     flux_aux_set (h, default_txn_auxkey, NULL, NULL);
 }
 
-int kvs_commit (flux_t *h, int flags)
+int flux_kvs_commit_anon (flux_t *h, int flags)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     flux_future_t *f;
@@ -192,7 +197,7 @@ int kvs_commit (flux_t *h, int flags)
     return rc;
 }
 
-int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
+int flux_kvs_fence_anon (flux_t *h, const char *name, int nprocs, int flags)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     flux_future_t *f;
@@ -210,7 +215,7 @@ int kvs_fence (flux_t *h, const char *name, int nprocs, int flags)
     return rc;
 }
 
-int kvs_put (flux_t *h, const char *key, const char *json_str)
+int flux_kvs_put (flux_t *h, const char *key, const char *json_str)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -218,31 +223,7 @@ int kvs_put (flux_t *h, const char *key, const char *json_str)
     return flux_kvs_txn_put (txn, 0, key, json_str);
 }
 
-int kvs_put_string (flux_t *h, const char *key, const char *val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "s", val);
-}
-
-int kvs_put_int (flux_t *h, const char *key, int val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "i", val);
-}
-
-int kvs_put_int64 (flux_t *h, const char *key, int64_t val)
-{
-    flux_kvs_txn_t *txn = get_default_txn (h);
-    if (!txn)
-        return -1;
-    return flux_kvs_txn_pack (txn, 0, key, "I", val);
-}
-
-int kvs_unlink (flux_t *h, const char *key)
+int flux_kvs_unlink (flux_t *h, const char *key)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -250,7 +231,7 @@ int kvs_unlink (flux_t *h, const char *key)
     return flux_kvs_txn_unlink (txn, 0, key);
 }
 
-int kvs_symlink (flux_t *h, const char *key, const char *target)
+int flux_kvs_symlink (flux_t *h, const char *key, const char *target)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -258,7 +239,7 @@ int kvs_symlink (flux_t *h, const char *key, const char *target)
     return flux_kvs_txn_symlink (txn, 0, key, target);
 }
 
-int kvs_mkdir (flux_t *h, const char *key)
+int flux_kvs_mkdir (flux_t *h, const char *key)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
     if (!txn)
@@ -279,26 +260,28 @@ static void dir_put_fini (struct dir_put *sp)
     errno = saved_errno;
 }
 
-static int dir_put_init (kvsdir_t *dir, const char *key, struct dir_put *dp)
+static int dir_put_init (const flux_kvsdir_t *dir, const char *key,
+                         struct dir_put *dp)
 {
     memset (dp, 0, sizeof (struct dir_put));
     if (!dir || !key) {
         errno = EINVAL;
         return -1;
     }
-    if (kvsdir_rootref (dir) != NULL) {
+    if (flux_kvsdir_rootref (dir) != NULL) {
         errno = EROFS;
         return -1;
     }
-    dp->h = kvsdir_handle (dir);
+    dp->h = flux_kvsdir_handle (dir);
     if (!(dp->txn = get_default_txn (dp->h)))
         return -1;
-    if (!(dp->key = kvsdir_key_at (dir, key)))
+    if (!(dp->key = flux_kvsdir_key_at (dir, key)))
         return -1;
     return 0;
 }
 
-int kvsdir_put (kvsdir_t *dir, const char *key, const char *json_str)
+int flux_kvsdir_put (const flux_kvsdir_t *dir, const char *key,
+                     const char *json_str)
 {
     struct dir_put dp;
     int rc;
@@ -309,62 +292,22 @@ int kvsdir_put (kvsdir_t *dir, const char *key, const char *json_str)
     return rc;
 }
 
-int kvsdir_put_string (kvsdir_t *dir, const char *key, const char *val)
+int flux_kvsdir_pack (const flux_kvsdir_t *dir, const char *key,
+                      const char *fmt, ...)
 {
     struct dir_put dp;
     int rc;
+    va_list ap;
     if (dir_put_init (dir, key, &dp) < 0)
         return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "s", val);
+    va_start (ap, fmt);
+    rc = flux_kvs_txn_vpack (dp.txn, 0, dp.key, fmt, ap);
+    va_end (ap);
     dir_put_fini (&dp);
     return rc;
 }
 
-int kvsdir_put_int (kvsdir_t *dir, const char *key, int val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "i", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int kvsdir_put_int64 (kvsdir_t *dir, const char *key, int64_t val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "I", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int kvsdir_put_double (kvsdir_t *dir, const char *key, double val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "f", val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int kvsdir_put_boolean (kvsdir_t *dir, const char *key, bool val)
-{
-    struct dir_put dp;
-    int rc;
-    if (dir_put_init (dir, key, &dp) < 0)
-        return -1;
-    rc = flux_kvs_txn_pack (dp.txn, 0, dp.key, "b", (int)val);
-    dir_put_fini (&dp);
-    return rc;
-}
-
-int kvsdir_unlink (kvsdir_t *dir, const char *key)
+int flux_kvsdir_unlink (const flux_kvsdir_t *dir, const char *key)
 {
     struct dir_put dp;
     int rc;
@@ -375,7 +318,7 @@ int kvsdir_unlink (kvsdir_t *dir, const char *key)
     return rc;
 }
 
-int kvsdir_mkdir (kvsdir_t *dir, const char *key)
+int flux_kvsdir_mkdir (const flux_kvsdir_t *dir, const char *key)
 {
     struct dir_put dp;
     int rc;

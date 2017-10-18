@@ -132,11 +132,6 @@ via commas. Currently available options include:
 	debugger. This option is provided for use with parallel
 	debuggers such as TotalView.
 
-'no-aggregate-task-exit'::
-        Do not use aggregator for task exit messages.  This option
-        will result in each task's exit status being committed
-        separately into the kvs.
-
 'no-pmi-server'::
         Do not start simple pmi server.  This option can be used to
         not launch the pmi server if a non-MPI job is being run.
