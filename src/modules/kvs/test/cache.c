@@ -44,16 +44,17 @@ void cache_entry_basic_tests (void)
     json_t *otmp;
 
     /* corner case tests */
-    ok (cache_entry_create_json (NULL) == NULL,
-        "cache_entry_create_json fails with bad input");
     ok (cache_entry_create_raw (NULL, 5) == NULL,
         "cache_entry_create_raw fails with bad input");
+    ok (cache_entry_create_json (NULL) == NULL,
+        "cache_entry_create_json fails with bad input");
     ok (cache_entry_set_json (NULL, NULL) < 0,
         "cache_entry_set_json fails with bad input");
     ok (cache_entry_clear_data (NULL) < 0,
         "cache_entry_clear_data fails with bad input");
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
+
     ok ((e = cache_entry_create_raw (NULL, 0)) != NULL,
         "cache_entry_create_raw success");
     ok (cache_entry_set_raw (e, "abcd", -1) < 0,
@@ -73,97 +74,11 @@ void cache_entry_basic_tests (void)
         "cache entry initially not dirty");
     ok (cache_entry_set_dirty (e, true) < 0,
         "cache_entry_set_dirty fails b/c entry non-valid");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
     ok (cache_entry_get_raw (e, NULL, NULL) < 0,
         "cache_entry_get_raw fails, no data set");
-    cache_entry_destroy (e);
-    e = NULL;
-}
-
-void cache_entry_json_tests (void)
-{
-    struct cache_entry *e;
-    json_t *otmp, *o1, *o2;
-
-    /* Play with one entry.
-     * N.B.: json ref is NOT incremented by create or get_json.
-     */
-
-    /* test empty cache entry later filled with json.
-     */
-
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    o2 = json_object ();
-    json_object_set_new (o2, "foo", json_integer (42));
-
-    ok ((e = cache_entry_create ()) != NULL,
-        "cache_entry_create works");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
     ok ((otmp = cache_entry_get_json (e)) == NULL,
         "cache_entry_get_json returns NULL, no json set");
-    ok (cache_entry_set_json (e, o1) == 0,
-        "cache_entry_set_json success");
-    ok (cache_entry_set_json (e, o2) == 0,
-        "cache_entry_set_json again, silent success");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_json call");
-    ok (cache_entry_set_raw (e, "abcd", 4) < 0,
-        "cache_entry_set_raw fails on cache entry with type json");
-    cache_entry_destroy (e);   /* destroys o1 */
-    e = NULL;
-
-    /* test cache entry filled with json initially */
-
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-
-    ok ((e = cache_entry_create_json (o1)) != NULL,
-        "cache_entry_create_json w/ non-NULL input works");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry initially valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
-
-    ok (cache_entry_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0, b/c no waiters");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
-
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
-    ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty returns 0");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
-
-    ok ((o2 = cache_entry_get_json (e)) != NULL,
-        "json retrieved from cache entry");
-    ok ((otmp = json_object_get (o2, "foo")) != NULL,
-        "json_object_get success");
-    ok (json_integer_value (otmp) == 42,
-        "expected json object found");
-
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_json (e) == NULL,
-        "cache entry no longer has json object");
-
-    cache_entry_destroy (e); /* destroys o1 */
+    cache_entry_destroy (e);
     e = NULL;
 }
 
@@ -279,73 +194,90 @@ void cache_entry_raw_tests (void)
     e = NULL;
 }
 
-void waiter_json_tests (void)
+void cache_entry_json_tests (void)
 {
     struct cache_entry *e;
-    json_t *o;
-    wait_t *w;
-    int count;
+    json_t *otmp, *o1, *o2;
 
-    /* Test cache entry waiters.
-     * N.B. waiter is destroyed when run.
+    /* Play with one entry.
+     * N.B.: json ref is NOT incremented by create or get_json.
      */
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
+
+    /* test empty cache entry later filled with json.
+     */
+
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
+    o2 = json_object ();
+    json_object_set_new (o2, "foo", json_integer (42));
+
     ok ((e = cache_entry_create ()) != NULL,
-        "cache_entry_create created empty object");
+        "cache_entry_create works");
     ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid, adding waiter");
-    ok (cache_entry_clear_dirty (e) < 0,
-        "cache_entry_clear_dirty returns error, b/c no object set");
-    ok (cache_entry_force_clear_dirty (e) < 0,
-        "cache_entry_force_clear_dirty returns error, b/c no object set");
-    o = json_object ();
-    json_object_set_new (o, "foo", json_integer (42));
-    ok (cache_entry_wait_valid (e, w) == 0,
-        "cache_entry_wait_valid success");
-    ok (cache_entry_set_json (e, o) == 0,
+        "cache entry initially non-valid");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry initially not dirty");
+    ok (cache_entry_set_dirty (e, true) < 0,
+        "cache_entry_set_dirty fails b/c entry non-valid");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry does not set dirty, b/c no data");
+    ok ((otmp = cache_entry_get_json (e)) == NULL,
+        "cache_entry_get_json returns NULL, no json set");
+    ok (cache_entry_set_json (e, o1) == 0,
         "cache_entry_set_json success");
+    ok (cache_entry_set_json (e, o2) == 0,
+        "cache_entry_set_json again, silent success");
     ok (cache_entry_get_valid (e) == true,
-        "cache entry set valid with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
+        "cache entry now valid after cache_entry_set_json call");
+    ok (cache_entry_set_raw (e, "abcd", 4) < 0,
+        "cache_entry_set_raw fails on cache entry with type json");
+    cache_entry_destroy (e);   /* destroys o1 */
+    e = NULL;
 
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry set dirty, adding waiter");
-    ok (cache_entry_wait_notdirty (e, w) == 0,
-        "cache_entry_wait_notdirty success");
-    ok (cache_entry_clear_dirty (e) == 1,
-        "cache_entry_clear_dirty returns 1, b/c of a waiter");
-    ok (cache_entry_set_dirty (e, false) == 0,
-        "cache_entry_set_dirty success");
+    /* test cache entry filled with json initially */
+
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
+
+    ok ((e = cache_entry_create_json (o1)) != NULL,
+        "cache_entry_create_json w/ non-NULL input works");
+    ok (cache_entry_get_valid (e) == true,
+        "cache entry initially valid");
     ok (cache_entry_get_dirty (e) == false,
-        "cache entry set not dirty with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
+        "cache entry initially not dirty");
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == true,
-        "cache entry set dirty, adding waiter");
-    ok (cache_entry_wait_notdirty (e, w) == 0,
-        "cache_entry_wait_notdirty success");
+        "cache entry succcessfully set dirty");
+
+    ok (cache_entry_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty returns 0, b/c no waiters");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry succcessfully now not dirty");
+
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry succcessfully set dirty");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0 w/ waiter");
+        "cache_entry_force_clear_dirty returns 0");
     ok (cache_entry_get_dirty (e) == false,
-        "cache entry set not dirty with one waiter");
-    ok (count == 0,
-        "waiter callback not called on force clear dirty");
+        "cache entry succcessfully now not dirty");
 
-    cache_entry_destroy (e); /* destroys o */
+    ok ((o2 = cache_entry_get_json (e)) != NULL,
+        "json retrieved from cache entry");
+    ok ((otmp = json_object_get (o2, "foo")) != NULL,
+        "json_object_get success");
+    ok (json_integer_value (otmp) == 42,
+        "expected json object found");
+
+    ok (cache_entry_clear_data (e) == 0,
+        "cache_entry_clear_data success");
+    ok (cache_entry_get_json (e) == NULL,
+        "cache entry no longer has json object");
+
+    cache_entry_destroy (e); /* destroys o1 */
+    e = NULL;
 }
 
 void waiter_raw_tests (void)
@@ -392,6 +324,75 @@ void waiter_raw_tests (void)
         "cache_entry_wait_valid success");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
+    ok (cache_entry_get_valid (e) == true,
+        "cache entry set valid with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_clear_dirty (e) == 1,
+        "cache_entry_clear_dirty returns 1, b/c of a waiter");
+    ok (cache_entry_set_dirty (e, false) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_force_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty returns 0 w/ waiter");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 0,
+        "waiter callback not called on force clear dirty");
+
+    cache_entry_destroy (e); /* destroys o */
+}
+
+void waiter_json_tests (void)
+{
+    struct cache_entry *e;
+    json_t *o;
+    wait_t *w;
+    int count;
+
+    /* Test cache entry waiters.
+     * N.B. waiter is destroyed when run.
+     */
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create created empty object");
+    ok (cache_entry_get_valid (e) == false,
+        "cache entry invalid, adding waiter");
+    ok (cache_entry_clear_dirty (e) < 0,
+        "cache_entry_clear_dirty returns error, b/c no object set");
+    ok (cache_entry_force_clear_dirty (e) < 0,
+        "cache_entry_force_clear_dirty returns error, b/c no object set");
+    o = json_object ();
+    json_object_set_new (o, "foo", json_integer (42));
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
+    ok (cache_entry_set_json (e, o) == 0,
+        "cache_entry_set_json success");
     ok (cache_entry_get_valid (e) == true,
         "cache entry set valid with one waiter");
     ok (count == 1,
@@ -631,10 +632,10 @@ int main (int argc, char *argv[])
 
     cache_tests ();
     cache_entry_basic_tests ();
-    cache_entry_json_tests ();
     cache_entry_raw_tests ();
-    waiter_json_tests ();
+    cache_entry_json_tests ();
     waiter_raw_tests ();
+    waiter_json_tests ();
     cache_expiration_tests ();
     cache_remove_entry_tests ();
 

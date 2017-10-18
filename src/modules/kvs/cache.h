@@ -14,25 +14,25 @@ struct cache;
  *
  * cache_entry_create() creates an empty cache entry.
  *
- * cache_entry_create_json() creates an entry storing the data
- * associated with a json object.  The create transfers ownership of
- * 'o' to the cache entry.  On destroy, json_decref() will be called
- * on 'o'.  'o' cannot be NULL.
- *
  * cache_entry_create_raw() creates an entry storing the data passed
  * in.  The create transfers ownership of 'data' to the cache entry.
  * On destroy, free() will be called on 'data'.  If 'data' is NULL,
  * 'len' must be zero.  If 'data' is non-NULL, 'len' must be > 0.
  *
+ * cache_entry_create_json() creates an entry storing the data
+ * associated with a json object.  The create transfers ownership of
+ * 'o' to the cache entry.  On destroy, json_decref() will be called
+ * on 'o'.  'o' cannot be NULL.
+ *
  * cache_entry_get_valid() will return true on entries when
- * cache_entry_create_json() and cache_entry_get_raw() return success.
+ * cache_entry_get_raw() or cache_entry_create_json() return success.
  */
 struct cache_entry *cache_entry_create (void);
-struct cache_entry *cache_entry_create_json (json_t *o);
 struct cache_entry *cache_entry_create_raw (void *data, int len);
+struct cache_entry *cache_entry_create_json (json_t *o);
 void cache_entry_destroy (void *arg);
 
-/* Return true if cache entry contains valid json or raw data.
+/* Return true if cache entry contains valid raw or json data.
  * False would indicate that a load RPC is in progress.
  */
 bool cache_entry_get_valid (struct cache_entry *hp);
@@ -63,12 +63,12 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
 
 /* Accessors for cache entry data.
  *
- * json set accessor transfers ownership of 'o' to the cache entry.
- * 'o' must be non-NULL.
- *
  * raw set accessor transfers ownership of 'data' to the cache entry
  * if it is non-NULL.  If 'data' is non-NULL, 'len' must be > 0.  If
  * 'data' is NULL, 'len' must be zero.
+ *
+ * json set accessor transfers ownership of 'o' to the cache entry.
+ * 'o' must be non-NULL.
  *
  * cache_entry_clear_data () will clear any data in the entry.
  *
@@ -79,14 +79,14 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * wish to set it again, you must run cache_entry_clear_data() before
  * doing so.
  *
- * cache_entry_set_json() & cache_entry_set_raw() &
+ * cache_entry_set_raw() & cache_entry_set_json() &
  * cache_entry_clear_data() returns -1 on error, 0 on success
  */
-json_t *cache_entry_get_json (struct cache_entry *hp);
-int cache_entry_set_json (struct cache_entry *hp, json_t *o);
-
 int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
+
+json_t *cache_entry_get_json (struct cache_entry *hp);
+int cache_entry_set_json (struct cache_entry *hp, json_t *o);
 
 int cache_entry_clear_data (struct cache_entry *hp);
 
