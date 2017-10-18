@@ -242,7 +242,7 @@ static bool walk (lookup_t *lh)
 
             if (refcount != 1) {
                 flux_log (lh->h, LOG_ERR, "invalid dirref count: %d", refcount);
-                lh->errnum = EPERM;
+                lh->errnum = ENOTRECOVERABLE;
                 goto error;
             }
 
@@ -264,7 +264,7 @@ static bool walk (lookup_t *lh)
                 if (wl->depth == 0 && wl->dirent == lh->root_dirent)
                     lh->errnum = EINVAL;
                 else
-                    lh->errnum = EPERM;
+                    lh->errnum = ENOTRECOVERABLE;
                 goto error;
             }
             if (!treeobj_is_dir (dir)) {
@@ -274,7 +274,7 @@ static bool walk (lookup_t *lh)
                 if (wl->depth == 0 && wl->dirent == lh->root_dirent)
                     lh->errnum = EINVAL;
                 else
-                    lh->errnum = EPERM;
+                    lh->errnum = ENOTRECOVERABLE;
                 goto error;
             }
         } else {
@@ -292,7 +292,7 @@ static bool walk (lookup_t *lh)
                           "lh->path=%s pathcomp=%s: wl->dirent=%s ",
                           __FUNCTION__, lh->path, pathcomp, s);
                 free (s);
-                lh->errnum = EPERM;
+                lh->errnum = ENOTRECOVERABLE;
                 goto error;
             }
         }
@@ -532,7 +532,7 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
             int refcount, i;
 
             if (!treeobj_is_valref (lh->valref_missing_refs)) {
-                errno = EPERM;
+                errno = ENOTRECOVERABLE;
                 return -1;
             }
 
@@ -654,7 +654,7 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
     }
     if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
         flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
-        lh->errnum = EPERM;
+        lh->errnum = ENOTRECOVERABLE;
         return -1;
     }
     if (!(lh->val = treeobj_create_val (valdata, len))) {
@@ -688,7 +688,7 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
 
         if (cache_entry_get_raw (hp, NULL, &len) < 0) {
             flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
-            lh->errnum = EPERM;
+            lh->errnum = ENOTRECOVERABLE;
             return -1;
         }
 
@@ -819,7 +819,7 @@ bool lookup (lookup_t *lh)
                     }
                     if (!treeobj_is_dir (valtmp)) {
                         /* root_ref points to not dir */
-                        lh->errnum = EPERM;
+                        lh->errnum = ENOTRECOVERABLE;
                         goto done;
                     }
                     lh->val = json_incref (valtmp);
@@ -863,7 +863,7 @@ bool lookup (lookup_t *lh)
                 if (refcount != 1) {
                     flux_log (lh->h, LOG_ERR, "invalid dirref count: %d",
                               refcount);
-                    lh->errnum = EPERM;
+                    lh->errnum = ENOTRECOVERABLE;
                     goto done;
                 }
                 if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
@@ -877,12 +877,12 @@ bool lookup (lookup_t *lh)
                 }
                 if (!(valtmp = cache_entry_get_json (hp))) {
                     flux_log (lh->h, LOG_ERR, "dirref points to non-json");
-                    lh->errnum = EPERM;
+                    lh->errnum = ENOTRECOVERABLE;
                     goto done;
                 }
                 if (!treeobj_is_dir (valtmp)) {
                     /* dirref points to not dir */
-                    lh->errnum = EPERM;
+                    lh->errnum = ENOTRECOVERABLE;
                     goto done;
                 }
                 lh->val = json_incref (valtmp);
@@ -904,7 +904,7 @@ bool lookup (lookup_t *lh)
                 if (!refcount) {
                     flux_log (lh->h, LOG_ERR, "invalid valref count: %d",
                               refcount);
-                    lh->errnum = EPERM;
+                    lh->errnum = ENOTRECOVERABLE;
                     goto done;
                 }
                 if (refcount == 1) {
@@ -957,7 +957,7 @@ bool lookup (lookup_t *lh)
                 flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %s",
                           __FUNCTION__, s);
                 free (s);
-                lh->errnum = EPERM;
+                lh->errnum = ENOTRECOVERABLE;
                 goto done;
             }
             /* val now contains the requested object (copied) */
@@ -967,7 +967,7 @@ bool lookup (lookup_t *lh)
         default:
             flux_log (lh->h, LOG_ERR, "%s: invalid state %d",
                       __FUNCTION__, lh->state);
-            lh->errnum = EPERM;
+            lh->errnum = ENOTRECOVERABLE;
             goto done;
     }
 
