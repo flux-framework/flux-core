@@ -203,10 +203,6 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * valid, the load() will ultimately hang.  The caller will
      * timeout or eventually give up, so the KVS can continue along
      * its merry way.  So we just log the error.
-     *
-     * If this is the result of a synchronous call to load(), there
-     * should be no waiters on this cache entry.  load() will handle
-     * this error scenario appropriately.
      */
     if (cache_entry_is_type_raw (hp)) {
         char *datacpy = NULL;
