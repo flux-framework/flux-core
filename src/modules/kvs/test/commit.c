@@ -737,7 +737,8 @@ int missingref_cb (commit_t *c, const char *ref, void *data)
     return 0;
 }
 
-void commit_process_missing_ref (void) {
+void commit_process_missing_ref (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -837,7 +838,8 @@ int cache_error_cb (commit_t *c, struct cache_entry *hp, void *data)
     return -1;
 }
 
-void commit_process_error_callbacks (void) {
+void commit_process_error_callbacks (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -924,7 +926,8 @@ int cache_error_partway_cb (commit_t *c, struct cache_entry *hp, void *data)
     return 0;
 }
 
-void commit_process_error_callbacks_partway (void) {
+void commit_process_error_callbacks_partway (void)
+{
     struct cache *cache;
     struct error_partway_data epd = { .total_calls = 0, .success_returns = 0};
     commit_mgr_t *cm;
@@ -993,7 +996,8 @@ void commit_process_error_callbacks_partway (void) {
     cache_destroy (cache);
 }
 
-void commit_process_invalid_operation (void) {
+void commit_process_invalid_operation (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1033,7 +1037,8 @@ void commit_process_invalid_operation (void) {
     cache_destroy (cache);
 }
 
-void commit_process_invalid_hash (void) {
+void commit_process_invalid_hash (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1073,7 +1078,8 @@ void commit_process_invalid_hash (void) {
     cache_destroy (cache);
 }
 
-void commit_process_follow_link (void) {
+void commit_process_follow_link (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1141,7 +1147,8 @@ void commit_process_follow_link (void) {
     cache_destroy (cache);
 }
 
-void commit_process_dirval_test (void) {
+void commit_process_dirval_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1197,7 +1204,8 @@ void commit_process_dirval_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_delete_test (void) {
+void commit_process_delete_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1263,7 +1271,8 @@ void commit_process_delete_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_delete_nosubdir_test (void) {
+void commit_process_delete_nosubdir_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1304,7 +1313,8 @@ void commit_process_delete_nosubdir_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_delete_filevalinpath_test (void) {
+void commit_process_delete_filevalinpath_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1365,7 +1375,8 @@ void commit_process_delete_filevalinpath_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_bad_dirrefs (void) {
+void commit_process_bad_dirrefs (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1439,7 +1450,8 @@ int cache_count_raw_cb (commit_t *c, struct cache_entry *hp, void *data)
     return 0;
 }
 
-void commit_process_big_fileval (void) {
+void commit_process_big_fileval (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1537,7 +1549,8 @@ void commit_process_big_fileval (void) {
 /* Test giant directory entry, as large json objects will iterate through
  * their entries randomly based on the internal hash data structure.
  */
-void commit_process_giant_dir (void) {
+void commit_process_giant_dir (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
