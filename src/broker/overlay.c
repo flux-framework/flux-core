@@ -35,9 +35,11 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/kary.h"
 
 #include "heartbeat.h"
 #include "overlay.h"
+#include "attr.h"
 
 struct endpoint {
     zsock_t *zs;
@@ -54,6 +56,10 @@ struct overlay_struct {
 
     uint32_t size;
     uint32_t rank;
+    int tbon_k;
+    int tbon_level;
+    int tbon_maxlevel;
+    int tbon_descendants;
 
     struct endpoint *parent;    /* DEALER - requests to parent */
     overlay_cb_f parent_cb;
@@ -115,14 +121,26 @@ void overlay_destroy (overlay_t *ov)
     }
 }
 
-overlay_t *overlay_create (void)
+overlay_t *overlay_create ()
 {
     overlay_t *ov = xzmalloc (sizeof (*ov));
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
+
     if (!(ov->children = zhash_new ()))
         oom ();
     return ov;
+}
+
+void overlay_init (overlay_t *overlay,
+                   uint32_t size, uint32_t rank, int tbon_k)
+{
+    overlay->size = size;
+    overlay->rank = rank;
+    overlay->tbon_k = tbon_k;
+    overlay->tbon_level = kary_levelof (tbon_k, rank);
+    overlay->tbon_maxlevel = kary_levelof (tbon_k, size - 1);
+    overlay->tbon_descendants = kary_sum_descendants (tbon_k, size, rank);
 }
 
 void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
@@ -130,19 +148,9 @@ void overlay_set_sec (overlay_t *ov, flux_sec_t *sec)
     ov->sec = sec;
 }
 
-void overlay_set_rank (overlay_t *ov, uint32_t rank)
-{
-    ov->rank = rank;
-}
-
 uint32_t overlay_get_rank (overlay_t *ov)
 {
     return ov->rank;
-}
-
-void overlay_set_size (overlay_t *ov, uint32_t size)
-{
-    ov->size = size;
 }
 
 uint32_t overlay_get_size (overlay_t *ov)
@@ -603,6 +611,59 @@ int overlay_bind (overlay_t *ov)
     rc = 0;
 done:
     return rc;
+}
+
+/* A callback of type attr_get_f to allow retrieving some information
+ * from an overlay_t through attr_get().
+ */
+static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
+{
+    overlay_t *overlay = arg;
+    int rc = -1;
+
+    if (!strcmp (name, "tbon.parent-endpoint"))
+        *val = overlay_get_parent(overlay);
+    else if (!strcmp (name, "mcast.relay-endpoint"))
+        *val = overlay_get_relay(overlay);
+    else {
+        errno = ENOENT;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
+{
+    if (attr_add_active (attrs, "tbon.parent-endpoint",
+                         FLUX_ATTRFLAG_READONLY,
+                         overlay_attr_get_cb, NULL, overlay) < 0)
+        return -1;
+    if (attr_add_active (attrs, "mcast.relay-endpoint",
+                         FLUX_ATTRFLAG_IMMUTABLE,
+                         overlay_attr_get_cb, NULL, overlay) < 0)
+        return -1;
+    if (attr_add_uint32 (attrs, "rank", overlay->rank,
+                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    if (attr_add_uint32 (attrs, "size", overlay->size,
+                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    if (attr_add_int (attrs, "tbon.arity", overlay->tbon_k,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    if (attr_add_int (attrs, "tbon.level", overlay->tbon_level,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    if (attr_add_int (attrs, "tbon.maxlevel", overlay->tbon_maxlevel,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    if (attr_add_int (attrs, "tbon.descendants", overlay->tbon_descendants,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+
+    return 0;
 }
 
 /*
