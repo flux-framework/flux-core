@@ -7,6 +7,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_txn_private.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/commit.h"
 #include "src/modules/kvs/lookup.h"
@@ -25,21 +26,16 @@ static int test_global = 5;
 void ops_append (json_t *array, const char *key, const char *value)
 {
     json_t *op;
-    json_t *o;
+    json_t *dirent;
+    int flags = 0; // not used for now
 
-    op = json_object ();
-    o = json_string (key);
-    json_object_set_new (op, "key", o);
+    if (value)
+        dirent = treeobj_create_val ((void *)value, strlen (value));
+    else
+        dirent = json_null ();
 
-    if (value) {
-        json_t *dirent = treeobj_create_val ((void *)value, strlen (value));
-        json_object_set_new (op, "dirent", dirent);
-    }
-    else {
-        json_t *null;
-        null = json_null ();
-        json_object_set_new (op, "dirent", null);
-    }
+    txn_encode_op (key, flags, dirent, &op);
+    json_decref (dirent);
     json_array_append (array, op);
 }
 
