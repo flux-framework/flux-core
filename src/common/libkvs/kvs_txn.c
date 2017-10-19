@@ -33,7 +33,7 @@
 #include "treeobj.h"
 
 /* A transaction is an ordered list of operations.
- * Each operation contains a key and a "dirent" (RFC 11 tree object).
+ * Each operation contains key, flags, and a "dirent" (RFC 11 tree object).
  * The operation assigns a new dirent to the key.  A NULL dirent removes
  * the key.  A commit operation accepts a transaction and applies the
  * whole thing, in order.  If any operation fails, the transaction is
@@ -100,11 +100,15 @@ static int validate_flags (int flags, int allowed)
 static int validate_op (json_t *op)
 {
     const char *key;
+    int flags;
     json_t *dirent = NULL;
 
-    if (json_unpack (op, "{s:s}", "key", &key) < 0)
+    if (json_unpack (op, "{s:s s:i}",
+                     "key", &key, "flags", &flags) < 0)
         goto error;
     if (strlen (key) == 0)
+        goto error;
+    if (flags != 0)
         goto error;
     if (json_unpack (op, "{s:n}", "dirent") == 0)
         ; // unlink sets dirent NULL
@@ -128,9 +132,11 @@ static int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
     json_t *op;
 
     if (!dirent)
-        op = json_pack ("{s:s s:n}", "key", key, "dirent");
+        op = json_pack ("{s:s s:i s:n}",
+                        "key", key, "flags", flags, "dirent");
     else
-        op = json_pack ("{s:s s:O}", "key", key, "dirent", dirent);
+        op = json_pack ("{s:s s:i s:O}",
+                        "key", key, "flags", flags, "dirent", dirent);
     if (!op) {
         errno = ENOMEM;
         goto error;
@@ -196,6 +202,7 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
             errno = EINVAL;
             goto error;
         }
+        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
     }
     else {
         json_t *test;
@@ -247,6 +254,7 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
      */
     if ((flags & FLUX_KVS_TREEOBJ)) {
         dirent = val;
+        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
     }
     else {
         char *s;
