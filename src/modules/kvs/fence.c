@@ -217,3 +217,7 @@ error:
     errno = saved_errno;
     return -1;
 }
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

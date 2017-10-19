@@ -907,3 +907,7 @@ int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
     }
     return 0;
 }
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
