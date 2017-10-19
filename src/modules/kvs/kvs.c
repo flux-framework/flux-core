@@ -1676,7 +1676,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
             saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_create_json_empty",
+            flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
             goto decref_done;
         }
