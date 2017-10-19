@@ -583,8 +583,9 @@ commit_process_t commit_process (commit_t *c,
 
                 for (i = 0; i < len; i++) {
                     missing_ref = NULL;
-                    if (!(op = json_array_get (ops, i))
-                        || txn_decode_op (op, &key, &flags, &dirent) < 0)
+                    op = json_array_get (ops, i);
+                    assert (op != NULL);
+                    if (txn_decode_op (op, &key, &flags, &dirent) < 0)
                         continue;
                     if (commit_link_dirent (c,
                                             current_epoch,
