@@ -37,8 +37,10 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
 {
     if (txn) {
         json_t *ops;
-        if (txn_get (txn, TXN_GET_ALL, &ops) < 0)
+        if (!(ops = txn_get_ops (txn))) {
+            errno = EINVAL;
             return NULL;
+        }
         return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
                                  "{s:s s:i s:i s:O}",
                                  "name", name,

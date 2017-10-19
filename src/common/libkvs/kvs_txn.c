@@ -58,7 +58,6 @@
  */
 struct flux_kvs_txn {
     json_t *ops;
-    int cursor;
 };
 
 void flux_kvs_txn_destroy (flux_kvs_txn_t *txn)
@@ -364,30 +363,27 @@ error:
     return -1;
 }
 
-/* accessors for KVS internals and unit tests
- */
-int txn_get (flux_kvs_txn_t *txn, int request, void *arg)
+/* kvs_txn_private.h */
+
+int txn_get_op_count (flux_kvs_txn_t *txn)
 {
-    switch (request) {
-        case TXN_GET_FIRST:
-            txn->cursor = 0;
-            if (arg)
-                *(json_t **)arg = json_array_get (txn->ops, txn->cursor);
-            txn->cursor++;
-            break;
-        case TXN_GET_NEXT:
-            if (arg)
-                *(json_t **)arg = json_array_get (txn->ops, txn->cursor);
-            txn->cursor++;
-            break;
-        case TXN_GET_ALL:
-            if (arg)
-                *(json_t **)arg = txn->ops;
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
+    return json_array_size (txn->ops);
+}
+
+json_t *txn_get_ops (flux_kvs_txn_t *txn)
+{
+    return txn->ops;
+}
+
+int txn_get_op (flux_kvs_txn_t *txn, int index, json_t **op)
+{
+    json_t *entry = json_array_get (txn->ops, index);
+    if (!entry) {
+        errno = EINVAL;
+        return -1;
     }
+    if (op)
+        *op = entry;
     return 0;
 }
 
