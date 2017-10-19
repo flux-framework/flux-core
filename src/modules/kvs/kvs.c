@@ -1456,9 +1456,9 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                 flux_log_error (ctx->h, "%s: cache_entry_create_json",
                                 __FUNCTION__);
                 json_decref (root);
-                return;
             }
-            cache_insert (ctx->cache, rootdir, hp);
+            else
+                cache_insert (ctx->cache, rootdir, hp);
         }
     }
     setroot (ctx, rootdir, rootseq);
