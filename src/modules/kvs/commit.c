@@ -159,28 +159,18 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
     if (c->state == COMMIT_STATE_STORE
         || c->state == COMMIT_STATE_PRE_FINISHED) {
         href_t ref;
+        void *data;
+        int len;
         int ret;
         assert (cache_entry_get_valid (hp) == true);
         assert (cache_entry_get_dirty (hp) == true);
         ret = cache_entry_clear_dirty (hp);
         assert (ret == 0);
 
-        if (cache_entry_is_type_raw (hp) == true) {
-            void *data;
-            int len;
+        ret = cache_entry_get_raw (hp, &data, &len);
+        assert (ret == 0);
 
-            ret = cache_entry_get_raw (hp, &data, &len);
-            assert (ret == 0);
-
-            blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
-        }
-        else {
-            json_t *o = cache_entry_get_json (hp);
-            assert (o != NULL);
-
-            if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0)
-                flux_log_error (c->cm->h, "kvs_util_json_hash");
-        }
+        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
 
         ret = cache_remove_entry (c->cm->cache, ref);
         assert (ret == 1);
@@ -198,7 +188,8 @@ static void cleanup_dirty_cache_list (commit_t *c)
 /* Store object 'o' under key 'ref' in local cache.
  * Object reference is still owned by the caller.
  * 'is_raw' indicates this data is a json string w/ base64 value and
- * should be flushed to the content store as raw data.
+ * should be flushed to the content store as raw data after it is
+ * decoded.
  * Returns -1 on error, 0 on success entry already there, 1 on success
  * entry needs to be flushed to content store
  */
@@ -236,7 +227,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
-        if (!(hp = cache_entry_create (CACHE_DATA_TYPE_NONE))) {
+        if (!(hp = cache_entry_create ())) {
             saved_errno = ENOMEM;
             goto done;
         }
