@@ -160,17 +160,30 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
         || c->state == COMMIT_STATE_PRE_FINISHED) {
         href_t ref;
         int ret;
+        assert (cache_entry_get_valid (hp) == true);
         assert (cache_entry_get_dirty (hp) == true);
         ret = cache_entry_clear_dirty (hp);
         assert (ret == 0);
-        if (kvs_util_json_hash (c->cm->hash_name,
-                                cache_entry_get_json (hp),
-                                ref) < 0)
-            flux_log_error (c->cm->h, "kvs_util_json_hash");
-        else {
-            ret = cache_remove_entry (c->cm->cache, ref);
-            assert (ret == 1);
+
+        if (cache_entry_is_type_raw (hp) == true) {
+            void *data;
+            int len;
+
+            ret = cache_entry_get_raw (hp, &data, &len);
+            assert (ret == 0);
+
+            blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
         }
+        else {
+            json_t *o = cache_entry_get_json (hp);
+            assert (o != NULL);
+
+            if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0)
+                flux_log_error (c->cm->h, "kvs_util_json_hash");
+        }
+
+        ret = cache_remove_entry (c->cm->cache, ref);
+        assert (ret == 1);
     }
 }
 
