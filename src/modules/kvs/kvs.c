@@ -203,10 +203,6 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * valid, the load() will ultimately hang.  The caller will
      * timeout or eventually give up, so the KVS can continue along
      * its merry way.  So we just log the error.
-     *
-     * If this is the result of a synchronous call to load(), there
-     * should be no waiters on this cache entry.  load() will handle
-     * this error scenario appropriately.
      */
     if (cache_entry_is_type_raw (hp)) {
         char *datacpy = NULL;
@@ -1460,9 +1456,9 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                 flux_log_error (ctx->h, "%s: cache_entry_create_json",
                                 __FUNCTION__);
                 json_decref (root);
-                return;
             }
-            cache_insert (ctx->cache, rootdir, hp);
+            else
+                cache_insert (ctx->cache, rootdir, hp);
         }
     }
     setroot (ctx, rootdir, rootseq);
@@ -1680,7 +1676,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
             saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_create_json_empty",
+            flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
             goto decref_done;
         }
