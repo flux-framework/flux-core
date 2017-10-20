@@ -36,7 +36,7 @@ void ops_append (json_t *array, const char *key, const char *value)
 
     txn_encode_op (key, flags, dirent, &op);
     json_decref (dirent);
-    json_array_append (array, op);
+    json_array_append_new (array, op);
 }
 
 struct cache *create_cache_with_empty_rootdir (href_t ref)
