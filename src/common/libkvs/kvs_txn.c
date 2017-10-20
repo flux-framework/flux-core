@@ -122,19 +122,22 @@ error:
 static int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
                                      const char *key, json_t *dirent)
 {
-    json_t *op;
+    json_t *op = NULL;
+    int saved_errno;
 
     if (txn_encode_op (key, flags, dirent, &op) < 0)
         goto error;
     if (validate_op (op) < 0)
         goto error;
     if (json_array_append_new (txn->ops, op) < 0) {
-        json_decref (op);
         errno = ENOMEM;
         goto error;
     }
     return 0;
 error:
+    saved_errno = errno;
+    json_decref (op);
+    errno = saved_errno;
     return -1;
 }
 
