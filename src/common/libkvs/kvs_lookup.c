@@ -192,28 +192,10 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
         if (json_str)
             *json_str = ctx->treeobj_str;
     }
-    /* If SYMLINK flag, extract link target from symlink object
-     * and return it directly.
-     */
-    else if ((ctx->flags & FLUX_KVS_READLINK)) {
-        if (!treeobj_is_symlink (ctx->treeobj)) {
-            errno = EINVAL;
-            return -1;
-        }
-        if (json_str) {
-            json_t *str = treeobj_get_data (ctx->treeobj);
-            const char *s = json_string_value (str);
-            if (!s) {
-                errno = EINVAL;
-                return -1;
-            }
-            *json_str = s;
-        }
-    }
     /* No flags, val is a 'val' object.
      * Decide the data and return it as a string if it is properly terminated.
      */
-    else {
+    else if (ctx->flags == 0) {
         if (!ctx->val_valid) {
             if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
                                                   &ctx->val_len) < 0)
@@ -227,6 +209,10 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
             if (json_str)
                 *json_str = s;
         }
+    }
+    else {
+        errno = EINVAL;
+        return -1;
     }
     return 0;
 }
@@ -303,6 +289,34 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     }
     if (dirp)
         *dirp = ctx->dir;
+    return 0;
+}
+
+int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
+{
+    struct lookup_ctx *ctx;
+    json_t *str;
+    const char *s;
+
+    if (!(ctx = flux_future_aux_get (f, auxkey))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(ctx->treeobj)) {
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+            return -1;
+    }
+    if (!treeobj_is_symlink (ctx->treeobj)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(str = treeobj_get_data (ctx->treeobj))
+                                || !(s = json_string_value (str))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (target)
+        *target = s;
     return 0;
 }
 
