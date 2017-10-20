@@ -49,7 +49,7 @@ declare -A extra_cmake_opts=(\
 #  Python pip packages
 #
 pips="\
-cffi==1.1 \
+cffi==1.5 \
 coverage \
 pylint==1.5.6
 "
