@@ -350,6 +350,7 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
         goto error;
     if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
         goto error;
+    json_decref (dirent);
     return 0;
 error:
     saved_errno = errno;
