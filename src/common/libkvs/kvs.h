@@ -14,6 +14,12 @@
 extern "C" {
 #endif
 
+enum {
+    FLUX_KVS_READDIR = 1,
+    FLUX_KVS_READLINK = 2,
+    FLUX_KVS_TREEOBJ = 16,
+};
+
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.

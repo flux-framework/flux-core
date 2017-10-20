@@ -33,7 +33,7 @@
 #include "treeobj.h"
 
 /* A transaction is an ordered list of operations.
- * Each operation contains a key and a "dirent" (RFC 11 tree object).
+ * Each operation contains key, flags, and a "dirent" (RFC 11 tree object).
  * The operation assigns a new dirent to the key.  A NULL dirent removes
  * the key.  A commit operation accepts a transaction and applies the
  * whole thing, in order.  If any operation fails, the transaction is
@@ -58,7 +58,6 @@
  */
 struct flux_kvs_txn {
     json_t *ops;
-    int cursor;
 };
 
 void flux_kvs_txn_destroy (flux_kvs_txn_t *txn)
@@ -100,18 +99,16 @@ static int validate_flags (int flags, int allowed)
 static int validate_op (json_t *op)
 {
     const char *key;
-    json_t *dirent = NULL;
+    int flags;
+    json_t *dirent;
 
-    if (json_unpack (op, "{s:s}", "key", &key) < 0)
+    if (txn_decode_op (op, &key, &flags, &dirent) < 0)
         goto error;
     if (strlen (key) == 0)
         goto error;
-    if (json_unpack (op, "{s:n}", "dirent") == 0)
-        ; // unlink sets dirent NULL
-    else if (json_unpack (op, "{s:o}", "dirent", &dirent) == 0) {
-        if (treeobj_validate (dirent) < 0)
-            goto error;
-    } else
+    if (flags != 0)
+        goto error;
+    if (!json_is_null (dirent) && treeobj_validate (dirent) < 0)
         goto error;
     return 0;
 error:
@@ -127,14 +124,8 @@ static int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
 {
     json_t *op;
 
-    if (!dirent)
-        op = json_pack ("{s:s s:n}", "key", key, "dirent");
-    else
-        op = json_pack ("{s:s s:O}", "key", key, "dirent", dirent);
-    if (!op) {
-        errno = ENOMEM;
+    if (txn_encode_op (key, flags, dirent, &op) < 0)
         goto error;
-    }
     if (validate_op (op) < 0)
         goto error;
     if (json_array_append_new (txn->ops, op) < 0) {
@@ -196,6 +187,7 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
             errno = EINVAL;
             goto error;
         }
+        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
     }
     else {
         json_t *test;
@@ -247,6 +239,7 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
      */
     if ((flags & FLUX_KVS_TREEOBJ)) {
         dirent = val;
+        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
     }
     else {
         char *s;
@@ -319,16 +312,25 @@ error:
 int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
                          const char *key)
 {
+    json_t *dirent = NULL;
+    int saved_errno;
+
     if (!txn || !key) {
         errno = EINVAL;
         goto error;
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, NULL) < 0)
+    if (!(dirent = json_null ()))
         goto error;
+    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+        goto error;
+    json_decref (dirent);
     return 0;
 error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
     return -1;
 }
 
@@ -348,6 +350,7 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
         goto error;
     if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
         goto error;
+    json_decref (dirent);
     return 0;
 error:
     saved_errno = errno;
@@ -356,31 +359,70 @@ error:
     return -1;
 }
 
-/* accessors for KVS internals and unit tests
- */
-int txn_get (flux_kvs_txn_t *txn, int request, void *arg)
+/* kvs_txn_private.h */
+
+int txn_get_op_count (flux_kvs_txn_t *txn)
 {
-    switch (request) {
-        case TXN_GET_FIRST:
-            txn->cursor = 0;
-            if (arg)
-                *(json_t **)arg = json_array_get (txn->ops, txn->cursor);
-            txn->cursor++;
-            break;
-        case TXN_GET_NEXT:
-            if (arg)
-                *(json_t **)arg = json_array_get (txn->ops, txn->cursor);
-            txn->cursor++;
-            break;
-        case TXN_GET_ALL:
-            if (arg)
-                *(json_t **)arg = txn->ops;
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
+    return json_array_size (txn->ops);
+}
+
+json_t *txn_get_ops (flux_kvs_txn_t *txn)
+{
+    return txn->ops;
+}
+
+int txn_get_op (flux_kvs_txn_t *txn, int index, json_t **op)
+{
+    json_t *entry = json_array_get (txn->ops, index);
+    if (!entry) {
+        errno = EINVAL;
+        return -1;
     }
+    if (op)
+        *op = entry;
     return 0;
+}
+
+int txn_decode_op (json_t *op, const char **keyp, int *flagsp, json_t **direntp)
+{
+    const char *key;
+    int flags;
+    json_t *dirent;
+
+    if (json_unpack (op, "{s:s s:i s:o !}",
+                         "key", &key,
+                         "flags", &flags,
+                         "dirent", &dirent) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (keyp)
+        *keyp = key;
+    if (flagsp)
+        *flagsp = flags;
+    if (direntp)
+        *direntp = dirent;
+    return 0;
+}
+
+int txn_encode_op (const char *key, int flags, json_t *dirent, json_t **opp)
+{
+    json_t *op;
+
+    if (!key || !dirent) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(op = json_pack ("{s:s s:i s:O}",
+                          "key", key,
+                          "flags", flags,
+                          "dirent", dirent))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *opp = op;
+    return 0;
+
 }
 
 /*

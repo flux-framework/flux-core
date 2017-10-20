@@ -103,6 +103,7 @@ void basic (void)
     int rc;
     const char *key;
     json_t *entry, *dirent;
+    int flags;
 
     /* Create a transaction
      */
@@ -149,71 +150,82 @@ void basic (void)
 
     /* Verify transaction contents
      */
-    ok (txn_get (txn, TXN_GET_FIRST, &entry) == 0
+    ok (txn_get_op_count (txn) == 7,
+        "txn contains 7 ops");
+    ok (txn_get_op (txn, 0, &entry) == 0
         && entry != NULL,
         "1: retrieved");
-    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
-                                         "dirent", &dirent) == 0,
-        "1: unpacked operation");
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "1: txn_decode_op works");
     ok (!strcmp (key, "foo.bar.baz")
+        && flags == 0
         && check_int_value (dirent, 42) == 0,
         "1: put foo.bar.baz = 42");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0,
+    ok (txn_get_op (txn, 1, &entry) == 0,
         "2: retrieved");
     jdiag (entry);
-    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
-                                         "dirent", &dirent) == 0,
-        "2: unpacked operation");
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "2: txn_decode_op works");
     ok (!strcmp (key, "foo.bar.bleep")
+        && flags == 0
         && check_string_value (dirent, "foo") == 0,
         "2: put foo.bar.baz = \"foo\"");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+    ok (txn_get_op (txn, 2, &entry) == 0 && entry != NULL,
         "3: retrieved");
     jdiag (entry);
-    rc = json_unpack (entry, "{s:s s:n}", "key", &key,
-                                          "dirent");
-    ok (rc == 0 && !strcmp (key, "a"),
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "3: txn_decode_op works");
+    ok (!strcmp (key, "a")
+        && flags == 0
+        && json_is_null (dirent),
         "3: unlink a");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+    ok (txn_get_op (txn, 3, &entry) == 0 && entry != NULL,
         "4: retrieved");
     jdiag (entry);
-    rc = json_unpack (entry, "{s:s s:o}", "key", &key,
-                                          "dirent", &dirent);
-    ok (rc == 0 && !strcmp (key, "b.b.b")
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "4: txn_decode_op works");
+    ok (!strcmp (key, "b.b.b")
+        && flags == 0
         && treeobj_is_dir (dirent) && treeobj_get_count (dirent) == 0,
         "4: mkdir b.b.b");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+    ok (txn_get_op (txn, 4, &entry) == 0 && entry != NULL,
         "5: retrieved");
     jdiag (entry);
-    rc = json_unpack (entry, "{s:s s:o}", "key", &key,
-                                          "dirent", &dirent);
-    ok (rc == 0 && !strcmp (key, "c.c.c") && treeobj_is_symlink (dirent)
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "5: txn_decode_op works");
+    ok (!strcmp (key, "c.c.c")
+        && flags == 0
+        && treeobj_is_symlink (dirent)
         && !strcmp (json_string_value (treeobj_get_data (dirent)), "b.b.b"),
         "5: symlink c.c.c b.b.b");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+    ok (txn_get_op (txn, 5, &entry) == 0 && entry != NULL,
         "6: retrieved");
-    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
-                                         "dirent", &dirent) == 0,
-        "6: unpacked operation");
+    jdiag (entry);
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "6: txn_decode_op works");
     ok (!strcmp (key, "d.d.d")
+        && flags == 0
         && check_int_value (dirent, 43) == 0,
         "6: put foo.bar.baz = 43");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+    ok (txn_get_op (txn, 6, &entry) == 0 && entry != NULL,
         "7: retrieved");
     jdiag (entry);
-    rc = json_unpack (entry, "{s:s s:n}", "key", &key,
-                                          "dirent");
-    ok (rc == 0 && !strcmp (key, "e"),
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "6: txn_decode_op works");
+    ok (!strcmp (key, "e")
+        && flags == 0
+        && json_is_null (dirent),
         "7: unlink e");
 
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry == NULL,
-        "8: NULL - end of transaction");
+    errno = 0;
+    ok (txn_get_op (txn, 7, &entry) < 0 && errno == EINVAL,
+        "8: invalid (end of transaction)");
 
     flux_kvs_txn_destroy (txn);
 }
@@ -224,7 +236,7 @@ void test_raw_values (void)
     char buf[13], *nbuf;
     json_t *entry, *dirent;
     const char *key;
-    int nlen;
+    int flags, nlen;
 
     memset (buf, 'c', sizeof (buf));
 
@@ -254,12 +266,13 @@ void test_raw_values (void)
         "flux_kvs_txn_put_raw works with data");
     /* Get first.
      */
-    ok (txn_get (txn, TXN_GET_FIRST, &entry) == 0 && entry != NULL,
+    ok (txn_get_op_count (txn) == 2,
+        "txn contains two ops");
+    ok (txn_get_op (txn, 0, &entry) == 0 && entry != NULL,
         "retreived 1st op from txn");
     jdiag (entry);
-    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
-                                         "dirent", &dirent) == 0,
-        "decoded op to get dirent");
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "txn_decode_op works");
     nbuf = buf;
     nlen = sizeof (buf);
     ok (treeobj_decode_val (dirent, (void **)&nbuf, &nlen) == 0,
@@ -271,12 +284,11 @@ void test_raw_values (void)
 
     /* Get 2nd
      */
-    ok (txn_get (txn, TXN_GET_NEXT, &entry) == 0 && entry != NULL,
+    ok (txn_get_op (txn, 1, &entry) == 0 && entry != NULL,
         "retreived 2nd op from txn");
     jdiag (entry);
-    ok (json_unpack (entry, "{s:s s:o}", "key", &key,
-                                         "dirent", &dirent) == 0,
-        "decoded op to get dirent");
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "txn_decode_op works");
     ok (treeobj_decode_val (dirent, (void **)&nbuf, &nlen) == 0,
         "retrieved buffer from dirent");
     ok (nlen == sizeof (buf),

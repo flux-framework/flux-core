@@ -38,6 +38,7 @@
 
 #include "src/common/libutil/base64.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_txn_private.h"
 
 #include "commit.h"
 #include "kvs_util.h"
@@ -569,10 +570,12 @@ commit_process_t commit_process (commit_t *c,
              * is unrolled later on.
              */
             if (fence_get_json_ops (c->f)) {
-                json_t *op, *key, *dirent;
+                json_t *op, *dirent;
                 const char *missing_ref = NULL;
                 json_t *ops = fence_get_json_ops (c->f);
                 int i, len = json_array_size (ops);
+                const char *key;
+                int flags;
 
                 /* Caller didn't call commit_iter_missing_refs() */
                 if (zlist_first (c->item_callback_list))
@@ -580,14 +583,16 @@ commit_process_t commit_process (commit_t *c,
 
                 for (i = 0; i < len; i++) {
                     missing_ref = NULL;
-                    if (!(op = json_array_get (ops, i))
-                        || !(key = json_object_get (op, "key"))
-                        || !(dirent = json_object_get (op, "dirent")))
-                        continue;
+                    op = json_array_get (ops, i);
+                    assert (op != NULL);
+                    if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
+                        c->errnum = errno;
+                        break;
+                    }
                     if (commit_link_dirent (c,
                                             current_epoch,
                                             c->rootcpy,
-                                            json_string_value (key),
+                                            key,
                                             dirent,
                                             &missing_ref) < 0) {
                         c->errnum = errno;
@@ -907,3 +912,7 @@ int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
     }
     return 0;
 }
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

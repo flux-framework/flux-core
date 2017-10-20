@@ -7,6 +7,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_txn_private.h"
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/commit.h"
 #include "src/modules/kvs/lookup.h"
@@ -25,22 +26,17 @@ static int test_global = 5;
 void ops_append (json_t *array, const char *key, const char *value)
 {
     json_t *op;
-    json_t *o;
+    json_t *dirent;
+    int flags = 0; // not used for now
 
-    op = json_object ();
-    o = json_string (key);
-    json_object_set_new (op, "key", o);
+    if (value)
+        dirent = treeobj_create_val ((void *)value, strlen (value));
+    else
+        dirent = json_null ();
 
-    if (value) {
-        json_t *dirent = treeobj_create_val ((void *)value, strlen (value));
-        json_object_set_new (op, "dirent", dirent);
-    }
-    else {
-        json_t *null;
-        null = json_null ();
-        json_object_set_new (op, "dirent", null);
-    }
-    json_array_append (array, op);
+    txn_encode_op (key, flags, dirent, &op);
+    json_decref (dirent);
+    json_array_append_new (array, op);
 }
 
 struct cache *create_cache_with_empty_rootdir (href_t ref)
@@ -741,7 +737,8 @@ int missingref_cb (commit_t *c, const char *ref, void *data)
     return 0;
 }
 
-void commit_process_missing_ref (void) {
+void commit_process_missing_ref (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -841,7 +838,8 @@ int cache_error_cb (commit_t *c, struct cache_entry *hp, void *data)
     return -1;
 }
 
-void commit_process_error_callbacks (void) {
+void commit_process_error_callbacks (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -928,7 +926,8 @@ int cache_error_partway_cb (commit_t *c, struct cache_entry *hp, void *data)
     return 0;
 }
 
-void commit_process_error_callbacks_partway (void) {
+void commit_process_error_callbacks_partway (void)
+{
     struct cache *cache;
     struct error_partway_data epd = { .total_calls = 0, .success_returns = 0};
     commit_mgr_t *cm;
@@ -997,7 +996,8 @@ void commit_process_error_callbacks_partway (void) {
     cache_destroy (cache);
 }
 
-void commit_process_invalid_operation (void) {
+void commit_process_invalid_operation (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1037,7 +1037,62 @@ void commit_process_invalid_operation (void) {
     cache_destroy (cache);
 }
 
-void commit_process_invalid_hash (void) {
+void commit_process_malformed_operation (void)
+{
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    href_t root_ref;
+    fence_t *f;
+    json_t *ops, *badop;
+
+    cache = create_cache_with_empty_rootdir (root_ref);
+
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /* Create ops array containing one bad op.
+     */
+    ops = json_array ();
+    badop = json_pack ("{s:s s:i s:n}",
+                       "key", "mykey",
+                       "flags", 0,
+                       "donuts"); // EPROTO: should be "dirent"
+    ok (ops != NULL && badop != NULL
+        && json_array_append_new (ops, badop) == 0,
+        "created ops array with one malformed unlink op");
+
+    /* Create fence_t and add ops array to it.
+     */
+    ok ((f = fence_create ("malformed", 1, 0)) != NULL,
+        "fence_create works");
+
+    ok (fence_add_request_data (f, ops) == 0,
+        "fence_add_request_data add works");
+
+    /* Submit fence_t to commit_mgr
+     */
+    ok (commit_mgr_add_fence (cm, f) == 0,
+        "commit_mgr_add_fence works");
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
+        "commit_mgr_process_fence_request works");
+
+    /* Process ready commit and verify EPROTO error
+     */
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR
+        && commit_get_errnum (c) == EPROTO,
+        "commit_process encountered EPROTO error");
+
+    json_decref (ops);
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+
+void commit_process_invalid_hash (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1077,7 +1132,8 @@ void commit_process_invalid_hash (void) {
     cache_destroy (cache);
 }
 
-void commit_process_follow_link (void) {
+void commit_process_follow_link (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1145,7 +1201,8 @@ void commit_process_follow_link (void) {
     cache_destroy (cache);
 }
 
-void commit_process_dirval_test (void) {
+void commit_process_dirval_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1201,7 +1258,8 @@ void commit_process_dirval_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_delete_test (void) {
+void commit_process_delete_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1267,7 +1325,8 @@ void commit_process_delete_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_delete_nosubdir_test (void) {
+void commit_process_delete_nosubdir_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1308,7 +1367,8 @@ void commit_process_delete_nosubdir_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_delete_filevalinpath_test (void) {
+void commit_process_delete_filevalinpath_test (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1369,7 +1429,8 @@ void commit_process_delete_filevalinpath_test (void) {
     cache_destroy (cache);
 }
 
-void commit_process_bad_dirrefs (void) {
+void commit_process_bad_dirrefs (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1443,7 +1504,8 @@ int cache_count_raw_cb (commit_t *c, struct cache_entry *hp, void *data)
     return 0;
 }
 
-void commit_process_big_fileval (void) {
+void commit_process_big_fileval (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1541,7 +1603,8 @@ void commit_process_big_fileval (void) {
 /* Test giant directory entry, as large json objects will iterate through
  * their entries randomly based on the internal hash data structure.
  */
-void commit_process_giant_dir (void) {
+void commit_process_giant_dir (void)
+{
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
@@ -1674,6 +1737,7 @@ int main (int argc, char *argv[])
     commit_process_error_callbacks ();
     commit_process_error_callbacks_partway ();
     commit_process_invalid_operation ();
+    commit_process_malformed_operation ();
     commit_process_invalid_hash ();
     commit_process_follow_link ();
     commit_process_dirval_test ();

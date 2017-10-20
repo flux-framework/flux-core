@@ -150,3 +150,7 @@ void commit_mgr_clear_noop_stores (commit_mgr_t *cm);
 int commit_mgr_merge_ready_commits (commit_mgr_t *cm);
 
 #endif /* !_FLUX_KVS_COMMIT_H */
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

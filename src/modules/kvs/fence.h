@@ -46,3 +46,8 @@ int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
 int fence_merge (fence_t *dest, fence_t *src);
 
 #endif /* !_FLUX_KVS_FENCE_H */
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
+
