@@ -1037,6 +1037,60 @@ void commit_process_invalid_operation (void)
     cache_destroy (cache);
 }
 
+void commit_process_malformed_operation (void)
+{
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    href_t root_ref;
+    fence_t *f;
+    json_t *ops, *badop;
+
+    cache = create_cache_with_empty_rootdir (root_ref);
+
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /* Create ops array containing one bad op.
+     */
+    ops = json_array ();
+    badop = json_pack ("{s:s s:i s:n}",
+                       "key", "mykey",
+                       "flags", 0,
+                       "donuts"); // EPROTO: should be "dirent"
+    ok (ops != NULL && badop != NULL
+        && json_array_append_new (ops, badop) == 0,
+        "created ops array with one malformed unlink op");
+
+    /* Create fence_t and add ops array to it.
+     */
+    ok ((f = fence_create ("malformed", 1, 0)) != NULL,
+        "fence_create works");
+
+    ok (fence_add_request_data (f, ops) == 0,
+        "fence_add_request_data add works");
+
+    /* Submit fence_t to commit_mgr
+     */
+    ok (commit_mgr_add_fence (cm, f) == 0,
+        "commit_mgr_add_fence works");
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
+        "commit_mgr_process_fence_request works");
+
+    /* Process ready commit and verify EPROTO error
+     */
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR
+        && commit_get_errnum (c) == EPROTO,
+        "commit_process encountered EPROTO error");
+
+    json_decref (ops);
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+
 void commit_process_invalid_hash (void)
 {
     struct cache *cache;
@@ -1683,6 +1737,7 @@ int main (int argc, char *argv[])
     commit_process_error_callbacks ();
     commit_process_error_callbacks_partway ();
     commit_process_invalid_operation ();
+    commit_process_malformed_operation ();
     commit_process_invalid_hash ();
     commit_process_follow_link ();
     commit_process_dirval_test ();
