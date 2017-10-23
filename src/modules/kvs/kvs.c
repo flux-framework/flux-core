@@ -1402,10 +1402,15 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
              * no consistency issue by not caching.  We will still
              * set new root below via setroot().
              */
-            if (!(hp = cache_entry_create_json (json_incref (root)))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create_json",
+            if (!(hp = cache_entry_create ())) {
+                flux_log_error (ctx->h, "%s: cache_entry_create",
+                                __FUNCTION__);
+            }
+            else if (cache_entry_set_json (hp, json_incref (root)) < 0) {
+                flux_log_error (ctx->h, "%s: cache_entry_set_json",
                                 __FUNCTION__);
                 json_decref (root);
+                cache_entry_destroy (hp);
             }
             else
                 cache_insert (ctx->cache, rootdir, hp);

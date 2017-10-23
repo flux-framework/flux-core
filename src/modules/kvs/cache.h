@@ -12,26 +12,10 @@ struct cache;
 
 /* Create/destroy cache entry.
  *
- * cache_entry_create() creates an empty cache entry.
- *
- * cache_entry_create_raw() creates an entry storing the data passed
- * in.  The create transfers ownership of 'data' to the cache entry.
- * On destroy, free() will be called on 'data'.  If 'data' is NULL,
- * 'len' must be zero.  If 'data' is non-NULL, 'len' must be > 0.
- *
- * cache_entry_create_json() is a convenience function that will take
- * a json object and extract the raw data string from it and store
- * that in the cache entry.  The json object 'o' is also cached
- * internally for later retrieval.  The create transfers ownership of
- * 'o' to the cache entry.  On destroy, json_decref() will be called
- * on 'o'.  'o' cannot be NULL.
- *
- * cache_entry_get_valid() will return true on entries when
- * cache_entry_get_raw() or cache_entry_create_json() return success.
+ * cache_entry_create() creates an empty cache entry.  Data can be set
+ * in an entry via cache_entry_set_raw() or cache_entry_set_json().
  */
 struct cache_entry *cache_entry_create (void);
-struct cache_entry *cache_entry_create_raw (void *data, int len);
-struct cache_entry *cache_entry_create_json (json_t *o);
 void cache_entry_destroy (void *arg);
 
 /* Return true if cache entry contains valid data.  False would

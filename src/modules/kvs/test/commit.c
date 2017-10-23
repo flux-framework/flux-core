@@ -3,6 +3,7 @@
 #endif
 #include <stdbool.h>
 #include <jansson.h>
+#include <assert.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
@@ -16,6 +17,21 @@
 #include "src/modules/kvs/types.h"
 
 static int test_global = 5;
+
+/* convenience function */
+static struct cache_entry *create_cache_entry_json (json_t *o)
+{
+    struct cache_entry *hp;
+    int ret;
+
+    assert (o);
+
+    hp = cache_entry_create ();
+    assert (hp);
+    ret = cache_entry_set_json (hp, o);
+    assert (ret == 0);
+    return hp;
+}
 
 /* Append a json object containing
  *     { "key" : key, "dirent" : <treeobj> } }
@@ -51,8 +67,8 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
         "cache_create works");
     ok (kvs_util_json_hash ("sha1", rootdir, ref) == 0,
         "kvs_util_json_hash worked");
-    ok ((hp = cache_entry_create_json (rootdir)) != NULL,
-        "cache_entry_create_json works");
+    ok ((hp = create_cache_entry_json (rootdir)) != NULL,
+        "create_cache_entry_json works");
     cache_insert (cache, ref, hp);
     return cache;
 }
@@ -602,7 +618,7 @@ void commit_basic_root_not_dir (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -643,8 +659,8 @@ int rootref_cb (commit_t *c, const char *ref, void *data)
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
-    ok ((hp = cache_entry_create_json (rootdir)) != NULL,
-        "cache_entry_create_json works");
+    ok ((hp = create_cache_entry_json (rootdir)) != NULL,
+        "create_cache_entry_json works");
 
     cache_insert (rd->cache, ref, hp);
 
@@ -729,8 +745,8 @@ int missingref_cb (commit_t *c, const char *ref, void *data)
     ok (strcmp (ref, md->dir_ref) == 0,
         "missing reference is what we expect it to be");
 
-    ok ((hp = cache_entry_create_json (md->dir)) != NULL,
-        "cache_entry_create_json works");
+    ok ((hp = create_cache_entry_json (md->dir)) != NULL,
+        "create_cache_entry_json works");
 
     cache_insert (md->cache, ref, hp);
 
@@ -776,7 +792,7 @@ void commit_process_missing_ref (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -875,7 +891,7 @@ void commit_process_error_callbacks (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -895,7 +911,7 @@ void commit_process_error_callbacks (void)
 
     /* insert cache entry now, want don't want missing refs on next
      * commit_process call */
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
         "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
@@ -956,7 +972,7 @@ void commit_process_error_callbacks_partway (void)
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
@@ -964,7 +980,7 @@ void commit_process_error_callbacks_partway (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1013,7 +1029,7 @@ void commit_process_invalid_operation (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1108,7 +1124,7 @@ void commit_process_invalid_hash (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "foobar", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1163,7 +1179,7 @@ void commit_process_follow_link (void)
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
@@ -1172,7 +1188,7 @@ void commit_process_follow_link (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
@@ -1230,7 +1246,7 @@ void commit_process_dirval_test (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1288,7 +1304,7 @@ void commit_process_delete_test (void)
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
@@ -1296,7 +1312,7 @@ void commit_process_delete_test (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1343,7 +1359,7 @@ void commit_process_delete_nosubdir_test (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1397,7 +1413,7 @@ void commit_process_delete_filevalinpath_test (void)
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
@@ -1405,7 +1421,7 @@ void commit_process_delete_filevalinpath_test (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1459,7 +1475,7 @@ void commit_process_bad_dirrefs (void)
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     dirref = treeobj_create_dirref (dir_ref);
     treeobj_append_blobref (dirref, dir_ref);
@@ -1470,7 +1486,7 @@ void commit_process_bad_dirrefs (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1541,7 +1557,7 @@ void commit_process_big_fileval (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
@@ -1686,7 +1702,7 @@ void commit_process_giant_dir (void)
     ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, dir_ref, cache_entry_create_json (dir));
+    cache_insert (cache, dir_ref, create_cache_entry_json (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (dir, "dir", treeobj_create_dirref (dir_ref));
@@ -1694,7 +1710,7 @@ void commit_process_giant_dir (void)
     ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
         "kvs_util_json_hash worked");
 
-    cache_insert (cache, root_ref, cache_entry_create_json (root));
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");

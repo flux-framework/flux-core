@@ -77,49 +77,6 @@ struct cache_entry *cache_entry_create (void)
     return hp;
 }
 
-struct cache_entry *cache_entry_create_raw (void *data, int len)
-{
-    struct cache_entry *hp;
-
-    if ((data && len <= 0) || (!data && len)) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (!(hp = cache_entry_create ()))
-        return NULL;
-
-    if (data) {
-        hp->data = data;
-        hp->len = len;
-    }
-    /* true even if data == NULL */
-    hp->entry_valid = true;
-    return hp;
-}
-
-struct cache_entry *cache_entry_create_json (json_t *o)
-{
-    struct cache_entry *hp;
-
-    if (!o) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (!(hp = cache_entry_create ()))
-        return NULL;
-
-    if (!(hp->data = kvs_util_json_dumps (o))) {
-        cache_entry_destroy (hp);
-        return NULL;
-    }
-    hp->len = strlen (hp->data) + 1;
-    hp->o = o;
-    hp->entry_valid = true;
-    return hp;
-}
-
 bool cache_entry_get_valid (struct cache_entry *hp)
 {
     return (hp && hp->entry_valid);
