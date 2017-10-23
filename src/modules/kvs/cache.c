@@ -181,6 +181,7 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
         }
         return 0;
     }
+    errno = EINVAL;
     return -1;
 }
 
@@ -234,6 +235,7 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
         }
         return 0;
     }
+    errno = EINVAL;
     return -1;
 }
 

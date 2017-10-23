@@ -44,8 +44,9 @@ void cache_entry_basic_tests (void)
     char *data;
 
     /* corner case tests */
-    ok (cache_entry_set_json (NULL, NULL) < 0,
-        "cache_entry_set_json fails with bad input");
+    ok (cache_entry_set_json (NULL, NULL) < 0
+        && errno == EINVAL,
+        "cache_entry_set_json fails with EINVAL with bad input");
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
 
@@ -54,10 +55,12 @@ void cache_entry_basic_tests (void)
 
     data = strdup ("abcd");
 
-    ok (cache_entry_set_raw (e, data, -1) < 0,
-        "cache_entry_set_raw fails with bad input");
-    ok (cache_entry_set_raw (e, NULL, 5) < 0,
-        "cache_entry_set_raw fails with bad input");
+    ok (cache_entry_set_raw (e, data, -1) < 0
+        && errno == EINVAL,
+        "cache_entry_set_raw fails with EINVAL with bad input");
+    ok (cache_entry_set_raw (e, NULL, 5) < 0
+        && errno == EINVAL,
+        "cache_entry_set_raw fails with EINVAL with bad input");
 
     free (data);
 
