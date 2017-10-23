@@ -32,6 +32,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "kvs_dir_private.h"
 #include "treeobj.h"
 
 struct flux_kvsdir {
@@ -73,46 +74,24 @@ flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
 }
 
 /* If rootref is non-NULL, the kvsdir records the root reference
- * so that subsequent kvsdir_get_* accesses can be relative to that
+ * so that subsequent flux_kvsdir_get_* accesses can be relative to that
  * snapshot.  Otherwise, they are relative to the current root.
  */
-flux_kvsdir_t *flux_kvsdir_create (flux_t *handle, const char *rootref,
+flux_kvsdir_t *flux_kvsdir_create (flux_t *h, const char *rootref,
                                    const char *key, const char *json_str)
 {
-    flux_kvsdir_t *dir;
+    flux_kvsdir_t *dir = NULL;
+    json_t *dirobj = NULL;
 
-    if (!key || !json_str) {
+    if (!key || !json_str || !(dirobj = treeobj_decode (json_str))) {
         errno = EINVAL;
-        return NULL;
+        goto done;
     }
-    if (!(dir = calloc (1, sizeof (*dir))))
-        goto error;
-
-    dir->handle = handle;
-    if (rootref) {
-        if (!(dir->rootref = strdup (rootref)))
-            goto error;
-    }
-    if (!(dir->key = strdup (key)))
-        goto error;
-    if (!(dir->json_str = strdup (json_str)))
-        goto error;
-    if (!(dir->dirobj = json_loads (json_str, 0, NULL))) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (treeobj_validate (dir->dirobj) < 0)
-        goto error;
-    if (!treeobj_is_dir (dir->dirobj)) {
-        errno = EINVAL;
-        goto error;
-    }
-    dir->usecount = 1;
-
+    if (!(dir = kvsdir_create_fromobj (h, rootref, key, dirobj)))
+        goto done;
+done:
+    json_decref (dirobj);
     return dir;
-error:
-    flux_kvsdir_destroy (dir);
-    return NULL;
 }
 
 const char *flux_kvsdir_tostring (const flux_kvsdir_t *dir)
@@ -257,6 +236,43 @@ nomem:
     return NULL;
 }
 
+/* kvs_txn_private.h */
+
+flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle, const char *rootref,
+                                      const char *key, json_t *treeobj)
+{
+    flux_kvsdir_t *dir = NULL;
+
+    if (!key || !treeobj || treeobj_validate (treeobj) < 0
+                         || !treeobj_is_dir (treeobj)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(dir = calloc (1, sizeof (*dir))))
+        goto error;
+
+    dir->handle = handle;
+    if (rootref) {
+        if (!(dir->rootref = strdup (rootref)))
+            goto error;
+    }
+    if (!(dir->key = strdup (key)))
+        goto error;
+    if (!(dir->json_str = treeobj_encode (treeobj)))
+        goto error;
+    dir->dirobj = json_incref (treeobj);
+    dir->usecount = 1;
+
+    return dir;
+error:
+    flux_kvsdir_destroy (dir);
+    return NULL;
+}
+
+json_t *kvsdir_get_obj (flux_kvsdir_t *dir)
+{
+    return dir->dirobj;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
