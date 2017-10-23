@@ -32,6 +32,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "kvs_dir_private.h"
 #include "kvs_lookup.h"
 #include "treeobj.h"
 
@@ -279,12 +280,13 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
         errno = EINVAL;
         return -1;
     }
-    if (!ctx->dir) {
-        const char *json_str;
-        if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (!(ctx->treeobj)) {
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
             return -1;
-        ctx->dir = flux_kvsdir_create (ctx->h, ctx->atref, ctx->key, json_str);
-        if (!ctx->dir)
+    }
+    if (!ctx->dir) {
+        if (!(ctx->dir = kvsdir_create_fromobj (ctx->h, ctx->atref,
+                                                ctx->key, ctx->treeobj)))
             return -1;
     }
     if (dirp)
