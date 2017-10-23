@@ -48,8 +48,6 @@
  * JSON, and flux_kvs_txn_pack() which builds a JSON object, then encodes it.
  * The encoded JSON is converted internally to a string, that is encoded as
  * base64 and becomes the raw value (with terminating NULL).
- * An exception is if the FLUX_KVS_TREEOBJ flag is set - then the encoded
- * or built JSON object is interpreted directly as an RFC 11 tree object.
  *
  * NULL or empty values:
  * A zero length raw value is considered valid.
@@ -144,43 +142,55 @@ error:
     return -1;
 }
 
+int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
+                              const char *key, const char *treeobj)
+{
+    json_t *dirent = NULL;
+    int saved_errno;
+
+    if (!txn || !key || !treeobj) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (validate_flags (flags, 0) < 0)
+        goto error;
+    if (!(dirent = treeobj_decode (treeobj)))
+        goto error;
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
+        goto error;
+    json_decref (dirent);
+    return 0;
+
+error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
+    return -1;
+}
+
 int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
                       const char *key, const char *json_str)
 {
     json_t *dirent = NULL;
     int saved_errno;
 
-    if (!txn || !key) {
+    if (!txn || !key || !json_str) {
         errno = EINVAL;
         goto error;
     }
-    if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
+    if (validate_flags (flags, 0) < 0)
         goto error;
-    /* If TREEOBJ flag, decoded json_str *is* the dirent.
-     * Its validity will be validated by put_treeobj().
-     * Otherwise, create a 'val' dirent, treating json_str as opaque data.
+    json_t *test;
+    /* User must pass in valid json object str, otherwise they
+     * should use flux_kvs_txn_pack() or flux_kvs_txn_put_raw()
      */
-    if ((flags & FLUX_KVS_TREEOBJ)) {
-        if (!(dirent = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-            errno = EINVAL;
-            goto error;
-        }
-        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
+    if (!(test = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+        errno = EINVAL;
+        goto error;
     }
-    else {
-        json_t *test;
-
-        /* User must pass in valid json object str, otherwise they
-         * should use flux_kvs_txn_pack() or flux_kvs_txn_put_raw()
-         */
-        if (!(test = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-            errno = EINVAL;
-            goto error;
-        }
-        json_decref (test);
-        if (!(dirent = treeobj_create_val (json_str, strlen (json_str) + 1)))
-            goto error;
-    }
+    json_decref (test);
+    if (!(dirent = treeobj_create_val (json_str, strlen (json_str) + 1)))
+        goto error;
     if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
@@ -198,41 +208,30 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
 {
     json_t *val, *dirent = NULL;
     int saved_errno;
+    char *s;
 
     if (!txn || !key | !fmt) {
         errno = EINVAL;
         goto error;
     }
-    if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
+    if (validate_flags (flags, 0) < 0)
         goto error;
     val = json_vpack_ex (NULL, 0, fmt, ap);
     if (!val) {
         errno = EINVAL;
         goto error;
     }
-    /* If TREEOBJ flag, the json object *is* the dirent.
-     * Its validity will be validated by put_treeobj().
-     * Otherwise, create a 'val' dirent, treating encoded json object
-     * as opaque data.
-     */
-    if ((flags & FLUX_KVS_TREEOBJ)) {
-        dirent = val;
-        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
-    }
-    else {
-        char *s;
-        if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
-            errno = ENOMEM;
-            json_decref (val);
-            goto error;
-        }
+    if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
+        errno = ENOMEM;
         json_decref (val);
-        if (!(dirent = treeobj_create_val (s, strlen (s) + 1))) {
-            free (s);
-            goto error;
-        }
-        free (s);
+        goto error;
     }
+    json_decref (val);
+    if (!(dirent = treeobj_create_val (s, strlen (s) + 1))) {
+        free (s);
+        goto error;
+    }
+    free (s);
     if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);

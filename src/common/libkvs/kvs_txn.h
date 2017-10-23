@@ -24,6 +24,9 @@ int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags, const char *key,
 int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
                           const char *key, const void *data, int len);
 
+int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
+                              const char *key, const char *treeobj);
+
 int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
                         const char *key);
 
