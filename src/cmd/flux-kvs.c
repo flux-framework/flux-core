@@ -380,9 +380,13 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             log_msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
 
-        if (flux_kvs_txn_put (txn, 0, key, val) < 0) {
-            if (errno != EINVAL)
+        json_t *obj;
+        if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
+            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
+            json_decref (obj);
+        }
+        else { // encode as JSON string if not already valid encoded JSON
             if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
                 log_err_exit ("%s", key);
         }

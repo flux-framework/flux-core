@@ -136,10 +136,6 @@ void basic (void)
     ok (rc < 0 && errno == EINVAL,
         "error: flux_kvs_txn_put(NULL) fails with EINVAL");
     errno = 0;
-    rc = flux_kvs_txn_put (txn, 0, "f", "");
-    ok (rc < 0 && errno == EINVAL,
-        "error: flux_kvs_txn_put(empty string) fails with EINVAL");
-    errno = 0;
     rc = flux_kvs_txn_pack (txn, 0xFFFF, "foo.bar.blorp",  "s", "foo");
     ok (rc < 0 && errno == EINVAL,
         "error: flux_kvs_txn_pack(bad flags) fails with EINVAL");

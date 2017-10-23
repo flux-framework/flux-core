@@ -13,7 +13,7 @@ flux_kvs_txn_t *flux_kvs_txn_create (void);
 void flux_kvs_txn_destroy (flux_kvs_txn_t *txn);
 
 int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
-                      const char *key, const char *json_str);
+                      const char *key, const char *value);
 
 /* N.B. splitting at 80 columns confuses python cffi parser */
 int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags, const char *key, const char *fmt, va_list ap);
