@@ -69,8 +69,8 @@ void flux_kvsdir_destroy (flux_kvsdir_t *dir)
 
 flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
 {
-    return flux_kvsdir_create (dir->handle, dir->rootref,
-                               dir->key, dir->json_str);
+    return kvsdir_create_fromobj (dir->handle, dir->rootref,
+                                  dir->key, dir->dirobj);
 }
 
 /* If rootref is non-NULL, the kvsdir records the root reference
