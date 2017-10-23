@@ -80,14 +80,15 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * internal raw data is not a valid json object (i.e. improperly
  * formatted or zero length), an error will be result.
  *
- * cache_entry_clear_data () will clear all data in the entry.
- *
  * An invalid->valid transition runs the entry's wait queue, if any in
  * both set accessors.
  *
- * Generally speaking, a cache entry can only be set once.  If you
- * wish to set it again, you must run cache_entry_clear_data() before
- * doing so.
+ * Generally speaking, a cache entry can only be set once.  An attempt
+ * to set new data in a cache entry will silently succeed.  A buffer
+ * passed to cache_entry_set_raw() will be freed for a cache entry
+ * that already has data stored.  A json object passed to
+ * cache_entry_set_json() will be json_decref()'d for a cache entry
+ * that alrdady has data stored.
  *
  * cache_entry_set_raw() & cache_entry_set_json() &
  * cache_entry_clear_data() returns -1 on error, 0 on success
@@ -97,8 +98,6 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
 
 json_t *cache_entry_get_json (struct cache_entry *hp);
 int cache_entry_set_json (struct cache_entry *hp, json_t *o);
-
-int cache_entry_clear_data (struct cache_entry *hp);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a

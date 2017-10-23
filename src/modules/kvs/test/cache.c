@@ -50,8 +50,6 @@ void cache_entry_basic_tests (void)
         "cache_entry_create_json fails with bad input");
     ok (cache_entry_set_json (NULL, NULL) < 0,
         "cache_entry_set_json fails with bad input");
-    ok (cache_entry_clear_data (NULL) < 0,
-        "cache_entry_clear_data fails with bad input");
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
 
@@ -117,10 +115,6 @@ void cache_entry_raw_tests (void)
         "raw data matches expected string");
     ok (datatmp && (len == strlen (data) + 1),
         "raw data length matches expected length");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid after clear");
     cache_entry_destroy (e);   /* destroys data */
     e = NULL;
 
@@ -155,10 +149,6 @@ void cache_entry_raw_tests (void)
         "raw data is NULL");
     ok (len == 0,
         "raw data length is zero");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid after clear");
     cache_entry_destroy (e);   /* destroys data */
     e = NULL;
 
@@ -197,11 +187,6 @@ void cache_entry_raw_tests (void)
         "raw data matches expected string");
     ok (datatmp && (len == strlen (data) + 1),
         "raw data length matches expected length");
-
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_raw (e, (void **)&data, &len) < 0,
-        "cache entry no longer has data object");
 
     cache_entry_destroy (e); /* destroys data */
     e = NULL;
@@ -254,10 +239,6 @@ void cache_entry_json_tests (void)
     ok (cache_entry_set_raw (e, NULL, 0) < 0
         && errno == EBADE,
         "cache_entry_set_raw fails with EBADE, changing validity type");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_json (e) == NULL,
-        "cache entry no longer has json object");
     cache_entry_destroy (e);   /* destroys o1 */
     e = NULL;
 
@@ -297,11 +278,6 @@ void cache_entry_json_tests (void)
         "json_object_get success");
     ok (json_integer_value (otmp) == 42,
         "expected json object found");
-
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_json (e) == NULL,
-        "cache entry no longer has json object");
 
     cache_entry_destroy (e); /* destroys o1 */
     e = NULL;
@@ -394,24 +370,6 @@ void waiter_raw_tests (void)
     ok (count == 1,
         "waiter callback ran");
 
-    /* set cache entry to zero-data, should also call get valid
-     * waiter */
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid, adding waiter");
-    ok (cache_entry_wait_valid (e, w) == 0,
-        "cache_entry_wait_valid success");
-    ok (cache_entry_set_raw (e, NULL, 0) == 0,
-        "cache_entry_set_raw success");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry set valid with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
@@ -446,7 +404,28 @@ void waiter_raw_tests (void)
     ok (count == 0,
         "waiter callback not called on force clear dirty");
 
-    cache_entry_destroy (e); /* destroys o */
+    cache_entry_destroy (e); /* destroys data */
+    e = NULL;
+
+    /* set cache entry to zero-data, should also call get valid
+     * waiter */
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create created empty object");
+    ok (cache_entry_get_valid (e) == false,
+        "cache entry invalid, adding waiter");
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
+    ok (cache_entry_set_raw (e, NULL, 0) == 0,
+        "cache_entry_set_raw success");
+    ok (cache_entry_get_valid (e) == true,
+        "cache entry set valid with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+    cache_entry_destroy (e); /* destroys data */
+    e = NULL;
 }
 
 void waiter_json_tests (void)

@@ -202,8 +202,7 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
             if ((data && hp->data) || (!data && !hp->data))
                 free (data); /* no-op, 'data' is assumed identical to hp->data */
             else {
-                /* attempt to change already valid cache entry,
-                 * cannot, must call cache_entry_clear_data() */
+                /* attempt to change already valid cache entry */
                 errno = EBADE;
                 return -1;
             }
@@ -244,8 +243,7 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
     if (hp && o) {
         if (hp->entry_valid) {
             if (!hp->data) {
-                /* attempt to change already valid cache entry,
-                 * cannot, must call cache_entry_clear_data() */
+                /* attempt to change already valid cache entry */
                 errno = EBADE;
                 return -1;
             }
@@ -277,24 +275,6 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
                 }
             }
         }
-        return 0;
-    }
-    return -1;
-}
-
-int cache_entry_clear_data (struct cache_entry *hp)
-{
-    if (hp) {
-        if (hp->data) {
-            free (hp->data);
-            hp->data = NULL;
-            hp->len = 0;
-        }
-        if (hp->o) {
-            json_decref (hp->o);
-            hp->o = NULL;
-        }
-        hp->entry_valid = false;
         return 0;
     }
     return -1;
