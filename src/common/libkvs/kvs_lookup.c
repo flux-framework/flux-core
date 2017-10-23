@@ -167,6 +167,14 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
     return f;
 }
 
+static bool value_is_string (const char *s, int len)
+{
+    if (len < 1 || s[len - 1] != '\0')
+        return false;
+    else
+        return true;
+}
+
 int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
 {
     struct lookup_ctx *ctx;
@@ -202,13 +210,12 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
                                                   &ctx->val_len) < 0)
                 return -1;
             ctx->val_valid = true;
-            char *s = ctx->val_data;
-            if (ctx->val_len < 1 || s[ctx->val_len - 1] != '\0') {
+            if (!value_is_string (ctx->val_data, ctx->val_len)) {
                 errno = EINVAL;
                 return -1;
             }
             if (json_str)
-                *json_str = s;
+                *json_str = ctx->val_data;
         }
     }
     else {
@@ -228,11 +235,23 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
         errno = EINVAL;
         return -1;
     }
-    if (!ctx->val_obj) {
-        const char *json_str;
-        if (flux_kvs_lookup_get (f, &json_str) < 0)
+    if (!(ctx->treeobj)) {
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
             return -1;
-        if (!(ctx->val_obj = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+    }
+    if (!ctx->val_valid) {
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
+                                              &ctx->val_len) < 0)
+            return -1;
+        ctx->val_valid = true;
+    }
+    if (!ctx->val_obj) {
+        if (!value_is_string (ctx->val_data, ctx->val_len)) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (!(ctx->val_obj = json_loads (ctx->val_data,
+                                         JSON_DECODE_ANY, NULL))) {
             errno = EINVAL;
             return -1;
         }
