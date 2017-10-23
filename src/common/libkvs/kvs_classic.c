@@ -218,9 +218,14 @@ int flux_kvs_fence_anon (flux_t *h, const char *name, int nprocs, int flags)
 int flux_kvs_put (flux_t *h, const char *key, const char *json_str)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
+    int rc;
     if (!txn)
         return -1;
-    return flux_kvs_txn_put (txn, 0, key, json_str);
+    if (json_str == NULL)
+        rc = flux_kvs_txn_unlink (txn, 0, key);
+    else
+        rc = flux_kvs_txn_put (txn, 0, key, json_str);
+    return rc;
 }
 
 int flux_kvs_unlink (flux_t *h, const char *key)
@@ -287,7 +292,10 @@ int flux_kvsdir_put (const flux_kvsdir_t *dir, const char *key,
     int rc;
     if (dir_put_init (dir, key, &dp) < 0)
         return -1;
-    rc = flux_kvs_txn_put (dp.txn, 0, dp.key, json_str);
+    if (json_str)
+        rc = flux_kvs_txn_put (dp.txn, 0, dp.key, json_str);
+    else
+        rc = flux_kvs_txn_unlink (dp.txn, 0, dp.key);
     dir_put_fini (&dp);
     return rc;
 }

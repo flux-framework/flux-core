@@ -128,9 +128,13 @@ void basic (void)
     rc = flux_kvs_txn_put (txn, 0, "d.d.d", "43");
     ok (rc == 0,
         "6: flux_kvs_txn_put(i) works");
-    rc = flux_kvs_txn_put (txn, 0, "e", NULL);
+    rc = flux_kvs_txn_unlink (txn, 0, "e");
     ok (rc == 0,
-        "7: flux_kvs_txn_put(NULL) works");
+        "7: flux_kvs_txn_unlink works");
+    errno = 0;
+    rc = flux_kvs_txn_put (txn, 0, "nerrrrb", NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "error: flux_kvs_txn_put(NULL) fails with EINVAL");
     errno = 0;
     rc = flux_kvs_txn_put (txn, 0, "f", "");
     ok (rc < 0 && errno == EINVAL,

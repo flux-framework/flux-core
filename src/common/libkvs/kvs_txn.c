@@ -53,7 +53,6 @@
  *
  * NULL or empty values:
  * A zero length raw value is considered valid.
- * A NULL JSON string passed to flux_kvs_txn_put() is interpreted as an unlink.
  * A NULL format string passed to flux_kvs_txn_pack() is invalid.
  */
 struct flux_kvs_txn {
@@ -155,8 +154,6 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if (!json_str)
-        return flux_kvs_txn_unlink (txn, flags, key);
     if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
         goto error;
     /* If TREEOBJ flag, decoded json_str *is* the dirent.
