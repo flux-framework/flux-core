@@ -173,6 +173,20 @@ static bool value_is_string (const char *s, int len)
         return true;
 }
 
+static int decode_treeobj (flux_future_t *f, json_t **treeobj)
+{
+    json_t *obj;
+
+    if (flux_rpc_get_unpack (f, "{s:o}", "val", &obj) < 0)
+        return -1;
+    if (treeobj_validate (obj) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    *treeobj = obj;
+    return 0;
+}
+
 int flux_kvs_lookup_get (flux_future_t *f, const char **value)
 {
     struct lookup_ctx *ctx;
@@ -182,7 +196,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
         return -1;
     }
     if (!(ctx->treeobj)) {
-        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+        if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
     }
     if (!ctx->val_valid) {
@@ -209,7 +223,7 @@ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
         return -1;
     }
     if (!(ctx->treeobj)) {
-        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+        if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
     }
     if (!ctx->treeobj_str) {
@@ -232,7 +246,7 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
         return -1;
     }
     if (!(ctx->treeobj)) {
-        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+        if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
     }
     if (!ctx->val_valid) {
@@ -269,10 +283,8 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
         return -1;
     }
     if (!(ctx->treeobj)) {
-        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0) {
-            errno = EINVAL;
+        if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
-        }
     }
     if (!ctx->val_valid) {
         if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
@@ -296,7 +308,7 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
         return -1;
     }
     if (!(ctx->treeobj)) {
-        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+        if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
     }
     if (!ctx->dir) {
@@ -320,7 +332,7 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
         return -1;
     }
     if (!(ctx->treeobj)) {
-        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+        if (decode_treeobj (f, &ctx->treeobj) < 0)
             return -1;
     }
     if (!treeobj_is_symlink (ctx->treeobj)) {
