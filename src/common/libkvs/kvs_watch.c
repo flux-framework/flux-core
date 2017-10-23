@@ -30,6 +30,7 @@
 #include <czmq.h>
 
 #include "treeobj.h"
+#include "kvs_dir_private.h"
 
 typedef enum {
     WATCH_JSONSTR, WATCH_DIR,
@@ -370,7 +371,7 @@ done:
 
 static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
 {
-    const char *val_in = NULL;
+    char *val_in = NULL;
     char *val_out = NULL;
     flux_kvsdir_t *dir_out = NULL;
     flux_future_t *f = NULL;
@@ -381,8 +382,8 @@ static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
         goto done;
     }
     if (*dirp) {
-        if (!(val_in = flux_kvsdir_tostring (*dirp)))
-            goto done;
+        json_t *dir_in = kvsdir_get_obj (*dirp);
+        val_in = treeobj_encode (dir_in);
     }
     if (!(f = kvs_watch_rpc (h, key, val_in,
                              KVS_WATCH_ONCE | FLUX_KVS_READDIR)))
@@ -399,6 +400,7 @@ static int watch_once_dir (flux_t *h, const char *key, flux_kvsdir_t **dirp)
     rc = 0;
 done:
     free (val_out);
+    free (val_in);
     flux_future_destroy (f);
     return rc;
 }

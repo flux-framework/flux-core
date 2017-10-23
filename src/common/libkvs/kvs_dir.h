@@ -66,7 +66,6 @@ bool flux_kvsdir_issymlink (const flux_kvsdir_t *dir, const char *name);
  * passed to flux_kvsdir_create ()
  */
 const char *flux_kvsdir_key (const flux_kvsdir_t *dir);
-const char *flux_kvsdir_tostring (const flux_kvsdir_t *dir);
 void *flux_kvsdir_handle (const flux_kvsdir_t *dir);
 const char *flux_kvsdir_rootref (const flux_kvsdir_t *dir);
 

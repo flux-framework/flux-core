@@ -39,7 +39,6 @@ struct flux_kvsdir {
     flux_t *handle;
     char *rootref; /* optional snapshot reference */
     char *key;
-    char *json_str;
     json_t *dirobj;
     int usecount;
 };
@@ -60,7 +59,6 @@ void flux_kvsdir_destroy (flux_kvsdir_t *dir)
         int saved_errno = errno;
         free (dir->rootref);
         free (dir->key);
-        free (dir->json_str);
         json_decref (dir->dirobj);
         free (dir);
         errno = saved_errno;
@@ -92,11 +90,6 @@ flux_kvsdir_t *flux_kvsdir_create (flux_t *h, const char *rootref,
 done:
     json_decref (dirobj);
     return dir;
-}
-
-const char *flux_kvsdir_tostring (const flux_kvsdir_t *dir)
-{
-    return dir->json_str;
 }
 
 int flux_kvsdir_get_size (const flux_kvsdir_t *dir)
@@ -257,8 +250,6 @@ flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle, const char *rootref,
             goto error;
     }
     if (!(dir->key = strdup (key)))
-        goto error;
-    if (!(dir->json_str = treeobj_encode (treeobj)))
         goto error;
     dir->dirobj = json_incref (treeobj);
     dir->usecount = 1;
