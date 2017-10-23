@@ -420,7 +420,7 @@ void cmd_get_treeobj (flux_t *h, int argc, char **argv)
     if (argc != 1)
         log_msg_exit ("get-treeobj: specify key");
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, argv[0]))
-            || flux_kvs_lookup_get (f, &treeobj) < 0)
+            || flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
         log_err_exit ("kvs_get_treeobj %s", argv[0]);
     printf ("%s\n", treeobj);
     flux_future_destroy (f);

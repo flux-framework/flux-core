@@ -37,7 +37,6 @@
 #include "treeobj.h"
 
 struct lookup_ctx {
-    int flags;
     flux_t *h;
     char *key;
     char *atref;
@@ -73,7 +72,6 @@ static struct lookup_ctx *alloc_ctx (flux_t *h, int flags, const char *key)
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto nomem;
     ctx->h = h;
-    ctx->flags = flags;
     if (!(ctx->key = strdup (key)))
         goto nomem;
     return ctx;
@@ -175,7 +173,7 @@ static bool value_is_string (const char *s, int len)
         return true;
 }
 
-int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
+int flux_kvs_lookup_get (flux_future_t *f, const char **value)
 {
     struct lookup_ctx *ctx;
 
@@ -187,41 +185,39 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **json_str)
         if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
             return -1;
     }
-    /* If TREEOBJ or READDIR flags, val is a tree object.
-     * Re-encode as a string and return.
-     */
-    if ((ctx->flags & FLUX_KVS_TREEOBJ) || (ctx->flags & FLUX_KVS_READDIR)) {
-        if (!ctx->treeobj_str) {
-            size_t flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
-            if (!(ctx->treeobj_str = json_dumps (ctx->treeobj, flags))) {
-                errno = EINVAL;
-                return -1;
-            }
-        }
-        if (json_str)
-            *json_str = ctx->treeobj_str;
+    if (!ctx->val_valid) {
+        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
+                                              &ctx->val_len) < 0)
+            return -1;
+        ctx->val_valid = true;
     }
-    /* No flags, val is a 'val' object.
-     * Decide the data and return it as a string if it is properly terminated.
-     */
-    else if (ctx->flags == 0) {
-        if (!ctx->val_valid) {
-            if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                                  &ctx->val_len) < 0)
-                return -1;
-            ctx->val_valid = true;
-            if (!value_is_string (ctx->val_data, ctx->val_len)) {
-                errno = EINVAL;
-                return -1;
-            }
-            if (json_str)
-                *json_str = ctx->val_data;
-        }
-    }
-    else {
+    if (!value_is_string (ctx->val_data, ctx->val_len)) {
         errno = EINVAL;
         return -1;
     }
+    if (value)
+        *value = ctx->val_data;
+    return 0;
+}
+
+int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj)
+{
+    struct lookup_ctx *ctx;
+
+    if (!(ctx = flux_future_aux_get (f, auxkey))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(ctx->treeobj)) {
+        if (flux_rpc_get_unpack (f, "{s:o}", "val", &ctx->treeobj) < 0)
+            return -1;
+    }
+    if (!ctx->treeobj_str) {
+        if (!(ctx->treeobj_str = treeobj_encode (ctx->treeobj)))
+            return -1;
+    }
+    if (treeobj)
+        *treeobj= ctx->treeobj_str;
     return 0;
 }
 

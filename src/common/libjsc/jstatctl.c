@@ -309,7 +309,7 @@ static int jobid_exist (flux_t *h, int64_t j)
     if (path == NULL)
         goto done;
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, path))
-                                || flux_kvs_lookup_get (f, NULL) < 0) {
+                                || flux_kvs_lookup_get_dir (f, NULL) < 0) {
         flux_log (h, LOG_DEBUG, "flux_kvs_lookup(%s): %s",
                      path, flux_strerror (errno));
         goto done;

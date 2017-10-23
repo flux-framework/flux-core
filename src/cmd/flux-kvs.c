@@ -1056,7 +1056,7 @@ static int categorize_key (optparse_t *p, const char *key,
     }
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, nkey)))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get (f, &json_str) < 0) {
+    if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         fprintf (stderr, "%s: %s\n", nkey, flux_strerror (errno));
         goto error;
     }
@@ -1166,7 +1166,7 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     dstkey = argv[optindex + 1];
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get (f, &json_str) < 0)
+            || flux_kvs_lookup_get_treeobj (f, &json_str) < 0)
         log_err_exit ("flux_kvs_lookup %s", srckey);
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
@@ -1198,7 +1198,7 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     dstkey = argv[optindex + 1];
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get (f, &json_str) < 0)
+            || flux_kvs_lookup_get_treeobj (f, &json_str) < 0)
         log_err_exit ("flux_kvs_lookup %s", srckey);
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
