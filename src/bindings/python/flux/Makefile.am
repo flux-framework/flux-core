@@ -98,10 +98,12 @@ lib-copy: ${fluxpy_PYTHON} ${fluxpy_LTLIBRARIES}
 	done
 	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp $(top_srcdir)/src/bindings/python/flux/*.py ./ || true
 
+if ENABLE_PYLINT
 #TODO: there must be a better way to do this
 # scan flux bindings with pylint, currently fails on any exit but 0
 check-local: lib-copy
 	if [ -x "$$( which pylint )" ] ; then  pylint --rcfile=$(top_srcdir)/src/bindings/python/.pylintrc ../flux ; fi
+endif
 
 all-local: lib-copy
 
