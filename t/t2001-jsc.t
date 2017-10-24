@@ -208,7 +208,7 @@ test_expect_success 'jstat 8: query detects bad inputs' '
 
 test_expect_success 'jstat 9: update state-pair' "
     flux jstat update 1 state-pair '{\"state-pair\": {\"ostate\": 13, \"nstate\": 12}}' &&
-    flux kvs get $(flux wreck kvs-path 1).state > output.9.1 &&
+    flux kvs get --json $(flux wreck kvs-path 1).state > output.9.1 &&
     cat >expected.9.1 <<-EOF &&
 cancelled
 EOF
@@ -216,15 +216,15 @@ EOF
 "
 
 test_expect_success 'jstat 10: update procdescs' "
-    flux kvs get $(flux wreck kvs-path 1).0.procdesc > output.10.1 &&
+    flux kvs get --json $(flux wreck kvs-path 1).0.procdesc > output.10.1 &&
     flux jstat update 1 pdesc '{\"pdesc\": {\"procsize\":1, \"hostnames\":[\"0\"], \"executables\":[\"fake\"], \"pdarray\":[{\"pid\":8482,\"eindx\":0,\"hindx\":0}]}}' &&
-    flux kvs get $(flux wreck kvs-path 1).0.procdesc > output.10.2 &&
+    flux kvs get --json $(flux wreck kvs-path 1).0.procdesc > output.10.2 &&
     test_expect_code 1 diff output.10.1 output.10.2 
 "
 
 test_expect_success 'jstat 11: update rdesc' "
     flux jstat update 1 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\":3600}}' &&
-    flux kvs get $(flux wreck kvs-path 1).ntasks > output.11.1 &&
+    flux kvs get --json $(flux wreck kvs-path 1).ntasks > output.11.1 &&
     cat > expected.11.1 <<-EOF &&
 128
 EOF
@@ -233,7 +233,7 @@ EOF
 
 test_expect_success 'jstat 12: update rdl' "
     flux jstat update 1 rdl '{\"rdl\": \"fake_rdl_string\"}' &&
-    flux kvs get $(flux wreck kvs-path 1).rdl > output.12.1 &&
+    flux kvs get --json $(flux wreck kvs-path 1).rdl > output.12.1 &&
     cat > expected.12.1 <<-EOF &&
 fake_rdl_string
 EOF
@@ -242,7 +242,7 @@ EOF
 
 test_expect_success 'jstat 13: update rdl_alloc' "
     flux jstat update 1 rdl_alloc '{\"rdl_alloc\": [{\"contained\": {\"cmbdrank\": 0, \"cmbdncores\": 102}}]}' &&
-    flux kvs get $(flux wreck kvs-path 1).rank.0.cores > output.13.1 &&
+    flux kvs get --json $(flux wreck kvs-path 1).rank.0.cores > output.13.1 &&
     cat > expected.13.1 <<-EOF &&
 102
 EOF

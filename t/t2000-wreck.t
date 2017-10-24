@@ -182,25 +182,25 @@ test_expect_success 'wreckrun: -N without -n works' '
 test_expect_success 'wreckrun: -N without -n sets ntasks in kvs' '
 	flux wreckrun -l -N${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.ntasks) &&
+	n=$(flux kvs get --json ${LWJ}.ntasks) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -n without -N sets nnnodes in kvs' '
 	flux wreckrun -l -n${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.nnodes) &&
+	n=$(flux kvs get --json ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -t1 -N${SIZE} sets ntasks in kvs' '
 	flux wreckrun -l -t1 -N${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.ntasks) &&
+	n=$(flux kvs get --json ${LWJ}.ntasks) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	flux wreckrun -l -t1 -n${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.nnodes) &&
+	n=$(flux kvs get --json ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
 
@@ -374,7 +374,7 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 check_complete_link() {
     for i in `seq 0 5`; do
         lastepoch=$(flux kvs dir lwj-complete | awk -F. '{print $2}' | sort -n | tail -1)
-        flux kvs get lwj-complete.${lastepoch}.${1}.state && return 0
+        flux kvs get --json lwj-complete.${lastepoch}.${1}.state && return 0
         sleep 0.2
     done
     return 1

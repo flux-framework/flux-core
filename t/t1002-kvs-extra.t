@@ -29,7 +29,7 @@ KEY=test.a.b.c
 #
 #
 test_kvs_key() {
-	flux kvs get "$1" >output
+	flux kvs get --json "$1" >output
 	echo "$2" >expected
 	test_cmp output expected
 	#if ! test "$OUTPUT" = "$2"; then
@@ -201,7 +201,7 @@ test_expect_success 'kvs: put-treeobj: clobbers destination' '
 	flux kvs put --json $TEST.a=42 &&
 	${KVSBASIC} get-treeobj . >snapshot2 &&
 	${KVSBASIC} put-treeobj $TEST.a="`cat snapshot2`" &&
-	! flux kvs get $TEST.a &&
+	! flux kvs get --json $TEST.a &&
 	flux kvs dir $TEST.a
 '
 
@@ -294,7 +294,7 @@ test_expect_success 'kvs: valref that points to content store data can be read' 
         flux kvs unlink -Rf $TEST &&
 	echo "$largeval" | flux content store &&
 	${KVSBASIC} put-treeobj $TEST.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get $TEST.largeval2 | grep $largeval
+        flux kvs get --json $TEST.largeval2 | grep $largeval
 '
 
 test_expect_success 'kvs: valref that points to zero size content store data can be read' '
@@ -400,13 +400,13 @@ test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
 test_expect_success 'kvs: put on rank 0, exists on all ranks' '
 	flux kvs put --json $TEST.xxx=99 &&
 	VERS=$(flux kvs version) &&
-	flux exec sh -c "flux kvs wait ${VERS} && flux kvs get $TEST.xxx"
+	flux exec sh -c "flux kvs wait ${VERS} && flux kvs get --json $TEST.xxx"
 '
 
 test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 	flux kvs unlink -Rf $TEST.xxx &&
 	VERS=$(flux kvs version) &&
-	flux exec sh -c "flux kvs wait ${VERS} && ! flux kvs get $TEST.xxx"
+	flux exec sh -c "flux kvs wait ${VERS} && ! flux kvs get --json $TEST.xxx"
 '
 
 # commit test

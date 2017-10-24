@@ -56,6 +56,16 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt);
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
+static struct optparse_option get_opts[] =  {
+    { .name = "json", .key = 'j', .has_arg = 0,
+      .usage = "Interpret value(s) as encoded JSON",
+    },
+    { .name = "raw", .key = 'r', .has_arg = 0,
+      .usage = "Interpret value(s) as raw data",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option put_opts[] =  {
     { .name = "json", .key = 'j', .has_arg = 0,
       .usage = "Store value(s) as encoded JSON",
@@ -130,11 +140,11 @@ static struct optparse_option unlink_opts[] =  {
 
 static struct optparse_subcommand subcommands[] = {
     { "get",
-      "key [key...]",
+      "[-j|-r] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
-      NULL
+      get_opts
     },
     { "put",
       "[-j|-r] key=value [key=value...]",
@@ -349,7 +359,7 @@ static void output_key_json_str (const char *key,
 int cmd_get (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    const char *key, *json_str;
+    const char *key;
     flux_future_t *f;
     int optindex, i;
 
@@ -360,10 +370,28 @@ int cmd_get (optparse_t *p, int argc, char **argv)
     }
     for (i = optindex; i < argc; i++) {
         key = argv[i];
-        if (!(f = flux_kvs_lookup (h, 0, key))
-                || flux_kvs_lookup_get (f, &json_str) < 0)
+        if (!(f = flux_kvs_lookup (h, 0, key)))
             log_err_exit ("%s", key);
-        output_key_json_str (NULL, json_str, key);
+        if (optparse_hasopt (p, "json")) {
+            const char *json_str;
+            if (flux_kvs_lookup_get (f, &json_str) < 0)
+                log_err_exit ("%s", key);
+            output_key_json_str (NULL, json_str, key);
+        }
+        else if (optparse_hasopt (p, "raw")) {
+            const void *data;
+            int len;
+            if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
+                log_err_exit ("%s", key);
+            if (write_all (STDOUT_FILENO, data, len) < 0)
+                log_err_exit ("%s", key);
+        }
+        else {
+            const char *value;
+            if (flux_kvs_lookup_get (f, &value) < 0)
+                log_err_exit ("%s", key);
+            printf ("%s\n", value);
+        }
         flux_future_destroy (f);
     }
     return (0);
