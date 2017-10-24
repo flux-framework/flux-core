@@ -122,7 +122,7 @@ int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if (validate_flags (flags, 0) < 0)
+    if (validate_flags (flags, FLUX_KVS_APPEND) < 0)
         goto error;
     if (!(dirent = treeobj_create_val (data, len)))
         goto error;
@@ -174,7 +174,7 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if (validate_flags (flags, 0) < 0)
+    if (validate_flags (flags, FLUX_KVS_APPEND) < 0)
         goto error;
     if (!(dirent = treeobj_create_val (value, value ? strlen (value) : 0)))
         goto error;
@@ -373,11 +373,13 @@ int txn_encode_op (const char *key, int flags, json_t *dirent, json_t **opp)
 {
     json_t *op;
 
-    if (!key || strlen (key) == 0 || flags != 0 || !dirent
+    if (!key || strlen (key) == 0 || !dirent
              || (!json_is_null (dirent) && treeobj_validate (dirent) < 0)) {
         errno = EINVAL;
         return -1;
     }
+    if (validate_flags (flags, FLUX_KVS_APPEND) < 0)
+        return -1;
     if (!(op = json_pack ("{s:s s:i s:O}",
                           "key", key,
                           "flags", flags,

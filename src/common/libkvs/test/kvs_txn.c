@@ -317,6 +317,22 @@ void test_raw_values (void)
     flux_kvs_txn_destroy (txn);
 }
 
+void test_corner_cases (void)
+{
+    json_t *val;
+    json_t *op;
+
+    ok (txn_encode_op (NULL, 0, NULL, NULL) < 0 && errno == EINVAL,
+        "txn_encode_op fails on bad input");
+
+    val = treeobj_create_val ("abcd", 4);
+
+    ok (txn_encode_op ("key", 0x44, val, &op) < 0 && errno == EINVAL,
+        "txn_encode_op fails on bad flags");
+
+    json_decref (val);
+}
+
 int main (int argc, char *argv[])
 {
 
@@ -324,6 +340,7 @@ int main (int argc, char *argv[])
 
     basic ();
     test_raw_values ();
+    test_corner_cases ();
 
     done_testing();
     return (0);
