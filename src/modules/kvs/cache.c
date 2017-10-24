@@ -59,7 +59,7 @@ struct cache_entry {
     bool valid;             /* flag indicating if raw data or json
                              * set, don't use data == NULL as test, as
                              * zero length data can be valid */
-    uint8_t dirty:1;
+    bool dirty;
 };
 
 struct cache {
@@ -93,13 +93,13 @@ int cache_entry_set_dirty (struct cache_entry *hp, bool val)
         if ((val && hp->dirty) || (!val && !hp->dirty))
             ; /* no-op */
         else if (val && !hp->dirty)
-            hp->dirty = 1;
+            hp->dirty = true;
         else if (!val && hp->dirty) {
-            hp->dirty = 0;
+            hp->dirty = false;
             if (hp->waitlist_notdirty) {
                 if (wait_runqueue (hp->waitlist_notdirty) < 0) {
                     /* set back dirty bit to orig */
-                    hp->dirty = 1;
+                    hp->dirty = true;
                     return -1;
                 }
             }
@@ -115,7 +115,7 @@ int cache_entry_clear_dirty (struct cache_entry *hp)
         if (hp->dirty
             && (!hp->waitlist_notdirty
                 || !wait_queue_length (hp->waitlist_notdirty)))
-            hp->dirty = 0;
+            hp->dirty = false;
         return 0;
     }
     return -1;
@@ -129,7 +129,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp)
                 wait_queue_destroy (hp->waitlist_notdirty);
                 hp->waitlist_notdirty = NULL;
             }
-            hp->dirty = 0;
+            hp->dirty = false;
         }
         return 0;
     }
