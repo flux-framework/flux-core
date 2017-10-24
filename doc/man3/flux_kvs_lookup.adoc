@@ -5,7 +5,7 @@ flux_kvs_lookup(3)
 
 NAME
 ----
-flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack, flux_kvs_lookup_get_raw, flux_kvs_lookup_get_dir - look up KVS key
+flux_kvs_lookup, flux_kvs_lookupat, flux_kvs_lookup_get, flux_kvs_lookup_get_unpack, flux_kvs_lookup_get_raw, flux_kvs_lookup_get_dir, flux_kvs_lookup_get_treeobj, flux_kvs_lookup_get_symlink - look up KVS key
 
 
 SYNOPSIS
@@ -17,49 +17,72 @@ SYNOPSIS
  flux_future_t *flux_kvs_lookupat (flux_t *h, int flags,
                                    const char *key, const char *treeobj);
 
- int flux_kvs_lookup_get (flux_future_t *f, const char **json_str);
+ int flux_kvs_lookup_get (flux_future_t *f, const char **value);
 
  int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...);
 
- int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len);
+ int flux_kvs_lookup_get_raw (flux_future_t *f,
+                              const void **data, int *len);
 
- int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dir);
+ int flux_kvs_lookup_get_dir (flux_future_t *f,
+                              const flux_kvsdir_t **dir);
+
+ int flux_kvs_lookup_get_treeobj (flux_future_t *f, const char **treeobj);
+
+ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target);
 
 
 DESCRIPTION
 -----------
 
 The Flux Key Value Store is a general purpose distributed storage
-service used by Flux services.  It is (currently) a single namespace
-per Flux instance and is available globally, with "loosely consistent"
-semantics.
+service used by Flux services.
 
-`flux_kvs_lookup()` sends a request to the KVS service to translate
-_key_ to its current value.  It returns a `flux_future_t` object which
-acts as handle for synchronization and container for the response.
-_flags_ modifies the request as described below.
+`flux_kvs_lookup()` sends a request to the KVS service to look up _key_.
+It returns a `flux_future_t` object which acts as handle for synchronization
+and container for the result.  _flags_ modifies the request as described
+below.
 
 `flux_kvs_lookupat()` is identical to `flux_kvs_lookup()` except
-_treeobj_ is a serialized JSON treeobj object that references a
-particular snapshot within the KVS.
+_treeobj_ is a serialized RFC 11 object that references a particular
+static set of content within the KVS, effectively a snapshot.
+See `flux_kvs_lookup_get_treeobj()` below.
 
-`flux_kvs_lookup_get ()` completes a lookup operation, blocking on
-response(s) if needed, parsing the result, and returning the requested
-value in _json_str_.  _buf_ is valid until `flux_future_destroy()` is called.
-_json_str_ may be a JSON object, array, or bare value.
+All the functions below are variations on a common theme.  First they
+complete the lookup RPC by blocking on the response, if not already received.
+Then they interpret the result in different ways.  They may be called more
+than once on the same future, and they may be intermixed to probe a result
+or interpret it in different ways.  Results remain valid until
+`flux_future_destroy()` is called.
 
-`flux_kvs_lookup_get_unpack()` is identical to `flux_kvs_lookup_get()` except
-the returned JSON is parsed according to variable arguments in Jansson
-`json_unpack()` format.
+`flux_kvs_lookup_get()` interprets the result as a NULL-terminated string
+value.  The value is assigned to _value_.  If the value is empty, NULL
+is assigned.
 
-`flux_kvs_lookup_get_raw()` is identical to `flux_kvs_lookup_get()` except
-the raw value is returned without decoding.
+`flux_kvs_lookup_get_unpack()` interprets the result as a NULL-terminated
+string value, then as encoded JSON (not necessarily enclosed in an object).
+The value is parsed according to variable arguments in Jansson `json_unpack()`
+format.
 
-`flux_kvs_lookup_get_dir()` is identical to `flux_kvs_lookup_get()` except
-a directory object is returned.
+`flux_kvs_lookup_get_raw()` interprets the result as a raw, opaque value,
+which it assigns to _buf_ and its length to _len_.  The value may be any
+byte sequence.  If the value has zero length, NULL is assigned to _buf_.
 
-These functions may be used asynchronously.
-See `flux_future_then(3)` for details.
+`flux_kvs_lookup_get_dir()` interprets the result as a directory,
+e.g. in response to a lookup with the FLUX_KVS_READDIR flag set.
+The directory object is assigned to _dir_.
+
+`flux_kvs_lookup_get_treeobj()` interprets the result as any RFC 11 object.
+The object in JSON-encoded form is assigned to _treeobj_.  Since all
+lookup requests return an RFC 11 object of one type or another, this
+function should work on all.
+
+`flux_kvs_lookup_get_symlink()` interprets the result as a symlink target,
+e.g. in response to a lookup with the FLUX_KVS_READLINK flag set.
+The result is parsed and symlink target is assigned to _target_.
+
+These functions may be used asynchronously.  See `flux_future_then(3)` for
+details.
 
 
 FLAGS
@@ -73,10 +96,15 @@ Look up a directory, not a value.  The lookup fails if the key does
 not refer to a directory object.
 
 FLUX_KVS_READLINK::
-If key is a symlink, read the link value, what it refers to.
+If key is a symlink, read the link value.  The lookup fails if the key
+does not refer to a symlink object.
 
 FLUX_KVS_TREEOBJ::
-Return the object representation.
+All KVS lookups return an RFC 11 tree object.  This flag requests that
+they be returned without conversion.  That is, a "valref" will not
+be converted to a "val" object, and a "dirref" will not be converted
+to a "dir" object.  This is useful for obtaining a snapshot reference
+that can be passed to `flux_kvs_lookupat()`.
 
 
 RETURN VALUE
@@ -85,16 +113,18 @@ RETURN VALUE
 `flux_kvs_lookup()` and `flux_kvs_lookupat()` return a
 `flux_future_t` on success, or NULL on failure with errno set appropriately.
 
-`flux_kvs_lookup_get()`, `flux_kvs_lookup_get_unpack()`, and
-`flux_kvs_lookup_get_raw()` return 0 on success, or -1 on failure with
-errno set appropriately.
+`flux_kvs_lookup_get()`, `flux_kvs_lookup_get_unpack()`,
+`flux_kvs_lookup_get_raw()`, `flux_kvs_lookup_get_dir()`,
+`flux_kvs_lookup_get_treeobj()`, and `flux_kvs_lookup_get_symlink()`
+return 0 on success, or -1 on failure with errno set appropriately.
 
 
 ERRORS
 ------
 
 EINVAL::
-One of the arguments was invalid.
+One of the arguments was invalid, or FLUX_KVS_READLINK was used but
+the key does not refer to a symlink.
 
 ENOMEM::
 Out of memory.
@@ -109,7 +139,7 @@ EISDIR::
 FLUX_KVS_READDIR flag was NOT set and key points to a directory.
 
 EPROTO::
-A request was malformed.
+A request or response was malformed.
 
 EFBIG::
 

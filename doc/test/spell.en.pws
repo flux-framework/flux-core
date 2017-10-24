@@ -402,3 +402,5 @@ procs
 txn
 kvsdir
 vpack
+dirref
+lookups

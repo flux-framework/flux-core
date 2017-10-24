@@ -128,6 +128,8 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_lookup_get_unpack.3 \
 	flux_kvs_lookup_get_raw.3 \
 	flux_kvs_lookup_get_dir.3 \
+	flux_kvs_lookup_get_treeobj.3 \
+	flux_kvs_lookup_get_symlink.3 \
 	flux_kvs_fence.3 \
 	flux_kvs_txn_destroy.3 \
 	flux_kvs_txn_put.3 \
@@ -239,6 +241,8 @@ flux_kvs_lookup_get.3: flux_kvs_lookup.3
 flux_kvs_lookup_get_unpack.3: flux_kvs_lookup.3
 flux_kvs_lookup_get_raw.3: flux_kvs_lookup.3
 flux_kvs_lookup_get_dir.3: flux_kvs_lookup.3
+flux_kvs_lookup_treeobj.3: flux_kvs_lookup.3
+flux_kvs_lookup_symlink.3: flux_kvs_lookup.3
 flux_kvs_fence.3: flux_kvs_commit.3
 flux_kvs_txn_destroy.3: flux_kvs_txn_create.3
 flux_kvs_txn_put.3: flux_kvs_txn_create.3
