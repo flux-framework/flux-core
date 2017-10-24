@@ -162,10 +162,12 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
         void *data;
         int len;
         int ret;
+
         assert (cache_entry_get_valid (hp) == true);
         assert (cache_entry_get_dirty (hp) == true);
         ret = cache_entry_clear_dirty (hp);
         assert (ret == 0);
+        assert (cache_entry_get_dirty (hp) == false);
 
         ret = cache_entry_get_raw (hp, &data, &len);
         assert (ret == 0);
