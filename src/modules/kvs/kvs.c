@@ -1674,6 +1674,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
                             __FUNCTION__);
             ret = cache_entry_clear_dirty (hp);
             assert (ret == 0);
+            assert (cache_entry_get_dirty (hp) == false);
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);
             goto done_error;

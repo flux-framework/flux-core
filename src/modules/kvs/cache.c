@@ -116,7 +116,7 @@ int cache_entry_clear_dirty (struct cache_entry *hp)
             && (!hp->waitlist_notdirty
                 || !wait_queue_length (hp->waitlist_notdirty)))
             hp->dirty = 0;
-        return hp->dirty ? 1 : 0;
+        return 0;
     }
     return -1;
 }
@@ -131,7 +131,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp)
             }
             hp->dirty = 0;
         }
-        return hp->dirty ? 1 : 0;
+        return 0;
     }
     return -1;
 }

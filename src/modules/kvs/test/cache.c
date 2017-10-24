@@ -124,16 +124,16 @@ void cache_entry_raw_tests (void)
         "cache entry succcessfully set dirty");
 
     ok (cache_entry_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0, b/c no waiters");
+        "cache_entry_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
+        "cache entry succcessfully now not dirty, b/c no waiters");
 
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == true,
         "cache entry succcessfully set dirty");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty returns 0");
+        "cache_entry_force_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry succcessfully now not dirty");
 
@@ -236,16 +236,16 @@ void cache_entry_json_tests (void)
         "cache entry succcessfully set dirty");
 
     ok (cache_entry_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0, b/c no waiters");
+        "cache_entry_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
+        "cache entry succcessfully now not dirty, b/c no waiters");
 
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == true,
         "cache entry succcessfully set dirty");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty returns 0");
+        "cache_entry_force_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry succcessfully now not dirty");
 
@@ -364,8 +364,10 @@ void waiter_raw_tests (void)
         "cache entry set dirty, adding waiter");
     ok (cache_entry_wait_notdirty (e, w) == 0,
         "cache_entry_wait_notdirty success");
-    ok (cache_entry_clear_dirty (e) == 1,
-        "cache_entry_clear_dirty returns 1, b/c of a waiter");
+    ok (cache_entry_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry still dirty, b/c of a waiter");
     ok (cache_entry_set_dirty (e, false) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == false,
@@ -383,7 +385,7 @@ void waiter_raw_tests (void)
     ok (cache_entry_wait_notdirty (e, w) == 0,
         "cache_entry_wait_notdirty success");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty returns 0 w/ waiter");
+        "cache_entry_force_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry set not dirty with one waiter");
     ok (count == 0,
@@ -454,8 +456,10 @@ void waiter_json_tests (void)
         "cache entry set dirty, adding waiter");
     ok (cache_entry_wait_notdirty (e, w) == 0,
         "cache_entry_wait_notdirty success");
-    ok (cache_entry_clear_dirty (e) == 1,
-        "cache_entry_clear_dirty returns 1, b/c of a waiter");
+    ok (cache_entry_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry still dirty, b/c of a waiter");
     ok (cache_entry_set_dirty (e, false) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == false,
@@ -473,7 +477,7 @@ void waiter_json_tests (void)
     ok (cache_entry_wait_notdirty (e, w) == 0,
         "cache_entry_wait_notdirty success");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty returns 0 w/ waiter");
+        "cache_entry_force_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry set not dirty with one waiter");
     ok (count == 0,

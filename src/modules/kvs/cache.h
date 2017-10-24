@@ -32,15 +32,17 @@ bool cache_entry_get_dirty (struct cache_entry *hp);
 int cache_entry_set_dirty (struct cache_entry *hp, bool val);
 
 /* cache_entry_clear_dirty() is similar to calling
- * cache_entry_set_dirty(hp,false), but it will not set the dirty
- * bit to false if there are waiters for notdirty
+ * cache_entry_set_dirty(hp,false), but it will not set the dirty bit
+ * to false if there are waiters for notdirty
  * (i.e. cache_entry_wait_notdirty() has been called on this entry).
  * This is typically called in an error path where the caller wishes
  * to give up on a previously marked dirty cache entry but has not yet
- * done anything with it.  Returns current value of dirty bit on
- * success, -1 on error.
+ * done anything with it.  Returns 0 on success, -1 on error.  Caller
+ * should call cache_entry_get_dirty() to see if dirty bit was cleared
+ * or not.
  *
- * cache_entry_force_clear_dirty() will clear the dirty bit no matter
+ * cache_entry_force_clear_dirty() is similar to
+ * cache_entry_clear_dirty(), but will clear the dirty bit no matter
  * what and destroy the internal wait queue of dirty bit waiters.  It
  * should be only used in emergency error handling cases.
  */
