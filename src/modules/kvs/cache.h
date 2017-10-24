@@ -6,59 +6,20 @@
 #include "src/common/libutil/tstat.h"
 #include "waitqueue.h"
 
-typedef enum {
-    CACHE_DATA_TYPE_NONE,
-    CACHE_DATA_TYPE_JSON,
-    CACHE_DATA_TYPE_RAW,
-} cache_data_type_t;
-
 struct cache_entry;
 struct cache;
 
 
 /* Create/destroy cache entry.
  *
- * cache_entry_create() creates an entry, setting the cache entry type
- * to specified type.  CACHE_DATA_TYPE_NONE indicates user is not yet
- * sure of the type of data to be stored, and it will be determined
- * later when cache_entry_set_X() function is called.
- * cache_entry_get_valid() will return false after
- * cache_entry_create() is initially called, regardless of the type
- * passed in.
- *
- * cache_entry_create_json() creates an entry, setting the cache entry
- * type to CACHE_DATA_TYPE_JSON.  The create transfers ownership of
- * 'o' to the cache entry.  On destroy, json_decref() will be called
- * on 'o'.  'o' cannot be NULL.
- *
- * cache_entry_create_raw() creates an entry, setting the cache entry
- * type to CACHE_DATA_TYPE_RAW.  The create transfers ownership of
- * 'data' to the cache entry.  On destroy, free() will be called on
- * 'data'.  If 'data' is NULL, 'len' must be zero.  If 'data' is
- * non-NULL, 'len' must be > 0.
- *
- * cache_entry_get_valid() will return true on entries when
- * cache_entry_create_json() and cache_entry_get_raw() return success.
+ * cache_entry_create() creates an empty cache entry.  Data can be set
+ * in an entry via cache_entry_set_raw() or cache_entry_set_json().
  */
-struct cache_entry *cache_entry_create (cache_data_type_t t);
-struct cache_entry *cache_entry_create_json (json_t *o);
-struct cache_entry *cache_entry_create_raw (void *data, int len);
+struct cache_entry *cache_entry_create (void);
 void cache_entry_destroy (void *arg);
 
-/* Return what data type is stored in the cache entry or will be
- * stored in the cache entry.  CACHE_DATA_TYPE_NONE means it has not
- * yet been determined.  Returns 0 on success, -1 on error.
- *
- * For convenience, cache_entry_is_type_json() checks specifically if
- * an entry is of type json.  cache_entry_is_type_raw() checks
- * specifically if an entry is of type raw.
- */
-int cache_entry_type (struct cache_entry *hp, cache_data_type_t *t);
-bool cache_entry_is_type_json (struct cache_entry *hp);
-bool cache_entry_is_type_raw (struct cache_entry *hp);
-
-/* Return true if cache entry contains valid json or raw data.
- * False would indicate that a load RPC is in progress.
+/* Return true if cache entry contains valid data.  False would
+ * indicate that a load RPC is in progress.
  */
 bool cache_entry_get_valid (struct cache_entry *hp);
 
@@ -88,42 +49,39 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
 
 /* Accessors for cache entry data.
  *
- * json get accessor must have type of CACHE_DATA_TYPE_JSON to
- * retrieve json object.
+ * raw set accessor transfers ownership of 'data' to the cache entry
+ * if it is non-NULL.  If 'data' is non-NULL, 'len' must be > 0.  If
+ * 'data' is NULL, 'len' must be zero.
  *
- * raw get accessor must have type of CACHE_DATA_TYPE_RAW to
- * retrieve raw data.
+ * json set accessor is a convenience function that will take a json
+ * object and extract the raw data string from it and store that in
+ * the cache entry.  The json object 'o' is also cached internally for
+ * later retrieval.  The create transfers ownership of 'o' to the
+ * cache entry. 'o' must be non-NULL.
  *
- * json set accessor must have type of CACHE_DATA_TYPE_NONE or
- * CACHE_DATA_TYPE_JSON to set json object.  After setting, the type
- * is converted to CACHE_DATA_TYPE_JSON.  'o' must be non-NULL.  Set
- * transfers ownership of 'o' to the cache entry.
- *
- * raw set accessor must have type of CACHE_DATA_TYPE_NONE or
- * CACHE_DATA_TYPE_RAW to set raw data.  After setting, the type is
- * converted to CACHE_DATA_TYPE_RAW.  If 'data' is NULL, 'len' must be
- * zero.  If 'data' is non-NULL, 'len' must be > 0.  If non-NULL, set
- * transfers ownership of 'data' to the cache entry.
- *
- * cache_entry_clear_data () will clear any data in the entry.
+ * json get accessor is a convenience function that will return the
+ * json object equivalent of the raw data stored internally.  If the
+ * internal raw data is not a valid json object (i.e. improperly
+ * formatted or zero length), an error will be result.
  *
  * An invalid->valid transition runs the entry's wait queue, if any in
  * both set accessors.
  *
- * Generally speaking, a cache entry can only be set once.  If you
- * wish to set it again, you must run cache_entry_clear_data() before
- * doing so.
+ * Generally speaking, a cache entry can only be set once.  An attempt
+ * to set new data in a cache entry will silently succeed.  A buffer
+ * passed to cache_entry_set_raw() will be freed for a cache entry
+ * that already has data stored.  A json object passed to
+ * cache_entry_set_json() will be json_decref()'d for a cache entry
+ * that alrdady has data stored.
  *
- * cache_entry_set_json() & cache_entry_set_raw() &
+ * cache_entry_set_raw() & cache_entry_set_json() &
  * cache_entry_clear_data() returns -1 on error, 0 on success
  */
-json_t *cache_entry_get_json (struct cache_entry *hp);
-int cache_entry_set_json (struct cache_entry *hp, json_t *o);
-
 int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
 
-int cache_entry_clear_data (struct cache_entry *hp);
+json_t *cache_entry_get_json (struct cache_entry *hp);
+int cache_entry_set_json (struct cache_entry *hp, json_t *o);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a

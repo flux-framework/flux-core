@@ -551,13 +551,13 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
 
                     /* valref points to raw data, raw_data flag is always
                      * true */
-                    if (cb (lh, ref, true, data) < 0)
+                    if (cb (lh, ref, data) < 0)
                         return -1;
                 }
             }
         }
         else {
-            if (cb (lh, lh->missing_ref, false, data) < 0)
+            if (cb (lh, lh->missing_ref, data) < 0)
                 return -1;
         }
         return 0;
@@ -653,7 +653,7 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
         return 0;
     }
     if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
-        flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
+        flux_log (lh->h, LOG_ERR, "cache_entry_get_raw");
         lh->errnum = ENOTRECOVERABLE;
         return -1;
     }
@@ -687,7 +687,7 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
         }
 
         if (cache_entry_get_raw (hp, NULL, &len) < 0) {
-            flux_log (lh->h, LOG_ERR, "valref points to non-raw data");
+            flux_log (lh->h, LOG_ERR, "cache_entry_get_raw");
             lh->errnum = ENOTRECOVERABLE;
             return -1;
         }

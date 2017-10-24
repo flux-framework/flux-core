@@ -11,7 +11,6 @@ typedef struct lookup lookup_t;
  */
 typedef int (*lookup_ref_f)(lookup_t *c,
                             const char *ref,
-                            bool raw_data,
                             void *data);
 
 /* Initialize a lookup handle

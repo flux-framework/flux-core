@@ -304,12 +304,12 @@ test_expect_success 'kvs: valref that points to zero size content store data can
 	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
 '
 
-test_expect_success 'kvs: valref that doesnt point to raw data fails' '
+test_expect_success 'kvs: valref can point to other treeobjs' '
 	flux kvs unlink -Rf $TEST &&
         flux kvs mkdir $TEST.a.b.c &&
         dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
 	${KVSBASIC} put-treeobj $TEST.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        test_must_fail ${KVSBASIC} copy-fromkvs $TEST.value -
+        ${KVSBASIC} copy-fromkvs $TEST.value - | grep dir
 '
 
 # multi-blobref valrefs
@@ -351,13 +351,13 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref in middle,
         test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
 '
 
-test_expect_success 'kvs: multi blob-ref valref with a blobref that doesnt point to raw data fails' '
+test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a treeobj' '
         flux kvs unlink -Rf $TEST &&
 	hashval1=`echo -n "abcd" | flux content store` &&
         flux kvs mkdir $TEST.a.b.c &&
         dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
 	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        test_must_fail ${KVSBASIC} copy-fromkvs $TEST.multival -
+        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep dir
 '
 
 # dtree tests

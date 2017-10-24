@@ -179,6 +179,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
     int size;
     const char *blobref;
     struct cache_entry *hp;
+    char *datacpy = NULL;
 
     if (flux_content_load_get (f, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
@@ -195,41 +196,26 @@ static void content_load_completion (flux_future_t *f, void *arg)
         goto done;
     }
 
-    /* If cache_entry_set_json() or cache_entry_set_raw() fail, it's a
-     * pretty terrible error case, where we've loaded an object from
-     * the content store, but can't put it in the cache.
+    /* If cache_entry_set_raw() fails, it's a pretty terrible error
+     * case, where we've loaded an object from the content store, but
+     * can't put it in the cache.
      *
      * If there was a waiter on this cache entry waiting for it to be
      * valid, the load() will ultimately hang.  The caller will
      * timeout or eventually give up, so the KVS can continue along
      * its merry way.  So we just log the error.
      */
-    if (cache_entry_is_type_raw (hp)) {
-        char *datacpy = NULL;
-
-        if (size) {
-            if (!(datacpy = malloc (size))) {
-                flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
-                goto done;
-            }
-            memcpy (datacpy, data, size);
-        }
-
-        if (cache_entry_set_raw (hp, datacpy, size) < 0) {
-            flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
+    if (size) {
+        if (!(datacpy = malloc (size))) {
+            flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
             goto done;
         }
+        memcpy (datacpy, data, size);
     }
-    else {
-        json_t *o;
-        if (!(o = json_loads ((char *)data, JSON_DECODE_ANY, NULL))) {
-            flux_log_error (ctx->h, "%s: json_loads", __FUNCTION__);
-            goto done;
-        }
-        if (cache_entry_set_json (hp, o) < 0) {
-            flux_log_error (ctx->h, "%s: cache_entry_set_json", __FUNCTION__);
-            goto done;
-        }
+
+    if (cache_entry_set_raw (hp, datacpy, size) < 0) {
+        flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
+        goto done;
     }
 
 done:
@@ -264,12 +250,9 @@ error:
     return -1;
 }
 
-/* Return 0 on success, -1 on error.  is_raw indicates if data being
- * loaded is raw data, so we know how to place it in the cache.  Set
- * stall variable appropriately
+/* Return 0 on success, -1 on error.  Set stall variable appropriately
  */
-static int load (kvs_ctx_t *ctx, const href_t ref, bool is_raw, wait_t *wait,
-                 bool *stall)
+static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     int saved_errno, ret;
@@ -279,19 +262,10 @@ static int load (kvs_ctx_t *ctx, const href_t ref, bool is_raw, wait_t *wait,
     /* Create an incomplete hash entry if none found.
      */
     if (!hp) {
-        if (is_raw) {
-            if (!(hp = cache_entry_create (CACHE_DATA_TYPE_RAW))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create",
-                                __FUNCTION__);
-                return -1;
-            }
-        }
-        else {
-            if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create",
-                                __FUNCTION__);
-                return -1;
-            }
+        if (!(hp = cache_entry_create ())) {
+            flux_log_error (ctx->h, "%s: cache_entry_create",
+                            __FUNCTION__);
+            return -1;
         }
         cache_insert (ctx->cache, ref, hp);
         if (content_load_request_send (ctx, ref) < 0) {
@@ -390,30 +364,13 @@ static void content_store_completion (flux_future_t *f, void *arg)
     (void)content_store_get (f, arg);
 }
 
-/* is_raw indicates if void *data is json or raw data.  'len' is
- * ignored if it is json.
- */
 static int content_store_request_send (kvs_ctx_t *ctx, void *data, int len,
-                                       bool is_raw, bool now)
+                                       bool now)
 {
     flux_future_t *f;
-    char *dataout = NULL;
-    char *dataout_cpy = NULL;
-    int size;
     int saved_errno, rc = -1;
 
-    if (is_raw) {
-        dataout = data;
-        size = len;
-    }
-    else {
-        if (!(dataout_cpy = kvs_util_json_dumps ((json_t *)data)))
-            goto error;
-        dataout = dataout_cpy;
-        size = strlen (dataout) + 1;
-    }
-
-    if (!(f = flux_content_store (ctx->h, dataout, size, 0)))
+    if (!(f = flux_content_store (ctx->h, data, len, 0)))
         goto error;
     if (now) {
         if (content_store_get (f, ctx) < 0)
@@ -427,7 +384,6 @@ static int content_store_request_send (kvs_ctx_t *ctx, void *data, int len,
 
     rc = 0;
 error:
-    free (dataout_cpy);
     return rc;
 }
 
@@ -451,10 +407,7 @@ static int commit_load_cb (commit_t *c, const char *ref, void *data)
     struct kvs_cb_data *cbd = data;
     bool stall;
 
-    /* is_raw flag is always false on commit loads, we will never
-     * load raw data from the content store, only tree objects.
-     */
-    if (load (cbd->ctx, ref, false, cbd->wait, &stall) < 0) {
+    if (load (cbd->ctx, ref, cbd->wait, &stall) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: load", __FUNCTION__);
         return -1;
@@ -473,20 +426,18 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
     struct kvs_cb_data *cbd = data;
     void *storedata;
     int storedatalen = 0;
-    bool is_raw;
 
     assert (cache_entry_get_dirty (hp));
 
-    is_raw = cache_entry_is_type_raw (hp);
-    if (is_raw)
-        cache_entry_get_raw (hp, &storedata, &storedatalen);
-    else
-        storedata = cache_entry_get_json (hp);
-
+    if (cache_entry_get_raw (hp, &storedata, &storedatalen) < 0) {
+        flux_log_error (cbd->ctx->h, "%s: cache_entry_get_raw",
+                        __FUNCTION__);
+        commit_cleanup_dirty_cache_entry (c, hp);
+        return -1;
+    }
     if (content_store_request_send (cbd->ctx,
                                     storedata,
                                     storedatalen,
-                                    is_raw,
                                     false) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
@@ -710,13 +661,12 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
 }
 
-static int lookup_load_cb (lookup_t *lh, const char *ref,
-                           bool raw_data, void *data)
+static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
 {
     struct kvs_cb_data *cbd = data;
     bool stall;
 
-    if (load (cbd->ctx, ref, raw_data, cbd->wait, &stall) < 0) {
+    if (load (cbd->ctx, ref, cbd->wait, &stall) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: load", __FUNCTION__);
         return -1;
@@ -1452,10 +1402,15 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
              * no consistency issue by not caching.  We will still
              * set new root below via setroot().
              */
-            if (!(hp = cache_entry_create_json (json_incref (root)))) {
-                flux_log_error (ctx->h, "%s: cache_entry_create_json",
+            if (!(hp = cache_entry_create ())) {
+                flux_log_error (ctx->h, "%s: cache_entry_create",
+                                __FUNCTION__);
+            }
+            else if (cache_entry_set_json (hp, json_incref (root)) < 0) {
+                flux_log_error (ctx->h, "%s: cache_entry_set_json",
                                 __FUNCTION__);
                 json_decref (root);
+                cache_entry_destroy (hp);
             }
             else
                 cache_insert (ctx->cache, rootdir, hp);
@@ -1674,7 +1629,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         goto decref_done;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(hp = cache_entry_create (CACHE_DATA_TYPE_JSON))) {
+        if (!(hp = cache_entry_create ())) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
@@ -1683,6 +1638,8 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
+        void *data;
+        int len;
         assert (o);
         if (cache_entry_set_json (hp, o) < 0) {
             saved_errno = errno;
@@ -1700,7 +1657,15 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
             assert (ret == 1);
             goto done_error;
         }
-        if (content_store_request_send (ctx, o, 0, false, true) < 0) {
+        if (cache_entry_get_raw (hp, &data, &len) < 0) {
+            /* remove entry will decref object */
+            saved_errno = errno;
+            flux_log_error (ctx->h, "%s: cache_entry_get_raw", __FUNCTION__);
+            ret = cache_remove_entry (ctx->cache, ref);
+            assert (ret == 1);
+            goto done_error;
+        }
+        if (content_store_request_send (ctx, data, len, true) < 0) {
             /* Must clean up, don't want cache entry to be assumed
              * valid.  Everything here is synchronous and w/o waiters,
              * so nothing should error here */

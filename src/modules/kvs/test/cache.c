@@ -41,56 +41,140 @@ void cache_tests (void)
 void cache_entry_basic_tests (void)
 {
     struct cache_entry *e;
-    json_t *otmp;
-    cache_data_type_t t;
+    char *data;
 
     /* corner case tests */
-    ok (cache_entry_create (447) == NULL,
-        "cache_entry_create fails with bad input");
-    ok (cache_entry_create_json (NULL) == NULL,
-        "cache_entry_create_json fails with bad input");
-    ok (cache_entry_create_raw (NULL, 5) == NULL,
-        "cache_entry_create_raw fails with bad input");
-    ok (cache_entry_type (NULL, NULL) < 0,
-        "cache_entry_type fails with bad input");
-    ok (cache_entry_set_json (NULL, NULL) < 0,
-        "cache_entry_set_json fails with bad input");
-    ok (cache_entry_clear_data (NULL) < 0,
-        "cache_entry_clear_data fails with bad input");
+    ok (cache_entry_set_json (NULL, NULL) < 0
+        && errno == EINVAL,
+        "cache_entry_set_json fails with EINVAL with bad input");
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
-    ok ((e = cache_entry_create_raw (NULL, 0)) != NULL,
-        "cache_entry_create_raw success");
-    ok (cache_entry_set_raw (e, "abcd", -1) < 0,
-        "cache_entry_set_raw fails with bad input");
-    ok (cache_entry_set_raw (e, NULL, 5) < 0,
-        "cache_entry_set_raw fails with bad input");
+
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create success");
+
+    data = strdup ("abcd");
+
+    ok (cache_entry_set_raw (e, data, -1) < 0
+        && errno == EINVAL,
+        "cache_entry_set_raw fails with EINVAL with bad input");
+    ok (cache_entry_set_raw (e, NULL, 5) < 0
+        && errno == EINVAL,
+        "cache_entry_set_raw fails with EINVAL with bad input");
+
+    free (data);
+
     cache_entry_destroy (e);
     e = NULL;
+}
 
-    /* test empty cache entry created by cache_entry_create() */
+void cache_entry_raw_tests (void)
+{
+    struct cache_entry *e;
+    json_t *o1;
+    char *data, *data2, *datatmp;
+    int len;
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    /* test empty cache entry later filled with raw data.
+     */
+
+    data = strdup ("abcd");
+    data2 = strdup ("abcd");
+
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_NONE,
-        "cache_entry_type returns NONE");
-    ok (cache_entry_is_type_json (e) == false,
-        "cache_entry_is_type_json returns false");
-    ok (cache_entry_is_type_raw (e) == false,
-        "cache_entry_is_type_raw returns false");
     ok (cache_entry_get_valid (e) == false,
         "cache entry initially non-valid");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry initially not dirty");
     ok (cache_entry_set_dirty (e, true) < 0,
         "cache_entry_set_dirty fails b/c entry non-valid");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry does not set dirty, b/c no data");
     ok (cache_entry_get_raw (e, NULL, NULL) < 0,
         "cache_entry_get_raw fails, no data set");
-    cache_entry_destroy (e);
+    ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
+        "cache_entry_set_raw success");
+    ok (cache_entry_get_valid (e) == true,
+        "cache entry now valid after cache_entry_set_raw call");
+
+    /* cache_entry_set_raw will free data2 */
+    ok (cache_entry_set_raw (e, data2, strlen (data) + 1) == 0,
+        "cache_entry_set_raw again, silent success");
+    ok (cache_entry_set_raw (e, NULL, 0) < 0 && errno == EBADE,
+        "cache_entry_set_raw fails with EBADE, changing validity type");
+
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
+    /* cache_entry_set_json will json_decref o1 */
+    ok (cache_entry_set_json (e, o1) == 0,
+        "cache_entry_set_json, silent success");
+    o1 = NULL;
+
+    ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
+        "raw data retrieved from cache entry");
+    ok (datatmp && strcmp (datatmp, data) == 0,
+        "raw data matches expected string");
+    ok (datatmp && (len == strlen (data) + 1),
+        "raw data length matches expected length");
+
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry succcessfully set dirty");
+
+    ok (cache_entry_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty returns 0, b/c no waiters");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry succcessfully now not dirty");
+
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry succcessfully set dirty");
+    ok (cache_entry_force_clear_dirty (e) == 0,
+        "cache_entry_force_clear_dirty returns 0");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry succcessfully now not dirty");
+
+    cache_entry_destroy (e); /* destroys data */
+    e = NULL;
+
+    /* test empty cache entry later filled with zero-byte raw data.
+     */
+
+    data = strdup ("abcd");
+
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_set_raw (e, NULL, 0) == 0,
+        "cache_entry_set_raw success");
+    ok (cache_entry_get_valid (e) == true,
+        "cache entry now valid after cache_entry_set_raw call");
+    ok (cache_entry_set_raw (e, NULL, 0) == 0,
+        "cache_entry_set_raw again, silent success");
+    ok (cache_entry_set_raw (e, data, strlen (data) + 1) < 0
+        && errno == EBADE,
+        "cache_entry_set_raw fails with EBADE, changing validity type");
+    free (data);
+
+    o1 = json_object ();
+    json_object_set_new (o1, "foo", json_integer (42));
+    /* cache_entry_set_json will json_decref o1 */
+    ok (cache_entry_set_json (e, o1) < 0
+        && errno == EBADE,
+        "cache_entry_set_json fails with EBADE, changing validity type");
+    json_decref (o1);
+    o1 = NULL;
+
+    ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
+        "raw data retrieved from cache entry");
+    ok (datatmp == NULL,
+        "raw data is NULL");
+    ok (len == 0,
+        "raw data length is zero");
+
+    cache_entry_destroy (e);   /* destroys data */
     e = NULL;
 }
 
@@ -98,37 +182,13 @@ void cache_entry_json_tests (void)
 {
     struct cache_entry *e;
     json_t *otmp, *o1, *o2;
-    cache_data_type_t t;
+    char *data;
 
     /* Play with one entry.
      * N.B.: json ref is NOT incremented by create or get_json.
      */
 
-    /* test empty cache entry with json type created by
-     * cache_entry_create() */
-
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_JSON)) != NULL,
-        "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_JSON,
-        "cache_entry_type returns JSON");
-    ok (cache_entry_is_type_json (e) == true,
-        "cache_entry_is_type_json returns true");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
-    cache_entry_destroy (e);
-    e = NULL;
-
-    /* test empty cache entry with none type, later filled with json.
+    /* test empty cache entry later filled with json.
      */
 
     o1 = json_object ();
@@ -136,14 +196,10 @@ void cache_entry_json_tests (void)
     o2 = json_object ();
     json_object_set_new (o2, "foo", json_integer (42));
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    data = strdup ("abcd");
+
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_NONE,
-        "cache_entry_type returns NONE");
-    ok (cache_entry_is_type_json (e) == false,
-        "cache_entry_is_type_json returns false");
     ok (cache_entry_get_valid (e) == false,
         "cache entry initially non-valid");
     ok (cache_entry_get_dirty (e) == false,
@@ -156,76 +212,24 @@ void cache_entry_json_tests (void)
         "cache_entry_get_json returns NULL, no json set");
     ok (cache_entry_set_json (e, o1) == 0,
         "cache_entry_set_json success");
+
+    /* cache_entry_set_json will json_decref o2 */
     ok (cache_entry_set_json (e, o2) == 0,
         "cache_entry_set_json again, silent success");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_JSON,
-        "cache_entry_type returns JSON");
+    o2 = NULL;
+
     ok (cache_entry_get_valid (e) == true,
         "cache entry now valid after cache_entry_set_json call");
-    ok (cache_entry_is_type_json (e) == true,
-        "cache_entry_is_type_json returns true");
-    ok (cache_entry_set_raw (e, "abcd", 4) < 0,
-        "cache_entry_set_raw fails on cache entry with type json");
-    cache_entry_destroy (e);   /* destroys o1 */
-    e = NULL;
 
-    /* test empty json cache entry with type json, later filled with
-     * data.
-     */
+    /* cache_entry_set_raw will free data */
+    ok (cache_entry_set_raw (e, data, 4) == 0,
+        "cache_entry_set_raw, silent success");
+    data = NULL;
 
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
+    ok (cache_entry_set_raw (e, NULL, 0) < 0
+        && errno == EBADE,
+        "cache_entry_set_raw fails with EBADE, changing validity type");
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_JSON)) != NULL,
-        "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_JSON,
-        "cache_entry_type returns JSON");
-    ok (cache_entry_is_type_json (e) == true,
-        "cache_entry_is_type_json returns true");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    ok (cache_entry_set_raw (e, "abcd", 4) < 0,
-        "cache_entry_set_raw fails on cache entry with type json");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
-    ok (cache_entry_set_json (e, o1) == 0,
-        "cache_entry_set_json success");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_json call");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid after clear");
-    cache_entry_destroy (e);   /* destroys o1 */
-    e = NULL;
-
-    /* test cache entry filled with json initially */
-
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-
-    ok ((e = cache_entry_create_json (o1)) != NULL,
-        "cache_entry_create_json w/ non-NULL input works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_JSON,
-        "cache_entry_type returns JSON");
-    ok (cache_entry_is_type_json (e) == true,
-        "cache_entry_is_type_json returns true");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry initially valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == true,
@@ -252,219 +256,159 @@ void cache_entry_json_tests (void)
     ok (json_integer_value (otmp) == 42,
         "expected json object found");
 
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_json (e) == NULL,
-        "cache entry no longer has json object");
-
     cache_entry_destroy (e); /* destroys o1 */
     e = NULL;
 }
 
-void cache_entry_raw_tests (void)
+void cache_entry_raw_and_json_tests (void)
 {
     struct cache_entry *e;
-    json_t *o1;
-    cache_data_type_t t;
-    char *data, *data2;
+    json_t *o1, *otmp;
+    char *data, *datatmp;
     int len;
 
-    /* test empty cache entry with raw type created by
-     * cache_entry_create() */
+    /* test cache entry filled with raw data that is not valid json
+     */
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_RAW)) != NULL,
+    data = strdup ("foo");
+
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_RAW,
-        "cache_entry_type returns RAW");
-    ok (cache_entry_is_type_raw (e) == true,
-        "cache_entry_is_type_raw returns true");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    ok (cache_entry_get_raw (e, (void **)&data, NULL) < 0,
-        "cache_entry_get_raw fails, no data set");
+    ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
+        "cache_entry_set_raw success");
+    ok ((otmp = cache_entry_get_json (e)) == NULL,
+        "cache_entry_get_json returns NULL for non-json raw data");
     cache_entry_destroy (e);
-    e = NULL;
 
-    /* test empty cache entry with none type, later filled with raw
-     * data.
+    /* test cache entry filled with zero length raw data */
+
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_set_raw (e, NULL, 0) == 0,
+        "cache_entry_set_raw success");
+    ok ((otmp = cache_entry_get_json (e)) == NULL,
+        "cache_entry_get_json returns NULL for zero length raw data");
+    cache_entry_destroy (e);
+
+    /* test cache entry filled with raw data that happens to be valid
+     * json
      */
 
-    data = strdup ("abcd");
-    data2 = strdup ("abcd");
+    data = strdup ("\"foo\"");
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_NONE,
-        "cache_entry_type returns NONE");
-    ok (cache_entry_is_type_raw (e) == false,
-        "cache_entry_is_type_raw returns false");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
-        "cache_entry_get_raw fails, no data set");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
-    ok (cache_entry_set_raw (e, data2, strlen (data) + 1) == 0,
-        "cache_entry_set_raw again, silent success");
-    ok (cache_entry_set_raw (e, NULL, 0) < 0 && errno == EBADE,
-        "cache_entry_set_raw fails with EBADE, changing validity type");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_RAW,
-        "cache_entry_type returns RAW");
-    ok (cache_entry_is_type_raw (e) == true,
-        "cache_entry_is_type_raw returns true");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_raw call");
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    ok (cache_entry_set_json (e, o1) < 0,
-        "cache_entry_set_json fails on cache entry with type raw");
-    json_decref (o1);
-    cache_entry_destroy (e);   /* destroys data */
-    e = NULL;
+    ok ((otmp = cache_entry_get_json (e)) != NULL,
+        "cache_entry_get_json returns non-NULL for json-legal raw data");
+    o1 = json_string ("foo");
+    ok (json_equal (o1, otmp) == true,
+        "json returned from cache entry correct");
+    cache_entry_destroy (e);
 
-    /* test empty cache entry with raw type, later filled with raw
-     * data.
-     */
+    /* test cache entry filled with json and get raw data */
 
-    data = strdup ("abcd");
+    o1 = json_string ("abcd");
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_RAW)) != NULL,
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_RAW,
-        "cache_entry_type returns RAW");
-    ok (cache_entry_is_type_raw (e) == true,
-        "cache_entry_is_type_raw returns true");
+    ok (cache_entry_set_json (e, o1) == 0,
+        "cache_entry_set_json success");
+    ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
+        "cache_entry_get_raw returns success for get json raw data");
+    ok (datatmp && strcmp (datatmp, "\"abcd\"") == 0,
+        "raw data matches expected string version of json");
+    ok (datatmp && (len == strlen ("\"abcd\"") + 1),
+        "raw data length matches expected length of json string");
+    cache_entry_destroy (e);
+}
+
+void waiter_raw_tests (void)
+{
+    struct cache_entry *e;
+    char *data;
+    wait_t *w;
+    int count;
+
+    /* Test cache entry waiters.
+     * N.B. waiter is destroyed when run.
+     */
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    ok (cache_entry_set_json (e, o1) < 0,
-        "cache_entry_set_json fails on cache entry with type raw");
-    json_decref (o1);
-    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
-        "cache_entry_get_raw fails, no data set");
+        "cache entry invalid, adding waiter");
+    ok (cache_entry_clear_dirty (e) < 0,
+        "cache_entry_clear_dirty returns error, b/c no object set");
+    ok (cache_entry_force_clear_dirty (e) < 0,
+        "cache_entry_force_clear_dirty returns error, b/c no object set");
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
+    data = strdup ("abcd");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
     ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_raw call");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid after clear");
-    cache_entry_destroy (e);   /* destroys data */
+        "cache entry set valid with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_clear_dirty (e) == 1,
+        "cache_entry_clear_dirty returns 1, b/c of a waiter");
+    ok (cache_entry_set_dirty (e, false) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
+
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok (cache_entry_set_dirty (e, true) == 0,
+        "cache_entry_set_dirty success");
+    ok (cache_entry_get_dirty (e) == true,
+        "cache entry set dirty, adding waiter");
+    ok (cache_entry_wait_notdirty (e, w) == 0,
+        "cache_entry_wait_notdirty success");
+    ok (cache_entry_force_clear_dirty (e) == 0,
+        "cache_entry_clear_dirty returns 0 w/ waiter");
+    ok (cache_entry_get_dirty (e) == false,
+        "cache entry set not dirty with one waiter");
+    ok (count == 0,
+        "waiter callback not called on force clear dirty");
+
+    cache_entry_destroy (e); /* destroys data */
     e = NULL;
 
-    /* test empty cache entry w/ raw type, later filled with zero-byte
-     * raw data.
-     */
-
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_RAW)) != NULL,
-        "cache_entry_create works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_RAW,
-        "cache_entry_type returns RAW");
-    ok (cache_entry_is_type_raw (e) == true,
-        "cache_entry_is_type_raw returns true");
+    /* set cache entry to zero-data, should also call get valid
+     * waiter */
+    count = 0;
+    ok ((w = wait_create (wait_cb, &count)) != NULL,
+        "wait_create works");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    ok (cache_entry_set_json (e, o1) < 0,
-        "cache_entry_set_json fails on cache entry with type raw");
-    json_decref (o1);
-    ok (cache_entry_get_raw (e, NULL, NULL) < 0,
-        "cache_entry_get_raw fails, no data set");
+        "cache entry invalid, adding waiter");
+    ok (cache_entry_wait_valid (e, w) == 0,
+        "cache_entry_wait_valid success");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
     ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_raw call");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid after clear");
-    cache_entry_destroy (e);   /* destroys data */
-    e = NULL;
-
-    /* test cache entry filled with raw data initially */
-
-    data = strdup ("abcd");
-
-    ok ((e = cache_entry_create_raw (data, strlen (data) + 1)) != NULL,
-        "cache_entry_create_raw w/ non-NULL input works");
-    ok (cache_entry_type (e, &t) == 0,
-        "cache_entry_type success");
-    ok (t == CACHE_DATA_TYPE_RAW,
-        "cache_entry_type returns RAW");
-    ok (cache_entry_is_type_raw (e) == true,
-        "cache_entry_is_type_raw returns true");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry initially valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
-
-    ok (cache_entry_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0, b/c no waiters");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
-
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
-    ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty returns 0");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
-
-    ok (cache_entry_get_raw (e, (void **)&data, &len) == 0,
-        "raw data retrieved from cache entry");
-    ok (data && strcmp (data, "abcd") == 0,
-        "raw data matches expected string");
-    ok (data && (len == strlen (data) + 1),
-        "raw data length matches expected length");
-
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_raw (e, (void **)&data, &len) < 0,
-        "cache entry no longer has data object");
-
+        "cache entry set valid with one waiter");
+    ok (count == 1,
+        "waiter callback ran");
     cache_entry_destroy (e); /* destroys data */
     e = NULL;
 }
@@ -482,7 +426,7 @@ void waiter_json_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create created empty object");
     ok (cache_entry_get_valid (e) == false,
         "cache entry invalid, adding waiter");
@@ -538,92 +482,6 @@ void waiter_json_tests (void)
     cache_entry_destroy (e); /* destroys o */
 }
 
-void waiter_raw_tests (void)
-{
-    struct cache_entry *e;
-    char *data;
-    wait_t *w;
-    int count;
-
-    /* Test cache entry waiters.
-     * N.B. waiter is destroyed when run.
-     */
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
-        "cache_entry_create created empty object");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid, adding waiter");
-    ok (cache_entry_clear_dirty (e) < 0,
-        "cache_entry_clear_dirty returns error, b/c no object set");
-    ok (cache_entry_force_clear_dirty (e) < 0,
-        "cache_entry_force_clear_dirty returns error, b/c no object set");
-    ok (cache_entry_wait_valid (e, w) == 0,
-        "cache_entry_wait_valid success");
-    data = strdup ("abcd");
-    ok (cache_entry_set_raw (e, data, 4) == 0,
-        "cache_entry_set_raw success");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry set valid with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
-    /* set cache entry to zero-data, should also call get valid
-     * waiter */
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_clear_data (e) == 0,
-        "cache_entry_clear_data success");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid, adding waiter");
-    ok (cache_entry_wait_valid (e, w) == 0,
-        "cache_entry_wait_valid success");
-    ok (cache_entry_set_raw (e, NULL, 0) == 0,
-        "cache_entry_set_raw success");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry set valid with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry set dirty, adding waiter");
-    ok (cache_entry_wait_notdirty (e, w) == 0,
-        "cache_entry_wait_notdirty success");
-    ok (cache_entry_clear_dirty (e) == 1,
-        "cache_entry_clear_dirty returns 1, b/c of a waiter");
-    ok (cache_entry_set_dirty (e, false) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry set not dirty with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry set dirty, adding waiter");
-    ok (cache_entry_wait_notdirty (e, w) == 0,
-        "cache_entry_wait_notdirty success");
-    ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0 w/ waiter");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry set not dirty with one waiter");
-    ok (count == 0,
-        "waiter callback not called on force clear dirty");
-
-    cache_entry_destroy (e); /* destroys o */
-}
-
 void cache_remove_entry_tests (void)
 {
     struct cache *cache;
@@ -635,7 +493,7 @@ void cache_remove_entry_tests (void)
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
     cache_insert (cache, "remove-ref", e);
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
@@ -650,7 +508,7 @@ void cache_remove_entry_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    ok ((e = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create created empty object");
     cache_insert (cache, "remove-ref", e);
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
@@ -677,8 +535,10 @@ void cache_remove_entry_tests (void)
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
     o = json_string ("foobar");
-    ok ((e = cache_entry_create_json (o)) != NULL,
-        "cache_entry_create_json created entry");
+    ok ((e = cache_entry_create ()) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_set_json (e, o) == 0,
+        "cache_entry_set_json success");
     cache_insert (cache, "remove-ref", e);
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
@@ -721,7 +581,7 @@ void cache_expiration_tests (void)
         "cache contains 0 entries");
 
     /* first test w/ entry w/o json object */
-    ok ((e1 = cache_entry_create (CACHE_DATA_TYPE_NONE)) != NULL,
+    ok ((e1 = cache_entry_create ()) != NULL,
         "cache_entry_create works");
     cache_insert (cache, "xxx1", e1);
     ok (cache_count_entries (cache) == 1,
@@ -757,8 +617,10 @@ void cache_expiration_tests (void)
     /* second test w/ entry with json object */
     o1 = json_object ();
     json_object_set_new (o1, "foo", json_integer (42));
-    ok ((e3 = cache_entry_create_json (o1)) != NULL,
-        "cache_entry_create_json works");
+    ok ((e3 = cache_entry_create ()) != NULL,
+        "cache_entry_create works");
+    ok (cache_entry_set_json (e3, o1) == 0,
+        "cache_entry_set_json success");
     cache_insert (cache, "xxx2", e3);
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries after insert");
@@ -821,10 +683,11 @@ int main (int argc, char *argv[])
 
     cache_tests ();
     cache_entry_basic_tests ();
-    cache_entry_json_tests ();
     cache_entry_raw_tests ();
-    waiter_json_tests ();
+    cache_entry_json_tests ();
+    cache_entry_raw_and_json_tests ();
     waiter_raw_tests ();
+    waiter_json_tests ();
     cache_expiration_tests ();
     cache_remove_entry_tests ();
 
