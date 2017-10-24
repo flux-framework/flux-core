@@ -27,7 +27,7 @@ SUBDIR2=test.a.b.e
 test_kvs_key() {
 	flux kvs get "$1" >output
 	echo "$2" >expected
-	test_cmp output expected
+	test_cmp expected output
 }
 
 #
@@ -35,34 +35,34 @@ test_kvs_key() {
 #
 
 test_expect_success 'kvs: integer put' '
-	flux kvs put $KEY.integer=42
+	flux kvs put --json $KEY.integer=42
 '
 test_expect_success 'kvs: double put' '
-	flux kvs put $KEY.double=3.14
+	flux kvs put --json $KEY.double=3.14
 '
 test_expect_success 'kvs: string put' '
-	flux kvs put $KEY.string=foo
+	flux kvs put --json $KEY.string=foo
 '
 test_expect_success 'kvs: empty string put' '
-	flux kvs put $KEY.emptystring=
+	flux kvs put --json $KEY.emptystring=
 '
 test_expect_success 'kvs: null is converted to json null' '
-	flux kvs put $KEY.jsonnull=null
+	flux kvs put --json $KEY.jsonnull=null
 '
 test_expect_success 'kvs: quoted null is converted to string' '
-	flux kvs put $KEY.strnull=\"null\"
+	flux kvs put --json $KEY.strnull=\"null\"
 '
 test_expect_success 'kvs: boolean true put' '
-	flux kvs put $KEY.booleantrue=true
+	flux kvs put --json $KEY.booleantrue=true
 '
 test_expect_success 'kvs: boolean false put' '
-	flux kvs put $KEY.booleanfalse=false
+	flux kvs put --json $KEY.booleanfalse=false
 '
 test_expect_success 'kvs: array put' '
-	flux kvs put $KEY.array="[1,3,5]"
+	flux kvs put --json $KEY.array="[1,3,5]"
 '
 test_expect_success 'kvs: object put' '
-	flux kvs put $KEY.object="{\"a\":42}"
+	flux kvs put --json $KEY.object="{\"a\":42}"
 '
 test_expect_success 'kvs: mkdir' '
 	flux kvs mkdir $SUBDIR1
@@ -191,7 +191,7 @@ test_expect_success 'kvs: unlink -R works' '
 #
 
 test_expect_success 'kvs: put (multiple)' '
-	flux kvs put $KEY.a=42 $KEY.b=3.14 $KEY.c=foo $KEY.d=true $KEY.e="[1,3,5]" $KEY.f="{\"a\":42}"
+	flux kvs put --json $KEY.a=42 $KEY.b=3.14 $KEY.c=foo $KEY.d=true $KEY.e="[1,3,5]" $KEY.f="{\"a\":42}"
 '
 test_expect_success 'kvs: get (multiple)' '
 	flux kvs get $KEY.a $KEY.b $KEY.c $KEY.d $KEY.e $KEY.f >output &&
@@ -244,11 +244,11 @@ test_expect_success 'kvs: unlink -R works' '
 '
 test_expect_success 'kvs: create a dir with keys and subdir' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=69 &&
-        flux kvs put $DIR.b=70 &&
-        flux kvs put $DIR.c.d.e.f.g=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
-        flux kvs put $DIR.e=true &&
+	flux kvs put --json $DIR.a=69 &&
+        flux kvs put --json $DIR.b=70 &&
+        flux kvs put --json $DIR.c.d.e.f.g=3.14 &&
+        flux kvs put --json $DIR.d=\"snerg\" &&
+        flux kvs put --json $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 69
@@ -262,11 +262,11 @@ EOF
 
 test_expect_success 'kvs: directory with multiple subdirs' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=69 &&
-        flux kvs put $DIR.b.c.d.e.f.g=70 &&
-        flux kvs put $DIR.c.a.b=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
-        flux kvs put $DIR.e=true &&
+	flux kvs put --json $DIR.a=69 &&
+        flux kvs put --json $DIR.b.c.d.e.f.g=70 &&
+        flux kvs put --json $DIR.c.a.b=3.14 &&
+        flux kvs put --json $DIR.d=\"snerg\" &&
+        flux kvs put --json $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 69
@@ -283,7 +283,7 @@ EOF
 #
 test_expect_success 'kvs: ls -1F DIR works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=69 &&
+	flux kvs put --json $DIR.a=69 &&
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
 	flux kvs ls -1F $DIR >output &&
@@ -296,7 +296,7 @@ test_expect_success 'kvs: ls -1F DIR works' '
 '
 test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=69 &&
+	flux kvs put --json $DIR.a=69 &&
 	flux kvs mkdir $DIR.b &&
 	flux kvs link b $DIR.c &&
 	flux kvs ls -1Fd $DIR.a $DIR.b $DIR.c >output &&
@@ -309,8 +309,8 @@ test_expect_success 'kvs: ls -1Fd DIR.a DIR.b DIR.c works' '
 '
 test_expect_success 'kvs: ls -1RF shows directory titles' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=69 &&
-	flux kvs put $DIR.b.d=42 &&
+	flux kvs put --json $DIR.a=69 &&
+	flux kvs put --json $DIR.b.d=42 &&
 	flux kvs link b $DIR.c &&
 	flux kvs ls -1RF $DIR | grep : | wc -l >output &&
 	cat >expected <<-EOF &&
@@ -387,7 +387,7 @@ test_expect_success 'kvs: ls key. works' '
 '
 test_expect_success 'kvs: ls key. fails if key is not a directory' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=42 &&
+	flux kvs put --json $DIR.a=42 &&
 	test_must_fail flux kvs ls -d $DIR.a.
 '
 test_expect_success 'kvs: ls key. fails if key does not exist' '
@@ -412,10 +412,10 @@ test_expect_success 'kvs: try to retrieve a directory as key should fail' '
 #
 
 test_expect_success 'kvs: put with invalid input' '
-	test_must_fail flux kvs put NOVALUE
+	test_must_fail flux kvs put --json NOVALUE
 '
 test_expect_success 'kvs: put key of . fails' '
-	test_must_fail flux kvs put .=1
+	test_must_fail flux kvs put --json .=1
 '
 
 #
@@ -428,7 +428,7 @@ test_empty_directory() {
 }
 
 test_expect_success 'kvs: try to retrieve key as directory should fail' '
-        flux kvs put $DIR.a.b.c.d=42 &&
+        flux kvs put --json $DIR.a.b.c.d=42 &&
 	test_must_fail flux kvs dir $DIR.a.b.c.d
 '
 test_expect_success 'kvs: empty directory can be created' '
@@ -462,7 +462,7 @@ test_expect_success 'kvs: unlink -R works' '
 '
 test_expect_success 'kvs: empty directory remains after key removed' '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a=1 &&
+        flux kvs put --json $DIR.a=1 &&
         test_kvs_key $DIR.a 1 &&
         flux kvs unlink $DIR.a &&
 	test_empty_directory $DIR
@@ -473,32 +473,32 @@ test_expect_success 'kvs: empty directory remains after key removed' '
 #
 test_expect_success 'kvs: put with leading path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put ......$DIR.a.b.c=42 &&
+	flux kvs put --json ......$DIR.a.b.c=42 &&
 	test_kvs_key $DIR.a.b.c 42
 '
 test_expect_success 'kvs: put with trailing path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c........=43 &&
+	flux kvs put --json $DIR.a.b.c........=43 &&
 	test_kvs_key $DIR.a.b.c 43
 '
 test_expect_success 'kvs: put with extra embedded path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.....a....b...c=44 &&
+	flux kvs put --json $DIR.....a....b...c=44 &&
 	test_kvs_key $DIR.a.b.c 44
 '
 test_expect_success 'kvs: get with leading path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c=42 &&
+	flux kvs put --json $DIR.a.b.c=42 &&
 	test_kvs_key ......$DIR.a.b.c 42
 '
 test_expect_success 'kvs: get with trailing path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c=43 &&
+	flux kvs put --json $DIR.a.b.c=43 &&
 	test_kvs_key $DIR.a.b.c........ 43
 '
 test_expect_success 'kvs: get with extra embedded path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c=44 &&
+	flux kvs put --json $DIR.a.b.c=44 &&
 	test_kvs_key $DIR.....a....b...c 44
 '
 
@@ -508,14 +508,14 @@ test_expect_success 'kvs: get with extra embedded path separators works' '
 
 test_expect_success 'kvs: link works' '
 	TARGET=$DIR.target &&
-	flux kvs put $TARGET=\"foo\" &&
+	flux kvs put --json $TARGET=\"foo\" &&
 	flux kvs link $TARGET $DIR.link &&
 	OUTPUT=$(flux kvs get $DIR.link) &&
 	test "$OUTPUT" = "foo"
 '
 test_expect_success 'kvs: readlink works' '
 	TARGET=$DIR.target &&
-	flux kvs put $TARGET=\"foo\" &&
+	flux kvs put --json $TARGET=\"foo\" &&
 	flux kvs link $TARGET $DIR.link &&
 	OUTPUT=$(flux kvs readlink $DIR.link) &&
 	test "$OUTPUT" = "$TARGET"
@@ -523,8 +523,8 @@ test_expect_success 'kvs: readlink works' '
 test_expect_success 'kvs: readlink works (multiple inputs)' '
 	TARGET1=$DIR.target1 &&
 	TARGET2=$DIR.target2 &&
-	flux kvs put $TARGET1=\"foo1\" &&
-	flux kvs put $TARGET2=\"foo2\" &&
+	flux kvs put --json $TARGET1=\"foo1\" &&
+	flux kvs put --json $TARGET2=\"foo2\" &&
 	flux kvs link $TARGET1 $DIR.link1 &&
 	flux kvs link $TARGET2 $DIR.link2 &&
 	flux kvs readlink $DIR.link1 $DIR.link2 >output &&
@@ -536,7 +536,7 @@ EOF
 '
 test_expect_success 'kvs: readlink fails on regular value' '
         flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.target=42 &&
+	flux kvs put --json $DIR.target=42 &&
 	! flux kvs readlink $DIR.target
 '
 test_expect_success 'kvs: readlink fails on directory' '
@@ -546,7 +546,7 @@ test_expect_success 'kvs: readlink fails on directory' '
 '
 test_expect_success 'kvs: link: path resolution when intermediate component is a link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c=42 &&
+	flux kvs put --json $DIR.a.b.c=42 &&
 	flux kvs link $DIR.a.b $DIR.Z.Y &&
 	OUTPUT=$(flux kvs get $DIR.Z.Y.c) &&
 	test "$OUTPUT" = "42"
@@ -558,7 +558,7 @@ test_expect_success 'kvs: link: path resolution with intermediate link and nonex
 '
 test_expect_success 'kvs: link: intermediate link points to another link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c=42 &&
+	flux kvs put --json $DIR.a.b.c=42 &&
 	flux kvs link $DIR.a.b $DIR.Z.Y &&
 	flux kvs link $DIR.Z.Y $DIR.X.W &&
 	test_kvs_key $DIR.X.W.c 42
@@ -568,7 +568,7 @@ test_expect_success 'kvs: link: intermediate links are followed by put' '
 	flux kvs mkdir $DIR.a &&
 	flux kvs link $DIR.a $DIR.link &&
 	flux kvs readlink $DIR.link >/dev/null &&
-	flux kvs put $DIR.link.X=42 &&
+	flux kvs put --json $DIR.link.X=42 &&
 	flux kvs readlink $DIR.link >/dev/null &&
 	test_kvs_key $DIR.link.X 42 &&
 	test_kvs_key $DIR.a.X 42
@@ -579,7 +579,7 @@ test_expect_success 'kvs: link: kvs_copy removes linked destination' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs mkdir $DIR.a &&
 	flux kvs link $DIR.a $DIR.link &&
-	flux kvs put $DIR.a.X=42 &&
+	flux kvs put --json $DIR.a.X=42 &&
 	flux kvs copy $DIR.a $DIR.link &&
 	! flux kvs readlink $DIR.link >/dev/null &&
 	test_kvs_key $DIR.link.X 42
@@ -590,7 +590,7 @@ test_expect_success 'kvs: link: kvs_move works' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs mkdir $DIR.a &&
 	flux kvs link $DIR.a $DIR.link &&
-	flux kvs put $DIR.a.X=42 &&
+	flux kvs put --json $DIR.a.X=42 &&
 	flux kvs move $DIR.a $DIR.link &&
 	! flux kvs readlink $DIR.link >/dev/null &&
 	test_kvs_key $DIR.link.X 42 &&
@@ -599,7 +599,7 @@ test_expect_success 'kvs: link: kvs_move works' '
 
 test_expect_success 'kvs: link: kvs_copy does not follow links (top)' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.X=42 &&
+	flux kvs put --json $DIR.a.X=42 &&
 	flux kvs link $DIR.a $DIR.link &&
 	flux kvs copy $DIR.link $DIR.copy &&
 	LINKVAL=$(flux kvs readlink $DIR.copy) &&
@@ -608,7 +608,7 @@ test_expect_success 'kvs: link: kvs_copy does not follow links (top)' '
 
 test_expect_success 'kvs: link: kvs_copy does not follow links (mid)' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.X=42 &&
+	flux kvs put --json $DIR.a.b.X=42 &&
 	flux kvs link $DIR.a.b $DIR.a.link &&
 	flux kvs copy $DIR.a $DIR.copy &&
 	LINKVAL=$(flux kvs readlink $DIR.copy.link) &&
@@ -617,7 +617,7 @@ test_expect_success 'kvs: link: kvs_copy does not follow links (mid)' '
 
 test_expect_success 'kvs: link: kvs_copy does not follow links (bottom)' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.X=42 &&
+	flux kvs put --json $DIR.a.b.X=42 &&
 	flux kvs link $DIR.a.b.X $DIR.a.b.link &&
 	flux kvs copy $DIR.a $DIR.copy &&
 	LINKVAL=$(flux kvs readlink $DIR.copy.b.link) &&
@@ -635,7 +635,7 @@ test_expect_success 'kvs: link: readlink on dangling link' '
 '
 test_expect_success 'kvs: link: readlink works on non-dangling link' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.b.c="foo" &&
+	flux kvs put --json $DIR.a.b.c="foo" &&
 	flux kvs link $DIR.a.b.c $DIR.link &&
 	OUTPUT=$(flux kvs readlink $DIR.link) &&
 	test "$OUTPUT" = "$DIR.a.b.c"
@@ -645,7 +645,7 @@ test_expect_success 'kvs: link: readlink works on non-dangling link' '
 
 test_expect_success 'kvs: link: error on link depth' '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a=1 &&
+        flux kvs put --json $DIR.a=1 &&
 	flux kvs link $DIR.a $DIR.b &&
 	flux kvs link $DIR.b $DIR.c &&
 	flux kvs link $DIR.c $DIR.d &&
@@ -672,7 +672,7 @@ test_expect_success 'kvs: link: error on link depth, loop' '
 #
 test_expect_success 'kvs: copy works' '
         flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.src=\"foo\" &&
+	flux kvs put --json $DIR.src=\"foo\" &&
         flux kvs copy $DIR.src $DIR.dest &&
 	OUTPUT1=$(flux kvs get $DIR.src) &&
 	OUTPUT2=$(flux kvs get $DIR.dest) &&
@@ -682,7 +682,7 @@ test_expect_success 'kvs: copy works' '
 
 test_expect_success 'kvs: move works' '
         flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.src=\"foo\" &&
+	flux kvs put --json $DIR.src=\"foo\" &&
         flux kvs move $DIR.src $DIR.dest &&
 	test_must_fail flux kvs get $DIR.src &&
 	OUTPUT=$(flux kvs get $DIR.dest) &&
@@ -709,7 +709,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: version and wait' '
         VERS=$((VERS + 1))
         flux kvs wait $VERS &
         kvswaitpid=$! &&
-        flux kvs put $DIR.xxx=99 &&
+        flux kvs put --json $DIR.xxx=99 &&
         test_expect_code 0 wait $kvswaitpid
 '
 
@@ -775,13 +775,13 @@ wait_watch_current() {
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.foo=0 &&
+        flux kvs put --json $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
         wait_watch_current "0"
-        flux kvs put $DIR.foo=1 &&
+        flux kvs put --json $DIR.foo=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	0
@@ -797,7 +797,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that at first doesnt exist' 
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
         wait_watch_current "nil" &&
-        flux kvs put $DIR.foo=1 &&
+        flux kvs put --json $DIR.foo=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	nil
@@ -808,7 +808,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that at first doesnt exist' 
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key that gets removed'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.foo=0 &&
+        flux kvs put --json $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
@@ -825,13 +825,13 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that gets removed'  '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key that becomes a dir'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.foo=0 &&
+        flux kvs put --json $DIR.foo=0 &&
         wait_watch_put "$DIR.foo" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
         wait_watch_current "0" &&
-        flux kvs put $DIR.foo.bar.baz=1 &&
+        flux kvs put --json $DIR.foo.bar.baz=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	0
@@ -844,14 +844,14 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that becomes a dir'  '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a dir'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
+        flux kvs put --json $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
-        flux kvs put $DIR.a.a=1 &&
+        flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	$DIR.a.
@@ -869,7 +869,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir that at first doesnt exist' 
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "nil" &&
-        flux kvs put $DIR.a.a=1 &&
+        flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	nil
@@ -882,7 +882,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir that at first doesnt exist' 
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a dir that gets removed'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
+        flux kvs put --json $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
         rm -f watch_out
@@ -902,14 +902,14 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir that gets removed'  '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a dir, converted into a key'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
+        flux kvs put --json $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
-        flux kvs put $DIR.a=1 &&
+        flux kvs put --json $DIR.a=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	$DIR.a.a.
@@ -925,14 +925,14 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir, converted into a key'  '
 # $DIR.a is no longer valid and we should see 'nil' as a result.
 test_expect_success NO_CHAIN_LINT 'kvs: watch a dir, prefix path converted into a key'  '
         flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a.a.a=0 $DIR.a.a.b=0 &&
+        flux kvs put --json $DIR.a.a.a=0 $DIR.a.a.b=0 &&
         wait_watch_put "$DIR.a.a.a" "0" &&
         wait_watch_put "$DIR.a.a.b" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
-        flux kvs put $DIR=1 &&
+        flux kvs put --json $DIR=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
 	$DIR.a.a.
@@ -965,14 +965,14 @@ sort_watch_output() {
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a dir with -R'  '
         flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
+        flux kvs put --json $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -R -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
-        flux kvs put $DIR.a.a=1 &&
+        flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
         sort_watch_output
 	cat >expected <<-EOF &&
@@ -988,14 +988,14 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir with -R'  '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a dir with -R and -d'  '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put $DIR.a.a=0 $DIR.a.b=0 &&
+        flux kvs put --json $DIR.a.a=0 $DIR.a.b=0 &&
         wait_watch_put "$DIR.a.a" "0" &&
         wait_watch_put "$DIR.a.b" "0"
         rm -f watch_out
 	stdbuf -oL flux kvs watch -R -d -o -c 1 $DIR >watch_out &
         watchpid=$! &&
         wait_watch_current "======================" &&
-        flux kvs put $DIR.a.a=1 &&
+        flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
         sort_watch_output
 	cat >expected <<-EOF &&

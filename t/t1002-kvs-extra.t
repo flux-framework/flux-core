@@ -45,24 +45,24 @@ test_kvs_type () {
 }
 
 test_expect_success 'kvs: integer put' '
-	flux kvs put $KEY=42 
+	flux kvs put --json $KEY=42 
 '
 test_expect_success 'kvs: integer type' '
 	test_kvs_type $KEY int
 '
 test_expect_success 'kvs: value can be empty' '
-	flux kvs put $KEY= &&
+	flux kvs put --json $KEY= &&
 	  test_kvs_key $KEY "" &&
 	  test_kvs_type $KEY string
 '
 test_expect_success 'kvs: null is converted to json null' '
-	flux kvs put $KEY=null &&
+	flux kvs put --json $KEY=null &&
 	  test_kvs_key $KEY nil &&
 	  test_kvs_type $KEY null
 '
 
 test_expect_success 'kvs: quoted null is converted to string' '
-	flux kvs put $KEY=\"null\" &&
+	flux kvs put --json $KEY=\"null\" &&
 	  test_kvs_key $KEY null &&
 	  test_kvs_type $KEY string
 '
@@ -70,19 +70,19 @@ test_expect_success 'kvs: quoted null is converted to string' '
 KEY=$TEST.b.c.d
 DIR=$TEST.b.c
 test_expect_success 'kvs: string put' '
-	flux kvs put $KEY="Hello world"
+	flux kvs put --json $KEY="Hello world"
 '
 test_expect_success 'kvs: string type' '
 	test_kvs_type $KEY string
 '
 test_expect_success 'kvs: boolean put' '
-	flux kvs put $KEY=true
+	flux kvs put --json $KEY=true
 '
 test_expect_success 'kvs: boolean type' '
 	test_kvs_type $KEY boolean
 '
 test_expect_success 'kvs: put double' '
-	flux kvs put $KEY=3.14159
+	flux kvs put --json $KEY=3.14159
 '
 test_expect_success 'kvs: double type' '
 	test_kvs_type $KEY double
@@ -90,7 +90,7 @@ test_expect_success 'kvs: double type' '
 
 # issue 875
 test_expect_success 'kvs: integer can be read as int, int64, or double' '
-	flux kvs put $TEST.a=2 &&
+	flux kvs put --json $TEST.a=2 &&
 	test_kvs_type $TEST.a int &&
 	test $($GETAS -t int $TEST.a) = "2" &&
 	test $($GETAS -t int -d $TEST a) = "2" &&
@@ -100,13 +100,13 @@ test_expect_success 'kvs: integer can be read as int, int64, or double' '
 	test $($GETAS -t double -d $TEST a | cut -d. -f1) = "2"
 '
 test_expect_success 'kvs: array put' '
-	flux kvs put $KEY="[1,3,5,7]"
+	flux kvs put --json $KEY="[1,3,5,7]"
 '
 test_expect_success 'kvs: array type' '
 	test_kvs_type $KEY array
 '
 test_expect_success 'kvs: object put' '
-	flux kvs put $KEY="{\"a\":42}"
+	flux kvs put --json $KEY="{\"a\":42}"
 '
 test_expect_success 'kvs: object type' '
 	test_kvs_type $KEY object
@@ -132,11 +132,11 @@ EOF
 
 test_expect_success 'kvs: directory with multiple subdirs using dirat' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $DIR.a=69 &&
-        flux kvs put $DIR.b.c.d.e.f.g=70 &&
-        flux kvs put $DIR.c.a.b=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
-        flux kvs put $DIR.e=true &&
+	flux kvs put --json $DIR.a=69 &&
+        flux kvs put --json $DIR.b.c.d.e.f.g=70 &&
+        flux kvs put --json $DIR.c.a.b=3.14 &&
+        flux kvs put --json $DIR.d=\"snerg\" &&
+        flux kvs put --json $DIR.e=true &&
         DIRREF=$(${KVSBASIC} get-treeobj $DIR) &&
 	${KVSBASIC} dirat -r $DIRREF . | sort >output &&
 	cat >expected <<EOF &&
@@ -171,7 +171,7 @@ test_expect_success 'kvs: get-treeobj: returns dirref object for directory' '
 
 test_expect_success 'kvs: get-treeobj: returns val object for small value' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a=b &&
+	flux kvs put --json $TEST.a=b &&
 	${KVSBASIC} get-treeobj $TEST.a | grep -q \"val\"
 '
 
@@ -183,7 +183,7 @@ test_expect_success 'kvs: get-treeobj: returns value ref for large value' '
 
 test_expect_success 'kvs: get-treeobj: returns link value for symlink' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.X=42 &&
+	flux kvs put --json $TEST.a.b.X=42 &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
 	${KVSBASIC} get-treeobj $TEST.a.b.link | grep -q \"symlink\"
 '
@@ -198,7 +198,7 @@ test_expect_success 'kvs: put-treeobj: can make root snapshot' '
 
 test_expect_success 'kvs: put-treeobj: clobbers destination' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a=42 &&
+	flux kvs put --json $TEST.a=42 &&
 	${KVSBASIC} get-treeobj . >snapshot2 &&
 	${KVSBASIC} put-treeobj $TEST.a="`cat snapshot2`" &&
 	! flux kvs get $TEST.a &&
@@ -243,21 +243,21 @@ test_expect_success 'kvs: getat: fails bad on dirent' '
 
 test_expect_success 'kvs: getat: works on root from get-treeobj' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c=42 &&
+	flux kvs put --json $TEST.a.b.c=42 &&
 	test $(${KVSBASIC} getat $(${KVSBASIC} get-treeobj .) $TEST.a.b.c) = 42
 '
 
 test_expect_success 'kvs: getat: works on subdir from get-treeobj' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c=42 &&
+	flux kvs put --json $TEST.a.b.c=42 &&
 	test $(${KVSBASIC} getat $(${KVSBASIC} get-treeobj $TEST.a.b) c) = 42
 '
 
 test_expect_success 'kvs: getat: works on outdated root' '
 	flux kvs unlink -Rf $TEST &&
-	flux kvs put $TEST.a.b.c=42 &&
+	flux kvs put --json $TEST.a.b.c=42 &&
 	ROOTREF=$(${KVSBASIC} get-treeobj .) &&
-	flux kvs put $TEST.a.b.c=43 &&
+	flux kvs put --json $TEST.a.b.c=43 &&
 	test $(${KVSBASIC} getat $ROOTREF $TEST.a.b.c) = 42
 '
 
@@ -269,9 +269,9 @@ test_expect_success 'kvs: zero size raw value can be stored and retrieved' '
 
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
-	flux kvs put $TEST.dirsize.a=1 &&
-	flux kvs put $TEST.dirsize.b=2 &&
-	flux kvs put $TEST.dirsize.c=3 &&
+	flux kvs put --json $TEST.dirsize.a=1 &&
+	flux kvs put --json $TEST.dirsize.b=2 &&
+	flux kvs put --json $TEST.dirsize.c=3 &&
 	OUTPUT=$(${KVSBASIC} dirsize $TEST.dirsize) &&
 	test "$OUTPUT" = "3"
 '
@@ -284,7 +284,7 @@ largevalhash="sha1-79da8e5c9dbe65c6460377d3f09b8f535ceb7d9d"
 
 test_expect_success 'kvs: large put stores raw data into content store' '
 	flux kvs unlink -Rf $TEST &&
- 	flux kvs put $TEST.largeval=$largeval &&
+ 	flux kvs put --json $TEST.largeval=$largeval &&
  	${KVSBASIC} get-treeobj $TEST.largeval | grep -q \"valref\" &&
  	${KVSBASIC} get-treeobj $TEST.largeval | grep -q ${largevalhash} &&
         flux content load ${largevalhash} | grep $largeval
@@ -384,8 +384,8 @@ test_expect_success 'kvs: store 2x4 directory tree and walk' '
 # exercise kvsdir_get_symlink, _double, _boolean, 
 test_expect_success 'kvs: add other types to 2x4 directory and walk' '
 	flux kvs link $TEST.dtree $TEST.dtree.link &&
-	flux kvs put $TEST.dtree.double=3.14 &&
-	flux kvs put $TEST.dtree.booelan=true &&
+	flux kvs put --json $TEST.dtree.double=3.14 &&
+	flux kvs put --json $TEST.dtree.booelan=true &&
 	test $(flux kvs dir -R $TEST.dtree | wc -l) = 19
 '
 
@@ -398,7 +398,7 @@ test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
 # test synchronization based on commit sequence no.
 
 test_expect_success 'kvs: put on rank 0, exists on all ranks' '
-	flux kvs put $TEST.xxx=99 &&
+	flux kvs put --json $TEST.xxx=99 &&
 	VERS=$(flux kvs version) &&
 	flux exec sh -c "flux kvs wait ${VERS} && flux kvs get $TEST.xxx"
 '

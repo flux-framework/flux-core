@@ -279,7 +279,7 @@ test_expect_success 'connector delivers kvs.setroot event to owner connection' '
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
 		kvs kvs.test.end \
                 "flux event pub kvs.test.a; \
-                 flux kvs put ev9=42; \
+                 flux kvs put --json ev9=42; \
                  flux event pub kvs.test.end" >ev9.out &&
 	grep -q kvs.setroot ev9.out
 '
@@ -289,7 +289,7 @@ test_expect_success 'dispatcher delivers kvs.setroot event to owner connection' 
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
 		kvs kvs.test.end \
                 "flux event pub kvs.test.a; \
-                 flux kvs put ev10=42; \
+                 flux kvs put --json ev10=42; \
                  flux event pub kvs.test.end" >ev10.out &&
 	grep -q kvs.setroot ev10.out
 '
@@ -300,7 +300,7 @@ test_expect_success 'connector suppresses kvs.setroot event to guest connection'
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
 		kvs kvs.test.end \
                 "flux event pub kvs.test.a; \
-                 flux kvs put ev11=42; \
+                 flux kvs put --json ev11=42; \
                  flux event pub kvs.test.end" >ev11.out &&
 	! grep -q kvs.setroot ev11.out
 '

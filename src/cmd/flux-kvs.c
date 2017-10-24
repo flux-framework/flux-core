@@ -56,6 +56,16 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt);
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
+static struct optparse_option put_opts[] =  {
+    { .name = "json", .key = 'j', .has_arg = 0,
+      .usage = "Store value(s) as encoded JSON",
+    },
+    { .name = "raw", .key = 'r', .has_arg = 0,
+      .usage = "Store value(s) as-is without adding NULL termination",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option dir_opts[] =  {
     { .name = "recursive", .key = 'R', .has_arg = 0,
       .usage = "Recursively display keys under subdirectories",
@@ -127,11 +137,11 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "put",
-      "key=value [key=value...]",
+      "[-j|-r] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
-      NULL
+      put_opts
     },
     { "dir",
       "[-R] [-d] [key]",
@@ -380,14 +390,33 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             log_msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
 
-        json_t *obj;
-        if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
-            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
-                log_err_exit ("%s", key);
-            json_decref (obj);
+        if (optparse_hasopt (p, "json")) {
+            json_t *obj;
+            if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
+                if (flux_kvs_txn_put (txn, 0, key, val) < 0)
+                    log_err_exit ("%s", key);
+                json_decref (obj);
+            }
+            else { // encode as JSON string if not already valid encoded JSON
+                if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
+                    log_err_exit ("%s", key);
+            }
         }
-        else { // encode as JSON string if not already valid encoded JSON
-            if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
+        else if (optparse_hasopt (p, "raw")) {
+            int len;
+            uint8_t *buf = NULL;
+            if (!strcmp (val, "-")) { // special handling for "--raw key=-"
+                if ((len = read_all (STDIN_FILENO, &buf)) < 0)
+                    log_err_exit ("stdin");
+                val = (char *)buf;
+            } else
+                len = strlen (val);
+            if (flux_kvs_txn_put_raw (txn, 0, key, val, len) < 0)
+                log_err_exit ("%s", key);
+            free (buf);
+        }
+        else {
+            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
         }
         free (key);
