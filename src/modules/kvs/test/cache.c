@@ -383,7 +383,7 @@ void waiter_raw_tests (void)
     ok (cache_entry_wait_notdirty (e, w) == 0,
         "cache_entry_wait_notdirty success");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0 w/ waiter");
+        "cache_entry_force_clear_dirty returns 0 w/ waiter");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry set not dirty with one waiter");
     ok (count == 0,
@@ -473,7 +473,7 @@ void waiter_json_tests (void)
     ok (cache_entry_wait_notdirty (e, w) == 0,
         "cache_entry_wait_notdirty success");
     ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty returns 0 w/ waiter");
+        "cache_entry_force_clear_dirty returns 0 w/ waiter");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry set not dirty with one waiter");
     ok (count == 0,
