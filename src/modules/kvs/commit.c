@@ -60,7 +60,8 @@ struct commit {
     int blocked:1;
     json_t *rootcpy;   /* working copy of root dir */
     href_t newroot;
-    zlist_t *item_callback_list;
+    zlist_t *missing_refs_list;
+    zlist_t *dirty_cache_entries_list;
     commit_mgr_t *cm;
     enum {
         COMMIT_STATE_INIT = 1,
@@ -76,8 +77,10 @@ static void commit_destroy (commit_t *c)
 {
     if (c) {
         json_decref (c->rootcpy);
-        if (c->item_callback_list)
-            zlist_destroy (&c->item_callback_list);
+        if (c->missing_refs_list)
+            zlist_destroy (&c->missing_refs_list);
+        if (c->dirty_cache_entries_list)
+            zlist_destroy (&c->dirty_cache_entries_list);
         /* fence destroyed through management of fence, not commit_t's
          * responsibility */
         free (c);
@@ -94,7 +97,11 @@ static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
         goto error;
     }
     c->f = f;
-    if (!(c->item_callback_list = zlist_new ())) {
+    if (!(c->missing_refs_list = zlist_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(c->dirty_cache_entries_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -183,7 +190,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
 {
     struct cache_entry *hp;
 
-    while ((hp = zlist_pop (c->item_callback_list)))
+    while ((hp = zlist_pop (c->dirty_cache_entries_list)))
         commit_cleanup_dirty_cache_entry (c, hp);
 }
 
@@ -314,7 +321,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                                     false, ref, &hp)) < 0)
                 return -1;
             if (ret) {
-                if (zlist_push (c->item_callback_list, hp) < 0) {
+                if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
                     commit_cleanup_dirty_cache_entry (c, hp);
                     errno = ENOMEM;
                     return -1;
@@ -341,7 +348,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                                         true, ref, &hp)) < 0)
                     return -1;
                 if (ret) {
-                    if (zlist_push (c->item_callback_list, hp) < 0) {
+                    if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
                         commit_cleanup_dirty_cache_entry (c, hp);
                         errno = ENOMEM;
                         return -1;
@@ -543,7 +550,7 @@ commit_process_t commit_process (commit_t *c,
             json_t *rootdir;
 
             /* Caller didn't call commit_iter_missing_refs() */
-            if (zlist_first (c->item_callback_list))
+            if (zlist_first (c->missing_refs_list))
                 goto stall_load;
 
             c->state = COMMIT_STATE_LOAD_ROOT;
@@ -551,7 +558,7 @@ commit_process_t commit_process (commit_t *c,
             if (!(rootdir = cache_lookup_and_get_json (c->cm->cache,
                                                        rootdir_ref,
                                                        current_epoch))) {
-                if (zlist_push (c->item_callback_list,
+                if (zlist_push (c->missing_refs_list,
                                 (void *)rootdir_ref) < 0) {
                     c->errnum = ENOMEM;
                     return COMMIT_PROCESS_ERROR;
@@ -584,7 +591,7 @@ commit_process_t commit_process (commit_t *c,
                 int flags;
 
                 /* Caller didn't call commit_iter_missing_refs() */
-                if (zlist_first (c->item_callback_list))
+                if (zlist_first (c->missing_refs_list))
                     goto stall_load;
 
                 for (i = 0; i < len; i++) {
@@ -605,7 +612,7 @@ commit_process_t commit_process (commit_t *c,
                         break;
                     }
                     if (missing_ref) {
-                        if (zlist_push (c->item_callback_list,
+                        if (zlist_push (c->missing_refs_list,
                                         (void *)missing_ref) < 0) {
                             c->errnum = ENOMEM;
                             break;
@@ -614,12 +621,12 @@ commit_process_t commit_process (commit_t *c,
                 }
 
                 if (c->errnum != 0) {
-                    /* empty item_callback_list to prevent mistakes later */
-                    while ((missing_ref = zlist_pop (c->item_callback_list)));
+                    /* empty missing_refs_list to prevent mistakes later */
+                    while ((missing_ref = zlist_pop (c->missing_refs_list)));
                     return COMMIT_PROCESS_ERROR;
                 }
 
-                if (zlist_first (c->item_callback_list))
+                if (zlist_first (c->missing_refs_list))
                     goto stall_load;
 
             }
@@ -648,7 +655,7 @@ commit_process_t commit_process (commit_t *c,
                                           &hp)) < 0)
                      c->errnum = errno;
             else if (sret
-                     && zlist_push (c->item_callback_list, hp) < 0) {
+                     && zlist_push (c->dirty_cache_entries_list, hp) < 0) {
                 commit_cleanup_dirty_cache_entry (c, hp);
                 c->errnum = ENOMEM;
             }
@@ -671,7 +678,7 @@ commit_process_t commit_process (commit_t *c,
             /* If we did not fall through to here, caller didn't call
              * commit_iter_dirty_cache_entries()
              */
-            if (zlist_first (c->item_callback_list))
+            if (zlist_first (c->dirty_cache_entries_list))
                 goto stall_store;
 
             c->state = COMMIT_STATE_FINISHED;
@@ -706,7 +713,7 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
         return -1;
     }
 
-    while ((ref = zlist_pop (c->item_callback_list))) {
+    while ((ref = zlist_pop (c->missing_refs_list))) {
         if (cb (c, ref, data) < 0) {
             saved_errno = errno;
             rc = -1;
@@ -715,7 +722,7 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
     }
 
     if (rc < 0) {
-        while ((ref = zlist_pop (c->item_callback_list)));
+        while ((ref = zlist_pop (c->missing_refs_list)));
         errno = saved_errno;
     }
 
@@ -734,7 +741,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
         return -1;
     }
 
-    while ((hp = zlist_pop (c->item_callback_list))) {
+    while ((hp = zlist_pop (c->dirty_cache_entries_list))) {
         if (cb (c, hp, data) < 0) {
             saved_errno = errno;
             rc = -1;
