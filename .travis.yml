@@ -9,7 +9,7 @@ compiler:
 matrix:
   include:
     - compiler: gcc
-      env: COVERAGE=t ARGS=--enable-caliper
+      env: COVERAGE=t ARGS="--enable-caliper --enable-pylint"
     - compiler: gcc
       env: T_INSTALL=t
     - compiler: clang
