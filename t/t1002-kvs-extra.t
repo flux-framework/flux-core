@@ -112,13 +112,13 @@ test_expect_success 'kvs: object type' '
 	test_kvs_type $KEY object
 '
 
-test_expect_success 'kvs: put using no-merge flag' '
+test_expect_success 'kvs: put using --no-merge flag' '
 	flux kvs unlink -Rf $TEST &&
-	${KVSBASIC} put-no-merge $DIR.a=69 &&
-        ${KVSBASIC} put-no-merge $DIR.b.c.d.e.f.g=70 &&
-        ${KVSBASIC} put-no-merge $DIR.c.a.b=3.14 &&
-        ${KVSBASIC} put-no-merge $DIR.d=\"snerg\" &&
-        ${KVSBASIC} put-no-merge $DIR.e=true &&
+	flux kvs put --no-merge --json $DIR.a=69 &&
+        flux kvs put --no-merge --json $DIR.b.c.d.e.f.g=70 &&
+        flux kvs put --no-merge --json $DIR.c.a.b=3.14 &&
+        flux kvs put --no-merge --json $DIR.d=\"snerg\" &&
+        flux kvs put --no-merge --json $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 69

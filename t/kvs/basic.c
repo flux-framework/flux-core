@@ -44,7 +44,6 @@ static const struct option longopts[] = {
 };
 
 void cmd_type (flux_t *h, int argc, char **argv);
-void cmd_put_no_merge (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
 
@@ -53,7 +52,6 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: basic type                key\n"
-"       basic put-no-merge        key=val\n"
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
 );
@@ -87,8 +85,6 @@ int main (int argc, char *argv[])
 
     if (!strcmp (cmd, "type"))
         cmd_type (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "put-no-merge"))
-        cmd_put_no_merge (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-tokvs"))
         cmd_copy_tokvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-fromkvs"))
@@ -144,35 +140,6 @@ void cmd_type (flux_t *h, int argc, char **argv)
     }
     json_decref (o);
     flux_future_destroy (f);
-}
-
-void cmd_put_no_merge (flux_t *h, int argc, char **argv)
-{
-    flux_kvs_txn_t *txn;
-    flux_future_t *f;
-
-    if (argc == 0)
-        log_msg_exit ("put: specify one key=value pair");
-    char *key = xstrdup (argv[0]);
-    char *val = strchr (key, '=');
-    if (!val)
-        log_msg_exit ("put: you must specify a value as key=value");
-    *val++ = '\0';
-
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit( "flux_kvs_txn_create");
-    if (flux_kvs_txn_put (txn, 0, key, val) < 0) {
-        if (errno != EINVAL)
-            log_err_exit ("%s", key);
-        if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
-            log_err_exit ("%s", key);
-    }
-    free (key);
-    if (!(f = flux_kvs_commit (h, FLUX_KVS_NO_MERGE, txn))
-        || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
 }
 
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
