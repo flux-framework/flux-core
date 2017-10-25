@@ -183,7 +183,7 @@ AM_CONDITIONAL([HAVE_PYTHON], [test "$enable_python" = yes])
 AC_ARG_ENABLE([pylint],
   [AS_HELP_STRING([--enable-pylint],
     [Enable pylint checks of python bindings])],,
-  [enable_pylint="yes"]
+  [enable_pylint="no"]
 )
 AS_IF([test "x$enable_pylint" = "xyes"], [
   AC_CHECK_PROG(PYLINT,[pylint],[pylint])
