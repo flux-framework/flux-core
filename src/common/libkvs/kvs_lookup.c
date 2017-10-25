@@ -191,7 +191,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
             return -1;
         ctx->val_valid = true;
     }
-    if (!value_is_string (ctx->val_data, ctx->val_len)) {
+    if (ctx->val_data && !value_is_string (ctx->val_data, ctx->val_len)) {
         errno = EINVAL;
         return -1;
     }
