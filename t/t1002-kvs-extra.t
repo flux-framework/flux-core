@@ -272,7 +272,7 @@ test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs put --json $TEST.dirsize.a=1 &&
 	flux kvs put --json $TEST.dirsize.b=2 &&
 	flux kvs put --json $TEST.dirsize.c=3 &&
-	OUTPUT=$(${KVSBASIC} dirsize $TEST.dirsize) &&
+	OUTPUT=$(flux kvs ls -1 $TEST.dirsize | wc -l) &&
 	test "$OUTPUT" = "3"
 '
 

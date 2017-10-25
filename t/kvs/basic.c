@@ -47,7 +47,6 @@ void cmd_type (flux_t *h, int argc, char **argv);
 void cmd_put_no_merge (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
-void cmd_dirsize (flux_t *h, int argc, char **argv);
 void cmd_getat (flux_t *h, int argc, char **argv);
 void cmd_dirat (flux_t *h, int argc, char **argv);
 void cmd_readlinkat (flux_t *h, int argc, char **argv);
@@ -60,7 +59,6 @@ void usage (void)
 "       basic put-no-merge        key=val\n"
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
-"       basic dirsize             key\n"
 "       basic getat               treeobj key\n"
 "       basic dirat [-r]          treeobj [key]\n"
 "       basic readlinkat          treeobj key\n"
@@ -101,8 +99,6 @@ int main (int argc, char *argv[])
         cmd_copy_tokvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-fromkvs"))
         cmd_copy_fromkvs (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dirsize"))
-        cmd_dirsize (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "getat"))
         cmd_getat (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirat"))
@@ -386,21 +382,6 @@ void cmd_dirat (flux_t *h, int argc, char **argv)
             || flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", argv[1]);
     dump_kvs_dir (dir, ropt);
-    flux_future_destroy (f);
-}
-
-void cmd_dirsize (flux_t *h, int argc, char **argv)
-{
-    flux_future_t *f;
-    const flux_kvsdir_t *dir = NULL;
-
-    if (argc != 1)
-        log_msg_exit ("dirsize: specify one directory");
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, argv[0])))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
-        log_err_exit ("%s", argv[0]);
-    printf ("%d\n", flux_kvsdir_get_size (dir));
     flux_future_destroy (f);
 }
 
