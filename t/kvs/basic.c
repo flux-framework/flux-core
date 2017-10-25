@@ -48,8 +48,6 @@ void cmd_put_no_merge (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
 void cmd_dirsize (flux_t *h, int argc, char **argv);
-void cmd_get_treeobj (flux_t *h, int argc, char **argv);
-void cmd_put_treeobj (flux_t *h, int argc, char **argv);
 void cmd_getat (flux_t *h, int argc, char **argv);
 void cmd_dirat (flux_t *h, int argc, char **argv);
 void cmd_readlinkat (flux_t *h, int argc, char **argv);
@@ -63,8 +61,6 @@ void usage (void)
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
 "       basic dirsize             key\n"
-"       basic get-treeobj         key\n"
-"       basic put-treeobj         key=treeobj\n"
 "       basic getat               treeobj key\n"
 "       basic dirat [-r]          treeobj [key]\n"
 "       basic readlinkat          treeobj key\n"
@@ -107,10 +103,6 @@ int main (int argc, char *argv[])
         cmd_copy_fromkvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirsize"))
         cmd_dirsize (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "get-treeobj"))
-        cmd_get_treeobj (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "put-treeobj"))
-        cmd_put_treeobj (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "getat"))
         cmd_getat (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dirat"))
@@ -412,20 +404,6 @@ void cmd_dirsize (flux_t *h, int argc, char **argv)
     flux_future_destroy (f);
 }
 
-void cmd_get_treeobj (flux_t *h, int argc, char **argv)
-{
-    const char *treeobj;
-    flux_future_t *f;
-
-    if (argc != 1)
-        log_msg_exit ("get-treeobj: specify key");
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, argv[0]))
-            || flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
-        log_err_exit ("kvs_get_treeobj %s", argv[0]);
-    printf ("%s\n", treeobj);
-    flux_future_destroy (f);
-}
-
 void cmd_getat (flux_t *h, int argc, char **argv)
 {
     const char *json_str;
@@ -438,30 +416,6 @@ void cmd_getat (flux_t *h, int argc, char **argv)
         log_err_exit ("flux_kvs_lookupat %s %s", argv[0], argv[1]);
     output_key_json_str (NULL, json_str, argv[1]);
     flux_future_destroy (f);
-}
-
-void cmd_put_treeobj (flux_t *h, int argc, char **argv)
-{
-    flux_future_t *f;
-    flux_kvs_txn_t *txn;
-
-    if (argc != 1)
-        log_msg_exit ("put-treeobj: specify key=val");
-    char *key = xstrdup (argv[0]);
-    char *val = strchr (key, '=');
-    if (!val)
-        log_msg_exit ("put-treeobj: you must specify a value as key=val");
-    *val++ = '\0';
-
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put_treeobj (txn, 0, key, val) < 0)
-        log_err_exit ("flux_kvs_txn_put %s=%s", key, val);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_future_destroy (f);
-    flux_kvs_txn_destroy (txn);
-    free (key);
 }
 
 void cmd_readlinkat (flux_t *h, int argc, char **argv)

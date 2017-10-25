@@ -137,7 +137,7 @@ test_expect_success 'kvs: directory with multiple subdirs using dirat' '
         flux kvs put --json $DIR.c.a.b=3.14 &&
         flux kvs put --json $DIR.d=\"snerg\" &&
         flux kvs put --json $DIR.e=true &&
-        DIRREF=$(${KVSBASIC} get-treeobj $DIR) &&
+        DIRREF=$(flux kvs get --treeobj $DIR) &&
 	${KVSBASIC} dirat -r $DIRREF . | sort >output &&
 	cat >expected <<EOF &&
 a = 69
@@ -152,84 +152,84 @@ EOF
 test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
-	ROOTREF=$(${KVSBASIC} get-treeobj .) &&
+	ROOTREF=$(flux kvs get --treeobj .) &&
 	flux kvs unlink -R $TEST &&
 	LINKVAL=$(${KVSBASIC} readlinkat $ROOTREF $TEST.a.b.link) &&
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
-test_expect_success 'kvs: get-treeobj: returns dirref object for root' '
+test_expect_success 'kvs: get --treeobj: returns dirref object for root' '
 	flux kvs unlink -Rf $TEST &&
-	${KVSBASIC} get-treeobj . | grep -q \"dirref\"
+	flux kvs get --treeobj . | grep -q \"dirref\"
 '
 
-test_expect_success 'kvs: get-treeobj: returns dirref object for directory' '
+test_expect_success 'kvs: get --treeobj: returns dirref object for directory' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs mkdir $TEST.a &&
-	${KVSBASIC} get-treeobj $TEST.a | grep -q \"dirref\"
+	flux kvs get --treeobj $TEST.a | grep -q \"dirref\"
 '
 
-test_expect_success 'kvs: get-treeobj: returns val object for small value' '
+test_expect_success 'kvs: get --treeobj: returns val object for small value' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a=b &&
-	${KVSBASIC} get-treeobj $TEST.a | grep -q \"val\"
+	flux kvs get --treeobj $TEST.a | grep -q \"val\"
 '
 
-test_expect_success 'kvs: get-treeobj: returns value ref for large value' '
+test_expect_success 'kvs: get --treeobj: returns value ref for large value' '
 	flux kvs unlink -Rf $TEST &&
 	dd if=/dev/zero bs=4096 count=1 | ${KVSBASIC} copy-tokvs $TEST.a - &&
-	${KVSBASIC} get-treeobj $TEST.a | grep -q \"valref\"
+	flux kvs get --treeobj $TEST.a | grep -q \"valref\"
 '
 
-test_expect_success 'kvs: get-treeobj: returns link value for symlink' '
+test_expect_success 'kvs: get --treeobj: returns link value for symlink' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a.b.X=42 &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
-	${KVSBASIC} get-treeobj $TEST.a.b.link | grep -q \"symlink\"
+	flux kvs get --treeobj $TEST.a.b.link | grep -q \"symlink\"
 '
 
-test_expect_success 'kvs: put-treeobj: can make root snapshot' '
+test_expect_success 'kvs: put --treeobj: can make root snapshot' '
 	flux kvs unlink -Rf $TEST &&
-	${KVSBASIC} get-treeobj . >snapshot &&
-	${KVSBASIC} put-treeobj $TEST.snap="`cat snapshot`" &&
-	${KVSBASIC} get-treeobj $TEST.snap >snapshot.cpy &&
+	flux kvs get --treeobj . >snapshot &&
+	flux kvs put --treeobj $TEST.snap="`cat snapshot`" &&
+	flux kvs get --treeobj $TEST.snap >snapshot.cpy &&
 	test_cmp snapshot snapshot.cpy
 '
 
-test_expect_success 'kvs: put-treeobj: clobbers destination' '
+test_expect_success 'kvs: put --treeobj: clobbers destination' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a=42 &&
-	${KVSBASIC} get-treeobj . >snapshot2 &&
-	${KVSBASIC} put-treeobj $TEST.a="`cat snapshot2`" &&
+	flux kvs get --treeobj . >snapshot2 &&
+	flux kvs put --treeobj $TEST.a="`cat snapshot2`" &&
 	! flux kvs get --json $TEST.a &&
 	flux kvs dir $TEST.a
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: not JSON' '
+test_expect_success 'kvs: put --treeobj: fails bad dirent: not JSON' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a=xyz
+	test_must_fail flux kvs put --treeobj $TEST.a=xyz
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: unknown type' '
+test_expect_success 'kvs: put --treeobj: fails bad dirent: unknown type' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}"
+	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}"
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: bad link data' '
+test_expect_success 'kvs: put --treeobj: fails bad dirent: bad link data' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":42,\"type\":\"symlink\",\"ver\":1}"
+	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":42,\"type\":\"symlink\",\"ver\":1}"
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: bad ref data' '
+test_expect_success 'kvs: put --treeobj: fails bad dirent: bad ref data' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":42,\"type\":\"dirref\",\"ver\":1}" &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}"
+	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":42,\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}"
 '
 
-test_expect_success 'kvs: put-treeobj: fails bad dirent: bad blobref' '
+test_expect_success 'kvs: put --treeobj: fails bad dirent: bad blobref' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" &&
-	test_must_fail ${KVSBASIC} put-treeobj $TEST.a="{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}"
+	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}"
 '
 
 test_expect_success 'kvs: getat: fails bad on dirent' '
@@ -241,22 +241,22 @@ test_expect_success 'kvs: getat: fails bad on dirent' '
 	test_must_fail ${KVSBASIC} getat "{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}" $TEST.a
 '
 
-test_expect_success 'kvs: getat: works on root from get-treeobj' '
+test_expect_success 'kvs: getat: works on root from get --treeobj' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a.b.c=42 &&
-	test $(${KVSBASIC} getat $(${KVSBASIC} get-treeobj .) $TEST.a.b.c) = 42
+	test $(${KVSBASIC} getat $(flux kvs get --treeobj .) $TEST.a.b.c) = 42
 '
 
-test_expect_success 'kvs: getat: works on subdir from get-treeobj' '
+test_expect_success 'kvs: getat: works on subdir from get --treeobj' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a.b.c=42 &&
-	test $(${KVSBASIC} getat $(${KVSBASIC} get-treeobj $TEST.a.b) c) = 42
+	test $(${KVSBASIC} getat $(flux kvs get --treeobj $TEST.a.b) c) = 42
 '
 
 test_expect_success 'kvs: getat: works on outdated root' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a.b.c=42 &&
-	ROOTREF=$(${KVSBASIC} get-treeobj .) &&
+	ROOTREF=$(flux kvs get --treeobj .) &&
 	flux kvs put --json $TEST.a.b.c=43 &&
 	test $(${KVSBASIC} getat $ROOTREF $TEST.a.b.c) = 42
 '
@@ -285,30 +285,30 @@ largevalhash="sha1-79da8e5c9dbe65c6460377d3f09b8f535ceb7d9d"
 test_expect_success 'kvs: large put stores raw data into content store' '
 	flux kvs unlink -Rf $TEST &&
  	flux kvs put --json $TEST.largeval=$largeval &&
- 	${KVSBASIC} get-treeobj $TEST.largeval | grep -q \"valref\" &&
- 	${KVSBASIC} get-treeobj $TEST.largeval | grep -q ${largevalhash} &&
-        flux content load ${largevalhash} | grep $largeval
+	flux kvs get --treeobj $TEST.largeval | grep -q \"valref\" &&
+	flux kvs get --treeobj $TEST.largeval | grep -q ${largevalhash} &&
+	flux content load ${largevalhash} | grep $largeval
 '
 
 test_expect_success 'kvs: valref that points to content store data can be read' '
         flux kvs unlink -Rf $TEST &&
 	echo "$largeval" | flux content store &&
-	${KVSBASIC} put-treeobj $TEST.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+	flux kvs put --treeobj $TEST.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
         flux kvs get --json $TEST.largeval2 | grep $largeval
 '
 
 test_expect_success 'kvs: valref that points to zero size content store data can be read' '
 	flux kvs unlink -Rf $TEST &&
         hashval=`flux content store </dev/null` &&
-	${KVSBASIC} put-treeobj $TEST.empty="{\"data\":[\"${hashval}\"],\"type\":\"valref\",\"ver\":1}" &&
+	flux kvs put --treeobj $TEST.empty="{\"data\":[\"${hashval}\"],\"type\":\"valref\",\"ver\":1}" &&
 	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
 '
 
 test_expect_success 'kvs: valref can point to other treeobjs' '
 	flux kvs unlink -Rf $TEST &&
         flux kvs mkdir $TEST.a.b.c &&
-        dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
-	${KVSBASIC} put-treeobj $TEST.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        dirhash=`flux kvs get --treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+	flux kvs put --treeobj $TEST.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
         ${KVSBASIC} copy-fromkvs $TEST.value - | grep dir
 '
 
@@ -318,7 +318,7 @@ test_expect_success 'kvs: multi blob-ref valref can be read' '
         flux kvs unlink -Rf $TEST &&
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`echo -n "efgh" | flux content store` &&
-	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
+	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
         ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcdefgh" &&
         test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
 '
@@ -327,7 +327,7 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref on left, c
         flux kvs unlink -Rf $TEST &&
 	hashval1=`flux content store < /dev/null` &&
 	hashval2=`echo -n "abcd" | flux content store` &&
-	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
+	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
         ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcd" &&
         test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 4
 '
@@ -336,7 +336,7 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref on right, 
         flux kvs unlink -Rf $TEST &&
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`flux content store < /dev/null` &&
-	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
+	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
         ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcd" &&
         test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 4
 '
@@ -346,7 +346,7 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref in middle,
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`flux content store < /dev/null` &&
 	hashval3=`echo -n "efgh" | flux content store` &&
-	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\", \"${hashval3}\"],\"type\":\"valref\",\"ver\":1}" &&
+	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\", \"${hashval3}\"],\"type\":\"valref\",\"ver\":1}" &&
         ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcdefgh" &&
         test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
 '
@@ -355,8 +355,8 @@ test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a tre
         flux kvs unlink -Rf $TEST &&
 	hashval1=`echo -n "abcd" | flux content store` &&
         flux kvs mkdir $TEST.a.b.c &&
-        dirhash=`${KVSBASIC} get-treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
-	${KVSBASIC} put-treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
+        dirhash=`flux kvs get --treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
         ${KVSBASIC} copy-fromkvs $TEST.multival - | grep dir
 '
 
@@ -371,7 +371,7 @@ test_expect_success 'kvs: walk 16x3 directory tree' '
 '
 
 test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
-	DIRREF=$(${KVSBASIC} get-treeobj $TEST.dtree) &&
+	DIRREF=$(flux kvs get --treeobj $TEST.dtree) &&
 	flux kvs unlink -Rf $TEST.dtree &&
 	test $(${KVSBASIC} dirat -r $DIRREF . | wc -l) = 4096
 '
