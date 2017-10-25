@@ -438,6 +438,37 @@ test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
 '
 
 #
+# treeobj tests
+#
+test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.val=hello &&
+	flux kvs put $DIR.valref=$(seq -s 1 100) &&
+	flux kvs mkdir $DIR.dirref &&
+	flux kvs link foo $DIR.symlink &&
+	flux kvs get --treeobj $DIR.val | grep -q val &&
+	flux kvs get --treeobj $DIR.valref | grep -q valref &&
+	flux kvs get --treeobj $DIR.dirref | grep -q dirref &&
+	flux kvs get --treeobj $DIR.symlink | grep -q symlink
+'
+test_expect_success 'kvs: treeobj is created by put --treeobj' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --treeobj $DIR.val="{\"data\":\"YgA=\",\"type\":\"val\",\"ver\":1}" &&
+	flux kvs get $DIR.val >val.output &&
+	echo "b" >val.expected &&
+	test_cmp val.expected val.output
+'
+test_expect_success 'kvs: treeobj can be used to create snapshot' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.a=hello &&
+	flux kvs put $DIR.a.b=goodbye &&
+	flux kvs put --treeobj $DIR.b=$(flux kvs get --treeobj $DIR.a) &&
+	(flux kvs get $DIR.a.a && flux kvs get $DIR.a.b) >snap.expected &&
+	(flux kvs get $DIR.b.a && flux kvs get $DIR.b.b) >snap.actual &&
+	test_cmp snap.expected snap.actual
+'
+
+#
 # get corner case tests
 #
 
