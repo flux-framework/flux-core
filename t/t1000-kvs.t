@@ -438,6 +438,39 @@ test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
 '
 
 #
+# empty string values
+#
+test_expect_success 'kvs: empty string value made by put with no options' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	dd if=/dev/zero count=1 bs=1 of=empty.expected &&
+	flux kvs get --raw $DIR.a >empty.actual &&
+	test_cmp empty.expected empty.actual
+'
+test_expect_success 'kvs: empty string value can be retrieved by get' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	echo >empty2.expected &&
+	flux kvs get $DIR.a >empty2.actual &&
+	test_cmp empty2.expected empty2.actual
+'
+test_expect_success 'kvs: empty string value NOT handled by get --json' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	test_must_fail flux kvs get --json $DIR.a
+'
+test_expect_success 'kvs: empty string value does not cause dir to fail' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs dir $DIR | grep -q "a ="
+'
+test_expect_success 'kvs: empty string value does not cause ls -FR to fail' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs ls -FR $DIR | grep -q "a"
+'
+
+#
 # treeobj tests
 #
 test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
