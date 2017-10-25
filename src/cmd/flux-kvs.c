@@ -458,7 +458,8 @@ int cmd_get (optparse_t *p, int argc, char **argv)
             const char *value;
             if (flux_kvs_lookup_get (f, &value) < 0)
                 log_err_exit ("%s", key);
-            printf ("%s\n", value);
+            if (value)
+                printf ("%s\n", value);
         }
         flux_future_destroy (f);
     }
