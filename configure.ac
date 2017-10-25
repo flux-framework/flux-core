@@ -36,16 +36,27 @@ PKG_PROG_PKG_CONFIG
 ##
 AC_PROG_CC_C99
 AM_PROG_CC_C_O
-if test "$GCC" = yes; then
-  WARNING_CFLAGS="-Wall -Werror -Werror=missing-field-initializers -Wno-strict-aliasing -Wno-error=deprecated-declarations"
-  AC_SUBST([WARNING_CFLAGS])
-fi
+AX_COMPILER_VENDOR
+AS_CASE($ax_cv_c_compiler_vendor,
+  [clang | gnu], [
+    WARNING_CFLAGS="-Wall -Werror -Werror=missing-field-initializers -Wno-strict-aliasing -Wno-error=deprecated-declarations"
+    AC_SUBST([WARNING_CFLAGS])
+  ]
+)
+
 AC_PROG_CXX
+# Check compiler vendor for c++, need to temporarily update AC_LANG
+AC_LANG_PUSH([C++])
+AX_COMPILER_VENDOR
+AC_LANG_POP
+AS_CASE($ax_cv_cxx_compiler_vendor,
+  [clang | gnu], [
+    WARNING_CXXFLAGS=$WARNING_CFLAGS
+    AC_SUBST([WARNING_CXXFLAGS])
+  ]
+)
 AX_CXX_COMPILE_STDCXX([11], [noext], [mandatory])
-if test "$GXX" = "yes"; then
-  WARNING_CXXFLAGS=$WARNING_CFLAGS
-  AC_SUBST([WARNING_CXXFLAGS])
-fi
+
 X_AC_ENABLE_SANITIZER
 LT_INIT
 AC_PROG_AWK
