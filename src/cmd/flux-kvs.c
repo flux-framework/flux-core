@@ -65,6 +65,9 @@ static struct optparse_option get_opts[] =  {
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Interpret value(s) as raw data",
     },
+    { .name = "treeobj", .key = 't', .has_arg = 0,
+      .usage = "Show RFC 11 object",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -145,7 +148,7 @@ static struct optparse_option unlink_opts[] =  {
 
 static struct optparse_subcommand subcommands[] = {
     { "get",
-      "[-j|-r] key [key...]",
+      "[-j|-r|-t] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -413,7 +416,6 @@ static void output_key_json_str (const char *key,
 int cmd_get (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    const char *key;
     flux_future_t *f;
     int optindex, i;
 
@@ -423,10 +425,19 @@ int cmd_get (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     for (i = optindex; i < argc; i++) {
-        key = argv[i];
-        if (!(f = flux_kvs_lookup (h, 0, key)))
+        const char *key = argv[i];
+        int flags = 0;
+        if (optparse_hasopt (p, "treeobj"))
+            flags |= FLUX_KVS_TREEOBJ;
+        if (!(f = flux_kvs_lookup (h, flags, key)))
             log_err_exit ("%s", key);
-        if (optparse_hasopt (p, "json")) {
+        if (optparse_hasopt (p, "treeobj")) {
+            const char *treeobj;
+            if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
+                log_err_exit ("%s", key);
+            printf ("%s\n", treeobj);
+        }
+        else if (optparse_hasopt (p, "json")) {
             const char *json_str;
             if (flux_kvs_lookup_get (f, &json_str) < 0)
                 log_err_exit ("%s", key);
