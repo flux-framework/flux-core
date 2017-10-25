@@ -444,6 +444,8 @@ int cmd_get (optparse_t *p, int argc, char **argv)
             const char *json_str;
             if (flux_kvs_lookup_get (f, &json_str) < 0)
                 log_err_exit ("%s", key);
+            if (!json_str)
+                log_msg_exit ("%s: zero-length value", key);
             output_key_json_str (NULL, json_str, key);
         }
         else if (optparse_hasopt (p, "raw")) {
