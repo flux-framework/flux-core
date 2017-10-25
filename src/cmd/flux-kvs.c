@@ -380,9 +380,13 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             log_msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
 
-        if (flux_kvs_txn_put (txn, 0, key, val) < 0) {
-            if (errno != EINVAL)
+        json_t *obj;
+        if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
+            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
+            json_decref (obj);
+        }
+        else { // encode as JSON string if not already valid encoded JSON
             if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
                 log_err_exit ("%s", key);
         }
@@ -506,7 +510,7 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
 
     for (i = optindex; i < argc; i++) {
         if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i]))
-                || flux_kvs_lookup_get (f, &target) < 0)
+                || flux_kvs_lookup_get_symlink (f, &target) < 0)
             log_err_exit ("%s", argv[i]);
         else
             printf ("%s\n", target);
@@ -781,7 +785,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt)
         if (flux_kvsdir_issymlink (dir, name)) {
             const char *link;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get (f, &link) < 0)
+                    || flux_kvs_lookup_get_symlink (f, &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
             flux_future_destroy (f);
@@ -1056,7 +1060,7 @@ static int categorize_key (optparse_t *p, const char *key,
     }
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, nkey)))
         log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get (f, &json_str) < 0) {
+    if (flux_kvs_lookup_get_treeobj (f, &json_str) < 0) {
         fprintf (stderr, "%s: %s\n", nkey, flux_strerror (errno));
         goto error;
     }
@@ -1166,12 +1170,12 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     dstkey = argv[optindex + 1];
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get (f, &json_str) < 0)
+            || flux_kvs_lookup_get_treeobj (f, &json_str) < 0)
         log_err_exit ("flux_kvs_lookup %s", srckey);
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, dstkey, json_str) < 0)
-        log_err_exit( "flux_kvs_txn_put");
+    if (flux_kvs_txn_put_treeobj (txn, 0, dstkey, json_str) < 0)
+        log_err_exit( "flux_kvs_txn_put_treeobj");
     flux_future_destroy (f);
 
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
@@ -1198,12 +1202,12 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     dstkey = argv[optindex + 1];
 
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, srckey))
-            || flux_kvs_lookup_get (f, &json_str) < 0)
+            || flux_kvs_lookup_get_treeobj (f, &json_str) < 0)
         log_err_exit ("flux_kvs_lookup %s", srckey);
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, dstkey, json_str) < 0)
-        log_err_exit( "flux_kvs_txn_put");
+    if (flux_kvs_txn_put_treeobj (txn, 0, dstkey, json_str) < 0)
+        log_err_exit( "flux_kvs_txn_put_treeobj");
     if (flux_kvs_txn_unlink (txn, 0, srckey) < 0)
         log_err_exit( "flux_kvs_txn_unlink");
     flux_future_destroy (f);

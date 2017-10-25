@@ -8,6 +8,7 @@
 
 #include "kvs.h"
 #include "kvs_txn_private.h"
+#include "kvs_dir_private.h"
 #include "treeobj.h"
 
 #include "src/common/libflux/flux.h"
@@ -68,7 +69,7 @@ void test_empty (void)
 
     ok (dir != NULL,
         "flux_kvsdir_create with empty directory works");
-    diag ("%s", flux_kvsdir_tostring (dir));
+    jdiag (kvsdir_get_obj (dir));
 
     ok (!flux_kvsdir_exists (dir, "noexist"),
         "flux_kvsdir_exists on nonexistent key returns false");
@@ -146,7 +147,7 @@ void test_full (void)
     free (s);
     ok (dir != NULL,
         "flux_kvsdir_create works");
-    diag ("%s", flux_kvsdir_tostring (dir));
+    jdiag (kvsdir_get_obj (dir));
 
     ok (!flux_kvsdir_exists (dir, "noexist"),
         "flux_kvsdir_exists on nonexistent key returns false");

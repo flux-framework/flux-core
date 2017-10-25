@@ -343,7 +343,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, bool ropt)
         if (flux_kvsdir_issymlink (dir, name)) {
             const char *link;
             if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get (f, &link) < 0)
+                    || flux_kvs_lookup_get_symlink (f, &link) < 0)
                 log_err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
             flux_future_destroy (f);
@@ -420,7 +420,7 @@ void cmd_get_treeobj (flux_t *h, int argc, char **argv)
     if (argc != 1)
         log_msg_exit ("get-treeobj: specify key");
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, argv[0]))
-            || flux_kvs_lookup_get (f, &treeobj) < 0)
+            || flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
         log_err_exit ("kvs_get_treeobj %s", argv[0]);
     printf ("%s\n", treeobj);
     flux_future_destroy (f);
@@ -455,7 +455,7 @@ void cmd_put_treeobj (flux_t *h, int argc, char **argv)
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put (txn, FLUX_KVS_TREEOBJ, key, val) < 0)
+    if (flux_kvs_txn_put_treeobj (txn, 0, key, val) < 0)
         log_err_exit ("flux_kvs_txn_put %s=%s", key, val);
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
@@ -472,7 +472,7 @@ void cmd_readlinkat (flux_t *h, int argc, char **argv)
     if (argc != 2)
         log_msg_exit ("readlink: specify treeobj and key");
     if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[1], argv[0]))
-            || flux_kvs_lookup_get (f, &target) < 0)
+            || flux_kvs_lookup_get_symlink (f, &target) < 0)
         log_err_exit ("%s", argv[1]);
     else
         printf ("%s\n", target);

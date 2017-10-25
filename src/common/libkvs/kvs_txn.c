@@ -42,18 +42,11 @@
  * Raw versus JSON values:
  * All values are base64 encoded per RFC 11, even values that
  * are themselves JSON.  This is a change from the original design,
- * which stored only JSON values.  The new design stores only untyped
- * opaque data.  Because of this history, and because it offers convenience
- * for KVS use cases, we still have flux_kvs_txn_put() which accepts encoded
- * JSON, and flux_kvs_txn_pack() which builds a JSON object, then encodes it.
- * The encoded JSON is converted internally to a string, that is encoded as
- * base64 and becomes the raw value (with terminating NULL).
- * An exception is if the FLUX_KVS_TREEOBJ flag is set - then the encoded
- * or built JSON object is interpreted directly as an RFC 11 tree object.
+ * which stored only JSON values.
  *
  * NULL or empty values:
- * A zero length raw value is considered valid.
- * A NULL JSON string passed to flux_kvs_txn_put() is interpreted as an unlink.
+ * A zero-length value may be stored in the KVS via
+ * flux_kvs_txn_put (value=NULL) or flux_kvs_txn_put_raw (data=NULL,len=0).
  * A NULL format string passed to flux_kvs_txn_pack() is invalid.
  */
 struct flux_kvs_txn {
@@ -96,45 +89,26 @@ static int validate_flags (int flags, int allowed)
     return 0;
 }
 
-static int validate_op (json_t *op)
-{
-    const char *key;
-    int flags;
-    json_t *dirent;
-
-    if (txn_decode_op (op, &key, &flags, &dirent) < 0)
-        goto error;
-    if (strlen (key) == 0)
-        goto error;
-    if (flags != 0)
-        goto error;
-    if (!json_is_null (dirent) && treeobj_validate (dirent) < 0)
-        goto error;
-    return 0;
-error:
-    errno = EINVAL;
-    return -1;
-}
-
 /* Add an operation on dirent to the transaction.
  * Takes a reference on dirent so caller retains ownership.
  */
-static int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
-                                     const char *key, json_t *dirent)
+static int append_op_to_txn (flux_kvs_txn_t *txn, int flags,
+                             const char *key, json_t *dirent)
 {
-    json_t *op;
+    json_t *op = NULL;
+    int saved_errno;
 
     if (txn_encode_op (key, flags, dirent, &op) < 0)
         goto error;
-    if (validate_op (op) < 0)
-        goto error;
     if (json_array_append_new (txn->ops, op) < 0) {
-        json_decref (op);
         errno = ENOMEM;
         goto error;
     }
     return 0;
 error:
+    saved_errno = errno;
+    json_decref (op);
+    errno = saved_errno;
     return -1;
 }
 
@@ -152,7 +126,33 @@ int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
         goto error;
     if (!(dirent = treeobj_create_val (data, len)))
         goto error;
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
+        goto error;
+    json_decref (dirent);
+    return 0;
+
+error:
+    saved_errno = errno;
+    json_decref (dirent);
+    errno = saved_errno;
+    return -1;
+}
+
+int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
+                              const char *key, const char *treeobj)
+{
+    json_t *dirent = NULL;
+    int saved_errno;
+
+    if (!txn || !key || !treeobj) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (validate_flags (flags, 0) < 0)
+        goto error;
+    if (!(dirent = treeobj_decode (treeobj)))
+        goto error;
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
     return 0;
@@ -165,7 +165,7 @@ error:
 }
 
 int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
-                      const char *key, const char *json_str)
+                      const char *key, const char *value)
 {
     json_t *dirent = NULL;
     int saved_errno;
@@ -174,36 +174,11 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if (!json_str)
-        return flux_kvs_txn_unlink (txn, flags, key);
-    if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
+    if (validate_flags (flags, 0) < 0)
         goto error;
-    /* If TREEOBJ flag, decoded json_str *is* the dirent.
-     * Its validity will be validated by put_treeobj().
-     * Otherwise, create a 'val' dirent, treating json_str as opaque data.
-     */
-    if ((flags & FLUX_KVS_TREEOBJ)) {
-        if (!(dirent = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-            errno = EINVAL;
-            goto error;
-        }
-        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
-    }
-    else {
-        json_t *test;
-
-        /* User must pass in valid json object str, otherwise they
-         * should use flux_kvs_txn_pack() or flux_kvs_txn_put_raw()
-         */
-        if (!(test = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
-            errno = EINVAL;
-            goto error;
-        }
-        json_decref (test);
-        if (!(dirent = treeobj_create_val (json_str, strlen (json_str) + 1)))
-            goto error;
-    }
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+    if (!(dirent = treeobj_create_val (value, value ? strlen (value) + 1 : 0)))
+        goto error;
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
     return 0;
@@ -220,42 +195,31 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
 {
     json_t *val, *dirent = NULL;
     int saved_errno;
+    char *s;
 
     if (!txn || !key | !fmt) {
         errno = EINVAL;
         goto error;
     }
-    if (validate_flags (flags, FLUX_KVS_TREEOBJ) < 0)
+    if (validate_flags (flags, 0) < 0)
         goto error;
     val = json_vpack_ex (NULL, 0, fmt, ap);
     if (!val) {
         errno = EINVAL;
         goto error;
     }
-    /* If TREEOBJ flag, the json object *is* the dirent.
-     * Its validity will be validated by put_treeobj().
-     * Otherwise, create a 'val' dirent, treating encoded json object
-     * as opaque data.
-     */
-    if ((flags & FLUX_KVS_TREEOBJ)) {
-        dirent = val;
-        flags &= ~FLUX_KVS_TREEOBJ; // don't send in commit request
-    }
-    else {
-        char *s;
-        if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
-            errno = ENOMEM;
-            json_decref (val);
-            goto error;
-        }
+    if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
+        errno = ENOMEM;
         json_decref (val);
-        if (!(dirent = treeobj_create_val (s, strlen (s) + 1))) {
-            free (s);
-            goto error;
-        }
-        free (s);
+        goto error;
     }
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+    json_decref (val);
+    if (!(dirent = treeobj_create_val (s, strlen (s) + 1))) {
+        free (s);
+        goto error;
+    }
+    free (s);
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
     return 0;
@@ -297,7 +261,7 @@ int flux_kvs_txn_mkdir (flux_kvs_txn_t *txn, int flags,
         goto error;
     if (!(dirent = treeobj_create_dir ()))
         goto error;
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
     return 0;
@@ -323,7 +287,7 @@ int flux_kvs_txn_unlink (flux_kvs_txn_t *txn, int flags,
         goto error;
     if (!(dirent = json_null ()))
         goto error;
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
     return 0;
@@ -348,7 +312,7 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
         goto error;
     if (!(dirent = treeobj_create_symlink (target)))
         goto error;
-    if (flux_kvs_txn_put_treeobj (txn, flags, key, dirent) < 0)
+    if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
     json_decref (dirent);
     return 0;
@@ -409,7 +373,8 @@ int txn_encode_op (const char *key, int flags, json_t *dirent, json_t **opp)
 {
     json_t *op;
 
-    if (!key || !dirent) {
+    if (!key || strlen (key) == 0 || flags != 0 || !dirent
+             || (!json_is_null (dirent) && treeobj_validate (dirent) < 0)) {
         errno = EINVAL;
         return -1;
     }

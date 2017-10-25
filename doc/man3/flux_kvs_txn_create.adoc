@@ -5,7 +5,7 @@ flux_kvs_txn_create(3)
 
 NAME
 ----
-flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_vpack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink, flux_kvs_txn_put_raw - operate on a KVS transaction object
+flux_kvs_txn_create, flux_kvs_txn_destroy, flux_kvs_txn_put, flux_kvs_txn_pack, flux_kvs_txn_vpack, flux_kvs_txn_mkdir, flux_kvs_txn_unlink, flux_kvs_txn_symlink, flux_kvs_txn_put_raw, flux_kvs_txn_put_treeobj - operate on a KVS transaction object
 
 
 SYNOPSIS
@@ -17,7 +17,7 @@ SYNOPSIS
  void flux_kvs_txn_destroy (flux_kvs_txn_t *txn);
 
  int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
-                       const char *key, const char *json_str);
+                       const char *key, const char *value);
 
  int flux_kvs_txn_pack (flux_kvs_txn_t *txn, int flags,
                         const char *key, const char *fmt, ...);
@@ -37,10 +37,15 @@ SYNOPSIS
  int flux_kvs_txn_put_raw (flux_kvs_txn_t *txn, int flags,
                            const char *key, const void *data, int len);
 
+ int flux_kvs_txn_put_treeobj (flux_kvs_txn_t *txn, int flags,
+                               const char *key, const char *treeobj);
 
 
 DESCRIPTION
 -----------
+
+The Flux Key Value Store is a general purpose distributed storage
+service used by Flux services.
 
 `flux_kvs_txn_create()` creates a KVS transaction object that may be
 passed to `flux_kvs_commit(3)` or `flux_kvs_fence(3)`.  The transaction
@@ -48,22 +53,17 @@ consists of a list of operations that are applied to the KVS together,
 in order.  The entire transaction either succeeds or fails.  After commit
 or fence, the object must be destroyed with `flux_kvs_txn_destroy()`.
 
-`flux_kvs_txn_put()` sets _key_ to a value represented by _json_str_.
-If _key_ does not exist it is created.  _key_ is hierarchical, with period
-(".") used as a path separator.  "." represents the root of the namespace
-and is optional at the beginning of _key_.  Any path components in _key_
-that do not exist is created.  Any path components in _key_ that must be
-converted to directories are overwritten.  The value _json_str_ may be be
-any bare JSON value (except null), a JSON array, or a JSON object, encoded
-as a string.  Alternatively, the FLUX_KVS_TREEOBJ flag may be specified
-indicating that the _json_str_ value is to be interpreted as an RFC 11
-tree object, as described in FLAGS below.  A NULL _json_str_ value is
-equivalent to calling `flux_kvs_txn_unlink()` on _key_.
+Each function below adds a single operation to _txn_.  _key_ is a
+hierarchical path name with period (".") used as path separator.
+When the transaction is committed, any existing keys or path components
+that are in conflict with the requested operation are overwritten.
 
-`flux_kvs_txn_pack()` is identical to `flux_kvs_txn_put()`, except
-`json_pack()` style arguments (see below) are used to construct the
-value.  `flux_kvs_txn_vpack()` is a variant that accepts a _va_list_
-argument.
+`flux_kvs_txn_put()` sets _key_ to a NULL terminated string _value_.
+_value_ may be NULL indicating that an empty value should be stored.
+
+`flux_kvs_txn_pack()` sets _key_ to a NULL terminated string encoded
+from a JSON object built with `json_pack()` style arguments (see below).
+`flux_kvs_txn_vpack()` is a variant that accepts a _va_list_ argument.
 
 `flux_kvs_txn_mkdir()` sets _key_ to an empty directory.
 
@@ -76,19 +76,14 @@ another key.  _target_ need not exist.
 `flux_kvs_txn_put_raw()` sets _key_ to a value containing raw data
 referred to by _data_ of length _len_.
 
+`flux_kvs_txn_put_treeobj()` sets _key_ to an RFC 11 object, encoded
+as a JSON string.
+
 
 FLAGS
 -----
 
-The _flags_ argument may be zero, or a bitmask of one or more of the
-following flags:
-
-FLUX_KVS_TREEOBJ::
-The specified value is interpreted as an RFC 11 tree object (KVS meta data)
-rather than the actual value.  Currently the only way to obtain a valid
-tree object is with `flux_kvs_lookup(3)` or `flux_kvs_lookupat(3)`.  In
-the future, other methods may be available.  Note: this flag is only
-valid for `flux_kvs_txn_put()` and `flux_kvs_txn_pack()`.
+The _flags_ argument is currently unused and must be zero.
 
 
 include::JSON_PACK.adoc[]

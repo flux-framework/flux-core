@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <czmq.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 int flux_kvs_get (flux_t *h, const char *key, char **valp)
@@ -215,12 +216,31 @@ int flux_kvs_fence_anon (flux_t *h, const char *name, int nprocs, int flags)
     return rc;
 }
 
+static int validate_json (const char *json_str)
+{
+    json_t *test;
+    if (!(test = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
+        errno = EINVAL;
+        return -1;
+    }
+    json_decref (test);
+    return 0;
+}
+
 int flux_kvs_put (flux_t *h, const char *key, const char *json_str)
 {
     flux_kvs_txn_t *txn = get_default_txn (h);
+    int rc;
     if (!txn)
         return -1;
-    return flux_kvs_txn_put (txn, 0, key, json_str);
+    if (json_str) {
+        if (validate_json (json_str) < 0)
+            return -1;
+        rc = flux_kvs_txn_put (txn, 0, key, json_str);
+    }
+    else
+        rc = flux_kvs_txn_unlink (txn, 0, key);
+    return rc;
 }
 
 int flux_kvs_unlink (flux_t *h, const char *key)
@@ -287,7 +307,13 @@ int flux_kvsdir_put (const flux_kvsdir_t *dir, const char *key,
     int rc;
     if (dir_put_init (dir, key, &dp) < 0)
         return -1;
-    rc = flux_kvs_txn_put (dp.txn, 0, dp.key, json_str);
+    if (json_str) {
+        if (validate_json (json_str) < 0)
+            return -1;
+        rc = flux_kvs_txn_put (dp.txn, 0, dp.key, json_str);
+    }
+    else
+        rc = flux_kvs_txn_unlink (dp.txn, 0, dp.key);
     dir_put_fini (&dp);
     return rc;
 }
