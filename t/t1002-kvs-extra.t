@@ -130,7 +130,7 @@ EOF
 	test_cmp expected output
 '
 
-test_expect_success 'kvs: directory with multiple subdirs using dirat' '
+test_expect_success 'kvs: directory with multiple subdirs using dir --at' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $DIR.a=69 &&
         flux kvs put --json $DIR.b.c.d.e.f.g=70 &&
@@ -138,7 +138,7 @@ test_expect_success 'kvs: directory with multiple subdirs using dirat' '
         flux kvs put --json $DIR.d=\"snerg\" &&
         flux kvs put --json $DIR.e=true &&
         DIRREF=$(flux kvs get --treeobj $DIR) &&
-	${KVSBASIC} dirat -r $DIRREF . | sort >output &&
+	flux kvs dir -R --at $DIRREF . | sort >output &&
 	cat >expected <<EOF &&
 a = 69
 b.c.d.e.f.g = 70
@@ -149,12 +149,12 @@ EOF
 	test_cmp expected output
 '
 
-test_expect_success 'kvs: get_symlinkat works after symlink unlinked' '
+test_expect_success 'kvs: readlink --at works after symlink unlinked' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
 	ROOTREF=$(flux kvs get --treeobj .) &&
 	flux kvs unlink -R $TEST &&
-	LINKVAL=$(${KVSBASIC} readlinkat $ROOTREF $TEST.a.b.link) &&
+	LINKVAL=$(flux kvs readlink --at $ROOTREF $TEST.a.b.link) &&
 	test "$LINKVAL" = "$TEST.a.b.X"
 '
 
@@ -232,33 +232,33 @@ test_expect_success 'kvs: put --treeobj: fails bad dirent: bad blobref' '
 	test_must_fail flux kvs put --treeobj $TEST.a="{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}"
 '
 
-test_expect_success 'kvs: getat: fails bad on dirent' '
+test_expect_success 'kvs: get --at: fails bad on dirent' '
 	flux kvs unlink -Rf $TEST &&
-	test_must_fail ${KVSBASIC} getat 42 $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"data\":42,\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail ${KVSBASIC} getat "{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}" $TEST.a
+	test_must_fail flux kvs get --at 42 $TEST.a &&
+	test_must_fail flux kvs get --at "{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail flux kvs get --at "{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail flux kvs get --at "{\"data\":42,\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
+	test_must_fail flux kvs get --at "{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}" $TEST.a
 '
 
-test_expect_success 'kvs: getat: works on root from get --treeobj' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put --json $TEST.a.b.c=42 &&
-	test $(${KVSBASIC} getat $(flux kvs get --treeobj .) $TEST.a.b.c) = 42
-'
-
-test_expect_success 'kvs: getat: works on subdir from get --treeobj' '
+test_expect_success 'kvs: get --at: works on root from get --treeobj' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a.b.c=42 &&
-	test $(${KVSBASIC} getat $(flux kvs get --treeobj $TEST.a.b) c) = 42
+	test $(flux kvs get --at $(flux kvs get --treeobj .) $TEST.a.b.c) = 42
 '
 
-test_expect_success 'kvs: getat: works on outdated root' '
+test_expect_success 'kvs: get --at: works on subdir from get --treeobj' '
+	flux kvs unlink -Rf $TEST &&
+	flux kvs put --json $TEST.a.b.c=42 &&
+	test $(flux kvs get --at $(flux kvs get --treeobj $TEST.a.b) c) = 42
+'
+
+test_expect_success 'kvs: get --at: works on outdated root' '
 	flux kvs unlink -Rf $TEST &&
 	flux kvs put --json $TEST.a.b.c=42 &&
 	ROOTREF=$(flux kvs get --treeobj .) &&
 	flux kvs put --json $TEST.a.b.c=43 &&
-	test $(${KVSBASIC} getat $ROOTREF $TEST.a.b.c) = 42
+	test $(flux kvs get --at $ROOTREF $TEST.a.b.c) = 42
 '
 
 test_expect_success 'kvs: zero size raw value can be stored and retrieved' '
@@ -370,10 +370,10 @@ test_expect_success 'kvs: walk 16x3 directory tree' '
 	test $(flux kvs dir -R $TEST.dtree | wc -l) = 4096
 '
 
-test_expect_success 'kvs: unlink, walk 16x3 directory tree with dirat' '
+test_expect_success 'kvs: unlink, walk 16x3 directory tree with dir --at' '
 	DIRREF=$(flux kvs get --treeobj $TEST.dtree) &&
 	flux kvs unlink -Rf $TEST.dtree &&
-	test $(${KVSBASIC} dirat -r $DIRREF . | wc -l) = 4096
+	test $(flux kvs dir -R --at $DIRREF . | wc -l) = 4096
 '
 
 test_expect_success 'kvs: store 2x4 directory tree and walk' '

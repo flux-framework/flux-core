@@ -47,9 +47,6 @@ void cmd_type (flux_t *h, int argc, char **argv);
 void cmd_put_no_merge (flux_t *h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
-void cmd_getat (flux_t *h, int argc, char **argv);
-void cmd_dirat (flux_t *h, int argc, char **argv);
-void cmd_readlinkat (flux_t *h, int argc, char **argv);
 
 
 void usage (void)
@@ -59,9 +56,6 @@ void usage (void)
 "       basic put-no-merge        key=val\n"
 "       basic copy-tokvs          key file\n"
 "       basic copy-fromkvs        key file\n"
-"       basic getat               treeobj key\n"
-"       basic dirat [-r]          treeobj [key]\n"
-"       basic readlinkat          treeobj key\n"
 );
     exit (1);
 }
@@ -99,12 +93,6 @@ int main (int argc, char *argv[])
         cmd_copy_tokvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "copy-fromkvs"))
         cmd_copy_fromkvs (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "getat"))
-        cmd_getat (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "dirat"))
-        cmd_dirat (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "readlinkat"))
-        cmd_readlinkat (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -156,58 +144,6 @@ void cmd_type (flux_t *h, int argc, char **argv)
     }
     json_decref (o);
     flux_future_destroy (f);
-}
-
-static void output_key_json_object (const char *key, json_t *o)
-{
-    char *s;
-    if (key)
-        printf ("%s = ", key);
-
-    switch (json_typeof (o)) {
-    case JSON_NULL:
-        printf ("nil\n");
-        break;
-    case JSON_TRUE:
-        printf ("true\n");
-        break;
-    case JSON_FALSE:
-        printf ("false\n");
-        break;
-    case JSON_REAL:
-        printf ("%f\n", json_real_value (o));
-        break;
-    case JSON_INTEGER:
-        printf ("%lld\n", (long long)json_integer_value (o));
-        break;
-    case JSON_STRING:
-        printf ("%s\n", json_string_value (o));
-        break;
-    case JSON_ARRAY:
-    case JSON_OBJECT:
-    default:
-        if (!(s = json_dumps (o, JSON_SORT_KEYS)))
-            log_msg_exit ("json_dumps failed");
-        printf ("%s\n", s);
-        free (s);
-        break;
-    }
-}
-
-static void output_key_json_str (const char *key,
-                                 const char *json_str,
-                                 const char *arg)
-{
-    json_t *o;
-    json_error_t error;
-
-    if (!json_str)
-        json_str = "null";
-    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error)))
-        log_msg_exit ("%s: %s (line %d column %d)",
-                      arg, error.text, error.line, error.column);
-    output_key_json_object (key, o);
-    json_decref (o);
 }
 
 void cmd_put_no_merge (flux_t *h, int argc, char **argv)
@@ -297,120 +233,6 @@ void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
         if (close (fd) < 0)
             log_err_exit ("%s", file);
     }
-    flux_future_destroy (f);
-}
-
-static void dump_kvs_val (const char *key, const char *json_str)
-{
-    json_t *o;
-    json_error_t error;
-
-    if (!json_str)
-        json_str = "null";
-    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error))) {
-        printf ("%s: %s (line %d column %d)\n",
-                key, error.text, error.line, error.column);
-        return;
-    }
-    output_key_json_object (key, o);
-    json_decref (o);
-}
-
-static void dump_kvs_dir (const flux_kvsdir_t *dir, bool ropt)
-{
-    flux_future_t *f;
-    flux_kvsitr_t *itr;
-    const char *name;
-    flux_t *h = flux_kvsdir_handle (dir);
-    const char *rootref = flux_kvsdir_rootref (dir);
-    char *key;
-
-    itr = flux_kvsitr_create (dir);
-    while ((name = flux_kvsitr_next (itr))) {
-        key = flux_kvsdir_key_at (dir, name);
-        if (flux_kvsdir_issymlink (dir, name)) {
-            const char *link;
-            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, key, rootref))
-                    || flux_kvs_lookup_get_symlink (f, &link) < 0)
-                log_err_exit ("%s", key);
-            printf ("%s -> %s\n", key, link);
-            flux_future_destroy (f);
-
-        } else if (flux_kvsdir_isdir (dir, name)) {
-            if (ropt) {
-                const flux_kvsdir_t *ndir;
-                if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref))
-                        || flux_kvs_lookup_get_dir (f, &ndir) < 0)
-                    log_err_exit ("%s", key);
-                dump_kvs_dir (ndir, ropt);
-                flux_future_destroy (f);
-            } else
-                printf ("%s.\n", key);
-        } else {
-            const char *json_str;
-            if (!(f = flux_kvs_lookupat (h, 0, key, rootref))
-                    || flux_kvs_lookup_get (f, &json_str) < 0)
-                log_err_exit ("%s", key);
-            dump_kvs_val (key, json_str);
-            flux_future_destroy (f);
-        }
-        free (key);
-    }
-    flux_kvsitr_destroy (itr);
-}
-
-void cmd_dirat (flux_t *h, int argc, char **argv)
-{
-    bool ropt = false;
-    const flux_kvsdir_t *dir;
-    flux_future_t *f;
-
-    if (argc > 0) {
-        while (argc) {
-            if (!strcmp (argv[0], "-r")) {
-                ropt = true;
-                argc--;
-                argv++;
-            }
-            else
-                break;
-        }
-    }
-    if (argc != 2)
-        log_msg_exit ("dir: specify treeobj and directory");
-    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, argv[1], argv[0]))
-            || flux_kvs_lookup_get_dir (f, &dir) < 0)
-        log_err_exit ("%s", argv[1]);
-    dump_kvs_dir (dir, ropt);
-    flux_future_destroy (f);
-}
-
-void cmd_getat (flux_t *h, int argc, char **argv)
-{
-    const char *json_str;
-    flux_future_t *f;
-
-    if (argc != 2)
-        log_msg_exit ("getat: specify treeobj and key");
-    if (!(f = flux_kvs_lookupat (h, 0, argv[1], argv[0]))
-        || flux_kvs_lookup_get (f, &json_str) < 0)
-        log_err_exit ("flux_kvs_lookupat %s %s", argv[0], argv[1]);
-    output_key_json_str (NULL, json_str, argv[1]);
-    flux_future_destroy (f);
-}
-
-void cmd_readlinkat (flux_t *h, int argc, char **argv)
-{
-    const char *target;
-    flux_future_t *f;
-
-    if (argc != 2)
-        log_msg_exit ("readlink: specify treeobj and key");
-    if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[1], argv[0]))
-            || flux_kvs_lookup_get_symlink (f, &target) < 0)
-        log_err_exit ("%s", argv[1]);
-    else
-        printf ("%s\n", target);
     flux_future_destroy (f);
 }
 
