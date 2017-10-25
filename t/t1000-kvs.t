@@ -396,6 +396,48 @@ test_expect_success 'kvs: ls key. fails if key does not exist' '
 '
 
 #
+# zero-length values
+#
+test_expect_success 'kvs: zero-length value handled by put/get --raw' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs get --raw $DIR.a >empty.output &&
+	test_cmp /dev/null empty.output
+'
+test_expect_success 'kvs: zero-length value handled by get with no options' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs get $DIR.a >empty2.output &&
+	test_cmp /dev/null empty2.output
+'
+test_expect_success 'kvs: zero-length value handled by get --treeobj' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs get --treeobj $DIR.a
+'
+test_expect_success 'kvs: zero-length value NOT handled by get --json' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	test_must_fail flux kvs get --json $DIR.a
+'
+test_expect_success 'kvs: zero-length value NOT made by put with no options' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs get --raw $DIR.a >onenull.output &&
+	test_must_fail diff -q /dev/null onenull.output
+'
+test_expect_success 'kvs: zero-length value does not cause dir to fail' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs dir $DIR
+'
+test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs ls -FR $DIR
+'
+
+#
 # get corner case tests
 #
 
