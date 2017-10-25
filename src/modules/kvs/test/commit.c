@@ -19,6 +19,22 @@
 static int test_global = 5;
 
 /* convenience function */
+static struct cache_entry *create_cache_entry_raw (void *data, int len)
+{
+    struct cache_entry *hp;
+    int ret;
+
+    assert (data);
+    assert (len);
+
+    hp = cache_entry_create ();
+    assert (hp);
+    ret = cache_entry_set_raw (hp, data, len);
+    assert (ret == 0);
+    return hp;
+}
+
+/* convenience function */
 static struct cache_entry *create_cache_entry_json (json_t *o)
 {
     struct cache_entry *hp;
@@ -1753,6 +1769,209 @@ void commit_process_giant_dir (void)
     cache_destroy (cache);
 }
 
+void commit_process_append (void)
+{
+    struct cache *cache;
+    int count = 0;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    href_t valref_ref;
+    href_t root_ref;
+    const char *newroot;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is
+     *
+     * valref_ref
+     * "ABCD"
+     *
+     * root_ref
+     * "val" : val to "abcd"
+     * "valref" : valref to valref_ref
+     */
+
+    blobref_hash ("sha1", "ABCD", 4, valref_ref, sizeof (href_t));
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("ABCD"), 4));
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("abcd", 4));
+    treeobj_insert_entry (root, "valref", treeobj_create_val ("ABCD", 4));
+
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /*
+     * first test, append to a treeobj val
+     */
+
+    create_ready_commit (cm, "fence1", "val", "efgh", FLUX_KVS_APPEND, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    count = 0;
+    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    /* 3 dirty entries, raw "abcd", raw "efgh", and a new root b/c val
+     * has been changed into a valref. */
+    ok (count == 3,
+        "correct number of cache entries were dirty");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "val", "abcdefgh");
+
+    commit_mgr_remove_commit (cm, c);
+
+    /*
+     * second test, append to a treeobj valref
+     */
+
+    create_ready_commit (cm, "fence2", "valref", "EFGH", FLUX_KVS_APPEND, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    count = 0;
+    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    /* 2 dirty entries, raw "EFGH", and a new root b/c valref has an
+     * additional blobref */
+    ok (count == 2,
+        "correct number of cache entries were dirty");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "valref", "ABCDEFGH");
+
+    commit_mgr_remove_commit (cm, c);
+
+    /*
+     * third test, append to a non-existent value, it's like an insert
+     */
+
+    create_ready_commit (cm, "fence3", "newval", "foobar", FLUX_KVS_APPEND, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
+        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    count = 0;
+    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
+        "commit_iter_dirty_cache_entries works for dirty cache entries");
+
+    /* 1 dirty entries, root simply has a new val in it */
+    ok (count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
+        "commit_process returns COMMIT_PROCESS_FINISHED");
+
+    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
+        "commit_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "newval", "foobar");
+
+    commit_mgr_remove_commit (cm, c);
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+void commit_process_append_errors (void)
+{
+    struct cache *cache;
+    commit_mgr_t *cm;
+    commit_t *c;
+    json_t *root;
+    href_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+
+    /* This root is
+     *
+     * root_ref
+     * "dir" : empty directory
+     * "symlink" : symlink to "dir"
+     */
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dir", treeobj_create_dir ());
+    treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
+
+    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
+        "kvs_util_json_hash worked");
+
+    cache_insert (cache, root_ref, create_cache_entry_json (root));
+
+    ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    /*
+     * append to a dir, should get EISDIR
+     */
+
+    create_ready_commit (cm, "fence1", "dir", "1", FLUX_KVS_APPEND, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
+        "commit_process returns COMMIT_PROCESS_ERROR");
+
+    ok (commit_get_errnum (c) == EISDIR,
+        "commit_get_errnum return EISDIR");
+
+    commit_mgr_remove_commit (cm, c);
+
+    /*
+     * append to a symlink, should get EOPNOTSUPP
+     */
+
+    create_ready_commit (cm, "fence2", "symlink", "2", FLUX_KVS_APPEND, 0);
+
+    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
+        "commit_mgr_get_ready_commit returns ready commit");
+
+    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
+        "commit_process returns COMMIT_PROCESS_ERROR");
+
+    ok (commit_get_errnum (c) == EOPNOTSUPP,
+        "commit_get_errnum return EOPNOTSUPP");
+
+    commit_mgr_remove_commit (cm, c);
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1782,6 +2001,8 @@ int main (int argc, char *argv[])
     commit_process_bad_dirrefs ();
     commit_process_big_fileval ();
     commit_process_giant_dir ();
+    commit_process_append ();
+    commit_process_append_errors ();
 
     done_testing ();
     return (0);
