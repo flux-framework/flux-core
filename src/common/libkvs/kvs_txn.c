@@ -45,7 +45,8 @@
  * which stored only JSON values.
  *
  * NULL or empty values:
- * A zero length raw value is considered valid.
+ * A zero-length value may be stored in the KVS via
+ * flux_kvs_txn_put (value=NULL) or flux_kvs_txn_put_raw (data=NULL,len=0).
  * A NULL format string passed to flux_kvs_txn_pack() is invalid.
  */
 struct flux_kvs_txn {
@@ -169,13 +170,13 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
     json_t *dirent = NULL;
     int saved_errno;
 
-    if (!txn || !key || !value) {
+    if (!txn || !key) {
         errno = EINVAL;
         goto error;
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(dirent = treeobj_create_val (value, strlen (value) + 1)))
+    if (!(dirent = treeobj_create_val (value, value ? strlen (value) + 1 : 0)))
         goto error;
     if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;

@@ -19,6 +19,25 @@ void jdiag (json_t *o)
     free (tmp);
 }
 
+
+/* Decode a 'val' containing base64 encoded emptiness.
+ */
+int check_null_value (json_t *dirent)
+{
+    char *data = "";
+    int len = -1;
+
+    if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
+        diag ("%s: initial base64 decode failed", __FUNCTION__);
+        return -1;
+    }
+    if (len != 0 || data != NULL) {
+        diag ("%s: len=%d data=%p", __FUNCTION__, len, data);
+        return -1;
+    }
+    return 0;
+}
+
 /* Decode a 'val' containing base64 encoded JSON.
  * Extract a number, and compare it to 'expected'.
  */
@@ -131,10 +150,9 @@ void basic (void)
     rc = flux_kvs_txn_unlink (txn, 0, "e");
     ok (rc == 0,
         "7: flux_kvs_txn_unlink works");
-    errno = 0;
     rc = flux_kvs_txn_put (txn, 0, "nerrrrb", NULL);
-    ok (rc < 0 && errno == EINVAL,
-        "error: flux_kvs_txn_put(NULL) fails with EINVAL");
+    ok (rc == 0,
+        "8: flux_kvs_txn_put(NULL) works");
     errno = 0;
     rc = flux_kvs_txn_pack (txn, 0xFFFF, "foo.bar.blorp",  "s", "foo");
     ok (rc < 0 && errno == EINVAL,
@@ -150,8 +168,8 @@ void basic (void)
 
     /* Verify transaction contents
      */
-    ok (txn_get_op_count (txn) == 7,
-        "txn contains 7 ops");
+    ok (txn_get_op_count (txn) == 8,
+        "txn contains 8 ops");
     ok (txn_get_op (txn, 0, &entry) == 0
         && entry != NULL,
         "1: retrieved");
@@ -217,15 +235,25 @@ void basic (void)
         "7: retrieved");
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
-        "6: txn_decode_op works");
+        "7: txn_decode_op works");
     ok (!strcmp (key, "e")
         && flags == 0
         && json_is_null (dirent),
         "7: unlink e");
 
+    ok (txn_get_op (txn, 7, &entry) == 0 && entry != NULL,
+        "8: retrieved");
+    jdiag (entry);
+    ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
+        "8: txn_decode_op works");
+    ok (!strcmp (key, "nerrrrb")
+        && flags == 0
+        && check_null_value (dirent) == 0,
+        "8: put nerrrrb = NULL");
+
     errno = 0;
-    ok (txn_get_op (txn, 7, &entry) < 0 && errno == EINVAL,
-        "8: invalid (end of transaction)");
+    ok (txn_get_op (txn, 8, &entry) < 0 && errno == EINVAL,
+        "9: invalid (end of transaction)");
 
     flux_kvs_txn_destroy (txn);
 }
