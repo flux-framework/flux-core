@@ -58,6 +58,13 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
+static struct optparse_option readlink_opts[] =  {
+    { .name = "at", .key = 'a', .has_arg = 1,
+      .usage = "Lookup relative to RFC 11 snapshot reference",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option get_opts[] =  {
     { .name = "json", .key = 'j', .has_arg = 0,
       .usage = "Interpret value(s) as encoded JSON",
@@ -67,6 +74,9 @@ static struct optparse_option get_opts[] =  {
     },
     { .name = "treeobj", .key = 't', .has_arg = 0,
       .usage = "Show RFC 11 object",
+    },
+    { .name = "at", .key = 'a', .has_arg = 1,
+      .usage = "Lookup relative to RFC 11 snapshot reference",
     },
     OPTPARSE_TABLE_END
 };
@@ -93,6 +103,9 @@ static struct optparse_option dir_opts[] =  {
     },
     { .name = "width", .key = 'w', .has_arg = 1,
       .usage = "Set output width to COLS.  0 means no limit",
+    },
+    { .name = "at", .key = 'a', .has_arg = 1,
+      .usage = "Lookup relative to RFC 11 snapshot reference",
     },
     OPTPARSE_TABLE_END
 };
@@ -151,7 +164,7 @@ static struct optparse_option unlink_opts[] =  {
 
 static struct optparse_subcommand subcommands[] = {
     { "get",
-      "[-j|-r|-t] key [key...]",
+      "[-j|-r|-t] [-a treeobj] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
@@ -165,7 +178,7 @@ static struct optparse_subcommand subcommands[] = {
       put_opts
     },
     { "dir",
-      "[-R] [-d] [-w COLS] [key]",
+      "[-R] [-d] [-w COLS] [-a treeobj] [key]",
       "Display all keys under directory",
       cmd_dir,
       0,
@@ -193,11 +206,11 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "readlink",
-      "key [key...]",
+      "[-a treeobj] key [key...]",
       "Retrieve the key a link refers to",
       cmd_readlink,
       0,
-      NULL
+      readlink_opts
     },
     { "mkdir",
       "key [key...]",
@@ -432,8 +445,15 @@ int cmd_get (optparse_t *p, int argc, char **argv)
         int flags = 0;
         if (optparse_hasopt (p, "treeobj"))
             flags |= FLUX_KVS_TREEOBJ;
-        if (!(f = flux_kvs_lookup (h, flags, key)))
-            log_err_exit ("%s", key);
+        if (optparse_hasopt (p, "at")) {
+            const char *reference = optparse_get_str (p, "at", "");
+            if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
+                log_err_exit ("%s", key);
+        }
+        else {
+            if (!(f = flux_kvs_lookup (h, flags, key)))
+                log_err_exit ("%s", key);
+        }
         if (optparse_hasopt (p, "treeobj")) {
             const char *treeobj;
             if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
@@ -641,11 +661,18 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
     }
 
     for (i = optindex; i < argc; i++) {
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i]))
-                || flux_kvs_lookup_get_symlink (f, &target) < 0)
+        if (optparse_hasopt (p, "at")) {
+            const char *ref = optparse_get_str (p, "at", "");
+            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[i], ref)))
+                log_err_exit ("%s", argv[i]);
+        }
+        else {
+            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
+                log_err_exit ("%s", argv[i]);
+        }
+        if (flux_kvs_lookup_get_symlink (f, &target) < 0)
             log_err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", target);
+        printf ("%s\n", target);
         flux_future_destroy (f);
     }
     return (0);
@@ -977,8 +1004,16 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     else
         log_msg_exit ("dir: specify zero or one directory");
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
-                || flux_kvs_lookup_get_dir (f, &dir) < 0)
+    if (optparse_hasopt (p, "at")) {
+        const char *reference = optparse_get_str (p, "at", "");
+        if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, reference)))
+            log_err_exit ("%s", key);
+    }
+    else {
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+            log_err_exit ("%s", key);
+    }
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", key);
     dump_kvs_dir (dir, maxcol, Ropt, dopt);
     flux_future_destroy (f);
