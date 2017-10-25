@@ -44,16 +44,12 @@ static const struct option longopts[] = {
 };
 
 void cmd_type (flux_t *h, int argc, char **argv);
-void cmd_copy_tokvs (flux_t *h, int argc, char **argv);
-void cmd_copy_fromkvs (flux_t *h, int argc, char **argv);
 
 
 void usage (void)
 {
     fprintf (stderr,
 "Usage: basic type                key\n"
-"       basic copy-tokvs          key file\n"
-"       basic copy-fromkvs        key file\n"
 );
     exit (1);
 }
@@ -85,10 +81,6 @@ int main (int argc, char *argv[])
 
     if (!strcmp (cmd, "type"))
         cmd_type (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "copy-tokvs"))
-        cmd_copy_tokvs (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "copy-fromkvs"))
-        cmd_copy_fromkvs (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -139,67 +131,6 @@ void cmd_type (flux_t *h, int argc, char **argv)
         break;
     }
     json_decref (o);
-    flux_future_destroy (f);
-}
-
-void cmd_copy_tokvs (flux_t *h, int argc, char **argv)
-{
-    char *file, *key;
-    int fd, len;
-    uint8_t *buf = NULL;
-    flux_kvs_txn_t *txn;
-    flux_future_t *f;
-
-    if (argc != 2)
-        log_msg_exit ("copy-tokvs: specify key and filename");
-    key = argv[0];
-    file = argv[1];
-    if (!strcmp (file, "-")) {
-        if ((len = read_all (STDIN_FILENO, &buf)) < 0)
-            log_err_exit ("stdin");
-    } else {
-        if ((fd = open (file, O_RDONLY)) < 0)
-            log_err_exit ("%s", file);
-        if ((len = read_all (fd, &buf)) < 0)
-            log_err_exit ("%s", file);
-        (void)close (fd);
-    }
-    if (!(txn = flux_kvs_txn_create ()))
-        log_err_exit ("flux_kvs_txn_create");
-    if (flux_kvs_txn_put_raw (txn, 0, key, buf, len) < 0)
-        log_err_exit ("flux_kvs_txn_put_raw");
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
-        log_err_exit ("flux_kvs_commit");
-    flux_kvs_txn_destroy (txn);
-    free (buf);
-}
-
-void cmd_copy_fromkvs (flux_t *h, int argc, char **argv)
-{
-    char *file, *key;
-    int fd, len;
-    const uint8_t *buf = NULL;
-    flux_future_t *f;
-
-    if (argc != 2)
-        log_msg_exit ("copy-fromkvs: specify key and filename");
-    key = argv[0];
-    file = argv[1];
-    if (!(f = flux_kvs_lookup (h, 0, key)))
-        log_err_exit ("flux_kvs_lookup");
-    if (flux_kvs_lookup_get_raw (f, (const void **)&buf, &len) < 0)
-        log_err_exit ("%s", key);
-    if (!strcmp (file, "-")) {
-        if (write_all (STDOUT_FILENO, buf, len) < 0)
-            log_err_exit ("stdout");
-    } else {
-        if ((fd = creat (file, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0)
-            log_err_exit ("%s", file);
-        if (write_all (fd, buf, len) < 0)
-            log_err_exit ("%s", file);
-        if (close (fd) < 0)
-            log_err_exit ("%s", file);
-    }
     flux_future_destroy (f);
 }
 

@@ -177,7 +177,7 @@ test_expect_success 'kvs: get --treeobj: returns val object for small value' '
 
 test_expect_success 'kvs: get --treeobj: returns value ref for large value' '
 	flux kvs unlink -Rf $TEST &&
-	dd if=/dev/zero bs=4096 count=1 | ${KVSBASIC} copy-tokvs $TEST.a - &&
+	dd if=/dev/zero bs=4096 count=1 | flux kvs put --raw $TEST.a=- &&
 	flux kvs get --treeobj $TEST.a | grep -q \"valref\"
 '
 
@@ -263,8 +263,8 @@ test_expect_success 'kvs: get --at: works on outdated root' '
 
 test_expect_success 'kvs: zero size raw value can be stored and retrieved' '
 	flux kvs unlink -Rf $TEST &&
-	${KVSBASIC} copy-tokvs $TEST.empty -  </dev/null &&
-	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
+	flux kvs put --raw $TEST.empty=-  </dev/null &&
+	test $(flux kvs get --raw $TEST.empty |wc -c) -eq 0
 '
 
 test_expect_success 'kvs: kvsdir_get_size works' '
@@ -301,7 +301,7 @@ test_expect_success 'kvs: valref that points to zero size content store data can
 	flux kvs unlink -Rf $TEST &&
         hashval=`flux content store </dev/null` &&
 	flux kvs put --treeobj $TEST.empty="{\"data\":[\"${hashval}\"],\"type\":\"valref\",\"ver\":1}" &&
-	test $(${KVSBASIC} copy-fromkvs $TEST.empty -|wc -c) -eq 0
+	test $(flux kvs get --raw $TEST.empty|wc -c) -eq 0
 '
 
 test_expect_success 'kvs: valref can point to other treeobjs' '
@@ -309,7 +309,7 @@ test_expect_success 'kvs: valref can point to other treeobjs' '
         flux kvs mkdir $TEST.a.b.c &&
         dirhash=`flux kvs get --treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
 	flux kvs put --treeobj $TEST.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ${KVSBASIC} copy-fromkvs $TEST.value - | grep dir
+        flux kvs get --raw $TEST.value | grep dir
 '
 
 # multi-blobref valrefs
@@ -319,8 +319,8 @@ test_expect_success 'kvs: multi blob-ref valref can be read' '
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`echo -n "efgh" | flux content store` &&
 	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcdefgh" &&
-        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
+        flux kvs get --raw $TEST.multival | grep "abcdefgh" &&
+        test $(flux kvs get --raw $TEST.multival|wc -c) -eq 8
 '
 
 test_expect_success 'kvs: multi blob-ref valref with an empty blobref on left, can be read' '
@@ -328,8 +328,8 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref on left, c
 	hashval1=`flux content store < /dev/null` &&
 	hashval2=`echo -n "abcd" | flux content store` &&
 	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcd" &&
-        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 4
+        flux kvs get --raw $TEST.multival | grep "abcd" &&
+        test $(flux kvs get --raw $TEST.multival|wc -c) -eq 4
 '
 
 test_expect_success 'kvs: multi blob-ref valref with an empty blobref on right, can be read' '
@@ -337,8 +337,8 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref on right, 
 	hashval1=`echo -n "abcd" | flux content store` &&
 	hashval2=`flux content store < /dev/null` &&
 	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcd" &&
-        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 4
+        flux kvs get --raw $TEST.multival | grep "abcd" &&
+        test $(flux kvs get --raw $TEST.multival|wc -c) -eq 4
 '
 
 test_expect_success 'kvs: multi blob-ref valref with an empty blobref in middle, can be read' '
@@ -347,8 +347,8 @@ test_expect_success 'kvs: multi blob-ref valref with an empty blobref in middle,
 	hashval2=`flux content store < /dev/null` &&
 	hashval3=`echo -n "efgh" | flux content store` &&
 	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${hashval2}\", \"${hashval3}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep "abcdefgh" &&
-        test $(${KVSBASIC} copy-fromkvs $TEST.multival -|wc -c) -eq 8
+        flux kvs get --raw $TEST.multival | grep "abcdefgh" &&
+        test $(flux kvs get --raw $TEST.multival|wc -c) -eq 8
 '
 
 test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a treeobj' '
@@ -357,7 +357,7 @@ test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a tre
         flux kvs mkdir $TEST.a.b.c &&
         dirhash=`flux kvs get --treeobj $TEST.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
 	flux kvs put --treeobj $TEST.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        ${KVSBASIC} copy-fromkvs $TEST.multival - | grep dir
+        flux kvs get --raw $TEST.multival | grep dir
 '
 
 # dtree tests
@@ -494,13 +494,11 @@ test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir2 --count 1000000
 '
 
-
-# base64 data
-test_expect_success 'kvs: copy-tokvs and copy-fromkvs work' '
+test_expect_success 'kvs: kvs put --raw and kvs get --raw  work' '
 	flux kvs unlink -Rf $TEST &&
 	dd if=/dev/urandom bs=4096 count=1 >random.data &&
-	${KVSBASIC} copy-tokvs $TEST.data random.data &&
-	${KVSBASIC} copy-fromkvs $TEST.data reread.data &&
+	flux kvs put --raw $TEST.data=- <random.data &&
+	flux kvs get --raw $TEST.data >reread.data &&
 	test_cmp random.data reread.data
 '
 
