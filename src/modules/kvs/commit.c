@@ -373,7 +373,8 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
  */
 static int commit_link_dirent (commit_t *c, int current_epoch,
                                json_t *rootdir, const char *key,
-                               json_t *dirent, const char **missing_ref)
+                               json_t *dirent, int flags,
+                               const char **missing_ref)
 {
     char *cpy = NULL;
     char *next, *name;
@@ -483,6 +484,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                                     rootdir,
                                     nkey,
                                     dirent,
+                                    flags,
                                     missing_ref) < 0) {
                 saved_errno = errno;
                 free (nkey);
@@ -607,6 +609,7 @@ commit_process_t commit_process (commit_t *c,
                                             c->rootcpy,
                                             key,
                                             dirent,
+                                            flags,
                                             &missing_ref) < 0) {
                         c->errnum = errno;
                         break;

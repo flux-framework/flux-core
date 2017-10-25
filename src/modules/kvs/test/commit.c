@@ -34,16 +34,15 @@ static struct cache_entry *create_cache_entry_json (json_t *o)
 }
 
 /* Append a json object containing
- *     { "key" : key, "dirent" : <treeobj> } }
+ *     { "key" : key, flags : <num>, "dirent" : <treeobj> } }
  * or
- *     { "key" : key, "dirent" : null }
+ *     { "key" : key, flags : <num>, "dirent" : null }
  * to a json array.
  */
-void ops_append (json_t *array, const char *key, const char *value)
+void ops_append (json_t *array, const char *key, const char *value, int flags)
 {
     json_t *op;
     json_t *dirent;
-    int flags = 0; // not used for now
 
     if (value)
         dirent = treeobj_create_val ((void *)value, strlen (value));
@@ -120,7 +119,7 @@ void commit_mgr_basic_tests (void)
         "commit_mgr_get_ready_commit returns NULL for no ready commits");
 
     ops = json_array ();
-    ops_append (ops, "key1", "1");
+    ops_append (ops, "key1", "1", 0);
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
@@ -157,16 +156,17 @@ void create_ready_commit (commit_mgr_t *cm,
                           const char *name,
                           const char *key,
                           const char *val,
-                          int flags)
+                          int op_flags,
+                          int fence_flags)
 {
     fence_t *f;
     json_t *ops = NULL;
 
-    ok ((f = fence_create (name, 1, flags)) != NULL,
+    ok ((f = fence_create (name, 1, fence_flags)) != NULL,
         "fence_create works");
 
     ops = json_array ();
-    ops_append (ops, key, val);
+    ops_append (ops, key, val, op_flags);
 
     ok (fence_add_request_data (f, ops) == 0,
         "fence_add_request_data add works");
@@ -233,8 +233,8 @@ void commit_mgr_merge_tests (void)
 
     /* test successful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0);
-    create_ready_commit (cm, "fence2", "key2", "2", 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
+    create_ready_commit (cm, "fence2", "key2", "2", 0, 0);
 
     ok (commit_mgr_merge_ready_commits (cm) == 0,
         "commit_mgr_merge_ready_commits success");
@@ -244,8 +244,8 @@ void commit_mgr_merge_tests (void)
     json_array_append (names, json_string ("fence2"));
 
     ops = json_array ();
-    ops_append (ops, "key1", "1");
-    ops_append (ops, "key2", "2");
+    ops_append (ops, "key1", "1", 0);
+    ops_append (ops, "key2", "2", 0);
 
     verify_ready_commit (cm, names, ops, "merged fence");
 
@@ -260,8 +260,8 @@ void commit_mgr_merge_tests (void)
 
     /* test unsuccessful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", FLUX_KVS_NO_MERGE);
-    create_ready_commit (cm, "fence2", "key2", "2", 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
+    create_ready_commit (cm, "fence2", "key2", "2", 0, 0);
 
     ok (commit_mgr_merge_ready_commits (cm) == 0,
         "commit_mgr_merge_ready_commits success");
@@ -270,7 +270,7 @@ void commit_mgr_merge_tests (void)
     json_array_append (names, json_string ("fence1"));
 
     ops = json_array ();
-    ops_append (ops, "key1", "1");
+    ops_append (ops, "key1", "1", 0);
 
     verify_ready_commit (cm, names, ops, "unmerged fence");
 
@@ -285,8 +285,8 @@ void commit_mgr_merge_tests (void)
 
     /* test unsuccessful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0);
-    create_ready_commit (cm, "fence2", "key2", "2", FLUX_KVS_NO_MERGE);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
+    create_ready_commit (cm, "fence2", "key2", "2", 0, FLUX_KVS_NO_MERGE);
 
     ok (commit_mgr_merge_ready_commits (cm) == 0,
         "commit_mgr_merge_ready_commits success");
@@ -295,7 +295,7 @@ void commit_mgr_merge_tests (void)
     json_array_append (names, json_string ("fence1"));
 
     ops = json_array ();
-    ops_append (ops, "key1", "1");
+    ops_append (ops, "key1", "1", 0);
 
     verify_ready_commit (cm, names, ops, "unmerged fence");
 
@@ -335,13 +335,13 @@ void commit_basic_tests (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
 
     ops = json_array ();
-    ops_append (ops, "key1", "1");
+    ops_append (ops, "key1", "1", 0);
 
     verify_ready_commit (cm, names, ops, "basic test");
 
@@ -442,7 +442,7 @@ void commit_basic_commit_process_test (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -487,8 +487,8 @@ void commit_basic_commit_process_test_multiple_fences (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0);
-    create_ready_commit (cm, "fence2", "dir.key2", "2", 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
+    create_ready_commit (cm, "fence2", "dir.key2", "2", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -560,8 +560,8 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "foo.key1", "1", 0);
-    create_ready_commit (cm, "fence2", "bar.key2", "2", 0);
+    create_ready_commit (cm, "fence1", "foo.key1", "1", 0, 0);
+    create_ready_commit (cm, "fence2", "bar.key2", "2", 0, 0);
 
     /* merge ready commits */
     ok (commit_mgr_merge_ready_commits (cm) == 0,
@@ -623,7 +623,7 @@ void commit_basic_root_not_dir (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "val", "42", 0);
+    create_ready_commit (cm, "fence1", "val", "42", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -691,7 +691,7 @@ void commit_process_root_missing (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -797,7 +797,7 @@ void commit_process_missing_ref (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -896,7 +896,7 @@ void commit_process_error_callbacks (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -985,8 +985,8 @@ void commit_process_error_callbacks_partway (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.fileA", "52", 0);
-    create_ready_commit (cm, "fence2", "dir.fileB", "53", 0);
+    create_ready_commit (cm, "fence1", "dir.fileA", "52", 0, 0);
+    create_ready_commit (cm, "fence2", "dir.fileB", "53", 0, 0);
 
     /* merge these commits */
     ok (commit_mgr_merge_ready_commits (cm) == 0,
@@ -1034,7 +1034,7 @@ void commit_process_invalid_operation (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", ".", "52", 0);
+    create_ready_commit (cm, "fence1", ".", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1129,7 +1129,7 @@ void commit_process_invalid_hash (void)
     ok ((cm = commit_mgr_create (cache, "foobar", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.fileval", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.fileval", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1194,7 +1194,7 @@ void commit_process_follow_link (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "symlink.val", "52", 0);
+    create_ready_commit (cm, "fence1", "symlink.val", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1251,7 +1251,7 @@ void commit_process_dirval_test (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1318,7 +1318,7 @@ void commit_process_delete_test (void)
         "commit_mgr_create works");
 
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "dir.val", NULL, 0);
+    create_ready_commit (cm, "fence1", "dir.val", NULL, 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1366,7 +1366,7 @@ void commit_process_delete_nosubdir_test (void)
 
     /* subdir doesn't exist for this key */
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "noexistdir.val", NULL, 0);
+    create_ready_commit (cm, "fence1", "noexistdir.val", NULL, 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1428,7 +1428,7 @@ void commit_process_delete_filevalinpath_test (void)
 
     /* val is in path */
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "dir.val.valbaz", NULL, 0);
+    create_ready_commit (cm, "fence1", "dir.val.valbaz", NULL, 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1491,7 +1491,7 @@ void commit_process_bad_dirrefs (void)
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0);
+    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1565,7 +1565,7 @@ void commit_process_big_fileval (void)
     /* first commit a small value, to make sure it ends up as json in
      * the cache */
 
-    create_ready_commit (cm, "fence1", "val", "smallstr", 0);
+    create_ready_commit (cm, "fence1", "val", "smallstr", 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1601,7 +1601,7 @@ void commit_process_big_fileval (void)
     for (i = 0; i < bigstrsize - 1; i++)
         bigstr[i] = 'a';
 
-    create_ready_commit (cm, "fence2", "val", bigstr, 0);
+    create_ready_commit (cm, "fence2", "val", bigstr, 0, 0);
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
@@ -1716,10 +1716,10 @@ void commit_process_giant_dir (void)
         "commit_mgr_create works");
 
     /* make three ready commits */
-    create_ready_commit (cm, "fence1", "dir.val0200", "foo", 0);
-    create_ready_commit (cm, "fence2", "dir.val0090", "bar", 0);
+    create_ready_commit (cm, "fence1", "dir.val0200", "foo", 0, 0);
+    create_ready_commit (cm, "fence2", "dir.val0090", "bar", 0, 0);
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence3", "dir.val00D0", NULL, 0);
+    create_ready_commit (cm, "fence3", "dir.val00D0", NULL, 0, 0);
 
     /* merge these three commits */
     ok (commit_mgr_merge_ready_commits (cm) == 0,
