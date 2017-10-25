@@ -91,6 +91,9 @@ static struct optparse_option put_opts[] =  {
     { .name = "treeobj", .key = 't', .has_arg = 0,
       .usage = "Store RFC 11 object",
     },
+    { .name = "no-merge", .key = 'n', .has_arg = 0,
+      .usage = "Set the NO_MERGE flag to ensure commit is standalone",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -171,7 +174,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-j|-r|-t] key=value [key=value...]",
+      "[-j|-r|-t] [-n] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
@@ -494,12 +497,15 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     int optindex, i;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
+    int commit_flags = 0;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
+    if (optparse_hasopt (p, "no-merge"))
+        commit_flags |= FLUX_KVS_NO_MERGE;
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     for (i = optindex; i < argc; i++) {
@@ -544,7 +550,8 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         }
         free (key);
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, commit_flags, txn))
+                                        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
