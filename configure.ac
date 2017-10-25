@@ -180,6 +180,17 @@ if test "$enable_python" = "yes"; then
 fi
 AM_CONDITIONAL([HAVE_PYTHON], [test "$enable_python" = yes])
 
+AC_ARG_ENABLE([pylint],
+  [AS_HELP_STRING([--enable-pylint],
+    [Enable pylint checks of python bindings])],,
+  [enable_pylint="yes"]
+)
+AS_IF([test "x$enable_pylint" = "xyes"], [
+  AC_CHECK_PROG(PYLINT,[pylint],[pylint])
+  AS_IF([test "x$PYLINT" != "xpylint"], [AC_MSG_ERROR([No pylint found in PATH])])
+])
+AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
+
 AX_PROG_LUA([5.1],[5.3])
 AX_LUA_HEADERS
 AX_LUA_LIBS
