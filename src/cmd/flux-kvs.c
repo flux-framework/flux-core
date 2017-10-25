@@ -78,6 +78,9 @@ static struct optparse_option put_opts[] =  {
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Store value(s) as-is without adding NULL termination",
     },
+    { .name = "treeobj", .key = 't', .has_arg = 0,
+      .usage = "Store RFC 11 object",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -155,7 +158,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-j|-r] key=value [key=value...]",
+      "[-j|-r|-t] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
@@ -483,7 +486,11 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             log_msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
 
-        if (optparse_hasopt (p, "json")) {
+        if (optparse_hasopt (p, "treeobj")) {
+            if (flux_kvs_txn_put_treeobj (txn, 0, key, val) < 0)
+                log_err_exit ("%s", key);
+        }
+        else if (optparse_hasopt (p, "json")) {
             json_t *obj;
             if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
                 if (flux_kvs_txn_put (txn, 0, key, val) < 0)
