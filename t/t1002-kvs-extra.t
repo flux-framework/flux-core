@@ -261,12 +261,6 @@ test_expect_success 'kvs: get --at: works on outdated root' '
 	test $(flux kvs get --at $ROOTREF $TEST.a.b.c) = 42
 '
 
-test_expect_success 'kvs: zero size raw value can be stored and retrieved' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put --raw $TEST.empty=-  </dev/null &&
-	test $(flux kvs get --raw $TEST.empty |wc -c) -eq 0
-'
-
 test_expect_success 'kvs: kvsdir_get_size works' '
 	flux kvs mkdir $TEST.dirsize &&
 	flux kvs put --json $TEST.dirsize.a=1 &&
