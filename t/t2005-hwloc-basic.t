@@ -115,16 +115,16 @@ test_expect_success HAVE_LSTOPO 'hwloc: test failure of lstopo command' '
 '
 
 test_expect_success 'hwloc: no broken down resource info by default' '
-    test_must_fail flux kvs get resource.hwloc.by_rank.0.Machine_0.OSName
+    test_must_fail flux kvs get --json resource.hwloc.by_rank.0.Machine_0.OSName
 '
 
 test_expect_success 'hwloc: reload --walk-topology=yes works' '
     flux hwloc reload --walk-topology=yes &&
-    flux kvs get resource.hwloc.by_rank.0.Machine_0.OSName
+    flux kvs get --json resource.hwloc.by_rank.0.Machine_0.OSName
 '
 test_expect_success 'hwloc: reload --walk-topology=no removes broken down topo' '
     flux hwloc reload --walk-topology=no &&
-    test_must_fail flux kvs get resource.hwloc.by_rank.0.Machine_0.OSName
+    test_must_fail flux kvs get --json resource.hwloc.by_rank.0.Machine_0.OSName
 '
 
 test_expect_success 'hwloc: reload fails on invalid rank' '
@@ -133,7 +133,7 @@ test_expect_success 'hwloc: reload fails on invalid rank' '
 '
 
 test_expect_success 'hwloc: HostName is populated in by_rank' '
-    HW_HOST=$(flux kvs get resource.hwloc.by_rank.0.HostName) &&
+    HW_HOST=$(flux kvs get --json resource.hwloc.by_rank.0.HostName) &&
     REAL_HOST=$(hostname) &&
     test x"$HW_HOST" = x"$REAL_HOST"
 '

@@ -93,7 +93,7 @@ test_expect_success 'pmi: wreck preputs PMI_process_mapping into kvs' '
 	#!/bin/sh
         if test \${FLUX_TASK_RANK} -eq 0; then
           KVS_PATH=\$(flux wreck kvs-path \${FLUX_JOB_ID})
-          flux kvs get \${KVS_PATH}.pmi.PMI_process_mapping
+          flux kvs get --json \${KVS_PATH}.pmi.PMI_process_mapping
         fi
 	EOF
 	chmod +x print-pmi-map.sh &&

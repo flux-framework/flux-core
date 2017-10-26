@@ -196,7 +196,7 @@ type_ok (kw, 'userdata', "f:kvswatcher returns kvswatcher object")
 kw.testkey = "foo"
 is (kw.testkey, 'foo', "Can set arbitrary members of kvswatcher object")
 
-os.execute (string.format ("flux kvs put %s=%s", data.key, data.value))
+os.execute (string.format ("flux kvs put --json %s=%s", data.key, data.value))
 
 local to = f:timer {
     timeout = 1500,
@@ -247,7 +247,7 @@ local t, err = f:timer {
 }
 
 -- Excute on rank 3 via flux-exec:
-os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
+os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put --json %s=%s",
     data.key, data.value))
 local r, err = f:reactor()
 isnt (r, -1, "reactor exited normally with ".. (r and r or err))
@@ -255,7 +255,7 @@ is (ncount, 2, "kvswatch callback invoked exactly twice")
 
 note ("Ensure kvs watch callback not invoked after kvswatcher removal")
 ok (kw:remove(), "Can remove kvswatcher without error")
-os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
+os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put --json %s=%s",
     data.key, 'test3'))
 
 local t, err = f:timer {

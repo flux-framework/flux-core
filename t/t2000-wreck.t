@@ -29,8 +29,8 @@ test_expect_success 'wreckrun: -T, --walltime works' '
 	test_expect_code 142 flux wreckrun --walltime=1s -n${SIZE} sleep 15
 '
 test_expect_success 'wreckrun: -T, --walltime allows override of default signal' '
-        flux kvs put lwj.walltime-signal=SIGTERM &&
-        test_when_finished flux kvs put lwj.walltime-signal= &&
+        flux kvs put --json lwj.walltime-signal=SIGTERM &&
+        test_when_finished flux kvs put --json lwj.walltime-signal= &&
 	test_expect_code 143 flux wreckrun -T 1s -n${SIZE} sleep 5
 '
 test_expect_success 'wreckrun: -T, --walltime allows per-job override of default signal' '
@@ -182,25 +182,25 @@ test_expect_success 'wreckrun: -N without -n works' '
 test_expect_success 'wreckrun: -N without -n sets ntasks in kvs' '
 	flux wreckrun -l -N${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.ntasks) &&
+	n=$(flux kvs get --json ${LWJ}.ntasks) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -n without -N sets nnnodes in kvs' '
 	flux wreckrun -l -n${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.nnodes) &&
+	n=$(flux kvs get --json ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -t1 -N${SIZE} sets ntasks in kvs' '
 	flux wreckrun -l -t1 -N${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.ntasks) &&
+	n=$(flux kvs get --json ${LWJ}.ntasks) &&
 	test "$n" = "${SIZE}"
 '
 test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	flux wreckrun -l -t1 -n${SIZE} /bin/true &&
 	LWJ=$(last_job_path) &&
-	n=$(flux kvs get ${LWJ}.nnodes) &&
+	n=$(flux kvs get --json ${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
 
@@ -230,7 +230,7 @@ test_expect_success MULTICORE 'wreckrun: supports per-task affinity assignment' 
 	test_cmp expected_cpus2 output_cpus2
 '
 test_expect_success 'wreckrun: top level environment' '
-	flux kvs put lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
+	flux kvs put --json lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
 	run_timeout 5 flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env &&
 	cat <<-EOF >expected_top_env &&
 	foo
@@ -285,9 +285,9 @@ test_expect_success 'wreckrun: --error supported' '
         $WAITFILE -v --timeout=1 -p "this is stdout" test2.out
 '
 test_expect_success 'wreckrun: kvs config output for all jobs' '
-	test_when_finished "flux kvs put lwj.output=" &&
-	flux kvs put lwj.output.labelio=true &&
-	flux kvs put lwj.output.files.stdout=test3.out &&
+	test_when_finished "flux kvs put --json lwj.output=" &&
+	flux kvs put --json lwj.output.labelio=true &&
+	flux kvs put --json lwj.output.files.stdout=test3.out &&
 	flux wreckrun -n${SIZE} echo foo &&
 	for i in $(seq 0 $((${SIZE}-1)))
 		do echo "$i: foo"
@@ -374,7 +374,7 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 check_complete_link() {
     for i in `seq 0 5`; do
         lastepoch=$(flux kvs dir lwj-complete | awk -F. '{print $2}' | sort -n | tail -1)
-        flux kvs get lwj-complete.${lastepoch}.${1}.state && return 0
+        flux kvs get --json lwj-complete.${lastepoch}.${1}.state && return 0
         sleep 0.2
     done
     return 1

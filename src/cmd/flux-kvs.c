@@ -52,9 +52,50 @@ int cmd_move (optparse_t *p, int argc, char **argv);
 int cmd_dir (optparse_t *p, int argc, char **argv);
 int cmd_ls (optparse_t *p, int argc, char **argv);
 
-static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt);
+static int get_window_width (optparse_t *p, int fd);
+static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
+                          bool Ropt, bool dopt);
 
 #define min(a,b) ((a)<(b)?(a):(b))
+
+static struct optparse_option readlink_opts[] =  {
+    { .name = "at", .key = 'a', .has_arg = 1,
+      .usage = "Lookup relative to RFC 11 snapshot reference",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option get_opts[] =  {
+    { .name = "json", .key = 'j', .has_arg = 0,
+      .usage = "Interpret value(s) as encoded JSON",
+    },
+    { .name = "raw", .key = 'r', .has_arg = 0,
+      .usage = "Interpret value(s) as raw data",
+    },
+    { .name = "treeobj", .key = 't', .has_arg = 0,
+      .usage = "Show RFC 11 object",
+    },
+    { .name = "at", .key = 'a', .has_arg = 1,
+      .usage = "Lookup relative to RFC 11 snapshot reference",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option put_opts[] =  {
+    { .name = "json", .key = 'j', .has_arg = 0,
+      .usage = "Store value(s) as encoded JSON",
+    },
+    { .name = "raw", .key = 'r', .has_arg = 0,
+      .usage = "Store value(s) as-is without adding NULL termination",
+    },
+    { .name = "treeobj", .key = 't', .has_arg = 0,
+      .usage = "Store RFC 11 object",
+    },
+    { .name = "no-merge", .key = 'n', .has_arg = 0,
+      .usage = "Set the NO_MERGE flag to ensure commit is standalone",
+    },
+    OPTPARSE_TABLE_END
+};
 
 static struct optparse_option dir_opts[] =  {
     { .name = "recursive", .key = 'R', .has_arg = 0,
@@ -62,6 +103,12 @@ static struct optparse_option dir_opts[] =  {
     },
     { .name = "directory", .key = 'd', .has_arg = 0,
       .usage = "List directory entries and not values",
+    },
+    { .name = "width", .key = 'w', .has_arg = 1,
+      .usage = "Set output width to COLS.  0 means no limit",
+    },
+    { .name = "at", .key = 'a', .has_arg = 1,
+      .usage = "Lookup relative to RFC 11 snapshot reference",
     },
     OPTPARSE_TABLE_END
 };
@@ -120,21 +167,21 @@ static struct optparse_option unlink_opts[] =  {
 
 static struct optparse_subcommand subcommands[] = {
     { "get",
-      "key [key...]",
+      "[-j|-r|-t] [-a treeobj] key [key...]",
       "Get value stored under key",
       cmd_get,
       0,
-      NULL
+      get_opts
     },
     { "put",
-      "key=value [key=value...]",
+      "[-j|-r|-t] [-n] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
-      NULL
+      put_opts
     },
     { "dir",
-      "[-R] [-d] [key]",
+      "[-R] [-d] [-w COLS] [-a treeobj] [key]",
       "Display all keys under directory",
       cmd_dir,
       0,
@@ -162,11 +209,11 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "readlink",
-      "key [key...]",
+      "[-a treeobj] key [key...]",
       "Retrieve the key a link refers to",
       cmd_readlink,
       0,
-      NULL
+      readlink_opts
     },
     { "mkdir",
       "key [key...]",
@@ -284,37 +331,86 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
-static void output_key_json_object (const char *key, json_t *o)
+static void kv_printf (const char *key, int maxcol, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+    char *val, *kv, *p;
+    bool overflow = false;
+
+    if (maxcol != 0 && maxcol <= 3)
+        maxcol = 0;
+
+    va_start (ap, fmt);
+    rc = vasprintf (&val, fmt, ap);
+    va_end (ap);
+
+    if (rc < 0)
+        log_err_exit ("%s", __FUNCTION__);
+
+    if (asprintf (&kv, "%s%s%s", key ? key : "",
+                                 key ? " = " : "",
+                                 val) < 0)
+        log_err_exit ("%s", __FUNCTION__);
+
+    /* There will be no truncation of output if maxcol = 0.
+     * If truncation is enabled, ensure that at most maxcol columns are used.
+     * Truncate earlier if value contains a convenient newline break.
+     * Finally, truncate on first non-printable character.
+     */
+    if (maxcol != 0) {
+        if (strlen (kv) > maxcol - 3) {
+            kv[maxcol - 3] = '\0';
+            overflow = true;
+        }
+        if ((p = strchr (kv, '\n'))) {
+            *p = '\0';
+            overflow = true;
+        }
+        for (p = kv; *p != '\0'; p++) {
+            if (!isprint (*p)) {
+                *p = '\0';
+                overflow = true;
+                break;
+            }
+        }
+    }
+    printf ("%s%s\n", kv,
+                      overflow ? "..." : "");
+
+    free (val);
+    free (kv);
+}
+
+static void output_key_json_object (const char *key, json_t *o, int maxcol)
 {
     char *s;
-    if (key)
-        printf ("%s = ", key);
 
     switch (json_typeof (o)) {
     case JSON_NULL:
-        printf ("nil\n");
+        kv_printf (key, maxcol, "nil");
         break;
     case JSON_TRUE:
-        printf ("true\n");
+        kv_printf (key, maxcol, "true");
         break;
     case JSON_FALSE:
-        printf ("false\n");
+        kv_printf (key, maxcol, "false");
         break;
     case JSON_REAL:
-        printf ("%f\n", json_real_value (o));
+        kv_printf (key, maxcol, "%f", json_real_value (o));
         break;
     case JSON_INTEGER:
-        printf ("%lld\n", (long long)json_integer_value (o));
+        kv_printf (key, maxcol, "%lld", (long long)json_integer_value (o));
         break;
     case JSON_STRING:
-        printf ("%s\n", json_string_value (o));
+        kv_printf (key, maxcol, "%s", json_string_value (o));
         break;
     case JSON_ARRAY:
     case JSON_OBJECT:
     default:
         if (!(s = json_dumps (o, JSON_SORT_KEYS)))
             log_msg_exit ("json_dumps failed");
-        printf ("%s\n", s);
+        kv_printf (key, maxcol, "%s", s);
         free (s);
         break;
     }
@@ -332,14 +428,13 @@ static void output_key_json_str (const char *key,
     if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error)))
         log_msg_exit ("%s: %s (line %d column %d)",
                       arg, error.text, error.line, error.column);
-    output_key_json_object (key, o);
+    output_key_json_object (key, o, 0);
     json_decref (o);
 }
 
 int cmd_get (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
-    const char *key, *json_str;
     flux_future_t *f;
     int optindex, i;
 
@@ -349,11 +444,48 @@ int cmd_get (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     for (i = optindex; i < argc; i++) {
-        key = argv[i];
-        if (!(f = flux_kvs_lookup (h, 0, key))
-                || flux_kvs_lookup_get (f, &json_str) < 0)
-            log_err_exit ("%s", key);
-        output_key_json_str (NULL, json_str, key);
+        const char *key = argv[i];
+        int flags = 0;
+        if (optparse_hasopt (p, "treeobj"))
+            flags |= FLUX_KVS_TREEOBJ;
+        if (optparse_hasopt (p, "at")) {
+            const char *reference = optparse_get_str (p, "at", "");
+            if (!(f = flux_kvs_lookupat (h, flags, key, reference)))
+                log_err_exit ("%s", key);
+        }
+        else {
+            if (!(f = flux_kvs_lookup (h, flags, key)))
+                log_err_exit ("%s", key);
+        }
+        if (optparse_hasopt (p, "treeobj")) {
+            const char *treeobj;
+            if (flux_kvs_lookup_get_treeobj (f, &treeobj) < 0)
+                log_err_exit ("%s", key);
+            printf ("%s\n", treeobj);
+        }
+        else if (optparse_hasopt (p, "json")) {
+            const char *json_str;
+            if (flux_kvs_lookup_get (f, &json_str) < 0)
+                log_err_exit ("%s", key);
+            if (!json_str)
+                log_msg_exit ("%s: zero-length value", key);
+            output_key_json_str (NULL, json_str, key);
+        }
+        else if (optparse_hasopt (p, "raw")) {
+            const void *data;
+            int len;
+            if (flux_kvs_lookup_get_raw (f, &data, &len) < 0)
+                log_err_exit ("%s", key);
+            if (write_all (STDOUT_FILENO, data, len) < 0)
+                log_err_exit ("%s", key);
+        }
+        else {
+            const char *value;
+            if (flux_kvs_lookup_get (f, &value) < 0)
+                log_err_exit ("%s", key);
+            if (value)
+                printf ("%s\n", value);
+        }
         flux_future_destroy (f);
     }
     return (0);
@@ -365,12 +497,15 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     int optindex, i;
     flux_future_t *f;
     flux_kvs_txn_t *txn;
+    int commit_flags = 0;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
+    if (optparse_hasopt (p, "no-merge"))
+        commit_flags |= FLUX_KVS_NO_MERGE;
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     for (i = optindex; i < argc; i++) {
@@ -380,19 +515,43 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             log_msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
 
-        json_t *obj;
-        if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
-            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
+        if (optparse_hasopt (p, "treeobj")) {
+            if (flux_kvs_txn_put_treeobj (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
-            json_decref (obj);
         }
-        else { // encode as JSON string if not already valid encoded JSON
-            if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
+        else if (optparse_hasopt (p, "json")) {
+            json_t *obj;
+            if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
+                if (flux_kvs_txn_put (txn, 0, key, val) < 0)
+                    log_err_exit ("%s", key);
+                json_decref (obj);
+            }
+            else { // encode as JSON string if not already valid encoded JSON
+                if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
+                    log_err_exit ("%s", key);
+            }
+        }
+        else if (optparse_hasopt (p, "raw")) {
+            int len;
+            uint8_t *buf = NULL;
+            if (!strcmp (val, "-")) { // special handling for "--raw key=-"
+                if ((len = read_all (STDIN_FILENO, &buf)) < 0)
+                    log_err_exit ("stdin");
+                val = (char *)buf;
+            } else
+                len = strlen (val);
+            if (flux_kvs_txn_put_raw (txn, 0, key, val, len) < 0)
+                log_err_exit ("%s", key);
+            free (buf);
+        }
+        else {
+            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
         }
         free (key);
     }
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0)
+    if (!(f = flux_kvs_commit (h, commit_flags, txn))
+                                        || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
@@ -509,11 +668,18 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
     }
 
     for (i = optindex; i < argc; i++) {
-        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i]))
-                || flux_kvs_lookup_get_symlink (f, &target) < 0)
+        if (optparse_hasopt (p, "at")) {
+            const char *ref = optparse_get_str (p, "at", "");
+            if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READLINK, argv[i], ref)))
+                log_err_exit ("%s", argv[i]);
+        }
+        else {
+            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READLINK, argv[i])))
+                log_err_exit ("%s", argv[i]);
+        }
+        if (flux_kvs_lookup_get_symlink (f, &target) < 0)
             log_err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", target);
+        printf ("%s\n", target);
         flux_future_destroy (f);
     }
     return (0);
@@ -599,7 +765,7 @@ static void watch_dump_kvsdir (flux_kvsdir_t *dir, bool Ropt, bool dopt,
         return;
     }
 
-    dump_kvs_dir (dir, Ropt, dopt);
+    dump_kvs_dir (dir, 0, Ropt, dopt);
     printf ("%s\n", WATCH_DIR_SEPARATOR);
     fflush (stdout);
 }
@@ -754,23 +920,24 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static void dump_kvs_val (const char *key, const char *json_str)
+static void dump_kvs_val (const char *key, int maxcol, const char *value)
 {
     json_t *o;
-    json_error_t error;
 
-    if (!json_str)
-        json_str = "null";
-    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error))) {
-        printf ("%s: %s (line %d column %d)\n",
-                key, error.text, error.line, error.column);
-        return;
+    if (!value) {
+        kv_printf (key, maxcol, "");
     }
-    output_key_json_object (key, o);
-    json_decref (o);
+    else if ((o = json_loads (value, JSON_DECODE_ANY, NULL))) {
+        output_key_json_object (key, o, maxcol);
+        json_decref (o);
+    }
+    else {
+        kv_printf (key, maxcol, value);
+    }
 }
 
-static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt)
+static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
+                          bool Ropt, bool dopt)
 {
     const char *rootref = flux_kvsdir_rootref (dir);
     flux_t *h = flux_kvsdir_handle (dir);
@@ -796,17 +963,23 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt)
                 if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, rootref))
                         || flux_kvs_lookup_get_dir (f, &ndir) < 0)
                     log_err_exit ("%s", key);
-                dump_kvs_dir (ndir, Ropt, dopt);
+                dump_kvs_dir (ndir, maxcol, Ropt, dopt);
                 flux_future_destroy (f);
             } else
                 printf ("%s.\n", key);
         } else {
             if (!dopt) {
-                const char *json_str;
-                if (!(f = flux_kvs_lookupat (h, 0, key, rootref))
-                        || flux_kvs_lookup_get (f, &json_str) < 0)
+                const char *value;
+                const void *buf;
+                int len;
+                if (!(f = flux_kvs_lookupat (h, 0, key, rootref)))
                     log_err_exit ("%s", key);
-                dump_kvs_val (key, json_str);
+                if (flux_kvs_lookup_get (f, &value) == 0) // null terminated
+                    dump_kvs_val (key, maxcol, value);
+                else if (flux_kvs_lookup_get_raw  (f, &buf, &len) == 0)
+                    kv_printf (key, maxcol, "%.*s", len, buf);
+                else
+                    log_err_exit ("%s", key);
                 flux_future_destroy (f);
             }
             else
@@ -820,6 +993,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, bool Ropt, bool dopt)
 int cmd_dir (optparse_t *p, int argc, char **argv)
 {
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    int maxcol = get_window_width (p, STDOUT_FILENO);
     bool Ropt;
     bool dopt;
     const char *key;
@@ -837,10 +1011,18 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     else
         log_msg_exit ("dir: specify zero or one directory");
 
-    if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
-                || flux_kvs_lookup_get_dir (f, &dir) < 0)
+    if (optparse_hasopt (p, "at")) {
+        const char *reference = optparse_get_str (p, "at", "");
+        if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, reference)))
+            log_err_exit ("%s", key);
+    }
+    else {
+        if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key)))
+            log_err_exit ("%s", key);
+    }
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
         log_err_exit ("%s", key);
-    dump_kvs_dir (dir, Ropt, dopt);
+    dump_kvs_dir (dir, maxcol, Ropt, dopt);
     flux_future_destroy (f);
     return (0);
 }
@@ -891,8 +1073,6 @@ static int get_window_width (optparse_t *p, int fd)
     int width;
     const char *s;
 
-    if (optparse_hasopt (p, "1"))
-        return 1;
     if ((width = optparse_get_int (p, "width", -1)) >= 0)
         return width;
     if (ioctl (fd, TIOCGWINSZ, &w) == 0)
@@ -1123,6 +1303,9 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
     bool print_label = false;   // print "name:" before directory contents
     bool print_vspace = false;  // print vertical space before label
     int rc = 0;
+
+    if (optparse_hasopt (p, "1"))
+        win_width = 1;
 
     if (!(dirs = zlist_new ()) || !(singles = zlist_new ()))
         log_err_exit ("zlist_new");

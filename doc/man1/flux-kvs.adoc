@@ -42,13 +42,22 @@ arguments are described below.
 
 COMMANDS
 --------
-*get* 'key' ['key...']::
+*get* [-j|-r|-t] [-a treeobj] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
-'key', display an error message.
+'key', display an error message.  If no options, value is interpreted
+as a NULL-terminated string.  If '-j', it is interpreted as encoded JSON.
+If '-r', it is interpreted as raw data and is output without formatting.
+If '-t', the RFC 11 object is displayed.  '-a treeobj' causes the lookup
+to be relative to an RFC 11 snapshot reference.
 
-*put* 'key=value' ['key=value...']::
+*put* [-j|-r|-t] [-n] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
-overwrite it.
+overwrite it.  If no options, value is stored as a NULL-terminated string.
+If '-j', it is first encoded as JSON, then stored as a NULL-terminated string.
+If '-r', it is stored as raw data with no termination.  For raw mode only,
+a value of "-" indicates that the value should be read from standard input.
+If '-t', value is stored as a RFC 11 object.  '-n' prevents the commit
+from being merged with with other contemporaneous commits.
 
 *ls* [-R] [-d] [-F] [-w COLS] [-1] ['key' ...]::
 Display directory referred to by _key_, or "." (root) if unspecified.
@@ -58,12 +67,14 @@ Options are roughly equivalent to a subset of ls(1) options.
 '-w COLS' sets the terminal width in characters.  '-1' causes output to be
 displayed in one column.
 
-*dir* [-R] [-d] ['key']::
+*dir* [-R] [-d] [-w COLS] [-a treeobj] ['key']::
 Display all keys and their values under the directory 'key'.
 If 'key' does not exist or is not a directory, display an error message.
 If 'key' is not provided, "." (root of the namespace) is assumed.  If '-R'
 is specified, recursively display keys under subdirectories.  If '-d' is
-specified, do not output key values.
+specified, do not output key values.  Output is truncated to fit the
+terminal width.  '-w COLS' sets the terminal width (0=unlimited).
+'-a treeobj' causes the lookup to be relative to an RFC 11 snapshot reference.
 
 *unlink* [-R] [-f] 'key' ['key...']::
 Remove 'key' from the KVS and commit the change.  If 'key' represents
@@ -75,9 +86,10 @@ Create a new name for 'target', similar to a symbolic link, and commit
 the change.  'target' does not have to exist.  If 'linkname' exists,
 it is overwritten.
 
-*readlink* 'key' ['key...']::
+*readlink* [-a treeobj] 'key' ['key...']::
 Retrieve the key a link refers to rather than its value, as would be
-returned by *get*.
+returned by *get*.  '-a treeobj' causes the lookup to be relative to
+an RFC 11 snapshot reference.
 
 *mkdir* 'key' ['key...']::
 Create an empty directory and commit the change.  If 'key' exists,
