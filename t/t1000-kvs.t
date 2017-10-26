@@ -471,6 +471,40 @@ test_expect_success 'kvs: empty string value does not cause ls -FR to fail' '
 '
 
 #
+# raw value tests
+#
+test_expect_success 'kvs: put/get --raw works with multiple key=val pairs' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a=xyz $DIR.b=zyx &&
+	printf "%s" 'xyzzyx' >twovals.expected &&
+	flux kvs get --raw $DIR.a $DIR.b >twovals.actual &&
+	test_cmp twovals.expected twovals.actual
+'
+test_expect_success 'kvs: put --raw a=- reads value from stdin' '
+	flux kvs unlink -Rf $DIR &&
+	printf "%s" "abc" | flux kvs put --raw $DIR.a=- &&
+	printf "%s" "abc" >rawstdin.expected &&
+	flux kvs get --raw $DIR.a >rawstdin.actual &&
+	test_cmp rawstdin.expected rawstdin.actual
+'
+test_expect_success 'kvs: put --raw a=- b=42 works' '
+	flux kvs unlink -Rf $DIR &&
+	printf "%s" "abc" | flux kvs put --raw $DIR.a=- $DIR.b=42 &&
+	printf "%s" "abc42" >rawstdin2.expected &&
+	flux kvs get --raw $DIR.a $DIR.b >rawstdin2.actual &&
+	test_cmp rawstdin2.expected rawstdin2.actual
+'
+test_expect_success 'kvs: put --raw a=- b=- works with a getting all of stdin' '
+	flux kvs unlink -Rf $DIR &&
+	printf "%s" "abc" | flux kvs put --raw $DIR.a=- $DIR.b=- &&
+	printf "%s" "abc" >rawstdin3a.expected &&
+	flux kvs get --raw $DIR.a >rawstdin3a.actual &&
+	flux kvs get --raw $DIR.b >rawstdin3b.actual &&
+	test_cmp rawstdin3a.expected rawstdin3a.actual &&
+	test_cmp /dev/null rawstdin3b.actual
+'
+
+#
 # treeobj tests
 #
 test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
