@@ -55,18 +55,17 @@ than once on the same future, and they may be intermixed to probe a result
 or interpret it in different ways.  Results remain valid until
 `flux_future_destroy()` is called.
 
-`flux_kvs_lookup_get()` interprets the result as a NULL-terminated string
-value.  The value is assigned to _value_.  If the value is empty, NULL
-is assigned.
+`flux_kvs_lookup_get()` interprets the result as a value.  If the value
+has length greater than zero, a NULL is appended and it is assigned
+to _value_, otherwise NULL is assigned to _value_.
 
-`flux_kvs_lookup_get_unpack()` interprets the result as a NULL-terminated
-string value, then as encoded JSON (not necessarily enclosed in an object).
-The value is parsed according to variable arguments in Jansson `json_unpack()`
-format.
+`flux_kvs_lookup_get_unpack()` interprets the result as a value, which
+it decodes as JSON according to variable arguments in Jansson
+`json_unpack()` format.
 
-`flux_kvs_lookup_get_raw()` interprets the result as a raw, opaque value,
-which it assigns to _buf_ and its length to _len_.  The value may be any
-byte sequence.  If the value has zero length, NULL is assigned to _buf_.
+`flux_kvs_lookup_get_raw()` interprets the result as a value.  If the value
+has length greater than zero, the value and its length are assigned to
+_buf_ and _len_, respectively.  Otherwise NULL and zero are assigned.
 
 `flux_kvs_lookup_get_dir()` interprets the result as a directory,
 e.g. in response to a lookup with the FLUX_KVS_READDIR flag set.
