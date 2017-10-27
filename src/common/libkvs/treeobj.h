@@ -46,6 +46,8 @@ bool treeobj_is_dirref (json_t *obj);
 json_t *treeobj_get_data (json_t *obj);
 
 /* get decoded val data.
+ * If len == 0, data will be NULL.
+ * If len > 0, data will be followed by an extra NULL byte in memory.
  * Caller must free returned data.
  */
 int treeobj_decode_val (json_t *obj, void **data, int *len);
