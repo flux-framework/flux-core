@@ -190,7 +190,7 @@ json_t *cache_entry_get_json (struct cache_entry *hp)
     if (!hp || !hp->valid || !hp->data)
         return NULL;
     if (!hp->o) {
-        if (!(hp->o = json_loads (hp->data, JSON_DECODE_ANY, NULL)))
+        if (!(hp->o = json_loadb (hp->data, hp->len, JSON_DECODE_ANY, NULL)))
             return NULL;
     }
     return hp->o;
@@ -218,7 +218,7 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
             if (!(hp->data = kvs_util_json_dumps (o)))
                 return -1;
 
-            hp->len = strlen (hp->data) + 1;
+            hp->len = strlen (hp->data);
             hp->o = o;
             hp->valid = true;
 

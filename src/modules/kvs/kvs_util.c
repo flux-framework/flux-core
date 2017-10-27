@@ -81,7 +81,7 @@ int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 
     if (!(s = kvs_util_json_dumps (o)))
         goto error;
-    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s),
                       ref, sizeof (href_t)) < 0)
         goto error;
     rc = 0;
