@@ -43,7 +43,7 @@ char *kvs_util_json_dumps (json_t *o)
     /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must
      * set JSON_SORT_KEYS, two different objects with different
      * internal order should map to same string (and reference when
-     * used by json_hash()).
+     * used by kvs_util_json_hash()).
      */
     int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
     char *s;
