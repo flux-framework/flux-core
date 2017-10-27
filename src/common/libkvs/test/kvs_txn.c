@@ -51,12 +51,7 @@ int check_int_value (json_t *dirent, int expected)
         diag ("%s: initial base64 decode failed", __FUNCTION__);
         return -1;
     }
-    if (len == 0 || data[len - 1] != '\0') {
-        diag ("%s: data not null terminated", __FUNCTION__);
-        free (data);
-        return -1;
-    }
-    if (!(val = json_loads (data, JSON_DECODE_ANY, NULL))) {
+    if (!(val = json_loadb (data, len, JSON_DECODE_ANY, NULL))) {
         diag ("%s: couldn't decode JSON", __FUNCTION__);
         free (data);
         return -1;
@@ -90,12 +85,7 @@ int check_string_value (json_t *dirent, const char *expected)
         diag ("%s: initial base64 decode failed", __FUNCTION__);
         return -1;
     }
-    if (len == 0 || data[len - 1] != '\0') {
-        diag ("%s: data not null terminated", __FUNCTION__);
-        free (data);
-        return -1;
-    }
-    if (!(val = json_loads (data, JSON_DECODE_ANY, NULL))) {
+    if (!(val = json_loadb (data, len, JSON_DECODE_ANY, NULL))) {
         diag ("%s: couldn't decode JSON", __FUNCTION__);
         free (data);
         return -1;

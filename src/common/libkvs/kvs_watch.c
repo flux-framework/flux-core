@@ -259,7 +259,7 @@ error:
 /* val will be one of three things:
  * 1) JSON_NULL, set json_str to string-encoded object (NULL)
  * 2) RFC 11 dir object, set json_str to string-encoded object
- * 3) RFC 11 val object, unbase64, verify NULL termination, set json_str
+ * 3) RFC 11 val object, unbase64, set json_str
  * The caller must free returned json_str (if any)
  */
 static int decode_val_object (json_t *val, char **json_str)
@@ -285,11 +285,6 @@ static int decode_val_object (json_t *val, char **json_str)
             goto error;
         if (treeobj_decode_val (val, (void **)&s, &len) < 0)
             goto error;
-        if (s[len - 1] != '\0') {
-            free (s);
-            errno = EPROTO;
-            goto error;
-        }
     }
     else {
         errno = EPROTO;
@@ -348,7 +343,7 @@ int flux_kvs_watch_once (flux_t *h, const char *key, char **valp)
     }
     val_in = *valp;
     if (val_in) {
-        if (!(xval_obj = treeobj_create_val (val_in, strlen (val_in) + 1)))
+        if (!(xval_obj = treeobj_create_val (val_in, strlen (val_in))))
             goto done;
         if (!(xval_str = treeobj_encode (xval_obj)))
             goto done;
