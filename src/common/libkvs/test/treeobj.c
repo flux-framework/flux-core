@@ -173,6 +173,8 @@ void test_val (void)
         "and returned size same as input");
     ok (memcmp (buf, outbuf, outlen) == 0,
         "and returned data same as input");
+    ok (outbuf[outlen] == '\0',
+        "and includes an extra null terminator");
     free (outbuf);
     ok (treeobj_decode_val (val, (void **)&outbuf, NULL) == 0,
         "treeobj_decode_val works w/o len input");

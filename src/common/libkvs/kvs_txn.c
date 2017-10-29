@@ -176,7 +176,7 @@ int flux_kvs_txn_put (flux_kvs_txn_t *txn, int flags,
     }
     if (validate_flags (flags, 0) < 0)
         goto error;
-    if (!(dirent = treeobj_create_val (value, value ? strlen (value) + 1 : 0)))
+    if (!(dirent = treeobj_create_val (value, value ? strlen (value) : 0)))
         goto error;
     if (append_op_to_txn (txn, flags, key, dirent) < 0)
         goto error;
@@ -214,7 +214,7 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
         goto error;
     }
     json_decref (val);
-    if (!(dirent = treeobj_create_val (s, strlen (s) + 1))) {
+    if (!(dirent = treeobj_create_val (s, strlen (s)))) {
         free (s);
         goto error;
     }

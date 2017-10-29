@@ -165,14 +165,6 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
     return f;
 }
 
-static bool value_is_string (const char *s, int len)
-{
-    if (len < 1 || s[len - 1] != '\0')
-        return false;
-    else
-        return true;
-}
-
 static int decode_treeobj (flux_future_t *f, json_t **treeobj)
 {
     json_t *obj;
@@ -204,10 +196,7 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
                                               &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
-    }
-    if (ctx->val_data && !value_is_string (ctx->val_data, ctx->val_len)) {
-        errno = EINVAL;
-        return -1;
+        // N.B. val_data includes xtra 0 byte term not reflected in val_len
     }
     if (value)
         *value = ctx->val_data;
@@ -256,11 +245,7 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
         ctx->val_valid = true;
     }
     if (!ctx->val_obj) {
-        if (!value_is_string (ctx->val_data, ctx->val_len)) {
-            errno = EINVAL;
-            return -1;
-        }
-        if (!(ctx->val_obj = json_loads (ctx->val_data,
+        if (!(ctx->val_obj = json_loadb (ctx->val_data, ctx->val_len,
                                          JSON_DECODE_ANY, NULL))) {
             errno = EINVAL;
             return -1;

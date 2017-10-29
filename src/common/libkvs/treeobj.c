@@ -152,7 +152,7 @@ int treeobj_decode_val (json_t *obj, void **dp, int *lp)
 {
     const char *type, *xdatastr;
     json_t *xdata;
-    int len, xlen;
+    int buflen, len, xlen;
     char *data;
 
     if (treeobj_unpack (obj, &type, &xdata) < 0
@@ -162,20 +162,20 @@ int treeobj_decode_val (json_t *obj, void **dp, int *lp)
     }
     xdatastr = json_string_value (xdata);
     xlen = strlen (xdatastr);
-    len = base64_decode_length (xlen);
-    if (len > 1) {
-        if (!(data = malloc (len))) {
-            errno = ENOMEM;
-            return -1;
-        }
-        if (base64_decode_block (data, &len, xdatastr, xlen) < 0) {
-            free (data);
-            errno = EINVAL;
-            return -1;
-        }
+    buflen = base64_decode_length (xlen); // an *estimate*, includes space
+    assert (buflen > 0);                  //  for '\0' term
+    if (!(data = malloc (buflen)))
+        return -1;
+    len = buflen;                         // len is an in/out parameter
+    if (base64_decode_block (data, &len, xdatastr, xlen) < 0) {
+        free (data);
+        errno = EINVAL;
+        return -1;
     }
-    else {
-        len = 0;
+    assert (len < buflen);                // len does not account
+    assert (data[len] == '\0');           //  for '\0' term
+    if (len == 0) {
+        free (data);
         data = NULL;
     }
     if (lp)

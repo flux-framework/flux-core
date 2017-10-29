@@ -272,9 +272,8 @@ test_expect_success 'kvs: kvsdir_get_size works' '
 
 # kvs reads/writes of raw data to/from content store work
 
-# largevalhash includes string quotes and NUL char at end
 largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
-largevalhash="sha1-79da8e5c9dbe65c6460377d3f09b8f535ceb7d9d"
+largevalhash="sha1-0b22e9fecf9c832032fe976e67058df0322dcc5c"
 
 test_expect_success 'kvs: large put stores raw data into content store' '
 	flux kvs unlink -Rf $TEST &&

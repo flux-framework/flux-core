@@ -420,11 +420,11 @@ test_expect_success 'kvs: zero-length value NOT handled by get --json' '
 	flux kvs put --raw $DIR.a= &&
 	test_must_fail flux kvs get --json $DIR.a
 '
-test_expect_success 'kvs: zero-length value NOT made by put with no options' '
+test_expect_success 'kvs: zero-length value is made by put with no options' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put $DIR.a= &&
-	flux kvs get --raw $DIR.a >onenull.output &&
-	test_must_fail diff -q /dev/null onenull.output
+	flux kvs get --raw $DIR.a >empty3.output &&
+	test_cmp /dev/null empty3.output
 '
 test_expect_success 'kvs: zero-length value does not cause dir to fail' '
 	flux kvs unlink -Rf $DIR &&
@@ -435,39 +435,6 @@ test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --raw $DIR.a= &&
 	flux kvs ls -FR $DIR
-'
-
-#
-# empty string values
-#
-test_expect_success 'kvs: empty string value made by put with no options' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	dd if=/dev/zero count=1 bs=1 of=empty.expected &&
-	flux kvs get --raw $DIR.a >empty.actual &&
-	test_cmp empty.expected empty.actual
-'
-test_expect_success 'kvs: empty string value can be retrieved by get' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	echo >empty2.expected &&
-	flux kvs get $DIR.a >empty2.actual &&
-	test_cmp empty2.expected empty2.actual
-'
-test_expect_success 'kvs: empty string value NOT handled by get --json' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	test_must_fail flux kvs get --json $DIR.a
-'
-test_expect_success 'kvs: empty string value does not cause dir to fail' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs dir $DIR | grep -q "a ="
-'
-test_expect_success 'kvs: empty string value does not cause ls -FR to fail' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs ls -FR $DIR | grep -q "a"
 '
 
 #

@@ -44,18 +44,17 @@ COMMANDS
 --------
 *get* [-j|-r|-t] [-a treeobj] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
-'key', display an error message.  If no options, value is interpreted
-as a NULL-terminated string.  If '-j', it is interpreted as encoded JSON.
-If '-r', it is interpreted as raw data and is output without formatting.
-If '-t', the RFC 11 object is displayed.  '-a treeobj' causes the lookup
-to be relative to an RFC 11 snapshot reference.
+'key', display an error message.  If no options, value is displayed with
+a newline appended (if value length is nonzero).  If '-j', value is
+interpreted as encoded JSON and formatted accordingly.  If '-r', value
+is displayed without a newline.  If '-t', the RFC 11 object is displayed.
+'-a treeobj' causes the lookup to be relative to an RFC 11 snapshot reference.
 
 *put* [-j|-r|-t] [-n] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
-overwrite it.  If no options, value is stored as a NULL-terminated string.
-If '-j', it is first encoded as JSON, then stored as a NULL-terminated string.
-If '-r', it is stored as raw data with no termination.  For raw mode only,
-a value of "-" indicates that the value should be read from standard input.
+overwrite it.  If no options, value is stored directly.  If '-j', it is
+first encoded as JSON, then stored.  If '-r', the value may be read from
+standard input if specified as "-", and may include embedded NULL bytes.
 If '-t', value is stored as a RFC 11 object.  '-n' prevents the commit
 from being merged with with other contemporaneous commits.
 
