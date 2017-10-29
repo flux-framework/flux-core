@@ -8,7 +8,7 @@
 
 /* Get compact string representation of json object, or json null
  * object if o is NULL.  Use this function for consistency, especially
- * when dealing with data that may be hashed via json_hash().
+ * when dealing with data that may be hashed via kvs_util_json_hash().
  *
  * Returns NULL on error
  */

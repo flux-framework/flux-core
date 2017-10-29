@@ -43,7 +43,7 @@ char *kvs_util_json_dumps (json_t *o)
     /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must
      * set JSON_SORT_KEYS, two different objects with different
      * internal order should map to same string (and reference when
-     * used by json_hash()).
+     * used by kvs_util_json_hash()).
      */
     int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
     char *s;
@@ -81,7 +81,7 @@ int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
 
     if (!(s = kvs_util_json_dumps (o)))
         goto error;
-    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s) + 1,
+    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s),
                       ref, sizeof (href_t)) < 0)
         goto error;
     rc = 0;

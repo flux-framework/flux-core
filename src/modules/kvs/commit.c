@@ -147,7 +147,7 @@ const char *commit_get_newroot_ref (commit_t *c)
  * bit.
  *
  * As of the writing of this code, it should also be impossible
- * for the cache_entry_removal() to fail.  In the rare case of two
+ * for the cache_remove_entry() to fail.  In the rare case of two
  * callers kvs-get and kvs.put-ing items that end up at the
  * blobref in the cache, any waiters for a valid cache entry would
  * have been satisfied when the dirty cache entry was put onto

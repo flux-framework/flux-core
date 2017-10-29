@@ -298,7 +298,7 @@ void cache_entry_raw_and_json_tests (void)
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
+    ok (cache_entry_set_raw (e, data, strlen (data)) == 0,
         "cache_entry_set_raw success");
     ok ((otmp = cache_entry_get_json (e)) != NULL,
         "cache_entry_get_json returns non-NULL for json-legal raw data");
@@ -319,7 +319,7 @@ void cache_entry_raw_and_json_tests (void)
         "cache_entry_get_raw returns success for get json raw data");
     ok (datatmp && strcmp (datatmp, "\"abcd\"") == 0,
         "raw data matches expected string version of json");
-    ok (datatmp && (len == strlen ("\"abcd\"") + 1),
+    ok (datatmp && (len == strlen ("\"abcd\"")),
         "raw data length matches expected length of json string");
     cache_entry_destroy (e);
 }
