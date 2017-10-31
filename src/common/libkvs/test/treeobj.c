@@ -429,6 +429,9 @@ void test_symlink (void)
 {
     json_t *o, *data;
 
+    ok (treeobj_create_symlink (NULL) == NULL
+        && errno == EINVAL,
+        "treeobj_create_symlink fails on bad input with EINVAL");
     o = treeobj_create_symlink ("a.b.c");
     ok (o != NULL,
         "treeobj_create_symlink works");

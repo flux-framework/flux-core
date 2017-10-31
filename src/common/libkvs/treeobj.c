@@ -358,6 +358,11 @@ json_t *treeobj_create_symlink (const char *target)
 {
     json_t *obj;
 
+    if (!target) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (!(obj = json_pack ("{s:i s:s s:s}", "ver", treeobj_version,
                                             "type", "symlink",
                                             "data", target))) {
