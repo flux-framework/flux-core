@@ -294,6 +294,11 @@ json_t *treeobj_copy_dir (json_t *obj)
     return cpy;
 }
 
+json_t *treeobj_deep_copy (json_t *obj)
+{
+    return json_deep_copy (obj);
+}
+
 int treeobj_append_blobref (json_t *obj, const char *blobref)
 {
     const char *type;
