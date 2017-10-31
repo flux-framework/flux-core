@@ -94,6 +94,9 @@ static struct optparse_option put_opts[] =  {
     { .name = "no-merge", .key = 'n', .has_arg = 0,
       .usage = "Set the NO_MERGE flag to ensure commit is standalone",
     },
+    { .name = "append", .key = 'A', .has_arg = 0,
+      .usage = "Append value(s) to key instead of overwriting",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -498,6 +501,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     flux_kvs_txn_t *txn;
     int commit_flags = 0;
+    int put_flags = 0;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
@@ -534,18 +538,25 @@ int cmd_put (optparse_t *p, int argc, char **argv)
         else if (optparse_hasopt (p, "raw")) {
             int len;
             uint8_t *buf = NULL;
+
+            if (optparse_hasopt (p, "append"))
+                put_flags |= FLUX_KVS_APPEND;
+
             if (!strcmp (val, "-")) { // special handling for "--raw key=-"
                 if ((len = read_all (STDIN_FILENO, &buf)) < 0)
                     log_err_exit ("stdin");
                 val = (char *)buf;
             } else
                 len = strlen (val);
-            if (flux_kvs_txn_put_raw (txn, 0, key, val, len) < 0)
+            if (flux_kvs_txn_put_raw (txn, put_flags, key, val, len) < 0)
                 log_err_exit ("%s", key);
             free (buf);
         }
         else {
-            if (flux_kvs_txn_put (txn, 0, key, val) < 0)
+            if (optparse_hasopt (p, "append"))
+                put_flags |= FLUX_KVS_APPEND;
+
+            if (flux_kvs_txn_put (txn, put_flags, key, val) < 0)
                 log_err_exit ("%s", key);
         }
         free (key);
