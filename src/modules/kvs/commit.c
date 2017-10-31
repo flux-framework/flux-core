@@ -443,7 +443,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
 
             /* do not corrupt store by modifying orig. */
-            if (!(subdir = treeobj_copy_dir (subdir))) {
+            if (!(subdir = treeobj_copy (subdir))) {
                 saved_errno = errno;
                 goto done;
             }
@@ -559,7 +559,7 @@ commit_process_t commit_process (commit_t *c,
                 goto stall_load;
             }
 
-            if (!(c->rootcpy = treeobj_copy_dir (rootdir))) {
+            if (!(c->rootcpy = treeobj_copy (rootdir))) {
                 c->errnum = errno;
                 return COMMIT_PROCESS_ERROR;
             }
