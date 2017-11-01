@@ -294,14 +294,6 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
     return hp;
 }
 
-json_t *cache_lookup_and_get_treeobj (struct cache *cache,
-                                      const char *ref,
-                                      int current_epoch)
-{
-    struct cache_entry *hp = cache_lookup (cache, ref, current_epoch);
-    return cache_entry_get_valid (hp) ? cache_entry_get_treeobj (hp) : NULL;
-}
-
 void cache_insert (struct cache *cache, const char *ref, struct cache_entry *hp)
 {
     int rc = zhash_insert (cache->zh, ref, hp);

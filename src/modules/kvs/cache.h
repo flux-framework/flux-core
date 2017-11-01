@@ -105,15 +105,6 @@ void cache_destroy (struct cache *cache);
 struct cache_entry *cache_lookup (struct cache *cache,
                                   const char *ref, int current_epoch);
 
-/* Look up a cache entry and get treeobj of cache entry only if entry
- * contains a valid treeobj.  This is a convenience function that is
- * effectively successful if calls to cache_lookup() and
- * cache_entry_get_treeobj() are both successful.
- */
-json_t *cache_lookup_and_get_treeobj (struct cache *cache,
-                                      const char *ref,
-                                      int current_epoch);
-
 /* Insert an entry in the cache by blobref 'ref'.
  * Ownership of the cache entry is transferred to the cache.
  */

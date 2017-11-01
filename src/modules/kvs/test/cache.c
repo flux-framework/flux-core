@@ -600,12 +600,8 @@ void cache_expiration_tests (void)
         "cache contains 1 entry after insert");
     ok (cache_lookup (cache, "yyy1", 0) == NULL,
         "cache_lookup of wrong hash fails");
-    ok (cache_lookup_and_get_treeobj (cache, "yyy1", 0) == NULL,
-        "cache_lookup_and_get_treeobj of wrong hash fails");
     ok ((e2 = cache_lookup (cache, "xxx1", 42)) != NULL,
         "cache_lookup of correct hash works (last use=42)");
-    ok (cache_lookup_and_get_treeobj (cache, "xxx1", 0) == NULL,
-        "cache_lookup_and_get_treeobj of correct hash, but non valid entry fails");
     ok (cache_entry_get_treeobj (e2) == NULL,
         "no treeobj object found");
     ok (cache_count_entries (cache) == 1,
@@ -642,10 +638,6 @@ void cache_expiration_tests (void)
     ok ((otmp = cache_entry_get_treeobj (e4)) != NULL,
         "cache_entry_get_treeobj found entry");
     otest = treeobj_create_val ("foo", 3);
-    ok (json_equal (otmp, otest) == 1,
-        "expected treeobj object found");
-    ok ((otmp = cache_lookup_and_get_treeobj (cache, "xxx2", 0)) != NULL,
-        "cache_lookup_and_get_treeobj of correct hash and valid entry works");
     ok (json_equal (otmp, otest) == 1,
         "expected treeobj object found");
     json_decref (otest);

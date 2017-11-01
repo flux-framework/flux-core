@@ -557,6 +557,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else if (treeobj_is_dir (dir_entry)) {
             subdir = dir_entry;
         } else if (treeobj_is_dirref (dir_entry)) {
+            struct cache_entry *hp;
             const char *ref;
             int refcount;
 
@@ -577,11 +578,15 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto done;
             }
 
-            if (!(subdir = cache_lookup_and_get_treeobj (c->cm->cache,
-                                                         ref,
-                                                         current_epoch))) {
+            if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))
+                || !cache_entry_get_valid (hp)) {
                 *missing_ref = ref;
                 goto success; /* stall */
+            }
+
+            if (!(subdir = cache_entry_get_treeobj (hp))) {
+                saved_errno = ENOTRECOVERABLE;
+                goto done;
             }
 
             /* do not corrupt store by modifying orig. */
@@ -693,6 +698,7 @@ commit_process_t commit_process (commit_t *c,
         {
             /* Make a copy of the root directory.
              */
+            struct cache_entry *hp;
             json_t *rootdir;
 
             /* Caller didn't call commit_iter_missing_refs() */
@@ -701,15 +707,22 @@ commit_process_t commit_process (commit_t *c,
 
             c->state = COMMIT_STATE_LOAD_ROOT;
 
-            if (!(rootdir = cache_lookup_and_get_treeobj (c->cm->cache,
-                                                          rootdir_ref,
-                                                          current_epoch))) {
+            if (!(hp = cache_lookup (c->cm->cache,
+                                     rootdir_ref,
+                                     current_epoch))
+                || !cache_entry_get_valid (hp)) {
+
                 if (zlist_push (c->missing_refs_list,
                                 (void *)rootdir_ref) < 0) {
                     c->errnum = ENOMEM;
                     return COMMIT_PROCESS_ERROR;
                 }
                 goto stall_load;
+            }
+
+            if (!(rootdir = cache_entry_get_treeobj (hp))) {
+                c->errnum = ENOTRECOVERABLE;
+                return COMMIT_PROCESS_ERROR;
             }
 
             if (!(c->rootcpy = treeobj_copy (rootdir))) {
