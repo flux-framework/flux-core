@@ -1696,7 +1696,6 @@ void commit_process_giant_dir (void)
      *
      */
 
-    dir = json_object();
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val0000", treeobj_create_val ("0", 1));
     treeobj_insert_entry (dir, "val0010", treeobj_create_val ("1", 1));
