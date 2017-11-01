@@ -18,6 +18,7 @@ enum {
     FLUX_KVS_READDIR = 1,
     FLUX_KVS_READLINK = 2,
     FLUX_KVS_TREEOBJ = 16,
+    FLUX_KVS_APPEND = 32,
 };
 
 /* Synchronization:

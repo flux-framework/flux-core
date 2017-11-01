@@ -60,7 +60,8 @@ struct commit {
     int blocked:1;
     json_t *rootcpy;   /* working copy of root dir */
     href_t newroot;
-    zlist_t *item_callback_list;
+    zlist_t *missing_refs_list;
+    zlist_t *dirty_cache_entries_list;
     commit_mgr_t *cm;
     enum {
         COMMIT_STATE_INIT = 1,
@@ -76,8 +77,10 @@ static void commit_destroy (commit_t *c)
 {
     if (c) {
         json_decref (c->rootcpy);
-        if (c->item_callback_list)
-            zlist_destroy (&c->item_callback_list);
+        if (c->missing_refs_list)
+            zlist_destroy (&c->missing_refs_list);
+        if (c->dirty_cache_entries_list)
+            zlist_destroy (&c->dirty_cache_entries_list);
         /* fence destroyed through management of fence, not commit_t's
          * responsibility */
         free (c);
@@ -94,7 +97,11 @@ static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
         goto error;
     }
     c->f = f;
-    if (!(c->item_callback_list = zlist_new ())) {
+    if (!(c->missing_refs_list = zlist_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(c->dirty_cache_entries_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -183,7 +190,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
 {
     struct cache_entry *hp;
 
-    while ((hp = zlist_pop (c->item_callback_list)))
+    while ((hp = zlist_pop (c->dirty_cache_entries_list)))
         commit_cleanup_dirty_cache_entry (c, hp);
 }
 
@@ -218,6 +225,13 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
             saved_errno = errno;
             flux_log_error (c->cm->h, "base64_decode_block");
             goto done;
+        }
+        /* len from base64_decode_length() always > 0 b/c of NUL byte,
+         * but len after base64_decode_block() can be zero.  Adjust if
+         * necessary. */
+        if (!len) {
+            free (data);
+            data = NULL;
         }
         blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
     }
@@ -314,7 +328,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                                     false, ref, &hp)) < 0)
                 return -1;
             if (ret) {
-                if (zlist_push (c->item_callback_list, hp) < 0) {
+                if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
                     commit_cleanup_dirty_cache_entry (c, hp);
                     errno = ENOMEM;
                     return -1;
@@ -341,7 +355,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
                                         true, ref, &hp)) < 0)
                     return -1;
                 if (ret) {
-                    if (zlist_push (c->item_callback_list, hp) < 0) {
+                    if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
                         commit_cleanup_dirty_cache_entry (c, hp);
                         errno = ENOMEM;
                         return -1;
@@ -362,11 +376,139 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     return 0;
 }
 
+static int commit_val_data_to_cache (commit_t *c, int current_epoch,
+                                     json_t *val, href_t ref)
+{
+    struct cache_entry *hp;
+    json_t *val_data;
+    int ret;
+
+    if (!(val_data = treeobj_get_data (val)))
+        return -1;
+
+    if ((ret = store_cache (c, current_epoch, val_data,
+                            true, ref, &hp)) < 0)
+        return -1;
+
+    if (ret) {
+        if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
+            commit_cleanup_dirty_cache_entry (c, hp);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
+                          json_t *dir, const char *final_name)
+{
+    json_t *entry;
+
+    if (!treeobj_is_val (dirent)) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    entry = treeobj_get_entry (dir, final_name);
+
+    if (!entry) {
+        /* entry not found, treat like normal insertion */
+        if (treeobj_insert_entry (dir, final_name, dirent) < 0)
+            return -1;
+    }
+    else if (treeobj_is_valref (entry)) {
+        href_t ref;
+        json_t *cpy;
+
+        /* treeobj is valref, so we need to append the new data's
+         * blobref to this tree object.  Before doing so, we must save
+         * off the new data to the cache and mark it dirty for
+         * flushing later (if necessary)
+         *
+         * Note that we make a copy of the original entry and
+         * re-insert it into the directory.  We do not want to
+         * accidentally alter any json object pointers that may be
+         * sitting in the KVS cache.
+         */
+
+        if (commit_val_data_to_cache (c, current_epoch,
+                                      dirent, ref) < 0)
+            return -1;
+
+        if (!(cpy = treeobj_deep_copy (entry)))
+            return -1;
+
+        if (treeobj_append_blobref (cpy, ref) < 0) {
+            json_decref (cpy);
+            return -1;
+        }
+
+        if (treeobj_insert_entry (dir, final_name, cpy) < 0) {
+            json_decref (cpy);
+            return -1;
+        }
+    }
+    else if (treeobj_is_val (entry)) {
+        json_t *tmp;
+        href_t ref1, ref2;
+
+        /* treeobj entry is val, so we need to convert the treeobj
+         * into a valref first.  Then the procedure is basically the
+         * same as the treeobj valref case above.
+         */
+
+        if (commit_val_data_to_cache (c, current_epoch,
+                                      entry, ref1) < 0)
+            return -1;
+
+        if (commit_val_data_to_cache (c, current_epoch,
+                                      dirent, ref2) < 0)
+            return -1;
+
+        if (!(tmp = treeobj_create_valref (ref1)))
+            return -1;
+
+        if (treeobj_append_blobref (tmp, ref2) < 0) {
+            json_decref (tmp);
+            return -1;
+        }
+
+        if (treeobj_insert_entry (dir, final_name, tmp) < 0) {
+            json_decref (tmp);
+            return -1;
+        }
+    }
+    else if (treeobj_is_symlink (entry)) {
+        /* Could use EPERM - operation not permitted, but want to
+         * avoid confusion with "common" errnos, we'll use this one
+         * instead. */
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    else if (treeobj_is_dir (entry)
+             || treeobj_is_dirref (entry)) {
+        errno = EISDIR;
+        return -1;
+    }
+    else {
+        char *s = json_dumps (entry, 0);
+        flux_log (c->cm->h, LOG_ERR, "%s: corrupt treeobj: %s",
+                  __FUNCTION__, s);
+        free (s);
+        errno = ENOTRECOVERABLE;
+        return -1;
+    }
+    return 0;
+}
+
 /* link (key, dirent) into directory 'dir'.
  */
 static int commit_link_dirent (commit_t *c, int current_epoch,
                                json_t *rootdir, const char *key,
-                               json_t *dirent, const char **missing_ref)
+                               json_t *dirent, int flags,
+                               const char **missing_ref)
 {
     char *cpy = NULL;
     char *next, *name;
@@ -443,7 +585,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
 
             /* do not corrupt store by modifying orig. */
-            if (!(subdir = treeobj_copy_dir (subdir))) {
+            if (!(subdir = treeobj_copy (subdir))) {
                 saved_errno = errno;
                 goto done;
             }
@@ -476,6 +618,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                                     rootdir,
                                     nkey,
                                     dirent,
+                                    flags,
                                     missing_ref) < 0) {
                 saved_errno = errno;
                 free (nkey);
@@ -500,12 +643,22 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         name = next;
         dir = subdir;
     }
-    /* This is the final path component of the key.  Add it to the directory.
+    /* This is the final path component of the key.  Add/modify/delete
+     * it in the directory.
      */
     if (!json_is_null (dirent)) {
-        if (treeobj_insert_entry (dir, name, dirent) < 0) {
-            saved_errno = errno;
-            goto done;
+        if (flags & FLUX_KVS_APPEND) {
+            if (commit_append (c, current_epoch, dirent, dir, name) < 0) {
+                saved_errno = errno;
+                goto done;
+            }
+        }
+        else {
+            /* if not append, it's a normal insertion */
+            if (treeobj_insert_entry (dir, name, dirent) < 0) {
+                saved_errno = errno;
+                goto done;
+            }
         }
     }
     else {
@@ -543,7 +696,7 @@ commit_process_t commit_process (commit_t *c,
             json_t *rootdir;
 
             /* Caller didn't call commit_iter_missing_refs() */
-            if (zlist_first (c->item_callback_list))
+            if (zlist_first (c->missing_refs_list))
                 goto stall_load;
 
             c->state = COMMIT_STATE_LOAD_ROOT;
@@ -551,7 +704,7 @@ commit_process_t commit_process (commit_t *c,
             if (!(rootdir = cache_lookup_and_get_json (c->cm->cache,
                                                        rootdir_ref,
                                                        current_epoch))) {
-                if (zlist_push (c->item_callback_list,
+                if (zlist_push (c->missing_refs_list,
                                 (void *)rootdir_ref) < 0) {
                     c->errnum = ENOMEM;
                     return COMMIT_PROCESS_ERROR;
@@ -559,7 +712,7 @@ commit_process_t commit_process (commit_t *c,
                 goto stall_load;
             }
 
-            if (!(c->rootcpy = treeobj_copy_dir (rootdir))) {
+            if (!(c->rootcpy = treeobj_copy (rootdir))) {
                 c->errnum = errno;
                 return COMMIT_PROCESS_ERROR;
             }
@@ -584,7 +737,7 @@ commit_process_t commit_process (commit_t *c,
                 int flags;
 
                 /* Caller didn't call commit_iter_missing_refs() */
-                if (zlist_first (c->item_callback_list))
+                if (zlist_first (c->missing_refs_list))
                     goto stall_load;
 
                 for (i = 0; i < len; i++) {
@@ -600,12 +753,13 @@ commit_process_t commit_process (commit_t *c,
                                             c->rootcpy,
                                             key,
                                             dirent,
+                                            flags,
                                             &missing_ref) < 0) {
                         c->errnum = errno;
                         break;
                     }
                     if (missing_ref) {
-                        if (zlist_push (c->item_callback_list,
+                        if (zlist_push (c->missing_refs_list,
                                         (void *)missing_ref) < 0) {
                             c->errnum = ENOMEM;
                             break;
@@ -614,12 +768,12 @@ commit_process_t commit_process (commit_t *c,
                 }
 
                 if (c->errnum != 0) {
-                    /* empty item_callback_list to prevent mistakes later */
-                    while ((missing_ref = zlist_pop (c->item_callback_list)));
+                    /* empty missing_refs_list to prevent mistakes later */
+                    while ((missing_ref = zlist_pop (c->missing_refs_list)));
                     return COMMIT_PROCESS_ERROR;
                 }
 
-                if (zlist_first (c->item_callback_list))
+                if (zlist_first (c->missing_refs_list))
                     goto stall_load;
 
             }
@@ -648,7 +802,7 @@ commit_process_t commit_process (commit_t *c,
                                           &hp)) < 0)
                      c->errnum = errno;
             else if (sret
-                     && zlist_push (c->item_callback_list, hp) < 0) {
+                     && zlist_push (c->dirty_cache_entries_list, hp) < 0) {
                 commit_cleanup_dirty_cache_entry (c, hp);
                 c->errnum = ENOMEM;
             }
@@ -671,7 +825,7 @@ commit_process_t commit_process (commit_t *c,
             /* If we did not fall through to here, caller didn't call
              * commit_iter_dirty_cache_entries()
              */
-            if (zlist_first (c->item_callback_list))
+            if (zlist_first (c->dirty_cache_entries_list))
                 goto stall_store;
 
             c->state = COMMIT_STATE_FINISHED;
@@ -706,7 +860,7 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
         return -1;
     }
 
-    while ((ref = zlist_pop (c->item_callback_list))) {
+    while ((ref = zlist_pop (c->missing_refs_list))) {
         if (cb (c, ref, data) < 0) {
             saved_errno = errno;
             rc = -1;
@@ -715,7 +869,7 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
     }
 
     if (rc < 0) {
-        while ((ref = zlist_pop (c->item_callback_list)));
+        while ((ref = zlist_pop (c->missing_refs_list)));
         errno = saved_errno;
     }
 
@@ -734,7 +888,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
         return -1;
     }
 
-    while ((hp = zlist_pop (c->item_callback_list))) {
+    while ((hp = zlist_pop (c->dirty_cache_entries_list))) {
         if (cb (c, hp, data) < 0) {
             saved_errno = errno;
             rc = -1;

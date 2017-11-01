@@ -69,12 +69,15 @@ json_t *treeobj_get_entry (json_t *obj, const char *name);
 int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2);
 int treeobj_delete_entry (json_t *obj, const char *name);
 
-/* Copy a treeobj dir.
- * This function performs a shallow copy on a dir object, copying the
- * first level of directory entries.  Use this function over json_copy()
- * on dir objects, as the latter is not safe on treeobj objects.
+/* Shallow copy a treeobj
+ * Note that this is not a shallow copy on the json object, but is a
+ * shallow copy on the data within a tree object.  For example, for a
+ * dir object, the first level of directory entries will be copied.
  */
-json_t *treeobj_copy_dir (json_t *obj);
+json_t *treeobj_copy (json_t *obj);
+
+/* Deep copy a treeobj */
+json_t *treeobj_deep_copy (json_t *obj);
 
 /* add blobref to dirref,valref object.
  * Return 0 on success, -1 on failure with errno set.

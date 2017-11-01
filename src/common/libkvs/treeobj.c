@@ -263,35 +263,48 @@ int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2)
     return 0;
 }
 
-json_t *treeobj_copy_dir (json_t *obj)
+json_t *treeobj_copy (json_t *obj)
 {
-    const char *type;
     json_t *data;
     json_t *cpy;
     json_t *datacpy;
     int save_errno;
 
-    if (treeobj_unpack (obj, &type, &data) < 0
-            || strcmp (type, "dir") != 0) {
+    if (treeobj_unpack (obj, NULL, &data) < 0) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(cpy = treeobj_create_dir ()))
-        return NULL;
-    if (!(datacpy = json_copy (data))) {
-        save_errno = errno;
-        json_decref (cpy);
-        errno = save_errno;
-        return NULL;
+    /* shallow copy of treeobj data and deep copy of treeobj is
+     * identical except for dir object.
+     */
+    if (treeobj_is_dir (obj)) {
+        if (!(cpy = treeobj_create_dir ()))
+            return NULL;
+
+        if (!(datacpy = json_copy (data))) {
+            save_errno = errno;
+            json_decref (cpy);
+            errno = save_errno;
+            return NULL;
+        }
+        if (json_object_set_new (cpy, "data", datacpy) < 0) {
+            save_errno = errno;
+            json_decref (datacpy);
+            json_decref (cpy);
+            errno = save_errno;
+            return NULL;
+        }
     }
-    if (json_object_set_new (cpy, "data", datacpy) < 0) {
-        save_errno = errno;
-        json_decref (datacpy);
-        json_decref (cpy);
-        errno = save_errno;
-        return NULL;
+    else {
+        if (!(cpy = json_deep_copy (obj)))
+            return NULL;
     }
     return cpy;
+}
+
+json_t *treeobj_deep_copy (json_t *obj)
+{
+    return json_deep_copy (obj);
 }
 
 int treeobj_append_blobref (json_t *obj, const char *blobref)
@@ -357,6 +370,11 @@ json_t *treeobj_create_dir (void)
 json_t *treeobj_create_symlink (const char *target)
 {
     json_t *obj;
+
+    if (!target) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(obj = json_pack ("{s:i s:s s:s}", "ver", treeobj_version,
                                             "type", "symlink",

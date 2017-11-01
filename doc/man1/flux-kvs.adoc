@@ -50,13 +50,15 @@ interpreted as encoded JSON and formatted accordingly.  If '-r', value
 is displayed without a newline.  If '-t', the RFC 11 object is displayed.
 '-a treeobj' causes the lookup to be relative to an RFC 11 snapshot reference.
 
-*put* [-j|-r|-t] [-n] 'key=value' ['key=value...']::
+*put* [-j|-r|-t] [-n] [-A] 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
 overwrite it.  If no options, value is stored directly.  If '-j', it is
 first encoded as JSON, then stored.  If '-r', the value may be read from
 standard input if specified as "-", and may include embedded NULL bytes.
 If '-t', value is stored as a RFC 11 object.  '-n' prevents the commit
-from being merged with with other contemporaneous commits.
+from being merged with with other contemporaneous commits.  '-A' appends the
+value to a key instead of overwriting the value.  Append is incompatible with
+the -j option.
 
 *ls* [-R] [-d] [-F] [-w COLS] [-1] ['key' ...]::
 Display directory referred to by _key_, or "." (root) if unspecified.

@@ -57,6 +57,7 @@ Each function below adds a single operation to _txn_.  _key_ is a
 hierarchical path name with period (".") used as path separator.
 When the transaction is committed, any existing keys or path components
 that are in conflict with the requested operation are overwritten.
+_flags_ can modify the request as described below.
 
 `flux_kvs_txn_put()` sets _key_ to a NULL terminated string _value_.
 _value_ may be NULL indicating that an empty value should be stored.
@@ -83,7 +84,12 @@ as a JSON string.
 FLAGS
 -----
 
-The _flags_ argument is currently unused and must be zero.
+The following are valid bits in a _flags_ mask passed as an argument
+to `flux_kvs_txn_put()` or `flux_kvs_txn_put_raw()`.
+
+FLUX_KVS_APPEND::
+Append value instead of overwriting it.  If the key does not exist,
+it will be created with the value as the initial value.
 
 
 include::JSON_PACK.adoc[]

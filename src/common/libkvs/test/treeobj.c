@@ -338,88 +338,239 @@ void test_dir (void)
     json_decref (dir);
 }
 
-void test_copy_dir (void)
+void test_copy (void)
 {
-    json_t *dir, *dircpy;
-    json_t *val1, *val2, *val3;
-    json_t *test;
-
-    /* create couple test values */
-    val1 = treeobj_create_val ("a", 1);
-    val2 = treeobj_create_val ("b", 1);
-    val3 = treeobj_create_val ("c", 1);
-    if (!val1 || !val2 || !val3)
-        BAIL_OUT ("can't continue without test values");
+    json_t *val, *symlink, *dirref, *valref, *dir;
+    json_t *valcpy, *symlinkcpy, *dirrefcpy, *valrefcpy, *dircpy;
+    json_t *val1, *val2;
 
     /* First, some corner case tests */
 
-    ok (treeobj_copy_dir (val1) == NULL,
-        "tree_copy_dir fails on non-dir");
+    ok (treeobj_copy (NULL) == NULL,
+        "tree_copy fails on bad input");
 
-    /* Next, test to show json_copy() is not safe.
-     *
-     * json_copy(), which makes a shallow copy of a JSON object,
-     * cannot be used directly on a RFC 11 dir object, since the
-     * directory itself is one level down under the "data" key.
-    */
+    /* Test val copy */
 
-    ok ((dir = treeobj_create_dir ()) != NULL,
-        "treeobj_create_dir works");
+    val = treeobj_create_val ("a", 1);
+    if (!val)
+        BAIL_OUT ("can't continue without test val");
+
+    ok ((valcpy = treeobj_copy (val)) != NULL,
+        "treeobj_copy worked on val");
+
+    ok (val != valcpy && json_equal (val, valcpy) == 1,
+        "treeobj_copy returned duplicate val copy");
+
+    json_decref (val);
+    json_decref (valcpy);
+
+    /* Test symlink copy */
+
+    symlink = treeobj_create_symlink ("abcdefgh");
+    if (!symlink)
+        BAIL_OUT ("can't continue without test symlink");
+
+    ok ((symlinkcpy = treeobj_copy (symlink)) != NULL,
+        "treeobj_copy worked on symlink");
+
+    ok (symlink != symlinkcpy && json_equal (symlink, symlinkcpy) == 1,
+        "treeobj_copy returned duplicate symlink copy");
+
+    json_decref (symlink);
+    json_decref (symlinkcpy);
+
+    /* Test dirref copy */
+
+    dirref = treeobj_create_dirref (blobrefs[0]);
+    if (!dirref)
+        BAIL_OUT ("can't continue without test dirref");
+
+    ok ((dirrefcpy = treeobj_copy (dirref)) != NULL,
+        "treeobj_copy worked on dirref");
+
+    ok (dirref != dirrefcpy && json_equal (dirref, dirrefcpy) == 1,
+        "treeobj_copy returned duplicate dirref copy");
+
+    ok (treeobj_append_blobref (dirref, blobrefs[1]) == 0,
+        "treeobj_append_blobref success");
+
+    ok (json_equal (dirref, dirrefcpy) == 0,
+        "change to one dirref did not affect other");
+
+    json_decref (dirref);
+    json_decref (dirrefcpy);
+
+    /* Test valref copy */
+
+    valref = treeobj_create_valref (blobrefs[0]);
+    if (!valref)
+        BAIL_OUT ("can't continue without test valref");
+
+    ok ((valrefcpy = treeobj_copy (valref)) != NULL,
+        "treeobj_copy worked on valref");
+
+    ok (valref != valrefcpy && json_equal (valref, valrefcpy) == 1,
+        "treeobj_copy returned duplicate valref copy");
+
+    ok (treeobj_append_blobref (valref, blobrefs[1]) == 0,
+        "treeobj_append_blobref success");
+
+    ok (json_equal (valref, valrefcpy) == 0,
+        "change to one valref did not affect other");
+
+    json_decref (valref);
+    json_decref (valrefcpy);
+
+    /* Test dir copy */
+
+    dir = treeobj_create_dir ();
+    val1 = treeobj_create_val ("a", 1);
+    val2 = treeobj_create_val ("b", 1);
+    if (!dir || !val1 || !val2)
+        BAIL_OUT ("can't continue without test dir");
+
     ok (treeobj_insert_entry (dir, "a", val1) == 0,
         "treeobj_insert_entry works");
-    ok (treeobj_insert_entry (dir, "b", val2) == 0,
-        "treeobj_insert_entry works");
-    ok (treeobj_get_count (dir) == 2,
-        "treeobj_get_count gets correct count");
 
-    ok ((dircpy = json_copy (dir)) != NULL,
-        "json_copy works");
+    ok ((dircpy = treeobj_copy (dir)) != NULL,
+        "treeobj_copy worked on dir");
 
-    /* change "b" to "c" in original */
-    ok (treeobj_insert_entry (dir, "b", val3) == 0,
-        "treeobj_insert_entry works");
+    ok (dir != dircpy && json_equal (dir, dircpy) == 1,
+        "treeobj_copy returned duplicate dir copy");
 
-    ok (json_equal (dir, dircpy) == 1,
-        "dir and dircpy are equal, json_copy() not safe");
-
-    json_decref (dir);
-    json_decref (dircpy);
-
-    /* Now test to show treeobj_copy_dir() is safe */
-
-    ok ((dir = treeobj_create_dir ()) != NULL,
-        "treeobj_create_dir works");
-    ok (treeobj_insert_entry (dir, "a", val1) == 0,
-        "treeobj_insert_entry works");
-    ok (treeobj_insert_entry (dir, "b", val2) == 0,
-        "treeobj_insert_entry works");
-    ok (treeobj_get_count (dir) == 2,
-        "treeobj_get_count gets correct count");
-
-    ok ((dircpy = treeobj_copy_dir (dir)) != NULL,
-        "treeobj_copy_dir works");
-
-    /* change "b" to "c" in original */
-    ok (treeobj_insert_entry (dir, "b", val3) == 0,
-        "treeobj_insert_entry works");
+    /* change "a" to "b" in main dir */
+    ok (treeobj_insert_entry (dir, "a", val2) == 0,
+        "treeobj_insert_entry success");
 
     ok (json_equal (dir, dircpy) == 0,
-        "dir and dircpy are not equal, treeobj_copy_dir() safe");
-
-    /* Make sure values are in the right copies */
-    ok ((test = treeobj_get_entry (dir, "b")) != NULL,
-        "treeobj_get_entry works");
-    ok (json_equal (test, val3) == 1,
-        "correct value is in original");
-
-    ok ((test = treeobj_get_entry (dircpy, "b")) != NULL,
-        "treeobj_get_entry works");
-    ok (json_equal (test, val2) == 1,
-        "correct value is in copy");
+        "change to one dir did not affect other");
 
     json_decref (dir);
     json_decref (dircpy);
+    json_decref (val1);
+    json_decref (val2);
 
+    /* Show that json copy is not safe compared to treeobj_copy()
+     * above */
+
+    dir = treeobj_create_dir ();
+    val1 = treeobj_create_val ("a", 1);
+    val2 = treeobj_create_val ("b", 1);
+    if (!dir || !val1 || !val2)
+        BAIL_OUT ("can't continue without test dir");
+
+    ok (treeobj_insert_entry (dir, "a", val1) == 0,
+        "treeobj_insert_entry works");
+
+    ok ((dircpy = json_copy (dir)) != NULL,
+        "json_copy worked on dir");
+
+    ok (dir != dircpy && json_equal (dir, dircpy) == 1,
+        "json_copy returned duplicate dir copy");
+
+    /* change "a" to "b" in main dir */
+    ok (treeobj_insert_entry (dir, "a", val2) == 0,
+        "treeobj_insert_entry success");
+
+    ok (json_equal (dir, dircpy) == 1,
+        "change to one dir did affect other");
+
+    json_decref (dir);
+    json_decref (dircpy);
+    json_decref (val1);
+    json_decref (val2);
+}
+
+void test_deep_copy (void)
+{
+    json_t *dir, *dircpy;
+    json_t *val1, *val2, *val3, *subdir, *subdir1, *subdir2;
+
+    /* First, some corner case tests */
+
+    ok (treeobj_deep_copy (NULL) == NULL,
+        "tree_copy fails on bad input");
+
+    /* Test dir copy */
+
+    dir = treeobj_create_dir ();
+    subdir = treeobj_create_dir();
+    val1 = treeobj_create_val ("a", 1);
+    val2 = treeobj_create_val ("b", 1);
+    val3 = treeobj_create_val ("c", 1);
+    if (!dir || !subdir || !val1 || !val2 || !val3)
+        BAIL_OUT ("can't continue without test dir");
+
+    ok (treeobj_insert_entry (dir, "a", val1) == 0,
+        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (subdir, "b", val2) == 0,
+        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (dir, "subdir", subdir) == 0,
+        "treeobj_insert_entry works");
+
+    ok ((dircpy = treeobj_deep_copy (dir)) != NULL,
+        "treeobj_deep_copy worked on dir");
+
+    ok (dir != dircpy && json_equal (dir, dircpy) == 1,
+        "treeobj_deep_copy returned duplicate dir copy");
+
+    ok ((subdir1 = treeobj_get_entry (dir, "subdir")) != NULL,
+        "treeobj_get_entry got subdir");
+    ok ((subdir2 = treeobj_get_entry (dircpy, "subdir")) != NULL,
+        "treeobj_get_entry got subdir");
+
+    /* change "b" to "c" in one subdir */
+    ok (treeobj_insert_entry (subdir1, "b", val3) == 0,
+        "treeobj_insert_entry success");
+
+    ok (json_equal (dir, dircpy) == 0,
+        "change to one dir did not affect other");
+
+    json_decref (dir);
+    json_decref (dircpy);
+    json_decref (subdir);
+    json_decref (val1);
+    json_decref (val2);
+    json_decref (val3);
+
+    /* Test dir copy compared to shallow copy function */
+
+    dir = treeobj_create_dir ();
+    subdir = treeobj_create_dir();
+    val1 = treeobj_create_val ("a", 1);
+    val2 = treeobj_create_val ("b", 1);
+    val3 = treeobj_create_val ("c", 1);
+    if (!dir || !subdir || !val1 || !val2 || !val3)
+        BAIL_OUT ("can't continue without test dir");
+
+    ok (treeobj_insert_entry (dir, "a", val1) == 0,
+        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (subdir, "b", val2) == 0,
+        "treeobj_insert_entry works");
+    ok (treeobj_insert_entry (dir, "subdir", subdir) == 0,
+        "treeobj_insert_entry works");
+
+    ok ((dircpy = treeobj_copy (dir)) != NULL,
+        "treeobj_copy worked on dir");
+
+    ok (dir != dircpy && json_equal (dir, dircpy) == 1,
+        "treeobj_copy returned duplicate dir copy");
+
+    ok ((subdir1 = treeobj_get_entry (dir, "subdir")) != NULL,
+        "treeobj_get_entry got subdir");
+    ok ((subdir2 = treeobj_get_entry (dircpy, "subdir")) != NULL,
+        "treeobj_get_entry got subdir");
+
+    /* change "b" to "c" in one subdir */
+    ok (treeobj_insert_entry (subdir1, "b", val3) == 0,
+        "treeobj_insert_entry success");
+
+    ok (json_equal (dir, dircpy) == 1,
+        "change to one dir *did* affect other, b/c treeobj_copy does only a 1 level copy");
+
+    json_decref (dir);
+    json_decref (dircpy);
+    json_decref (subdir);
     json_decref (val1);
     json_decref (val2);
     json_decref (val3);
@@ -429,6 +580,9 @@ void test_symlink (void)
 {
     json_t *o, *data;
 
+    ok (treeobj_create_symlink (NULL) == NULL
+        && errno == EINVAL,
+        "treeobj_create_symlink fails on bad input with EINVAL");
     o = treeobj_create_symlink ("a.b.c");
     ok (o != NULL,
         "treeobj_create_symlink works");
@@ -540,7 +694,8 @@ int main(int argc, char** argv)
     test_val ();
     test_dirref ();
     test_dir ();
-    test_copy_dir ();
+    test_copy ();
+    test_deep_copy ();
     test_symlink ();
     test_corner_cases ();
 

@@ -503,6 +503,73 @@ test_expect_success 'kvs: treeobj can be used to create snapshot' '
 '
 
 #
+# append tests
+#
+test_expect_success 'kvs: append on non-existent key is same as create' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --append $DIR.a=abc &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: basic append works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=abc &&
+	flux kvs put --append $DIR.a=def &&
+	flux kvs put --append $DIR.a=ghi &&
+	printf "%s%s%s\n" "abcdefghi" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: basic append works with --raw' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a=abc &&
+	flux kvs put --append --raw $DIR.a=def &&
+	flux kvs put --append --raw $DIR.a=ghi &&
+	printf "%s" "abcdefghi" >expected &&
+	flux kvs get --raw $DIR.a >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: basic append works with newlines' '
+	flux kvs unlink -Rf $DIR &&
+	echo "abc" | flux kvs put --raw $DIR.a=- &&
+	echo "def" | flux kvs put --append --raw $DIR.a=- &&
+	echo "ghi" | flux kvs put --append --raw $DIR.a=- &&
+	printf "%s\n%s\n%s\n" "abc" "def" "ghi" >expected &&
+	flux kvs get --raw $DIR.a >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: append to zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs put --append $DIR.a=abc &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: append a zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=abc &&
+	flux kvs put --append $DIR.a= &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'kvs: append a zero length value to zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs put --append $DIR.a= &&
+	flux kvs get $DIR.a >empty.output &&
+	test_cmp /dev/null empty.output
+'
+
+#
 # get corner case tests
 #
 
