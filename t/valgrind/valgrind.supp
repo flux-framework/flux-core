@@ -47,16 +47,11 @@
    <ipaddr_getprimary>
    Memcheck:Leak
    fun:malloc
-   obj:*
-   obj:*
-   obj:*
-   obj:*
+   ...
    fun:gaih_inet.constprop.5
    fun:getaddrinfo
    fun:ipaddr_getprimary
-   fun:calc_endpoint.isra.8
-   fun:boot_pmi
-   fun:main
+   ...
 }
 {
    <libdl_lookup_symbol_x>
