@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <jansson.h>
 
+#include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libtap/tap.h"
 #include "src/modules/kvs/waitqueue.h"
@@ -41,17 +42,28 @@ void cache_tests (void)
 void cache_entry_basic_tests (void)
 {
     struct cache_entry *e;
+    json_t *o;
     char *data;
 
     /* corner case tests */
-    ok (cache_entry_set_json (NULL, NULL) < 0
-        && errno == EINVAL,
-        "cache_entry_set_json fails with EINVAL with bad input");
+
     cache_entry_destroy (NULL);
     diag ("cache_entry_destroy accept NULL arg");
 
+    ok (cache_entry_set_treeobj (NULL, NULL) < 0
+        && errno == EINVAL,
+        "cache_entry_set_treeobj fails with EINVAL with bad input");
+
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create success");
+
+    o = json_string ("yabadabadoo");
+
+    ok (cache_entry_set_treeobj (e, o) < 0
+        && errno == EINVAL,
+        "cache_entry_set_treeobj fails with EINVAL with non-treeobj json");
+
+    json_decref (o);
 
     data = strdup ("abcd");
 
@@ -104,11 +116,10 @@ void cache_entry_raw_tests (void)
     ok (cache_entry_set_raw (e, NULL, 0) < 0 && errno == EBADE,
         "cache_entry_set_raw fails with EBADE, changing validity type");
 
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    /* cache_entry_set_json will json_decref o1 */
-    ok (cache_entry_set_json (e, o1) == 0,
-        "cache_entry_set_json, silent success");
+    o1 = treeobj_create_val ("foo", 3);
+    /* cache_entry_set_treeobj will json_decref o1 */
+    ok (cache_entry_set_treeobj (e, o1) == 0,
+        "cache_entry_set_treeobj, silent success");
     o1 = NULL;
 
     ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
@@ -158,12 +169,10 @@ void cache_entry_raw_tests (void)
         "cache_entry_set_raw fails with EBADE, changing validity type");
     free (data);
 
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    /* cache_entry_set_json will json_decref o1 */
-    ok (cache_entry_set_json (e, o1) < 0
+    o1 = treeobj_create_val ("foo", 3);
+    ok (cache_entry_set_treeobj (e, o1) < 0
         && errno == EBADE,
-        "cache_entry_set_json fails with EBADE, changing validity type");
+        "cache_entry_set_treeobj fails with EBADE, changing validity type");
     json_decref (o1);
     o1 = NULL;
 
@@ -178,23 +187,21 @@ void cache_entry_raw_tests (void)
     e = NULL;
 }
 
-void cache_entry_json_tests (void)
+void cache_entry_treeobj_tests (void)
 {
     struct cache_entry *e;
-    json_t *otmp, *o1, *o2;
+    json_t *otmp, *o1, *o2, *otest;
     char *data;
 
     /* Play with one entry.
-     * N.B.: json ref is NOT incremented by create or get_json.
+     * N.B.: json ref is NOT incremented by create or get_treeobj.
      */
 
-    /* test empty cache entry later filled with json.
+    /* test empty cache entry later filled with treeobj.
      */
 
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
-    o2 = json_object ();
-    json_object_set_new (o2, "foo", json_integer (42));
+    o1 = treeobj_create_val ("foo", 3);
+    o2 = treeobj_create_val ("foo", 3);
 
     data = strdup ("abcd");
 
@@ -208,18 +215,18 @@ void cache_entry_json_tests (void)
         "cache_entry_set_dirty fails b/c entry non-valid");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry does not set dirty, b/c no data");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL, no json set");
-    ok (cache_entry_set_json (e, o1) == 0,
-        "cache_entry_set_json success");
+    ok ((otmp = cache_entry_get_treeobj (e)) == NULL,
+        "cache_entry_get_treeobj returns NULL, no treeobj set");
+    ok (cache_entry_set_treeobj (e, o1) == 0,
+        "cache_entry_set_treeobj success");
 
-    /* cache_entry_set_json will json_decref o2 */
-    ok (cache_entry_set_json (e, o2) == 0,
-        "cache_entry_set_json again, silent success");
+    /* cache_entry_set_treeobj will json_decref o2 */
+    ok (cache_entry_set_treeobj (e, o2) == 0,
+        "cache_entry_set_treeobj again, silent success");
     o2 = NULL;
 
     ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_json call");
+        "cache entry now valid after cache_entry_set_treeobj call");
 
     /* cache_entry_set_raw will free data */
     ok (cache_entry_set_raw (e, data, 4) == 0,
@@ -249,25 +256,25 @@ void cache_entry_json_tests (void)
     ok (cache_entry_get_dirty (e) == false,
         "cache entry succcessfully now not dirty");
 
-    ok ((o2 = cache_entry_get_json (e)) != NULL,
-        "json retrieved from cache entry");
-    ok ((otmp = json_object_get (o2, "foo")) != NULL,
-        "json_object_get success");
-    ok (json_integer_value (otmp) == 42,
-        "expected json object found");
+    ok ((otmp = cache_entry_get_treeobj (e)) != NULL,
+        "treeobj retrieved from cache entry");
+    otest = treeobj_create_val ("foo", 3);
+    ok (json_equal (otmp, otest) == 1,
+        "expected treeobj object returned");
+    json_decref (otest);
 
     cache_entry_destroy (e); /* destroys o1 */
     e = NULL;
 }
 
-void cache_entry_raw_and_json_tests (void)
+void cache_entry_raw_and_treeobj_tests (void)
 {
     struct cache_entry *e;
-    json_t *o1, *otmp;
+    json_t *o1, *otmp, *otest;
     char *data, *datatmp;
     int len;
 
-    /* test cache entry filled with raw data that is not valid json
+    /* test cache entry filled with raw data that is not valid treeobj
      */
 
     data = strdup ("foo");
@@ -276,8 +283,8 @@ void cache_entry_raw_and_json_tests (void)
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL for non-json raw data");
+    ok ((otmp = cache_entry_get_treeobj (e)) == NULL,
+        "cache_entry_get_treeobj returns NULL for non-treeobj raw data");
     cache_entry_destroy (e);
 
     /* test cache entry filled with zero length raw data */
@@ -286,41 +293,44 @@ void cache_entry_raw_and_json_tests (void)
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
-    ok ((otmp = cache_entry_get_json (e)) == NULL,
-        "cache_entry_get_json returns NULL for zero length raw data");
+    ok ((otmp = cache_entry_get_treeobj (e)) == NULL,
+        "cache_entry_get_treeobj returns NULL for zero length raw data");
     cache_entry_destroy (e);
 
     /* test cache entry filled with raw data that happens to be valid
-     * json
+     * treeobj
      */
 
-    data = strdup ("\"foo\"");
+    o1 = treeobj_create_val ("foo", 3);
+    data = strdup (treeobj_encode (o1));
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, data, strlen (data)) == 0,
         "cache_entry_set_raw success");
-    ok ((otmp = cache_entry_get_json (e)) != NULL,
-        "cache_entry_get_json returns non-NULL for json-legal raw data");
-    o1 = json_string ("foo");
-    ok (json_equal (o1, otmp) == true,
-        "json returned from cache entry correct");
+    ok ((otmp = cache_entry_get_treeobj (e)) != NULL,
+        "cache_entry_get_treeobj returns non-NULL for treeobj-legal raw data");
+    otest = treeobj_create_val ("foo", 3);
+    ok (json_equal (otmp, otest) == true,
+        "treeobj returned from cache entry correct");
+    json_decref (o1);
     cache_entry_destroy (e);
 
-    /* test cache entry filled with json and get raw data */
+    /* test cache entry filled with treeobj and get raw data */
 
-    o1 = json_string ("abcd");
+    o1 = treeobj_create_val ("abcd", 3);
+    data = treeobj_encode (o1);
 
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_set_json (e, o1) == 0,
-        "cache_entry_set_json success");
+    ok (cache_entry_set_treeobj (e, o1) == 0,
+        "cache_entry_set_treeobj success");
     ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
-        "cache_entry_get_raw returns success for get json raw data");
-    ok (datatmp && strcmp (datatmp, "\"abcd\"") == 0,
-        "raw data matches expected string version of json");
-    ok (datatmp && (len == strlen ("\"abcd\"")),
-        "raw data length matches expected length of json string");
+        "cache_entry_get_raw returns success for get treeobj raw data");
+    ok (datatmp && strcmp (datatmp, data) == 0,
+        "raw data matches expected string version of treeobj");
+    ok (datatmp && (len == strlen (data)),
+        "raw data length matches expected length of treeobj string");
     cache_entry_destroy (e);
 }
 
@@ -415,7 +425,7 @@ void waiter_raw_tests (void)
     e = NULL;
 }
 
-void waiter_json_tests (void)
+void waiter_treeobj_tests (void)
 {
     struct cache_entry *e;
     json_t *o;
@@ -436,12 +446,11 @@ void waiter_json_tests (void)
         "cache_entry_clear_dirty returns error, b/c no object set");
     ok (cache_entry_force_clear_dirty (e) < 0,
         "cache_entry_force_clear_dirty returns error, b/c no object set");
-    o = json_object ();
-    json_object_set_new (o, "foo", json_integer (42));
+    o = treeobj_create_val ("foo", 3);
     ok (cache_entry_wait_valid (e, w) == 0,
         "cache_entry_wait_valid success");
-    ok (cache_entry_set_json (e, o) == 0,
-        "cache_entry_set_json success");
+    ok (cache_entry_set_treeobj (e, o) == 0,
+        "cache_entry_set_treeobj success");
     ok (cache_entry_get_valid (e) == true,
         "cache entry set valid with one waiter");
     ok (count == 1,
@@ -523,9 +532,9 @@ void cache_remove_entry_tests (void)
         "cache_entry_wait_valid success");
     ok (cache_remove_entry (cache, "remove-ref") == 0,
         "cache_remove_entry failed on valid waiter");
-    o = json_string ("foobar");
-    ok (cache_entry_set_json (e, o) == 0,
-        "cache_entry_set_json success");
+    o = treeobj_create_val ("foobar", 6);
+    ok (cache_entry_set_treeobj (e, o) == 0,
+        "cache_entry_set_treeobj success");
     ok (cache_entry_get_valid (e) == true,
         "cache entry set valid with one waiter");
     ok (count == 1,
@@ -538,11 +547,11 @@ void cache_remove_entry_tests (void)
     count = 0;
     ok ((w = wait_create (wait_cb, &count)) != NULL,
         "wait_create works");
-    o = json_string ("foobar");
+    o = treeobj_create_val ("foobar", 6);
     ok ((e = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_set_json (e, o) == 0,
-        "cache_entry_set_json success");
+    ok (cache_entry_set_treeobj (e, o) == 0,
+        "cache_entry_set_treeobj success");
     cache_insert (cache, "remove-ref", e);
     ok (cache_lookup (cache, "remove-ref", 0) != NULL,
         "cache_lookup verify entry exists");
@@ -573,9 +582,8 @@ void cache_expiration_tests (void)
     tstat_t ts;
     int size, incomplete, dirty;
     json_t *o1;
-    json_t *o2;
-    json_t *o3;
     json_t *otmp;
+    json_t *otest;
 
     /* Put entry in cache and test lookup, expire
      */
@@ -584,7 +592,7 @@ void cache_expiration_tests (void)
     ok (cache_count_entries (cache) == 0,
         "cache contains 0 entries");
 
-    /* first test w/ entry w/o json object */
+    /* first test w/ entry w/o treeobj object */
     ok ((e1 = cache_entry_create ()) != NULL,
         "cache_entry_create works");
     cache_insert (cache, "xxx1", e1);
@@ -592,23 +600,23 @@ void cache_expiration_tests (void)
         "cache contains 1 entry after insert");
     ok (cache_lookup (cache, "yyy1", 0) == NULL,
         "cache_lookup of wrong hash fails");
-    ok (cache_lookup_and_get_json (cache, "yyy1", 0) == NULL,
-        "cache_lookup_and_get_json of wrong hash fails");
+    ok (cache_lookup_and_get_treeobj (cache, "yyy1", 0) == NULL,
+        "cache_lookup_and_get_treeobj of wrong hash fails");
     ok ((e2 = cache_lookup (cache, "xxx1", 42)) != NULL,
         "cache_lookup of correct hash works (last use=42)");
-    ok (cache_lookup_and_get_json (cache, "xxx1", 0) == NULL,
-        "cache_lookup_and_get_json of correct hash, but non valid entry fails");
-    ok (cache_entry_get_json (e2) == NULL,
-        "no json object found");
+    ok (cache_lookup_and_get_treeobj (cache, "xxx1", 0) == NULL,
+        "cache_lookup_and_get_treeobj of correct hash, but non valid entry fails");
+    ok (cache_entry_get_treeobj (e2) == NULL,
+        "no treeobj object found");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
     memset (&ts, 0, sizeof (ts));
     ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
         "cache_get_stats works");
-    ok (ts.n == 0, "cache w/ entry w/o json, ts.n == 0");
-    ok (size == 0, "cache w/ entry w/o json, size == 0");
-    ok (incomplete == 1, "cache w/ entry w/o json, incomplete == 1");
-    ok (dirty == 0, "cache w/ entry w/o json, dirty == 0");
+    ok (ts.n == 0, "cache w/ entry w/o data, ts.n == 0");
+    ok (size == 0, "cache w/ entry w/o data, size == 0");
+    ok (incomplete == 1, "cache w/ entry w/o data, incomplete == 1");
+    ok (dirty == 0, "cache w/ entry w/o data, dirty == 0");
     ok (cache_expire_entries (cache, 43, 1) == 0,
         "cache_expire_entries now=43 thresh=1 expired 0 b/c entry invalid");
     ok (cache_count_entries (cache) == 1,
@@ -618,13 +626,12 @@ void cache_expiration_tests (void)
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
 
-    /* second test w/ entry with json object */
-    o1 = json_object ();
-    json_object_set_new (o1, "foo", json_integer (42));
+    /* second test w/ entry with treeobj object */
+    o1 = treeobj_create_val ("foo", 3);
     ok ((e3 = cache_entry_create ()) != NULL,
         "cache_entry_create works");
-    ok (cache_entry_set_json (e3, o1) == 0,
-        "cache_entry_set_json success");
+    ok (cache_entry_set_treeobj (e3, o1) == 0,
+        "cache_entry_set_treeobj success");
     cache_insert (cache, "xxx2", e3);
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries after insert");
@@ -632,28 +639,26 @@ void cache_expiration_tests (void)
         "cache_lookup of wrong hash fails");
     ok ((e4 = cache_lookup (cache, "xxx2", 42)) != NULL,
         "cache_lookup of correct hash works (last use=42)");
-    ok ((o2 = cache_entry_get_json (e4)) != NULL,
-        "cache_entry_get_json found entry");
-    ok ((otmp = json_object_get (o2, "foo")) != NULL,
-        "json_object_get success");
-    ok (json_integer_value (otmp) == 42,
-        "expected json object found");
-    ok ((o3 = cache_lookup_and_get_json (cache, "xxx2", 0)) != NULL,
-        "cache_lookup_and_get_json of correct hash and valid entry works");
-    ok ((otmp = json_object_get (o3, "foo")) != NULL,
-        "json_object_get success");
-    ok (json_integer_value (otmp) == 42,
-        "expected json object found");
+    ok ((otmp = cache_entry_get_treeobj (e4)) != NULL,
+        "cache_entry_get_treeobj found entry");
+    otest = treeobj_create_val ("foo", 3);
+    ok (json_equal (otmp, otest) == 1,
+        "expected treeobj object found");
+    ok ((otmp = cache_lookup_and_get_treeobj (cache, "xxx2", 0)) != NULL,
+        "cache_lookup_and_get_treeobj of correct hash and valid entry works");
+    ok (json_equal (otmp, otest) == 1,
+        "expected treeobj object found");
+    json_decref (otest);
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
 
     memset (&ts, 0, sizeof (ts));
     ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
         "cache_get_stats works");
-    ok (ts.n == 1, "cache w/ entry w/ json, ts.n == 1");
-    ok (size != 0, "cache w/ entry w/ json, size != 0");
-    ok (incomplete == 1, "cache w/ entry w/ json, incomplete == 1");
-    ok (dirty == 0, "cache w/ entry w/ json, dirty == 0");
+    ok (ts.n == 1, "cache w/ entry w/ data, ts.n == 1");
+    ok (size != 0, "cache w/ entry w/ data, size != 0");
+    ok (incomplete == 1, "cache w/ entry w/ data, incomplete == 1");
+    ok (dirty == 0, "cache w/ entry w/ data, dirty == 0");
 
     ok (cache_entry_set_dirty (e4, true)  == 0,
         "cache_entry_set_dirty success");
@@ -661,10 +666,10 @@ void cache_expiration_tests (void)
     memset (&ts, 0, sizeof (ts));
     ok (cache_get_stats (cache, &ts, &size, &incomplete, &dirty) == 0,
         "cache_get_stats works");
-    ok (ts.n == 1, "cache w/ entry w/ dirty json, ts.n == 1");
-    ok (size != 0, "cache w/ entry w/ dirty json, size != 0");
-    ok (incomplete == 1, "cache w/ entry w/ dirty json, incomplete == 1");
-    ok (dirty == 1, "cache w/ entry w/ dirty json, dirty == 1");
+    ok (ts.n == 1, "cache w/ entry w/ dirty data, ts.n == 1");
+    ok (size != 0, "cache w/ entry w/ dirty data, size != 0");
+    ok (incomplete == 1, "cache w/ entry w/ dirty data, incomplete == 1");
+    ok (dirty == 1, "cache w/ entry w/ dirty data, dirty == 1");
 
     ok (cache_entry_set_dirty (e4, false) == 0,
         "cache_entry_set_dirty success");
@@ -688,10 +693,10 @@ int main (int argc, char *argv[])
     cache_tests ();
     cache_entry_basic_tests ();
     cache_entry_raw_tests ();
-    cache_entry_json_tests ();
-    cache_entry_raw_and_json_tests ();
+    cache_entry_treeobj_tests ();
+    cache_entry_raw_and_treeobj_tests ();
     waiter_raw_tests ();
-    waiter_json_tests ();
+    waiter_treeobj_tests ();
     cache_expiration_tests ();
     cache_remove_entry_tests ();
 

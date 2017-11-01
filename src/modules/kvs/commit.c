@@ -159,7 +159,7 @@ const char *commit_get_newroot_ref (commit_t *c)
  * blobref in the cache, any waiters for a valid cache entry would
  * have been satisfied when the dirty cache entry was put onto
  * this dirty cache list (i.e. in store_cache() below when
- * cache_entry_set_json() was called).
+ * cache_entry_set_treeobj() was called).
  */
 void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
 {
@@ -198,7 +198,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
  * Object reference is still owned by the caller.
  * 'is_raw' indicates this data is a json string w/ base64 value and
  * should be flushed to the content store as raw data after it is
- * decoded.
+ * decoded.  Otherwise, the json object should be a treeobj.
  * Returns -1 on error, 0 on success entry already there, 1 on success
  * entry needs to be flushed to content store
  */
@@ -267,7 +267,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
         else {
             json_incref (o);
-            if (cache_entry_set_json (hp, o) < 0) {
+            if (cache_entry_set_treeobj (hp, o) < 0) {
                 int ret;
                 saved_errno = errno;
                 json_decref (o);
@@ -577,9 +577,9 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto done;
             }
 
-            if (!(subdir = cache_lookup_and_get_json (c->cm->cache,
-                                                      ref,
-                                                      current_epoch))) {
+            if (!(subdir = cache_lookup_and_get_treeobj (c->cm->cache,
+                                                         ref,
+                                                         current_epoch))) {
                 *missing_ref = ref;
                 goto success; /* stall */
             }
@@ -701,9 +701,9 @@ commit_process_t commit_process (commit_t *c,
 
             c->state = COMMIT_STATE_LOAD_ROOT;
 
-            if (!(rootdir = cache_lookup_and_get_json (c->cm->cache,
-                                                       rootdir_ref,
-                                                       current_epoch))) {
+            if (!(rootdir = cache_lookup_and_get_treeobj (c->cm->cache,
+                                                          rootdir_ref,
+                                                          current_epoch))) {
                 if (zlist_push (c->missing_refs_list,
                                 (void *)rootdir_ref) < 0) {
                     c->errnum = ENOMEM;

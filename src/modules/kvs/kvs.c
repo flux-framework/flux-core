@@ -1382,8 +1382,8 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                  * no consistency issue by not caching.  We will still
                  * set new root below via setroot().
                  */
-                if (cache_entry_set_json (hp, json_incref (root)) < 0) {
-                    flux_log_error (ctx->h, "%s: cache_entry_set_json",
+                if (cache_entry_set_treeobj (hp, json_incref (root)) < 0) {
+                    flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
                                     __FUNCTION__);
                     json_decref (root);
                 }
@@ -1406,8 +1406,8 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                 flux_log_error (ctx->h, "%s: cache_entry_create",
                                 __FUNCTION__);
             }
-            else if (cache_entry_set_json (hp, json_incref (root)) < 0) {
-                flux_log_error (ctx->h, "%s: cache_entry_set_json",
+            else if (cache_entry_set_treeobj (hp, json_incref (root)) < 0) {
+                flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
                                 __FUNCTION__);
                 json_decref (root);
                 cache_entry_destroy (hp);
@@ -1431,7 +1431,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     if (event_includes_rootdir) {
         struct cache_entry *hp;
         if ((hp = cache_lookup (ctx->cache, ctx->rootdir, ctx->epoch)))
-            root = cache_entry_get_json (hp);
+            root = cache_entry_get_treeobj (hp);
         assert (root != NULL); // root entry is always in cache on rank 0
     }
     else {
@@ -1641,9 +1641,9 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         void *data;
         int len;
         assert (o);
-        if (cache_entry_set_json (hp, o) < 0) {
+        if (cache_entry_set_treeobj (hp, o) < 0) {
             saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_set_json",
+            flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
                             __FUNCTION__);
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);

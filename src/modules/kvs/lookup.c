@@ -256,11 +256,11 @@ static bool walk (lookup_t *lh)
                 lh->missing_ref = refstr;
                 goto stall;
             }
-            if (!(dir = cache_entry_get_json (hp))) {
-                /* dirref pointed to non json error, special case when
+            if (!(dir = cache_entry_get_treeobj (hp))) {
+                /* dirref pointed to non treeobj error, special case when
                  * root_dirent is bad, is EINVAL from user.
                  */
-                flux_log (lh->h, LOG_ERR, "dirref points to non-json");
+                flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
                 if (wl->depth == 0 && wl->dirent == lh->root_dirent)
                     lh->errnum = EINVAL;
                 else
@@ -812,8 +812,9 @@ bool lookup (lookup_t *lh)
                         lh->missing_ref = lh->root_ref;
                         goto stall;
                     }
-                    if (!(valtmp = cache_entry_get_json (hp))) {
-                        flux_log (lh->h, LOG_ERR, "root_ref points to non-json");
+                    if (!(valtmp = cache_entry_get_treeobj (hp))) {
+                        flux_log (lh->h, LOG_ERR,
+                                  "root_ref points to non-treeobj");
                         lh->errnum = EINVAL;
                         goto done;
                     }
@@ -875,8 +876,8 @@ bool lookup (lookup_t *lh)
                     lh->missing_ref = reftmp;
                     goto stall;
                 }
-                if (!(valtmp = cache_entry_get_json (hp))) {
-                    flux_log (lh->h, LOG_ERR, "dirref points to non-json");
+                if (!(valtmp = cache_entry_get_treeobj (hp))) {
+                    flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
                     lh->errnum = ENOTRECOVERABLE;
                     goto done;
                 }
