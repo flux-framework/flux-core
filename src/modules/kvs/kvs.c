@@ -1421,7 +1421,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
 {
-    json_t *root = NULL;
+    const json_t *root = NULL;
     json_t *nullobj = NULL;
     flux_msg_t *msg = NULL;
     int saved_errno, rc = -1;
