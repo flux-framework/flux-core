@@ -357,6 +357,34 @@ void test_dir (void)
     json_decref (dir);
 }
 
+void test_dir_peek (void)
+{
+    json_t *dir;
+    json_t *val = NULL;
+    const json_t *result;
+
+    ok (treeobj_peek_entry (NULL, NULL) == NULL,
+        "treeobj_peek_entry fails on bad input");
+
+    /* create test value */
+    val = treeobj_create_val ("foo", 4);
+    if (!val)
+        BAIL_OUT ("can't continue without test values");
+
+    ok ((dir = treeobj_create_dir ()) != NULL,
+        "treeobj_create_dir works");
+
+    ok (treeobj_insert_entry (dir, "foo", val) == 0,
+        "treeobj_insert_entry works");
+    ok ((result = treeobj_peek_entry (dir, "foo")) != NULL,
+        "treeobj_peek_entry works");
+    ok (result == val,
+        "treeobj_peek_entry returns correct pointer");
+
+    json_decref (val);
+    json_decref (dir);
+}
+
 void test_copy (void)
 {
     json_t *val, *symlink, *dirref, *valref, *dir;
@@ -715,6 +743,7 @@ int main(int argc, char** argv)
     test_val ();
     test_dirref ();
     test_dir ();
+    test_dir_peek ();
     test_copy ();
     test_deep_copy ();
     test_symlink ();

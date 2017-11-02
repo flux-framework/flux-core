@@ -69,6 +69,12 @@ json_t *treeobj_get_entry (json_t *obj, const char *name);
 int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2);
 int treeobj_delete_entry (json_t *obj, const char *name);
 
+/* peek directory entry
+ * identical to treeobj_get_entry(), but is a const equivalent.  Good
+ * to use when modifications will not occur.
+ */
+const json_t *treeobj_peek_entry (const json_t *obj, const char *name);
+
 /* Shallow copy a treeobj
  * Note that this is not a shallow copy on the json object, but is a
  * shallow copy on the data within a tree object.  For example, for a

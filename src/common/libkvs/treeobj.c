@@ -292,6 +292,23 @@ int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2)
     return 0;
 }
 
+const json_t *treeobj_peek_entry (const json_t *obj, const char *name)
+{
+    const char *type;
+    const json_t *data, *obj2;
+
+    if (treeobj_peek (obj, &type, &data) < 0
+            || strcmp (type, "dir") != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(obj2 = json_object_get (data, name))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return obj2;
+}
+
 json_t *treeobj_copy (json_t *obj)
 {
     json_t *data;
