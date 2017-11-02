@@ -177,6 +177,24 @@ json_t *treeobj_get_data (json_t *obj)
     return data;
 }
 
+const char *treeobj_get_symlink (const json_t *obj)
+{
+    const char *type;
+    const json_t *data;
+    const char *str;
+
+    if (treeobj_peek (obj, &type, &data) < 0
+            || strcmp (type, "symlink") != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(str = json_string_value (data))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return str;
+}
+
 int treeobj_decode_val (const json_t *obj, void **dp, int *lp)
 {
     const char *type, *xdatastr;

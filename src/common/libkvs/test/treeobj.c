@@ -626,6 +626,7 @@ void test_deep_copy (void)
 void test_symlink (void)
 {
     json_t *o, *data;
+    const char *str;
 
     ok (treeobj_create_symlink (NULL) == NULL
         && errno == EINVAL,
@@ -640,6 +641,12 @@ void test_symlink (void)
         "treeobj_get_data returned string");
     ok (!strcmp (json_string_value (data), "a.b.c"),
         "and string has right content");
+    ok (treeobj_get_symlink (NULL) == NULL,
+        "treeobj_get_symlink fails on bad input");
+    ok ((str = treeobj_get_symlink (o)) != NULL,
+        "treeobj_get_symlink works");
+    ok (!strcmp (str, "a.b.c"),
+        "treeobj_get_symlink returns correct string");
     json_decref (o);
 }
 

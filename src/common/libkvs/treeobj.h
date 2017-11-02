@@ -45,6 +45,10 @@ bool treeobj_is_dirref (const json_t *obj);
  */
 json_t *treeobj_get_data (json_t *obj);
 
+/* get convenience functions, operate on type specific objects
+ */
+const char *treeobj_get_symlink (const json_t *obj);
+
 /* get decoded val data.
  * If len == 0, data will be NULL.
  * If len > 0, data will be followed by an extra NULL byte in memory.
