@@ -590,7 +590,7 @@ void test_symlink (void)
     ok (treeobj_is_symlink (o),
         "treeobj_is_symlink returns true");
     ok ((data = treeobj_get_data (o)) != NULL && json_is_string (data),
-        "treobj_get_data returned string");
+        "treeobj_get_data returned string");
     ok (!strcmp (json_string_value (data), "a.b.c"),
         "and string has right content");
     json_decref (o);
