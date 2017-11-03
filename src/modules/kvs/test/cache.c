@@ -84,7 +84,8 @@ void cache_entry_raw_tests (void)
 {
     struct cache_entry *e;
     json_t *o1;
-    char *data, *data2, *datatmp;
+    char *data, *data2;
+    const char *datatmp;
     int len;
 
     /* test empty cache entry later filled with raw data.
@@ -122,7 +123,7 @@ void cache_entry_raw_tests (void)
         "cache_entry_set_treeobj, silent success");
     o1 = NULL;
 
-    ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
+    ok (cache_entry_get_raw (e, (const void **)&datatmp, &len) == 0,
         "raw data retrieved from cache entry");
     ok (datatmp && strcmp (datatmp, data) == 0,
         "raw data matches expected string");
@@ -176,7 +177,7 @@ void cache_entry_raw_tests (void)
     json_decref (o1);
     o1 = NULL;
 
-    ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
+    ok (cache_entry_get_raw (e, (const void **)&datatmp, &len) == 0,
         "raw data retrieved from cache entry");
     ok (datatmp == NULL,
         "raw data is NULL");
@@ -274,7 +275,8 @@ void cache_entry_raw_and_treeobj_tests (void)
     struct cache_entry *e;
     json_t *o1, *otest;
     const json_t *otmp;
-    char *data, *datatmp;
+    char *data;
+    const char *datatmp;
     int len;
 
     /* test cache entry filled with raw data that is not valid treeobj
@@ -329,7 +331,7 @@ void cache_entry_raw_and_treeobj_tests (void)
         "cache_entry_create works");
     ok (cache_entry_set_treeobj (e, o1) == 0,
         "cache_entry_set_treeobj success");
-    ok (cache_entry_get_raw (e, (void **)&datatmp, &len) == 0,
+    ok (cache_entry_get_raw (e, (const void **)&datatmp, &len) == 0,
         "cache_entry_get_raw returns success for get treeobj raw data");
     ok (datatmp && strcmp (datatmp, data) == 0,
         "raw data matches expected string version of treeobj");

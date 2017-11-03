@@ -166,7 +166,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
     if (c->state == COMMIT_STATE_STORE
         || c->state == COMMIT_STATE_PRE_FINISHED) {
         href_t ref;
-        void *data;
+        const void *data;
         int len;
         int ret;
 

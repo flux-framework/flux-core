@@ -137,7 +137,8 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp)
     return -1;
 }
 
-int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len)
+int cache_entry_get_raw (struct cache_entry *hp, const void **data,
+                         int *len)
 {
     if (!hp || !hp->valid)
         return -1;
