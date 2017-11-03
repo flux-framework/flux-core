@@ -344,13 +344,14 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
         }
         else if (treeobj_is_val (dir_entry)) {
             json_t *val_data;
-            size_t size;
+            const char *str;
 
             if (!(val_data = treeobj_get_data (dir_entry)))
                 return -1;
-            if (kvs_util_json_encoded_size (val_data, &size) < 0)
-                return -1;
-            if (size > BLOBREF_MAX_STRING_SIZE) {
+            /* jansson >= 2.7 could use json_string_length() instead */
+            str = json_string_value (val_data);
+            assert (str);
+            if (strlen (str) > BLOBREF_MAX_STRING_SIZE) {
                 if ((ret = store_cache (c, current_epoch, val_data,
                                         true, ref, &hp)) < 0)
                     return -1;
