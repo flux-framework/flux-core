@@ -236,9 +236,9 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
     }
     else {
-        if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
+        if (treeobj_hash (c->cm->hash_name, o, ref, sizeof (href_t)) < 0) {
             saved_errno = errno;
-            flux_log_error (c->cm->h, "kvs_util_json_hash");
+            flux_log_error (c->cm->h, "treeobj_hash");
             goto done;
         }
     }

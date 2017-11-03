@@ -1622,9 +1622,9 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
     int rc = -1;
     int saved_errno, ret;
 
-    if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
+    if (treeobj_hash (ctx->hash_name, o, ref, sizeof (href_t)) < 0) {
         saved_errno = errno;
-        flux_log_error (ctx->h, "%s: kvs_util_json_hash",
+        flux_log_error (ctx->h, "%s: treeobj_hash",
                         __FUNCTION__);
         goto decref_done;
     }

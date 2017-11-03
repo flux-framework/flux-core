@@ -63,24 +63,10 @@ void test_norm (void)
 int main (int argc, char *argv[])
 {
     json_t *obj;
-    href_t ref;
     char *s1, *s2;
     size_t size;
 
     plan (NO_PLAN);
-
-    obj = json_object ();
-    json_object_set_new (obj, "A", json_string ("foo"));
-    json_object_set_new (obj, "B", json_string ("bar"));
-    json_object_set_new (obj, "C", json_string ("cow"));
-
-    ok (kvs_util_json_hash ("sha1", obj, ref) == 0,
-        "kvs_util_json_hash works on sha1");
-
-    ok (kvs_util_json_hash ("foobar", obj, ref) < 0,
-        "kvs_util_json_hash error on bad hash name");
-
-    json_decref (obj);
 
     obj = json_object ();
     json_object_set_new (obj, "A", json_string ("a"));
