@@ -82,7 +82,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
 int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
 
-json_t *cache_entry_get_treeobj (struct cache_entry *hp);
+const json_t *cache_entry_get_treeobj (struct cache_entry *hp);
 int cache_entry_set_treeobj (struct cache_entry *hp, json_t *o);
 
 /* Arrange for message handler represented by 'wait' to be restarted

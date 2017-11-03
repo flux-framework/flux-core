@@ -190,7 +190,8 @@ void cache_entry_raw_tests (void)
 void cache_entry_treeobj_tests (void)
 {
     struct cache_entry *e;
-    json_t *otmp, *o1, *o2, *otest;
+    json_t *o1, *o2, *otest;
+    const json_t *otmp;
     char *data;
 
     /* Play with one entry.
@@ -215,7 +216,7 @@ void cache_entry_treeobj_tests (void)
         "cache_entry_set_dirty fails b/c entry non-valid");
     ok (cache_entry_get_dirty (e) == false,
         "cache entry does not set dirty, b/c no data");
-    ok ((otmp = cache_entry_get_treeobj (e)) == NULL,
+    ok (cache_entry_get_treeobj (e) == NULL,
         "cache_entry_get_treeobj returns NULL, no treeobj set");
     ok (cache_entry_set_treeobj (e, o1) == 0,
         "cache_entry_set_treeobj success");
@@ -259,7 +260,8 @@ void cache_entry_treeobj_tests (void)
     ok ((otmp = cache_entry_get_treeobj (e)) != NULL,
         "treeobj retrieved from cache entry");
     otest = treeobj_create_val ("foo", 3);
-    ok (json_equal (otmp, otest) == 1,
+    /* XXX - json_equal takes const in jansson > 2.10 */
+    ok (json_equal ((json_t *)otmp, otest) == 1,
         "expected treeobj object returned");
     json_decref (otest);
 
@@ -270,7 +272,8 @@ void cache_entry_treeobj_tests (void)
 void cache_entry_raw_and_treeobj_tests (void)
 {
     struct cache_entry *e;
-    json_t *o1, *otmp, *otest;
+    json_t *o1, *otest;
+    const json_t *otmp;
     char *data, *datatmp;
     int len;
 
@@ -283,7 +286,7 @@ void cache_entry_raw_and_treeobj_tests (void)
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, data, strlen (data) + 1) == 0,
         "cache_entry_set_raw success");
-    ok ((otmp = cache_entry_get_treeobj (e)) == NULL,
+    ok (cache_entry_get_treeobj (e) == NULL,
         "cache_entry_get_treeobj returns NULL for non-treeobj raw data");
     cache_entry_destroy (e);
 
@@ -293,7 +296,7 @@ void cache_entry_raw_and_treeobj_tests (void)
         "cache_entry_create works");
     ok (cache_entry_set_raw (e, NULL, 0) == 0,
         "cache_entry_set_raw success");
-    ok ((otmp = cache_entry_get_treeobj (e)) == NULL,
+    ok (cache_entry_get_treeobj (e) == NULL,
         "cache_entry_get_treeobj returns NULL for zero length raw data");
     cache_entry_destroy (e);
 
@@ -311,7 +314,8 @@ void cache_entry_raw_and_treeobj_tests (void)
     ok ((otmp = cache_entry_get_treeobj (e)) != NULL,
         "cache_entry_get_treeobj returns non-NULL for treeobj-legal raw data");
     otest = treeobj_create_val ("foo", 3);
-    ok (json_equal (otmp, otest) == true,
+    /* XXX - json_equal takes const in jansson > 2.10 */
+    ok (json_equal ((json_t *)otmp, otest) == true,
         "treeobj returned from cache entry correct");
     json_decref (o1);
     cache_entry_destroy (e);
@@ -582,8 +586,8 @@ void cache_expiration_tests (void)
     tstat_t ts;
     int size, incomplete, dirty;
     json_t *o1;
-    json_t *otmp;
     json_t *otest;
+    const json_t *otmp;
 
     /* Put entry in cache and test lookup, expire
      */
@@ -638,7 +642,8 @@ void cache_expiration_tests (void)
     ok ((otmp = cache_entry_get_treeobj (e4)) != NULL,
         "cache_entry_get_treeobj found entry");
     otest = treeobj_create_val ("foo", 3);
-    ok (json_equal (otmp, otest) == 1,
+    /* XXX - json_equal takes const in jansson > 2.10 */
+    ok (json_equal ((json_t *)otmp, otest) == 1,
         "expected treeobj object found");
     json_decref (otest);
     ok (cache_count_entries (cache) == 2,

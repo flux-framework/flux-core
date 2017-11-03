@@ -53,7 +53,7 @@
 typedef struct {
     int depth;
     char *path_copy;            /* for internal parsing, do not use */
-    json_t *dirent;
+    const json_t *dirent;
     zlist_t *pathcomps;
 } walk_level_t;
 
@@ -82,7 +82,7 @@ struct lookup {
     /* if valref_missing_refs is true, iterate on refs, else
      * return missing_ref string.
      */
-    json_t *valref_missing_refs;
+    const json_t *valref_missing_refs;
     const char *missing_ref;
 
     int errnum;                 /* errnum if error */
@@ -91,7 +91,7 @@ struct lookup {
     /* API internal */
     json_t *root_dirent;
     zlist_t *levels;
-    json_t *wdirent;       /* result after walk() */
+    const json_t *wdirent;       /* result after walk() */
     enum {
         LOOKUP_STATE_INIT,
         LOOKUP_STATE_CHECK_ROOT,
@@ -219,7 +219,7 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
  */
 static bool walk (lookup_t *lh)
 {
-    json_t *dir;
+    const json_t *dir;
     walk_level_t *wl = NULL;
     char *pathcomp;
 
@@ -299,7 +299,7 @@ static bool walk (lookup_t *lh)
 
         /* Get directory reference of path component from directory */
 
-        if (!(wl->dirent = treeobj_get_entry (dir, pathcomp))) {
+        if (!(wl->dirent = treeobj_peek_entry (dir, pathcomp))) {
             /* if entry does not exist, not necessarily ENOENT error,
              * let caller decide.  If error not ENOENT, return to
              * caller. */
@@ -311,15 +311,12 @@ static bool walk (lookup_t *lh)
         /* Resolve dirent if it is a link */
 
         if (treeobj_is_symlink (wl->dirent)) {
-            json_t *link;
             const char *linkstr;
 
-            if (!(link = treeobj_get_data (wl->dirent))) {
+            if (!(linkstr = treeobj_get_symlink (wl->dirent))) {
                 lh->errnum = errno;
                 goto error;
             }
-
-            linkstr = json_string_value (link);
 
             /* Follow link if in middle of path or if end of path,
              * flags say we can follow it
@@ -779,7 +776,7 @@ done:
 
 bool lookup (lookup_t *lh)
 {
-    json_t *valtmp = NULL;
+    const json_t *valtmp = NULL;
     const char *reftmp;
     struct cache_entry *hp;
     int refcount;
@@ -823,7 +820,10 @@ bool lookup (lookup_t *lh)
                         lh->errnum = ENOTRECOVERABLE;
                         goto done;
                     }
-                    lh->val = json_incref (valtmp);
+                    if (!(lh->val = treeobj_deep_copy (valtmp))) {
+                        lh->errnum = errno;
+                        goto done;
+                    }
                 }
                 goto done;
             }
@@ -844,7 +844,8 @@ bool lookup (lookup_t *lh)
             /* fallthrough */
         case LOOKUP_STATE_VALUE:
             if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                lh->val = json_incref (lh->wdirent);
+                if (!(lh->val = treeobj_deep_copy (lh->wdirent)))
+                    lh->errnum = errno;
                 goto done;
             }
 
@@ -886,7 +887,10 @@ bool lookup (lookup_t *lh)
                     lh->errnum = ENOTRECOVERABLE;
                     goto done;
                 }
-                lh->val = json_incref (valtmp);
+                if (!(lh->val = treeobj_deep_copy (valtmp))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
             } else if (treeobj_is_valref (lh->wdirent)) {
                 bool stall;
 
@@ -931,7 +935,10 @@ bool lookup (lookup_t *lh)
                     lh->errnum = EISDIR;
                     goto done;
                 }
-                lh->val = json_incref (lh->wdirent);
+                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
             } else if (treeobj_is_val (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
                     lh->errnum = EINVAL;
@@ -941,7 +948,10 @@ bool lookup (lookup_t *lh)
                     lh->errnum = ENOTDIR;
                     goto done;
                 }
-                lh->val = json_incref (lh->wdirent);
+                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
             } else if (treeobj_is_symlink (lh->wdirent)) {
                 /* this should be "impossible" */
                 if (!(lh->flags & FLUX_KVS_READLINK)) {
@@ -952,7 +962,10 @@ bool lookup (lookup_t *lh)
                     lh->errnum = ENOTDIR;
                     goto done;
                 }
-                lh->val = json_incref (lh->wdirent);
+                if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
+                    lh->errnum = errno;
+                    goto done;
+                }
             } else {
                 char *s = json_dumps (lh->wdirent, 0);
                 flux_log (lh->h, LOG_ERR, "%s: corrupt dirent: %s",

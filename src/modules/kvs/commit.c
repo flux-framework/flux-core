@@ -559,6 +559,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else if (treeobj_is_dirref (dir_entry)) {
             struct cache_entry *hp;
             const char *ref;
+            const json_t *subdirtmp;
             int refcount;
 
             if ((refcount = treeobj_get_count (dir_entry)) < 0) {
@@ -584,13 +585,13 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto success; /* stall */
             }
 
-            if (!(subdir = cache_entry_get_treeobj (hp))) {
+            if (!(subdirtmp = cache_entry_get_treeobj (hp))) {
                 saved_errno = ENOTRECOVERABLE;
                 goto done;
             }
 
             /* do not corrupt store by modifying orig. */
-            if (!(subdir = treeobj_copy (subdir))) {
+            if (!(subdir = treeobj_deep_copy (subdirtmp))) {
                 saved_errno = errno;
                 goto done;
             }
@@ -699,7 +700,7 @@ commit_process_t commit_process (commit_t *c,
             /* Make a copy of the root directory.
              */
             struct cache_entry *hp;
-            json_t *rootdir;
+            const json_t *rootdir;
 
             /* Caller didn't call commit_iter_missing_refs() */
             if (zlist_first (c->missing_refs_list))
@@ -725,7 +726,7 @@ commit_process_t commit_process (commit_t *c,
                 return COMMIT_PROCESS_ERROR;
             }
 
-            if (!(c->rootcpy = treeobj_copy (rootdir))) {
+            if (!(c->rootcpy = treeobj_deep_copy (rootdir))) {
                 c->errnum = errno;
                 return COMMIT_PROCESS_ERROR;
             }

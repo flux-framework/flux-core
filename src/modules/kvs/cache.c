@@ -186,7 +186,7 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
     return -1;
 }
 
-json_t *cache_entry_get_treeobj (struct cache_entry *hp)
+const json_t *cache_entry_get_treeobj (struct cache_entry *hp)
 {
     if (!hp || !hp->valid || !hp->data)
         return NULL;

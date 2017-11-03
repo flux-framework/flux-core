@@ -21,19 +21,19 @@ json_t *treeobj_create_dirref (const char *blobref);
 /* Validate treeobj, recursively.
  * Return 0 if valid, -1 with errno = EINVAL if invalid.
  */
-int treeobj_validate (json_t *obj);
+int treeobj_validate (const json_t *obj);
 
 /* get type (RFC 11 defined strings or NULL on error with errno set).
  */
-const char *treeobj_get_type (json_t *obj);
+const char *treeobj_get_type (const json_t *obj);
 
 /* Test for a particular type
  */
-bool treeobj_is_symlink (json_t *obj);
-bool treeobj_is_val (json_t *obj);
-bool treeobj_is_valref (json_t *obj);
-bool treeobj_is_dir (json_t *obj);
-bool treeobj_is_dirref (json_t *obj);
+bool treeobj_is_symlink (const json_t *obj);
+bool treeobj_is_val (const json_t *obj);
+bool treeobj_is_valref (const json_t *obj);
+bool treeobj_is_dir (const json_t *obj);
+bool treeobj_is_dirref (const json_t *obj);
 
 /* get type-specific value.
  * For dirref/valref, this is an array of blobrefs.
@@ -45,12 +45,16 @@ bool treeobj_is_dirref (json_t *obj);
  */
 json_t *treeobj_get_data (json_t *obj);
 
+/* get convenience functions, operate on type specific objects
+ */
+const char *treeobj_get_symlink (const json_t *obj);
+
 /* get decoded val data.
  * If len == 0, data will be NULL.
  * If len > 0, data will be followed by an extra NULL byte in memory.
  * Caller must free returned data.
  */
-int treeobj_decode_val (json_t *obj, void **data, int *len);
+int treeobj_decode_val (const json_t *obj, void **data, int *len);
 
 /* get type-specific count.
  * For dirref/valref, this is the number of blobrefs.
@@ -58,7 +62,7 @@ int treeobj_decode_val (json_t *obj, void **data, int *len);
  * For symlink or val, this is 1.
  * Return count on success, -1 on error with errno = EINVAL.
  */
-int treeobj_get_count (json_t *obj);
+int treeobj_get_count (const json_t *obj);
 
 /* get/add/remove directory entry
  * Get returns JSON object (owned by 'obj', do not destory), NULL on error.
@@ -69,6 +73,12 @@ json_t *treeobj_get_entry (json_t *obj, const char *name);
 int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2);
 int treeobj_delete_entry (json_t *obj, const char *name);
 
+/* peek directory entry
+ * identical to treeobj_get_entry(), but is a const equivalent.  Good
+ * to use when modifications will not occur.
+ */
+const json_t *treeobj_peek_entry (const json_t *obj, const char *name);
+
 /* Shallow copy a treeobj
  * Note that this is not a shallow copy on the json object, but is a
  * shallow copy on the data within a tree object.  For example, for a
@@ -77,7 +87,7 @@ int treeobj_delete_entry (json_t *obj, const char *name);
 json_t *treeobj_copy (json_t *obj);
 
 /* Deep copy a treeobj */
-json_t *treeobj_deep_copy (json_t *obj);
+json_t *treeobj_deep_copy (const json_t *obj);
 
 /* add blobref to dirref,valref object.
  * Return 0 on success, -1 on failure with errno set.
@@ -87,7 +97,7 @@ int treeobj_append_blobref (json_t *obj, const char *blobref);
 /* get blobref entry at 'index'.
  * Return blobref on success, NULL on failure with errno set.
  */
-const char *treeobj_get_blobref (json_t *obj, int index);
+const char *treeobj_get_blobref (const json_t *obj, int index);
 
 /* Create valref that refers to 'data', a blob of 'len' bytes using
  * 'hashtype' hash algorithm (e.g. "sha1").  If 'maxblob' > 0, split the
@@ -102,7 +112,7 @@ json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
  */
 json_t *treeobj_decode (const char *buf);
 json_t *treeobj_decodeb (const char *buf, size_t buflen);
-char *treeobj_encode (json_t *obj);
+char *treeobj_encode (const json_t *obj);
 
 #endif /* !_FLUX_KVS_TREEOBJ_H */
 

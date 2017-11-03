@@ -23,6 +23,7 @@ json_t *create_large_dir (void)
             json_decref (dir);
             return NULL;
         }
+        json_decref (ent);
     }
     return dir;
 }
@@ -356,6 +357,34 @@ void test_dir (void)
     json_decref (dir);
 }
 
+void test_dir_peek (void)
+{
+    json_t *dir;
+    json_t *val = NULL;
+    const json_t *result;
+
+    ok (treeobj_peek_entry (NULL, NULL) == NULL,
+        "treeobj_peek_entry fails on bad input");
+
+    /* create test value */
+    val = treeobj_create_val ("foo", 4);
+    if (!val)
+        BAIL_OUT ("can't continue without test values");
+
+    ok ((dir = treeobj_create_dir ()) != NULL,
+        "treeobj_create_dir works");
+
+    ok (treeobj_insert_entry (dir, "foo", val) == 0,
+        "treeobj_insert_entry works");
+    ok ((result = treeobj_peek_entry (dir, "foo")) != NULL,
+        "treeobj_peek_entry works");
+    ok (result == val,
+        "treeobj_peek_entry returns correct pointer");
+
+    json_decref (val);
+    json_decref (dir);
+}
+
 void test_copy (void)
 {
     json_t *val, *symlink, *dirref, *valref, *dir;
@@ -597,6 +626,7 @@ void test_deep_copy (void)
 void test_symlink (void)
 {
     json_t *o, *data;
+    const char *str;
 
     ok (treeobj_create_symlink (NULL) == NULL
         && errno == EINVAL,
@@ -611,6 +641,12 @@ void test_symlink (void)
         "treeobj_get_data returned string");
     ok (!strcmp (json_string_value (data), "a.b.c"),
         "and string has right content");
+    ok (treeobj_get_symlink (NULL) == NULL,
+        "treeobj_get_symlink fails on bad input");
+    ok ((str = treeobj_get_symlink (o)) != NULL,
+        "treeobj_get_symlink works");
+    ok (!strcmp (str, "a.b.c"),
+        "treeobj_get_symlink returns correct string");
     json_decref (o);
 }
 
@@ -640,8 +676,10 @@ void test_corner_cases (void)
     ok (treeobj_get_count (val) < 0 && errno == EINVAL,
         "treeobj_get_count detects invalid type");
 
-    ok (treeobj_decode (treeobj_encode (val)) == NULL && errno == EPROTO,
+    char *s = treeobj_encode (val);
+    ok (treeobj_decode (s) == NULL && errno == EPROTO,
         "treeobj_decode returns EPROTO on bad treeobj");
+    free (s);
 
     json_decref (val);
 
@@ -712,6 +750,7 @@ int main(int argc, char** argv)
     test_val ();
     test_dirref ();
     test_dir ();
+    test_dir_peek ();
     test_copy ();
     test_deep_copy ();
     test_symlink ();
