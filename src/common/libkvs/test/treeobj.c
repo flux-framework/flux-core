@@ -23,6 +23,7 @@ json_t *create_large_dir (void)
             json_decref (dir);
             return NULL;
         }
+        json_decref (ent);
     }
     return dir;
 }
@@ -640,8 +641,10 @@ void test_corner_cases (void)
     ok (treeobj_get_count (val) < 0 && errno == EINVAL,
         "treeobj_get_count detects invalid type");
 
-    ok (treeobj_decode (treeobj_encode (val)) == NULL && errno == EPROTO,
+    char *s = treeobj_encode (val);
+    ok (treeobj_decode (s) == NULL && errno == EPROTO,
         "treeobj_decode returns EPROTO on bad treeobj");
+    free (s);
 
     json_decref (val);
 
