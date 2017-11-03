@@ -101,6 +101,7 @@ json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
  * The return value of treeobj_encode must be destroyed with free().
  */
 json_t *treeobj_decode (const char *buf);
+json_t *treeobj_decodeb (const char *buf, size_t buflen);
 char *treeobj_encode (json_t *obj);
 
 #endif /* !_FLUX_KVS_TREEOBJ_H */

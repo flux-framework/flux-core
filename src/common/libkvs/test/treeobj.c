@@ -36,23 +36,40 @@ void diag_json (json_t *o)
 
 void test_codec (void)
 {
-    json_t *cpy, *dir = create_large_dir ();
+    json_t *cpy1, *cpy2, *dir = create_large_dir ();
     char *s, *p;
 
     if (!dir)
         BAIL_OUT ("could not create %d-entry dir", large_dir_entries);
+
+    ok (treeobj_decode (NULL) == NULL,
+        "treeobj_decode fails on bad input");
+    ok (treeobj_decodeb (NULL, 0) == NULL,
+        "treeobj_decodeb fails on bad input");
+
     s = treeobj_encode (dir);
     ok (s != NULL,
         "encoded %d-entry dir", large_dir_entries);
     if (!s)
         BAIL_OUT ("could not encode %d-entry dir", large_dir_entries);
-    ok ((cpy = treeobj_decode (s)) != NULL,
-        "decoded %d-entry dir", large_dir_entries);
-    if (!cpy)
+
+    ok ((cpy1 = treeobj_decode (s)) != NULL,
+        "decoded %d-entry dir via treeobj_decode", large_dir_entries);
+    if (!cpy1)
         diag ("%m");
-    if (!cpy)
+
+    ok ((cpy2 = treeobj_decodeb (s, strlen (s))) != NULL,
+        "decoded %d-entry dir via treeobj_decodeb", large_dir_entries);
+    if (!cpy2)
+        diag ("%m");
+
+    ok (json_equal (cpy1, cpy2) == 1,
+        "treeobj_decode and treeobj_decodeb returned identical objects");
+
+    if (!cpy1)
         BAIL_OUT ("could not continue");
-    p = treeobj_encode (cpy);
+
+    p = treeobj_encode (cpy1);
     ok (p != NULL,
         "re-encoded %d-entry dir", large_dir_entries);
     ok (strcmp (p, s) == 0,
@@ -60,7 +77,8 @@ void test_codec (void)
     free (p);
 
     free (s);
-    json_decref (cpy);
+    json_decref (cpy1);
+    json_decref (cpy2);
     json_decref (dir);
 }
 
@@ -590,7 +608,7 @@ void test_symlink (void)
     ok (treeobj_is_symlink (o),
         "treeobj_is_symlink returns true");
     ok ((data = treeobj_get_data (o)) != NULL && json_is_string (data),
-        "treobj_get_data returned string");
+        "treeobj_get_data returned string");
     ok (!strcmp (json_string_value (data), "a.b.c"),
         "and string has right content");
     json_decref (o);

@@ -478,8 +478,17 @@ error:
 
 json_t *treeobj_decode (const char *buf)
 {
+    if (!buf) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return treeobj_decodeb (buf, strlen (buf));
+}
+
+json_t *treeobj_decodeb (const char *buf, size_t buflen)
+{
     json_t *obj = NULL;
-    if (!(obj = json_loads (buf, 0, NULL))
+    if (!(obj = json_loadb (buf, buflen, 0, NULL))
             || treeobj_validate (obj) < 0) {
         errno = EPROTO;
         goto error;

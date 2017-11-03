@@ -13,7 +13,7 @@ struct cache;
 /* Create/destroy cache entry.
  *
  * cache_entry_create() creates an empty cache entry.  Data can be set
- * in an entry via cache_entry_set_raw() or cache_entry_set_json().
+ * in an entry via cache_entry_set_raw() or cache_entry_set_treeobj().
  */
 struct cache_entry *cache_entry_create (void);
 void cache_entry_destroy (void *arg);
@@ -55,15 +55,15 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * if it is non-NULL.  If 'data' is non-NULL, 'len' must be > 0.  If
  * 'data' is NULL, 'len' must be zero.
  *
- * json set accessor is a convenience function that will take a json
+ * treeobj set accessor is a convenience function that will take a treeobj
  * object and extract the raw data string from it and store that in
- * the cache entry.  The json object 'o' is also cached internally for
+ * the cache entry.  The treeobj object 'o' is also cached internally for
  * later retrieval.  The create transfers ownership of 'o' to the
  * cache entry. 'o' must be non-NULL.
  *
- * json get accessor is a convenience function that will return the
- * json object equivalent of the raw data stored internally.  If the
- * internal raw data is not a valid json object (i.e. improperly
+ * treeobj get accessor is a convenience function that will return the
+ * treeobj object equivalent of the raw data stored internally.  If the
+ * internal raw data is not a valid treeobj object (i.e. improperly
  * formatted or zero length), an error will be result.
  *
  * An invalid->valid transition runs the entry's wait queue, if any in
@@ -72,18 +72,18 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * Generally speaking, a cache entry can only be set once.  An attempt
  * to set new data in a cache entry will silently succeed.  A buffer
  * passed to cache_entry_set_raw() will be freed for a cache entry
- * that already has data stored.  A json object passed to
- * cache_entry_set_json() will be json_decref()'d for a cache entry
+ * that already has data stored.  A treeobj object passed to
+ * cache_entry_set_treeobj() will be json_decref()'d for a cache entry
  * that alrdady has data stored.
  *
- * cache_entry_set_raw() & cache_entry_set_json() &
+ * cache_entry_set_raw() & cache_entry_set_treeobj() &
  * cache_entry_clear_data() returns -1 on error, 0 on success
  */
 int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
 
-json_t *cache_entry_get_json (struct cache_entry *hp);
-int cache_entry_set_json (struct cache_entry *hp, json_t *o);
+json_t *cache_entry_get_treeobj (struct cache_entry *hp);
+int cache_entry_set_treeobj (struct cache_entry *hp, json_t *o);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
@@ -104,15 +104,6 @@ void cache_destroy (struct cache *cache);
  */
 struct cache_entry *cache_lookup (struct cache *cache,
                                   const char *ref, int current_epoch);
-
-/* Look up a cache entry and get json of cache entry only if entry
- * contains valid json.  This is a convenience function that is
- * effectively successful if calls to cache_lookup() and
- * cache_entry_get_json() are both successful.
- */
-json_t *cache_lookup_and_get_json (struct cache *cache,
-                                   const char *ref,
-                                   int current_epoch);
 
 /* Insert an entry in the cache by blobref 'ref'.
  * Ownership of the cache entry is transferred to the cache.

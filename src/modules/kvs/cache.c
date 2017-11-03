@@ -40,6 +40,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
@@ -54,9 +55,9 @@ struct cache_entry {
     waitqueue_t *waitlist_valid;
     void *data;             /* value raw data */
     int len;
-    json_t *o;              /* value json object */
+    json_t *o;              /* value treeobj object */
     int lastuse_epoch;      /* time of last use for cache expiry */
-    bool valid;             /* flag indicating if raw data or json
+    bool valid;             /* flag indicating if raw data or treeobj
                              * set, don't use data == NULL as test, as
                              * zero length data can be valid */
     bool dirty;
@@ -185,18 +186,18 @@ int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
     return -1;
 }
 
-json_t *cache_entry_get_json (struct cache_entry *hp)
+json_t *cache_entry_get_treeobj (struct cache_entry *hp)
 {
     if (!hp || !hp->valid || !hp->data)
         return NULL;
     if (!hp->o) {
-        if (!(hp->o = json_loadb (hp->data, hp->len, JSON_DECODE_ANY, NULL)))
+        if (!(hp->o = treeobj_decodeb (hp->data, hp->len)))
             return NULL;
     }
     return hp->o;
 }
 
-int cache_entry_set_json (struct cache_entry *hp, json_t *o)
+int cache_entry_set_treeobj (struct cache_entry *hp, json_t *o)
 {
     if (hp && o) {
         if (hp->valid) {
@@ -215,7 +216,12 @@ int cache_entry_set_json (struct cache_entry *hp, json_t *o)
             assert (!hp->data);
             assert (!hp->o);
 
-            if (!(hp->data = kvs_util_json_dumps (o)))
+            if (treeobj_validate (o) < 0) {
+                errno = EINVAL;
+                return -1;
+            }
+
+            if (!(hp->data = treeobj_encode (o)))
                 return -1;
 
             hp->len = strlen (hp->data);
@@ -286,14 +292,6 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
     if (hp && current_epoch > hp->lastuse_epoch)
         hp->lastuse_epoch = current_epoch;
     return hp;
-}
-
-json_t *cache_lookup_and_get_json (struct cache *cache,
-                                   const char *ref,
-                                   int current_epoch)
-{
-    struct cache_entry *hp = cache_lookup (cache, ref, current_epoch);
-    return cache_entry_get_valid (hp) ? cache_entry_get_json (hp) : NULL;
 }
 
 void cache_insert (struct cache *cache, const char *ref, struct cache_entry *hp)
