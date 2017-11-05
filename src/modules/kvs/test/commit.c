@@ -80,8 +80,8 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
-    ok (kvs_util_json_hash ("sha1", rootdir, ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", rootdir, ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
     ok ((hp = create_cache_entry_treeobj (rootdir)) != NULL,
         "create_cache_entry_treeobj works");
     cache_insert (cache, ref, hp);
@@ -631,8 +631,8 @@ void commit_basic_root_not_dir (void)
     /* make a non-dir root */
     root = treeobj_create_val ("abcd", 4);
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -699,8 +699,8 @@ void commit_process_root_missing (void)
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
-    ok (kvs_util_json_hash ("sha1", rootdir, rootref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", rootdir, rootref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     json_decref (rootdir);
 
@@ -797,16 +797,16 @@ void commit_process_missing_ref (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -896,16 +896,16 @@ void commit_process_error_callbacks (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     /* don't add dir entry, we want it to miss  */
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -985,16 +985,16 @@ void commit_process_error_callbacks_partway (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1042,8 +1042,8 @@ void commit_process_invalid_operation (void)
     /* This root is an empty root */
     root = treeobj_create_dir ();
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1137,8 +1137,8 @@ void commit_process_invalid_hash (void)
     /* This root is an empty root */
     root = treeobj_create_dir ();
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1192,8 +1192,8 @@ void commit_process_follow_link (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
@@ -1201,8 +1201,8 @@ void commit_process_follow_link (void)
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1259,8 +1259,8 @@ void commit_process_dirval_test (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", dir);
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1317,16 +1317,16 @@ void commit_process_delete_test (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1372,8 +1372,8 @@ void commit_process_delete_nosubdir_test (void)
     /* This root is an empty root */
     root = treeobj_create_dir ();
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1426,16 +1426,16 @@ void commit_process_delete_filevalinpath_test (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1488,8 +1488,8 @@ void commit_process_bad_dirrefs (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
@@ -1499,8 +1499,8 @@ void commit_process_bad_dirrefs (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", dirref);
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1570,8 +1570,8 @@ void commit_process_big_fileval (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("42", 2));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1716,16 +1716,16 @@ void commit_process_giant_dir (void)
     treeobj_insert_entry (dir, "val0e00", treeobj_create_val ("E", 1));
     treeobj_insert_entry (dir, "valF000", treeobj_create_val ("f", 1));
 
-    ok (kvs_util_json_hash ("sha1", dir, dir_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (dir, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1801,8 +1801,8 @@ void commit_process_append (void)
     treeobj_insert_entry (root, "val", treeobj_create_val ("abcd", 4));
     treeobj_insert_entry (root, "valref", treeobj_create_val ("ABCD", 4));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
@@ -1927,8 +1927,8 @@ void commit_process_append_errors (void)
     treeobj_insert_entry (root, "dir", treeobj_create_dir ());
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
 
-    ok (kvs_util_json_hash ("sha1", root, root_ref) == 0,
-        "kvs_util_json_hash worked");
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+        "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 

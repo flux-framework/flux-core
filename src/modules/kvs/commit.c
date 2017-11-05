@@ -166,7 +166,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
     if (c->state == COMMIT_STATE_STORE
         || c->state == COMMIT_STATE_PRE_FINISHED) {
         href_t ref;
-        void *data;
+        const void *data;
         int len;
         int ret;
 
@@ -236,9 +236,9 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
     }
     else {
-        if (kvs_util_json_hash (c->cm->hash_name, o, ref) < 0) {
+        if (treeobj_hash (c->cm->hash_name, o, ref, sizeof (href_t)) < 0) {
             saved_errno = errno;
-            flux_log_error (c->cm->h, "kvs_util_json_hash");
+            flux_log_error (c->cm->h, "treeobj_hash");
             goto done;
         }
     }
@@ -344,13 +344,14 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
         }
         else if (treeobj_is_val (dir_entry)) {
             json_t *val_data;
-            size_t size;
+            const char *str;
 
             if (!(val_data = treeobj_get_data (dir_entry)))
                 return -1;
-            if (kvs_util_json_encoded_size (val_data, &size) < 0)
-                return -1;
-            if (size > BLOBREF_MAX_STRING_SIZE) {
+            /* jansson >= 2.7 could use json_string_length() instead */
+            str = json_string_value (val_data);
+            assert (str);
+            if (strlen (str) > BLOBREF_MAX_STRING_SIZE) {
                 if ((ret = store_cache (c, current_epoch, val_data,
                                         true, ref, &hp)) < 0)
                     return -1;

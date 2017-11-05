@@ -79,7 +79,8 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * cache_entry_set_raw() & cache_entry_set_treeobj() &
  * cache_entry_clear_data() returns -1 on error, 0 on success
  */
-int cache_entry_get_raw (struct cache_entry *hp, void **data, int *len);
+int cache_entry_get_raw (struct cache_entry *hp, const void **data,
+                         int *len);
 int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *hp);

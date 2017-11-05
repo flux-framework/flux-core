@@ -27,68 +27,8 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
 #include <stdbool.h>
-#include <ctype.h>
-#include <flux/core.h>
-#include <jansson.h>
-
-#include "src/common/libutil/blobref.h"
-
-#include "types.h"
-
-char *kvs_util_json_dumps (json_t *o)
-{
-    /* Must pass JSON_ENCODE_ANY, can be called on any object.  Must
-     * set JSON_SORT_KEYS, two different objects with different
-     * internal order should map to same string (and reference when
-     * used by kvs_util_json_hash()).
-     */
-    int flags = JSON_ENCODE_ANY | JSON_COMPACT | JSON_SORT_KEYS;
-    char *s;
-    if (!o) {
-        if (!(s = strdup ("null"))) {
-            errno = ENOMEM;
-            return NULL;
-        }
-        return s;
-    }
-    if (!(s = json_dumps (o, flags))) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    return s;
-}
-
-int kvs_util_json_encoded_size (json_t *o, size_t *size)
-{
-    char *s = kvs_util_json_dumps (o);
-    if (!s) {
-        errno = ENOMEM;
-        return -1;
-    }
-    if (size)
-        *size = strlen (s);
-    free (s);
-    return 0;
-}
-
-int kvs_util_json_hash (const char *hash_name, json_t *o, href_t ref)
-{
-    char *s = NULL;
-    int rc = -1;
-
-    if (!(s = kvs_util_json_dumps (o)))
-        goto error;
-    if (blobref_hash (hash_name, (uint8_t *)s, strlen (s),
-                      ref, sizeof (href_t)) < 0)
-        goto error;
-    rc = 0;
-error:
-    free (s);
-    return rc;
-}
+#include <string.h>
 
 char *kvs_util_normalize_key (const char *key, bool *want_directory)
 {

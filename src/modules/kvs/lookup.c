@@ -636,7 +636,7 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
 {
     struct cache_entry *hp;
     const char *reftmp;
-    void *valdata;
+    const void *valdata;
     int len;
 
     if (!(reftmp = treeobj_get_blobref (lh->wdirent, 0))) {
@@ -707,7 +707,7 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
 {
     struct cache_entry *hp;
     const char *reftmp;
-    void *valdata;
+    const void *valdata;
     int len;
     char *valbuf = NULL;
     int pos = 0;

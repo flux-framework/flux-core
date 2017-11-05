@@ -364,8 +364,8 @@ static void content_store_completion (flux_future_t *f, void *arg)
     (void)content_store_get (f, arg);
 }
 
-static int content_store_request_send (kvs_ctx_t *ctx, void *data, int len,
-                                       bool now)
+static int content_store_request_send (kvs_ctx_t *ctx, const void *data,
+                                       int len, bool now)
 {
     flux_future_t *f;
     int saved_errno, rc = -1;
@@ -424,7 +424,7 @@ static int commit_load_cb (commit_t *c, const char *ref, void *data)
 static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
 {
     struct kvs_cb_data *cbd = data;
-    void *storedata;
+    const void *storedata;
     int storedatalen = 0;
 
     assert (cache_entry_get_dirty (hp));
@@ -1622,9 +1622,9 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
     int rc = -1;
     int saved_errno, ret;
 
-    if (kvs_util_json_hash (ctx->hash_name, o, ref) < 0) {
+    if (treeobj_hash (ctx->hash_name, o, ref, sizeof (href_t)) < 0) {
         saved_errno = errno;
-        flux_log_error (ctx->h, "%s: kvs_util_json_hash",
+        flux_log_error (ctx->h, "%s: treeobj_hash",
                         __FUNCTION__);
         goto decref_done;
     }
@@ -1638,7 +1638,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
-        void *data;
+        const void *data;
         int len;
         assert (o);
         if (cache_entry_set_treeobj (hp, o) < 0) {
