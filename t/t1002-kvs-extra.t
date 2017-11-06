@@ -19,9 +19,6 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
-KVSBASIC=${FLUX_BUILD_DIR}/t/kvs/basic
-GETAS=${FLUX_BUILD_DIR}/t/kvs/getas
-
 TEST=$TEST_NAME
 KEY=test.a.b.c
 
@@ -38,33 +35,21 @@ test_kvs_key() {
 	#fi
 }
 
-test_kvs_type () {
-	${KVSBASIC} type "$1" >output
-	echo "$2" >expected
-	test_cmp output expected
-}
-
 test_expect_success 'kvs: integer put' '
 	flux kvs put --json $KEY=42
 '
-test_expect_success 'kvs: integer type' '
-	test_kvs_type $KEY int
-'
 test_expect_success 'kvs: value can be empty' '
 	flux kvs put --json $KEY= &&
-	  test_kvs_key $KEY "" &&
-	  test_kvs_type $KEY string
+	  test_kvs_key $KEY ""
 '
 test_expect_success 'kvs: null is converted to json null' '
 	flux kvs put --json $KEY=null &&
-	  test_kvs_key $KEY nil &&
-	  test_kvs_type $KEY null
+	  test_kvs_key $KEY ni
 '
 
 test_expect_success 'kvs: quoted null is converted to string' '
 	flux kvs put --json $KEY=\"null\" &&
-	  test_kvs_key $KEY null &&
-	  test_kvs_type $KEY string
+	  test_kvs_key $KEY null
 '
 
 KEY=$TEST.b.c.d
@@ -72,44 +57,18 @@ DIR=$TEST.b.c
 test_expect_success 'kvs: string put' '
 	flux kvs put --json $KEY="Hello world"
 '
-test_expect_success 'kvs: string type' '
-	test_kvs_type $KEY string
-'
 test_expect_success 'kvs: boolean put' '
 	flux kvs put --json $KEY=true
-'
-test_expect_success 'kvs: boolean type' '
-	test_kvs_type $KEY boolean
 '
 test_expect_success 'kvs: put double' '
 	flux kvs put --json $KEY=3.14159
 '
-test_expect_success 'kvs: double type' '
-	test_kvs_type $KEY double
-'
 
-# issue 875
-test_expect_success 'kvs: integer can be read as int, int64, or double' '
-	flux kvs put --json $TEST.a=2 &&
-	test_kvs_type $TEST.a int &&
-	test $($GETAS -t int $TEST.a) = "2" &&
-	test $($GETAS -t int -d $TEST a) = "2" &&
-	test $($GETAS -t int64 $TEST.a) = "2" &&
-	test $($GETAS -t int64 -d $TEST a) = "2" &&
-	test $($GETAS -t double $TEST.a | cut -d. -f1) = "2" &&
-	test $($GETAS -t double -d $TEST a | cut -d. -f1) = "2"
-'
 test_expect_success 'kvs: array put' '
 	flux kvs put --json $KEY="[1,3,5,7]"
 '
-test_expect_success 'kvs: array type' '
-	test_kvs_type $KEY array
-'
 test_expect_success 'kvs: object put' '
 	flux kvs put --json $KEY="{\"a\":42}"
-'
-test_expect_success 'kvs: object type' '
-	test_kvs_type $KEY object
 '
 
 test_expect_success 'kvs: put using --no-merge flag' '

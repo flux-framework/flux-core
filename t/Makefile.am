@@ -171,14 +171,12 @@ check_PROGRAMS = \
 	kz/kzutil \
 	kvs/torture \
 	kvs/dtree \
-	kvs/getas \
 	kvs/blobref \
 	kvs/hashtest \
 	kvs/watch \
 	kvs/watch_disconnect \
 	kvs/commit \
 	kvs/commitmerge \
-	kvs/basic \
 	module/basic \
 	request/treq \
 	barrier/tbarrier
@@ -280,11 +278,6 @@ kvs_dtree_CPPFLAGS = $(test_cppflags)
 kvs_dtree_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
-kvs_getas_SOURCES = kvs/getas.c
-kvs_getas_CPPFLAGS = $(test_cppflags)
-kvs_getas_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
-
 kvs_blobref_SOURCES = kvs/blobref.c
 kvs_blobref_CPPFLAGS = $(test_cppflags)
 kvs_blobref_LDADD = \
@@ -314,11 +307,6 @@ kvs_hashtest_SOURCES = kvs/hashtest.c
 kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
-
-kvs_basic_SOURCES = kvs/basic.c
-kvs_basic_CPPFLAGS = $(test_cppflags)
-kvs_basic_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
