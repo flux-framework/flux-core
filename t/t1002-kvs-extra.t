@@ -20,56 +20,7 @@ test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
 TEST=$TEST_NAME
-KEY=test.a.b.c
-
-#
-#
-#
-test_kvs_key() {
-	flux kvs get --json "$1" >output
-	echo "$2" >expected
-	test_cmp output expected
-	#if ! test "$OUTPUT" = "$2"; then
-	#	test_debug say_color error "Error: Output \'$OUTPUT\" != \'$2\'"
-	#	return false
-	#fi
-}
-
-test_expect_success 'kvs: integer put' '
-	flux kvs put --json $KEY=42
-'
-test_expect_success 'kvs: value can be empty' '
-	flux kvs put --json $KEY= &&
-	  test_kvs_key $KEY ""
-'
-test_expect_success 'kvs: null is converted to json null' '
-	flux kvs put --json $KEY=null &&
-	  test_kvs_key $KEY ni
-'
-
-test_expect_success 'kvs: quoted null is converted to string' '
-	flux kvs put --json $KEY=\"null\" &&
-	  test_kvs_key $KEY null
-'
-
-KEY=$TEST.b.c.d
-DIR=$TEST.b.c
-test_expect_success 'kvs: string put' '
-	flux kvs put --json $KEY="Hello world"
-'
-test_expect_success 'kvs: boolean put' '
-	flux kvs put --json $KEY=true
-'
-test_expect_success 'kvs: put double' '
-	flux kvs put --json $KEY=3.14159
-'
-
-test_expect_success 'kvs: array put' '
-	flux kvs put --json $KEY="[1,3,5,7]"
-'
-test_expect_success 'kvs: object put' '
-	flux kvs put --json $KEY="{\"a\":42}"
-'
+DIR=$TEST.a.b.c
 
 test_expect_success 'kvs: put using --no-merge flag' '
 	flux kvs unlink -Rf $TEST &&
