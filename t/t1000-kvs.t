@@ -84,7 +84,7 @@ test_expect_success 'kvs: null is converted to json null' '
 '
 test_expect_success 'kvs: quoted null is converted to string' '
         test_kvs_key $KEY.strnull null
-# '
+'
 test_expect_success 'kvs: boolean true get' '
 	test_kvs_key $KEY.booleantrue true
 '

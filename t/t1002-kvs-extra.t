@@ -45,7 +45,7 @@ test_kvs_type () {
 }
 
 test_expect_success 'kvs: integer put' '
-	flux kvs put --json $KEY=42 
+	flux kvs put --json $KEY=42
 '
 test_expect_success 'kvs: integer type' '
 	test_kvs_type $KEY int
@@ -374,7 +374,6 @@ test_expect_success 'kvs: store 2x4 directory tree and walk' '
 	test $(flux kvs dir -R $TEST.dtree | wc -l) = 16
 '
 
-# exercise kvsdir_get_symlink, _double, _boolean, 
 test_expect_success 'kvs: add other types to 2x4 directory and walk' '
 	flux kvs link $TEST.dtree $TEST.dtree.link &&
 	flux kvs put --json $TEST.dtree.double=3.14 &&
