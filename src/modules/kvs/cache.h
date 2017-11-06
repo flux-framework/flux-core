@@ -70,21 +70,17 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * both set accessors.
  *
  * Generally speaking, a cache entry can only be set once.  An attempt
- * to set new data in a cache entry will silently succeed.  A buffer
- * passed to cache_entry_set_raw() will be freed for a cache entry
- * that already has data stored.  A treeobj object passed to
- * cache_entry_set_treeobj() will be json_decref()'d for a cache entry
- * that alrdady has data stored.
+ * to set new data in a cache entry will silently succeed.
  *
  * cache_entry_set_raw() & cache_entry_set_treeobj() &
  * cache_entry_clear_data() returns -1 on error, 0 on success
  */
 int cache_entry_get_raw (struct cache_entry *hp, const void **data,
                          int *len);
-int cache_entry_set_raw (struct cache_entry *hp, void *data, int len);
+int cache_entry_set_raw (struct cache_entry *hp, const void *data, int len);
 
 const json_t *cache_entry_get_treeobj (struct cache_entry *hp);
-int cache_entry_set_treeobj (struct cache_entry *hp, json_t *o);
+int cache_entry_set_treeobj (struct cache_entry *hp, const json_t *o);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a

@@ -725,12 +725,10 @@ void lookup_errors (void) {
     json_t *dirref;
     json_t *dir;
     json_t *dirref_multi;
-    json_t *valref_multi_overflow;
     struct cache *cache;
     lookup_t *lh;
     href_t dirref_ref;
     href_t valref_ref;
-    href_t valref_long_ref;
     href_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
@@ -740,9 +738,6 @@ void lookup_errors (void) {
      *
      * valref_ref
      * "abcd"
-     *
-     * valref_long_ref
-     * "long", but invalid length on buffer
      *
      * dirref_ref
      * "val" : val to "bar"
@@ -756,21 +751,11 @@ void lookup_errors (void) {
      * "dirref" : dirref to dirref_ref
      * "dir" : dir w/ "val" : val to "baz"
      * "dirref_bad" : dirref to valref_ref
-     * "valref_multi_overflow" : [ valref_long_ref, valref_long_ref ]
      * "dirref_multi" : dirref to [ dirref_ref, dirref_ref ]
      */
 
     blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
-
-    /* achu: Note that I am abusing internal knowledge that cache
-     * entries blindly store pointers and lengths.  Obviously the
-     * "real" length of the buffer below is length 4, but I'm storing
-     * a huge number.
-     */
-    blobref_hash ("sha1", "long", 4, valref_long_ref, sizeof (href_t));
-    cache_insert (cache, valref_long_ref,
-                  create_cache_entry_raw (strdup ("long"), INT_MAX - 32));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
@@ -789,10 +774,6 @@ void lookup_errors (void) {
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
     treeobj_insert_entry (root, "dir", dir);
     treeobj_insert_entry (root, "dirref_bad", treeobj_create_dirref (valref_ref));
-
-    valref_multi_overflow = treeobj_create_valref (valref_long_ref);
-    treeobj_append_blobref (valref_multi_overflow, valref_long_ref);
-    treeobj_insert_entry (root, "valref_multi_overflow", valref_multi_overflow);
 
     dirref_multi = treeobj_create_dirref (dirref_ref);
     treeobj_append_blobref (dirref_multi, dirref_ref);
@@ -981,19 +962,6 @@ void lookup_errors (void) {
                              FLUX_KVS_READDIR)) != NULL,
         "lookup_create on dirref_bad, in middle of path");
     check (lh, ENOTRECOVERABLE, NULL, "lookup dirref_bad, in middle of path");
-
-    /* Lookup a valref multiple blobref that points to buffers that will
-     * over int, should get EOVERFLOW.
-     */
-    ok ((lh = lookup_create (cache,
-                             1,
-                             root_ref,
-                             root_ref,
-                             "valref_multi_overflow",
-                             NULL,
-                             0)) != NULL,
-        "lookup_create on valref_multi_overflow");
-    check (lh, EOVERFLOW, NULL, "lookup valref_multi_overflow");
 
     /* Lookup with an invalid root_ref, should get EINVAL */
     ok ((lh = lookup_create (cache,

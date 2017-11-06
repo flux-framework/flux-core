@@ -179,7 +179,6 @@ static void content_load_completion (flux_future_t *f, void *arg)
     int size;
     const char *blobref;
     struct cache_entry *hp;
-    char *datacpy = NULL;
 
     if (flux_content_load_get (f, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
@@ -205,15 +204,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * timeout or eventually give up, so the KVS can continue along
      * its merry way.  So we just log the error.
      */
-    if (size) {
-        if (!(datacpy = malloc (size))) {
-            flux_log_error (ctx->h, "%s: malloc", __FUNCTION__);
-            goto done;
-        }
-        memcpy (datacpy, data, size);
-    }
-
-    if (cache_entry_set_raw (hp, datacpy, size) < 0) {
+    if (cache_entry_set_raw (hp, data, size) < 0) {
         flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
         goto done;
     }
@@ -1382,10 +1373,9 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                  * no consistency issue by not caching.  We will still
                  * set new root below via setroot().
                  */
-                if (cache_entry_set_treeobj (hp, json_incref (root)) < 0) {
+                if (cache_entry_set_treeobj (hp, root) < 0) {
                     flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
                                     __FUNCTION__);
-                    json_decref (root);
                 }
             }
             if (cache_entry_get_dirty (hp)) {
@@ -1406,10 +1396,9 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                 flux_log_error (ctx->h, "%s: cache_entry_create",
                                 __FUNCTION__);
             }
-            else if (cache_entry_set_treeobj (hp, json_incref (root)) < 0) {
+            else if (cache_entry_set_treeobj (hp, root) < 0) {
                 flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
                                 __FUNCTION__);
-                json_decref (root);
                 cache_entry_destroy (hp);
             }
             else
@@ -1619,21 +1608,20 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
 {
     struct cache_entry *hp;
-    int rc = -1;
     int saved_errno, ret;
 
     if (treeobj_hash (ctx->hash_name, o, ref, sizeof (href_t)) < 0) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: treeobj_hash",
                         __FUNCTION__);
-        goto decref_done;
+        goto error;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         if (!(hp = cache_entry_create ())) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
-            goto decref_done;
+            goto error;
         }
         cache_insert (ctx->cache, ref, hp);
     }
@@ -1647,7 +1635,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
                             __FUNCTION__);
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);
-            goto decref_done;
+            goto error;
         }
         if (cache_entry_set_dirty (hp, true) < 0) {
             /* remove entry will decref object */
@@ -1655,7 +1643,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
             flux_log_error (ctx->h, "%s: cache_entry_set_dirty", __FUNCTION__);
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);
-            goto done_error;
+            goto error;
         }
         if (cache_entry_get_raw (hp, &data, &len) < 0) {
             /* remove entry will decref object */
@@ -1663,7 +1651,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
             flux_log_error (ctx->h, "%s: cache_entry_get_raw", __FUNCTION__);
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);
-            goto done_error;
+            goto error;
         }
         if (content_store_request_send (ctx, data, len, true) < 0) {
             /* Must clean up, don't want cache entry to be assumed
@@ -1677,19 +1665,15 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
             assert (cache_entry_get_dirty (hp) == false);
             ret = cache_remove_entry (ctx->cache, ref);
             assert (ret == 1);
-            goto done_error;
+            goto error;
         }
-    } else
-        json_decref (o);
-    rc = 0;
-    return rc;
-
-decref_done:
+    }
     json_decref (o);
-done_error:
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+    return 0;
+error:
+    json_decref (o);
+    errno = saved_errno;
+    return -1;
 }
 
 int mod_main (flux_t *h, int argc, char **argv)
