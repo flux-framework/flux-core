@@ -43,12 +43,6 @@ test_expect_success 'kvs: double put' '
 test_expect_success 'kvs: string put' '
 	flux kvs put --json $KEY.string=foo
 '
-test_expect_success 'kvs: null is converted to json null' '
-	flux kvs put --json $KEY.jsonnull=null
-'
-test_expect_success 'kvs: quoted null is converted to string' '
-	flux kvs put --json $KEY.strnull=\"null\"
-'
 test_expect_success 'kvs: boolean true put' '
 	flux kvs put --json $KEY.booleantrue=true
 '
@@ -72,12 +66,6 @@ test_expect_success 'kvs: double get' '
 '
 test_expect_success 'kvs: string get' '
 	test_kvs_key $KEY.string foo
-'
-test_expect_success 'kvs: null is converted to json null' '
-        test_kvs_key $KEY.jsonnull nil
-'
-test_expect_success 'kvs: quoted null is converted to string' '
-        test_kvs_key $KEY.strnull null
 '
 test_expect_success 'kvs: boolean true get' '
 	test_kvs_key $KEY.booleantrue true
@@ -107,10 +95,8 @@ $KEY.booleanfalse = false
 $KEY.booleantrue = true
 $KEY.double = 3.140000
 $KEY.integer = 42
-$KEY.jsonnull = nil
 $KEY.object = {"a": 42}
 $KEY.string = foo
-$KEY.strnull = null
 EOF
 	test_cmp expected output
 '
@@ -122,10 +108,8 @@ $KEY.booleanfalse
 $KEY.booleantrue
 $KEY.double
 $KEY.integer
-$KEY.jsonnull
 $KEY.object
 $KEY.string
-$KEY.strnull
 EOF
 	test_cmp expected output
 '
@@ -140,14 +124,6 @@ test_expect_success 'kvs: unlink works' '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.string &&
 	  test_must_fail flux kvs get --json $KEY.string
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY.jsonnull &&
-	  test_must_fail flux kvs get --json $KEY.jsonnull
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY.strnull &&
-	  test_must_fail flux kvs get --json $KEY.strnull
 '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.booleantrue &&
@@ -610,6 +586,18 @@ test_expect_success 'kvs: put with invalid input' '
 '
 test_expect_success 'kvs: put key of . fails' '
 	test_must_fail flux kvs put --json .=1
+'
+
+#
+# get/put --json corner case tests
+#
+test_expect_success 'kvs: null is converted to json null' '
+	flux kvs put --json $DIR.jsonnull=null &&
+        test_kvs_key $DIR.jsonnull nil
+'
+test_expect_success 'kvs: quoted null is converted to json string' '
+	flux kvs put --json $DIR.strnull=\"null\" &&
+        test_kvs_key $DIR.strnull null
 '
 
 #
