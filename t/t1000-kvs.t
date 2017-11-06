@@ -43,9 +43,6 @@ test_expect_success 'kvs: double put' '
 test_expect_success 'kvs: string put' '
 	flux kvs put --json $KEY.string=foo
 '
-test_expect_success 'kvs: empty string put' '
-	flux kvs put --json $KEY.emptystring=
-'
 test_expect_success 'kvs: null is converted to json null' '
 	flux kvs put --json $KEY.jsonnull=null
 '
@@ -75,9 +72,6 @@ test_expect_success 'kvs: double get' '
 '
 test_expect_success 'kvs: string get' '
 	test_kvs_key $KEY.string foo
-'
-test_expect_success 'kvs: empty string get' '
-	test_kvs_key $KEY.emptystring ""
 '
 test_expect_success 'kvs: null is converted to json null' '
         test_kvs_key $KEY.jsonnull nil
@@ -112,7 +106,6 @@ $KEY.array = [1, 3, 5]
 $KEY.booleanfalse = false
 $KEY.booleantrue = true
 $KEY.double = 3.140000
-$KEY.emptystring = 
 $KEY.integer = 42
 $KEY.jsonnull = nil
 $KEY.object = {"a": 42}
@@ -128,7 +121,6 @@ $KEY.array
 $KEY.booleanfalse
 $KEY.booleantrue
 $KEY.double
-$KEY.emptystring
 $KEY.integer
 $KEY.jsonnull
 $KEY.object
@@ -148,10 +140,6 @@ test_expect_success 'kvs: unlink works' '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.string &&
 	  test_must_fail flux kvs get --json $KEY.string
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY.emptystring &&
-	  test_must_fail flux kvs get --json $KEY.emptystring
 '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.jsonnull &&
@@ -393,6 +381,38 @@ test_expect_success 'kvs: ls key. fails if key is not a directory' '
 test_expect_success 'kvs: ls key. fails if key does not exist' '
 	flux kvs unlink -Rf $DIR &&
 	test_must_fail flux kvs ls $DIR.a
+'
+
+#
+# empty string value
+#
+test_expect_success 'kvs: put/get empty string' '
+	flux kvs unlink -Rf $DIR &&
+	echo -n "" | flux kvs put --raw $DIR.a=- &&
+	flux kvs get $DIR.a >output &&
+        echo -n "" > expected &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: dir can read and display empty string' '
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a = 
+EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: no value with --json is json empty string' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a= &&
+	flux kvs get --json $DIR.a >output &&
+        echo "" > expected &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: dir can read and display json empty string' '
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a = 
+EOF
+	test_cmp expected output
 '
 
 #
