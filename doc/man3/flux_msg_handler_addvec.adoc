@@ -18,14 +18,14 @@ SYNOPSIS
      const char *topic_glob;
      flux_msg_handler_f cb;
      uint32_t rolemask;
-     flux_msg_handler_t *w;
  };
 
  int flux_msg_handler_addvec (flux_t *h,
-                              struct flux_msg_handler_spec tab[],
-                              void *arg);
+                              const struct flux_msg_handler_spec tab[],
+                              void *arg,
+                              flux_msg_handler_t **handlers[]);
 
- void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
+ void flux_msg_handler_delvec (flux_msg_handler_t *handlers[]);
 
 
 DESCRIPTION
@@ -33,10 +33,11 @@ DESCRIPTION
 
 `flux_msg_handler_addvec()` creates and starts an array of message handlers,
 terminated by FLUX_MSGHANDLER_TABLE_END.  The new message handler objects
-are stored in the array.
+are assigned to an internally allocated array, returned in _handlers_.
+The last entry in the array is set to NULL.
 
-`flux_msg_handler_delvec()` stops and destroys an array of message handler
-objects, terminated by FLUX_MSGHANDLER_TABLE_END.
+`flux_msg_handler_delvec()` stops and destroys an array of message handlers
+returned from `flux_msg_handler_addvec()`.
 
 These functions are convenience functions which call
 `flux_msg_handler_create(3)`, `flux_msg_handler_start(3)`; and
