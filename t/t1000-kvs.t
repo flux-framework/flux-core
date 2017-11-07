@@ -31,7 +31,7 @@ test_kvs_key() {
 }
 
 #
-# Basic put, get, mkdir, dir, unlink tests
+# Basic put, get, unlink tests
 #
 
 test_expect_success 'kvs: integer put' '
@@ -55,9 +55,6 @@ test_expect_success 'kvs: array put' '
 test_expect_success 'kvs: object put' '
 	flux kvs put --json $KEY.object="{\"a\":42}"
 '
-test_expect_success 'kvs: mkdir' '
-	flux kvs mkdir $SUBDIR1
-'
 test_expect_success 'kvs: integer get' '
 	test_kvs_key $KEY.integer 42
 '
@@ -78,40 +75,6 @@ test_expect_success 'kvs: array get' '
 '
 test_expect_success 'kvs: object get' '
 	test_kvs_key $KEY.object "{\"a\": 42}"
-'
-test_expect_success 'kvs: dir' '
-	flux kvs dir $DIR | sort >output &&
-	cat >expected <<EOF &&
-$DIR.c.
-$DIR.d.
-EOF
-	test_cmp expected output
-'
-test_expect_success 'kvs: dir -R' '
-	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF &&
-$KEY.array = [1, 3, 5]
-$KEY.booleanfalse = false
-$KEY.booleantrue = true
-$KEY.double = 3.140000
-$KEY.integer = 42
-$KEY.object = {"a": 42}
-$KEY.string = foo
-EOF
-	test_cmp expected output
-'
-test_expect_success 'kvs: dir -R -d' '
-	flux kvs dir -R -d $DIR | sort >output &&
-	cat >expected <<EOF &&
-$KEY.array
-$KEY.booleanfalse
-$KEY.booleantrue
-$KEY.double
-$KEY.integer
-$KEY.object
-$KEY.string
-EOF
-	test_cmp expected output
 '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.integer &&
@@ -141,17 +104,9 @@ test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY.object &&
 	  test_must_fail flux kvs get --json $KEY.object
 '
-test_expect_success 'kvs: unlink dir works' '
-        flux kvs unlink $SUBDIR1 &&
-          test_must_fail flux kvs dir $SUBDIR1
-'
-test_expect_success 'kvs: unlink -R works' '
-        flux kvs unlink -R $DIR &&
-          test_must_fail flux kvs dir $DIR
-'
 
 #
-# Basic put, get, mkdir, dir, unlink tests w/ multiple key inputs
+# Basic put, get, unlink tests w/ multiple key inputs
 #
 
 test_expect_success 'kvs: put (multiple)' '
@@ -169,30 +124,6 @@ true
 EOF
 	test_cmp expected output
 '
-test_expect_success 'kvs: mkdir (multiple)' '
-	flux kvs mkdir $SUBDIR1 $SUBDIR2
-'
-test_expect_success 'kvs: dir' '
-	flux kvs dir $DIR | sort >output &&
-	cat >expected <<EOF &&
-$DIR.c.
-$DIR.d.
-$DIR.e.
-EOF
-	test_cmp expected output
-'
-test_expect_success 'kvs: dir -R' '
-	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF &&
-$KEY.a = 42
-$KEY.b = 3.140000
-$KEY.c = foo
-$KEY.d = true
-$KEY.e = [1, 3, 5]
-$KEY.f = {"a": 42}
-EOF
-	test_cmp expected output
-'
 test_expect_success 'kvs: unlink (multiple)' '
 	flux kvs unlink $KEY.a $KEY.b $KEY.c $KEY.d $KEY.e $KEY.f &&
           test_must_fail flux kvs get --json $KEY.a &&
@@ -202,10 +133,86 @@ test_expect_success 'kvs: unlink (multiple)' '
           test_must_fail flux kvs get --json $KEY.e &&
           test_must_fail flux kvs get --json $KEY.f
 '
+
+#
+# Basic dir tests
+#
+
+test_expect_success 'kvs: mkdir' '
+	flux kvs mkdir $DIR
+'
+test_expect_success 'kvs: dir success listing empty dir' '
+	flux kvs dir $DIR | sort >output &&
+	cat >expected <<EOF &&
+EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: mkdir subdir' '
+	flux kvs mkdir $SUBDIR1
+'
+test_expect_success 'kvs: dir lists subdir' '
+	flux kvs dir $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.d.
+EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: dir -R' '
+	flux kvs put --json $DIR.a=42 $DIR.b=3.14 $DIR.c=foo $DIR.d=true $DIR.e="[1,3,5]" $DIR.f="{\"a\":42}" &&
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a = 42
+$DIR.b = 3.140000
+$DIR.c = foo
+$DIR.d = true
+$DIR.e = [1, 3, 5]
+$DIR.f = {"a": 42}
+EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: dir -R -d' '
+	flux kvs dir -R -d $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a
+$DIR.b
+$DIR.c
+$DIR.d
+$DIR.e
+$DIR.f
+EOF
+	test_cmp expected output
+'
+
+test_expect_success 'kvs: unlink dir works' '
+        flux kvs unlink $SUBDIR1 &&
+          test_must_fail flux kvs dir $SUBDIR1
+'
 test_expect_success 'kvs: unlink -R works' '
         flux kvs unlink -R $DIR &&
           test_must_fail flux kvs dir $DIR
 '
+
+#
+# Basic dir tests (multiple inputs)
+#
+
+test_expect_success 'kvs: mkdir (multiple)' '
+        flux kvs unlink -Rf $DIR &&
+	flux kvs mkdir $DIR $SUBDIR1 $SUBDIR2
+'
+test_expect_success 'kvs: dir multiple subdirs' '
+	flux kvs dir $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.d.
+$DIR.e.
+EOF
+	test_cmp expected output
+'
+
+#
+# More complex dir tests
+#
+
 test_expect_success 'kvs: create a dir with keys and subdir' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a=69 &&
