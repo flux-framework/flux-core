@@ -203,86 +203,6 @@ void cache_entry_raw_tests (void)
     free (data2);
 }
 
-void cache_entry_treeobj_tests (void)
-{
-    struct cache_entry *e;
-    json_t *o1, *o2, *otest;
-    const json_t *otmp;
-    char *data;
-
-    /* Play with one entry.
-     */
-
-    /* test empty cache entry later filled with treeobj.
-     */
-
-    o1 = treeobj_create_val ("foo", 3);
-    o2 = treeobj_create_val ("foo", 3);
-
-    data = strdup ("abcd");
-
-    ok ((e = cache_entry_create ()) != NULL,
-        "cache_entry_create works");
-
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry initially non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry initially not dirty");
-    ok (cache_entry_set_dirty (e, true) < 0,
-        "cache_entry_set_dirty fails b/c entry non-valid");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry does not set dirty, b/c no data");
-    ok (cache_entry_get_treeobj (e) == NULL,
-        "cache_entry_get_treeobj returns NULL, no treeobj set");
-    ok (cache_entry_set_treeobj (e, o1) == 0,
-        "cache_entry_set_treeobj success");
-
-    ok (cache_entry_set_treeobj (e, o2) == 0,
-        "cache_entry_set_treeobj again, silent success");
-
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry now valid after cache_entry_set_treeobj call");
-
-    ok (cache_entry_set_raw (e, NULL, 0) < 0
-        && errno == EBADE,
-        "cache_entry_set_raw fails with EBADE, setting to different value");
-    ok (cache_entry_set_raw (e, data, 4) < 0
-        && errno == EBADE,
-        "cache_entry_set_raw fails with EBADE, setting to different value");
-
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
-
-    ok (cache_entry_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty success");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty, b/c no waiters");
-
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
-    ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty success");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
-
-    ok ((otmp = cache_entry_get_treeobj (e)) != NULL,
-        "treeobj retrieved from cache entry");
-    otest = treeobj_create_val ("foo", 3);
-    /* XXX - json_equal takes const in jansson > 2.10 */
-    ok (json_equal ((json_t *)otmp, otest) == 1,
-        "expected treeobj object returned");
-    json_decref (otest);
-
-    cache_entry_destroy (e);
-    free (data);
-    json_decref (o1);
-    json_decref (o2);
-}
-
 void cache_entry_raw_and_treeobj_tests (void)
 {
     struct cache_entry *e;
@@ -348,7 +268,7 @@ void cache_entry_raw_and_treeobj_tests (void)
         "cache_entry_set_treeobj success");
     ok (cache_entry_get_raw (e, (const void **)&datatmp, &len) == 0,
         "cache_entry_get_raw returns success for get treeobj raw data");
-    ok (datatmp && strcmp (datatmp, data) == 0,
+    ok (datatmp && strncmp (datatmp, data, len) == 0,
         "raw data matches expected string version of treeobj");
     ok (datatmp && (len == strlen (data)),
         "raw data length matches expected length of treeobj string");
@@ -357,7 +277,7 @@ void cache_entry_raw_and_treeobj_tests (void)
     cache_entry_destroy (e);
 }
 
-void waiter_raw_tests (void)
+void waiter_tests (void)
 {
     struct cache_entry *e;
     char *data;
@@ -447,76 +367,6 @@ void waiter_raw_tests (void)
     cache_entry_destroy (e); /* destroys data */
 
     free (data);
-}
-
-void waiter_treeobj_tests (void)
-{
-    struct cache_entry *e;
-    json_t *o;
-    wait_t *w;
-    int count;
-
-    /* Test cache entry waiters.
-     * N.B. waiter is destroyed when run.
-     */
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok ((e = cache_entry_create ()) != NULL,
-        "cache_entry_create created empty object");
-    ok (cache_entry_get_valid (e) == false,
-        "cache entry invalid, adding waiter");
-    ok (cache_entry_clear_dirty (e) < 0,
-        "cache_entry_clear_dirty returns error, b/c no object set");
-    ok (cache_entry_force_clear_dirty (e) < 0,
-        "cache_entry_force_clear_dirty returns error, b/c no object set");
-    o = treeobj_create_val ("foo", 3);
-    ok (cache_entry_wait_valid (e, w) == 0,
-        "cache_entry_wait_valid success");
-    ok (cache_entry_set_treeobj (e, o) == 0,
-        "cache_entry_set_treeobj success");
-    ok (cache_entry_get_valid (e) == true,
-        "cache entry set valid with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry set dirty, adding waiter");
-    ok (cache_entry_wait_notdirty (e, w) == 0,
-        "cache_entry_wait_notdirty success");
-    ok (cache_entry_clear_dirty (e) == 0,
-        "cache_entry_clear_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry still dirty, b/c of a waiter");
-    ok (cache_entry_set_dirty (e, false) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry set not dirty with one waiter");
-    ok (count == 1,
-        "waiter callback ran");
-
-    count = 0;
-    ok ((w = wait_create (wait_cb, &count)) != NULL,
-        "wait_create works");
-    ok (cache_entry_set_dirty (e, true) == 0,
-        "cache_entry_set_dirty success");
-    ok (cache_entry_get_dirty (e) == true,
-        "cache entry set dirty, adding waiter");
-    ok (cache_entry_wait_notdirty (e, w) == 0,
-        "cache_entry_wait_notdirty success");
-    ok (cache_entry_force_clear_dirty (e) == 0,
-        "cache_entry_force_clear_dirty success");
-    ok (cache_entry_get_dirty (e) == false,
-        "cache entry set not dirty with one waiter");
-    ok (count == 0,
-        "waiter callback not called on force clear dirty");
-
-    cache_entry_destroy (e); /* destroys o */
 }
 
 void cache_remove_entry_tests (void)
@@ -713,10 +563,8 @@ int main (int argc, char *argv[])
     cache_tests ();
     cache_entry_basic_tests ();
     cache_entry_raw_tests ();
-    cache_entry_treeobj_tests ();
     cache_entry_raw_and_treeobj_tests ();
-    waiter_raw_tests ();
-    waiter_treeobj_tests ();
+    waiter_tests ();
     cache_expiration_tests ();
     cache_remove_entry_tests ();
 
