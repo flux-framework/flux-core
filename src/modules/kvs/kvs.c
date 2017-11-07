@@ -1601,77 +1601,78 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
 }
 
 /* Store initial rootdir in local cache, and flush to content
- * cache synchronously.
- * Object reference is given to this function, it will either give it
- * to the cache or decref it.
+ * cache synchronously. If 'rootdir' is NULL, store an empty one.
+ * The corresponding blobref is written into 'ref'.
  */
-static int store_initial_rootdir (kvs_ctx_t *ctx, json_t *o, href_t ref)
+static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
+                                  href_t ref)
 {
     struct cache_entry *hp;
     int saved_errno, ret;
+    void *data = NULL;
+    int len;
+    flux_future_t *f = NULL;
+    const char *newref;
+    json_t *empty_rootdir = NULL;
 
-    if (treeobj_hash (ctx->hash_name, o, ref, sizeof (href_t)) < 0) {
-        saved_errno = errno;
-        flux_log_error (ctx->h, "%s: treeobj_hash",
-                        __FUNCTION__);
+    if (!rootdir) {
+        if (!(empty_rootdir = treeobj_create_dir ())) {
+            flux_log_error (ctx->h, "%s: treeobj_create_dir", __FUNCTION__);
+            goto error;
+        }
+        rootdir = empty_rootdir;
+    }
+    if (treeobj_validate (rootdir) < 0 || !treeobj_is_dir (rootdir)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(data = treeobj_encode (rootdir)))
+        goto error;
+    len = strlen (data);
+    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+        flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
     if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
         if (!(hp = cache_entry_create ())) {
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_create",
-                            __FUNCTION__);
+            flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
         cache_insert (ctx->cache, ref, hp);
     }
     if (!cache_entry_get_valid (hp)) {
-        const void *data;
-        int len;
-        assert (o);
-        if (cache_entry_set_treeobj (hp, o) < 0) {
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
-                            __FUNCTION__);
-            ret = cache_remove_entry (ctx->cache, ref);
-            assert (ret == 1);
-            goto error;
+        if (cache_entry_set_raw (hp, data, len) < 0) { // makes entry valid
+            flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
+            goto error_uncache;
         }
-        if (cache_entry_set_dirty (hp, true) < 0) {
-            /* remove entry will decref object */
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_set_dirty", __FUNCTION__);
-            ret = cache_remove_entry (ctx->cache, ref);
-            assert (ret == 1);
-            goto error;
+        if (!(f = flux_content_store (ctx->h, data, len, 0))
+                || flux_content_store_get (f, &newref) < 0) {
+            flux_log_error (ctx->h, "%s: flux_content_store", __FUNCTION__);
+            goto error_uncache;
         }
-        if (cache_entry_get_raw (hp, &data, &len) < 0) {
-            /* remove entry will decref object */
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: cache_entry_get_raw", __FUNCTION__);
-            ret = cache_remove_entry (ctx->cache, ref);
-            assert (ret == 1);
-            goto error;
-        }
-        if (content_store_request_send (ctx, data, len, true) < 0) {
-            /* Must clean up, don't want cache entry to be assumed
-             * valid.  Everything here is synchronous and w/o waiters,
-             * so nothing should error here */
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: content_store_request_send",
-                            __FUNCTION__);
-            ret = cache_entry_clear_dirty (hp);
-            assert (ret == 0);
-            assert (cache_entry_get_dirty (hp) == false);
-            ret = cache_remove_entry (ctx->cache, ref);
-            assert (ret == 1);
-            goto error;
+        /* Sanity check that content cache is using the same hash alg as KVS.
+         * It should suffice to do this once at startup.
+         */
+        if (strcmp (newref, ref) != 0) {
+            errno = EPROTO;
+            flux_log_error (ctx->h, "%s: hash mismatch kvs=%s content=%s",
+                            __FUNCTION__, ref, newref);
+            goto error_uncache;
         }
     }
-    json_decref (o);
+    free (data);
+    flux_future_destroy (f);
+    json_decref (empty_rootdir);
     return 0;
+error_uncache:
+    saved_errno = errno;
+    ret = cache_remove_entry (ctx->cache, ref);
+    assert (ret == 1);
 error:
-    json_decref (o);
+    saved_errno = errno;
+    free (data);
+    flux_future_destroy (f);
+    json_decref (empty_rootdir);
     errno = saved_errno;
     return -1;
 }
@@ -1695,16 +1696,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (ctx->rank == 0) {
-        json_t *rootdir;
         href_t href;
 
-        if (!(rootdir = treeobj_create_dir ())) {
-            flux_log_error (h, "treeobj_create_dir");
-            goto done;
-        }
-
-        if (store_initial_rootdir (ctx, rootdir, href) < 0) {
-            flux_log_error (h, "storing root object");
+        if (store_initial_rootdir (ctx, NULL, href) < 0) {
+            flux_log_error (h, "storing initial root object");
             goto done;
         }
         setroot (ctx, href, 0);
