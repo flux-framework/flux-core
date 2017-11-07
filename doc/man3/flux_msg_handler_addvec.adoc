@@ -49,6 +49,17 @@ handler, all previously created message handlers in the array are destroyed
 before an error is returned.
 
 
+SECURITY
+--------
+
+The _rolemask_ member of _struct flux_msg_handler_spec_ is passed
+to `flux_msg_handler_allow_rolemask()`.  If no additional roles besides the
+instance owner are to be allowed, set _rolemask_ to zero.
+
+See the SECURITY section of `flux_msg_handler_create(3)` for a description
+of message handler security.
+
+
 RETURN VALUE
 ------------
 
