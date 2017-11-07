@@ -504,6 +504,27 @@ test_expect_success 'kvs: basic append works with newlines' '
 '
 
 #
+# put --no-merge tests
+#
+test_expect_success 'kvs: put using --no-merge flag' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --no-merge --json $DIR.a=69 &&
+        flux kvs put --no-merge --json $DIR.b.c.d.e.f.g=70 &&
+        flux kvs put --no-merge --json $DIR.c.a.b=3.14 &&
+        flux kvs put --no-merge --json $DIR.d=\"snerg\" &&
+        flux kvs put --no-merge --json $DIR.e=true &&
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a = 69
+$DIR.b.c.d.e.f.g = 70
+$DIR.c.a.b = 3.140000
+$DIR.d = snerg
+$DIR.e = true
+EOF
+	test_cmp expected output
+'
+
+#
 # zero-length value corner case tests
 #
 test_expect_success 'kvs: zero-length value handled by put/get --raw' '
