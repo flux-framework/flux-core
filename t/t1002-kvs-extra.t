@@ -79,15 +79,6 @@ test_expect_success 'kvs: get --at: works on outdated root' '
 	test $(flux kvs get --at $ROOTREF $TEST.a.b.c) = 42
 '
 
-test_expect_success 'kvs: kvsdir_get_size works' '
-	flux kvs mkdir $TEST.dirsize &&
-	flux kvs put --json $TEST.dirsize.a=1 &&
-	flux kvs put --json $TEST.dirsize.b=2 &&
-	flux kvs put --json $TEST.dirsize.c=3 &&
-	OUTPUT=$(flux kvs ls -1 $TEST.dirsize | wc -l) &&
-	test "$OUTPUT" = "3"
-'
-
 # kvs reads/writes of raw data to/from content store work
 
 largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
