@@ -6,7 +6,9 @@ flux_msg_handler_create(3)
 NAME
 ----
 flux_msg_handler_create, flux_msg_handler_destroy,
-flux_msg_handler_start, flux_msg_handler_stop -  manage message handlers
+flux_msg_handler_start, flux_msg_handler_stop,
+flux_msg_handler_allow_rolemask,
+flux_msg_handler_deny_rolemask  -  manage message handlers
 
 
 SYNOPSIS
@@ -29,6 +31,12 @@ SYNOPSIS
  void flux_msg_handler_start (flux_msg_handler_t *mh);
 
  void flux_msg_handler_stop (flux_msg_handler_t *mh);
+
+ void flux_msg_handler_allow_rolemask (flux_msg_handler_t *w,
+                                       uint32_t rolemask);
+
+ void flux_msg_handler_deny_rolemask (flux_msg_handler_t *w,
+                                      uint32_t rolemask);
 
 
 DESCRIPTION
@@ -57,6 +65,34 @@ are automatically sent an ENOSYS response by the dispatcher.
 
 `flux_msg_handler_destroy()` destroys a handler, after internally
 stopping it.
+
+
+SECURITY
+--------
+
+As described in RFC 12, Flux connectors authenticate each broker
+connection, mapping it to a Flux userid and set of "roles" allocated
+to that user.  This userid and rolemask is stamped on all messages
+originating from the connection.
+
+A message handler only receives a message if a bit-wise and of the message
+rolemask and the message handler rolemask evaluates to a non-zero value,
+or the message rolemask contains the FLUX_ROLE_OWNER (instance owner) role.
+
+By default, the message handler rolemask is 0, but may be changed with
+`flux_msg_handler_allow_rolemask()` and `flux_msg_handler_deny_rolemask()`,
+which add or remove roles from the message handler rolemask.  The
+FLUX_ROLE_OWNER bit position is ignored in the message handler rolemask.
+
+The following roles are defined in RFC 12:
+
+FLUX_ROLE_OWNER::
+The instance owner role has maximum privilege within the Flux instance.
+
+FLUX_ROLE_USER::
+The user role confers access, but not administrative privilege.
+
+Other roles are yet to be defined.
 
 
 CAVEATS
@@ -103,3 +139,5 @@ include::COPYRIGHT.adoc[]
 SEE ALSO
 ---------
 flux_get_reactor(3), flux_reactor_start(3), flux_msg_cmp(3)
+
+https://github.com/flux-framework/rfc/blob/master/spec_6.adoc[RFC 12: Flux Security Architecture]
