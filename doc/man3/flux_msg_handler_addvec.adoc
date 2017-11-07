@@ -5,7 +5,8 @@ flux_msg_handler_addvec(3)
 
 NAME
 ----
-flux_msg_handler_addvec, flux_msg_handler_delvec - bulk add/remove message handlers
+flux_msg_handler_addvec,
+flux_msg_handler_delvec - bulk add/remove message handlers
 
 
 SYNOPSIS
@@ -14,7 +15,7 @@ SYNOPSIS
 
  struct flux_msg_handler_spec {
      int typemask;
-     char *topic_glob;
+     const char *topic_glob;
      flux_msg_handler_f cb;
      uint32_t rolemask;
      flux_msg_handler_t *w;
