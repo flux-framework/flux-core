@@ -1342,6 +1342,46 @@ done:
     return rc;
 }
 
+/* Optimization: the current rootdir object is optionally included
+ * in the kvs.setroot event.  Prime the local cache with it.
+ * If there are complications, just skip it.  Not critical.
+ */
+static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
+{
+    struct cache_entry *hp;
+    href_t ref;
+    void *data = NULL;
+    int len;
+
+    if (treeobj_validate (rootdir) < 0 || !treeobj_is_dir (rootdir)) {
+        flux_log (ctx->h, LOG_ERR, "%s: invalid rootdir", __FUNCTION__);
+        goto done;
+    }
+    if (!(data = treeobj_encode (rootdir))) {
+        flux_log_error (ctx->h, "%s: treeobj_encode", __FUNCTION__);
+        goto done;
+    }
+    len = strlen (data);
+    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+        flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
+        goto done;
+    }
+    if ((hp = cache_lookup (ctx->cache, ref, ctx->epoch)))
+        goto done; // already in cache, possibly dirty/invalid - we don't care
+    if (!(hp = cache_entry_create ())) {
+        flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
+        goto done;
+    }
+    if (cache_entry_set_raw (hp, data, len) < 0) {
+        flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
+        cache_entry_destroy (hp);
+        goto done;
+    }
+    cache_insert (ctx->cache, ref, hp);
+done:
+    free (data);
+}
+
 /* Alter the (rootref, rootseq) in response to a setroot event.
  */
 static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
@@ -1350,65 +1390,27 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
     kvs_ctx_t *ctx = arg;
     int rootseq;
     const char *rootref;
-    json_t *root = NULL;
+    json_t *rootdir = NULL;
     json_t *names = NULL;
 
     if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
                            "rootseq", &rootseq,
                            "rootref", &rootref,
                            "names", &names,
-                           "rootdir", &root) < 0) {
+                           "rootdir", &rootdir) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
 
     finalize_fences_bynames (ctx, names, 0);
-    /* Copy of root object (corresponding to rootref) was included
-     * in the setroot event as an optimization, since it would otherwise
-     * be loaded from the content store on next KVS access - immediate
-     * if there are watchers.  Store this object in the KVS cache
-     * with clear dirty bit as it is already valid in the content store.
+
+    /* Optimization: prime local cache with directory object, if provided
+     * in event message.  Ignore failure here - object will be fetched on
+     * demand from content cache if not in local cache.
      */
-    if (!json_is_null (root)) {
-        struct cache_entry *hp;
-        if ((hp = cache_lookup (ctx->cache, rootref, ctx->epoch))) {
-            if (!cache_entry_get_valid (hp)) {
-                /* On error, bad that we can't cache new root, but
-                 * no consistency issue by not caching.  We will still
-                 * set new root below via setroot().
-                 */
-                if (cache_entry_set_treeobj (hp, root) < 0) {
-                    flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
-                                    __FUNCTION__);
-                }
-            }
-            if (cache_entry_get_dirty (hp)) {
-                /* If it was dirty, an RPC is already in process, so
-                 * let that RPC handle any error handling with this
-                 * cache entry, we just log this error.
-                 */
-                if (cache_entry_set_dirty (hp, false) < 0)
-                    flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
-                                    __FUNCTION__);
-            }
-        } else {
-            /* On error, bad that we can't cache new root, but
-             * no consistency issue by not caching.  We will still
-             * set new root below via setroot().
-             */
-            if (!(hp = cache_entry_create ())) {
-                flux_log_error (ctx->h, "%s: cache_entry_create",
-                                __FUNCTION__);
-            }
-            else if (cache_entry_set_treeobj (hp, root) < 0) {
-                flux_log_error (ctx->h, "%s: cache_entry_set_treeobj",
-                                __FUNCTION__);
-                cache_entry_destroy (hp);
-            }
-            else
-                cache_insert (ctx->cache, rootref, hp);
-        }
-    }
+    if (!json_is_null (rootdir))
+        prime_cache_with_rootdir (ctx, rootdir);
+
     setroot (ctx, rootref, rootseq);
 }
 
