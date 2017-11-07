@@ -790,27 +790,12 @@ $TARGET2
 EOF
 	test_cmp output expected
 '
-test_expect_success 'kvs: readlink fails on regular value' '
-        flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.target=42 &&
-	! flux kvs readlink $DIR.target
-'
-test_expect_success 'kvs: readlink fails on directory' '
-        flux kvs unlink -Rf $DIR &&
-	flux kvs mkdir $DIR.a.b.c &&
-	! flux kvs readlink $DIR.a.b.
-'
 test_expect_success 'kvs: link: path resolution when intermediate component is a link' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a.b.c=42 &&
 	flux kvs link $DIR.a.b $DIR.Z.Y &&
 	OUTPUT=$(flux kvs get --json $DIR.Z.Y.c) &&
 	test "$OUTPUT" = "42"
-'
-test_expect_success 'kvs: link: path resolution with intermediate link and nonexistent key' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs link $DIR.a.b $DIR.Z.Y &&
-	test_must_fail flux kvs get --json $DIR.Z.Y
 '
 test_expect_success 'kvs: link: intermediate link points to another link' '
 	flux kvs unlink -Rf $DIR &&
@@ -829,9 +814,8 @@ test_expect_success 'kvs: link: intermediate links are followed by put' '
 	test_kvs_key $DIR.link.X 42 &&
 	test_kvs_key $DIR.a.X 42
 '
-
 # This will fail if individual ops are applied out of order
-test_expect_success 'kvs: link: kvs_copy removes linked destination' '
+test_expect_success 'kvs: link: copy removes linked destination' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs mkdir $DIR.a &&
 	flux kvs link $DIR.a $DIR.link &&
@@ -840,9 +824,8 @@ test_expect_success 'kvs: link: kvs_copy removes linked destination' '
 	! flux kvs readlink $DIR.link >/dev/null &&
 	test_kvs_key $DIR.link.X 42
 '
-
 # This will fail if individual ops are applied out of order
-test_expect_success 'kvs: link: kvs_move works' '
+test_expect_success 'kvs: link: move works' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs mkdir $DIR.a &&
 	flux kvs link $DIR.a $DIR.link &&
@@ -852,8 +835,7 @@ test_expect_success 'kvs: link: kvs_move works' '
 	test_kvs_key $DIR.link.X 42 &&
 	! flux kvs dir $DIR.a >/dev/null
 '
-
-test_expect_success 'kvs: link: kvs_copy does not follow links (top)' '
+test_expect_success 'kvs: link: copy does not follow links (top)' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a.X=42 &&
 	flux kvs link $DIR.a $DIR.link &&
@@ -861,8 +843,7 @@ test_expect_success 'kvs: link: kvs_copy does not follow links (top)' '
 	LINKVAL=$(flux kvs readlink $DIR.copy) &&
 	test "$LINKVAL" = "$DIR.a"
 '
-
-test_expect_success 'kvs: link: kvs_copy does not follow links (mid)' '
+test_expect_success 'kvs: link: copy does not follow links (mid)' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a.b.X=42 &&
 	flux kvs link $DIR.a.b $DIR.a.link &&
@@ -870,8 +851,7 @@ test_expect_success 'kvs: link: kvs_copy does not follow links (mid)' '
 	LINKVAL=$(flux kvs readlink $DIR.copy.link) &&
 	test "$LINKVAL" = "$DIR.a.b"
 '
-
-test_expect_success 'kvs: link: kvs_copy does not follow links (bottom)' '
+test_expect_success 'kvs: link: copy does not follow links (bottom)' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --json $DIR.a.b.X=42 &&
 	flux kvs link $DIR.a.b.X $DIR.a.b.link &&
@@ -879,28 +859,36 @@ test_expect_success 'kvs: link: kvs_copy does not follow links (bottom)' '
 	LINKVAL=$(flux kvs readlink $DIR.copy.b.link) &&
 	test "$LINKVAL" = "$DIR.a.b.X"
 '
-
-# Keep the next two tests in order
 test_expect_success 'kvs: link: dangling link' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs link $DIR.dangle $DIR.a.b.c
 '
 test_expect_success 'kvs: link: readlink on dangling link' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs link $DIR.dangle $DIR.a.b.c &&
 	OUTPUT=$(flux kvs readlink $DIR.a.b.c) &&
 	test "$OUTPUT" = "$DIR.dangle"
 '
-test_expect_success 'kvs: link: readlink works on non-dangling link' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c="foo" &&
-	flux kvs link $DIR.a.b.c $DIR.link &&
-	OUTPUT=$(flux kvs readlink $DIR.link) &&
-	test "$OUTPUT" = "$DIR.a.b.c"
+
+#
+# link/readlink corner case tests
+#
+
+test_expect_success 'kvs: readlink fails on regular value' '
+        flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.target=42 &&
+	! flux kvs readlink $DIR.target
 '
-
-#
-# link depth corner case tests
-#
-
+test_expect_success 'kvs: readlink fails on directory' '
+        flux kvs unlink -Rf $DIR &&
+	flux kvs mkdir $DIR.a.b.c &&
+	! flux kvs readlink $DIR.a.b.
+'
+test_expect_success 'kvs: link: path resolution with intermediate link and nonexistent key' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs link $DIR.a.b $DIR.Z.Y &&
+	test_must_fail flux kvs get --json $DIR.Z.Y
+'
 test_expect_success 'kvs: link: error on link depth' '
 	flux kvs unlink -Rf $DIR &&
         flux kvs put --json $DIR.a=1 &&
@@ -917,7 +905,6 @@ test_expect_success 'kvs: link: error on link depth' '
 	flux kvs link $DIR.k $DIR.l &&
         test_must_fail flux kvs get --json $DIR.l
 '
-
 test_expect_success 'kvs: link: error on link depth, loop' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs link $DIR.link1 $DIR.link2 &&
