@@ -432,6 +432,29 @@ test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
 	flux kvs put --raw $DIR.a= &&
 	flux kvs ls -FR $DIR
 '
+test_expect_success 'kvs: append to zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs put --append $DIR.a=abc &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: append a zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=abc &&
+	flux kvs put --append $DIR.a= &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: append a zero length value to zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs put --append $DIR.a= &&
+	flux kvs get $DIR.a >empty.output &&
+	test_cmp /dev/null empty.output
+'
 
 #
 # raw value tests
@@ -537,32 +560,6 @@ test_expect_success 'kvs: basic append works with newlines' '
 	printf "%s\n%s\n%s\n" "abc" "def" "ghi" >expected &&
 	flux kvs get --raw $DIR.a >output &&
 	test_cmp output expected
-'
-
-test_expect_success 'kvs: append to zero length value works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs put --append $DIR.a=abc &&
-	printf "%s\n" "abc" >expected &&
-	flux kvs get $DIR.a >output &&
-	test_cmp output expected
-'
-
-test_expect_success 'kvs: append a zero length value works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=abc &&
-	flux kvs put --append $DIR.a= &&
-	printf "%s\n" "abc" >expected &&
-	flux kvs get $DIR.a >output &&
-	test_cmp output expected
-'
-
-test_expect_success 'kvs: append a zero length value to zero length value works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs put --append $DIR.a= &&
-	flux kvs get $DIR.a >empty.output &&
-	test_cmp /dev/null empty.output
 '
 
 #
