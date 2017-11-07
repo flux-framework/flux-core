@@ -1,11 +1,10 @@
 #!/bin/sh
 #
 
-test_description='Test flux-kvs usage in flux session
+test_description='Test flux-kvs and kvs in flux session
 
-This differs from basic KVS tests as it tests the flux-kvs command
-line interface to KVS and not necessarily the KVS functionality.  Some
-tests may be identical.
+These are the basic/core flux kvs tests and should be run before
+any other tests that require kvs functionality.
 '
 
 . `dirname $0`/sharness.sh
