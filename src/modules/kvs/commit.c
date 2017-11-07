@@ -159,7 +159,7 @@ const char *commit_get_newroot_ref (commit_t *c)
  * blobref in the cache, any waiters for a valid cache entry would
  * have been satisfied when the dirty cache entry was put onto
  * this dirty cache list (i.e. in store_cache() below when
- * cache_entry_set_treeobj() was called).
+ * cache_entry_set_raw() was called).
  */
 void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
 {
@@ -206,7 +206,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
                         bool is_raw, href_t ref, struct cache_entry **hpp)
 {
     struct cache_entry *hp;
-    int saved_errno, rc = -1;
+    int saved_errno, rc;
     const char *xdata;
     char *data = NULL;
     int xlen, len;
@@ -231,40 +231,38 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
             free (data);
             data = NULL;
         }
-        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
     }
     else {
-        if (treeobj_hash (c->cm->hash_name, o, ref, sizeof (href_t)) < 0) {
-            flux_log_error (c->cm->h, "treeobj_hash");
+        if (treeobj_validate (o) < 0 || !(data = treeobj_encode (o))) {
+            flux_log_error (c->cm->h, "%s: treeobj_encode", __FUNCTION__);
             goto error;
         }
+        len = strlen (data);
+    }
+    if (blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+        flux_log_error (c->cm->h, "%s: blobref_hash", __FUNCTION__);
+        goto error;
     }
     if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
-        if (!(hp = cache_entry_create ()))
+        if (!(hp = cache_entry_create ())) {
+            flux_log_error (c->cm->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
+        }
         cache_insert (c->cm->cache, ref, hp);
     }
     if (cache_entry_get_valid (hp)) {
         c->cm->noop_stores++;
         rc = 0;
-    } else {
-        if (is_raw) {
-            if (cache_entry_set_raw (hp, data, len) < 0) {
-                int ret;
-                ret = cache_remove_entry (c->cm->cache, ref);
-                assert (ret == 1);
-                goto error;
-            }
-        }
-        else {
-            if (cache_entry_set_treeobj (hp, o) < 0) {
-                int ret;
-                ret = cache_remove_entry (c->cm->cache, ref);
-                assert (ret == 1);
-                goto error;
-            }
+    }
+    else {
+        if (cache_entry_set_raw (hp, data, len) < 0) {
+            int ret;
+            ret = cache_remove_entry (c->cm->cache, ref);
+            assert (ret == 1);
+            goto error;
         }
         if (cache_entry_set_dirty (hp, true) < 0) {
+            flux_log_error (c->cm->h, "%s: cache_entry_set_dirty",__FUNCTION__);
             int ret;
             ret = cache_remove_entry (c->cm->cache, ref);
             assert (ret == 1);
@@ -280,7 +278,7 @@ error:
     saved_errno = errno;
     free (data);
     errno = saved_errno;
-    return rc;
+    return -1;
 }
 
 /* Store DIRVAL objects, converting them to DIRREFs.
