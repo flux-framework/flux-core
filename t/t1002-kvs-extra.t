@@ -22,63 +22,6 @@ echo "# $0: flux session size will be ${SIZE}"
 TEST=$TEST_NAME
 DIR=$TEST.a.b.c
 
-test_expect_success 'kvs: directory with multiple subdirs using dir --at' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put --json $DIR.a=69 &&
-        flux kvs put --json $DIR.b.c.d.e.f.g=70 &&
-        flux kvs put --json $DIR.c.a.b=3.14 &&
-        flux kvs put --json $DIR.d=\"snerg\" &&
-        flux kvs put --json $DIR.e=true &&
-        DIRREF=$(flux kvs get --treeobj $DIR) &&
-	flux kvs dir -R --at $DIRREF . | sort >output &&
-	cat >expected <<EOF &&
-a = 69
-b.c.d.e.f.g = 70
-c.a.b = 3.140000
-d = snerg
-e = true
-EOF
-	test_cmp expected output
-'
-
-test_expect_success 'kvs: readlink --at works after symlink unlinked' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs link $TEST.a.b.X $TEST.a.b.link &&
-	ROOTREF=$(flux kvs get --treeobj .) &&
-	flux kvs unlink -R $TEST &&
-	LINKVAL=$(flux kvs readlink --at $ROOTREF $TEST.a.b.link) &&
-	test "$LINKVAL" = "$TEST.a.b.X"
-'
-
-test_expect_success 'kvs: get --at: fails bad on dirent' '
-	flux kvs unlink -Rf $TEST &&
-	test_must_fail flux kvs get --at 42 $TEST.a &&
-	test_must_fail flux kvs get --at "{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail flux kvs get --at "{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail flux kvs get --at "{\"data\":42,\"type\":\"dirref\",\"ver\":1}" $TEST.a &&
-	test_must_fail flux kvs get --at "{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}" $TEST.a
-'
-
-test_expect_success 'kvs: get --at: works on root from get --treeobj' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put --json $TEST.a.b.c=42 &&
-	test $(flux kvs get --at $(flux kvs get --treeobj .) $TEST.a.b.c) = 42
-'
-
-test_expect_success 'kvs: get --at: works on subdir from get --treeobj' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put --json $TEST.a.b.c=42 &&
-	test $(flux kvs get --at $(flux kvs get --treeobj $TEST.a.b) c) = 42
-'
-
-test_expect_success 'kvs: get --at: works on outdated root' '
-	flux kvs unlink -Rf $TEST &&
-	flux kvs put --json $TEST.a.b.c=42 &&
-	ROOTREF=$(flux kvs get --treeobj .) &&
-	flux kvs put --json $TEST.a.b.c=43 &&
-	test $(flux kvs get --at $ROOTREF $TEST.a.b.c) = 42
-'
-
 # kvs reads/writes of raw data to/from content store work
 
 largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
