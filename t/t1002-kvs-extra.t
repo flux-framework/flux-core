@@ -19,41 +19,40 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
-TEST=$TEST_NAME
-DIR=$TEST.a.b.c
+DIR=test.a.b.c
 
 # dtree tests
 
 test_expect_success 'kvs: store 16x3 directory tree' '
-	${FLUX_BUILD_DIR}/t/kvs/dtree -h3 -w16 --prefix $TEST.dtree
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h3 -w16 --prefix $DIR.dtree
 '
 
 test_expect_success 'kvs: walk 16x3 directory tree' '
-	test $(flux kvs dir -R $TEST.dtree | wc -l) = 4096
+	test $(flux kvs dir -R $DIR.dtree | wc -l) = 4096
 '
 
 test_expect_success 'kvs: unlink, walk 16x3 directory tree with dir --at' '
-	DIRREF=$(flux kvs get --treeobj $TEST.dtree) &&
-	flux kvs unlink -Rf $TEST.dtree &&
+	DIRREF=$(flux kvs get --treeobj $DIR.dtree) &&
+	flux kvs unlink -Rf $DIR.dtree &&
 	test $(flux kvs dir -R --at $DIRREF . | wc -l) = 4096
 '
 
 test_expect_success 'kvs: store 2x4 directory tree and walk' '
-	${FLUX_BUILD_DIR}/t/kvs/dtree -h4 -w2 --prefix $TEST.dtree &&
-	test $(flux kvs dir -R $TEST.dtree | wc -l) = 16
+	${FLUX_BUILD_DIR}/t/kvs/dtree -h4 -w2 --prefix $DIR.dtree &&
+	test $(flux kvs dir -R $DIR.dtree | wc -l) = 16
 '
 
 test_expect_success 'kvs: add other types to 2x4 directory and walk' '
-	flux kvs link $TEST.dtree $TEST.dtree.link &&
-	flux kvs put --json $TEST.dtree.double=3.14 &&
-	flux kvs put --json $TEST.dtree.booelan=true &&
-	test $(flux kvs dir -R $TEST.dtree | wc -l) = 19
+	flux kvs link $DIR.dtree $DIR.dtree.link &&
+	flux kvs put --json $DIR.dtree.double=3.14 &&
+	flux kvs put --json $DIR.dtree.booelan=true &&
+	test $(flux kvs dir -R $DIR.dtree | wc -l) = 19
 '
 
 test_expect_success 'kvs: store 3x4 directory tree using kvsdir_put functions' '
-	flux kvs unlink -Rf $TEST.dtree &&
-	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $TEST.dtree &&
-	test $(flux kvs dir -R $TEST.dtree | wc -l) = 81
+	flux kvs unlink -Rf $DIR.dtree &&
+	${FLUX_BUILD_DIR}/t/kvs/dtree --mkdir -h4 -w3 --prefix $DIR.dtree &&
+	test $(flux kvs dir -R $DIR.dtree | wc -l) = 81
 '
 
 # commit test
@@ -102,43 +101,43 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mix
 # watch tests
 
 test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
-	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $TEST.a &&
-	flux kvs unlink -Rf $TEST.a
+	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $DIR.a &&
+	flux kvs unlink -Rf $DIR.a
 '
 
 test_expect_success 'kvs: watch-selfmod: watch callback modifies watched key' '
-	${FLUX_BUILD_DIR}/t/kvs/watch selfmod $TEST.a &&
-	flux kvs unlink -Rf $TEST.a
+	${FLUX_BUILD_DIR}/t/kvs/watch selfmod $DIR.a &&
+	flux kvs unlink -Rf $DIR.a
 '
 
 test_expect_success 'kvs: watch-unwatch unwatch works' '
-	${FLUX_BUILD_DIR}/t/kvs/watch unwatch $TEST.a &&
-	flux kvs unlink -Rf $TEST.a
+	${FLUX_BUILD_DIR}/t/kvs/watch unwatch $DIR.a &&
+	flux kvs unlink -Rf $DIR.a
 '
 
 test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
-	${FLUX_BUILD_DIR}/t/kvs/watch unwatchloop $TEST.a &&
-	flux kvs unlink -Rf $TEST.a
+	${FLUX_BUILD_DIR}/t/kvs/watch unwatchloop $DIR.a &&
+	flux kvs unlink -Rf $DIR.a
 '
 
 test_expect_success 'kvs: 256 simultaneous watches works' '
-	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $TEST.a 256 &&
-	flux kvs unlink -Rf $TEST.a
+	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $DIR.a 256 &&
+	flux kvs unlink -Rf $DIR.a
 '
 
 
 # large dirs
 
 test_expect_success 'kvs: store value exceeding RFC 10 max blob size of 1m' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.tortureval --count 1 --size=1048577
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.tortureval --count 1 --size=1048577
 '
 
 test_expect_success 'kvs: store 10,000 keys in one dir' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir --count 10000
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir --count 10000
 '
 
 test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $TEST.bigdir2 --count 1000000
+	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir2 --count 1000000
 '
 
 # kvs merging tests
