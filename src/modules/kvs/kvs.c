@@ -63,11 +63,15 @@ const int max_lastuse_age = 5;
  */
 const bool event_includes_rootdir = true;
 
+struct kvsroot {
+    int seq;
+    href_t ref;
+};
+
 typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
-    href_t rootdir;         /* current root blobref */
-    int rootseq;            /* current root version (for ordering) */
+    struct kvsroot root;
     commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
@@ -378,12 +382,12 @@ error:
     return rc;
 }
 
-static void setroot (kvs_ctx_t *ctx, const char *rootdir, int rootseq)
+static void setroot (kvs_ctx_t *ctx, const char *rootref, int rootseq)
 {
-    if (rootseq == 0 || rootseq > ctx->rootseq) {
-        assert (strlen (rootdir) < sizeof (href_t));
-        strcpy (ctx->rootdir, rootdir);
-        ctx->rootseq = rootseq;
+    if (rootseq == 0 || rootseq > ctx->root.seq) {
+        assert (strlen (rootref) < sizeof (href_t));
+        strcpy (ctx->root.ref, rootref);
+        ctx->root.seq = rootseq;
         /* log error on wait_runqueue(), don't error out.  watchers
          * may miss value change, but will never get older one.
          * Maintains consistency model */
@@ -461,7 +465,7 @@ static void commit_apply (commit_t *c)
 
     if ((ret = commit_process (c,
                                ctx->epoch,
-                               ctx->rootdir)) == COMMIT_PROCESS_ERROR) {
+                               ctx->root.ref)) == COMMIT_PROCESS_ERROR) {
         errnum = commit_get_errnum (c);
         goto done;
     }
@@ -523,7 +527,7 @@ static void commit_apply (commit_t *c)
     /* else ret == COMMIT_PROCESS_FINISHED */
 
     /* This is the transaction that finalizes the commit by replacing
-     * ctx->rootdir with newroot, incrementing the root seq,
+     * ctx->root.ref with newroot, incrementing ctx->root.seq,
      * and sending out the setroot event for "eventual consistency"
      * of other nodes.
      */
@@ -537,7 +541,7 @@ done:
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, commit_get_newroot_ref (c), ctx->rootseq + 1);
+        setroot (ctx, commit_get_newroot_ref (c), ctx->root.seq + 1);
         setroot_event_send (ctx, fence_get_json_names (f));
     } else {
         fence_t *f = commit_get_fence (c);
@@ -646,7 +650,7 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
     /* "touch" root */
-    (void)cache_lookup (ctx->cache, ctx->rootdir, ctx->epoch);
+    (void)cache_lookup (ctx->cache, ctx->root.ref, ctx->epoch);
 
     if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
@@ -711,7 +715,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
-                                  ctx->rootdir,
+                                  ctx->root.ref,
                                   root_ref,
                                   key,
                                   h,
@@ -833,7 +837,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
-                                  ctx->rootdir,
+                                  ctx->root.ref,
                                   NULL,
                                   key,
                                   h,
@@ -1219,7 +1223,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
-    if (ctx->rootseq < rootseq) {
+    if (ctx->root.seq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
             goto error;
         if (wait_addqueue (ctx->watchlist, wait) < 0) {
@@ -1231,8 +1235,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
         return; /* stall */
     }
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
-                           "rootseq", ctx->rootseq,
-                           "rootdir", ctx->rootdir) < 0) {
+                           "rootseq", ctx->root.seq,
+                           "rootdir", ctx->root.ref) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -1252,8 +1256,8 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
-                           "rootseq", ctx->rootseq,
-                           "rootdir", ctx->rootdir) < 0) {
+                           "rootseq", ctx->root.seq,
+                           "rootdir", ctx->root.ref) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -1264,7 +1268,7 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
+static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootref)
 {
     flux_future_t *f;
     const char *ref;
@@ -1285,7 +1289,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootdir)
         saved_errno = EPROTO;
         goto done;
     }
-    strcpy (rootdir, ref);
+    strcpy (rootref, ref);
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -1338,20 +1342,20 @@ done:
     return rc;
 }
 
-/* Alter the (rootdir, rootseq) in response to a setroot event.
+/* Alter the (rootref, rootseq) in response to a setroot event.
  */
 static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     int rootseq;
-    const char *rootdir;
+    const char *rootref;
     json_t *root = NULL;
     json_t *names = NULL;
 
     if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
                            "rootseq", &rootseq,
-                           "rootdir", &rootdir,
+                           "rootdir", &rootref,
                            "names", &names,
                            "rootdirval", &root) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
@@ -1359,7 +1363,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
     }
 
     finalize_fences_bynames (ctx, names, 0);
-    /* Copy of root object (corresponding to rootdir blobref) was included
+    /* Copy of root object (corresponding to rootref) was included
      * in the setroot event as an optimization, since it would otherwise
      * be loaded from the content store on next KVS access - immediate
      * if there are watchers.  Store this object in the KVS cache
@@ -1367,7 +1371,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
      */
     if (!json_is_null (root)) {
         struct cache_entry *hp;
-        if ((hp = cache_lookup (ctx->cache, rootdir, ctx->epoch))) {
+        if ((hp = cache_lookup (ctx->cache, rootref, ctx->epoch))) {
             if (!cache_entry_get_valid (hp)) {
                 /* On error, bad that we can't cache new root, but
                  * no consistency issue by not caching.  We will still
@@ -1402,10 +1406,10 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
                 cache_entry_destroy (hp);
             }
             else
-                cache_insert (ctx->cache, rootdir, hp);
+                cache_insert (ctx->cache, rootref, hp);
         }
     }
-    setroot (ctx, rootdir, rootseq);
+    setroot (ctx, rootref, rootseq);
 }
 
 static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
@@ -1419,7 +1423,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
 
     if (event_includes_rootdir) {
         struct cache_entry *hp;
-        if ((hp = cache_lookup (ctx->cache, ctx->rootdir, ctx->epoch)))
+        if ((hp = cache_lookup (ctx->cache, ctx->root.ref, ctx->epoch)))
             root = cache_entry_get_treeobj (hp);
         assert (root != NULL); // root entry is always in cache on rank 0
     }
@@ -1432,8 +1436,8 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
         root = nullobj;
     }
     if (!(msg = flux_event_pack ("kvs.setroot", "{ s:i s:s s:O s:O }",
-                                 "rootseq", ctx->rootseq,
-                                 "rootdir", ctx->rootdir,
+                                 "rootseq", ctx->root.seq,
+                                 "rootdir", ctx->root.ref,
                                  "names", names,
                                  "rootdirval", root))) {
         saved_errno = errno;
@@ -1530,7 +1534,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
                            "#watchers", wait_queue_length (ctx->watchlist),
                            "#no-op stores", commit_mgr_get_noop_stores (ctx->cm),
                            "#faults", ctx->faults,
-                           "store revision", ctx->rootseq) < 0) {
+                           "store revision", ctx->root.seq) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto done;
     }
@@ -1600,7 +1604,7 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
     }
 }
 
-/* Store initial rootdir in local cache, and flush to content
+/* Store initial root in local cache, and flush to content
  * cache synchronously. If 'rootdir' is NULL, store an empty one.
  * The corresponding blobref is written into 'ref'.
  */
@@ -1696,13 +1700,13 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (ctx->rank == 0) {
-        href_t href;
+        href_t rootref;
 
-        if (store_initial_rootdir (ctx, NULL, href) < 0) {
+        if (store_initial_rootdir (ctx, NULL, rootref) < 0) {
             flux_log_error (h, "storing initial root object");
             goto done;
         }
-        setroot (ctx, href, 0);
+        setroot (ctx, rootref, 0);
     } else {
         href_t href;
         int rootseq;
