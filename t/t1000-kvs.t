@@ -250,6 +250,325 @@ EOF
 '
 
 #
+# get corner case tests
+#
+
+test_expect_success 'kvs: get a nonexistent key' '
+	test_must_fail flux kvs get --json NOT.A.KEY
+'
+test_expect_success 'kvs: try to retrieve a directory as key should fail' '
+        flux kvs mkdir $DIR.a.b.c &&
+	test_must_fail flux kvs get --json $DIR
+'
+
+#
+# put corner case tests
+#
+
+test_expect_success 'kvs: put with invalid input' '
+	test_must_fail flux kvs put --json NOVALUE
+'
+test_expect_success 'kvs: put key of . fails' '
+	test_must_fail flux kvs put --json .=1
+'
+
+#
+# get/put --json corner case tests
+#
+test_expect_success 'kvs: null is converted to json null' '
+	flux kvs put --json $DIR.jsonnull=null &&
+        test_kvs_key $DIR.jsonnull nil
+'
+test_expect_success 'kvs: quoted null is converted to json string' '
+	flux kvs put --json $DIR.strnull=\"null\" &&
+        test_kvs_key $DIR.strnull null
+'
+
+#
+# dir corner case tests
+#
+
+test_empty_directory() {
+	OUTPUT=`flux kvs dir -R $1 | wc -l` &&
+	test "x$OUTPUT" = "x0"
+}
+
+test_expect_success 'kvs: try to retrieve key as directory should fail' '
+        flux kvs put --json $DIR.a.b.c.d=42 &&
+	test_must_fail flux kvs dir $DIR.a.b.c.d
+'
+test_expect_success 'kvs: empty directory can be created' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs mkdir $DIR &&
+	test_empty_directory $DIR
+'
+
+#
+# unlink corner case tests
+#
+
+test_expect_success 'kvs: unlink nonexistent key fails' '
+        test_must_fail flux kvs unlink NOT.A.KEY
+'
+test_expect_success 'kvs: unlink nonexistent key with -f does not fail' '
+        flux kvs unlink -f NOT.A.KEY
+'
+test_expect_success 'kvs: unlink nonexistent dir with -f does not fail' '
+        flux kvs unlink -Rf NOT.A.KEY
+'
+test_expect_success 'kvs: unlink non-empty dir fails' '
+        flux kvs mkdir $SUBDIR1 $SUBDIR2 &&
+	test_must_fail flux kvs unlink $DIR
+'
+test_expect_success 'kvs: unlink -R works' '
+        flux kvs unlink -R $DIR &&
+          test_must_fail flux kvs dir $SUBDIR1 &&
+          test_must_fail flux kvs dir $SUBDIR2 &&
+          test_must_fail flux kvs dir $DIR
+'
+test_expect_success 'kvs: empty directory remains after key removed' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs put --json $DIR.a=1 &&
+        test_kvs_key $DIR.a 1 &&
+        flux kvs unlink $DIR.a &&
+	test_empty_directory $DIR
+'
+
+#
+# empty string corner case tests
+#
+test_expect_success 'kvs: put/get empty string' '
+	flux kvs unlink -Rf $DIR &&
+	echo -n "" | flux kvs put --raw $DIR.a=- &&
+	flux kvs get $DIR.a >output &&
+        echo -n "" > expected &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: dir can read and display empty string' '
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a = 
+EOF
+	test_cmp expected output
+'
+test_expect_success 'kvs: no value with --json is json empty string' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a= &&
+	flux kvs get --json $DIR.a >output &&
+        echo "" > expected &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: dir can read and display json empty string' '
+	flux kvs dir -R $DIR | sort >output &&
+	cat >expected <<EOF &&
+$DIR.a = 
+EOF
+	test_cmp expected output
+'
+
+#
+# key normalization corner case tests
+#
+test_expect_success 'kvs: put with leading path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json ......$DIR.a.b.c=42 &&
+	test_kvs_key $DIR.a.b.c 42
+'
+test_expect_success 'kvs: put with trailing path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a.b.c........=43 &&
+	test_kvs_key $DIR.a.b.c 43
+'
+test_expect_success 'kvs: put with extra embedded path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.....a....b...c=44 &&
+	test_kvs_key $DIR.a.b.c 44
+'
+test_expect_success 'kvs: get with leading path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a.b.c=42 &&
+	test_kvs_key ......$DIR.a.b.c 42
+'
+test_expect_success 'kvs: get with trailing path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a.b.c=43 &&
+	test_kvs_key $DIR.a.b.c........ 43
+'
+test_expect_success 'kvs: get with extra embedded path separators works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a.b.c=44 &&
+	test_kvs_key $DIR.....a....b...c 44
+'
+
+#
+# get/put --raw tests
+#
+test_expect_success 'kvs: put/get --raw works with multiple key=val pairs' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a=xyz $DIR.b=zyx &&
+	printf "%s" 'xyzzyx' >twovals.expected &&
+	flux kvs get --raw $DIR.a $DIR.b >twovals.actual &&
+	test_cmp twovals.expected twovals.actual
+'
+test_expect_success 'kvs: put --raw a=- reads value from stdin' '
+	flux kvs unlink -Rf $DIR &&
+	printf "%s" "abc" | flux kvs put --raw $DIR.a=- &&
+	printf "%s" "abc" >rawstdin.expected &&
+	flux kvs get --raw $DIR.a >rawstdin.actual &&
+	test_cmp rawstdin.expected rawstdin.actual
+'
+test_expect_success 'kvs: put --raw a=- b=42 works' '
+	flux kvs unlink -Rf $DIR &&
+	printf "%s" "abc" | flux kvs put --raw $DIR.a=- $DIR.b=42 &&
+	printf "%s" "abc42" >rawstdin2.expected &&
+	flux kvs get --raw $DIR.a $DIR.b >rawstdin2.actual &&
+	test_cmp rawstdin2.expected rawstdin2.actual
+'
+test_expect_success 'kvs: put --raw a=- b=- works with a getting all of stdin' '
+	flux kvs unlink -Rf $DIR &&
+	printf "%s" "abc" | flux kvs put --raw $DIR.a=- $DIR.b=- &&
+	printf "%s" "abc" >rawstdin3a.expected &&
+	flux kvs get --raw $DIR.a >rawstdin3a.actual &&
+	flux kvs get --raw $DIR.b >rawstdin3b.actual &&
+	test_cmp rawstdin3a.expected rawstdin3a.actual &&
+	test_cmp /dev/null rawstdin3b.actual
+'
+
+#
+# get/put --treeobj tests
+#
+test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.val=hello &&
+	flux kvs put $DIR.valref=$(seq -s 1 100) &&
+	flux kvs mkdir $DIR.dirref &&
+	flux kvs link foo $DIR.symlink &&
+	flux kvs get --treeobj $DIR.val | grep -q val &&
+	flux kvs get --treeobj $DIR.valref | grep -q valref &&
+	flux kvs get --treeobj $DIR.dirref | grep -q dirref &&
+	flux kvs get --treeobj $DIR.symlink | grep -q symlink
+'
+test_expect_success 'kvs: treeobj is created by put --treeobj' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --treeobj $DIR.val="{\"data\":\"YgA=\",\"type\":\"val\",\"ver\":1}" &&
+	flux kvs get $DIR.val >val.output &&
+	echo "b" >val.expected &&
+	test_cmp val.expected val.output
+'
+test_expect_success 'kvs: treeobj can be used to create snapshot' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a.a=hello &&
+	flux kvs put $DIR.a.b=goodbye &&
+	flux kvs put --treeobj $DIR.b=$(flux kvs get --treeobj $DIR.a) &&
+	(flux kvs get $DIR.a.a && flux kvs get $DIR.a.b) >snap.expected &&
+	(flux kvs get $DIR.b.a && flux kvs get $DIR.b.b) >snap.actual &&
+	test_cmp snap.expected snap.actual
+'
+
+#
+# put --append tests
+#
+test_expect_success 'kvs: append on non-existent key is same as create' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --append $DIR.a=abc &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: basic append works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=abc &&
+	flux kvs put --append $DIR.a=def &&
+	flux kvs put --append $DIR.a=ghi &&
+	printf "%s%s%s\n" "abcdefghi" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: basic append works with --raw' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a=abc &&
+	flux kvs put --append --raw $DIR.a=def &&
+	flux kvs put --append --raw $DIR.a=ghi &&
+	printf "%s" "abcdefghi" >expected &&
+	flux kvs get --raw $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: basic append works with newlines' '
+	flux kvs unlink -Rf $DIR &&
+	echo "abc" | flux kvs put --raw $DIR.a=- &&
+	echo "def" | flux kvs put --append --raw $DIR.a=- &&
+	echo "ghi" | flux kvs put --append --raw $DIR.a=- &&
+	printf "%s\n%s\n%s\n" "abc" "def" "ghi" >expected &&
+	flux kvs get --raw $DIR.a >output &&
+	test_cmp output expected
+'
+
+#
+# zero-length value corner case tests
+#
+test_expect_success 'kvs: zero-length value handled by put/get --raw' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs get --raw $DIR.a >empty.output &&
+	test_cmp /dev/null empty.output
+'
+test_expect_success 'kvs: zero-length value handled by get with no options' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs get $DIR.a >empty2.output &&
+	test_cmp /dev/null empty2.output
+'
+test_expect_success 'kvs: zero-length value handled by get --treeobj' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs get --treeobj $DIR.a
+'
+test_expect_success 'kvs: zero-length value NOT handled by get --json' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	test_must_fail flux kvs get --json $DIR.a
+'
+test_expect_success 'kvs: zero-length value is made by put with no options' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs get --raw $DIR.a >empty3.output &&
+	test_cmp /dev/null empty3.output
+'
+test_expect_success 'kvs: zero-length value does not cause dir to fail' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs dir $DIR
+'
+test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --raw $DIR.a= &&
+	flux kvs ls -FR $DIR
+'
+test_expect_success 'kvs: append to zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs put --append $DIR.a=abc &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: append a zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a=abc &&
+	flux kvs put --append $DIR.a= &&
+	printf "%s\n" "abc" >expected &&
+	flux kvs get $DIR.a >output &&
+	test_cmp output expected
+'
+test_expect_success 'kvs: append a zero length value to zero length value works' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put $DIR.a= &&
+	flux kvs put --append $DIR.a= &&
+	flux kvs get $DIR.a >empty.output &&
+	test_cmp /dev/null empty.output
+'
+
+#
 # ls tests
 #
 test_expect_success 'kvs: ls -1F DIR works' '
@@ -364,328 +683,6 @@ test_expect_success 'kvs: ls key. fails if key is not a directory' '
 test_expect_success 'kvs: ls key. fails if key does not exist' '
 	flux kvs unlink -Rf $DIR &&
 	test_must_fail flux kvs ls $DIR.a
-'
-
-#
-# empty string value
-#
-test_expect_success 'kvs: put/get empty string' '
-	flux kvs unlink -Rf $DIR &&
-	echo -n "" | flux kvs put --raw $DIR.a=- &&
-	flux kvs get $DIR.a >output &&
-        echo -n "" > expected &&
-	test_cmp output expected
-'
-test_expect_success 'kvs: dir can read and display empty string' '
-	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF &&
-$DIR.a = 
-EOF
-	test_cmp expected output
-'
-test_expect_success 'kvs: no value with --json is json empty string' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a= &&
-	flux kvs get --json $DIR.a >output &&
-        echo "" > expected &&
-	test_cmp output expected
-'
-test_expect_success 'kvs: dir can read and display json empty string' '
-	flux kvs dir -R $DIR | sort >output &&
-	cat >expected <<EOF &&
-$DIR.a = 
-EOF
-	test_cmp expected output
-'
-
-#
-# zero-length values
-#
-test_expect_success 'kvs: zero-length value handled by put/get --raw' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	flux kvs get --raw $DIR.a >empty.output &&
-	test_cmp /dev/null empty.output
-'
-test_expect_success 'kvs: zero-length value handled by get with no options' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	flux kvs get $DIR.a >empty2.output &&
-	test_cmp /dev/null empty2.output
-'
-test_expect_success 'kvs: zero-length value handled by get --treeobj' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	flux kvs get --treeobj $DIR.a
-'
-test_expect_success 'kvs: zero-length value NOT handled by get --json' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	test_must_fail flux kvs get --json $DIR.a
-'
-test_expect_success 'kvs: zero-length value is made by put with no options' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs get --raw $DIR.a >empty3.output &&
-	test_cmp /dev/null empty3.output
-'
-test_expect_success 'kvs: zero-length value does not cause dir to fail' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	flux kvs dir $DIR
-'
-test_expect_success 'kvs: zero-length value does not cause ls -FR to fail' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	flux kvs ls -FR $DIR
-'
-test_expect_success 'kvs: append to zero length value works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs put --append $DIR.a=abc &&
-	printf "%s\n" "abc" >expected &&
-	flux kvs get $DIR.a >output &&
-	test_cmp output expected
-'
-test_expect_success 'kvs: append a zero length value works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=abc &&
-	flux kvs put --append $DIR.a= &&
-	printf "%s\n" "abc" >expected &&
-	flux kvs get $DIR.a >output &&
-	test_cmp output expected
-'
-test_expect_success 'kvs: append a zero length value to zero length value works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a= &&
-	flux kvs put --append $DIR.a= &&
-	flux kvs get $DIR.a >empty.output &&
-	test_cmp /dev/null empty.output
-'
-
-#
-# raw value tests
-#
-test_expect_success 'kvs: put/get --raw works with multiple key=val pairs' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a=xyz $DIR.b=zyx &&
-	printf "%s" 'xyzzyx' >twovals.expected &&
-	flux kvs get --raw $DIR.a $DIR.b >twovals.actual &&
-	test_cmp twovals.expected twovals.actual
-'
-test_expect_success 'kvs: put --raw a=- reads value from stdin' '
-	flux kvs unlink -Rf $DIR &&
-	printf "%s" "abc" | flux kvs put --raw $DIR.a=- &&
-	printf "%s" "abc" >rawstdin.expected &&
-	flux kvs get --raw $DIR.a >rawstdin.actual &&
-	test_cmp rawstdin.expected rawstdin.actual
-'
-test_expect_success 'kvs: put --raw a=- b=42 works' '
-	flux kvs unlink -Rf $DIR &&
-	printf "%s" "abc" | flux kvs put --raw $DIR.a=- $DIR.b=42 &&
-	printf "%s" "abc42" >rawstdin2.expected &&
-	flux kvs get --raw $DIR.a $DIR.b >rawstdin2.actual &&
-	test_cmp rawstdin2.expected rawstdin2.actual
-'
-test_expect_success 'kvs: put --raw a=- b=- works with a getting all of stdin' '
-	flux kvs unlink -Rf $DIR &&
-	printf "%s" "abc" | flux kvs put --raw $DIR.a=- $DIR.b=- &&
-	printf "%s" "abc" >rawstdin3a.expected &&
-	flux kvs get --raw $DIR.a >rawstdin3a.actual &&
-	flux kvs get --raw $DIR.b >rawstdin3b.actual &&
-	test_cmp rawstdin3a.expected rawstdin3a.actual &&
-	test_cmp /dev/null rawstdin3b.actual
-'
-
-#
-# treeobj tests
-#
-test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.val=hello &&
-	flux kvs put $DIR.valref=$(seq -s 1 100) &&
-	flux kvs mkdir $DIR.dirref &&
-	flux kvs link foo $DIR.symlink &&
-	flux kvs get --treeobj $DIR.val | grep -q val &&
-	flux kvs get --treeobj $DIR.valref | grep -q valref &&
-	flux kvs get --treeobj $DIR.dirref | grep -q dirref &&
-	flux kvs get --treeobj $DIR.symlink | grep -q symlink
-'
-test_expect_success 'kvs: treeobj is created by put --treeobj' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --treeobj $DIR.val="{\"data\":\"YgA=\",\"type\":\"val\",\"ver\":1}" &&
-	flux kvs get $DIR.val >val.output &&
-	echo "b" >val.expected &&
-	test_cmp val.expected val.output
-'
-test_expect_success 'kvs: treeobj can be used to create snapshot' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a.a=hello &&
-	flux kvs put $DIR.a.b=goodbye &&
-	flux kvs put --treeobj $DIR.b=$(flux kvs get --treeobj $DIR.a) &&
-	(flux kvs get $DIR.a.a && flux kvs get $DIR.a.b) >snap.expected &&
-	(flux kvs get $DIR.b.a && flux kvs get $DIR.b.b) >snap.actual &&
-	test_cmp snap.expected snap.actual
-'
-
-#
-# append tests
-#
-test_expect_success 'kvs: append on non-existent key is same as create' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --append $DIR.a=abc &&
-	printf "%s\n" "abc" >expected &&
-	flux kvs get $DIR.a >output &&
-	test_cmp output expected
-'
-
-test_expect_success 'kvs: basic append works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put $DIR.a=abc &&
-	flux kvs put --append $DIR.a=def &&
-	flux kvs put --append $DIR.a=ghi &&
-	printf "%s%s%s\n" "abcdefghi" >expected &&
-	flux kvs get $DIR.a >output &&
-	test_cmp output expected
-'
-
-test_expect_success 'kvs: basic append works with --raw' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a=abc &&
-	flux kvs put --append --raw $DIR.a=def &&
-	flux kvs put --append --raw $DIR.a=ghi &&
-	printf "%s" "abcdefghi" >expected &&
-	flux kvs get --raw $DIR.a >output &&
-	test_cmp output expected
-'
-
-test_expect_success 'kvs: basic append works with newlines' '
-	flux kvs unlink -Rf $DIR &&
-	echo "abc" | flux kvs put --raw $DIR.a=- &&
-	echo "def" | flux kvs put --append --raw $DIR.a=- &&
-	echo "ghi" | flux kvs put --append --raw $DIR.a=- &&
-	printf "%s\n%s\n%s\n" "abc" "def" "ghi" >expected &&
-	flux kvs get --raw $DIR.a >output &&
-	test_cmp output expected
-'
-
-#
-# get corner case tests
-#
-
-test_expect_success 'kvs: get a nonexistent key' '
-	test_must_fail flux kvs get --json NOT.A.KEY
-'
-test_expect_success 'kvs: try to retrieve a directory as key should fail' '
-        flux kvs mkdir $DIR.a.b.c &&
-	test_must_fail flux kvs get --json $DIR
-'
-
-#
-# put corner case tests
-#
-
-test_expect_success 'kvs: put with invalid input' '
-	test_must_fail flux kvs put --json NOVALUE
-'
-test_expect_success 'kvs: put key of . fails' '
-	test_must_fail flux kvs put --json .=1
-'
-
-#
-# get/put --json corner case tests
-#
-test_expect_success 'kvs: null is converted to json null' '
-	flux kvs put --json $DIR.jsonnull=null &&
-        test_kvs_key $DIR.jsonnull nil
-'
-test_expect_success 'kvs: quoted null is converted to json string' '
-	flux kvs put --json $DIR.strnull=\"null\" &&
-        test_kvs_key $DIR.strnull null
-'
-
-#
-# dir corner case tests
-#
-
-test_empty_directory() {
-	OUTPUT=`flux kvs dir -R $1 | wc -l` &&
-	test "x$OUTPUT" = "x0"
-}
-
-test_expect_success 'kvs: try to retrieve key as directory should fail' '
-        flux kvs put --json $DIR.a.b.c.d=42 &&
-	test_must_fail flux kvs dir $DIR.a.b.c.d
-'
-test_expect_success 'kvs: empty directory can be created' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs mkdir $DIR &&
-	test_empty_directory $DIR
-'
-
-#
-# unlink corner case tests
-#
-
-test_expect_success 'kvs: unlink nonexistent key fails' '
-        test_must_fail flux kvs unlink NOT.A.KEY
-'
-test_expect_success 'kvs: unlink nonexistent key with -f does not fail' '
-        flux kvs unlink -f NOT.A.KEY
-'
-test_expect_success 'kvs: unlink nonexistent dir with -f does not fail' '
-        flux kvs unlink -Rf NOT.A.KEY
-'
-test_expect_success 'kvs: unlink non-empty dir fails' '
-        flux kvs mkdir $SUBDIR1 $SUBDIR2 &&
-	test_must_fail flux kvs unlink $DIR
-'
-test_expect_success 'kvs: unlink -R works' '
-        flux kvs unlink -R $DIR &&
-          test_must_fail flux kvs dir $SUBDIR1 &&
-          test_must_fail flux kvs dir $SUBDIR2 &&
-          test_must_fail flux kvs dir $DIR
-'
-test_expect_success 'kvs: empty directory remains after key removed' '
-	flux kvs unlink -Rf $DIR &&
-        flux kvs put --json $DIR.a=1 &&
-        test_kvs_key $DIR.a 1 &&
-        flux kvs unlink $DIR.a &&
-	test_empty_directory $DIR
-'
-
-#
-# test key normalization
-#
-test_expect_success 'kvs: put with leading path separators works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json ......$DIR.a.b.c=42 &&
-	test_kvs_key $DIR.a.b.c 42
-'
-test_expect_success 'kvs: put with trailing path separators works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c........=43 &&
-	test_kvs_key $DIR.a.b.c 43
-'
-test_expect_success 'kvs: put with extra embedded path separators works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.....a....b...c=44 &&
-	test_kvs_key $DIR.a.b.c 44
-'
-test_expect_success 'kvs: get with leading path separators works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c=42 &&
-	test_kvs_key ......$DIR.a.b.c 42
-'
-test_expect_success 'kvs: get with trailing path separators works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c=43 &&
-	test_kvs_key $DIR.a.b.c........ 43
-'
-test_expect_success 'kvs: get with extra embedded path separators works' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c=44 &&
-	test_kvs_key $DIR.....a....b...c 44
 '
 
 #
@@ -827,7 +824,9 @@ test_expect_success 'kvs: link: readlink works on non-dangling link' '
 	test "$OUTPUT" = "$DIR.a.b.c"
 '
 
-# Check for limit on link depth
+#
+# link depth corner case tests
+#
 
 test_expect_success 'kvs: link: error on link depth' '
 	flux kvs unlink -Rf $DIR &&
