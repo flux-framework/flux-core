@@ -437,6 +437,9 @@ test_expect_success 'kvs: put --raw a=- b=- works with a getting all of stdin' '
 #
 # get/put --treeobj tests
 #
+test_expect_success 'kvs: get --treeobj: returns dirref object for root' '
+	flux kvs get --treeobj . | grep -q \"dirref\"
+'
 test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put $DIR.val=hello &&
@@ -448,6 +451,11 @@ test_expect_success 'kvs: treeobj of all types handled by get --treeobj' '
 	flux kvs get --treeobj $DIR.dirref | grep -q dirref &&
 	flux kvs get --treeobj $DIR.symlink | grep -q symlink
 '
+test_expect_success 'kvs: get --treeobj: returns value ref for large value' '
+	flux kvs unlink -Rf $DIR &&
+	dd if=/dev/zero bs=4096 count=1 | flux kvs put --raw $DIR.a=- &&
+	flux kvs get --treeobj $DIR.a | grep -q \"valref\"
+'
 test_expect_success 'kvs: treeobj is created by put --treeobj' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --treeobj $DIR.val="{\"data\":\"YgA=\",\"type\":\"val\",\"ver\":1}" &&
@@ -455,7 +463,14 @@ test_expect_success 'kvs: treeobj is created by put --treeobj' '
 	echo "b" >val.expected &&
 	test_cmp val.expected val.output
 '
-test_expect_success 'kvs: treeobj can be used to create snapshot' '
+test_expect_success 'kvs: put --treeobj: can make root snapshot' '
+       flux kvs unlink -Rf $DIR &&
+       flux kvs get --treeobj . >snapshot &&
+       flux kvs put --treeobj $DIR.a="`cat snapshot`" &&
+       flux kvs get --treeobj $DIR.a >snapshot.cpy &&
+       test_cmp snapshot snapshot.cpy
+'
+test_expect_success 'kvs: treeobj can be used to create arbitrary snapshot' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put $DIR.a.a=hello &&
 	flux kvs put $DIR.a.b=goodbye &&
@@ -463,6 +478,43 @@ test_expect_success 'kvs: treeobj can be used to create snapshot' '
 	(flux kvs get $DIR.a.a && flux kvs get $DIR.a.b) >snap.expected &&
 	(flux kvs get $DIR.b.a && flux kvs get $DIR.b.b) >snap.actual &&
 	test_cmp snap.expected snap.actual
+'
+
+#
+# get/put --treeobj corner case tests
+#
+
+test_expect_success 'kvs: put --treeobj: clobbers destination' '
+	flux kvs unlink -Rf $DIR &&
+	flux kvs put --json $DIR.a=42 &&
+	flux kvs get --treeobj . >snapshot2 &&
+	flux kvs put --treeobj $DIR.a="`cat snapshot2`" &&
+	! flux kvs get --json $DIR.a &&
+	flux kvs dir $DIR.a
+'
+test_expect_success 'kvs: put --treeobj: fails bad dirent: not JSON' '
+	flux kvs unlink -Rf $DIR &&
+	test_must_fail flux kvs put --treeobj $DIR.a=xyz
+'
+test_expect_success 'kvs: put --treeobj: fails bad dirent: unknown type' '
+	flux kvs unlink -Rf $DIR &&
+	test_must_fail flux kvs put --treeobj $DIR.a="{\"data\":\"MQA=\",\"type\":\"FOO\",\"ver\":1}"
+'
+test_expect_success 'kvs: put --treeobj: fails bad dirent: bad link data' '
+	flux kvs unlink -Rf $DIR &&
+	test_must_fail flux kvs put --treeobj $DIR.a="{\"data\":42,\"type\":\"symlink\",\"ver\":1}"
+'
+
+test_expect_success 'kvs: put --treeobj: fails bad dirent: bad ref data' '
+	flux kvs unlink -Rf $DIR &&
+	test_must_fail flux kvs put --treeobj $DIR.a="{\"data\":42,\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail flux kvs put --treeobj $DIR.a="{\"data\":"sha1-4087718d190b373fb490b27873f61552d7f29dbe",\"type\":\"dirref\",\"ver\":1}"
+'
+
+test_expect_success 'kvs: put --treeobj: fails bad dirent: bad blobref' '
+	flux kvs unlink -Rf $DIR &&
+	test_must_fail flux kvs put --treeobj $DIR.a="{\"data\":[\"sha1-aaa\"],\"type\":\"dirref\",\"ver\":1}" &&
+	test_must_fail flux kvs put --treeobj $DIR.a="{\"data\":[\"sha1-bbb\"],\"type\":\"dirref\",\"ver\":1}"
 '
 
 #
