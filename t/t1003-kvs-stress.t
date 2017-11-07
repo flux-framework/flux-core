@@ -1,12 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Test basic kvs usage in flux session
-
-Verify basic KVS operations against a running flux comms session.
-This test script verifies operation of the kvs and should be run
-before other tests that depend on kvs.
-'
+test_description='Stress test KVS in flux session'
 
 . `dirname $0`/sharness.sh
 
