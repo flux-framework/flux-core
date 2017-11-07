@@ -93,34 +93,6 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mix
 		$(basename ${SHARNESS_TEST_FILE})
 '
 
-# watch tests
-
-test_expect_success 'kvs: watch-mt: multi-threaded kvs watch program' '
-	${FLUX_BUILD_DIR}/t/kvs/watch mt 100 100 $DIR.a &&
-	flux kvs unlink -Rf $DIR.a
-'
-
-test_expect_success 'kvs: watch-selfmod: watch callback modifies watched key' '
-	${FLUX_BUILD_DIR}/t/kvs/watch selfmod $DIR.a &&
-	flux kvs unlink -Rf $DIR.a
-'
-
-test_expect_success 'kvs: watch-unwatch unwatch works' '
-	${FLUX_BUILD_DIR}/t/kvs/watch unwatch $DIR.a &&
-	flux kvs unlink -Rf $DIR.a
-'
-
-test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
-	${FLUX_BUILD_DIR}/t/kvs/watch unwatchloop $DIR.a &&
-	flux kvs unlink -Rf $DIR.a
-'
-
-test_expect_success 'kvs: 256 simultaneous watches works' '
-	${FLUX_BUILD_DIR}/t/kvs/watch simulwatch $DIR.a 256 &&
-	flux kvs unlink -Rf $DIR.a
-'
-
-
 # large dirs
 
 test_expect_success 'kvs: store value exceeding RFC 10 max blob size of 1m' '

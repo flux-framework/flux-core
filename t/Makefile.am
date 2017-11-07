@@ -49,6 +49,7 @@ TESTS = \
 	t0016-cron-faketime.t \
 	t0017-security.t \
 	t1000-kvs.t \
+	t1002-kvs-watch.t \
 	t1003-kvs-stress.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
@@ -120,6 +121,7 @@ check_SCRIPTS = \
 	t0016-cron-faketime.t \
 	t0017-security.t \
 	t1000-kvs.t \
+	t1002-kvs-watch.t \
 	t1003-kvs-stress.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
