@@ -199,28 +199,6 @@ const json_t *cache_entry_get_treeobj (struct cache_entry *hp)
     return hp->o;
 }
 
-int cache_entry_set_treeobj (struct cache_entry *hp, const json_t *o)
-{
-    char *s = NULL;
-    int saved_errno;
-    int rc = -1;
-
-    if (!hp || !o || treeobj_validate (o) < 0) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(s = treeobj_encode (o)))
-        goto done;
-    if (cache_entry_set_raw (hp, s, strlen (s)) < 0)
-        goto done;
-    rc = 0;
-done:
-    saved_errno = errno;
-    free (s);
-    errno = saved_errno;
-    return rc;
-}
-
 void cache_entry_destroy (void *arg)
 {
     struct cache_entry *hp = arg;
