@@ -1236,7 +1236,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
     }
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", ctx->root.seq,
-                           "rootdir", ctx->root.ref) < 0) {
+                           "rootref", ctx->root.ref) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -1257,7 +1257,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", ctx->root.seq,
-                           "rootdir", ctx->root.ref) < 0) {
+                           "rootref", ctx->root.ref) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -1280,7 +1280,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootref)
     }
     if (flux_rpc_get_unpack (f, "{ s:i s:s }",
                              "rootseq", rootseq,
-                             "rootdir", &ref) < 0) {
+                             "rootref", &ref) < 0) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto done;
@@ -1355,9 +1355,9 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
                            "rootseq", &rootseq,
-                           "rootdir", &rootref,
+                           "rootref", &rootref,
                            "names", &names,
-                           "rootdirval", &root) < 0) {
+                           "rootdir", &root) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -1437,9 +1437,9 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     }
     if (!(msg = flux_event_pack ("kvs.setroot", "{ s:i s:s s:O s:O }",
                                  "rootseq", ctx->root.seq,
-                                 "rootdir", ctx->root.ref,
+                                 "rootref", ctx->root.ref,
                                  "names", names,
-                                 "rootdirval", root))) {
+                                 "rootdir", root))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
         goto done;
