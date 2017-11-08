@@ -231,7 +231,7 @@ static bool walk (lookup_t *lh)
         /* Get directory of dirent */
 
         if (treeobj_is_dirref (wl->dirent)) {
-            struct cache_entry *hp;
+            struct cache_entry *entry;
             const char *refstr;
             int refcount;
 
@@ -251,12 +251,12 @@ static bool walk (lookup_t *lh)
                 goto error;
             }
 
-            if (!(hp = cache_lookup (lh->cache, refstr, lh->current_epoch))
-                || !cache_entry_get_valid (hp)) {
+            if (!(entry = cache_lookup (lh->cache, refstr, lh->current_epoch))
+                || !cache_entry_get_valid (entry)) {
                 lh->missing_ref = refstr;
                 goto stall;
             }
-            if (!(dir = cache_entry_get_treeobj (hp))) {
+            if (!(dir = cache_entry_get_treeobj (entry))) {
                 /* dirref pointed to non treeobj error, special case when
                  * root_dirent is bad, is EINVAL from user.
                  */
@@ -537,14 +537,14 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
             assert (refcount > 0);
 
             for (i = 0; i < refcount; i++) {
-                struct cache_entry *hp;
+                struct cache_entry *entry;
                 const char *ref;
 
                 if (!(ref = treeobj_get_blobref (lh->valref_missing_refs, i)))
                     return -1;
 
-                if (!(hp = cache_lookup (lh->cache, ref, lh->current_epoch))
-                    || !cache_entry_get_valid (hp)) {
+                if (!(entry = cache_lookup (lh->cache, ref, lh->current_epoch))
+                    || !cache_entry_get_valid (entry)) {
 
                     /* valref points to raw data, raw_data flag is always
                      * true */
@@ -634,7 +634,7 @@ int lookup_set_aux_data (lookup_t *lh, void *data)
  * checked */
 static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     const char *reftmp;
     const void *valdata;
     int len;
@@ -643,13 +643,13 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
         lh->errnum = errno;
         return -1;
     }
-    if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
-        || !cache_entry_get_valid (hp)) {
+    if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+        || !cache_entry_get_valid (entry)) {
         lh->valref_missing_refs = lh->wdirent;
         (*stall) = true;
         return 0;
     }
-    if (cache_entry_get_raw (hp, &valdata, &len) < 0) {
+    if (cache_entry_get_raw (entry, &valdata, &len) < 0) {
         flux_log (lh->h, LOG_ERR, "cache_entry_get_raw");
         lh->errnum = ENOTRECOVERABLE;
         return -1;
@@ -665,7 +665,7 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
 static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
                                             int *total_len, bool *stall)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     const char *reftmp;
     int total = 0;
     int len;
@@ -676,14 +676,14 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
             lh->errnum = errno;
             return -1;
         }
-        if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
-            || !cache_entry_get_valid (hp)) {
+        if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+            || !cache_entry_get_valid (entry)) {
             lh->valref_missing_refs = lh->wdirent;
             (*stall) = true;
             return 0;
         }
 
-        if (cache_entry_get_raw (hp, NULL, &len) < 0) {
+        if (cache_entry_get_raw (entry, NULL, &len) < 0) {
             flux_log (lh->h, LOG_ERR, "cache_entry_get_raw");
             lh->errnum = ENOTRECOVERABLE;
             return -1;
@@ -705,7 +705,7 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
 static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
                                             int total_len)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     const char *reftmp;
     const void *valdata;
     int len;
@@ -727,11 +727,11 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
         reftmp = treeobj_get_blobref (lh->wdirent, i);
         assert (reftmp);
 
-        hp = cache_lookup (lh->cache, reftmp, lh->current_epoch);
-        assert (hp);
-        assert (cache_entry_get_valid (hp));
+        entry = cache_lookup (lh->cache, reftmp, lh->current_epoch);
+        assert (entry);
+        assert (cache_entry_get_valid (entry));
 
-        ret = cache_entry_get_raw (hp, &valdata, &len);
+        ret = cache_entry_get_raw (entry, &valdata, &len);
         assert (ret == 0);
 
         memcpy (valbuf + pos, valdata, len);
@@ -778,7 +778,7 @@ bool lookup (lookup_t *lh)
 {
     const json_t *valtmp = NULL;
     const char *reftmp;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int refcount;
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
@@ -801,15 +801,15 @@ bool lookup (lookup_t *lh)
                         lh->errnum = EISDIR;
                         goto done;
                     }
-                    if (!(hp = cache_lookup (lh->cache,
-                                             lh->root_ref,
-                                             lh->current_epoch))
-                        || !cache_entry_get_valid (hp)) {
+                    if (!(entry = cache_lookup (lh->cache,
+                                                lh->root_ref,
+                                                lh->current_epoch))
+                        || !cache_entry_get_valid (entry)) {
                         lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
                         goto stall;
                     }
-                    if (!(valtmp = cache_entry_get_treeobj (hp))) {
+                    if (!(valtmp = cache_entry_get_treeobj (entry))) {
                         flux_log (lh->h, LOG_ERR,
                                   "root_ref points to non-treeobj");
                         lh->errnum = EINVAL;
@@ -872,12 +872,13 @@ bool lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto done;
                 }
-                if (!(hp = cache_lookup (lh->cache, reftmp, lh->current_epoch))
-                    || !cache_entry_get_valid (hp)) {
+                if (!(entry = cache_lookup (lh->cache, reftmp,
+                                            lh->current_epoch))
+                    || !cache_entry_get_valid (entry)) {
                     lh->missing_ref = reftmp;
                     goto stall;
                 }
-                if (!(valtmp = cache_entry_get_treeobj (hp))) {
+                if (!(valtmp = cache_entry_get_treeobj (entry))) {
                     flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
                     lh->errnum = ENOTRECOVERABLE;
                     goto done;

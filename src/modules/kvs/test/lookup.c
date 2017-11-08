@@ -43,19 +43,19 @@ error:
     return rc;
 }
 
-static int cache_entry_set_treeobj (struct cache_entry *hp, const json_t *o)
+static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 {
     char *s = NULL;
     int saved_errno;
     int rc = -1;
 
-    if (!hp || !o || treeobj_validate (o) < 0) {
+    if (!entry || !o || treeobj_validate (o) < 0) {
         errno = EINVAL;
         goto done;
     }
     if (!(s = treeobj_encode (o)))
         goto done;
-    if (cache_entry_set_raw (hp, s, strlen (s)) < 0)
+    if (cache_entry_set_raw (entry, s, strlen (s)) < 0)
         goto done;
     rc = 0;
 done:
@@ -68,32 +68,32 @@ done:
 /* convenience function */
 static struct cache_entry *create_cache_entry_raw (void *data, int len)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int ret;
 
     assert (data);
     assert (len);
 
-    hp = cache_entry_create ();
-    assert (hp);
-    ret = cache_entry_set_raw (hp, data, len);
+    entry = cache_entry_create ();
+    assert (entry);
+    ret = cache_entry_set_raw (entry, data, len);
     assert (ret == 0);
-    return hp;
+    return entry;
 }
 
 /* convenience function */
 static struct cache_entry *create_cache_entry_treeobj (json_t *o)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int ret;
 
     assert (o);
 
-    hp = cache_entry_create ();
-    assert (hp);
-    ret = cache_entry_set_treeobj (hp, o);
+    entry = cache_entry_create ();
+    assert (entry);
+    ret = cache_entry_set_treeobj (entry, o);
     assert (ret == 0);
-    return hp;
+    return entry;
 }
 
 int lookup_ref (lookup_t *c,

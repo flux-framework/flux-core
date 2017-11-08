@@ -42,19 +42,19 @@ error:
     return rc;
 }
 
-static int cache_entry_set_treeobj (struct cache_entry *hp, const json_t *o)
+static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 {
     char *s = NULL;
     int saved_errno;
     int rc = -1;
 
-    if (!hp || !o || treeobj_validate (o) < 0) {
+    if (!entry || !o || treeobj_validate (o) < 0) {
         errno = EINVAL;
         goto done;
     }
     if (!(s = treeobj_encode (o)))
         goto done;
-    if (cache_entry_set_raw (hp, s, strlen (s)) < 0)
+    if (cache_entry_set_raw (entry, s, strlen (s)) < 0)
         goto done;
     rc = 0;
 done:
@@ -67,32 +67,32 @@ done:
 /* convenience function */
 static struct cache_entry *create_cache_entry_raw (void *data, int len)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int ret;
 
     assert (data);
     assert (len);
 
-    hp = cache_entry_create ();
-    assert (hp);
-    ret = cache_entry_set_raw (hp, data, len);
+    entry = cache_entry_create ();
+    assert (entry);
+    ret = cache_entry_set_raw (entry, data, len);
     assert (ret == 0);
-    return hp;
+    return entry;
 }
 
 /* convenience function */
 static struct cache_entry *create_cache_entry_treeobj (json_t *o)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int ret;
 
     assert (o);
 
-    hp = cache_entry_create ();
-    assert (hp);
-    ret = cache_entry_set_treeobj (hp, o);
+    entry = cache_entry_create ();
+    assert (entry);
+    ret = cache_entry_set_treeobj (entry, o);
     assert (ret == 0);
-    return hp;
+    return entry;
 }
 
 /* Append a treeobj object containing
@@ -119,7 +119,7 @@ void ops_append (json_t *array, const char *key, const char *value, int flags)
 struct cache *create_cache_with_empty_rootdir (blobref_t ref)
 {
     struct cache *cache;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     json_t *rootdir;
 
     rootdir = treeobj_create_dir ();
@@ -128,9 +128,9 @@ struct cache *create_cache_with_empty_rootdir (blobref_t ref)
         "cache_create works");
     ok (treeobj_hash ("sha1", rootdir, ref) == 0,
         "treeobj_hash worked");
-    ok ((hp = create_cache_entry_treeobj (rootdir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (rootdir)) != NULL,
         "create_cache_entry_treeobj works");
-    cache_insert (cache, ref, hp);
+    cache_insert (cache, ref, entry);
     return cache;
 }
 
@@ -379,7 +379,7 @@ int ref_noop_cb (commit_t *c, const char *ref, void *data)
     return 0;
 }
 
-int cache_noop_cb (commit_t *c, struct cache_entry *hp, void *data)
+int cache_noop_cb (commit_t *c, struct cache_entry *entry, void *data)
 {
     return 0;
 }
@@ -445,10 +445,10 @@ void commit_basic_tests (void)
     cache_destroy (cache);
 }
 
-int cache_count_dirty_cb (commit_t *c, struct cache_entry *hp, void *data)
+int cache_count_dirty_cb (commit_t *c, struct cache_entry *entry, void *data)
 {
     int *count = data;
-    if (cache_entry_get_dirty (hp)) {
+    if (cache_entry_get_dirty (entry)) {
         if (count)
             (*count)++;
     }
@@ -713,7 +713,7 @@ int rootref_cb (commit_t *c, const char *ref, void *data)
 {
     struct rootref_data *rd = data;
     json_t *rootdir;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
 
     ok (strcmp (ref, rd->rootref) == 0,
         "missing root reference is what we expect it to be");
@@ -721,10 +721,10 @@ int rootref_cb (commit_t *c, const char *ref, void *data)
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
-    ok ((hp = create_cache_entry_treeobj (rootdir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (rootdir)) != NULL,
         "create_cache_entry_treeobj works");
 
-    cache_insert (rd->cache, ref, hp);
+    cache_insert (rd->cache, ref, entry);
 
     return 0;
 }
@@ -802,15 +802,15 @@ struct missingref_data {
 int missingref_cb (commit_t *c, const char *ref, void *data)
 {
     struct missingref_data *md = data;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
 
     ok (strcmp (ref, md->dir_ref) == 0,
         "missing reference is what we expect it to be");
 
-    ok ((hp = create_cache_entry_treeobj (md->dir)) != NULL,
+    ok ((entry = create_cache_entry_treeobj (md->dir)) != NULL,
         "create_cache_entry_treeobj works");
 
-    cache_insert (md->cache, ref, hp);
+    cache_insert (md->cache, ref, entry);
 
     return 0;
 }
@@ -907,9 +907,9 @@ int ref_error_cb (commit_t *c, const char *ref, void *data)
     return -1;
 }
 
-int cache_error_cb (commit_t *c, struct cache_entry *hp, void *data)
+int cache_error_cb (commit_t *c, struct cache_entry *entry, void *data)
 {
-    commit_cleanup_dirty_cache_entry (c, hp);
+    commit_cleanup_dirty_cache_entry (c, entry);
 
     /* pick a weird errno */
     errno = EXDEV;
@@ -992,7 +992,7 @@ struct error_partway_data {
     int success_returns;
 };
 
-int cache_error_partway_cb (commit_t *c, struct cache_entry *hp, void *data)
+int cache_error_partway_cb (commit_t *c, struct cache_entry *entry, void *data)
 {
     struct error_partway_data *epd = data;
     epd->total_calls++;
@@ -1577,14 +1577,14 @@ struct cache_count {
     int total_count;
 };
 
-int cache_count_treeobj_cb (commit_t *c, struct cache_entry *hp, void *data)
+int cache_count_treeobj_cb (commit_t *c, struct cache_entry *entry, void *data)
 {
     struct cache_count *cache_count = data;
 
     /* we count "raw-ness" of a cache entry by determining if the
      * cache entry holds a valid treeobj object.
      */
-    if (cache_entry_get_treeobj (hp) != NULL)
+    if (cache_entry_get_treeobj (entry) != NULL)
         cache_count->treeobj_count++;
     cache_count->total_count++;
 
