@@ -11,7 +11,6 @@
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
 #include "src/modules/kvs/kvs_util.h"
-#include "src/modules/kvs/types.h"
 #include "src/common/libutil/blobref.h"
 
 struct lookup_ref_data
@@ -20,19 +19,43 @@ struct lookup_ref_data
     int count;
 };
 
-static int cache_entry_set_treeobj (struct cache_entry *hp, const json_t *o)
+static int treeobj_hash (const char *hash_name, json_t *obj, blobref_t blobref)
+{
+    char *tmp = NULL;
+    int rc = -1;
+
+    if (!hash_name || !obj || !blobref) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    if (treeobj_validate (obj) < 0)
+        goto error;
+
+    if (!(tmp = treeobj_encode (obj)))
+        goto error;
+
+    if (blobref_hash (hash_name, (uint8_t *)tmp, strlen (tmp), blobref) < 0)
+        goto error;
+    rc = 0;
+error:
+    free (tmp);
+    return rc;
+}
+
+static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 {
     char *s = NULL;
     int saved_errno;
     int rc = -1;
 
-    if (!hp || !o || treeobj_validate (o) < 0) {
+    if (!entry || !o || treeobj_validate (o) < 0) {
         errno = EINVAL;
         goto done;
     }
     if (!(s = treeobj_encode (o)))
         goto done;
-    if (cache_entry_set_raw (hp, s, strlen (s)) < 0)
+    if (cache_entry_set_raw (entry, s, strlen (s)) < 0)
         goto done;
     rc = 0;
 done:
@@ -45,32 +68,32 @@ done:
 /* convenience function */
 static struct cache_entry *create_cache_entry_raw (void *data, int len)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int ret;
 
     assert (data);
     assert (len);
 
-    hp = cache_entry_create ();
-    assert (hp);
-    ret = cache_entry_set_raw (hp, data, len);
+    entry = cache_entry_create ();
+    assert (entry);
+    ret = cache_entry_set_raw (entry, data, len);
     assert (ret == 0);
-    return hp;
+    return entry;
 }
 
 /* convenience function */
 static struct cache_entry *create_cache_entry_treeobj (json_t *o)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int ret;
 
     assert (o);
 
-    hp = cache_entry_create ();
-    assert (hp);
-    ret = cache_entry_set_treeobj (hp, o);
+    entry = cache_entry_create ();
+    assert (entry);
+    ret = cache_entry_set_treeobj (entry, o);
     assert (ret == 0);
-    return hp;
+    return entry;
 }
 
 int lookup_ref (lookup_t *c,
@@ -415,8 +438,8 @@ void lookup_root (void) {
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-    href_t valref_ref;
-    href_t root_ref;
+    blobref_t valref_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -430,11 +453,11 @@ void lookup_root (void) {
      * treeobj dir, no entries
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     root = treeobj_create_dir ();
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     /* flags = 0, should error EISDIR */
@@ -497,11 +520,11 @@ void lookup_basic (void) {
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-    href_t valref_ref;
-    href_t valref2_ref;
-    href_t dirref_ref;
-    href_t dirref_test_ref;
-    href_t root_ref;
+    blobref_t valref_ref;
+    blobref_t valref2_ref;
+    blobref_t dirref_ref;
+    blobref_t dirref_test_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -530,16 +553,16 @@ void lookup_basic (void) {
      * "dirref" : dirref to dirref_ref
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
-    blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (href_t));
+    blobref_hash ("sha1", "efgh", 4, valref2_ref);
     cache_insert (cache, valref2_ref, create_cache_entry_raw (strdup ("efgh"), 4));
 
     dirref_test = treeobj_create_dir ();
     treeobj_insert_entry (dirref_test, "dummy", treeobj_create_val ("dummy", 5));
 
-    treeobj_hash ("sha1", dirref_test, dirref_test_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref_test, dirref_test_ref);
     cache_insert (cache, dirref_test_ref, create_cache_entry_treeobj (dirref_test));
 
     dir = treeobj_create_dir ();
@@ -562,13 +585,13 @@ void lookup_basic (void) {
 
     treeobj_insert_entry (dirref, "valref_multi_with_dirref", valref_multi_with_dirref);
 
-    treeobj_hash ("sha1", dirref, dirref_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref, dirref_ref);
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
 
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     /* lookup dir via dirref */
@@ -749,9 +772,9 @@ void lookup_errors (void) {
     json_t *dirref_multi;
     struct cache *cache;
     lookup_t *lh;
-    href_t dirref_ref;
-    href_t valref_ref;
-    href_t root_ref;
+    blobref_t dirref_ref;
+    blobref_t valref_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -776,12 +799,12 @@ void lookup_errors (void) {
      * "dirref_multi" : dirref to [ dirref_ref, dirref_ref ]
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     dirref = treeobj_create_dir ();
     treeobj_insert_entry (dirref, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", dirref, dirref_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref, dirref_ref);
     cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
 
     dir = treeobj_create_dir ();
@@ -802,7 +825,7 @@ void lookup_errors (void) {
 
     treeobj_insert_entry (root, "dirref_multi", dirref_multi);
 
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
@@ -1032,11 +1055,11 @@ void lookup_links (void) {
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-    href_t valref_ref;
-    href_t dirref3_ref;
-    href_t dirref2_ref;
-    href_t dirref1_ref;
-    href_t root_ref;
+    blobref_t valref_ref;
+    blobref_t dirref3_ref;
+    blobref_t dirref2_ref;
+    blobref_t dirref1_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1068,12 +1091,12 @@ void lookup_links (void) {
      * "dirref2" : dirref to "dirref2_ref
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     dirref3 = treeobj_create_dir ();
     treeobj_insert_entry (dirref3, "val", treeobj_create_val ("baz", 3));
-    treeobj_hash ("sha1", dirref3, dirref3_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref3, dirref3_ref);
     cache_insert (cache, dirref3_ref, create_cache_entry_treeobj (dirref3));
 
     dir = treeobj_create_dir ();
@@ -1085,7 +1108,7 @@ void lookup_links (void) {
     treeobj_insert_entry (dirref2, "dir", dir);
     treeobj_insert_entry (dirref2, "dirref", treeobj_create_dirref (dirref3_ref));
     treeobj_insert_entry (dirref2, "symlink", treeobj_create_symlink ("dirref2.val"));
-    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref2, dirref2_ref);
     cache_insert (cache, dirref2_ref, create_cache_entry_treeobj (dirref2));
 
     dirref1 = treeobj_create_dir ();
@@ -1094,13 +1117,13 @@ void lookup_links (void) {
     treeobj_insert_entry (dirref1, "link2valref", treeobj_create_symlink ("dirref2.valref"));
     treeobj_insert_entry (dirref1, "link2dir", treeobj_create_symlink ("dirref2.dir"));
     treeobj_insert_entry (dirref1, "link2symlink", treeobj_create_symlink ("dirref2.symlink"));
-    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref1, dirref1_ref);
     cache_insert (cache, dirref1_ref, create_cache_entry_treeobj (dirref1));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     /* lookup val, follow two links */
@@ -1249,9 +1272,9 @@ void lookup_alt_root (void) {
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-    href_t dirref1_ref;
-    href_t dirref2_ref;
-    href_t root_ref;
+    blobref_t dirref1_ref;
+    blobref_t dirref2_ref;
+    blobref_t root_ref;
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
 
@@ -1270,18 +1293,18 @@ void lookup_alt_root (void) {
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref1, dirref1_ref);
     cache_insert (cache, dirref1_ref, create_cache_entry_treeobj (dirref1));
 
     dirref2 = treeobj_create_dir ();
     treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref2, dirref2_ref);
     cache_insert (cache, dirref2_ref, create_cache_entry_treeobj (dirref2));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
     /* lookup val, alt root-ref dirref1_ref */
@@ -1318,7 +1341,7 @@ void lookup_stall_root (void) {
     json_t *root;
     struct cache *cache;
     lookup_t *lh;
-    href_t root_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1331,7 +1354,7 @@ void lookup_stall_root (void) {
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -1374,15 +1397,15 @@ void lookup_stall (void) {
     json_t *test;
     struct cache *cache;
     lookup_t *lh;
-    href_t valref1_ref;
-    href_t valref2_ref;
-    href_t valref3_ref;
-    href_t valref4_ref;
-    href_t valrefmisc1_ref;
-    href_t valrefmisc2_ref;
-    href_t dirref1_ref;
-    href_t dirref2_ref;
-    href_t root_ref;
+    blobref_t valref1_ref;
+    blobref_t valref2_ref;
+    blobref_t valref3_ref;
+    blobref_t valref4_ref;
+    blobref_t valrefmisc1_ref;
+    blobref_t valrefmisc2_ref;
+    blobref_t dirref1_ref;
+    blobref_t dirref2_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1423,12 +1446,12 @@ void lookup_stall (void) {
      *
      */
 
-    blobref_hash ("sha1", "abcd", 4, valref1_ref, sizeof (href_t));
-    blobref_hash ("sha1", "efgh", 4, valref2_ref, sizeof (href_t));
-    blobref_hash ("sha1", "ijkl", 4, valref3_ref, sizeof (href_t));
-    blobref_hash ("sha1", "mnop", 4, valref4_ref, sizeof (href_t));
-    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref, sizeof (href_t));
-    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref, sizeof (href_t));
+    blobref_hash ("sha1", "abcd", 4, valref1_ref);
+    blobref_hash ("sha1", "efgh", 4, valref2_ref);
+    blobref_hash ("sha1", "ijkl", 4, valref3_ref);
+    blobref_hash ("sha1", "mnop", 4, valref4_ref);
+    blobref_hash ("sha1", "foobar", 4, valrefmisc1_ref);
+    blobref_hash ("sha1", "foobaz", 4, valrefmisc2_ref);
 
     dirref1 = treeobj_create_dir ();
     treeobj_insert_entry (dirref1, "val", treeobj_create_val ("foo", 3));
@@ -1444,17 +1467,17 @@ void lookup_stall (void) {
     treeobj_append_blobref (valref_tmp, valrefmisc2_ref);
     treeobj_insert_entry (dirref1, "valrefmisc_multi", valref_tmp);
 
-    treeobj_hash ("sha1", dirref1, dirref1_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref1, dirref1_ref);
 
     dirref2 = treeobj_create_dir ();
     treeobj_insert_entry (dirref2, "val", treeobj_create_val ("bar", 3));
-    treeobj_hash ("sha1", dirref2, dirref2_ref, sizeof (href_t));
+    treeobj_hash ("sha1", dirref2, dirref2_ref);
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dirref1", treeobj_create_dirref (dirref1_ref));
     treeobj_insert_entry (root, "dirref2", treeobj_create_dirref (dirref2_ref));
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
-    treeobj_hash ("sha1", root, root_ref, sizeof (href_t));
+    treeobj_hash ("sha1", root, root_ref);
 
     /* do not insert entries into cache until later for these stall tests */
 

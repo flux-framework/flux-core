@@ -6,7 +6,7 @@
 
 #include "cache.h"
 #include "fence.h"
-#include "types.h"
+#include "src/common/libutil/blobref.h"
 
 typedef struct commit_mgr commit_mgr_t;
 typedef struct commit commit_t;
@@ -25,7 +25,7 @@ typedef enum {
 typedef int (*commit_ref_f)(commit_t *c, const char *ref, void *data);
 
 typedef int (*commit_cache_entry_f)(commit_t *c,
-                                     struct cache_entry *hp,
+                                     struct cache_entry *entry,
                                      void *data);
 
 int commit_get_errnum (commit_t *c);
@@ -68,7 +68,7 @@ const char *commit_get_newroot_ref (commit_t *c);
  */
 commit_process_t commit_process (commit_t *c,
                                  int current_epoch,
-                                 const href_t rootdir_ref);
+                                 const blobref_t rootdir_ref);
 
 /* on commit stall, iterate through all missing refs that the caller
  * should load into the cache
@@ -91,7 +91,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
  * should only be used for error cleanup in the callback function used in
  * commit_iter_dirty_cache_entries().
  */
-void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp);
+void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *entry);
 
 /*
  * commit_mgr_t API

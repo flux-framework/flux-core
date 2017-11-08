@@ -50,7 +50,6 @@
 
 #include "lookup.h"
 #include "fence.h"
-#include "types.h"
 #include "commit.h"
 
 #define KVS_MAGIC 0xdeadbeef
@@ -65,7 +64,7 @@ const bool event_includes_rootdir = true;
 
 struct kvsroot {
     int seq;
-    href_t ref;
+    blobref_t ref;
 };
 
 typedef struct {
@@ -182,7 +181,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
     const void *data;
     int size;
     const char *blobref;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
 
     if (flux_content_load_get (f, &data, &size) < 0) {
         flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
@@ -194,7 +193,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * b/c it is not yet valid.  But check and log incase there is
      * logic error dealng with error paths using cache_remove_entry().
      */
-    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+    if (!(entry = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto done;
     }
@@ -208,7 +207,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * timeout or eventually give up, so the KVS can continue along
      * its merry way.  So we just log the error.
      */
-    if (cache_entry_set_raw (hp, data, size) < 0) {
+    if (cache_entry_set_raw (entry, data, size) < 0) {
         flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
         goto done;
     }
@@ -219,7 +218,7 @@ done:
 
 /* Send content load request and setup contination to handle response.
  */
-static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref)
+static int content_load_request_send (kvs_ctx_t *ctx, const blobref_t ref)
 {
     flux_future_t *f = NULL;
     char *refcpy;
@@ -247,22 +246,22 @@ error:
 
 /* Return 0 on success, -1 on error.  Set stall variable appropriately
  */
-static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
+static int load (kvs_ctx_t *ctx, const blobref_t ref, wait_t *wait, bool *stall)
 {
-    struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
+    struct cache_entry *entry = cache_lookup (ctx->cache, ref, ctx->epoch);
     int saved_errno, ret;
 
     assert (wait != NULL);
 
     /* Create an incomplete hash entry if none found.
      */
-    if (!hp) {
-        if (!(hp = cache_entry_create ())) {
+    if (!entry) {
+        if (!(entry = cache_entry_create ())) {
             flux_log_error (ctx->h, "%s: cache_entry_create",
                             __FUNCTION__);
             return -1;
         }
-        cache_insert (ctx->cache, ref, hp);
+        cache_insert (ctx->cache, ref, entry);
         if (content_load_request_send (ctx, ref) < 0) {
             saved_errno = errno;
             flux_log_error (ctx->h, "%s: content_load_request_send",
@@ -278,8 +277,8 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
     /* If hash entry is incomplete (either created above or earlier),
      * arrange to stall caller.
      */
-    if (!cache_entry_get_valid (hp)) {
-        if (cache_entry_wait_valid (hp, wait) < 0) {
+    if (!cache_entry_get_valid (entry)) {
+        if (cache_entry_wait_valid (entry, wait) < 0) {
             /* no cleanup in this path, if an rpc was sent, it will
              * complete, but not call a waiter on this load.  Return
              * error so caller can handle error appropriately.
@@ -300,7 +299,7 @@ static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
 static int content_store_get (flux_future_t *f, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     const char *blobref;
     int rc = -1;
     int saved_errno, ret;
@@ -316,7 +315,7 @@ static int content_store_get (flux_future_t *f, void *arg)
      * b/c it was dirty.  But check and log incase there is logic
      * error dealng with error paths using cache_remove_entry().
      */
-    if (!(hp = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+    if (!(entry = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
         saved_errno = ENOTRECOVERABLE;
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto done;
@@ -338,11 +337,11 @@ static int content_store_get (flux_future_t *f, void *arg)
      * entries without waiters.  So in this rare case, we must call
      * cache_entry_force_clear_dirty().
      */
-    if (cache_entry_set_dirty (hp, false) < 0) {
+    if (cache_entry_set_dirty (entry, false) < 0) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: cache_entry_set_dirty",
                         __FUNCTION__);
-        ret = cache_entry_force_clear_dirty (hp);
+        ret = cache_entry_force_clear_dirty (entry);
         assert (ret == 0);
         goto done;
     }
@@ -385,7 +384,7 @@ error:
 static void setroot (kvs_ctx_t *ctx, const char *rootref, int rootseq)
 {
     if (rootseq == 0 || rootseq > ctx->root.seq) {
-        assert (strlen (rootref) < sizeof (href_t));
+        assert (strlen (rootref) < sizeof (blobref_t));
         strcpy (ctx->root.ref, rootref);
         ctx->root.seq = rootseq;
         /* log error on wait_runqueue(), don't error out.  watchers
@@ -416,18 +415,18 @@ static int commit_load_cb (commit_t *c, const char *ref, void *data)
  * object's wait queue.  FIXME: asynchronous errors need to be
  * propagated back to caller.
  */
-static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
+static int commit_cache_cb (commit_t *c, struct cache_entry *entry, void *data)
 {
     struct kvs_cb_data *cbd = data;
     const void *storedata;
     int storedatalen = 0;
 
-    assert (cache_entry_get_dirty (hp));
+    assert (cache_entry_get_dirty (entry));
 
-    if (cache_entry_get_raw (hp, &storedata, &storedatalen) < 0) {
+    if (cache_entry_get_raw (entry, &storedata, &storedatalen) < 0) {
         flux_log_error (cbd->ctx->h, "%s: cache_entry_get_raw",
                         __FUNCTION__);
-        commit_cleanup_dirty_cache_entry (c, hp);
+        commit_cleanup_dirty_cache_entry (c, entry);
         return -1;
     }
     if (content_store_request_send (cbd->ctx,
@@ -437,13 +436,13 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *hp, void *data)
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
                         __FUNCTION__);
-        commit_cleanup_dirty_cache_entry (c, hp);
+        commit_cleanup_dirty_cache_entry (c, entry);
         return -1;
     }
-    if (cache_entry_wait_notdirty (hp, cbd->wait) < 0) {
+    if (cache_entry_wait_notdirty (entry, cbd->wait) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "cache_entry_wait_notdirty");
-        commit_cleanup_dirty_cache_entry (c, hp);
+        commit_cleanup_dirty_cache_entry (c, entry);
         return -1;
     }
     return 0;
@@ -1268,7 +1267,7 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootref)
+static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, blobref_t rootref)
 {
     flux_future_t *f;
     const char *ref;
@@ -1285,7 +1284,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootref)
         flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto done;
     }
-    if (strlen (ref) > sizeof (href_t) - 1) {
+    if (strlen (ref) > sizeof (blobref_t) - 1) {
         saved_errno = EPROTO;
         goto done;
     }
@@ -1348,8 +1347,8 @@ done:
  */
 static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
 {
-    struct cache_entry *hp;
-    href_t ref;
+    struct cache_entry *entry;
+    blobref_t ref;
     void *data = NULL;
     int len;
 
@@ -1362,22 +1361,22 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         goto done;
     }
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto done;
     }
-    if ((hp = cache_lookup (ctx->cache, ref, ctx->epoch)))
+    if ((entry = cache_lookup (ctx->cache, ref, ctx->epoch)))
         goto done; // already in cache, possibly dirty/invalid - we don't care
-    if (!(hp = cache_entry_create ())) {
+    if (!(entry = cache_entry_create ())) {
         flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
         goto done;
     }
-    if (cache_entry_set_raw (hp, data, len) < 0) {
+    if (cache_entry_set_raw (entry, data, len) < 0) {
         flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
-        cache_entry_destroy (hp);
+        cache_entry_destroy (entry);
         goto done;
     }
-    cache_insert (ctx->cache, ref, hp);
+    cache_insert (ctx->cache, ref, entry);
 done:
     free (data);
 }
@@ -1424,9 +1423,9 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
     assert (ctx->rank == 0);
 
     if (event_includes_rootdir) {
-        struct cache_entry *hp;
-        if ((hp = cache_lookup (ctx->cache, ctx->root.ref, ctx->epoch)))
-            root = cache_entry_get_treeobj (hp);
+        struct cache_entry *entry;
+        if ((entry = cache_lookup (ctx->cache, ctx->root.ref, ctx->epoch)))
+            root = cache_entry_get_treeobj (entry);
         assert (root != NULL); // root entry is always in cache on rank 0
     }
     else {
@@ -1611,9 +1610,9 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
  * The corresponding blobref is written into 'ref'.
  */
 static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
-                                  href_t ref)
+                                  blobref_t ref)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int saved_errno, ret;
     void *data = NULL;
     int len;
@@ -1635,19 +1634,19 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
     if (!(data = treeobj_encode (rootdir)))
         goto error;
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
-    if (!(hp = cache_lookup (ctx->cache, ref, ctx->epoch))) {
-        if (!(hp = cache_entry_create ())) {
+    if (!(entry = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+        if (!(entry = cache_entry_create ())) {
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        cache_insert (ctx->cache, ref, hp);
+        cache_insert (ctx->cache, ref, entry);
     }
-    if (!cache_entry_get_valid (hp)) {
-        if (cache_entry_set_raw (hp, data, len) < 0) { // makes entry valid
+    if (!cache_entry_get_valid (entry)) {
+        if (cache_entry_set_raw (entry, data, len) < 0) { // makes entry valid
             flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
             goto error_uncache;
         }
@@ -1702,7 +1701,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (ctx->rank == 0) {
-        href_t rootref;
+        blobref_t rootref;
 
         if (store_initial_rootdir (ctx, NULL, rootref) < 0) {
             flux_log_error (h, "storing initial root object");
@@ -1710,13 +1709,13 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
         setroot (ctx, rootref, 0);
     } else {
-        href_t href;
+        blobref_t rootref;
         int rootseq;
-        if (getroot_rpc (ctx, &rootseq, href) < 0) {
+        if (getroot_rpc (ctx, &rootseq, rootref) < 0) {
             flux_log_error (h, "getroot");
             goto done;
         }
-        setroot (ctx, href, rootseq);
+        setroot (ctx, rootref, rootseq);
     }
     if (flux_msg_handler_addvec (h, handlers, ctx) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");

@@ -21,18 +21,18 @@ void cache_entry_destroy (void *arg);
 /* Return true if cache entry contains valid data.  False would
  * indicate that a load RPC is in progress.
  */
-bool cache_entry_get_valid (struct cache_entry *hp);
+bool cache_entry_get_valid (struct cache_entry *entry);
 
 /* Get/set cache entry's dirty bit.
  * The dirty bit indicates that a store RPC is in progress.
  * A true->false transitions runs the entry's wait queue, if any.
  * cache_entry_set_dirty() returns -1 on error, 0 on success
  */
-bool cache_entry_get_dirty (struct cache_entry *hp);
-int cache_entry_set_dirty (struct cache_entry *hp, bool val);
+bool cache_entry_get_dirty (struct cache_entry *entry);
+int cache_entry_set_dirty (struct cache_entry *entry, bool val);
 
 /* cache_entry_clear_dirty() is similar to calling
- * cache_entry_set_dirty(hp,false), but it will not set the dirty bit
+ * cache_entry_set_dirty(entry,false), but it will not set the dirty bit
  * to false if there are waiters for notdirty
  * (i.e. cache_entry_wait_notdirty() has been called on this entry).
  * This is typically called in an error path where the caller wishes
@@ -46,8 +46,8 @@ int cache_entry_set_dirty (struct cache_entry *hp, bool val);
  * what and destroy the internal wait queue of dirty bit waiters.  It
  * should be only used in emergency error handling cases.
  */
-int cache_entry_clear_dirty (struct cache_entry *hp);
-int cache_entry_force_clear_dirty (struct cache_entry *hp);
+int cache_entry_clear_dirty (struct cache_entry *entry);
+int cache_entry_force_clear_dirty (struct cache_entry *entry);
 
 /* Accessors for cache entry data.
  *
@@ -69,19 +69,19 @@ int cache_entry_force_clear_dirty (struct cache_entry *hp);
  * cache_entry_set_raw() & cache_entry_clear_data()
  * return -1 on error, 0 on success
  */
-int cache_entry_get_raw (struct cache_entry *hp, const void **data,
+int cache_entry_get_raw (struct cache_entry *entry, const void **data,
                          int *len);
-int cache_entry_set_raw (struct cache_entry *hp, const void *data, int len);
+int cache_entry_set_raw (struct cache_entry *entry, const void *data, int len);
 
-const json_t *cache_entry_get_treeobj (struct cache_entry *hp);
+const json_t *cache_entry_get_treeobj (struct cache_entry *entry);
 
 /* Arrange for message handler represented by 'wait' to be restarted
  * once cache entry becomes valid or not dirty at completion of a
  * load or store RPC.
  * Returns -1 on error, 0 on success
  */
-int cache_entry_wait_notdirty (struct cache_entry *hp, wait_t *wait);
-int cache_entry_wait_valid (struct cache_entry *hp, wait_t *wait);
+int cache_entry_wait_notdirty (struct cache_entry *entry, wait_t *wait);
+int cache_entry_wait_valid (struct cache_entry *entry, wait_t *wait);
 
 /* Create/destroy the cache container and its contents.
  */
@@ -99,7 +99,7 @@ struct cache_entry *cache_lookup (struct cache *cache,
  * Ownership of the cache entry is transferred to the cache.
  */
 void cache_insert (struct cache *cache, const char *ref,
-                   struct cache_entry *hp);
+                   struct cache_entry *entry);
 
 /* Remove a cache_entry from the cache.  Will not be removed if dirty
  * or there are any waiters of any sort.

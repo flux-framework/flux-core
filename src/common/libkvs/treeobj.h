@@ -114,11 +114,6 @@ json_t *treeobj_decode (const char *buf);
 json_t *treeobj_decodeb (const char *buf, size_t buflen);
 char *treeobj_encode (const json_t *obj);
 
-/* Calculate hash of a treeobj
- * Returns 0 on success, -1 on error with errno set
- */
-int treeobj_hash (const char *hash_name, json_t *obj, char *s, int size);
-
 #endif /* !_FLUX_KVS_TREEOBJ_H */
 
 /*

@@ -330,7 +330,7 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
     const void *data;
     int size, hash_len;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
-    char blobref[BLOBREF_MAX_STRING_SIZE] = "-";
+    blobref_t blobref = "-";
     int uncompressed_size = -1;
     int rc = -1;
     int old_state;
@@ -345,8 +345,7 @@ void store_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EFBIG;
         goto done;
     }
-    if (blobref_hash (ctx->hashfun, (uint8_t *)data, size,
-                      blobref,sizeof (blobref)) < 0)
+    if (blobref_hash (ctx->hashfun, (uint8_t *)data, size, blobref) < 0)
         goto done;
     if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
         goto done;

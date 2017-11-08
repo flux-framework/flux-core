@@ -516,7 +516,7 @@ json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
                                    void *data, int len)
 {
     json_t *valref = NULL;
-    char blobref[BLOBREF_MAX_STRING_SIZE];
+    blobref_t blobref;
     int blob_len;
 
     if (!(valref = treeobj_create_valref (NULL)))
@@ -525,8 +525,7 @@ json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
         blob_len = len;
         if (maxblob > 0 && len > maxblob)
             blob_len = maxblob;
-        if (blobref_hash (hashtype, data, blob_len,
-                          blobref, sizeof (blobref)) < 0)
+        if (blobref_hash (hashtype, data, blob_len, blobref) < 0)
             goto error;
         if (treeobj_append_blobref (valref, blobref) < 0)
             goto error;
@@ -567,32 +566,6 @@ error:
 char *treeobj_encode (const json_t *obj)
 {
     return json_dumps (obj, JSON_COMPACT|JSON_SORT_KEYS);
-}
-
-int treeobj_hash (const char *hash_name, json_t *obj, char *s, int size)
-{
-    char *tmp = NULL;
-    int rc = -1;
-
-    if (!hash_name || !obj || !s || size <= 0) {
-        errno = EINVAL;
-        goto error;
-    }
-
-    if (treeobj_validate (obj) < 0)
-        goto error;
-
-    if (!(tmp = treeobj_encode (obj)))
-        goto error;
-
-    if (blobref_hash (hash_name, (uint8_t *)tmp, strlen (tmp),
-                      s, size) < 0)
-        goto error;
-
-    rc = 0;
- error:
-    free (tmp);
-    return rc;
 }
 
 /*

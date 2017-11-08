@@ -59,7 +59,7 @@ struct commit {
     fence_t *f;
     int blocked:1;
     json_t *rootcpy;   /* working copy of root dir */
-    href_t newroot;
+    blobref_t newroot;
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
     commit_mgr_t *cm;
@@ -161,25 +161,25 @@ const char *commit_get_newroot_ref (commit_t *c)
  * this dirty cache list (i.e. in store_cache() below when
  * cache_entry_set_raw() was called).
  */
-void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
+void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *entry)
 {
     if (c->state == COMMIT_STATE_STORE
         || c->state == COMMIT_STATE_PRE_FINISHED) {
-        href_t ref;
+        blobref_t ref;
         const void *data;
         int len;
         int ret;
 
-        assert (cache_entry_get_valid (hp) == true);
-        assert (cache_entry_get_dirty (hp) == true);
-        ret = cache_entry_clear_dirty (hp);
+        assert (cache_entry_get_valid (entry) == true);
+        assert (cache_entry_get_dirty (entry) == true);
+        ret = cache_entry_clear_dirty (entry);
         assert (ret == 0);
-        assert (cache_entry_get_dirty (hp) == false);
+        assert (cache_entry_get_dirty (entry) == false);
 
-        ret = cache_entry_get_raw (hp, &data, &len);
+        ret = cache_entry_get_raw (entry, &data, &len);
         assert (ret == 0);
 
-        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
+        blobref_hash (c->cm->hash_name, data, len, ref);
 
         ret = cache_remove_entry (c->cm->cache, ref);
         assert (ret == 1);
@@ -188,10 +188,10 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
 
 static void cleanup_dirty_cache_list (commit_t *c)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
 
-    while ((hp = zlist_pop (c->dirty_cache_entries_list)))
-        commit_cleanup_dirty_cache_entry (c, hp);
+    while ((entry = zlist_pop (c->dirty_cache_entries_list)))
+        commit_cleanup_dirty_cache_entry (c, entry);
 }
 
 /* Store object 'o' under key 'ref' in local cache.
@@ -203,9 +203,9 @@ static void cleanup_dirty_cache_list (commit_t *c)
  * entry needs to be flushed to content store
  */
 static int store_cache (commit_t *c, int current_epoch, json_t *o,
-                        bool is_raw, href_t ref, struct cache_entry **hpp)
+                        bool is_raw, blobref_t ref, struct cache_entry **entryp)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int saved_errno, rc;
     const char *xdata;
     char *data = NULL;
@@ -239,29 +239,29 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
         len = strlen (data);
     }
-    if (blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+    if (blobref_hash (c->cm->hash_name, data, len, ref) < 0) {
         flux_log_error (c->cm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
-    if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))) {
-        if (!(hp = cache_entry_create ())) {
+    if (!(entry = cache_lookup (c->cm->cache, ref, current_epoch))) {
+        if (!(entry = cache_entry_create ())) {
             flux_log_error (c->cm->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        cache_insert (c->cm->cache, ref, hp);
+        cache_insert (c->cm->cache, ref, entry);
     }
-    if (cache_entry_get_valid (hp)) {
+    if (cache_entry_get_valid (entry)) {
         c->cm->noop_stores++;
         rc = 0;
     }
     else {
-        if (cache_entry_set_raw (hp, data, len) < 0) {
+        if (cache_entry_set_raw (entry, data, len) < 0) {
             int ret;
             ret = cache_remove_entry (c->cm->cache, ref);
             assert (ret == 1);
             goto error;
         }
-        if (cache_entry_set_dirty (hp, true) < 0) {
+        if (cache_entry_set_dirty (entry, true) < 0) {
             flux_log_error (c->cm->h, "%s: cache_entry_set_dirty",__FUNCTION__);
             int ret;
             ret = cache_remove_entry (c->cm->cache, ref);
@@ -270,7 +270,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
         rc = 1;
     }
-    *hpp = hp;
+    *entryp = entry;
     free (data);
     return rc;
 
@@ -290,9 +290,9 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     json_t *dir_entry;
     json_t *dir_data;
     json_t *tmp;
-    href_t ref;
+    blobref_t ref;
     int ret;
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     void *iter;
 
     assert (treeobj_is_dir (dir));
@@ -311,11 +311,11 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             if (commit_unroll (c, current_epoch, dir_entry) < 0) /* depth first */
                 return -1;
             if ((ret = store_cache (c, current_epoch, dir_entry,
-                                    false, ref, &hp)) < 0)
+                                    false, ref, &entry)) < 0)
                 return -1;
             if (ret) {
-                if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
-                    commit_cleanup_dirty_cache_entry (c, hp);
+                if (zlist_push (c->dirty_cache_entries_list, entry) < 0) {
+                    commit_cleanup_dirty_cache_entry (c, entry);
                     errno = ENOMEM;
                     return -1;
                 }
@@ -339,11 +339,11 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             assert (str);
             if (strlen (str) > BLOBREF_MAX_STRING_SIZE) {
                 if ((ret = store_cache (c, current_epoch, val_data,
-                                        true, ref, &hp)) < 0)
+                                        true, ref, &entry)) < 0)
                     return -1;
                 if (ret) {
-                    if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
-                        commit_cleanup_dirty_cache_entry (c, hp);
+                    if (zlist_push (c->dirty_cache_entries_list, entry) < 0) {
+                        commit_cleanup_dirty_cache_entry (c, entry);
                         errno = ENOMEM;
                         return -1;
                     }
@@ -364,9 +364,9 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 }
 
 static int commit_val_data_to_cache (commit_t *c, int current_epoch,
-                                     json_t *val, href_t ref)
+                                     json_t *val, blobref_t ref)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     json_t *val_data;
     int ret;
 
@@ -374,12 +374,12 @@ static int commit_val_data_to_cache (commit_t *c, int current_epoch,
         return -1;
 
     if ((ret = store_cache (c, current_epoch, val_data,
-                            true, ref, &hp)) < 0)
+                            true, ref, &entry)) < 0)
         return -1;
 
     if (ret) {
-        if (zlist_push (c->dirty_cache_entries_list, hp) < 0) {
-            commit_cleanup_dirty_cache_entry (c, hp);
+        if (zlist_push (c->dirty_cache_entries_list, entry) < 0) {
+            commit_cleanup_dirty_cache_entry (c, entry);
             errno = ENOMEM;
             return -1;
         }
@@ -406,7 +406,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
             return -1;
     }
     else if (treeobj_is_valref (entry)) {
-        href_t ref;
+        blobref_t ref;
         json_t *cpy;
 
         /* treeobj is valref, so we need to append the new data's
@@ -439,7 +439,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
     }
     else if (treeobj_is_val (entry)) {
         json_t *tmp;
-        href_t ref1, ref2;
+        blobref_t ref1, ref2;
 
         /* treeobj entry is val, so we need to convert the treeobj
          * into a valref first.  Then the procedure is basically the
@@ -544,7 +544,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else if (treeobj_is_dir (dir_entry)) {
             subdir = dir_entry;
         } else if (treeobj_is_dirref (dir_entry)) {
-            struct cache_entry *hp;
+            struct cache_entry *entry;
             const char *ref;
             const json_t *subdirtmp;
             int refcount;
@@ -566,13 +566,13 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto done;
             }
 
-            if (!(hp = cache_lookup (c->cm->cache, ref, current_epoch))
-                || !cache_entry_get_valid (hp)) {
+            if (!(entry = cache_lookup (c->cm->cache, ref, current_epoch))
+                || !cache_entry_get_valid (entry)) {
                 *missing_ref = ref;
                 goto success; /* stall */
             }
 
-            if (!(subdirtmp = cache_entry_get_treeobj (hp))) {
+            if (!(subdirtmp = cache_entry_get_treeobj (entry))) {
                 saved_errno = ENOTRECOVERABLE;
                 goto done;
             }
@@ -674,7 +674,7 @@ done:
 
 commit_process_t commit_process (commit_t *c,
                                  int current_epoch,
-                                 const href_t rootdir_ref)
+                                 const blobref_t rootdir_ref)
 {
     /* Incase user calls commit_process() again */
     if (c->errnum)
@@ -686,7 +686,7 @@ commit_process_t commit_process (commit_t *c,
         {
             /* Make a copy of the root directory.
              */
-            struct cache_entry *hp;
+            struct cache_entry *entry;
             const json_t *rootdir;
 
             /* Caller didn't call commit_iter_missing_refs() */
@@ -695,10 +695,10 @@ commit_process_t commit_process (commit_t *c,
 
             c->state = COMMIT_STATE_LOAD_ROOT;
 
-            if (!(hp = cache_lookup (c->cm->cache,
-                                     rootdir_ref,
-                                     current_epoch))
-                || !cache_entry_get_valid (hp)) {
+            if (!(entry = cache_lookup (c->cm->cache,
+                                        rootdir_ref,
+                                        current_epoch))
+                || !cache_entry_get_valid (entry)) {
 
                 if (zlist_push (c->missing_refs_list,
                                 (void *)rootdir_ref) < 0) {
@@ -708,7 +708,7 @@ commit_process_t commit_process (commit_t *c,
                 goto stall_load;
             }
 
-            if (!(rootdir = cache_entry_get_treeobj (hp))) {
+            if (!(rootdir = cache_entry_get_treeobj (entry))) {
                 c->errnum = ENOTRECOVERABLE;
                 return COMMIT_PROCESS_ERROR;
             }
@@ -790,7 +790,7 @@ commit_process_t commit_process (commit_t *c,
              * Flushes to content cache are asynchronous but we don't
              * proceed until they are completed.
              */
-            struct cache_entry *hp;
+            struct cache_entry *entry;
             int sret;
 
             if (commit_unroll (c, current_epoch, c->rootcpy) < 0)
@@ -800,11 +800,11 @@ commit_process_t commit_process (commit_t *c,
                                           c->rootcpy,
                                           false,
                                           c->newroot,
-                                          &hp)) < 0)
+                                          &entry)) < 0)
                      c->errnum = errno;
             else if (sret
-                     && zlist_push (c->dirty_cache_entries_list, hp) < 0) {
-                commit_cleanup_dirty_cache_entry (c, hp);
+                     && zlist_push (c->dirty_cache_entries_list, entry) < 0) {
+                commit_cleanup_dirty_cache_entry (c, entry);
                 c->errnum = ENOMEM;
             }
 
@@ -881,7 +881,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
                                      commit_cache_entry_f cb,
                                      void *data)
 {
-    struct cache_entry *hp;
+    struct cache_entry *entry;
     int saved_errno, rc = 0;
 
     if (c->state != COMMIT_STATE_PRE_FINISHED) {
@@ -889,8 +889,8 @@ int commit_iter_dirty_cache_entries (commit_t *c,
         return -1;
     }
 
-    while ((hp = zlist_pop (c->dirty_cache_entries_list))) {
-        if (cb (c, hp, data) < 0) {
+    while ((entry = zlist_pop (c->dirty_cache_entries_list))) {
+        if (cb (c, entry, data) < 0) {
             saved_errno = errno;
             rc = -1;
             break;

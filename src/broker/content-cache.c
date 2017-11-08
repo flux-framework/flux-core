@@ -521,7 +521,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *w,
     const void *data;
     int len;
     struct cache_entry *e = NULL;
-    char blobref[BLOBREF_MAX_STRING_SIZE];
+    blobref_t blobref;
     int rc = -1;
 
     if (flux_request_decode_raw (msg, NULL, &data, &len) < 0)
@@ -530,8 +530,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *w,
         errno = EFBIG;
         goto done;
     }
-    if (blobref_hash (cache->hash_name, (uint8_t *)data, len,
-                      blobref, sizeof (blobref)) < 0)
+    if (blobref_hash (cache->hash_name, (uint8_t *)data, len, blobref) < 0)
         goto done;
 
     if (!(e = lookup_entry (cache, blobref))) {
