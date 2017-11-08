@@ -742,33 +742,6 @@ void test_corner_cases (void)
     json_decref (symlink);
 }
 
-void test_hash (void)
-{
-    char buf[128];
-    json_t *o;
-
-    ok (treeobj_hash (NULL, NULL, NULL, -1) < 0
-        && errno == EINVAL,
-        "treeobj_hash fails with EINVAL on bad input");
-
-    o = json_object ();
-    ok (treeobj_hash ("sha1", o, buf, 128) < 0
-        && errno == EINVAL,
-        "treeobj_hash fails with EINVAL on non-treeobj");
-    json_decref (o);
-
-    o = treeobj_create_val ("foo", 3);
-
-    ok (treeobj_hash ("sha1", o, buf, 1) < 0
-        && errno == EINVAL,
-        "treeobj_hash fails with EINVAL on too small buffer");
-
-    ok (treeobj_hash ("sha1", o, buf, 128) == 0,
-        "treeobj_hash success");
-
-    json_decref (o);
-}
-
 int main(int argc, char** argv)
 {
     plan (NO_PLAN);
@@ -784,7 +757,6 @@ int main(int argc, char** argv)
     test_corner_cases ();
 
     test_codec ();
-    test_hash ();
 
     done_testing();
 }
