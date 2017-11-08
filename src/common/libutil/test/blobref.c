@@ -32,13 +32,9 @@ int main(int argc, char** argv)
 
     /* invalid args */
     errno = 0;
-    ok (blobref_hash ("nerf", data, sizeof (data), ref, sizeof (ref)) < 0
+    ok (blobref_hash ("nerf", data, sizeof (data), ref) < 0
         && errno == EINVAL,
         "blobref_hash fails EINVAL with unknown hash name");
-    errno = 0;
-    ok (blobref_hash ("sha1", data, sizeof (data), ref, 2) < 0
-        && errno == EINVAL,
-        "blobref_hash fails EINVAL with runt ref buffer");
 
     errno = 0;
     ok (blobref_strtohash (badref[0], digest, sizeof (digest)) < 0
@@ -63,45 +59,41 @@ int main(int argc, char** argv)
 
     memset (digest, 6, sizeof (digest));
     errno = 0;
-    ok (blobref_hashtostr ("nerf", digest, SHA1_DIGEST_SIZE, ref, sizeof (ref)) < 0
+    ok (blobref_hashtostr ("nerf", digest, SHA1_DIGEST_SIZE, ref) < 0
         && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with unknown hash");
     errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA256_BLOCK_SIZE, ref, sizeof (ref)) < 0
+    ok (blobref_hashtostr ("sha1", digest, SHA256_BLOCK_SIZE, ref) < 0
         && errno == EINVAL,
         "blobref_hashtostr fails EINVAL with wrong digest size for hash");
-    errno = 0;
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref, 2) < 0
-        && errno == EINVAL,
-        "blobref_hashtostr fails EINVAL with runt ref");
 
     /* sha1 */
-    ok (blobref_hash ("sha1", NULL, 0, ref, sizeof (ref)) == 0,
+    ok (blobref_hash ("sha1", NULL, 0, ref) == 0,
         "blobref_hash sha1 handles zero length data");
     diag ("%s", ref);
-    ok (blobref_hash ("sha1", data, sizeof (data), ref, sizeof (ref)) == 0,
+    ok (blobref_hash ("sha1", data, sizeof (data), ref) == 0,
         "blobref_hash sha1 works");
     diag ("%s", ref);
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA1_DIGEST_SIZE,
         "blobref_strtohash returns expected size hash");
-    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref2, sizeof (ref2)) == 0,
+    ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref2) == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
     ok (strcmp (ref, ref2) == 0,
         "and blobrefs match");
 
     /* sha256 */
-    ok (blobref_hash ("sha256", NULL, 0, ref, sizeof (ref)) == 0,
+    ok (blobref_hash ("sha256", NULL, 0, ref) == 0,
         "blobref_hash sha256 handles zero length data");
     diag ("%s", ref);
-    ok (blobref_hash ("sha256", data, sizeof (data), ref, sizeof (ref)) == 0,
+    ok (blobref_hash ("sha256", data, sizeof (data), ref) == 0,
         "blobref_hash sha256 works");
     diag ("%s", ref);
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA256_BLOCK_SIZE,
         "blobref_strtohash returns expected size hash");
-    ok (blobref_hashtostr ("sha256", digest, SHA256_BLOCK_SIZE, ref2, sizeof (ref2)) == 0,
+    ok (blobref_hashtostr ("sha256", digest, SHA256_BLOCK_SIZE, ref2) == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
     ok (strcmp (ref, ref2) == 0,

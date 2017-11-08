@@ -1361,7 +1361,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         goto done;
     }
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (blobref_t)) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto done;
     }
@@ -1634,7 +1634,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
     if (!(data = treeobj_encode (rootdir)))
         goto error;
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (blobref_t)) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }

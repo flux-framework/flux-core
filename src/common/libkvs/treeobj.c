@@ -516,7 +516,7 @@ json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
                                    void *data, int len)
 {
     json_t *valref = NULL;
-    char blobref[BLOBREF_MAX_STRING_SIZE];
+    blobref_t blobref;
     int blob_len;
 
     if (!(valref = treeobj_create_valref (NULL)))
@@ -525,8 +525,7 @@ json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob,
         blob_len = len;
         if (maxblob > 0 && len > maxblob)
             blob_len = maxblob;
-        if (blobref_hash (hashtype, data, blob_len,
-                          blobref, sizeof (blobref)) < 0)
+        if (blobref_hash (hashtype, data, blob_len, blobref) < 0)
             goto error;
         if (treeobj_append_blobref (valref, blobref) < 0)
             goto error;

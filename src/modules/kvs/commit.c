@@ -179,7 +179,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
         ret = cache_entry_get_raw (hp, &data, &len);
         assert (ret == 0);
 
-        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (blobref_t));
+        blobref_hash (c->cm->hash_name, data, len, ref);
 
         ret = cache_remove_entry (c->cm->cache, ref);
         assert (ret == 1);
@@ -239,7 +239,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
         len = strlen (data);
     }
-    if (blobref_hash (c->cm->hash_name, data, len, ref, sizeof (blobref_t)) < 0) {
+    if (blobref_hash (c->cm->hash_name, data, len, ref) < 0) {
         flux_log_error (c->cm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }

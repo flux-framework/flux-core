@@ -12,23 +12,23 @@ typedef char blobref_t[BLOBREF_MAX_STRING_SIZE];
  * The hash algorithm is selected by the blobref prefix.
  * Returns hash length on success, or -1 on error, with errno set.
  */
-int blobref_strtohash (const char *s, void *hash, int size);
+int blobref_strtohash (const char *blobref, void *hash, int size);
 
-/* Convert a hash digest to null-terminated blobref string in 's'.
+/* Convert a hash digest to null-terminated blobref string in 'blobref'.
  * The hash algorithm is selected by 'hashtype', e.g. "sha1".
  * Returns 0 on success, -1 on error, with errno set.
  */
 int blobref_hashtostr (const char *hashtype,
                        const void *hash, int len,
-                       char *s, int size);
+                       blobref_t blobref);
 
-/* Compute hash over data and return null-terminated blobref string in 's'.
- * The hash algorithm is selected by 'hashtype', e.g. "sha1".
+/* Compute hash over data and return null-terminated blobref string in
+ * 'blobref'.  The hash algorithm is selected by 'hashtype', e.g. "sha1".
  * Returns 0 on success, -1 on error with errno set.
  */
 int blobref_hash (const char *hashtype,
                   const void *data, int len,
-                  char *s, int size);
+                  blobref_t blobref);
 
 /* Check validity of blobref string.
  */
