@@ -6,7 +6,7 @@
 
 #include "cache.h"
 #include "fence.h"
-#include "types.h"
+#include "src/common/libutil/blobref.h"
 
 typedef struct commit_mgr commit_mgr_t;
 typedef struct commit commit_t;
@@ -68,7 +68,7 @@ const char *commit_get_newroot_ref (commit_t *c);
  */
 commit_process_t commit_process (commit_t *c,
                                  int current_epoch,
-                                 const href_t rootdir_ref);
+                                 const blobref_t rootdir_ref);
 
 /* on commit stall, iterate through all missing refs that the caller
  * should load into the cache

@@ -50,7 +50,6 @@
 
 #include "lookup.h"
 #include "fence.h"
-#include "types.h"
 #include "commit.h"
 
 #define KVS_MAGIC 0xdeadbeef
@@ -65,7 +64,7 @@ const bool event_includes_rootdir = true;
 
 struct kvsroot {
     int seq;
-    href_t ref;
+    blobref_t ref;
 };
 
 typedef struct {
@@ -219,7 +218,7 @@ done:
 
 /* Send content load request and setup contination to handle response.
  */
-static int content_load_request_send (kvs_ctx_t *ctx, const href_t ref)
+static int content_load_request_send (kvs_ctx_t *ctx, const blobref_t ref)
 {
     flux_future_t *f = NULL;
     char *refcpy;
@@ -247,7 +246,7 @@ error:
 
 /* Return 0 on success, -1 on error.  Set stall variable appropriately
  */
-static int load (kvs_ctx_t *ctx, const href_t ref, wait_t *wait, bool *stall)
+static int load (kvs_ctx_t *ctx, const blobref_t ref, wait_t *wait, bool *stall)
 {
     struct cache_entry *hp = cache_lookup (ctx->cache, ref, ctx->epoch);
     int saved_errno, ret;
@@ -385,7 +384,7 @@ error:
 static void setroot (kvs_ctx_t *ctx, const char *rootref, int rootseq)
 {
     if (rootseq == 0 || rootseq > ctx->root.seq) {
-        assert (strlen (rootref) < sizeof (href_t));
+        assert (strlen (rootref) < sizeof (blobref_t));
         strcpy (ctx->root.ref, rootref);
         ctx->root.seq = rootseq;
         /* log error on wait_runqueue(), don't error out.  watchers
@@ -1268,7 +1267,7 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootref)
+static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, blobref_t rootref)
 {
     flux_future_t *f;
     const char *ref;
@@ -1285,7 +1284,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, href_t rootref)
         flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto done;
     }
-    if (strlen (ref) > sizeof (href_t) - 1) {
+    if (strlen (ref) > sizeof (blobref_t) - 1) {
         saved_errno = EPROTO;
         goto done;
     }
@@ -1349,7 +1348,7 @@ done:
 static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
 {
     struct cache_entry *hp;
-    href_t ref;
+    blobref_t ref;
     void *data = NULL;
     int len;
 
@@ -1362,7 +1361,7 @@ static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
         goto done;
     }
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (blobref_t)) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto done;
     }
@@ -1611,7 +1610,7 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
  * The corresponding blobref is written into 'ref'.
  */
 static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
-                                  href_t ref)
+                                  blobref_t ref)
 {
     struct cache_entry *hp;
     int saved_errno, ret;
@@ -1635,7 +1634,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
     if (!(data = treeobj_encode (rootdir)))
         goto error;
     len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (blobref_t)) < 0) {
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
@@ -1702,7 +1701,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (ctx->rank == 0) {
-        href_t rootref;
+        blobref_t rootref;
 
         if (store_initial_rootdir (ctx, NULL, rootref) < 0) {
             flux_log_error (h, "storing initial root object");
@@ -1710,13 +1709,13 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
         setroot (ctx, rootref, 0);
     } else {
-        href_t href;
+        blobref_t rootref;
         int rootseq;
-        if (getroot_rpc (ctx, &rootseq, href) < 0) {
+        if (getroot_rpc (ctx, &rootseq, rootref) < 0) {
             flux_log_error (h, "getroot");
             goto done;
         }
-        setroot (ctx, href, rootseq);
+        setroot (ctx, rootref, rootseq);
     }
     if (flux_msg_handler_addvec (h, handlers, ctx) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");

@@ -59,7 +59,7 @@ struct commit {
     fence_t *f;
     int blocked:1;
     json_t *rootcpy;   /* working copy of root dir */
-    href_t newroot;
+    blobref_t newroot;
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
     commit_mgr_t *cm;
@@ -165,7 +165,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
 {
     if (c->state == COMMIT_STATE_STORE
         || c->state == COMMIT_STATE_PRE_FINISHED) {
-        href_t ref;
+        blobref_t ref;
         const void *data;
         int len;
         int ret;
@@ -179,7 +179,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *hp)
         ret = cache_entry_get_raw (hp, &data, &len);
         assert (ret == 0);
 
-        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t));
+        blobref_hash (c->cm->hash_name, data, len, ref, sizeof (blobref_t));
 
         ret = cache_remove_entry (c->cm->cache, ref);
         assert (ret == 1);
@@ -203,7 +203,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
  * entry needs to be flushed to content store
  */
 static int store_cache (commit_t *c, int current_epoch, json_t *o,
-                        bool is_raw, href_t ref, struct cache_entry **hpp)
+                        bool is_raw, blobref_t ref, struct cache_entry **hpp)
 {
     struct cache_entry *hp;
     int saved_errno, rc;
@@ -239,7 +239,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         }
         len = strlen (data);
     }
-    if (blobref_hash (c->cm->hash_name, data, len, ref, sizeof (href_t)) < 0) {
+    if (blobref_hash (c->cm->hash_name, data, len, ref, sizeof (blobref_t)) < 0) {
         flux_log_error (c->cm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
@@ -290,7 +290,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     json_t *dir_entry;
     json_t *dir_data;
     json_t *tmp;
-    href_t ref;
+    blobref_t ref;
     int ret;
     struct cache_entry *hp;
     void *iter;
@@ -364,7 +364,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
 }
 
 static int commit_val_data_to_cache (commit_t *c, int current_epoch,
-                                     json_t *val, href_t ref)
+                                     json_t *val, blobref_t ref)
 {
     struct cache_entry *hp;
     json_t *val_data;
@@ -406,7 +406,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
             return -1;
     }
     else if (treeobj_is_valref (entry)) {
-        href_t ref;
+        blobref_t ref;
         json_t *cpy;
 
         /* treeobj is valref, so we need to append the new data's
@@ -439,7 +439,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
     }
     else if (treeobj_is_val (entry)) {
         json_t *tmp;
-        href_t ref1, ref2;
+        blobref_t ref1, ref2;
 
         /* treeobj entry is val, so we need to convert the treeobj
          * into a valref first.  Then the procedure is basically the
@@ -674,7 +674,7 @@ done:
 
 commit_process_t commit_process (commit_t *c,
                                  int current_epoch,
-                                 const href_t rootdir_ref)
+                                 const blobref_t rootdir_ref)
 {
     /* Incase user calls commit_process() again */
     if (c->errnum)

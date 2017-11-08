@@ -23,7 +23,6 @@ kvs_la_SOURCES = \
 	lookup.c \
 	fence.h \
 	fence.c \
-	types.h \
 	commit.h \
 	commit.c
 

@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -14,7 +15,6 @@
 #include "src/modules/kvs/lookup.h"
 #include "src/modules/kvs/fence.h"
 #include "src/modules/kvs/kvs_util.h"
-#include "src/modules/kvs/types.h"
 
 static int test_global = 5;
 
@@ -92,7 +92,7 @@ void ops_append (json_t *array, const char *key, const char *value, int flags)
     json_array_append_new (array, op);
 }
 
-struct cache *create_cache_with_empty_rootdir (href_t ref)
+struct cache *create_cache_with_empty_rootdir (blobref_t ref)
 {
     struct cache *cache;
     struct cache_entry *hp;
@@ -102,7 +102,7 @@ struct cache *create_cache_with_empty_rootdir (href_t ref)
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
-    ok (treeobj_hash ("sha1", rootdir, ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", rootdir, ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
     ok ((hp = create_cache_entry_treeobj (rootdir)) != NULL,
         "create_cache_entry_treeobj works");
@@ -117,7 +117,7 @@ void commit_mgr_basic_tests (void)
     commit_mgr_t *cm;
     commit_t *c;
     fence_t *f, *tf;
-    href_t rootref;
+    blobref_t rootref;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
@@ -262,7 +262,7 @@ void commit_mgr_merge_tests (void)
     struct cache *cache;
     json_t *names, *ops = NULL;
     commit_mgr_t *cm;
-    href_t rootref;
+    blobref_t rootref;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
@@ -366,7 +366,7 @@ void commit_basic_tests (void)
     json_t *names, *ops = NULL;
     commit_mgr_t *cm;
     commit_t *c;
-    href_t rootref;
+    blobref_t rootref;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
@@ -472,7 +472,7 @@ void commit_basic_commit_process_test (void)
     int count = 0;
     commit_mgr_t *cm;
     commit_t *c;
-    href_t rootref;
+    blobref_t rootref;
     const char *newroot;
 
     cache = create_cache_with_empty_rootdir (rootref);
@@ -517,7 +517,7 @@ void commit_basic_commit_process_test_multiple_fences (void)
     int count = 0;
     commit_mgr_t *cm;
     commit_t *c;
-    href_t rootref;
+    blobref_t rootref;
     const char *newroot;
 
     cache = create_cache_with_empty_rootdir (rootref);
@@ -590,7 +590,7 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
     int count = 0;
     commit_mgr_t *cm;
     commit_t *c;
-    href_t rootref;
+    blobref_t rootref;
     const char *newroot;
 
     cache = create_cache_with_empty_rootdir (rootref);
@@ -645,7 +645,7 @@ void commit_basic_root_not_dir (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t root_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -653,7 +653,7 @@ void commit_basic_root_not_dir (void)
     /* make a non-dir root */
     root = treeobj_create_val ("abcd", 4);
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -710,7 +710,7 @@ void commit_process_root_missing (void)
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    href_t rootref;
+    blobref_t rootref;
     struct rootref_data rd;
     json_t *rootdir;
     const char *newroot;
@@ -721,7 +721,7 @@ void commit_process_root_missing (void)
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
-    ok (treeobj_hash ("sha1", rootdir, rootref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", rootdir, rootref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     json_decref (rootdir);
@@ -798,8 +798,8 @@ void commit_process_missing_ref (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
     struct missingref_data md;
     const char *newroot;
 
@@ -819,7 +819,7 @@ void commit_process_missing_ref (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     /* don't add dir entry, we want it to miss  */
@@ -827,7 +827,7 @@ void commit_process_missing_ref (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -899,8 +899,8 @@ void commit_process_error_callbacks (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -918,7 +918,7 @@ void commit_process_error_callbacks (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     /* don't add dir entry, we want it to miss  */
@@ -926,7 +926,7 @@ void commit_process_error_callbacks (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -988,8 +988,8 @@ void commit_process_error_callbacks_partway (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1007,7 +1007,7 @@ void commit_process_error_callbacks_partway (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
@@ -1015,7 +1015,7 @@ void commit_process_error_callbacks_partway (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1056,7 +1056,7 @@ void commit_process_invalid_operation (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t root_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1064,7 +1064,7 @@ void commit_process_invalid_operation (void)
     /* This root is an empty root */
     root = treeobj_create_dir ();
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1096,7 +1096,7 @@ void commit_process_malformed_operation (void)
     struct cache *cache;
     commit_mgr_t *cm;
     commit_t *c;
-    href_t root_ref;
+    blobref_t root_ref;
     fence_t *f;
     json_t *ops, *badop;
 
@@ -1151,7 +1151,7 @@ void commit_process_invalid_hash (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t root_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1159,7 +1159,7 @@ void commit_process_invalid_hash (void)
     /* This root is an empty root */
     root = treeobj_create_dir ();
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1193,8 +1193,8 @@ void commit_process_follow_link (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1214,7 +1214,7 @@ void commit_process_follow_link (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
@@ -1223,7 +1223,7 @@ void commit_process_follow_link (void)
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1262,7 +1262,7 @@ void commit_process_dirval_test (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
+    blobref_t root_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1281,7 +1281,7 @@ void commit_process_dirval_test (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", dir);
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1319,8 +1319,8 @@ void commit_process_delete_test (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1339,7 +1339,7 @@ void commit_process_delete_test (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
@@ -1347,7 +1347,7 @@ void commit_process_delete_test (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1385,7 +1385,7 @@ void commit_process_delete_nosubdir_test (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t root_ref;
+    blobref_t root_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1394,7 +1394,7 @@ void commit_process_delete_nosubdir_test (void)
     /* This root is an empty root */
     root = treeobj_create_dir ();
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1428,8 +1428,8 @@ void commit_process_delete_filevalinpath_test (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1448,7 +1448,7 @@ void commit_process_delete_filevalinpath_test (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
@@ -1456,7 +1456,7 @@ void commit_process_delete_filevalinpath_test (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1491,8 +1491,8 @@ void commit_process_bad_dirrefs (void)
     json_t *root;
     json_t *dirref;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1510,7 +1510,7 @@ void commit_process_bad_dirrefs (void)
     dir = treeobj_create_dir ();
     treeobj_insert_entry (dir, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
@@ -1521,7 +1521,7 @@ void commit_process_bad_dirrefs (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "dir", dirref);
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1573,7 +1573,7 @@ void commit_process_big_fileval (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t root_ref;
+    blobref_t root_ref;
     const char *newroot;
     int bigstrsize = BLOBREF_MAX_STRING_SIZE * 2;
     char bigstr[bigstrsize];
@@ -1592,7 +1592,7 @@ void commit_process_big_fileval (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("42", 2));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1685,8 +1685,8 @@ void commit_process_giant_dir (void)
     commit_t *c;
     json_t *root;
     json_t *dir;
-    href_t root_ref;
-    href_t dir_ref;
+    blobref_t root_ref;
+    blobref_t dir_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1738,7 +1738,7 @@ void commit_process_giant_dir (void)
     treeobj_insert_entry (dir, "val0e00", treeobj_create_val ("E", 1));
     treeobj_insert_entry (dir, "valF000", treeobj_create_val ("f", 1));
 
-    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", dir, dir_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
@@ -1746,7 +1746,7 @@ void commit_process_giant_dir (void)
     root = treeobj_create_dir ();
     treeobj_insert_entry (dir, "dir", treeobj_create_dirref (dir_ref));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1799,8 +1799,8 @@ void commit_process_append (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t valref_ref;
-    href_t root_ref;
+    blobref_t valref_ref;
+    blobref_t root_ref;
     const char *newroot;
 
     ok ((cache = cache_create ()) != NULL,
@@ -1816,14 +1816,14 @@ void commit_process_append (void)
      * "valref" : valref to valref_ref
      */
 
-    blobref_hash ("sha1", "ABCD", 4, valref_ref, sizeof (href_t));
+    blobref_hash ("sha1", "ABCD", 4, valref_ref, sizeof (blobref_t));
     cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("ABCD"), 4));
 
     root = treeobj_create_dir ();
     treeobj_insert_entry (root, "val", treeobj_create_val ("abcd", 4));
     treeobj_insert_entry (root, "valref", treeobj_create_val ("ABCD", 4));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
@@ -1933,7 +1933,7 @@ void commit_process_append_errors (void)
     commit_mgr_t *cm;
     commit_t *c;
     json_t *root;
-    href_t root_ref;
+    blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
@@ -1949,7 +1949,7 @@ void commit_process_append_errors (void)
     treeobj_insert_entry (root, "dir", treeobj_create_dir ());
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dir"));
 
-    ok (treeobj_hash ("sha1", root, root_ref, sizeof (href_t)) == 0,
+    ok (treeobj_hash ("sha1", root, root_ref, sizeof (blobref_t)) == 0,
         "treeobj_hash worked");
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
