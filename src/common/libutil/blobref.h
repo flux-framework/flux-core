@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+typedef char blobref_t[BLOBREF_MAX_STRING_SIZE];
+
 /* Convert a blobref string to hash digest.
  * The hash algorithm is selected by the blobref prefix.
  * Returns hash length on success, or -1 on error, with errno set.

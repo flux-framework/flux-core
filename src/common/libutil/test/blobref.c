@@ -21,8 +21,8 @@ const char *goodref[] = {
 
 int main(int argc, char** argv)
 {
-    char ref[BLOBREF_MAX_STRING_SIZE];
-    char ref2[BLOBREF_MAX_STRING_SIZE];
+    blobref_t ref;
+    blobref_t ref2;
     uint8_t digest[BLOBREF_MAX_DIGEST_SIZE];
     uint8_t data[1024];
 
