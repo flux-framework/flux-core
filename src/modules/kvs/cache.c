@@ -149,41 +149,42 @@ int cache_entry_get_raw (struct cache_entry *hp, const void **data,
     return 0;
 }
 
-int cache_entry_set_raw (struct cache_entry *hp, void *data, int len)
+int cache_entry_set_raw (struct cache_entry *hp, const void *data, int len)
 {
-    if ((data && len <= 0) || (!data && len)) {
+    void *cpy = NULL;
+
+    if (!hp || (data && len <= 0) || (!data && len)) {
         errno = EINVAL;
         return -1;
     }
-
-    if (hp) {
-        if (hp->valid) {
-            if ((data && hp->data) || (!data && !hp->data))
-                free (data); /* no-op, 'data' is assumed identical to hp->data */
-            else {
-                /* attempt to change already valid cache entry */
-                errno = EBADE;
-                return -1;
-            }
-        }
-        else {
-            hp->data = data;
-            hp->len = len;
-            hp->valid = true;
-
-            if (hp->waitlist_valid) {
-                if (wait_runqueue (hp->waitlist_valid) < 0) {
-                    /* set back to orig */
-                    hp->data = NULL;
-                    hp->len = 0;
-                    hp->valid = false;
-                    return -1;
-                }
-            }
+    /* It should be a no-op if the entry is already set.
+     * However, as a sanity check, make sure proposed and existing values match.
+     */
+    if (hp->valid) {
+        if (len != hp->len || memcmp (data, hp->data, len) != 0) {
+            errno = EBADE;
+            return -1;
         }
         return 0;
     }
-    errno = EINVAL;
+    if (len > 0) {
+        if (!(cpy = malloc (len)))
+            return -1;
+        memcpy (cpy, data, len);
+    }
+    hp->data = cpy;
+    hp->len = len;
+    hp->valid = true;
+    if (hp->waitlist_valid) {
+        if (wait_runqueue (hp->waitlist_valid) < 0)
+            goto reset_invalid;
+    }
+    return 0;
+reset_invalid:
+    free (hp->data);
+    hp->data = NULL;
+    hp->len = 0;
+    hp->valid = false;
     return -1;
 }
 
@@ -196,54 +197,6 @@ const json_t *cache_entry_get_treeobj (struct cache_entry *hp)
             return NULL;
     }
     return hp->o;
-}
-
-int cache_entry_set_treeobj (struct cache_entry *hp, json_t *o)
-{
-    if (hp && o) {
-        if (hp->valid) {
-            if (!hp->data) {
-                /* attempt to change already valid cache entry */
-                errno = EBADE;
-                return -1;
-            }
-            else
-                /* no-op, 'o' is assumed identical to current data */
-                json_decref (o);
-
-            assert (hp->data);
-            assert (hp->len > 0);
-        } else {
-            assert (!hp->data);
-            assert (!hp->o);
-
-            if (treeobj_validate (o) < 0) {
-                errno = EINVAL;
-                return -1;
-            }
-
-            if (!(hp->data = treeobj_encode (o)))
-                return -1;
-
-            hp->len = strlen (hp->data);
-            hp->o = o;
-            hp->valid = true;
-
-            if (hp->waitlist_valid) {
-                if (wait_runqueue (hp->waitlist_valid) < 0) {
-                    /* set back to orig */
-                    hp->data = NULL;
-                    hp->len = 0;
-                    hp->o = NULL;
-                    hp->valid = false;
-                    return -1;
-                }
-            }
-        }
-        return 0;
-    }
-    errno = EINVAL;
-    return -1;
 }
 
 void cache_entry_destroy (void *arg)

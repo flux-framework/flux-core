@@ -53,7 +53,7 @@ int flux_kvs_wait_version (flux_t *h, int version)
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
                              "rootseq", version)))
         goto done;
-    /* N.B. response contains (rootseq, rootdir) but we don't need it.
+    /* N.B. response contains (rootseq, rootref) but we don't need it.
      */
     if (flux_future_get (f, NULL) < 0)
         goto done;
