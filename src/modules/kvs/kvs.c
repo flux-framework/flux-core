@@ -71,6 +71,7 @@ typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
     struct kvsroot root;
+    bool root_init;
     commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
@@ -91,6 +92,7 @@ struct kvs_cb_data {
     int errnum;
 };
 
+static int getroot (kvs_ctx_t *ctx);
 static int setroot_event_send (kvs_ctx_t *ctx, json_t *names);
 static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -596,6 +598,8 @@ static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int size, expcount = 0;
     int rc = -1;
 
+    /* irrelevant if root not initialized, drop cache entries */
+
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto done;
     size = cache_count_entries (ctx->cache);
@@ -618,6 +622,8 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
     kvs_ctx_t *ctx = arg;
     int size, expcount = 0;
 
+    /* irrelevant if root not initialized, drop cache entries */
+
     if (flux_event_decode (msg, NULL, NULL) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_decode", __FUNCTION__);
         return;
@@ -639,6 +645,11 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (ctx->h, "%s: flux_heartbeat_decode", __FUNCTION__);
         return;
     }
+
+    /* nothing to do after setting epoch if root not initialized */
+    if (!ctx->root_init)
+        return;
+
     /* "touch" objects involved in watched keys */
     if (ctx->epoch - ctx->watchlist_lastrun_epoch > max_lastuse_age) {
         /* log error on wait_runqueue(), don't error out.  watchers
@@ -688,6 +699,11 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
         ctx = arg;
+
+        if (!ctx->root_init) {
+            if (getroot (ctx) < 0)
+                goto done;
+        }
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
                                  "key", &key,
@@ -825,6 +841,11 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
         ctx = arg;
+
+        if (!ctx->root_init) {
+            if (getroot (ctx) < 0)
+                goto done;
+        }
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:o s:i }",
                                  "key", &key,
@@ -1013,6 +1034,10 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     unwatch_param_t p = { NULL, NULL };
     int errnum = 0;
 
+    /* if root not initialized, success automatically */
+    if (!ctx->root_init)
+        goto done;
+
     if (flux_request_unpack (msg, NULL, "{ s:s }", "key", &key) < 0) {
         errnum = errno;
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
@@ -1099,6 +1124,12 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *ops = NULL;
     fence_t *f;
 
+    /* This should be impossible given we are on rank 0 */
+    if (!ctx->root_init) {
+        flux_log_error (h, "%s: root not initialized", __FUNCTION__);
+        return;
+    }
+
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
                              "ops", &ops,
                              "name", &name,
@@ -1148,6 +1179,11 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int saved_errno, nprocs, flags;
     json_t *ops = NULL;
     fence_t *f;
+
+    if (!ctx->root_init) {
+        if (getroot (ctx) < 0)
+            goto error;
+    }
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
                              "ops", &ops,
@@ -1218,6 +1254,11 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int saved_errno, rootseq;
     wait_t *wait = NULL;
 
+    if (!ctx->root_init) {
+        if (getroot (ctx) < 0)
+            goto error;
+    }
+
     if (flux_request_unpack (msg, NULL, "{ s:i }",
                              "rootseq", &rootseq) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
@@ -1254,6 +1295,14 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
 
+    /* If root is not initialized, we have to intialize ourselves
+     * first.
+     */
+    if (!ctx->root_init) {
+        if (getroot (ctx) < 0)
+            goto error;
+    }
+
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
@@ -1275,6 +1324,7 @@ static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, blobref_t rootref)
     const char *ref;
     int saved_errno, rc = -1;
 
+    /* XXX: future make asynchronous */
     if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0))) {
         saved_errno = errno;
         goto done;
@@ -1299,12 +1349,28 @@ done:
     return rc;
 }
 
+static int getroot (kvs_ctx_t *ctx) {
+    blobref_t rootref;
+    int rootseq;
+    if (getroot_rpc (ctx, &rootseq, rootref) < 0) {
+        flux_log_error (ctx->h, "getroot_rpc");
+        return -1;
+    }
+    setroot (ctx, rootref, rootseq);
+    ctx->root_init = true;
+    return 0;
+}
+
 static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     json_t *names = NULL;
     int errnum;
+
+    /* if root not initialized, nothing to do */
+    if (!ctx->root_init)
+        return;
 
     if (flux_event_unpack (msg, NULL, "{ s:o s:i }",
                            "names", &names,
@@ -1393,6 +1459,10 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *rootref;
     json_t *rootdir = NULL;
     json_t *names = NULL;
+
+    /* if root not initialized, nothing to do */
+    if (!ctx->root_init)
+        return;
 
     if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
                            "rootseq", &rootseq,
@@ -1483,6 +1553,10 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     kvs_ctx_t *ctx = arg;
     char *sender = NULL;
 
+    /* if root not initialized, nothing to do */
+    if (!ctx->root_init)
+        return;
+
     if (flux_request_decode (msg, NULL, NULL) < 0)
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
@@ -1506,17 +1580,20 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     json_t *t = NULL;
-    tstat_t ts;
-    int size, incomplete, dirty;
+    tstat_t ts = { .min = 0.0, .max = 0.0, .M = 0.0, .S = 0.0, .newM = 0.0,
+                   .newS = 0.0, .n = 0 };
+    int size = 0, incomplete = 0, dirty = 0;
     int rc = -1;
     double scale = 1E-3;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto done;
+    /* if root not initialized, respond with all zeroes as stats */
+    if (ctx->root_init) {
+        if (flux_request_decode (msg, NULL, NULL) < 0)
+            goto done;
 
-    memset (&ts, 0, sizeof (ts));
-    if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
-        goto done;
+        if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
+            goto done;
+    }
 
     if (!(t = json_pack ("{ s:i s:f s:f s:f s:f }",
                          "count", tstat_count (&ts),
@@ -1561,6 +1638,9 @@ static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
                                   const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+
+    /* irrelevant if root not initialized, clear stats */
+
     stats_clear (ctx);
 }
 
@@ -1568,6 +1648,8 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+
+    /* irrelevant if root not initialized, clear stats */
 
     stats_clear (ctx);
 
@@ -1711,14 +1793,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
         setroot (ctx, rootref, 0);
-    } else {
-        blobref_t rootref;
-        int rootseq;
-        if (getroot_rpc (ctx, &rootseq, rootref) < 0) {
-            flux_log_error (h, "getroot");
-            goto done;
-        }
-        setroot (ctx, rootref, rootseq);
+        ctx->root_init = true;
     }
     if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
