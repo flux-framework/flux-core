@@ -14,7 +14,7 @@ SYNOPSIS
  #include <flux/core.h>
 
  typedef void (*flux_msg_handler_f)(flux_t *h,
-                                    flux_msg_handler_t *w,
+                                    flux_msg_handler_t *mh,
                                     const flux_msg_t *msg,
                                     void *arg);
 
@@ -24,11 +24,11 @@ SYNOPSIS
                           flux_msg_handler_f callback,
                           void *arg);
 
- void flux_msg_handler_destroy (flux_msg_handler_t *w);
+ void flux_msg_handler_destroy (flux_msg_handler_t *mh);
 
- void flux_msg_handler_start (flux_msg_handler_t *w);
+ void flux_msg_handler_start (flux_msg_handler_t *mh);
 
- void flux_msg_handler_stop (flux_msg_handler_t *w);
+ void flux_msg_handler_stop (flux_msg_handler_t *mh);
 
 
 DESCRIPTION
