@@ -10,6 +10,13 @@ AC_DEFUN([X_AC_YAMLCPP], [
         CFLAGS="$CFLAGS $YAMLCPP_CFLAGS"
         AC_LANG_PUSH([C++])
 
+        AC_MSG_CHECKING([whether yaml-cpp/yaml.h is usable])
+        AC_PREPROC_IFELSE(
+            [AC_LANG_PROGRAM([#include <yaml-cpp/yaml.h>], [])],
+                [AC_MSG_RESULT([yes])],
+                [AC_MSG_FAILURE([yaml-cpp/yaml.h doesn't appear to be usable.])]
+        )
+
         # YAML::Node::Mark() is only present in yaml-cpp beginning
         # with release 0.5.3.
         AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <yaml-cpp/yaml.h>],
