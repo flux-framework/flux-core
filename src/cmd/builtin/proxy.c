@@ -587,7 +587,7 @@ disconnect:
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
  */
-static void response_cb (flux_t *h, flux_msg_handler_t *w,
+static void response_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     proxy_ctx_t *ctx = arg;
@@ -632,7 +632,7 @@ done:
 /* Received an event message from broker.
  * Find all subscribers and deliver.
  */
-static void event_cb (flux_t *h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     proxy_ctx_t *ctx = arg;

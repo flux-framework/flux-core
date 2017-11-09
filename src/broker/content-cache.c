@@ -347,7 +347,7 @@ done:
     return rc;
 }
 
-void content_load_request (flux_t *h, flux_msg_handler_t *w,
+void content_load_request (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -514,7 +514,7 @@ done:
     return rc;
 }
 
-static void content_store_request (flux_t *h, flux_msg_handler_t *w,
+static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -632,7 +632,7 @@ static int cache_flush (content_cache_t *cache)
     return rc;
 }
 
-static void content_backing_request (flux_t *h, flux_msg_handler_t *w,
+static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
                                      const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -672,7 +672,7 @@ done:
  * N.B. this walks the entire cache in one go.
  */
 
-static void content_dropcache_request (flux_t *h, flux_msg_handler_t *w,
+static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
                                        const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -715,7 +715,7 @@ done:
 /* Return stats about the cache.
  */
 
-static void content_stats_request (flux_t *h, flux_msg_handler_t *w,
+static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -758,7 +758,7 @@ static void flush_respond (content_cache_t *cache)
                         __FUNCTION__);
 }
 
-static void content_flush_request (flux_t *h, flux_msg_handler_t *w,
+static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;
@@ -841,7 +841,7 @@ done:
     return rc;
 }
 
-static void heartbeat_event (flux_t *h, flux_msg_handler_t *w,
+static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
     content_cache_t *cache = arg;

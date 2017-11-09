@@ -206,7 +206,7 @@ static int handle_seq_fetch (flux_t *h, seqhash_t *s, const flux_msg_t *msg)
                               "value", v);
 }
 
-static void sequence_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void sequence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                  const flux_msg_t *msg, void *arg)
 {
     seqhash_t *seq = arg;

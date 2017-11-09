@@ -62,9 +62,9 @@ typedef struct {
 static void freectx (void *arg)
 {
     modservice_ctx_t *ctx = arg;
-    flux_msg_handler_t *w;
-    while ((w = zlist_pop (ctx->handlers)))
-        flux_msg_handler_destroy (w);
+    flux_msg_handler_t *mh;
+    while ((mh = zlist_pop (ctx->handlers)))
+        flux_msg_handler_destroy (mh);
     zlist_destroy (&ctx->handlers);
     flux_watcher_destroy (ctx->w_prepare);
     flux_watcher_destroy (ctx->w_check);
@@ -86,7 +86,7 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
     return ctx;
 }
 
-static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
+static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     flux_msgcounters_t mcs;
@@ -105,13 +105,13 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
       FLUX_LOG_ERROR (h);
 }
 
-static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
+static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
                                   const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
 }
 
-static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
@@ -119,13 +119,13 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
         FLUX_LOG_ERROR (h);
 }
 
-static void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
+static void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static void debug_cb (flux_t *h, flux_msg_handler_t *w,
+static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     int flags;
@@ -190,13 +190,13 @@ static void register_event (modservice_ctx_t *ctx, const char *name,
                             flux_msg_handler_f cb)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
 
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
-    if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
+    if (!(mh = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
         log_err_exit ("flux_msg_handler_create");
-    flux_msg_handler_start (w);
-    if (zlist_append (ctx->handlers, w) < 0)
+    flux_msg_handler_start (mh);
+    if (zlist_append (ctx->handlers, mh) < 0)
         oom ();
     if (flux_event_subscribe (ctx->h, match.topic_glob) < 0)
         log_err_exit ("%s: flux_event_subscribe %s",
@@ -208,14 +208,14 @@ static void register_request (modservice_ctx_t *ctx, const char *name,
                               flux_msg_handler_f cb, uint32_t rolemask)
 {
     struct flux_match match = FLUX_MATCH_REQUEST;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
 
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
-    if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
+    if (!(mh = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
         log_err_exit ("flux_msg_handler_create");
-    flux_msg_handler_allow_rolemask (w, rolemask);
-    flux_msg_handler_start (w);
-    if (zlist_append (ctx->handlers, w) < 0)
+    flux_msg_handler_allow_rolemask (mh, rolemask);
+    flux_msg_handler_start (mh);
+    if (zlist_append (ctx->handlers, mh) < 0)
         oom ();
     free (match.topic_glob);
 }

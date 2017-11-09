@@ -208,7 +208,7 @@ static void user_delete (userdb_ctx_t *ctx, uint32_t userid)
     zhash_delete (ctx->db, key);
 }
 
-static void lookup (flux_t *h, flux_msg_handler_t *w,
+static void lookup (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
     userdb_ctx_t *ctx = arg;
@@ -233,7 +233,7 @@ error:
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
-static void addrole (flux_t *h, flux_msg_handler_t *w,
+static void addrole (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     userdb_ctx_t *ctx = arg;
@@ -264,7 +264,7 @@ error:
         flux_log_error (h, "%s", __FUNCTION__);
 }
 
-static void delrole (flux_t *h, flux_msg_handler_t *w,
+static void delrole (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     userdb_ctx_t *ctx = arg;
@@ -300,7 +300,7 @@ static int compare_keys (const char *s1, const char *s2)
     return 0;
 }
 
-static void getnext (flux_t *h, flux_msg_handler_t *w,
+static void getnext (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     userdb_ctx_t *ctx = arg;
@@ -339,7 +339,7 @@ error:
     free (uuid);
 }
 
-static void disconnect (flux_t *h, flux_msg_handler_t *w,
+static void disconnect (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     userdb_ctx_t *ctx = arg;

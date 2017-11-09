@@ -466,7 +466,7 @@ aggregator_new_aggregate (struct aggregator *ctx, const char *key,
 /*
  *  Callback for "aggregator.push"
  */
-static void push_cb (flux_t *h, flux_msg_handler_t *w,
+static void push_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     int rc = -1;

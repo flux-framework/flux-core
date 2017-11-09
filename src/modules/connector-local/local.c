@@ -779,7 +779,7 @@ static bool allowed_message (client_t *c, const flux_msg_t *msg)
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
  */
-static void response_cb (flux_t *h, flux_msg_handler_t *w,
+static void response_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     mod_local_ctx_t *ctx = arg;
@@ -827,7 +827,7 @@ done:
 /* Received an event message from broker.
  * Find all subscribers and deliver.
  */
-static void event_cb (flux_t *h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     mod_local_ctx_t *ctx = arg;
@@ -861,10 +861,10 @@ static void event_cb (flux_t *h, flux_msg_handler_t *w,
 
 /* Accept a connection from new client.
  */
-static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
+static void listener_cb (flux_reactor_t *r, flux_watcher_t *mh,
                          int revents, void *arg)
 {
-    int fd = flux_fd_watcher_get_fd (w);
+    int fd = flux_fd_watcher_get_fd (mh);
     mod_local_ctx_t *ctx = arg;
     flux_t *h = ctx->h;
 

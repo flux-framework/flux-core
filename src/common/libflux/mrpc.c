@@ -54,7 +54,7 @@ struct flux_mrpc_struct {
     flux_t *h;
     flux_mrpc_continuation_f then_cb;
     void *then_arg;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     uint32_t nodeid;
     flux_msg_t *rx_msg;
     int rx_errnum;
@@ -76,9 +76,9 @@ static void flux_mrpc_usecount_decr (flux_mrpc_t *mrpc)
         return;
     assert (mrpc->magic == MRPC_MAGIC);
     if (--mrpc->usecount == 0) {
-        if (mrpc->w) {
-            flux_msg_handler_stop (mrpc->w);
-            flux_msg_handler_destroy (mrpc->w);
+        if (mrpc->mh) {
+            flux_msg_handler_stop (mrpc->mh);
+            flux_msg_handler_destroy (mrpc->mh);
         }
         if (mrpc->m.matchtag != FLUX_MATCHTAG_NONE) {
             /* FIXME: we cannot safely return matchtags to the pool here
@@ -312,7 +312,7 @@ done:
  * For the multi-response case, overwrite previous message if
  * flux_mrpc_next () was not called.
  */
-static void mrpc_cb (flux_t *h, flux_msg_handler_t *w,
+static void mrpc_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
     flux_mrpc_t *mrpc = arg;
@@ -327,7 +327,7 @@ static void mrpc_cb (flux_t *h, flux_msg_handler_t *w,
     mrpc->then_cb (mrpc, mrpc->then_arg);
 done:
     if (mrpc->rx_count >= mrpc->rx_expected || flux_fatality (mrpc->h))
-        flux_msg_handler_stop (mrpc->w);
+        flux_msg_handler_stop (mrpc->mh);
     flux_mrpc_usecount_decr (mrpc);
 }
 
@@ -341,12 +341,12 @@ int flux_mrpc_then (flux_mrpc_t *mrpc, flux_mrpc_continuation_f cb, void *arg)
         goto done;
     }
     if (cb && !mrpc->then_cb) {
-        if (!mrpc->w) {
-            if (!(mrpc->w = flux_msg_handler_create (mrpc->h, mrpc->m,
-                                                     mrpc_cb, mrpc)))
+        if (!mrpc->mh) {
+            if (!(mrpc->mh = flux_msg_handler_create (mrpc->h, mrpc->m,
+                                                      mrpc_cb, mrpc)))
                 goto done;
         }
-        flux_msg_handler_start (mrpc->w);
+        flux_msg_handler_start (mrpc->mh);
         if (mrpc->rx_msg || mrpc->rx_errnum) {
             if (mrpc->rx_msg)
                 if (flux_requeue (mrpc->h, mrpc->rx_msg, FLUX_RQ_HEAD) < 0)
@@ -354,7 +354,7 @@ int flux_mrpc_then (flux_mrpc_t *mrpc, flux_mrpc_continuation_f cb, void *arg)
             (void)flux_mrpc_next (mrpc);
         }
     } else if (!cb && mrpc->then_cb) {
-        flux_msg_handler_stop (mrpc->w);
+        flux_msg_handler_stop (mrpc->mh);
     }
     mrpc->then_cb = cb;
     mrpc->then_arg = arg;

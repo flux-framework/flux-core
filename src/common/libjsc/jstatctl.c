@@ -1077,7 +1077,7 @@ static bool job_is_finished (const char *state)
     return false;
 }
 
-static void job_state_cb (flux_t *h, flux_msg_handler_t *w,
+static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     int64_t jobid = -1;

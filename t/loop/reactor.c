@@ -24,29 +24,29 @@ done:
 }
 
 static int multmatch_count = 0;
-static void multmatch1 (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg,
-                        void *arg)
+static void multmatch1 (flux_t *h, flux_msg_handler_t *mh,
+                        const flux_msg_t *msg, void *arg)
 {
     const char *topic;
     if (flux_msg_get_topic (msg, &topic) < 0 || strcmp (topic, "foo.baz"))
         flux_reactor_stop_error (flux_get_reactor (h));
-    flux_msg_handler_stop (w);
+    flux_msg_handler_stop (mh);
     multmatch_count++;
 }
 
-static void multmatch2 (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg,
-                        void *arg)
+static void multmatch2 (flux_t *h, flux_msg_handler_t *mh,
+                        const flux_msg_t *msg, void *arg)
 {
     const char *topic;
     if (flux_msg_get_topic (msg, &topic) < 0 || strcmp (topic, "foo.bar"))
         flux_reactor_stop_error (flux_get_reactor (h));
-    flux_msg_handler_stop (w);
+    flux_msg_handler_stop (mh);
     multmatch_count++;
 }
 
 static void test_multmatch (flux_t *h)
 {
-    flux_msg_handler_t *w1, *w2;
+    flux_msg_handler_t *mh1, *mh2;
     struct flux_match m1 = FLUX_MATCH_ANY;
     struct flux_match m2 = FLUX_MATCH_ANY;
 
@@ -56,41 +56,41 @@ static void test_multmatch (flux_t *h)
     /* test #1: verify multiple match behaves as documented, that is,
      * a message is matched (only) by the most recently added watcher
      */
-    ok ((w1 = flux_msg_handler_create (h, m1, multmatch1, NULL)) != NULL,
+    ok ((mh1 = flux_msg_handler_create (h, m1, multmatch1, NULL)) != NULL,
         "multmatch: first added handler for foo.*");
-    ok ((w2 = flux_msg_handler_create (h, m2, multmatch2, NULL)) != NULL,
+    ok ((mh2 = flux_msg_handler_create (h, m2, multmatch2, NULL)) != NULL,
         "multmatch: next added handler for foo.bar");
-    flux_msg_handler_start (w1);
-    flux_msg_handler_start (w2);
+    flux_msg_handler_start (mh1);
+    flux_msg_handler_start (mh2);
     ok (send_request (h, "foo.bar") == 0,
         "multmatch: send foo.bar msg");
     ok (send_request (h, "foo.baz") == 0,
         "multmatch: send foo.baz msg");
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0 && multmatch_count == 2,
-        "multmatch: last added watcher handled foo.bar");
-    flux_msg_handler_destroy (w1);
-    flux_msg_handler_destroy (w2);
+        "multmatch: last added handler handled foo.bar");
+    flux_msg_handler_destroy (mh1);
+    flux_msg_handler_destroy (mh2);
 }
 
 static int msgwatcher_count = 100;
-static void msgreader (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg,
-                       void *arg)
+static void msgreader (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
 {
     static int count = 0;
     count++;
     if (count == msgwatcher_count)
-        flux_msg_handler_stop (w);
+        flux_msg_handler_stop (mh);
 }
 
 static void test_msg (flux_t *h)
 {
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     int i;
 
-    ok ((w = flux_msg_handler_create (h, FLUX_MATCH_ANY, msgreader, NULL))
-        != NULL,
+    mh = flux_msg_handler_create (h, FLUX_MATCH_ANY, msgreader, NULL);
+    ok (mh != NULL,
         "msg: created handler for any message");
-    flux_msg_handler_start (w);
+    flux_msg_handler_start (mh);
     for (i = 0; i < msgwatcher_count; i++) {
         if (send_request (h, "foo") < 0)
             break;
@@ -99,11 +99,11 @@ static void test_msg (flux_t *h)
         "msg: sent %d requests", i);
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "msg: reactor ran to completion after %d requests", msgwatcher_count);
-    flux_msg_handler_stop (w);
-    flux_msg_handler_destroy (w);
+    flux_msg_handler_stop (mh);
+    flux_msg_handler_destroy (mh);
 }
 
-static void dummy (flux_t *h, flux_msg_handler_t *w,
+static void dummy (flux_t *h, flux_msg_handler_t *mh,
                    const flux_msg_t *msg, void *arg)
 {
 }
@@ -111,13 +111,13 @@ static void dummy (flux_t *h, flux_msg_handler_t *w,
 static void leak_msg_handler (void)
 {
     flux_t *h;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
 
     if (!(h = flux_open ("loop://", 0)))
         exit (1);
-    if (!(w = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy, NULL)))
+    if (!(mh = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy, NULL)))
         exit (1);
-    flux_msg_handler_start (w);
+    flux_msg_handler_start (mh);
     flux_close (h);
 }
 

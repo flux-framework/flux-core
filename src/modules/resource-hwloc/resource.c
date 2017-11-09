@@ -434,7 +434,7 @@ static int decode_reload_request (flux_t *h, resource_ctx_t *ctx,
 }
 
 static void reload_request_cb (flux_t *h,
-                               flux_msg_handler_t *watcher,
+                               flux_msg_handler_t *mh,
                                const flux_msg_t *msg,
                                void *arg)
 {
@@ -450,7 +450,7 @@ static void reload_request_cb (flux_t *h,
 }
 
 static void topo_request_cb (flux_t *h,
-                             flux_msg_handler_t *watcher,
+                             flux_msg_handler_t *mh,
                              const flux_msg_t *msg,
                              void *arg)
 {

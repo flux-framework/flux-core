@@ -51,7 +51,7 @@ struct ctx {
 };
 
 struct msg_compat {
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     FluxMsgHandler fn;
     void *arg;
 };
@@ -121,7 +121,7 @@ static int libzmq_to_events (int events)
 
 /* message
  */
-void msg_compat_cb (flux_t *h, flux_msg_handler_t *w,
+void msg_compat_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
     struct msg_compat *compat = arg;
@@ -141,7 +141,7 @@ done:
 static void msg_compat_free (struct msg_compat *c)
 {
     if (c) {
-        flux_msg_handler_destroy (c->w);
+        flux_msg_handler_destroy (c->mh);
         free (c);
     }
 }
@@ -160,11 +160,11 @@ static int msghandler_add (flux_t *h, int typemask, const char *pattern,
 
     c->fn = cb;
     c->arg = arg;
-    if (!(c->w = flux_msg_handler_create (h, match, msg_compat_cb, c))) {
+    if (!(c->mh = flux_msg_handler_create (h, match, msg_compat_cb, c))) {
         free (c);
         return -1;
     }
-    flux_msg_handler_start (c->w);
+    flux_msg_handler_start (c->mh);
     snprintf (hashkey, sizeof (hashkey), "msg:%d:%s", typemask, pattern);
     zhash_update (ctx->watchers, hashkey, c);
     zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)msg_compat_free);
@@ -185,7 +185,7 @@ void flux_msghandler_remove (flux_t *h, int typemask, const char *pattern)
 
     snprintf (hashkey, sizeof (hashkey), "msg:%d:%s", typemask, pattern);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
-        flux_msg_handler_stop (c->w);
+        flux_msg_handler_stop (c->mh);
         zhash_delete (ctx->watchers, hashkey);
     }
 }

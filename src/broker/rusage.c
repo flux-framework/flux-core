@@ -31,10 +31,10 @@
 #include "rusage.h"
 
 struct rusage_context {
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
 };
 
-static void rusage_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void rusage_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     struct rusage ru;
@@ -73,8 +73,8 @@ error:
 static void rusage_finalize (void *arg)
 {
     struct rusage_context *r = arg;
-    flux_msg_handler_stop (r->w);
-    flux_msg_handler_destroy (r->w);
+    flux_msg_handler_stop (r->mh);
+    flux_msg_handler_destroy (r->mh);
     free (r);
 }
 
@@ -91,19 +91,16 @@ int rusage_initialize (flux_t *h, const char *service)
         errno = ENOMEM;
         goto error;
     }
-    if (!(r->w = flux_msg_handler_create (h, match, rusage_request_cb, r)))
+    if (!(r->mh = flux_msg_handler_create (h, match, rusage_request_cb, r)))
         goto error;
-    flux_msg_handler_start (r->w);
+    flux_msg_handler_start (r->mh);
     flux_aux_set (h, "flux::rusage", r, rusage_finalize);
     free (match.topic_glob);
     return 0;
 error:
-    if (r) {
-        free (match.topic_glob);
-        flux_msg_handler_stop (r->w);
-        flux_msg_handler_destroy (r->w);
-        free (r);
-    }
+    if (r)
+        rusage_finalize (r);
+    free (match.topic_glob);
     return -1;
 }
 

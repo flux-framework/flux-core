@@ -1496,7 +1496,7 @@ static void broker_unhandle_signals (zlist_t *sigwatchers)
  ** Built-in services
  **/
 
-static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1521,7 +1521,7 @@ error:
     free (name);
 }
 
-static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1550,7 +1550,7 @@ error:
     free (argz);
 }
 
-static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1575,7 +1575,7 @@ error:
         flux_modlist_destroy (mods);
 }
 
-static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1591,7 +1591,7 @@ static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *w,
     free (out);
 }
 
-static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     const char *s = NULL;
@@ -1608,7 +1608,7 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1620,7 +1620,7 @@ static void cmb_event_mute_cb (flux_t *h, flux_msg_handler_t *w,
     /* no response */
 }
 
-static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     char *sender = NULL;;
@@ -1632,7 +1632,7 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *w,
     /* no response */
 }
 
-static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1659,7 +1659,7 @@ error:
     free (uuid);
 }
 
-static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *w,
+static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;

@@ -33,7 +33,7 @@
 struct handler {
     flux_msg_handler_f cb;
     flux_t *h;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     flux_msg_t *msg;
     void *arg;
 };
@@ -71,7 +71,7 @@ wait_t *wait_create (wait_cb_f cb, void *arg)
     return w;
 }
 
-wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *wh,
+wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
                                  flux_msg_handler_f cb, void *arg)
 {
@@ -80,7 +80,7 @@ wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *wh,
         w->hand.cb = cb;
         w->hand.arg = arg;
         w->hand.h = h;
-        w->hand.w = wh;
+        w->hand.mh = mh;
         if (msg && !(w->hand.msg = flux_msg_copy (msg, true))) {
             wait_destroy (w);
             errno = ENOMEM;
@@ -156,7 +156,7 @@ static void wait_runone (wait_t *w)
         if (w->cb)
             w->cb (w->cb_arg);
         else if (w->hand.cb)
-            w->hand.cb (w->hand.h, w->hand.w, w->hand.msg, w->hand.arg);
+            w->hand.cb (w->hand.h, w->hand.mh, w->hand.msg, w->hand.arg);
         wait_destroy (w);
     }
 }

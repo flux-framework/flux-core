@@ -38,7 +38,7 @@ struct heartbeat_struct {
     flux_t *h;
     double rate;
     flux_watcher_t *timer;
-    flux_msg_handler_t *handler;
+    flux_msg_handler_t *mh;
     int send_epoch;
     int epoch;
 };
@@ -52,7 +52,7 @@ void heartbeat_destroy (heartbeat_t *hb)
 {
     if (hb) {
         flux_watcher_destroy (hb->timer);
-        flux_msg_handler_destroy (hb->handler);
+        flux_msg_handler_destroy (hb->mh);
         free (hb);
     }
 }
@@ -116,7 +116,7 @@ int heartbeat_get_epoch (heartbeat_t *hb)
     return hb->epoch;
 }
 
-static void event_cb (flux_t *h, flux_msg_handler_t *w,
+static void event_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     heartbeat_t *hb = arg;
@@ -167,9 +167,9 @@ int heartbeat_start (heartbeat_t *hb)
         flux_watcher_start (hb->timer);
     }
     match.topic_glob = "hb";
-    if (!(hb->handler = flux_msg_handler_create (hb->h, match, event_cb, hb)))
+    if (!(hb->mh = flux_msg_handler_create (hb->h, match, event_cb, hb)))
         return -1;
-    flux_msg_handler_start (hb->handler);
+    flux_msg_handler_start (hb->mh);
     return 0;
 }
 
@@ -177,8 +177,8 @@ void heartbeat_stop (heartbeat_t *hb)
 {
     if (hb->timer)
         flux_watcher_stop (hb->timer);
-    if (hb->handler)
-        flux_msg_handler_stop (hb->handler);
+    if (hb->mh)
+        flux_msg_handler_stop (hb->mh);
 }
 
 /*

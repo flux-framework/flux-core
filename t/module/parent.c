@@ -112,7 +112,7 @@ static flux_modlist_t *module_list (void)
     return mods;
 }
 
-static void insmod_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void insmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -149,7 +149,7 @@ done:
         free (argz);
 }
 
-static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void rmmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -182,7 +182,7 @@ done:
         free (name);
 }
 
-static void lsmod_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void lsmod_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     flux_modlist_t *mods = NULL;

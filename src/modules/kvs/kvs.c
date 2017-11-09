@@ -589,7 +589,7 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -612,7 +612,7 @@ done:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
+static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -630,7 +630,7 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *w,
                   expcount, size);
 }
 
-static void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
+static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -670,7 +670,7 @@ static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
     return 0;
 }
 
-static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
                             const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = NULL;
@@ -745,7 +745,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, w, msg, get_request_cb, lh)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, get_request_cb, lh)))
             goto done;
 
         cbd.ctx = ctx;
@@ -805,7 +805,7 @@ stall:
     json_decref (val);
 }
 
-static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = NULL;
@@ -869,7 +869,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, w, msg, watch_request_cb, lh)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg,
+                                              watch_request_cb, lh)))
             goto done;
 
         cbd.ctx = ctx;
@@ -937,7 +938,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *w,
             flux_log_error (h, "%s: flux_msg_pack", __FUNCTION__);
             goto done;
         }
-        if (!(watcher = wait_create_msg_handler (h, w, cpy,
+        if (!(watcher = wait_create_msg_handler (h, mh, cpy,
                                                  watch_request_cb, ctx)))
             goto done;
         if (wait_addqueue (ctx->watchlist, watcher) < 0) {
@@ -1004,7 +1005,7 @@ done:
     return match;
 }
 
-static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1089,7 +1090,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, json_t *names, int errnum)
 
 /* kvs.relayfence (rank 0 only, no response).
  */
-static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1139,7 +1140,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *w,
 /* kvs.fence
  * Sent from users to local kvs module.
  */
-static void fence_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1210,7 +1211,7 @@ error:
 
 /* For wait_version().
  */
-static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1223,7 +1224,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     }
     if (ctx->root.seq < rootseq) {
-        if (!(wait = wait_create_msg_handler (h, w, msg, sync_request_cb, arg)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg,
+                                              sync_request_cb, arg)))
             goto error;
         if (wait_addqueue (ctx->watchlist, wait) < 0) {
             saved_errno = errno;
@@ -1247,7 +1249,7 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static void getroot_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1297,7 +1299,7 @@ done:
     return rc;
 }
 
-static void error_event_cb (flux_t *h, flux_msg_handler_t *w,
+static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1383,7 +1385,7 @@ done:
 
 /* Alter the (rootref, rootseq) in response to a setroot event.
  */
-static void setroot_event_cb (flux_t *h, flux_msg_handler_t *w,
+static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1475,7 +1477,7 @@ static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
     return match;
 }
 
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1499,7 +1501,7 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
     free (sender);
 }
 
-static void stats_get_cb (flux_t *h, flux_msg_handler_t *w,
+static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
@@ -1555,14 +1557,14 @@ static void stats_clear (kvs_ctx_t *ctx)
     commit_mgr_clear_noop_stores (ctx->cm);
 }
 
-static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *w,
+static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
                                   const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     stats_clear (ctx);
 }
 
-static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;

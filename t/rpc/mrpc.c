@@ -13,7 +13,7 @@ static uint32_t fake_rank = 0;
 
 /* request nodeid and flags returned in response */
 static int nodeid_fake_error = -1;
-void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -39,7 +39,7 @@ done:
     Jput (o);
 }
 
-void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
+void rpcftest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -63,7 +63,7 @@ done:
 }
 
 /* request payload echoed in response */
-void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -83,7 +83,7 @@ done:
 
 /* no-payload response */
 static int hello_count = 0;
-void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -102,7 +102,7 @@ done:
     (void)flux_respond (h, msg, errnum, NULL);
 }
 
-void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
+void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;

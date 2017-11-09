@@ -8,7 +8,8 @@ void wait_cb (void *arg)
     (*count)++;
 }
 
-void msghand (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg, void *arg)
+void msghand (flux_t *h, flux_msg_handler_t *mh,
+              const flux_msg_t *msg, void *arg)
 {
     int *count = arg;
     (*count)++;

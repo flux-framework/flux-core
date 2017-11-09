@@ -54,7 +54,7 @@ struct hello_struct {
     flux_reduce_t *reduce;
 };
 
-static void join_request (flux_t *h, flux_msg_handler_t *w,
+static void join_request (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg);
 
 static void r_reduce (flux_reduce_t *r, int batch, void *arg);
@@ -212,7 +212,7 @@ done:
 
 /* handle a message sent from downstream via downstream's r_forward op.
  */
-static void join_request (flux_t *h, flux_msg_handler_t *w,
+static void join_request (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     hello_t *hello = arg;
