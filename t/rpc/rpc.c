@@ -110,19 +110,20 @@ void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
         (void)flux_respond_pack (h, msg, "{}");
 }
 
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",    rpctest_incr_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",   rpctest_hello_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",  rpcftest_hello_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",    rpctest_echo_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho", rpctest_rawecho_cb, 0, NULL},
-    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",  rpctest_nodeid_cb, 0, NULL},
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.incr",    rpctest_incr_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",   rpctest_hello_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "rpcftest.hello",  rpcftest_hello_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",    rpctest_echo_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.rawecho", rpctest_rawecho_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",  rpctest_nodeid_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 int test_server (flux_t *h, void *arg)
 {
-    if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
+    flux_msg_handler_t **handlers = NULL;
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
         diag ("flux_msg_handler_addvec failed");
         return -1;
     }
@@ -130,7 +131,7 @@ int test_server (flux_t *h, void *arg)
         diag ("flux_reactor_run failed");
         return -1;
     }
-    flux_msg_handler_delvec (htab);
+    flux_msg_handler_delvec (handlers);
     return 0;
 }
 

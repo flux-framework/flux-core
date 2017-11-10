@@ -530,31 +530,31 @@ done:
 }
 
 
-static struct flux_msg_handler_spec htab[] = {
-    //{ FLUX_MSGTYPE_EVENT,      "hb",               hb_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,   "aggregator.push",  push_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    //{ FLUX_MSGTYPE_EVENT,      "hb",               hb_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "aggregator.push",  push_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
+    flux_msg_handler_t **handlers = NULL;
     struct aggregator *ctx = aggregator_create (h);
     if (!ctx)
         goto done;
 
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_advec");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done_delvec;
+        goto done;
     }
     rc = 0;
-done_delvec:
-    flux_msg_handler_delvec (htab);
 done:
+    flux_msg_handler_delvec (handlers);
     aggregator_destroy (ctx);
     return rc;
 }

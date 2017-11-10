@@ -61,6 +61,7 @@ typedef struct {
 typedef struct {
     zhash_t *active_jobs;
     lru_cache_t *kvs_paths;
+    flux_msg_handler_t **handlers;
     zlist_t *callbacks;
     int first_time;
     flux_t *h;
@@ -121,6 +122,7 @@ static void freectx (void *arg)
     zhash_destroy (&(ctx->active_jobs));
     lru_cache_destroy (ctx->kvs_paths);
     zlist_destroy (&(ctx->callbacks));
+    flux_msg_handler_delvec (ctx->handlers);
 }
 
 static jscctx_t *getctx (flux_t *h)
@@ -1120,9 +1122,9 @@ done:
  *                    Public Job Status and Control API                       *
  *                                                                            *
  ******************************************************************************/
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb, 0 },
       FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -1131,6 +1133,7 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
     int rc = -1;
     cb_pair_t *c = NULL;
     jscctx_t *ctx = NULL;
+    flux_msg_handler_t **handlers;
 
     if (!func)
         goto done;
@@ -1144,19 +1147,19 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
         rc = -1;
         goto done;
     }
-    if (flux_msg_handler_addvec (h, htab, (void *)ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, (void *)ctx, &handlers) < 0) {
         flux_log_error (h, "registering resource event handler");
         rc = -1;
         goto done;
     }
 
     ctx = getctx (h);
+    ctx->handlers = handlers;
     c = (cb_pair_t *) xzmalloc (sizeof(*c));
     c->cb = func;
     c->arg = d;
     if (zlist_append (ctx->callbacks, c) < 0)
         goto done;
-
     zlist_freefn (ctx->callbacks, c, free, true);
     rc = 0;
 

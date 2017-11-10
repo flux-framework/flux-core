@@ -588,12 +588,12 @@ static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
     }
 }
 
-static struct flux_msg_handler_spec htab[] = {
+static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "resource-hwloc.reload", reload_request_cb,
-       0, NULL
+       0
     },
     { FLUX_MSGTYPE_REQUEST, "resource-hwloc.topo", topo_request_cb,
-       FLUX_ROLE_USER, NULL
+       FLUX_ROLE_USER
     },
     FLUX_MSGHANDLER_TABLE_END
 };
@@ -602,6 +602,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     resource_ctx_t *ctx;
+    flux_msg_handler_t **handlers = NULL;
 
     if (!(ctx = resource_hwloc_ctx_create (h)))
         goto done;
@@ -617,19 +618,18 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
 
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done_delvec;
+        goto done;
     }
     rc = 0;
-done_delvec:
-    flux_msg_handler_delvec (htab);
 done:
+    flux_msg_handler_delvec (handlers);
     resource_hwloc_ctx_destroy (ctx);
     return rc;
 }

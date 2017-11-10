@@ -556,51 +556,63 @@ error:
     return NULL;
 }
 
-int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
-                             void *arg)
+static bool at_end (struct flux_msg_handler_spec spec)
+{
+    struct flux_msg_handler_spec end = FLUX_MSGHANDLER_TABLE_END;
+
+    return (spec.typemask == end.typemask
+            && spec.topic_glob == end.topic_glob
+            && spec.cb == end.cb
+            && spec.rolemask == end.rolemask);
+}
+
+int flux_msg_handler_addvec (flux_t *h,
+                             const struct flux_msg_handler_spec tab[],
+                             void *arg,
+                             flux_msg_handler_t **hp[])
 {
     int i;
     struct flux_match match = FLUX_MATCH_ANY;
+    flux_msg_handler_t **handlers = NULL;
+    int count = 0;
+    int saved_errno;
 
-    for (i = 0; ; i++) {
-        if (!tab[i].typemask && !tab[i].topic_glob && !tab[i].cb)
-            break; /* FLUX_MSGHANDLER_TABLE_END */
+    if (!h || !tab || !hp) {
+        errno = EINVAL;
+        return -1;
+    }
+    while (!at_end (tab[count]))
+        count++;
+    if (!(handlers = calloc (count + 1, sizeof (flux_msg_handler_t *))))
+        return -1;
+    for (i = 0; i < count; i++) {
         match.typemask = tab[i].typemask;
         /* flux_msg_handler_create() will make a copy of the topic_glob
          * so it is safe to temporarily remove "const" from
          * tab[i].topic_glob with a cast. */
         match.topic_glob = (char *)tab[i].topic_glob;
-        tab[i].w = flux_msg_handler_create (h, match, tab[i].cb, arg);
-        if (!tab[i].w)
+        if (!(handlers[i] = flux_msg_handler_create (h, match, tab[i].cb, arg)))
             goto error;
-        flux_msg_handler_allow_rolemask (tab[i].w, tab[i].rolemask);
-        flux_msg_handler_start (tab[i].w);
+        flux_msg_handler_allow_rolemask (handlers[i], tab[i].rolemask);
+        flux_msg_handler_start (handlers[i]);
     }
+    *hp = handlers;
     return 0;
 error:
-    while (i >= 0) {
-        if (tab[i].w) {
-            flux_msg_handler_stop (tab[i].w);
-            flux_msg_handler_destroy (tab[i].w);
-            tab[i].w = NULL;
-        }
-        i--;
-    }
+    saved_errno = errno;
+    flux_msg_handler_delvec (handlers);
+    errno = saved_errno;
     return -1;
 }
 
-void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[])
+void flux_msg_handler_delvec (flux_msg_handler_t *handlers[])
 {
-    int i;
-
-    for (i = 0; ; i++) {
-        if (!tab[i].typemask && !tab[i].topic_glob && !tab[i].cb)
-            break; /* FLUX_MSGHANDLER_TABLE_END */
-        if (tab[i].w) {
-            flux_msg_handler_stop (tab[i].w);
-            flux_msg_handler_destroy (tab[i].w);
-            tab[i].w = NULL;
+    if (handlers) {
+        for (int i = 0; handlers[i] != NULL; i++) {
+            flux_msg_handler_destroy (handlers[i]);
+            handlers[i] = NULL;
         }
+        free (handlers);
     }
 }
 

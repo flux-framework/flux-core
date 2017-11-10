@@ -875,9 +875,9 @@ error:
     return -1;
 }
 
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     NULL, event_cb, 0, NULL },
-    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT,     NULL, event_cb, 0 },
+    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -900,6 +900,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     const char *job;
     const char *optarg;
     int optindex;
+    flux_msg_handler_t **handlers = NULL;
 
     log_init ("flux-proxy");
 
@@ -978,7 +979,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     /* Create/start event/response message watchers
      */
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_watcher_addvec");
         goto done;
     }
@@ -990,7 +991,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         goto done;
     }
 done:
-    flux_msg_handler_delvec (htab);
+    flux_msg_handler_delvec (handlers);
     flux_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
         if (close (ctx->listen_fd) < 0)

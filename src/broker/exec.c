@@ -41,6 +41,7 @@
 
 typedef struct {
     flux_t *h;
+    flux_msg_handler_t **handlers;
     struct subprocess_manager *sm;
     uint32_t rank;
     const char *local_uri;
@@ -507,19 +508,19 @@ error:
     json_decref (procs);
 }
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.exec",           exec_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.exec.signal",    signal_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.exec.write",     write_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.processes",      ps_request_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "cmb.exec",           exec_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.exec.signal",    signal_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.exec.write",     write_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.processes",      ps_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 static void exec_finalize (void *arg)
 {
     exec_t *x = arg;
+    flux_msg_handler_delvec (x->handlers);
     free (x);
-    flux_msg_handler_delvec (handlers);
 }
 
 int exec_initialize (flux_t *h, struct subprocess_manager *sm,
@@ -537,7 +538,7 @@ int exec_initialize (flux_t *h, struct subprocess_manager *sm,
         free (x);
         return -1;
     }
-    if (flux_msg_handler_addvec (h, handlers, x) < 0) {
+    if (flux_msg_handler_addvec (h, htab, x, &x->handlers) < 0) {
         free (x);
         return -1;
     }

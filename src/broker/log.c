@@ -46,6 +46,7 @@ static const int default_level = LOG_DEBUG;
 typedef struct {
     int magic;
     flux_t *h;
+    flux_msg_handler_t **handlers;
     uint32_t rank;
     char *filename;
     FILE *f;
@@ -642,19 +643,19 @@ done:
     /* no response */
 }
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 static void logbuf_finalize (void *arg)
 {
     logbuf_t *logbuf = arg;
+    flux_msg_handler_delvec (logbuf->handlers);
     logbuf_destroy (logbuf);
-    flux_msg_handler_delvec (handlers);
     /* FIXME: need logbuf_unregister_attrs() */
 }
 
@@ -674,7 +675,7 @@ int logbuf_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
         goto error;
     if (fake_rank (h, rank) < 0)
         goto error;
-    if (flux_msg_handler_addvec (h, handlers, logbuf) < 0)
+    if (flux_msg_handler_addvec (h, htab, logbuf, &logbuf->handlers) < 0)
         goto error;
     flux_log_set_appname (h, "broker");
     flux_log_set_redirect (h, logbuf_append_redirect, logbuf);

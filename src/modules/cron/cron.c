@@ -907,13 +907,13 @@ static void cron_ls_handler (flux_t *h, flux_msg_handler_t *w,
 
 /**************************************************************************/
 
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "cron.create",   cron_create_handler, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "cron.delete",   cron_delete_handler, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "cron.list",     cron_ls_handler, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "cron.stop",     cron_stop_handler, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "cron.start",    cron_start_handler, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "cron.sync",     cron_sync_handler, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,     "cron.create",   cron_create_handler, 0 },
+    { FLUX_MSGTYPE_REQUEST,     "cron.delete",   cron_delete_handler, 0 },
+    { FLUX_MSGTYPE_REQUEST,     "cron.list",     cron_ls_handler, 0 },
+    { FLUX_MSGTYPE_REQUEST,     "cron.stop",     cron_stop_handler, 0 },
+    { FLUX_MSGTYPE_REQUEST,     "cron.start",    cron_start_handler, 0 },
+    { FLUX_MSGTYPE_REQUEST,     "cron.sync",     cron_sync_handler, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -941,19 +941,20 @@ static void process_args (cron_ctx_t *ctx, int ac, char **av)
 int mod_main (flux_t *h, int ac, char **av)
 {
     int rc = -1;
+    flux_msg_handler_t **handlers = NULL;
     cron_ctx_t *ctx = cron_ctx_create (h);
 
     process_args (ctx, ac, av);
 
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
         goto done;
     }
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)
         flux_log_error (h, "flux_reactor_run");
-    flux_msg_handler_delvec (htab);
-    cron_ctx_destroy (ctx);
 done:
+    flux_msg_handler_delvec (handlers);
+    cron_ctx_destroy (ctx);
     return rc;
 }
 

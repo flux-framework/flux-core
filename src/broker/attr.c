@@ -35,6 +35,7 @@
 
 struct attr_struct {
     zhash_t *hash;
+    flux_msg_handler_t **handlers;
 };
 
 struct entry {
@@ -415,27 +416,24 @@ error:
  ** Initialization
  **/
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb, 0, NULL },
+static const struct flux_msg_handler_spec handlers[] = {
+    { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb, FLUX_ROLE_ALL },
+    { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb, FLUX_ROLE_ALL },
+    { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 
 int attr_register_handlers (attr_t *attrs, flux_t *h)
 {
-    if (flux_msg_handler_addvec (h, handlers, attrs) < 0)
+    if (flux_msg_handler_addvec (h, handlers, attrs, &attrs->handlers) < 0)
         return -1;
-    /* allow any user to attr.get and attr.list */
-    flux_msg_handler_allow_rolemask (handlers[0].w, FLUX_ROLE_ALL);
-    flux_msg_handler_allow_rolemask (handlers[1].w, FLUX_ROLE_ALL);
     return 0;
 }
 
-void attr_unregister_handlers (void)
+void attr_unregister_handlers (attr_t *attrs)
 {
-    flux_msg_handler_delvec (handlers);
+    flux_msg_handler_delvec (attrs->handlers);
 }
 
 attr_t *attr_create (void)

@@ -212,16 +212,17 @@ done:
         flux_modlist_destroy (mods);
 }
 
-struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "parent.insmod",         insmod_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "parent.rmmod",          rmmod_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "parent.lsmod",          lsmod_request_cb, 0, NULL },
+const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "parent.insmod",         insmod_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "parent.rmmod",          rmmod_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "parent.lsmod",          lsmod_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno;
+    flux_msg_handler_t **handlers = NULL;
 
     if (argc == 1 && !strcmp (argv[0], "--init-failure")) {
         flux_log (h, LOG_INFO, "aborting during init per test request");
@@ -232,7 +233,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         saved_errno = ENOMEM;
         goto error;
     }
-    if (flux_msg_handler_addvec (h, htab, NULL) < 0) {
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
         saved_errno = errno;
         flux_log_error (h, "flux_msghandler_addvec");
         goto error;
@@ -245,6 +246,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     zhash_destroy (&modules);
     return 0;
 error:
+    flux_msg_handler_delvec (handlers);
     zhash_destroy (&modules);
     errno = saved_errno;
     return -1;

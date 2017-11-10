@@ -350,12 +350,12 @@ static void disconnect (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "userdb.lookup", lookup, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,  "userdb.addrole", addrole, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,  "userdb.delrole", delrole, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,  "userdb.getnext", getnext, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,  "userdb.disconnect", disconnect, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,  "userdb.lookup", lookup, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.addrole", addrole, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.delrole", delrole, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.getnext", getnext, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "userdb.disconnect", disconnect, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -363,6 +363,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     userdb_ctx_t *ctx;
+    flux_msg_handler_t **handlers = NULL;
     struct user *up;
 
     if (!(ctx = getctx (h, argc, argv))) {
@@ -372,18 +373,17 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "failed to add owner to userdb");
         goto done;
     }
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done_unreg;
+        goto done;
     }
     rc = 0;
-done_unreg:
-    flux_msg_handler_delvec (htab);
 done:
+    flux_msg_handler_delvec (handlers);
     return rc;
 }
 

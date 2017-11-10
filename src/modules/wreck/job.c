@@ -608,18 +608,21 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
     Jput (in);
 }
 
-struct flux_msg_handler_spec mtab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0, NULL },
+static const struct flux_msg_handler_spec mtab[] = {
+    { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
-    if (flux_msg_handler_addvec (h, mtab, NULL) < 0) {
+    flux_msg_handler_t **handlers = NULL;
+    int rc = -1;
+
+    if (flux_msg_handler_addvec (h, mtab, NULL, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
         return (-1);
     }
@@ -633,38 +636,40 @@ int mod_main (flux_t *h, int argc, char **argv)
        || (flux_event_subscribe (h, "wreck.state.submitted") < 0)
        || (flux_event_subscribe (h, "wrexec.run.") < 0)) {
         flux_log_error (h, "flux_event_subscribe");
-        return -1;
+        goto done;
     }
 
     if ((flux_attr_get_int (h, "wreck.lwj-dir-levels", &kvs_dir_levels) < 0)
        && (flux_attr_set_int (h, "wreck.lwj-dir-levels", kvs_dir_levels) < 0)) {
         flux_log_error (h, "failed to get or set lwj-dir-levels");
-        return -1;
+        goto done;
     }
     if ((flux_attr_get_int (h, "wreck.lwj-bits-per-dir",
                             &kvs_bits_per_dir) < 0)
        && (flux_attr_set_int (h, "wreck.lwj-bits-per-dir",
                               kvs_bits_per_dir) < 0)) {
         flux_log_error (h, "failed to get or set lwj-bits-per-dir");
-        return -1;
+        goto done;
     }
 
     if (flux_get_rank (h, &broker_rank) < 0) {
         flux_log_error (h, "flux_get_rank");
-        return -1;
+        goto done;
     }
 
     if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
         flux_log_error (h, "flux_attr_get (\"local-uri\")");
-        return -1;
+        goto done;
     }
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        return -1;
+        goto done;
     }
-    flux_msg_handler_delvec (mtab);
-    return 0;
+    rc = 0;
+done:
+    flux_msg_handler_delvec (handlers);
+    return rc;
 }
 
 MOD_NAME ("job");
