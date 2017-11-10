@@ -668,6 +668,7 @@ int main (int argc, char *argv[])
     service_switch_destroy (ctx.services);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
+    shutdown_destroy (ctx.shutdown);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     if (ctx.subscriptions) {

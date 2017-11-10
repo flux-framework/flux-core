@@ -63,6 +63,7 @@ void shutdown_destroy (shutdown_t *s)
     if (s) {
         if (s->shutdown)
             flux_msg_handler_destroy (s->shutdown);
+        shutdown_disarm (s);
         if (s->h)
             (void)flux_event_unsubscribe (s->h, "shutdown");
         free (s);
