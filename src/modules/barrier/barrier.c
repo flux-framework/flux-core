@@ -188,7 +188,7 @@ done:
  * notification upon barrier termination.
  */
 
-static void enter_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     barrier_ctx_t *ctx = arg;
@@ -246,7 +246,7 @@ done:
  * participating in.
  */
 
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     barrier_ctx_t *ctx = arg;
@@ -282,7 +282,7 @@ done:
     return rc;
 }
 
-static void exit_event_cb (flux_t *h, flux_msg_handler_t *w,
+static void exit_event_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     barrier_ctx_t *ctx = arg;

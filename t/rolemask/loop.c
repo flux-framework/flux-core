@@ -96,7 +96,7 @@ static void check_rpc_oneway_faked (flux_t *h)
 }
 
 static bool testrpc1_called;
-static void testrpc1 (flux_t *h, flux_msg_handler_t *w,
+static void testrpc1 (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     diag ("testrpc1 handler invoked");
@@ -120,19 +120,19 @@ flux_msg_handler_t *testrpc1_handler_create (flux_t *h)
 static void check_rpc_default_policy (flux_t *h)
 {
     flux_future_t *f;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     struct creds saved, new, cr;
     int rc;
 
-    ok ((w = testrpc1_handler_create (h)) != NULL,
+    ok ((mh = testrpc1_handler_create (h)) != NULL,
         "created message handler with default policy");
-    if (w == NULL)
+    if (mh == NULL)
         BAIL_OUT ("flux_msg_handler_create: %s", flux_strerror (errno));
 
     /* This should be a no-op since "deny all" can't deny FLUX_ROLE_OWNER,
      * and the default policy is to require FLUX_ROLE_OWNER.
      */
-    flux_msg_handler_deny_rolemask (w, FLUX_ROLE_ALL);
+    flux_msg_handler_deny_rolemask (mh, FLUX_ROLE_ALL);
 
 
     /* Attempt with default creds.
@@ -176,21 +176,21 @@ static void check_rpc_default_policy (flux_t *h)
     ok (cred_set (h, &saved) == 0,
         "restored connector creds");
 
-    flux_msg_handler_destroy (w);
+    flux_msg_handler_destroy (mh);
 }
 
 static void check_rpc_open_policy (flux_t *h)
 {
     flux_future_t *f;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     struct creds saved, new, cr;
     int rc;
 
-    ok ((w = testrpc1_handler_create (h)) != NULL,
+    ok ((mh = testrpc1_handler_create (h)) != NULL,
         "created message handler with open policy");
-    if (w == NULL)
+    if (mh == NULL)
         BAIL_OUT ("flux_msg_handler_create: %s", flux_strerror (errno));
-    flux_msg_handler_allow_rolemask (w, FLUX_ROLE_ALL);
+    flux_msg_handler_allow_rolemask (mh, FLUX_ROLE_ALL);
 
     /* Attempt with default creds.
      */
@@ -230,23 +230,23 @@ static void check_rpc_open_policy (flux_t *h)
     ok (cred_set (h, &saved) == 0,
         "restored connector creds");
 
-    flux_msg_handler_destroy (w);
+    flux_msg_handler_destroy (mh);
 }
 
 static void check_rpc_targetted_policy (flux_t *h)
 {
     flux_future_t *f;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     struct creds saved, new, cr;
     uint32_t allow = 0x1000;
     int rc;
 
-    ok ((w = testrpc1_handler_create (h)) != NULL,
+    ok ((mh = testrpc1_handler_create (h)) != NULL,
         "created message handler with targetted policy");
-    if (w == NULL)
+    if (mh == NULL)
         BAIL_OUT ("flux_msg_handler_create: %s", flux_strerror (errno));
-    flux_msg_handler_deny_rolemask (w, FLUX_ROLE_ALL);
-    flux_msg_handler_allow_rolemask (w, allow);
+    flux_msg_handler_deny_rolemask (mh, FLUX_ROLE_ALL);
+    flux_msg_handler_allow_rolemask (mh, allow);
 
     ok (cred_get (h, &saved) == 0
         && saved.userid == geteuid() && saved.rolemask == FLUX_ROLE_OWNER,
@@ -308,7 +308,7 @@ static void check_rpc_targetted_policy (flux_t *h)
 
     ok (cred_set (h, &saved) == 0,
         "restored connector creds");
-    flux_msg_handler_destroy (w);
+    flux_msg_handler_destroy (mh);
 }
 
 static void fatal_err (const char *message, void *arg)

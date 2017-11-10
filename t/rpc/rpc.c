@@ -6,7 +6,7 @@
 #include "util.h"
 
 /* increment integer and send it back */
-void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     int i;
@@ -18,7 +18,7 @@ void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *w,
 }
 
 /* request nodeid and flags returned in response */
-void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -40,7 +40,7 @@ done:
 }
 
 /* request payload echoed in response */
-void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_echo_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -59,7 +59,7 @@ done:
 }
 
 /* raw request payload echoed in response */
-void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_rawecho_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -75,7 +75,7 @@ done:
 }
 
 /* no-payload response */
-void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *w,
+void rpctest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -94,7 +94,7 @@ done:
         diag ("%s: flux_respond: %s", __FUNCTION__, flux_strerror (errno));
 }
 
-void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *w,
+void rpcftest_hello_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;

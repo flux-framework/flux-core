@@ -73,7 +73,7 @@ void reduce (flux_reduce_t *r, int batchnum, void *arg)
     }
 }
 
-void forward_cb (flux_t *h, flux_msg_handler_t *w,
+void forward_cb (flux_t *h, flux_msg_handler_t *mh,
                  const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;
@@ -94,7 +94,7 @@ void forward_cb (flux_t *h, flux_msg_handler_t *w,
     Jput (in);
 }
 
-void heartbeat_cb (flux_t *h, flux_msg_handler_t *w,
+void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
                    const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;

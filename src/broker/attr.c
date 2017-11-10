@@ -316,7 +316,7 @@ const char *attr_next (attr_t *attrs)
  ** Service
  **/
 
-void getattr_request_cb (flux_t *h, flux_msg_handler_t *w,
+void getattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     attr_t *attrs = arg;
@@ -342,7 +342,7 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void setattr_request_cb (flux_t *h, flux_msg_handler_t *w,
+void setattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     attr_t *attrs = arg;
@@ -375,7 +375,7 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-void lsattr_request_cb (flux_t *h, flux_msg_handler_t *w,
+void lsattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     attr_t *attrs = arg;

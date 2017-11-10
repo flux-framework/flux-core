@@ -38,7 +38,7 @@
 #include <flux/core.h>
 #include "heaptrace.h"
 
-static void start_cb (flux_t *h, flux_msg_handler_t *w,
+static void start_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     const char *filename;
@@ -63,7 +63,7 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-static void dump_cb (flux_t *h, flux_msg_handler_t *w,
+static void dump_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     const char *reason;
@@ -88,7 +88,7 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-static void stop_cb (flux_t *h, flux_msg_handler_t *w,
+static void stop_cb (flux_t *h, flux_msg_handler_t *mh,
                      const flux_msg_t *msg, void *arg)
 {
     if (flux_request_decode (msg, NULL, NULL) < 0)

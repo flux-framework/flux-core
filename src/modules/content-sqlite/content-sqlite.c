@@ -242,7 +242,7 @@ int grow_lzo_buf (sqlite_ctx_t *ctx, size_t size)
     return 0;
 }
 
-void load_cb (flux_t *h, flux_msg_handler_t *w,
+void load_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;
@@ -323,7 +323,7 @@ done:
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
 }
 
-void store_cb (flux_t *h, flux_msg_handler_t *w,
+void store_cb (flux_t *h, flux_msg_handler_t *mh,
                const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;
@@ -419,7 +419,7 @@ done:
 /* Intercept broker shutdown event.  If broker is shutting down,
  * avoid transferring data back to the content cache at unload time.
  */
-void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *w,
+void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;
@@ -431,7 +431,7 @@ void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *w,
  * Tell content cache to disable backing store,
  * then write everything back to it before exiting.
  */
-void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
+void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
                   const flux_msg_t *msg, void *arg)
 {
     sqlite_ctx_t *ctx = arg;

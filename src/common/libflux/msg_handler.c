@@ -85,7 +85,7 @@ struct flux_msg_handler {
 
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
-static void free_msg_handler (flux_msg_handler_t *w);
+static void free_msg_handler (flux_msg_handler_t *mh);
 
 static void fastpath_init (struct fastpath *fp);
 static void fastpath_free (struct fastpath *fp);
@@ -207,16 +207,16 @@ static int fastpath_grow (struct fastpath *fp)
 }
 
 static int fastpath_get (struct fastpath *fp, uint32_t tag,
-                         struct flux_msg_handler **hpp)
+                         struct flux_msg_handler **mhp)
 {
     if (tag >= fp->len || fp->map[tag] == NULL)
         return -1;
-    *hpp = fp->map[tag];
+    *mhp = fp->map[tag];
     return 0;
 }
 
 static int fastpath_set (struct fastpath *fp, uint32_t tag,
-                         struct flux_msg_handler *hp)
+                         struct flux_msg_handler *mh)
 {
     while (tag >= fp->len) {
         if (fastpath_grow (fp) < 0)
@@ -226,7 +226,7 @@ static int fastpath_set (struct fastpath *fp, uint32_t tag,
         errno = EINVAL;
         return -1;
     }
-    fp->map[tag] = hp;
+    fp->map[tag] = mh;
     return 0;
 }
 
@@ -237,7 +237,7 @@ static void fastpath_clr (struct fastpath *fp, uint32_t tag)
 }
 
 static int fastpath_response_lookup (struct dispatch *d, const flux_msg_t *msg,
-                                     struct flux_msg_handler **hpp)
+                                     struct flux_msg_handler **mhp)
 {
     uint32_t tag, group;
 
@@ -245,20 +245,20 @@ static int fastpath_response_lookup (struct dispatch *d, const flux_msg_t *msg,
         return -1;
     group = tag>>FLUX_MATCHTAG_GROUP_SHIFT;
     if (group > 0)
-        return fastpath_get (&d->group, group, hpp);
+        return fastpath_get (&d->group, group, mhp);
     else
-        return fastpath_get (&d->norm, tag, hpp);
+        return fastpath_get (&d->norm, tag, mhp);
 }
 
 static int fastpath_response_register (struct dispatch *d,
-                                       struct flux_msg_handler *hp)
+                                       struct flux_msg_handler *mh)
 {
-    uint32_t tag = hp->match.matchtag;
+    uint32_t tag = mh->match.matchtag;
     uint32_t group = tag>>FLUX_MATCHTAG_GROUP_SHIFT;
     if (group > 0)
-        return fastpath_set (&d->group, group, hp);
+        return fastpath_set (&d->group, group, mh);
     else
-        return fastpath_set (&d->norm, tag, hp);
+        return fastpath_set (&d->norm, tag, mh);
 }
 
 static void fastpath_response_unregister (struct dispatch *d, uint32_t tag)
@@ -285,44 +285,45 @@ static int copy_match (struct flux_match *dst,
     return 0;
 }
 
-static void call_handler (flux_msg_handler_t *w, const flux_msg_t *msg)
+static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
 {
     uint32_t rolemask, matchtag;
 
     if (flux_msg_get_rolemask (msg, &rolemask) < 0)
         return;
-    if (!(rolemask & w->rolemask)) {
+    if (!(rolemask & mh->rolemask)) {
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
                         && flux_msg_get_matchtag (msg, &matchtag) == 0
                         && matchtag != FLUX_MATCHTAG_NONE) {
-            (void)flux_respond (w->d->h, msg, EPERM, NULL);
+            (void)flux_respond (mh->d->h, msg, EPERM, NULL);
         }
         return;
     }
-    w->fn (w->d->h, w, msg, w->arg);
+    mh->fn (mh->d->h, mh, msg, mh->arg);
 }
 
 static bool dispatch_message (struct dispatch *d,
                               const flux_msg_t *msg, int type)
 {
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     bool match = false;
 
     /* fastpath */
     if (type == FLUX_MSGTYPE_RESPONSE) {
-        if (fastpath_response_lookup (d, msg, &w) == 0 && w->running
-                                            && flux_msg_cmp (msg, w->match)) {
-            call_handler (w, msg);
+        if (fastpath_response_lookup (d, msg, &mh) == 0
+                && mh->running
+                && flux_msg_cmp (msg, mh->match)) {
+            call_handler (mh, msg);
             match = true;
         }
     }
     /* slowpath */
     if (!match) {
-        FOREACH_ZLIST (d->handlers, w) {
-            if (!w->running)
+        FOREACH_ZLIST (d->handlers, mh) {
+            if (!mh->running)
                 continue;
-            if (flux_msg_cmp (msg, w->match)) {
-                call_handler (w, msg);
+            if (flux_msg_cmp (msg, mh->match)) {
+                call_handler (mh, msg);
                 if (type != FLUX_MSGTYPE_EVENT) {
                     match = true;
                     break;
@@ -445,72 +446,72 @@ done:
     flux_msg_destroy (msg);
 }
 
-void flux_msg_handler_start (flux_msg_handler_t *w)
+void flux_msg_handler_start (flux_msg_handler_t *mh)
 {
-    struct dispatch *d = w->d;
+    struct dispatch *d = mh->d;
 
-    assert (w->magic == HANDLER_MAGIC);
-    if (w->running == 0) {
-        w->running = 1;
+    assert (mh->magic == HANDLER_MAGIC);
+    if (mh->running == 0) {
+        mh->running = 1;
         d->running_count++;
         flux_watcher_start (d->w);
     }
 }
 
-void flux_msg_handler_stop (flux_msg_handler_t *w)
+void flux_msg_handler_stop (flux_msg_handler_t *mh)
 {
-    if (!w)
+    if (!mh)
         return;
-    assert (w->magic == HANDLER_MAGIC);
-    if (w->running == 1) {
-        struct dispatch *d = w->d;
-        w->running = 0;
+    assert (mh->magic == HANDLER_MAGIC);
+    if (mh->running == 1) {
+        struct dispatch *d = mh->d;
+        mh->running = 0;
         d->running_count--;
         if (d->running_count == 0)
             flux_watcher_stop (d->w);
     }
 }
 
-void flux_msg_handler_allow_rolemask (flux_msg_handler_t *w, uint32_t rolemask)
+void flux_msg_handler_allow_rolemask (flux_msg_handler_t *mh, uint32_t rolemask)
 {
-    if (w) {
-        w->rolemask |= rolemask;
+    if (mh) {
+        mh->rolemask |= rolemask;
     }
 }
 
-void flux_msg_handler_deny_rolemask (flux_msg_handler_t *w, uint32_t rolemask)
+void flux_msg_handler_deny_rolemask (flux_msg_handler_t *mh, uint32_t rolemask)
 {
-    if (w) {
-        w->rolemask &= ~rolemask;
-        w->rolemask |= FLUX_ROLE_OWNER;
+    if (mh) {
+        mh->rolemask &= ~rolemask;
+        mh->rolemask |= FLUX_ROLE_OWNER;
     }
 }
 
-static void free_msg_handler (flux_msg_handler_t *w)
+static void free_msg_handler (flux_msg_handler_t *mh)
 {
-    if (w) {
-        assert (w->magic == HANDLER_MAGIC);
-        if (w->match.topic_glob)
-            free (w->match.topic_glob);
-        w->magic = ~HANDLER_MAGIC;
-        free (w);
+    if (mh) {
+        assert (mh->magic == HANDLER_MAGIC);
+        if (mh->match.topic_glob)
+            free (mh->match.topic_glob);
+        mh->magic = ~HANDLER_MAGIC;
+        free (mh);
     }
 }
 
-void flux_msg_handler_destroy (flux_msg_handler_t *w)
+void flux_msg_handler_destroy (flux_msg_handler_t *mh)
 {
-    if (w) {
-        assert (w->magic == HANDLER_MAGIC);
-        if (w->match.typemask == FLUX_MSGTYPE_RESPONSE
-                            && w->match.matchtag != FLUX_MATCHTAG_NONE) {
-            fastpath_response_unregister (w->d, w->match.matchtag);
+    if (mh) {
+        assert (mh->magic == HANDLER_MAGIC);
+        if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
+                            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
+            fastpath_response_unregister (mh->d, mh->match.matchtag);
         } else {
-            zlist_remove (w->d->handlers_new, w);
-            zlist_remove (w->d->handlers, w);
+            zlist_remove (mh->d->handlers_new, mh);
+            zlist_remove (mh->d->handlers, mh);
         }
-        flux_msg_handler_stop (w);
-        dispatch_usecount_decr (w->d);
-        free_msg_handler (w);
+        flux_msg_handler_stop (mh);
+        dispatch_usecount_decr (mh->d);
+        free_msg_handler (mh);
     }
 }
 
@@ -519,38 +520,38 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
                                              flux_msg_handler_f cb, void *arg)
 {
     struct dispatch *d = dispatch_get (h);
-    flux_msg_handler_t *w = NULL;
+    flux_msg_handler_t *mh = NULL;
     int saved_errno;
 
     if (!d) {
         saved_errno = errno;
         goto error;
     }
-    if (!(w = calloc (1, sizeof (*w))))
+    if (!(mh = calloc (1, sizeof (*mh))))
         goto nomem;
-    w->magic = HANDLER_MAGIC;
-    if (copy_match (&w->match, match) < 0)
+    mh->magic = HANDLER_MAGIC;
+    if (copy_match (&mh->match, match) < 0)
         goto nomem;
-    w->rolemask = FLUX_ROLE_OWNER;
-    w->fn = cb;
-    w->arg = arg;
-    w->d = d;
-    if (w->match.typemask == FLUX_MSGTYPE_RESPONSE
-                            && w->match.matchtag != FLUX_MATCHTAG_NONE) {
-        if (fastpath_response_register (d, w) < 0) {
+    mh->rolemask = FLUX_ROLE_OWNER;
+    mh->fn = cb;
+    mh->arg = arg;
+    mh->d = d;
+    if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
+                            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
+        if (fastpath_response_register (d, mh) < 0) {
             saved_errno = errno;
             goto error;
         }
     } else {
-        if (zlist_append (d->handlers_new, w) < 0)
+        if (zlist_append (d->handlers_new, mh) < 0)
             goto nomem;
     }
     dispatch_usecount_incr (d);
-    return w;
+    return mh;
 nomem:
     saved_errno = ENOMEM;
 error:
-    free_msg_handler (w);
+    free_msg_handler (mh);
     errno = saved_errno;
     return NULL;
 }

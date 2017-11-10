@@ -202,7 +202,7 @@ done:
     return rc;
 }
 
-static void write_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void write_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     exec_t *x = arg;
@@ -235,7 +235,7 @@ out:
         flux_log_error (h, "write_request_cb: flux_respond_pack");
 }
 
-static void signal_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void signal_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     exec_t *x = arg;
@@ -346,7 +346,7 @@ error:
     return -1;
 }
 
-static void exec_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void exec_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
     exec_t *x = arg;
@@ -475,7 +475,7 @@ error:
     return NULL;
 }
 
-static void ps_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void ps_request_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     struct subprocess *p;

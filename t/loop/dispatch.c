@@ -7,14 +7,14 @@
 
 int cb_called;
 flux_t *cb_h;
-flux_msg_handler_t *cb_w;
+flux_msg_handler_t *cb_mh;
 const flux_msg_t *cb_msg;
 void *cb_arg;
-void cb (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg, void *arg)
+void cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     cb_called++;
     cb_h = h;
-    cb_w = w;
+    cb_mh = mh;
     cb_msg = msg;
     cb_arg = arg;
 }
@@ -28,11 +28,11 @@ void cb (flux_t *h, flux_msg_handler_t *w, const flux_msg_t *msg, void *arg)
  */
 void test_simple_msg_handler (flux_t *h)
 {
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     flux_msg_t *msg;
     int rc;
 
-    ok ((w = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, &w)) != NULL,
+    ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, &mh)) != NULL,
         "handle created dispatcher on demand");
     ok ((msg = flux_event_encode ("test", NULL)) != NULL,
         "encoded event message");
@@ -46,19 +46,19 @@ void test_simple_msg_handler (flux_t *h)
         "message handler that was not started did not run");
     cb_called = 0;
     cb_h = NULL;
-    cb_w = NULL;
+    cb_mh = NULL;
     cb_arg = NULL;
-    flux_msg_handler_start (w);
+    flux_msg_handler_start (mh);
     diag ("started message handler");
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
     ok (rc >= 0,
         "flux_reactor_run ran");
     ok (cb_called == 1,
         "message handler was called after being started");
-    ok (cb_h == h && cb_w == w && cb_arg == &w && cb_msg != NULL,
+    ok (cb_h == h && cb_mh == mh && cb_arg == &mh && cb_msg != NULL,
         "message handler was called with appropriate args");
     flux_msg_destroy (msg);
-    flux_msg_handler_destroy (w);
+    flux_msg_handler_destroy (mh);
     diag ("destroyed message and message handler");
 }
 
@@ -67,13 +67,13 @@ void test_simple_msg_handler (flux_t *h)
 void test_fastpath (flux_t *h)
 {
     struct flux_match m = FLUX_MATCH_RESPONSE;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     flux_msg_t *msg;
     int rc;
 
     ok ((m.matchtag = flux_matchtag_alloc (h, 0)) != FLUX_MATCHTAG_NONE,
         "allocated matchtag");
-    ok ((w = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
+    ok ((mh = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
     ok ((msg = flux_response_encode ("foo", 0, NULL)) != NULL,
         "encoded response message");
@@ -87,7 +87,7 @@ void test_fastpath (flux_t *h)
         "flux_reactor_run ran");
     ok (cb_called == 0,
         "message handler that was not started did not run");
-    flux_msg_handler_start (w);
+    flux_msg_handler_start (mh);
     diag ("started message handler");
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
     ok (rc >= 0,
@@ -111,7 +111,7 @@ void test_fastpath (flux_t *h)
 
     flux_matchtag_free (h, m.matchtag);
     flux_msg_destroy (msg);
-    flux_msg_handler_destroy (w);
+    flux_msg_handler_destroy (mh);
     diag ("freed matchtag, destroyed message and message handler");
 }
 
@@ -120,7 +120,7 @@ void test_cloned_dispatch (flux_t *orig)
     flux_t *h;
     flux_reactor_t *r;
     flux_msg_t *msg;
-    flux_msg_handler_t *w, *w2;
+    flux_msg_handler_t *mh, *mh2;
     struct flux_match m = FLUX_MATCH_RESPONSE;
     struct flux_match m2 = FLUX_MATCH_RESPONSE;
     int rc;
@@ -140,9 +140,9 @@ void test_cloned_dispatch (flux_t *orig)
         "set reactor in cloned handle");
 
     /* event */
-    ok ((w = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
+    ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
         "handle created dispatcher on demand");
-    flux_msg_handler_start (w);
+    flux_msg_handler_start (mh);
     ok ((msg = flux_event_encode ("test", NULL)) != NULL,
         "encoded event message");
     ok (flux_send (h, msg, 0) == 0,
@@ -154,9 +154,9 @@ void test_cloned_dispatch (flux_t *orig)
     m.matchtag = flux_matchtag_alloc (h, 0);
     ok (m.matchtag != FLUX_MATCHTAG_NONE,
         "allocated matchtag (%d)", m.matchtag); // 1
-    ok ((w2 = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
+    ok ((mh2 = flux_msg_handler_create (h, m, cb, NULL)) != NULL,
         "created handler for response");
-    flux_msg_handler_start (w2);
+    flux_msg_handler_start (mh2);
     ok ((msg = flux_response_encode ("foo", 0, NULL)) != NULL,
         "encoded response message");
     ok (flux_msg_set_matchtag (msg, m.matchtag) == 0,
@@ -234,8 +234,8 @@ void test_cloned_dispatch (flux_t *orig)
         "there are no more messages");
 
     /* close the clone */
-    flux_msg_handler_destroy (w);
-    flux_msg_handler_destroy (w2);
+    flux_msg_handler_destroy (mh);
+    flux_msg_handler_destroy (mh2);
     flux_matchtag_free (h, m.matchtag);
     flux_matchtag_free (h, m2.matchtag);
     flux_close (h);

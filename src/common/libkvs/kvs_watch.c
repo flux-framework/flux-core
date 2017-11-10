@@ -48,10 +48,10 @@ typedef struct {
 
 typedef struct {
     zhash_t *watchers; /* kvs_watch_t hashed by stringified matchtag */
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
 } kvs_watch_ctx_t;
 
-static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
+static void watch_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg);
 static int decode_val_object (json_t *val, char **json_str);
 
@@ -59,7 +59,7 @@ static void freectx (kvs_watch_ctx_t *ctx)
 {
     if (ctx) {
         zhash_destroy (&ctx->watchers);
-        flux_msg_handler_destroy (ctx->w);
+        flux_msg_handler_destroy (ctx->mh);
         free (ctx);
     }
 }
@@ -76,8 +76,8 @@ static kvs_watch_ctx_t *getctx (flux_t *h, bool create)
         if (!(ctx->watchers = zhash_new ()))
             goto nomem;
         match.topic_glob = "kvs.watch";
-        if (!(ctx->w = flux_msg_handler_create (h, match, watch_response_cb,
-                                                                ctx)))
+        if (!(ctx->mh = flux_msg_handler_create (h, match,
+                                                 watch_response_cb, ctx)))
             goto nomem;
         flux_aux_set (h, auxkey, ctx, (flux_free_f)freectx);
     }
@@ -130,7 +130,7 @@ static kvs_watcher_t *add_watcher (flux_t *h, const char *key,
     zhash_freefn (ctx->watchers, k, (zhash_free_fn *)destroy_watcher);
 
     if (lastcount == 0)
-        flux_msg_handler_start (ctx->w);
+        flux_msg_handler_start (ctx->mh);
     return wp;
 }
 
@@ -168,7 +168,7 @@ int flux_kvs_unwatch (flux_t *h, const char *key)
         }
         zlist_destroy (&hashkeys);
         if (zhash_size (ctx->watchers) == 0)
-            flux_msg_handler_stop (ctx->w);
+            flux_msg_handler_stop (ctx->mh);
     }
     rc = 0;
 done:
@@ -204,7 +204,7 @@ done:
     return rc;
 }
 
-static void watch_response_cb (flux_t *h, flux_msg_handler_t *w,
+static void watch_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     char *json_str = NULL;

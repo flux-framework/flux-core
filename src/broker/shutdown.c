@@ -86,7 +86,7 @@ static void timer_handler (flux_reactor_t *r, flux_watcher_t *w,
 /* On receipt of the shutdown event message, begin the grace timer,
  * and log the "shutdown in..." message on rank 0.
  */
-void shutdown_handler (flux_t *h, flux_msg_handler_t *w,
+void shutdown_handler (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     shutdown_t *s = arg;

@@ -13,7 +13,7 @@
 struct test_server {
     flux_t *c;
     flux_t *s;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     test_server_f cb;
     void *arg;
     pthread_t thread;
@@ -21,7 +21,7 @@ struct test_server {
     zuuid_t *uuid;
 };
 
-void shutdown_cb (flux_t *h, flux_msg_handler_t *w,
+void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
                   const flux_msg_t *msg, void *arg)
 {
     flux_reactor_stop (flux_get_reactor (h));
@@ -71,7 +71,7 @@ done:
 static void test_server_destroy (struct test_server *a)
 {
     if (a) {
-        flux_msg_handler_destroy (a->w);
+        flux_msg_handler_destroy (a->mh);
         flux_close (a->s);
         zuuid_destroy (&a->uuid);
         free (a);
@@ -123,12 +123,12 @@ flux_t *test_server_create (test_server_f cb, void *arg)
      */
     struct flux_match match = FLUX_MATCH_REQUEST;
     match.topic_glob = "shutdown";
-    if (!(a->w = flux_msg_handler_create (a->s, match, shutdown_cb, a))) {
+    if (!(a->mh = flux_msg_handler_create (a->s, match, shutdown_cb, a))) {
         diag ("%s: flux_msg_handler_create: %s\n",
              __FUNCTION__, flux_strerror (errno));
         goto error;
     }
-    flux_msg_handler_start (a->w);
+    flux_msg_handler_start (a->mh);
 
     /* Start server thread
      */

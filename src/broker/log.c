@@ -69,7 +69,7 @@ struct logbuf_entry {
 struct sleeper {
     int magic;
     flux_t *h;
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
     flux_msg_handler_f fun;
     flux_msg_t *msg;
     void *arg;
@@ -86,7 +86,7 @@ static void sleeper_destroy (struct sleeper *s)
 }
 
 static struct sleeper *sleeper_create (flux_msg_handler_f fun,
-                                       flux_t *h, flux_msg_handler_t *w,
+                                       flux_t *h, flux_msg_handler_t *mh,
                                        const flux_msg_t *msg, void *arg)
 {
     struct sleeper *s = calloc (1, sizeof (*s));
@@ -94,7 +94,7 @@ static struct sleeper *sleeper_create (flux_msg_handler_f fun,
         return NULL;
     s->magic = SLEEPER_MAGIC;
     s->h = h;
-    s->w = w;
+    s->mh = mh;
     s->fun = fun;
     s->arg = arg;
     if (!(s->msg = flux_msg_copy (msg, true))) {
@@ -167,11 +167,11 @@ static int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
 }
 
 static int logbuf_sleepon (logbuf_t *logbuf, flux_msg_handler_f fun, flux_t *h,
-                           flux_msg_handler_t *w, const flux_msg_t *msg,
+                           flux_msg_handler_t *mh, const flux_msg_t *msg,
                            void *arg)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
-    struct sleeper *s = sleeper_create (fun, h, w, msg, arg);
+    struct sleeper *s = sleeper_create (fun, h, mh, msg, arg);
     if (!s)
         return -1;
     if (zlist_append (logbuf->sleepers, s) < 0) {
@@ -198,7 +198,7 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
             return -1;
         }
         while ((s = zlist_pop (logbuf->sleepers))) {
-            s->fun (s->h, s->w, s->msg, s->arg);
+            s->fun (s->h, s->mh, s->msg, s->arg);
             sleeper_destroy (s);
         }
     }
@@ -520,7 +520,7 @@ static void logbuf_append_redirect (const char *buf, int len, void *arg)
 
 /* N.B. log requests have no response.
  */
-static void append_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void append_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
@@ -548,7 +548,7 @@ error:
     }
 }
 
-static void clear_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
@@ -563,7 +563,7 @@ done:
     flux_respond (h, msg, rc < 0 ? errno : 0, NULL);
 }
 
-static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
@@ -577,7 +577,7 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (logbuf_get (logbuf, seq, &seq, &buf, &len) < 0) {
         if (follow && errno == ENOENT) {
-            if (logbuf_sleepon (logbuf, dmesg_request_cb, h, w, msg, arg) < 0)
+            if (logbuf_sleepon (logbuf, dmesg_request_cb, h, mh, msg, arg) < 0)
                 goto error;
             return; /* no reply */
         }
@@ -608,7 +608,7 @@ done:
     return rc;
 }
 
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;

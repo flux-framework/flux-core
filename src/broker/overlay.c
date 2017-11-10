@@ -85,7 +85,7 @@ typedef struct {
     bool mute;
 } child_t;
 
-static void heartbeat_handler (flux_t *h, flux_msg_handler_t *w,
+static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg);
 
 static void endpoint_destroy (struct endpoint *ep)
@@ -290,7 +290,7 @@ done:
     return rc;
 }
 
-static void heartbeat_handler (flux_t *h, flux_msg_handler_t *w,
+static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     overlay_t *ov = arg;

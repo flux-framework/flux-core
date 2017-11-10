@@ -30,7 +30,7 @@
 #include "ping.h"
 
 struct ping_context {
-    flux_msg_handler_t *w;
+    flux_msg_handler_t *mh;
 };
 
 static char *make_json_response_payload (const char *request_payload,
@@ -65,7 +65,7 @@ done:
     return result;
 }
 
-static void ping_request_cb (flux_t *h, flux_msg_handler_t *w,
+static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -109,8 +109,8 @@ error:
 static void ping_finalize (void *arg)
 {
     struct ping_context *p = arg;
-    flux_msg_handler_stop (p->w);
-    flux_msg_handler_destroy (p->w);
+    flux_msg_handler_stop (p->mh);
+    flux_msg_handler_destroy (p->mh);
     free (p);
 }
 
@@ -127,20 +127,17 @@ int ping_initialize (flux_t *h, const char *service)
         errno = ENOMEM;
         goto error;
     }
-    if (!(p->w = flux_msg_handler_create (h, match, ping_request_cb, p)))
+    if (!(p->mh = flux_msg_handler_create (h, match, ping_request_cb, p)))
         goto error;
-    flux_msg_handler_allow_rolemask (p->w, FLUX_ROLE_ALL);
-    flux_msg_handler_start (p->w);
+    flux_msg_handler_allow_rolemask (p->mh, FLUX_ROLE_ALL);
+    flux_msg_handler_start (p->mh);
     flux_aux_set (h, "flux::ping", p, ping_finalize);
     free (match.topic_glob);
     return 0;
 error:
-    if (p) {
-        free (match.topic_glob);
-        flux_msg_handler_stop (p->w);
-        flux_msg_handler_destroy (p->w);
-        free (p);
-    }
+    free (match.topic_glob);
+    if (p)
+        ping_finalize (p);
     return -1;
 }
 
