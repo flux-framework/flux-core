@@ -1147,7 +1147,7 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
         rc = -1;
         goto done;
     }
-    if (flux_msg_handler_addvec (h, htab, (void *)ctx, &handlers) < 0) {
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
         flux_log_error (h, "registering resource event handler");
         rc = -1;
         goto done;
