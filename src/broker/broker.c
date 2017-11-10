@@ -158,6 +158,7 @@ static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (broker_ctx_t *ctx);
+static void broker_remove_services (void);
 
 static int load_module_byname (broker_ctx_t *ctx, const char *name,
                                const char *argz, size_t argz_len,
@@ -669,6 +670,7 @@ int main (int argc, char *argv[])
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     shutdown_destroy (ctx.shutdown);
+    broker_remove_services ();
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     if (ctx.subscriptions) {
@@ -1741,6 +1743,13 @@ static void broker_add_services (broker_ctx_t *ctx)
 
     if (flux_msg_handler_addvec (ctx->h, handlers, ctx) < 0)
         log_err_exit ("error registering message handlers");
+}
+
+/* Unregister message handlers
+ */
+static void broker_remove_services (void)
+{
+    flux_msg_handler_delvec (handlers);
 }
 
 /**
