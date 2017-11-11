@@ -125,7 +125,6 @@ typedef struct {
     zlist_t *subscriptions;     /* subscripts for internal services */
     content_cache_t *cache;
     int tbon_k;
-    flux_msg_handler_t **handlers;
     /* Bootstrap
      */
     hello_t *hello;
@@ -158,7 +157,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
-static void broker_add_services (broker_ctx_t *ctx);
+static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
 static int load_module_byname (broker_ctx_t *ctx, const char *name,
@@ -312,6 +311,7 @@ int main (int argc, char *argv[])
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
+    flux_msg_handler_t **handlers;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -581,7 +581,7 @@ int main (int argc, char *argv[])
     if (rusage_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("rusage_initialize");
 
-    broker_add_services (&ctx);
+    handlers = broker_add_services (&ctx);
 
     /* Initialize comms module infrastructure.
      */
@@ -671,7 +671,7 @@ int main (int argc, char *argv[])
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     shutdown_destroy (ctx.shutdown);
-    broker_remove_services (ctx.handlers);
+    broker_remove_services (handlers);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     if (ctx.subscriptions) {
@@ -1731,8 +1731,9 @@ static struct internal_service services[] = {
  * Register message handlers for some cmb services.  Others are registered
  * in their own initialization functions.
  */
-static void broker_add_services (broker_ctx_t *ctx)
+static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
 {
+    flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, overlay_get_rank(ctx->overlay)))
@@ -1742,8 +1743,9 @@ static void broker_add_services (broker_ctx_t *ctx)
             log_err_exit ("error registering service for %s", svc->name);
     }
 
-    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &ctx->handlers) < 0)
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0)
         log_err_exit ("error registering message handlers");
+    return handlers;
 }
 
 /* Unregister message handlers
