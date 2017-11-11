@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+#define KVS_PRIMARY_ROOT_KEY "primary"
+
 enum {
     FLUX_KVS_READDIR = 1,
     FLUX_KVS_READLINK = 2,
