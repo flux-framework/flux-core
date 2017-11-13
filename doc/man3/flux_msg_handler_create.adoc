@@ -79,10 +79,11 @@ A message handler only receives a message if a bit-wise and of the message
 rolemask and the message handler rolemask evaluates to a non-zero value,
 or the message rolemask contains the FLUX_ROLE_OWNER (instance owner) role.
 
-By default, the message handler rolemask is 0, but may be changed with
-`flux_msg_handler_allow_rolemask()` and `flux_msg_handler_deny_rolemask()`,
-which add or remove roles from the message handler rolemask.  The
-FLUX_ROLE_OWNER bit position is ignored in the message handler rolemask.
+By default, the message handler rolemask is 0, but roles may be added
+to the existing message handler rolemask with
+`flux_msg_handler_allow_rolemask()` or removed from it with
+`flux_msg_handler_deny_rolemask()`.  The FLUX_ROLE_OWNER bit position
+is ignored in the message handler rolemask.
 
 The following roles are defined in RFC 12:
 
@@ -91,6 +92,14 @@ The instance owner role has maximum privilege within the Flux instance.
 
 FLUX_ROLE_USER::
 The user role confers access, but not administrative privilege.
+
+In addition, RFC 12 defines these symbolic rolemask values:
+
+FLUX_ROLE_NONE::
+The empty set.
+
+FLUX_ROLE_ALL::
+The set of all possible roles.
 
 Other roles are yet to be defined.
 
