@@ -42,6 +42,7 @@ static double default_reduction_timeout = 10.;
 struct hello_struct {
     flux_t *h;
     attr_t *attrs;
+    flux_msg_handler_t **handlers;
     uint32_t rank;
     uint32_t size;
     uint32_t count;
@@ -82,6 +83,7 @@ void hello_destroy (hello_t *hello)
 {
     if (hello) {
         flux_reduce_destroy (hello->reduce);
+        flux_msg_handler_delvec (hello->handlers);
         free (hello);
     }
 }
@@ -123,8 +125,8 @@ int hello_register_attrs (hello_t *hello, attr_t *attrs)
     return 0;
 }
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "hello.join",     join_request, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "hello.join",     join_request, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -169,7 +171,8 @@ int hello_start (hello_t *hello)
         log_err ("hello: error getting rank/size");
         goto done;
     }
-    if (flux_msg_handler_addvec (hello->h, handlers, hello) < 0) {
+    if (flux_msg_handler_addvec (hello->h, htab, hello,
+                                 &hello->handlers) < 0) {
         log_err ("hello: adding message handlers");
         goto done;
     }

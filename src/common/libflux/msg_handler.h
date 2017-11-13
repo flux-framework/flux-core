@@ -36,13 +36,14 @@ struct flux_msg_handler_spec {
     const char *topic_glob;
     flux_msg_handler_f cb;
     uint32_t rolemask;
-    flux_msg_handler_t *w;
 };
-#define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL, 0, NULL }
+#define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL, 0 }
 
-int flux_msg_handler_addvec (flux_t *h, struct flux_msg_handler_spec tab[],
-                             void *arg);
-void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
+int flux_msg_handler_addvec (flux_t *h,
+                             const struct flux_msg_handler_spec tab[],
+                             void *arg,
+                             flux_msg_handler_t **msg_handlers[]);
+void flux_msg_handler_delvec (flux_msg_handler_t *msg_handlers[]);
 
 /* Requeue any unmatched messages, if handle was cloned.
  */

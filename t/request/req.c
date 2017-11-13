@@ -382,18 +382,18 @@ error:
     flux_reactor_stop_error (flux_get_reactor (h));
 }
 
-struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "req.null",              null_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.echo",              echo_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.err",               err_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.src",               src_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.nsrc",              nsrc_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.xping",             xping_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "req.count",             count_request_cb, 0, NULL },
+const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "req.null",              null_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.echo",              echo_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.err",               err_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.src",               src_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.nsrc",              nsrc_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.xping",             xping_request_cb, 0 },
+    { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "req.count",             count_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -401,13 +401,14 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno;
     t_req_ctx_t *ctx = getctx (h);
+    flux_msg_handler_t **handlers = NULL;
 
     if (!ctx) {
         saved_errno = errno;
         flux_log_error (h, "error allocating context");
         goto error;
     }
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         saved_errno = errno;
         flux_log_error (h, "flux_msg_handler_addvec");
         goto error;
@@ -415,10 +416,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         saved_errno = errno;
         flux_log_error (h, "flux_reactor_run");
-        flux_msg_handler_delvec (htab);
+        flux_msg_handler_delvec (handlers);
         goto error;
     }
-    flux_msg_handler_delvec (htab);
+    flux_msg_handler_delvec (handlers);
     return 0;
 error:
     errno = saved_errno;

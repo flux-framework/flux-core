@@ -36,6 +36,7 @@
 
 typedef struct {
     zhash_t *vhash;
+    flux_msg_handler_t **handlers;
 } seqhash_t;
 
 static seqhash_t * sequence_hash_create (void)
@@ -231,16 +232,16 @@ done:
     }
 }
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "seq.*",     sequence_request_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "seq.*",     sequence_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 static void sequence_hash_finalize (void *arg)
 {
     seqhash_t *seq = arg;
+    flux_msg_handler_delvec (seq->handlers);
     sequence_hash_destroy (seq);
-    flux_msg_handler_delvec (handlers);
 }
 
 int sequence_hash_initialize (flux_t *h)
@@ -248,7 +249,7 @@ int sequence_hash_initialize (flux_t *h)
     seqhash_t *seq = sequence_hash_create ();
     if (!seq)
         return -1;
-    if (flux_msg_handler_addvec (h, handlers, seq) < 0) {
+    if (flux_msg_handler_addvec (h, htab, seq, &seq->handlers) < 0) {
         sequence_hash_destroy (seq);
         return -1;
     }

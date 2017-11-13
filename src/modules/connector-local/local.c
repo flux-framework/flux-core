@@ -931,12 +931,11 @@ error_close:
     return -1;
 }
 
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     NULL, event_cb,    FLUX_ROLE_ALL, NULL },
-    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, FLUX_ROLE_ALL, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT,     NULL, event_cb,    FLUX_ROLE_ALL },
+    { FLUX_MSGTYPE_RESPONSE,  NULL, response_cb, FLUX_ROLE_ALL },
     FLUX_MSGHANDLER_TABLE_END
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
@@ -944,6 +943,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     char sockpath[PATH_MAX + 1];
     const char *local_uri = NULL;
     char *tmpdir;
+    flux_msg_handler_t **handlers = NULL;
     int rc = -1;
 
     if (!ctx)
@@ -973,7 +973,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     /* Create/start event/response message watchers
      */
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
         goto done;
     }
@@ -982,12 +982,11 @@ int mod_main (flux_t *h, int argc, char **argv)
      */
     if (flux_reactor_run (ctx->reactor, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done_delvec;
+        goto done;
     }
     rc = 0;
-done_delvec:
-    flux_msg_handler_delvec (htab);
 done:
+    flux_msg_handler_delvec (handlers);
     flux_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
         if (close (ctx->listen_fd) < 0)

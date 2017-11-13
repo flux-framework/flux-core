@@ -157,7 +157,8 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers);
 static void broker_unhandle_signals (zlist_t *sigwatchers);
 
-static void broker_add_services (broker_ctx_t *ctx);
+static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
+static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
 static int load_module_byname (broker_ctx_t *ctx, const char *name,
                                const char *argz, size_t argz_len,
@@ -310,6 +311,7 @@ int main (int argc, char *argv[])
     sigset_t old_sigmask;
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
+    flux_msg_handler_t **handlers;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -579,7 +581,7 @@ int main (int argc, char *argv[])
     if (rusage_initialize (ctx.h, "cmb") < 0)
         log_err_exit ("rusage_initialize");
 
-    broker_add_services (&ctx);
+    handlers = broker_add_services (&ctx);
 
     /* Initialize comms module infrastructure.
      */
@@ -651,7 +653,7 @@ int main (int argc, char *argv[])
 
     /* Unregister builtin services
      */
-    attr_unregister_handlers ();
+    attr_unregister_handlers (ctx.attrs);
     content_cache_destroy (ctx.cache);
 
     broker_unhandle_signals (sigwatchers);
@@ -668,6 +670,8 @@ int main (int argc, char *argv[])
     service_switch_destroy (ctx.services);
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
+    shutdown_destroy (ctx.shutdown);
+    broker_remove_services (handlers);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     if (ctx.subscriptions) {
@@ -1694,16 +1698,16 @@ static int route_to_handle (const flux_msg_t *msg, void *arg)
     return 0;
 }
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.event-mute", cmb_event_mute_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1727,8 +1731,9 @@ static struct internal_service services[] = {
  * Register message handlers for some cmb services.  Others are registered
  * in their own initialization functions.
  */
-static void broker_add_services (broker_ctx_t *ctx)
+static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
 {
+    flux_msg_handler_t **handlers;
     struct internal_service *svc;
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, overlay_get_rank(ctx->overlay)))
@@ -1738,8 +1743,16 @@ static void broker_add_services (broker_ctx_t *ctx)
             log_err_exit ("error registering service for %s", svc->name);
     }
 
-    if (flux_msg_handler_addvec (ctx->h, handlers, ctx) < 0)
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &handlers) < 0)
         log_err_exit ("error registering message handlers");
+    return handlers;
+}
+
+/* Unregister message handlers
+ */
+static void broker_remove_services (flux_msg_handler_t *handlers[])
+{
+    flux_msg_handler_delvec (handlers);
 }
 
 /**

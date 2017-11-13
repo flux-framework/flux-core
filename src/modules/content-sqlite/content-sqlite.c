@@ -511,31 +511,32 @@ done:
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "content-backing.load",         load_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "content-backing.store",        store_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "content-sqlite.shutdown", shutdown_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,       "shutdown",             broker_shutdown_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-sqlite.shutdown", shutdown_cb, 0, },
+    { FLUX_MSGTYPE_EVENT,   "shutdown",                broker_shutdown_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
+    flux_msg_handler_t **handlers = NULL;
     int lzo_rc = lzo_init ();
     sqlite_ctx_t *ctx = getctx (h);
     if (!ctx)
-        return -1;
+        goto done;
     if (lzo_rc != LZO_E_OK) {
         flux_log (h, LOG_ERR, "lzo_init failed (rc=%d)", lzo_rc);
-        return -1;
+        goto done;
     }
     if (flux_event_subscribe (h, "shutdown") < 0) {
         flux_log_error (h, "flux_event_subscribe");
-        return -1;
+        goto done;
     }
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
-        return -1;
+        goto done;
     }
     if (register_backing_store (h, true, "content-sqlite") < 0) {
         flux_log_error (h, "registering backing store");
@@ -546,7 +547,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
 done:
-    flux_msg_handler_delvec (htab);
+    flux_msg_handler_delvec (handlers);
     return 0;
 }
 

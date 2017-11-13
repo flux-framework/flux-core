@@ -20,7 +20,7 @@ void attr_destroy (attr_t *attrs);
 /* Register/unregister message handlers
  */
 int attr_register_handlers (attr_t *attrs, flux_t *h);
-void attr_unregister_handlers (void);
+void attr_unregister_handlers (attr_t *attrs);
 
 /* Delete an attribute
  */

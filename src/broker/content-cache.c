@@ -71,6 +71,7 @@ struct cache_entry {
 struct content_cache {
     flux_t *h;
     flux_t *enclosing_h;
+    flux_msg_handler_t **handlers;
     uint32_t rank;
     zhash_t *entries;
     uint8_t backing:1;              /* 'content.backing' service available */
@@ -854,14 +855,16 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
 /* Initialization
  */
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request, FLUX_ROLE_USER, NULL },
-    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request, FLUX_ROLE_USER, NULL },
-    { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "content.flush",     content_flush_request, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,   "hb",                heartbeat_event, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request,
+      FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request,
+      FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content.flush",     content_flush_request, 0 },
+    { FLUX_MSGTYPE_EVENT,   "hb",                heartbeat_event, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -869,7 +872,7 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
 {
     cache->h = h;
 
-    if (flux_msg_handler_addvec (h, handlers, cache) < 0)
+    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
         return -1;
     if (flux_get_rank (h, &cache->rank) < 0)
         return -1;
@@ -975,7 +978,7 @@ void content_cache_destroy (content_cache_t *cache)
     if (cache) {
         if (cache->h) {
             (void)flux_event_unsubscribe (cache->h, "hb");
-            flux_msg_handler_delvec (handlers);
+            flux_msg_handler_delvec (cache->handlers);
         }
         if (cache->backing_name)
             free (cache->backing_name);

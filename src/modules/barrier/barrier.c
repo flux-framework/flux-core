@@ -327,9 +327,9 @@ static void timeout_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 static struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,     "barrier.enter",       enter_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,     "barrier.disconnect",  disconnect_request_cb, 0, NULL },
-    { FLUX_MSGTYPE_EVENT,       "barrier.exit",        exit_event_cb, 0, NULL },
+    { FLUX_MSGTYPE_REQUEST, "barrier.enter",       enter_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "barrier.disconnect",  disconnect_request_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "barrier.exit",        exit_event_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -337,6 +337,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     barrier_ctx_t *ctx = getctx (h);
+    flux_msg_handler_t **handlers = NULL;
 
     if (!ctx)
         goto done;
@@ -344,18 +345,17 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_event_subscribe");
         goto done;
     }
-    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done_unreg;
+        goto done;
     }
     rc = 0;
-done_unreg:
-    flux_msg_handler_delvec (htab);
 done:
+    flux_msg_handler_delvec (handlers);
     return rc;
 }
 

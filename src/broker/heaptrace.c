@@ -38,6 +38,8 @@
 #include <flux/core.h>
 #include "heaptrace.h"
 
+static flux_msg_handler_t **handlers = NULL;
+
 static void start_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
@@ -111,10 +113,10 @@ error:
         FLUX_LOG_ERROR (h);
 }
 
-static struct flux_msg_handler_spec handlers[] = {
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.start",  start_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.dump",   dump_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST, "heaptrace.stop",   stop_cb, 0, NULL },
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "heaptrace.start",  start_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "heaptrace.dump",   dump_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "heaptrace.stop",   stop_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -126,7 +128,7 @@ static void heaptrace_finalize (void *arg)
 int heaptrace_initialize (flux_t *h)
 {
     char *dummy = "hello";
-    if (flux_msg_handler_addvec (h, handlers, NULL) < 0)
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0)
         return -1;
     flux_aux_set (h, "flux::heaptrace", dummy, heaptrace_finalize);
     return 0;

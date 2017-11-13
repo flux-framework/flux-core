@@ -103,9 +103,9 @@ void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
         free (item);
 }
 
-struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     "hb",              heartbeat_cb, 0, NULL },
-    { FLUX_MSGTYPE_REQUEST,   "treduce.forward", forward_cb, 0, NULL },
+const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT,     "hb",              heartbeat_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "treduce.forward", forward_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -123,6 +123,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     uint32_t rank;
     double timeout = 0.;
     int flags;
+    flux_msg_handler_t **handlers = NULL;
 
     if (argc == 1) {
         timeout = strtod (argv[0], NULL);
@@ -139,11 +140,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         return -1;
     if (flux_event_subscribe (h, "hb") < 0)
         return -1;
-    if (flux_msg_handler_addvec (h, htab, &ctx) < 0)
+    if (flux_msg_handler_addvec (h, htab, &ctx, &handlers) < 0)
         return -1;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         return -1;
-    flux_msg_handler_delvec (htab);
+    flux_msg_handler_delvec (handlers);
     return 0;
 }
 
