@@ -147,10 +147,13 @@ static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
 int flux_kvs_unwatch (flux_t *h, const char *key)
 {
     flux_future_t *f = NULL;
+    const char *namespace = KVS_PRIMARY_NAMESPACE;
     int rc = -1;
 
     if (!(f = flux_rpc_pack (h, "kvs.unwatch", FLUX_NODEID_ANY, 0,
-                             "{s:s}", "key", key)))
+                             "{s:s s:s}",
+                             "key", key,
+                             "namespace", namespace)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -232,6 +235,7 @@ static flux_future_t *kvs_watch_rpc (flux_t *h, const char *key,
                                      const char *json_str, int flags)
 {
     flux_future_t *f;
+    const char *namespace = KVS_PRIMARY_NAMESPACE;
     json_t *val = NULL;
     int saved_errno;
 
@@ -242,8 +246,9 @@ static flux_future_t *kvs_watch_rpc (flux_t *h, const char *key,
         goto error;
     }
     if (!(f = flux_rpc_pack (h, "kvs.watch", FLUX_NODEID_ANY, 0,
-                             "{s:s s:i s:o}",
+                             "{s:s s:s s:i s:o}",
                              "key", key,
+                             "namespace", namespace,
                              "flags", flags,
                              "val", val))) {
         goto error;

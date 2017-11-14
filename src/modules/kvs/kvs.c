@@ -91,7 +91,7 @@ struct kvs_cb_data {
     int errnum;
 };
 
-static struct kvsroot *getroot (kvs_ctx_t *ctx);
+static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace);
 static int setroot_event_send (kvs_ctx_t *ctx, json_t *names);
 static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -459,7 +459,7 @@ static void commit_apply (commit_t *c)
     int errnum = 0;
     commit_process_t ret;
 
-    root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY);
+    root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE);
 
     /* root must exist in hash by this point b/c we were called
      * after a fence/commit request */
@@ -723,19 +723,21 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
+        const char *namespace;
         struct kvsroot *root;
 
         ctx = arg;
 
-        if (!(root = getroot (ctx)))
-            goto done;
-
-        if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
+        if (flux_request_unpack (msg, NULL, "{ s:s s:s s:i }",
                                  "key", &key,
+                                 "namespace", &namespace,
                                  "flags", &flags) < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
+
+        if (!(root = getroot (ctx, namespace)))
+            goto done;
 
         /* rootdir is optional */
         (void)flux_request_unpack (msg, NULL, "{ s:o }",
@@ -855,6 +857,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_msg_t *cpy = NULL;
     struct kvsroot *root = NULL;
     const char *key;
+    const char *namespace;
     int flags;
     lookup_t *lh = NULL;
     wait_t *wait = NULL;
@@ -868,16 +871,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (lookup_validate (arg) == false) {
         ctx = arg;
 
-        if (!(root = getroot (ctx)))
-            goto done;
-
-        if (flux_request_unpack (msg, NULL, "{ s:s s:o s:i }",
+        if (flux_request_unpack (msg, NULL, "{ s:s s:s s:o s:i }",
                                  "key", &key,
+                                 "namespace", &namespace,
                                  "val", &oval,
                                  "flags", &flags) < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
+
+        if (!(root = getroot (ctx, namespace)))
+            goto done;
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
@@ -953,16 +957,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* we didn't initialize these values on a replay, get them */
     if (isreplay) {
-        if (!(root = getroot (ctx)))
-            goto done;
-
-        if (flux_request_unpack (msg, NULL, "{ s:s s:o s:i }",
+        if (flux_request_unpack (msg, NULL, "{ s:s s:s s:o s:i }",
                                  "key", &key,
+                                 "namespace", &namespace,
                                  "val", &oval,
                                  "flags", &flags) < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
             goto done;
         }
+
+        if (!(root = getroot (ctx, namespace)))
+            goto done;
     }
 
     /* Value changed or this is the initial request, so there will be
@@ -979,8 +984,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (!(cpy = flux_msg_copy (msg, false)))
             goto done;
 
-        if (flux_msg_pack (cpy, "{ s:s s:O s:i }",
+        if (flux_msg_pack (cpy, "{ s:s s:s s:O s:i }",
                            "key", key,
+                           "namespace", namespace,
                            "val", val,
                            "flags", flags & ~KVS_WATCH_FIRST) < 0) {
             flux_log_error (h, "%s: flux_msg_pack", __FUNCTION__);
@@ -1059,19 +1065,23 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
+    const char *namespace;
     const char *key;
     unwatch_param_t p = { NULL, NULL };
     int errnum = 0;
 
-    /* if root not initialized, success automatically */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
-        goto done;
-
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "key", &key) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:s s:s }",
+                             "namespace", &namespace,
+                             "key", &key) < 0) {
         errnum = errno;
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto done;
     }
+
+    /* if root not initialized, success automatically */
+    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+        goto done;
+
     if (!(p.key = kvs_util_normalize_key (key, NULL))) {
         errnum = errno;
         goto done;
@@ -1150,25 +1160,28 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
+    const char *namespace;
     const char *name;
     int nprocs, flags;
     json_t *ops = NULL;
     fence_t *f;
 
-    /* This should be impossible given we are on rank 0 */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))) {
-        flux_log_error (h, "%s: root not initialized", __FUNCTION__);
-        return;
-    }
-
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
                              "ops", &ops,
                              "name", &name,
+                             "namespace", &namespace,
                              "flags", &flags,
                              "nprocs", &nprocs) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
+
+    /* namespace must exist given we are on rank 0 */
+    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+        flux_log_error (h, "%s: root not initialized", __FUNCTION__);
+        return;
+    }
+
     /* FIXME: generate a kvs.fence.abort (or similar) if an error
      * occurs after we know the fence name
      */
@@ -1207,22 +1220,25 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
+    const char *namespace;
     const char *name;
     int saved_errno, nprocs, flags;
     json_t *ops = NULL;
     fence_t *f;
 
-    if (!(root = getroot (ctx)))
-        goto error;
-
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
                              "ops", &ops,
                              "name", &name,
+                             "namespace", &namespace,
                              "flags", &flags,
                              "nprocs", &nprocs) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
+
+    if (!(root = getroot (ctx, namespace)))
+        goto error;
+
     if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
             flux_log_error (h, "%s: fence_create", __FUNCTION__);
@@ -1257,9 +1273,10 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_future_t *f;
 
         if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
-                                 "{ s:O s:s s:i s:i }",
+                                 "{ s:O s:s s:s s:i s:i }",
                                  "ops", ops,
                                  "name", name,
+                                 "namespace", namespace,
                                  "flags", flags,
                                  "nprocs", nprocs))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
@@ -1281,18 +1298,21 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    const char *namespace;
     struct kvsroot *root;
     int saved_errno, rootseq;
     wait_t *wait = NULL;
 
-    if (!(root = getroot (ctx)))
-        goto error;
-
-    if (flux_request_unpack (msg, NULL, "{ s:i }",
-                             "rootseq", &rootseq) < 0) {
+    if (flux_request_unpack (msg, NULL, "{ s:i s:s }",
+                             "rootseq", &rootseq,
+                             "namespace", &namespace) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
+
+    if (!(root = getroot (ctx, namespace)))
+        goto error;
+
     if (root->seq < rootseq) {
         if (!(wait = wait_create_msg_handler (h, mh, msg,
                                               sync_request_cb, arg)))
@@ -1323,16 +1343,21 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    const char *namespace;
     struct kvsroot *root;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }",
+                             "namespace", &namespace) < 0) {
+        flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
 
     /* If root is not initialized, we have to intialize ourselves
      * first.
      */
-    if (!(root = getroot (ctx)))
+    if (!(root = getroot (ctx, namespace)))
         goto error;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (flux_respond_pack (h, msg, "{ s:i s:s }",
                            "rootseq", root->seq,
                            "rootref", root->ref) < 0) {
@@ -1346,14 +1371,17 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int getroot_rpc (kvs_ctx_t *ctx, int *rootseq, blobref_t rootref)
+static int getroot_rpc (kvs_ctx_t *ctx, const char *namespace, int *rootseq,
+                        blobref_t rootref)
 {
     flux_future_t *f;
     const char *ref;
     int saved_errno, rc = -1;
 
     /* XXX: future make asynchronous */
-    if (!(f = flux_rpc (ctx->h, "kvs.getroot", NULL, FLUX_NODEID_UPSTREAM, 0))) {
+    if (!(f = flux_rpc_pack (ctx->h, "kvs.getroot", FLUX_NODEID_UPSTREAM, 0,
+                             "{ s:s }",
+                             "namespace", namespace))) {
         saved_errno = errno;
         goto done;
     }
@@ -1389,7 +1417,7 @@ static void destroy_root (void *data)
     }
 }
 
-static struct kvsroot *create_root (kvs_ctx_t *ctx) {
+static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
     struct kvsroot *root;
     int save_errnum;
 
@@ -1409,15 +1437,15 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx) {
         goto error;
     }
 
-    if (zhash_insert (ctx->roothash, KVS_PRIMARY_ROOT_KEY, root) < 0) {
+    if (zhash_insert (ctx->roothash, namespace, root) < 0) {
         flux_log_error (ctx->h, "zhash_insert");
         goto error;
     }
 
-    if (!zhash_freefn (ctx->roothash, KVS_PRIMARY_ROOT_KEY, destroy_root)) {
+    if (!zhash_freefn (ctx->roothash, namespace, destroy_root)) {
         flux_log_error (ctx->h, "zhash_freefn");
         save_errnum = errno;
-        zhash_delete (ctx->roothash, KVS_PRIMARY_ROOT_KEY);
+        zhash_delete (ctx->roothash, namespace);
         errno = save_errnum;
         goto error;
     }
@@ -1431,18 +1459,18 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx) {
     return NULL;
 }
 
-static struct kvsroot *getroot (kvs_ctx_t *ctx) {
+static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
     struct kvsroot *root;
     blobref_t rootref;
     int rootseq;
 
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))) {
-        if (getroot_rpc (ctx, &rootseq, rootref) < 0) {
+    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+        if (getroot_rpc (ctx, namespace, &rootseq, rootref) < 0) {
             flux_log_error (ctx->h, "getroot_rpc");
             return NULL;
         }
 
-        if (!(root = create_root (ctx))) {
+        if (!(root = create_root (ctx, namespace))) {
             flux_log_error (ctx->h, "create_root");
             return NULL;
         }
@@ -1461,7 +1489,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
     int errnum;
 
     /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE)))
         return;
 
     if (flux_event_unpack (msg, NULL, "{ s:o s:i }",
@@ -1554,7 +1582,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *names = NULL;
 
     /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE)))
         return;
 
     if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
@@ -1588,7 +1616,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
 
     assert (ctx->rank == 0);
 
-    root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY);
+    root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE);
 
     /* root must exist in hash by this point b/c we were called
      * after a completed fence/commit */
@@ -1656,7 +1684,7 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     char *sender = NULL;
 
     /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE)))
         return;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -1681,19 +1709,24 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvsroot *root;
+    const char *namespace;
     json_t *t = NULL;
+    struct kvsroot *root;
     tstat_t ts = { .min = 0.0, .max = 0.0, .M = 0.0, .S = 0.0, .newM = 0.0,
                    .newS = 0.0, .n = 0 };
     int size = 0, incomplete = 0, dirty = 0;
     int rc = -1;
     double scale = 1E-3;
 
-    /* if root not initialized, respond with all zeroes as stats */
-    if ((root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))) {
-        if (flux_request_decode (msg, NULL, NULL) < 0)
-            goto done;
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto done;
 
+    if (flux_request_unpack (msg, NULL, "{ s:s }",
+                             "namespace", &namespace) < 0)
+        namespace = KVS_PRIMARY_NAMESPACE;
+
+    /* if root not initialized, respond with all zeroes as stats */
+    if ((root = zhash_lookup (ctx->roothash, namespace))) {
         if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
             goto done;
     }
@@ -1902,8 +1935,8 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
 
-        if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))) {
-            if (!(root = create_root (ctx))) {
+        if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE))) {
+            if (!(root = create_root (ctx, KVS_PRIMARY_NAMESPACE))) {
                 flux_log_error (h, "create_root");
                 goto done;
             }

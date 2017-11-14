@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define KVS_PRIMARY_ROOT_KEY "primary"
+#define KVS_PRIMARY_NAMESPACE "primary"
 
 enum {
     FLUX_KVS_READDIR = 1,

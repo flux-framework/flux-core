@@ -18,8 +18,9 @@ void send_watch_requests (flux_t *h, const char *key)
     int flags = KVS_WATCH_FIRST;
     flux_mrpc_t *r;
 
-    if (!(r = flux_mrpcf (h, "kvs.watch", "all", 0, "{s:s s:i s:n}",
+    if (!(r = flux_mrpcf (h, "kvs.watch", "all", 0, "{s:s s:s s:i s:n}",
                                                     "key", key,
+                                                    "namespace", KVS_PRIMARY_NAMESPACE,
                                                     "flags", flags,
                                                     "val")))
         log_err_exit ("flux_mrpc kvs.watch");

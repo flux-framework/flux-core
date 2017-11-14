@@ -99,6 +99,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
 {
     struct lookup_ctx *ctx;
     flux_future_t *f;
+    const char *namespace = KVS_PRIMARY_NAMESPACE;
 
     if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
         errno = EINVAL;
@@ -106,9 +107,11 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
     }
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
-    if (!(f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0, "{s:s s:i}",
-                                                         "key", key,
-                                                         "flags", flags))) {
+    if (!(f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0,
+                             "{s:s s:s s:i}",
+                             "key", key,
+                             "namespace", namespace,
+                             "flags", flags))) {
         free_ctx (ctx);
         return NULL;
     }
@@ -140,6 +143,8 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         }
     }
     else {
+        const char *namespace = KVS_PRIMARY_NAMESPACE;
+
         if (!(ctx->atref = strdup (treeobj)))
             return NULL;
         if (!(obj = json_loads (treeobj, 0, NULL))) {
@@ -147,9 +152,11 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
             return NULL;
         }
         if (!(f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0,
-                                    "{s:s s:i s:O}", "key", key,
-                                                     "flags", flags,
-                                                     "rootdir", obj))) {
+                                 "{s:s s:s s:i s:O}",
+                                 "key", key,
+                                 "namespace", namespace,
+                                 "flags", flags,
+                                 "rootdir", obj))) {
             free_ctx (ctx);
             json_decref (obj);
             return NULL;

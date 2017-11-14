@@ -30,10 +30,12 @@
 int flux_kvs_get_version (flux_t *h, int *versionp)
 {
     flux_future_t *f;
+    const char *namespace = KVS_PRIMARY_NAMESPACE;
     int version;
     int rc = -1;
 
-    if (!(f = flux_rpc (h, "kvs.getroot", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
+                             "namespace", namespace)))
         goto done;
     if (flux_rpc_get_unpack (f, "{ s:i }", "rootseq", &version) < 0)
         goto done;
@@ -48,10 +50,12 @@ done:
 int flux_kvs_wait_version (flux_t *h, int version)
 {
     flux_future_t *f;
+    const char *namespace = KVS_PRIMARY_NAMESPACE;
     int ret = -1;
 
-    if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i }",
-                             "rootseq", version)))
+    if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
+                             "rootseq", version,
+                             "namespace", namespace)))
         goto done;
     /* N.B. response contains (rootseq, rootref) but we don't need it.
      */
