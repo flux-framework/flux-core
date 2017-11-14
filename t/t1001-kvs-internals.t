@@ -267,4 +267,34 @@ test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 	flux exec sh -c "flux kvs wait ${VERS} && ! flux kvs get --json $DIR.xxx"
 '
 
+#
+# test clear of stats
+#
+
+# each store of largeval will increase the noop store count, b/c we
+# know that the identical large value will be cached as raw data
+
+test_expect_success 'kvs: clear stats locally' '
+        flux kvs unlink -Rf $DIR &&
+        flux module stats -c kvs &&
+        flux module stats kvs | grep no-op | grep -q 0 &&
+        flux kvs put --json $DIR.largeval1=$largeval &&
+        flux kvs put --json $DIR.largeval2=$largeval &&
+        ! flux module stats kvs | grep no-op | grep -q 0 &&
+        flux module stats -c kvs &&
+        flux module stats kvs | grep no-op | grep -q 0
+'
+
+test_expect_success 'kvs: clear stats globally' '
+        flux kvs unlink -Rf $DIR &&
+        flux module stats -C kvs &&
+        flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        for i in `seq 0 $((${SIZE} - 1))`; do
+            flux exec -r $i sh -c "flux kvs put --json $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
+        done &&
+        ! flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0" &&
+        flux module stats -C kvs &&
+        flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0"
+'
+
 test_done
