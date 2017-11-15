@@ -65,6 +65,8 @@ const bool event_includes_rootdir = true;
 struct kvsroot {
     int seq;
     blobref_t ref;
+    waitqueue_t *watchlist;
+    int watchlist_lastrun_epoch;
 };
 
 typedef struct {
@@ -72,8 +74,6 @@ typedef struct {
     struct cache *cache;    /* blobref => cache_entry */
     zhash_t *roothash;
     commit_mgr_t *cm;
-    waitqueue_t *watchlist;
-    int watchlist_lastrun_epoch;
     int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
@@ -106,8 +106,6 @@ static void freectx (void *arg)
         cache_destroy (ctx->cache);
         zhash_destroy (&ctx->roothash);
         commit_mgr_destroy (ctx->cm);
-        if (ctx->watchlist)
-            wait_queue_destroy (ctx->watchlist);
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
@@ -138,9 +136,8 @@ static kvs_ctx_t *getctx (flux_t *h)
         }
         ctx->cache = cache_create ();
         ctx->roothash = zhash_new ();
-        ctx->watchlist = wait_queue_create ();
         ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, h, ctx);
-        if (!ctx->cache || !ctx->roothash || !ctx->watchlist || !ctx->cm) {
+        if (!ctx->cache || !ctx->roothash || !ctx->cm) {
             saved_errno = ENOMEM;
             goto error;
         }
@@ -394,9 +391,9 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
         /* log error on wait_runqueue(), don't error out.  watchers
          * may miss value change, but will never get older one.
          * Maintains consistency model */
-        if (wait_runqueue (ctx->watchlist) < 0)
+        if (wait_runqueue (root->watchlist) < 0)
             flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
-        ctx->watchlist_lastrun_epoch = ctx->epoch;
+        root->watchlist_lastrun_epoch = ctx->epoch;
     }
 }
 
@@ -655,21 +652,23 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    /* nothing to do after setting epoch if root not initialized */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
-        return;
+    root = zhash_first (ctx->roothash);
+    while (root) {
 
-    /* "touch" objects involved in watched keys */
-    if (ctx->epoch - ctx->watchlist_lastrun_epoch > max_lastuse_age) {
-        /* log error on wait_runqueue(), don't error out.  watchers
-         * may miss value change, but will never get older one.
-         * Maintains consistency model */
-        if (wait_runqueue (ctx->watchlist) < 0)
-            flux_log_error (h, "%s: wait_runqueue", __FUNCTION__);
-        ctx->watchlist_lastrun_epoch = ctx->epoch;
+        /* "touch" objects involved in watched keys */
+        if (ctx->epoch - root->watchlist_lastrun_epoch > max_lastuse_age) {
+            /* log error on wait_runqueue(), don't error out.  watchers
+             * may miss value change, but will never get older one.
+             * Maintains consistency model */
+            if (wait_runqueue (root->watchlist) < 0)
+                flux_log_error (h, "%s: wait_runqueue", __FUNCTION__);
+            root->watchlist_lastrun_epoch = ctx->epoch;
+        }
+        /* "touch" root */
+        (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
+
+        root = zhash_next (ctx->roothash);
     }
-    /* "touch" root */
-    (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
 
     if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
@@ -837,6 +836,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *oval = NULL;
     json_t *val = NULL;
     flux_msg_t *cpy = NULL;
+    struct kvsroot *root = NULL;
     const char *key;
     int flags;
     lookup_t *lh = NULL;
@@ -849,7 +849,6 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
-        struct kvsroot *root;
         ctx = arg;
 
         if (!(root = getroot (ctx)))
@@ -937,6 +936,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* we didn't initialize these values on a replay, get them */
     if (isreplay) {
+        if (!(root = getroot (ctx)))
+            goto done;
+
         if (flux_request_unpack (msg, NULL, "{ s:s s:o s:i }",
                                  "key", &key,
                                  "val", &oval,
@@ -953,7 +955,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         out = true;
 
     /* No reply sent or this is a multi-response watch request.
-     * Arrange to wait on ctx->watchlist for each new commit.
+     * Arrange to wait on root->watchlist for each new commit.
      * Reconstruct the payload with 'first' flag clear, and updated value.
      */
     if (!out || !(flags & KVS_WATCH_ONCE)) {
@@ -967,10 +969,11 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "%s: flux_msg_pack", __FUNCTION__);
             goto done;
         }
+
         if (!(watcher = wait_create_msg_handler (h, mh, cpy,
                                                  watch_request_cb, ctx)))
             goto done;
-        if (wait_addqueue (ctx->watchlist, watcher) < 0) {
+        if (wait_addqueue (root->watchlist, watcher) < 0) {
             saved_errno = errno;
             wait_destroy (watcher);
             errno = saved_errno;
@@ -1038,12 +1041,13 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                 const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
     const char *key;
     unwatch_param_t p = { NULL, NULL };
     int errnum = 0;
 
     /* if root not initialized, success automatically */
-    if (!zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
         goto done;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "key", &key) < 0) {
@@ -1066,7 +1070,7 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * but cache_wait_destroy_msg() fails, it's not that big of a
      * deal.  The current state is still maintained.
      */
-    if (wait_destroy_msg (ctx->watchlist, unwatch_cmp, &p) < 0) {
+    if (wait_destroy_msg (root->watchlist, unwatch_cmp, &p) < 0) {
         errnum = errno;
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
         goto done;
@@ -1273,7 +1277,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (!(wait = wait_create_msg_handler (h, mh, msg,
                                               sync_request_cb, arg)))
             goto error;
-        if (wait_addqueue (ctx->watchlist, wait) < 0) {
+        if (wait_addqueue (root->watchlist, wait) < 0) {
             saved_errno = errno;
             wait_destroy (wait);
             errno = saved_errno;
@@ -1353,28 +1357,50 @@ done:
     return rc;
 }
 
+static void destroy_root (void *data)
+{
+    if (data) {
+        struct kvsroot *root = data;
+        if (root->watchlist)
+            wait_queue_destroy (root->watchlist);
+        free (data);
+    }
+}
+
 static struct kvsroot *create_root (kvs_ctx_t *ctx) {
     struct kvsroot *root;
+    int save_errnum;
 
     if (!(root = calloc (1, sizeof (*root)))) {
         flux_log_error (ctx->h, "calloc");
         return NULL;
     }
 
-    if (zhash_insert (ctx->roothash, KVS_PRIMARY_ROOT_KEY, root) < 0) {
-        flux_log_error (ctx->h, "zhash_insert");
-        free (root);
-        return NULL;
+    if (!(root->watchlist = wait_queue_create ())) {
+        flux_log_error (ctx->h, "wait_queue_create");
+        goto error;
     }
 
-    if (!zhash_freefn (ctx->roothash, KVS_PRIMARY_ROOT_KEY, free)) {
+    if (zhash_insert (ctx->roothash, KVS_PRIMARY_ROOT_KEY, root) < 0) {
+        flux_log_error (ctx->h, "zhash_insert");
+        goto error;
+    }
+
+    if (!zhash_freefn (ctx->roothash, KVS_PRIMARY_ROOT_KEY, destroy_root)) {
         flux_log_error (ctx->h, "zhash_freefn");
+        save_errnum = errno;
         zhash_delete (ctx->roothash, KVS_PRIMARY_ROOT_KEY);
-        free (root);
-        return NULL;
+        errno = save_errnum;
+        goto error;
     }
 
     return root;
+
+ error:
+    save_errnum = errno;
+    destroy_root (root);
+    errno = save_errnum;
+    return NULL;
 }
 
 static struct kvsroot *getroot (kvs_ctx_t *ctx) {
@@ -1597,10 +1623,11 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
     char *sender = NULL;
 
     /* if root not initialized, nothing to do */
-    if (!zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
         return;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -1614,7 +1641,7 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * but cache_wait_destroy_msg() fails, it's not that big of a
      * deal.  The current state is still maintained.
      */
-    if (wait_destroy_msg (ctx->watchlist, disconnect_cmp, sender) < 0)
+    if (wait_destroy_msg (root->watchlist, disconnect_cmp, sender) < 0)
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
     if (cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender) < 0)
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
@@ -1658,7 +1685,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                            "obj size (KiB)", t,
                            "#obj dirty", dirty,
                            "#obj incomplete", incomplete,
-                           "#watchers", wait_queue_length (ctx->watchlist),
+                           "#watchers",
+                               root ? wait_queue_length (root->watchlist) : 0,
                            "#no-op stores", commit_mgr_get_noop_stores (ctx->cm),
                            "#faults", ctx->faults,
                            "store revision", root ? root->seq : 0) < 0) {
