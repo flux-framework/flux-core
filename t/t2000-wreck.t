@@ -315,7 +315,7 @@ test_expect_success 'flux-wreck: attach with stdin' '
 	EOF
 	test_cmp output.attach_in expected.attach_in
 '
-test_expect_success 'flux-werck: attach --label-io' '
+test_expect_success 'flux-wreck: attach --label-io' '
 	flux wreckrun -l -n4 --output=expected.attach-l echo bazz >/dev/null &&
 	flux wreck attach --label-io $(last_job_id) |sort > output.attach-l &&
         sort expected.attach-l > x && mv x expected.attach-l &&
