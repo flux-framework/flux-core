@@ -65,6 +65,7 @@ const bool event_includes_rootdir = true;
 struct kvsroot {
     int seq;
     blobref_t ref;
+    commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
 };
@@ -73,7 +74,6 @@ typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
     zhash_t *roothash;
-    commit_mgr_t *cm;
     int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
@@ -105,7 +105,6 @@ static void freectx (void *arg)
     if (ctx) {
         cache_destroy (ctx->cache);
         zhash_destroy (&ctx->roothash);
-        commit_mgr_destroy (ctx->cm);
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
@@ -136,8 +135,7 @@ static kvs_ctx_t *getctx (flux_t *h)
         }
         ctx->cache = cache_create ();
         ctx->roothash = zhash_new ();
-        ctx->cm = commit_mgr_create (ctx->cache, ctx->hash_name, h, ctx);
-        if (!ctx->cache || !ctx->roothash || !ctx->cm) {
+        if (!ctx->cache || !ctx->roothash) {
             saved_errno = ENOMEM;
             goto error;
         }
@@ -461,14 +459,14 @@ static void commit_apply (commit_t *c)
     int errnum = 0;
     commit_process_t ret;
 
-    if ((errnum = commit_get_aux_errnum (c)))
-        goto done;
-
     root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY);
 
     /* root must exist in hash by this point b/c we were called
      * after a fence/commit request */
     assert (root);
+
+    if ((errnum = commit_get_aux_errnum (c)))
+        goto done;
 
     if ((ret = commit_process (c,
                                ctx->epoch,
@@ -560,7 +558,7 @@ done:
     /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
-    commit_mgr_remove_commit (ctx->cm, c);
+    commit_mgr_remove_commit (root->cm, c);
     return;
 
 stall:
@@ -571,8 +569,21 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
+    bool ready = false;
 
-    if (commit_mgr_commits_ready (ctx->cm))
+    root = zhash_first (ctx->roothash);
+    while (root) {
+
+        if (commit_mgr_commits_ready (root->cm)) {
+            ready = true;
+            break;
+        }
+
+        root = zhash_next (ctx->roothash);
+    }
+
+    if (ready)
         flux_watcher_start (ctx->idle_w);
 }
 
@@ -580,19 +591,25 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
     commit_t *c;
 
     flux_watcher_stop (ctx->idle_w);
 
-    if ((c = commit_mgr_get_ready_commit (ctx->cm))) {
-        if (ctx->commit_merge) {
-            /* if merge fails, set errnum in commit_t, let
-             * commit_apply() handle error handling.
-             */
-            if (commit_mgr_merge_ready_commits (ctx->cm) < 0)
-                commit_set_aux_errnum (c, errno);
+    root = zhash_first (ctx->roothash);
+    while (root) {
+        if ((c = commit_mgr_get_ready_commit (root->cm))) {
+            if (ctx->commit_merge) {
+                /* if merge fails, set errnum in commit_t, let
+                 * commit_apply() handle error handling.
+                 */
+                if (commit_mgr_merge_ready_commits (root->cm) < 0)
+                    commit_set_aux_errnum (c, errno);
+            }
+            commit_apply (c);
         }
-        commit_apply (c);
+
+        root = zhash_next (ctx->roothash);
     }
 }
 
@@ -1102,7 +1119,8 @@ static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
     return 0;
 }
 
-static void finalize_fences_bynames (kvs_ctx_t *ctx, json_t *names, int errnum)
+static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
+                                     json_t *names, int errnum)
 {
     int i, len;
     json_t *name;
@@ -1118,9 +1136,9 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, json_t *names, int errnum)
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = commit_mgr_lookup_fence (ctx->cm, json_string_value (name)))) {
+        if ((f = commit_mgr_lookup_fence (root->cm, json_string_value (name)))) {
             fence_iter_request_copies (f, finalize_fence_req, &d);
-            commit_mgr_remove_fence (ctx->cm, json_string_value (name));
+            commit_mgr_remove_fence (root->cm, json_string_value (name));
         }
     }
 }
@@ -1131,13 +1149,14 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
     const char *name;
     int nprocs, flags;
     json_t *ops = NULL;
     fence_t *f;
 
     /* This should be impossible given we are on rank 0 */
-    if (!zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)) {
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))) {
         flux_log_error (h, "%s: root not initialized", __FUNCTION__);
         return;
     }
@@ -1153,12 +1172,12 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     /* FIXME: generate a kvs.fence.abort (or similar) if an error
      * occurs after we know the fence name
      */
-    if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
+    if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
             flux_log_error (h, "%s: fence_create", __FUNCTION__);
             return;
         }
-        if (commit_mgr_add_fence (ctx->cm, f) < 0) {
+        if (commit_mgr_add_fence (root->cm, f) < 0) {
             flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
             return;
@@ -1172,7 +1191,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    if (commit_mgr_process_fence_request (ctx->cm, f) < 0) {
+    if (commit_mgr_process_fence_request (root->cm, f) < 0) {
         flux_log_error (h, "%s: commit_mgr_process_fence_request", __FUNCTION__);
         return;
     }
@@ -1187,12 +1206,13 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
     const char *name;
     int saved_errno, nprocs, flags;
     json_t *ops = NULL;
     fence_t *f;
 
-    if (!getroot (ctx))
+    if (!(root = getroot (ctx)))
         goto error;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i s:i }",
@@ -1203,12 +1223,12 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
-    if (!(f = commit_mgr_lookup_fence (ctx->cm, name))) {
+    if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
             flux_log_error (h, "%s: fence_create", __FUNCTION__);
             goto error;
         }
-        if (commit_mgr_add_fence (ctx->cm, f) < 0) {
+        if (commit_mgr_add_fence (root->cm, f) < 0) {
             saved_errno = errno;
             flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
@@ -1227,7 +1247,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
 
-        if (commit_mgr_process_fence_request (ctx->cm, f) < 0) {
+        if (commit_mgr_process_fence_request (root->cm, f) < 0) {
             flux_log_error (h, "%s: commit_mgr_process_fence_request",
                             __FUNCTION__);
             goto error;
@@ -1361,6 +1381,8 @@ static void destroy_root (void *data)
 {
     if (data) {
         struct kvsroot *root = data;
+        if (root->cm)
+            commit_mgr_destroy (root->cm);
         if (root->watchlist)
             wait_queue_destroy (root->watchlist);
         free (data);
@@ -1374,6 +1396,12 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx) {
     if (!(root = calloc (1, sizeof (*root)))) {
         flux_log_error (ctx->h, "calloc");
         return NULL;
+    }
+
+    if (!(root->cm = commit_mgr_create (ctx->cache, ctx->hash_name,
+                                        ctx->h, ctx))) {
+        flux_log_error (ctx->h, "commit_mgr_create");
+        goto error;
     }
 
     if (!(root->watchlist = wait_queue_create ())) {
@@ -1428,11 +1456,12 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
     json_t *names = NULL;
     int errnum;
 
     /* if root not initialized, nothing to do */
-    if (!zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY))
+    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_ROOT_KEY)))
         return;
 
     if (flux_event_unpack (msg, NULL, "{ s:o s:i }",
@@ -1441,7 +1470,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
-    finalize_fences_bynames (ctx, names, errnum);
+    finalize_fences_bynames (ctx, root, names, errnum);
 }
 
 static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum)
@@ -1537,7 +1566,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    finalize_fences_bynames (ctx, names, 0);
+    finalize_fences_bynames (ctx, root, names, 0);
 
     /* Optimization: prime local cache with directory object, if provided
      * in event message.  Ignore failure here - object will be fetched on
@@ -1687,7 +1716,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                            "#obj incomplete", incomplete,
                            "#watchers",
                                root ? wait_queue_length (root->watchlist) : 0,
-                           "#no-op stores", commit_mgr_get_noop_stores (ctx->cm),
+                           "#no-op stores",
+                               root ? commit_mgr_get_noop_stores (root->cm) : 0,
                            "#faults", ctx->faults,
                            "store revision", root ? root->seq : 0) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
@@ -1705,16 +1735,21 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
 
 static void stats_clear (kvs_ctx_t *ctx)
 {
+    struct kvsroot *root;
+
     ctx->faults = 0;
-    commit_mgr_clear_noop_stores (ctx->cm);
+
+    root = zhash_first (ctx->roothash);
+    while (root) {
+        commit_mgr_clear_noop_stores (root->cm);
+        root = zhash_next (ctx->roothash);
+    }
 }
 
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
                                   const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-
-    /* irrelevant if root not initialized, clear stats */
 
     stats_clear (ctx);
 }
@@ -1723,8 +1758,6 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                     const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-
-    /* irrelevant if root not initialized, clear stats */
 
     stats_clear (ctx);
 
