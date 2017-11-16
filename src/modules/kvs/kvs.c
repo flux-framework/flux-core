@@ -62,14 +62,6 @@ const int max_lastuse_age = 5;
  */
 const bool event_includes_rootdir = true;
 
-struct kvsroot {
-    int seq;
-    blobref_t ref;
-    commit_mgr_t *cm;
-    waitqueue_t *watchlist;
-    int watchlist_lastrun_epoch;
-};
-
 typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
@@ -84,6 +76,16 @@ typedef struct {
     int commit_merge;
     const char *hash_name;
 } kvs_ctx_t;
+
+struct kvsroot {
+    char *namespace;
+    int seq;
+    blobref_t ref;
+    commit_mgr_t *cm;
+    waitqueue_t *watchlist;
+    int watchlist_lastrun_epoch;
+    kvs_ctx_t *ctx;
+};
 
 struct kvs_cb_data {
     kvs_ctx_t *ctx;
@@ -1409,6 +1411,8 @@ static void destroy_root (void *data)
 {
     if (data) {
         struct kvsroot *root = data;
+        if (root->namespace)
+            free (root->namespace);
         if (root->cm)
             commit_mgr_destroy (root->cm);
         if (root->watchlist)
@@ -1424,6 +1428,11 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
     if (!(root = calloc (1, sizeof (*root)))) {
         flux_log_error (ctx->h, "calloc");
         return NULL;
+    }
+
+    if (!(root->namespace = strdup (namespace))) {
+        flux_log_error (ctx->h, "strdup");
+        goto error;
     }
 
     if (!(root->cm = commit_mgr_create (ctx->cache, ctx->hash_name,
@@ -1449,6 +1458,8 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
         errno = save_errnum;
         goto error;
     }
+
+    root->ctx = ctx;
 
     return root;
 
