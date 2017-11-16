@@ -1722,9 +1722,9 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    const char *namespace;
-    json_t *t = NULL;
-    struct kvsroot *root;
+    json_t *tstats = NULL;
+    json_t *cstats = NULL;
+    json_t *nsstats = NULL;
     tstat_t ts = { .min = 0.0, .max = 0.0, .M = 0.0, .S = 0.0, .newM = 0.0,
                    .newS = 0.0, .n = 0 };
     int size = 0, incomplete = 0, dirty = 0;
@@ -1734,38 +1734,76 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto done;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &namespace) < 0)
-        namespace = KVS_PRIMARY_NAMESPACE;
-
-    /* if root not initialized, respond with all zeroes as stats */
-    if ((root = zhash_lookup (ctx->roothash, namespace))) {
+    /* if no roots are initialized, respond with all zeroes as stats */
+    if (zhash_size (ctx->roothash)) {
         if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
             goto done;
     }
 
-    if (!(t = json_pack ("{ s:i s:f s:f s:f s:f }",
-                         "count", tstat_count (&ts),
-                         "min", tstat_min (&ts)*scale,
-                         "mean", tstat_mean (&ts)*scale,
-                         "stddev", tstat_stddev (&ts)*scale,
-                         "max", tstat_max (&ts)*scale))) {
+    if (!(tstats = json_pack ("{ s:i s:f s:f s:f s:f }",
+                              "count", tstat_count (&ts),
+                              "min", tstat_min (&ts)*scale,
+                              "mean", tstat_mean (&ts)*scale,
+                              "stddev", tstat_stddev (&ts)*scale,
+                              "max", tstat_max (&ts)*scale))) {
         errno = ENOMEM;
         goto done;
     }
 
+    if (!(cstats = json_pack ("{ s:f s:O s:i s:i s:i }",
+                              "obj size total (MiB)", (double)size/1048576,
+                              "obj size (KiB)", tstats,
+                              "#obj dirty", dirty,
+                              "#obj incomplete", incomplete,
+                              "#faults", ctx->faults))) {
+        errno = ENOMEM;
+        goto done;
+    }
+
+    if (!(nsstats = json_object ())) {
+        errno = ENOMEM;
+        goto done;
+    }
+
+    if (zhash_size (ctx->roothash)) {
+        struct kvsroot *root;
+
+        root = zhash_first (ctx->roothash);
+        while (root) {
+            json_t *s;
+
+            if (!(s = json_pack ("{ s:i s:i s:i }",
+                                 "#watchers",
+                                     wait_queue_length (root->watchlist),
+                                 "#no-op stores",
+                                     commit_mgr_get_noop_stores (root->cm),
+                                 "store revision", root->seq))) {
+                errno = ENOMEM;
+                goto done;
+            }
+
+            json_object_set_new (nsstats, root->namespace, s);
+
+            root = zhash_next (ctx->roothash);
+        }
+    }
+    else {
+        json_t *s;
+
+        if (!(s = json_pack ("{ s:i s:i }",
+                             "#watchers", 0,
+                             "store revision", 0))) {
+            errno = ENOMEM;
+            goto done;
+        }
+
+        json_object_set_new (nsstats, KVS_PRIMARY_NAMESPACE, s);
+    }
+
     if (flux_respond_pack (h, msg,
-                           "{ s:f s:O s:i s:i s:i s:i s:i s:i }",
-                           "obj size total (MiB)", (double)size/1048576,
-                           "obj size (KiB)", t,
-                           "#obj dirty", dirty,
-                           "#obj incomplete", incomplete,
-                           "#watchers",
-                               root ? wait_queue_length (root->watchlist) : 0,
-                           "#no-op stores",
-                               root ? commit_mgr_get_noop_stores (root->cm) : 0,
-                           "#faults", ctx->faults,
-                           "store revision", root ? root->seq : 0) < 0) {
+                           "{ s:O s:O }",
+                           "cache", cstats,
+                           "namespace", nsstats) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto done;
     }
@@ -1776,7 +1814,9 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         if (flux_respond (h, msg, errno, NULL) < 0)
             flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     }
-    json_decref (t);
+    json_decref (tstats);
+    json_decref (cstats);
+    json_decref (nsstats);
 }
 
 static void stats_clear (kvs_ctx_t *ctx)
