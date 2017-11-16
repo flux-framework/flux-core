@@ -1683,10 +1683,6 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     char *sender = NULL;
 
-    /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE)))
-        return;
-
     if (flux_request_decode (msg, NULL, NULL) < 0)
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
@@ -1698,8 +1694,14 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * but cache_wait_destroy_msg() fails, it's not that big of a
      * deal.  The current state is still maintained.
      */
-    if (wait_destroy_msg (root->watchlist, disconnect_cmp, sender) < 0)
-        flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
+    root = zhash_first (ctx->roothash);
+    while (root) {
+
+        if (wait_destroy_msg (root->watchlist, disconnect_cmp, sender) < 0)
+            flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
+
+        root = zhash_next (ctx->roothash);
+    }
     if (cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender) < 0)
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
     free (sender);
