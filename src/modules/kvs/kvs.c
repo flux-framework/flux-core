@@ -455,17 +455,11 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *entry, void *data)
  */
 static void commit_apply (commit_t *c)
 {
-    kvs_ctx_t *ctx = commit_get_aux (c);
-    struct kvsroot *root;
+    struct kvsroot *root = commit_get_aux (c);
+    kvs_ctx_t *ctx = root->ctx;
     wait_t *wait = NULL;
     int errnum = 0;
     commit_process_t ret;
-
-    root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE);
-
-    /* root must exist in hash by this point b/c we were called
-     * after a fence/commit request */
-    assert (root);
 
     if ((errnum = commit_get_aux_errnum (c)))
         goto done;
@@ -1436,7 +1430,7 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
     }
 
     if (!(root->cm = commit_mgr_create (ctx->cache, ctx->hash_name,
-                                        ctx->h, ctx))) {
+                                        ctx->h, root))) {
         flux_log_error (ctx->h, "commit_mgr_create");
         goto error;
     }
