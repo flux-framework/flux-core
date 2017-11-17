@@ -74,6 +74,7 @@ typedef struct {
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
     int commit_merge;
+    bool events_init;            /* flag */
     const char *hash_name;
 } kvs_ctx_t;
 
@@ -1417,6 +1418,11 @@ static void destroy_root (void *data)
     }
 }
 
+static void remove_root (kvs_ctx_t *ctx, const char *namespace)
+{
+    zhash_delete (ctx->roothash, namespace);
+}
+
 static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
     struct kvsroot *root;
     int save_errnum;
@@ -1466,10 +1472,70 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
     return NULL;
 }
 
+static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
+{
+    char *setroot_topic = NULL;
+    char *error_topic = NULL;
+    int rc = -1;
+
+    /* do not want to subscribe to events that are not within our
+     * namespace, so we subscribe to only specific ones.
+     */
+
+    if (!(ctx->events_init)) {
+
+        /* These belong to all namespaces, subscribe once the first
+         * time we init a namespace */
+
+        if (flux_event_subscribe (ctx->h, "hb") < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
+
+        if (flux_event_subscribe (ctx->h, "kvs.stats.clear") < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
+
+        if (flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
+
+        ctx->events_init = true;
+    }
+
+    if (asprintf (&setroot_topic, "kvs.setroot.%s", namespace) < 0) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+
+    if (flux_event_subscribe (ctx->h, setroot_topic) < 0) {
+        flux_log_error (ctx->h, "flux_event_subscribe");
+        goto cleanup;
+    }
+
+    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+        errno = ENOMEM;
+        goto cleanup;
+    }
+
+    if (flux_event_subscribe (ctx->h, error_topic) < 0) {
+        flux_log_error (ctx->h, "flux_event_subscribe");
+        goto cleanup;
+    }
+
+    rc = 0;
+cleanup:
+    free (setroot_topic);
+    free (error_topic);
+    return rc;
+}
+
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
     struct kvsroot *root;
     blobref_t rootref;
-    int rootseq;
+    int save_errno, rootseq;
 
     if (!(root = zhash_lookup (ctx->roothash, namespace))) {
         if (getroot_rpc (ctx, namespace, &rootseq, rootref) < 0) {
@@ -1483,6 +1549,14 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
         }
 
         setroot (ctx, root, rootref, rootseq);
+
+        if (event_subscribe (ctx, namespace) < 0) {
+            save_errno = errno;
+            remove_root (ctx, namespace);
+            errno = save_errno;
+            flux_log_error (ctx->h, "event_subscribe");
+            return NULL;
+        }
     }
     return root;
 }
@@ -1504,9 +1578,16 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+    /* if root not initialized, nothing to do
+     * - it is possible to get the event due to a race between a
+     * remove and the event being sent.  But generally speaking this
+     * should be impossible to hit.
+     */
+    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
+                  __FUNCTION__, namespace);
         return;
+    }
 
     finalize_fences_bynames (ctx, root, names, errnum);
 }
@@ -1515,9 +1596,16 @@ static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
                              json_t *names, int errnum)
 {
     flux_msg_t *msg = NULL;
+    char *error_topic = NULL;
     int saved_errno, rc = -1;
 
-    if (!(msg = flux_event_pack ("kvs.error", "{ s:s s:O s:i }",
+    if (asprintf (&error_topic, "kvs.error.%s", root->namespace) < 0) {
+        saved_errno = ENOMEM;
+        flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
+        goto done;
+    }
+
+    if (!(msg = flux_event_pack (error_topic, "{ s:s s:O s:i }",
                                  "namespace", root->namespace,
                                  "names", names,
                                  "errnum", errnum))) {
@@ -1535,6 +1623,7 @@ static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
     }
     rc = 0;
 done:
+    free (error_topic);
     flux_msg_destroy (msg);
     if (rc < 0)
         errno = saved_errno;
@@ -1604,9 +1693,16 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+    /* if root not initialized, nothing to do
+     * - it is possible to get the event due to a race between a
+     * remove and the event being sent.  But generally speaking this
+     * should be impossible to hit.
+     */
+    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
+                  __FUNCTION__, namespace);
         return;
+    }
 
     finalize_fences_bynames (ctx, root, names, 0);
 
@@ -1626,6 +1722,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
     const json_t *root_dir = NULL;
     json_t *nullobj = NULL;
     flux_msg_t *msg = NULL;
+    char *setroot_topic = NULL;
     int saved_errno, rc = -1;
 
     assert (ctx->rank == 0);
@@ -1645,7 +1742,14 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         }
         root_dir = nullobj;
     }
-    if (!(msg = flux_event_pack ("kvs.setroot", "{ s:s s:i s:s s:O s:O }",
+
+    if (asprintf (&setroot_topic, "kvs.setroot.%s", root->namespace) < 0) {
+        saved_errno = ENOMEM;
+        flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
+        goto done;
+    }
+
+    if (!(msg = flux_event_pack (setroot_topic, "{ s:s s:i s:s s:O s:O }",
                                  "namespace", root->namespace,
                                  "rootseq", root->seq,
                                  "rootref", root->ref,
@@ -1665,6 +1769,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
     }
     rc = 0;
 done:
+    free (setroot_topic);
     flux_msg_destroy (msg);
     json_decref (nullobj);
     if (rc < 0)
@@ -1853,8 +1958,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",    setroot_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error",      error_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.setroot.*",  setroot_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.error.*",    error_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",    getroot_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0 },
@@ -1969,14 +2074,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     process_args (ctx, argc, argv);
-    if (flux_event_subscribe (h, "hb") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
-        goto done;
-    }
-    if (flux_event_subscribe (h, "kvs.") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
-        goto done;
-    }
     if (ctx->rank == 0) {
         struct kvsroot *root;
         blobref_t rootref;
@@ -1994,6 +2091,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
 
         setroot (ctx, root, rootref, 0);
+
+        if (event_subscribe (ctx, KVS_PRIMARY_NAMESPACE) < 0) {
+            flux_log_error (h, "event_subscribe");
+            goto done;
+        }
     }
     if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
