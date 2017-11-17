@@ -94,8 +94,10 @@ struct kvs_cb_data {
 };
 
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace);
-static int setroot_event_send (kvs_ctx_t *ctx, json_t *names);
-static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum);
+static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+                               json_t *names);
+static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+                             json_t *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -542,12 +544,12 @@ done:
                       count, opcount);
         }
         setroot (ctx, root, commit_get_newroot_ref (c), root->seq + 1);
-        setroot_event_send (ctx, fence_get_json_names (f));
+        setroot_event_send (ctx, root, fence_get_json_names (f));
     } else {
         fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, fence_get_json_names (f), errnum);
+        error_event_send (ctx, root, fence_get_json_names (f), errnum);
     }
     wait_destroy (wait);
 
@@ -1490,28 +1492,33 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
+    const char *namespace;
     json_t *names = NULL;
     int errnum;
 
-    /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE)))
-        return;
-
-    if (flux_event_unpack (msg, NULL, "{ s:o s:i }",
+    if (flux_event_unpack (msg, NULL, "{ s:s s:o s:i }",
+                           "namespace", &namespace,
                            "names", &names,
                            "errnum", &errnum) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
+
+    /* if root not initialized, nothing to do */
+    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+        return;
+
     finalize_fences_bynames (ctx, root, names, errnum);
 }
 
-static int error_event_send (kvs_ctx_t *ctx, json_t *names, int errnum)
+static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+                             json_t *names, int errnum)
 {
     flux_msg_t *msg = NULL;
     int saved_errno, rc = -1;
 
-    if (!(msg = flux_event_pack ("kvs.error", "{ s:O s:i }",
+    if (!(msg = flux_event_pack ("kvs.error", "{ s:s s:O s:i }",
+                                 "namespace", root->namespace,
                                  "names", names,
                                  "errnum", errnum))) {
         saved_errno = errno;
@@ -1581,16 +1588,14 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
+    const char *namespace;
     int rootseq;
     const char *rootref;
     json_t *rootdir = NULL;
     json_t *names = NULL;
 
-    /* if root not initialized, nothing to do */
-    if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE)))
-        return;
-
-    if (flux_event_unpack (msg, NULL, "{ s:i s:s s:o s:o }",
+    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
+                           "namespace", &namespace,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
                            "names", &names,
@@ -1598,6 +1603,10 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
+
+    /* if root not initialized, nothing to do */
+    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+        return;
 
     finalize_fences_bynames (ctx, root, names, 0);
 
@@ -1611,21 +1620,15 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     setroot (ctx, root, rootref, rootseq);
 }
 
-static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
+static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+                               json_t *names)
 {
     const json_t *root_dir = NULL;
-    struct kvsroot *root;
     json_t *nullobj = NULL;
     flux_msg_t *msg = NULL;
     int saved_errno, rc = -1;
 
     assert (ctx->rank == 0);
-
-    root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE);
-
-    /* root must exist in hash by this point b/c we were called
-     * after a completed fence/commit */
-    assert (root);
 
     if (event_includes_rootdir) {
         struct cache_entry *entry;
@@ -1642,7 +1645,8 @@ static int setroot_event_send (kvs_ctx_t *ctx, json_t *names)
         }
         root_dir = nullobj;
     }
-    if (!(msg = flux_event_pack ("kvs.setroot", "{ s:i s:s s:O s:O }",
+    if (!(msg = flux_event_pack ("kvs.setroot", "{ s:s s:i s:s s:O s:O }",
+                                 "namespace", root->namespace,
                                  "rootseq", root->seq,
                                  "rootref", root->ref,
                                  "names", names,
