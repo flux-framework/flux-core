@@ -85,6 +85,7 @@ struct kvsroot {
     commit_mgr_t *cm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
+    int flags;
     kvs_ctx_t *ctx;
 };
 
@@ -1357,9 +1358,10 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(root = getroot (ctx, namespace)))
         goto error;
 
-    if (flux_respond_pack (h, msg, "{ s:i s:s }",
+    if (flux_respond_pack (h, msg, "{ s:i s:s s:i }",
                            "rootseq", root->seq,
-                           "rootref", root->ref) < 0) {
+                           "rootref", root->ref,
+                           "flags", root->flags) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -1371,10 +1373,11 @@ error:
 }
 
 static int getroot_rpc (kvs_ctx_t *ctx, const char *namespace, int *rootseq,
-                        blobref_t rootref)
+                        blobref_t rootref, int *flagsp)
 {
     flux_future_t *f;
     const char *ref;
+    int flags;
     int saved_errno, rc = -1;
 
     /* XXX: future make asynchronous */
@@ -1384,9 +1387,10 @@ static int getroot_rpc (kvs_ctx_t *ctx, const char *namespace, int *rootseq,
         saved_errno = errno;
         goto done;
     }
-    if (flux_rpc_get_unpack (f, "{ s:i s:s }",
+    if (flux_rpc_get_unpack (f, "{ s:i s:s s:i }",
                              "rootseq", rootseq,
-                             "rootref", &ref) < 0) {
+                             "rootref", &ref,
+                             "flags", &flags) < 0) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto done;
@@ -1396,6 +1400,8 @@ static int getroot_rpc (kvs_ctx_t *ctx, const char *namespace, int *rootseq,
         goto done;
     }
     strcpy (rootref, ref);
+    if (flagsp)
+        (*flagsp) = flags;
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -1423,7 +1429,8 @@ static void remove_root (kvs_ctx_t *ctx, const char *namespace)
     zhash_delete (ctx->roothash, namespace);
 }
 
-static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
+static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
+                                    int flags) {
     struct kvsroot *root;
     int save_errnum;
 
@@ -1447,6 +1454,8 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace) {
         flux_log_error (ctx->h, "wait_queue_create");
         goto error;
     }
+
+    root->flags = flags;
 
     if (zhash_insert (ctx->roothash, namespace, root) < 0) {
         flux_log_error (ctx->h, "zhash_insert");
@@ -1535,15 +1544,15 @@ cleanup:
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
     struct kvsroot *root;
     blobref_t rootref;
-    int save_errno, rootseq;
+    int save_errno, rootseq, flags;
 
     if (!(root = zhash_lookup (ctx->roothash, namespace))) {
-        if (getroot_rpc (ctx, namespace, &rootseq, rootref) < 0) {
+        if (getroot_rpc (ctx, namespace, &rootseq, rootref, &flags) < 0) {
             flux_log_error (ctx->h, "getroot_rpc");
             return NULL;
         }
 
-        if (!(root = create_root (ctx, namespace))) {
+        if (!(root = create_root (ctx, namespace, flags))) {
             flux_log_error (ctx->h, "create_root");
             return NULL;
         }
@@ -2084,7 +2093,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
 
         if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE))) {
-            if (!(root = create_root (ctx, KVS_PRIMARY_NAMESPACE))) {
+            if (!(root = create_root (ctx, KVS_PRIMARY_NAMESPACE, 0))) {
                 flux_log_error (h, "create_root");
                 goto done;
             }
