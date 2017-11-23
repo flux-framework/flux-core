@@ -118,7 +118,7 @@ void parse_yaml_count (Resource& res, const YAML::Node &cnode)
     res.count.oper = cnode["operator"].as<char>();
     switch (res.count.oper) {
     case '+':
-    case '-':
+    case '*':
     case '^':
         break;
     default:
