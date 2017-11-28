@@ -23,6 +23,10 @@ enum {
     FLUX_KVS_APPEND = 32,
 };
 
+/* Namespace */
+flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
+                                          int flags);
+
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.
