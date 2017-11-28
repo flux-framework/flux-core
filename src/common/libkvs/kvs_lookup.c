@@ -32,6 +32,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "kvs_private.h"
 #include "kvs_dir_private.h"
 #include "kvs_lookup.h"
 #include "treeobj.h"
@@ -99,7 +100,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
 {
     struct lookup_ctx *ctx;
     flux_future_t *f;
-    const char *namespace = KVS_PRIMARY_NAMESPACE;
+    const char *namespace = get_kvs_namespace ();
 
     if (!h || !key || strlen (key) == 0 || validate_lookup_flags (flags) < 0) {
         errno = EINVAL;
@@ -143,7 +144,7 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         }
     }
     else {
-        const char *namespace = KVS_PRIMARY_NAMESPACE;
+        const char *namespace = get_kvs_namespace ();
 
         if (!(ctx->atref = strdup (treeobj)))
             return NULL;

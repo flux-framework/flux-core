@@ -27,6 +27,13 @@
 #endif
 #include <flux/core.h>
 
+const char *get_kvs_namespace (void)
+{
+    if (getenv ("FLUX_KVS_NAMESPACE"))
+        return getenv ("FLUX_KVS_NAMESPACE");
+    return KVS_PRIMARY_NAMESPACE;
+}
+
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
                                           int flags)
 {
@@ -44,7 +51,7 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
 int flux_kvs_get_version (flux_t *h, int *versionp)
 {
     flux_future_t *f;
-    const char *namespace = KVS_PRIMARY_NAMESPACE;
+    const char *namespace = get_kvs_namespace ();
     int version;
     int rc = -1;
 
@@ -64,7 +71,7 @@ done:
 int flux_kvs_wait_version (flux_t *h, int version)
 {
     flux_future_t *f;
-    const char *namespace = KVS_PRIMARY_NAMESPACE;
+    const char *namespace = get_kvs_namespace ();
     int ret = -1;
 
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",

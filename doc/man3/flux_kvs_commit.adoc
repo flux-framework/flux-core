@@ -48,6 +48,11 @@ block until the response has been received.  Both accept an optional timeout.
 was successful, indicating the entire transaction was committed, or -1
 on failure, indicating none of the transaction was committed.
 
+By default, both `flux_kvs_commit()` and `flux_kvs_fence()` operate on
+the default KVS namespace.  To use a different namespace, set the
+environment variable FLUX_KVS_NAMESPACE to the namespace you wish to
+use.
+
 FLAGS
 -----
 

@@ -48,6 +48,11 @@ _treeobj_ is a serialized RFC 11 object that references a particular
 static set of content within the KVS, effectively a snapshot.
 See `flux_kvs_lookup_get_treeobj()` below.
 
+By default, both `flux_kvs_lookup()` and `flux_kvs_lookupat()` operate
+on the default KVS namespace.  To use a different namespace, set the
+environment variable FLUX_KVS_NAMESPACE to the namespace you wish to
+use.
+
 All the functions below are variations on a common theme.  First they
 complete the lookup RPC by blocking on the response, if not already received.
 Then they interpret the result in different ways.  They may be called more

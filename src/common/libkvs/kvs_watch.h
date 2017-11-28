@@ -40,6 +40,7 @@ typedef int (*kvs_set_dir_f)(const char *key, flux_kvsdir_t *dir, void *arg,
  * Callback is triggered once during registration to get the initial value.
  * Once the reactor is (re-)entered, it will then be called each time the
  * key changes.
+ * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE
  */
 int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg);
 
@@ -49,6 +50,7 @@ int flux_kvs_watch (flux_t *h, const char *key, kvs_set_f set, void *arg);
  * KVS's hash tree namespace organization, this function will be called
  * whenever any key under this directory changes, since that forces the
  * hash references to change on parents, all the way to the root.
+ * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE
  */
 int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
                         const char *fmt, ...)
@@ -56,6 +58,7 @@ int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
 
 /* Cancel a flux_kvs_watch(), freeing server-side state, and unregistering
  * any callback.  Returns 0 on success, or -1 with errno set on error.
+ * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE
  */
 int flux_kvs_unwatch (flux_t *h, const char *key);
 
@@ -70,6 +73,8 @@ int flux_kvs_unwatch (flux_t *h, const char *key);
  *
  * If 'key' initially exists, then is removed, the function fails with
  * ENOENT and the initial value is not freed.
+ *
+ * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE
  */
 int flux_kvs_watch_once (flux_t *h, const char *key, char **json_str);
 

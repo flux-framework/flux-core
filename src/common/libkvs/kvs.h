@@ -30,6 +30,7 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.
+ * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE.
  */
 int flux_kvs_get_version (flux_t *h, int *versionp);
 int flux_kvs_wait_version (flux_t *h, int version);
