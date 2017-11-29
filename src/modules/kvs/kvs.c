@@ -1178,7 +1178,8 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* namespace must exist given we are on rank 0 */
     if (!(root = zhash_lookup (ctx->roothash, namespace))) {
-        flux_log_error (h, "%s: root not initialized", __FUNCTION__);
+        flux_log (h, LOG_ERR, "%s: namespace %s not initialized",
+                  __FUNCTION__, namespace);
         return;
     }
 
@@ -1352,11 +1353,20 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    /* If root is not initialized, we have to intialize ourselves
-     * first.
-     */
-    if (!(root = getroot (ctx, namespace)))
-        goto error;
+    if (ctx->rank == 0) {
+        if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+            flux_log (h, LOG_DEBUG, "namespace %s not found", namespace);
+            errno = ENOTSUP;
+            goto error;
+        }
+    }
+    else {
+        /* If root is not initialized, we have to intialize ourselves
+         * first.
+         */
+        if (!(root = getroot (ctx, namespace)))
+            goto error;
+    }
 
     if (flux_respond_pack (h, msg, "{ s:i s:s s:i }",
                            "rootseq", root->seq,
@@ -1547,24 +1557,31 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
     int save_errno, rootseq, flags;
 
     if (!(root = zhash_lookup (ctx->roothash, namespace))) {
-        if (getroot_rpc (ctx, namespace, &rootseq, rootref, &flags) < 0) {
-            flux_log_error (ctx->h, "getroot_rpc");
+        if (ctx->rank == 0) {
+            flux_log (ctx->h, LOG_DEBUG, "namespace %s not found", namespace);
+            errno = ENOTSUP;
             return NULL;
         }
+        else {
+            if (getroot_rpc (ctx, namespace, &rootseq, rootref, &flags) < 0) {
+                flux_log_error (ctx->h, "getroot_rpc");
+                return NULL;
+            }
 
-        if (!(root = create_root (ctx, namespace, flags))) {
-            flux_log_error (ctx->h, "create_root");
-            return NULL;
-        }
+            if (!(root = create_root (ctx, namespace, flags))) {
+                flux_log_error (ctx->h, "create_root");
+                return NULL;
+            }
 
-        setroot (ctx, root, rootref, rootseq);
+            setroot (ctx, root, rootref, rootseq);
 
-        if (event_subscribe (ctx, namespace) < 0) {
-            save_errno = errno;
-            remove_root (ctx, namespace);
-            errno = save_errno;
-            flux_log_error (ctx->h, "event_subscribe");
-            return NULL;
+            if (event_subscribe (ctx, namespace) < 0) {
+                save_errno = errno;
+                remove_root (ctx, namespace);
+                errno = save_errno;
+                flux_log_error (ctx->h, "event_subscribe");
+                return NULL;
+            }
         }
     }
     return root;
