@@ -1963,6 +1963,85 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
+static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
+{
+    struct kvsroot *root;
+    json_t *rootdir = NULL;
+    blobref_t ref;
+    void *data = NULL;
+    int len;
+
+    /* Namespace already exists */
+    if (zhash_lookup (ctx->roothash, namespace)) {
+        errno = EEXIST;
+        goto cleanup;
+    }
+
+    if (!(root = create_root (ctx, namespace, flags))) {
+        flux_log_error (ctx->h, "%s: create_root", __FUNCTION__);
+        goto cleanup;
+    }
+
+    if (!(rootdir = treeobj_create_dir ())) {
+        flux_log_error (ctx->h, "%s: treeobj_create_dir", __FUNCTION__);
+        goto cleanup_remove_root;
+    }
+
+    if (!(data = treeobj_encode (rootdir))) {
+        flux_log_error (ctx->h, "%s: treeobj_encode", __FUNCTION__);
+        goto cleanup_remove_root;
+    }
+    len = strlen (data);
+
+    if (blobref_hash (ctx->hash_name, data, len, ref) < 0) {
+        flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
+        goto cleanup_remove_root;
+    }
+
+    setroot (ctx, root, ref, 0);
+
+    if (event_subscribe (ctx, namespace) < 0) {
+        flux_log_error (ctx->h, "%s: event_subscribe", __FUNCTION__);
+        goto cleanup_remove_root;
+    }
+
+    return 0;
+
+cleanup_remove_root:
+    remove_root (ctx, namespace);
+cleanup:
+    free (data);
+    json_decref (rootdir);
+    return -1;
+}
+
+static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                         const flux_msg_t *msg, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+    const char *namespace;
+    int flags;
+
+    assert (ctx->rank == 0);
+
+    if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
+                             "namespace", &namespace,
+                             "flags", &flags) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+
+    if (namespace_create (ctx, namespace, flags) < 0) {
+        flux_log_error (h, "%s: namespace_create", __FUNCTION__);
+        goto error;
+    }
+
+    errno = 0;
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
@@ -1980,6 +2059,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",      watch_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.fence",      fence_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.create",
+                            namespace_create_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
