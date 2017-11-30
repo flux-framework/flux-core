@@ -8,7 +8,8 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	$(ZMQ_CFLAGS) \
-	-Wno-strict-aliasing -Wno-error=strict-aliasing
+	-Wno-strict-aliasing -Wno-error=strict-aliasing \
+	-Wno-parentheses -Wno-error=parentheses
 
 noinst_LTLIBRARIES = libutil.la
 
