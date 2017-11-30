@@ -83,7 +83,7 @@ static double tv_to_double (struct timeval *tv)
 
 static bool almost_is (double a, double b)
 {
-    return fabs (a - b) < 1e-6;
+    return fabs (a - b) < 1e-5;
 }
 
 int main (int argc, char *argv[])
@@ -272,10 +272,10 @@ int main (int argc, char *argv[])
     ok (string_to_tv ("2016-06-06 07:00:00.3", &tv), "string_to_tv");
 
     x = cronodate_remaining (d, tv_to_double (&tv));
-    ok (almost_is (x, 3599.700), "cronodate_remaining works: got %.3fs", x);
+    ok (almost_is (x, 3599.700), "cronodate_remaining works: got %.6fs", x);
     ok (string_to_tv ("2016-06-06 08:00:00", &tv), "string_to_tv");
     x = cronodate_remaining (d, tv_to_double (&tv));
-    ok (almost_is (x, 24*60*60), "cronodate_remaining works: got %.3fs", x);
+    ok (almost_is (x, 24*60*60), "cronodate_remaining works: got %.6fs", x);
 
     cronodate_destroy (d);
 
