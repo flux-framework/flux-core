@@ -215,7 +215,7 @@ void zio_destroy (zio_t *z)
     zio_close_dst_fd (z);
     flux_watcher_destroy (z->reader);
     flux_watcher_destroy (z->writer);
-    assert (z->magic = ~ZIO_MAGIC);
+    assert ((z->magic = ~ZIO_MAGIC));
     free (z);
 }
 
@@ -248,7 +248,7 @@ static zio_t *zio_allocate (const char *name, int reader, void *arg)
         return NULL;
 
     memset (z, 0, sizeof (*z));
-    assert (z->magic = ZIO_MAGIC);
+    assert ((z->magic = ZIO_MAGIC));
 
     if (!(z->name = strdup (name))) {
         zio_destroy (z);
