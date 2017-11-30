@@ -6,7 +6,8 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-	-DWITH_PTHREADS
+	-DWITH_PTHREADS \
+	-Wno-parentheses -Wno-error=parentheses
 
 noinst_LTLIBRARIES = liblsd.la
 
