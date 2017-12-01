@@ -78,7 +78,7 @@ static int lua_number_to_cpu_setp (lua_State *L, int index, cpu_set_t *setp)
     char buf [1024];
     unsigned long long n = lua_tointeger (L, index);
 
-    if (n >= (unsigned long long) MAX_LUAINT) {
+    if (n >= (unsigned long long) MAX_LUAINT || lua_tonumber (L, index) != n) {
         lua_pushnil (L);
         lua_pushfstring (L, "unable to parse CPU mask: numeric overflow");
         return (2);
