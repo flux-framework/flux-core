@@ -28,17 +28,13 @@ export FLUX_PMI_SINGLETON=1 # avoid finding leaks in slurm libpmi.so
 VALGRIND=`which valgrind`
 VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
 VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh
-BROKER=${FLUX_BUILD_DIR}/src/broker/.libs/lt-flux-broker
+BROKER=${FLUX_BUILD_DIR}/src/broker/flux-broker
 
 # broker run under valgrind may need extra retries in flux_open():
 FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
 
-if ! test -x $BROKER; then
-    ${FLUX_BUILD_DIR}/src/broker/flux-broker --help >/dev/null 2>&1
-fi
-
 test_expect_success 'valgrind reports no new errors on single broker run' '
-	flux ${VALGRIND} \
+	libtool e flux ${VALGRIND} \
 		--tool=memcheck \
 		--leak-check=full \
 		--gen-suppressions=all \

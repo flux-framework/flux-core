@@ -213,7 +213,7 @@ static void repeat (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_stop (w);
 }
 
-static bool oneshot_runs = 0;
+static int oneshot_runs = 0;
 static int oneshot_errno = 0;
 static void oneshot (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)

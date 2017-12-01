@@ -1,7 +1,8 @@
 AM_CFLAGS =	$(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS =	$(CODE_COVERAGE_LIBS)
 AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-		$(LUA_INCLUDE) $(ZMQ_CFLAGS)
+		$(LUA_INCLUDE) $(ZMQ_CFLAGS) \
+		-Wno-parentheses -Wno-error=parentheses
 
 fluxluadir =     $(luadir)/flux
 fluxometerdir =  $(luadir)/fluxometer
