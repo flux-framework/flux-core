@@ -5,7 +5,7 @@ flux_kvs_namespace_create(3)
 
 NAME
 ----
-flux_kvs_namespace_create - create a KVS namespace
+flux_kvs_namespace_create, flux_kvs_namespace_remove - create/remove a KVS namespace
 
 
 SYNOPSIS
@@ -16,12 +16,17 @@ SYNOPSIS
                                            const char *namespace,
                                            int flags);
 
+ flux_future_t *flux_kvs_namespace_remove (flux_t *h,
+                                           const char *namespace);
+
 DESCRIPTION
 -----------
 
 `flux_kvs_namespace_create()` creates a KVS namespace.  Within a
 namespace, users can get/put KVS values completely independent of
 other KVS namespaces.
+
+`flux_kvs_namespace_remove()` removes a KVS namespace.
 
 FLAGS
 -----
@@ -32,8 +37,9 @@ The _flags_ mask is currently unused and should be set to 0.
 RETURN VALUE
 ------------
 
-`flux_kvs_namespace_create()` returns a `flux_future_t` on success, or
-NULL on failure with errno set appropriately.
+`flux_kvs_namespace_create()` and `flux_kvs_namespace_remove()` return
+a `flux_future_t` on success, or NULL on failure with errno set
+appropriately.
 
 
 ERRORS
@@ -53,6 +59,9 @@ The KVS module is not loaded.
 
 EEXIST::
 The namespace already exists.
+
+ENOTSUP::
+Attempt to remove illegal namespace.
 
 AUTHOR
 ------

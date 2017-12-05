@@ -27,9 +27,14 @@ enum {
  * - namespace create only creates the namespace on rank 0.  Other
  *   ranks initialize against that namespace the first time they use
  *   it.
+ * - namespace remove marks the namespace for removal on all ranks.
+ *   Garbage collection will happen in the background and the
+ *   namespace will official be removed.  The removal is "eventually
+ *   consistent".
  */
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
                                           int flags);
+flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace);
 
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.

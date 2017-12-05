@@ -17,6 +17,10 @@ void errors (void)
     errno = 0;
     ok (flux_kvs_namespace_create (NULL, NULL, 5) == NULL && errno == EINVAL,
         "flux_kvs_namespace_create fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_namespace_remove (NULL, NULL) == NULL && errno == EINVAL,
+        "flux_kvs_namespace_remove fails on bad input");
 }
 
 void namespace (void)
