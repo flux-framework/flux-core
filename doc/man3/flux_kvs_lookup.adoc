@@ -150,6 +150,8 @@ EFBIG::
 ENOSYS::
 The KVS module is not loaded.
 
+ENOTSUP::
+An unknown namespace was requested.
 
 AUTHOR
 ------
