@@ -45,6 +45,9 @@ COMMANDS
 *namespace-create* 'name' ['name...']::
 Create a namespace in which kvs values will be read/written to.
 
+*namespace-remove* 'name' ['name...']::
+Remove a kvs namespace.
+
 *get* [-j|-r|-t] [-a treeobj] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.  If no options, value is displayed with
