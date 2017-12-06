@@ -44,7 +44,8 @@ MAN3_FILES_PRIMARY = \
 	flux_future_create.3 \
 	flux_kvs_lookup.3 \
 	flux_kvs_commit.3 \
-	flux_kvs_txn_create.3
+	flux_kvs_txn_create.3 \
+	flux_kvs_namespace_create.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section

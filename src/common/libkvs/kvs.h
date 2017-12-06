@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+#define KVS_PRIMARY_NAMESPACE "primary"
+
 enum {
     FLUX_KVS_READDIR = 1,
     FLUX_KVS_READLINK = 2,
@@ -21,9 +23,14 @@ enum {
     FLUX_KVS_APPEND = 32,
 };
 
+/* Namespace */
+flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
+                                          int flags);
+
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.
+ * To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE.
  */
 int flux_kvs_get_version (flux_t *h, int *versionp);
 int flux_kvs_wait_version (flux_t *h, int version);

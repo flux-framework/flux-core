@@ -1,0 +1,74 @@
+flux_kvs_namespace_create(3)
+============================
+:doctype: manpage
+
+
+NAME
+----
+flux_kvs_namespace_create - create a KVS namespace
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ flux_future_t *flux_kvs_namespace_create (flux_t *h,
+                                           const char *namespace,
+                                           int flags);
+
+DESCRIPTION
+-----------
+
+`flux_kvs_namespace_create()` creates a KVS namespace.  Within a
+namespace, users can get/put KVS values completely independent of
+other KVS namespaces.
+
+FLAGS
+-----
+
+The _flags_ mask is currently unused and should be set to 0.
+
+
+RETURN VALUE
+------------
+
+`flux_kvs_namespace_create()` returns a `flux_future_t` on success, or
+NULL on failure with errno set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+One of the arguments was invalid.
+
+ENOMEM::
+Out of memory.
+
+EPROTO::
+A request was malformed.
+
+ENOSYS::
+The KVS module is not loaded.
+
+EEXIST::
+The namespace already exists.
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_kvs_lookup(3), flux_kvs_commit(3)

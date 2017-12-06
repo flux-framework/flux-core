@@ -13,6 +13,7 @@ noinst_LTLIBRARIES = libkvs.la
 
 libkvs_la_SOURCES = \
 	kvs.c \
+	kvs_private.h \
 	kvs_lookup.c \
 	kvs_dir.c \
 	kvs_dir_private.h \
@@ -34,6 +35,7 @@ fluxcoreinclude_HEADERS = \
 	kvs_commit.h
 
 TESTS = \
+	test_kvs.t \
 	test_kvs_txn.t \
 	test_kvs_lookup.t \
 	test_kvs_dir.t \
@@ -56,6 +58,10 @@ test_ldadd = \
 test_cppflags = \
 	$(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src/common/libtap
+
+test_kvs_t_SOURCES = test/kvs.c
+test_kvs_t_CPPFLAGS = $(test_cppflags)
+test_kvs_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_kvs_txn_t_SOURCES = test/kvs_txn.c
 test_kvs_txn_t_CPPFLAGS = $(test_cppflags)

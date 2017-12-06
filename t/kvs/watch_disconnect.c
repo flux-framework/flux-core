@@ -18,8 +18,9 @@ void send_watch_requests (flux_t *h, const char *key)
     int flags = KVS_WATCH_FIRST;
     flux_mrpc_t *r;
 
-    if (!(r = flux_mrpcf (h, "kvs.watch", "all", 0, "{s:s s:i s:n}",
+    if (!(r = flux_mrpcf (h, "kvs.watch", "all", 0, "{s:s s:s s:i s:n}",
                                                     "key", key,
+                                                    "namespace", KVS_PRIMARY_NAMESPACE,
                                                     "flags", flags,
                                                     "val")))
         log_err_exit ("flux_mrpc kvs.watch");
@@ -40,7 +41,12 @@ int count_watchers (flux_t *h)
     if (!(r = flux_mrpc (h, "kvs.stats.get", NULL, "all", 0)))
         log_err_exit ("flux_mrpc kvs.stats.get");
     do {
-        if (flux_mrpc_getf (r, "{s:i}", "#watchers", &n) < 0)
+        json_t *ns, *p;
+        if (flux_mrpc_getf (r, "{ s:o }", "namespace", &ns) < 0)
+            log_err_exit ("kvs.stats.get namespace");
+        if (json_unpack (ns, "{ s:o }", KVS_PRIMARY_NAMESPACE, &p) < 0)
+            log_err_exit ("kvs.stats.get %s", KVS_PRIMARY_NAMESPACE);
+        if (json_unpack (p, "{ s:i }", "#watchers", &n) < 0)
             log_err_exit ("kvs.stats.get #watchers");
         count += n;
     } while (flux_mrpc_next (r) == 0);

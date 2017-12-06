@@ -473,11 +473,16 @@ static int simulwatch_cb (const char *key, const char *json_str, void *arg, int 
 int get_watch_stats (flux_t *h, int *count)
 {
     flux_future_t *f;
+    json_t *ns, *p;
     int rc = -1;
 
     if (!(f = flux_rpc (h, "kvs.stats.get", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get_unpack (f, "{ s:i }", "#watchers", count) < 0)
+    if (flux_rpc_get_unpack (f, "{ s:o }", "namespace", &ns) < 0)
+        goto done;
+    if (json_unpack (ns, "{ s:o }", KVS_PRIMARY_NAMESPACE, &p) < 0)
+        goto done;
+    if (json_unpack (p, "{ s:i }", "#watchers", count) < 0)
         goto done;
     rc = 0;
 done:

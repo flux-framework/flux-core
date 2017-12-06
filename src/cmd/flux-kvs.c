@@ -37,6 +37,7 @@
 #include "src/common/libutil/readall.h"
 #include "src/common/libkvs/treeobj.h"
 
+int cmd_namespace_create (optparse_t *p, int argc, char **argv);
 int cmd_get (optparse_t *p, int argc, char **argv);
 int cmd_put (optparse_t *p, int argc, char **argv);
 int cmd_unlink (optparse_t *p, int argc, char **argv);
@@ -169,6 +170,13 @@ static struct optparse_option unlink_opts[] =  {
 };
 
 static struct optparse_subcommand subcommands[] = {
+    { "namespace-create",
+      "name [name...]",
+      "Create a KVS namespace",
+      cmd_namespace_create,
+      0,
+      NULL
+    },
     { "get",
       "[-j|-r|-t] [-a treeobj] key [key...]",
       "Get value stored under key",
@@ -332,6 +340,28 @@ int main (int argc, char *argv[])
     optparse_destroy (p);
     log_fini ();
     return (exitval);
+}
+
+int cmd_namespace_create (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_future_t *f;
+    int optindex, i;
+
+    optindex = optparse_option_index (p);
+    if ((optindex - argc) == 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    for (i = optindex; i < argc; i++) {
+        const char *name = argv[i];
+        int flags = 0;
+        if (!(f = flux_kvs_namespace_create (h, name, flags))
+            || flux_future_get (f, NULL) < 0)
+            log_err_exit ("%s", name);
+        flux_future_destroy (f);
+    }
+    return (0);
 }
 
 static void kv_printf (const char *key, int maxcol, const char *fmt, ...)

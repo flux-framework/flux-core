@@ -387,12 +387,12 @@ test_expect_success 'wreck job is linked in lwj-complete after failure' '
 
 test_expect_success 'wreck: no KVS watchers leaked after 10 jobs' '
 	flux exec -r 1-$(($SIZE-1)) -l \
-		flux module stats --parse "#watchers" kvs | sort -n >w.before &&
+		flux module stats --parse "namespace.primary.#watchers" kvs | sort -n >w.before &&
 	for i in `seq 1 10`; do
 		flux wreckrun --ntasks $SIZE /bin/true
 	done &&
 	flux exec -r 1-$(($SIZE-1)) -l \
-		flux module stats --parse "#watchers" kvs | sort -n >w.after &&
+		flux module stats --parse "namespace.primary.#watchers" kvs | sort -n >w.after &&
 	test_cmp w.before w.after
 '
 

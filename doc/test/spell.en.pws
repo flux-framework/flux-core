@@ -405,3 +405,5 @@ vpack
 dirref
 lookups
 mh
+namespaces
+ENOTSUP

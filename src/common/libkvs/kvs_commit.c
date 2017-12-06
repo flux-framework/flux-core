@@ -29,12 +29,15 @@
 #include <czmq.h>
 #include <flux/core.h>
 
+#include "kvs_private.h"
 #include "kvs_txn_private.h"
 #include "src/common/libutil/blobref.h"
 
 flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                int nprocs, flux_kvs_txn_t *txn)
 {
+    const char *namespace = get_kvs_namespace ();
+
     if (txn) {
         json_t *ops;
         if (!(ops = txn_get_ops (txn))) {
@@ -42,16 +45,18 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
             return NULL;
         }
         return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:i s:O}",
+                                 "{s:s s:i s:s s:i s:O}",
                                  "name", name,
                                  "nprocs", nprocs,
+                                 "namespace", namespace,
                                  "flags", flags,
                                  "ops", ops);
     } else {
         return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:i s:[]}",
+                                 "{s:s s:i s:s s:i s:[]}",
                                  "name", name,
                                  "nprocs", nprocs,
+                                 "namespace", namespace,
                                  "flags", flags,
                                  "ops");
     }
