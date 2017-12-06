@@ -24,6 +24,7 @@ unset FLUX_KVS_NAMESPACE
 
 PRIMARYNAMESPACE=primary
 NAMESPACETEST=namespacetest
+NAMESPACETMP=namespacetmp
 NAMESPACERANK1=namespacerank1
 
 test_kvs_key() {
@@ -85,6 +86,48 @@ dir_kvs_namespace_exitvalue() {
         unset FLUX_KVS_NAMESPACE
 }
 
+namespace_create_loop() {
+        i=0
+        while ! flux kvs namespace-create $1 && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ $i -eq 50 ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+get_kvs_namespace_all_ranks_loop() {
+        i=0
+        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; flux kvs get $2" && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ $i -eq 50 ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+get_kvs_namespace_fails_all_ranks_loop() {
+        i=0
+        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; ! flux kvs get $2" && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ $i -eq 50 ]
+        then
+            return 1
+        fi
+        return 0
+}
+
 wait_watch_namespace_put() {
         export FLUX_KVS_NAMESPACE=$1
         i=0
@@ -115,12 +158,30 @@ wait_watch_current() {
         return 0
 }
 
+wait_fencecount_nonzero() {
+        i=0
+        while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#fences kvs" 2> /dev/null)" == "0" ] && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ $i -eq 50 ]
+        then
+            return 1
+        fi
+        return 0
+}
+
 #
 # Basic tests in default primary namespace
 #
 
 test_expect_success 'kvs: create primary namespace fails' '
 	! flux kvs namespace-create $PRIMARYNAMESPACE
+'
+
+test_expect_success 'kvs: remove primary namespace fails' '
+	! flux kvs namespace-remove $PRIMARYNAMESPACE
 '
 
 test_expect_success 'kvs: get with primary namespace works' '
@@ -264,6 +325,32 @@ EOF
         test_cmp watch_out expected
 '
 
+test_expect_success 'kvs: namespace remove non existing namespace silently passes' '
+	flux kvs namespace-remove $NAMESPACETMP
+'
+
+test_expect_success 'kvs: namespace remove works' '
+	flux kvs namespace-create $NAMESPACETMP-BASIC &&
+        put_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.tmp 1 &&
+        test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.tmp 1 &&
+	flux kvs namespace-remove $NAMESPACETMP-BASIC &&
+        get_kvs_namespace_exitvalue $NAMESPACETMP-BASIC $DIR.tmp exitvalue &&
+        test $exitvalue -ne 0
+'
+
+# A namespace-create races against the namespace-remove above, as we
+# can't confirm if the namespace-remove has garbage collected itself
+# yet.  So we use namespace_create_loop() to iterate and try
+# namespace-create many times until it succeeds.
+test_expect_success 'kvs: namespace can be re-created after remove' '
+        namespace_create_loop $NAMESPACETMP-BASIC &&
+        put_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.recreate 1 &&
+        test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.recreate 1 &&
+	flux kvs namespace-remove $NAMESPACETMP-BASIC &&
+        get_kvs_namespace_exitvalue $NAMESPACETMP-BASIC $DIR.recreate exitvalue &&
+        test $exitvalue -ne 0
+'
+
 #
 # Basic tests, data in new namespace available across ranks
 #
@@ -279,6 +366,33 @@ test_expect_success 'kvs: unlink value in new namespace, does not exist all rank
         unlink_kvs_namespace $NAMESPACETEST $DIR.all &&
         version_kvs_namespace $NAMESPACETEST VERS &&
         flux exec sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETEST; flux kvs wait ${VERS} && ! flux kvs get $DIR.all"
+'
+
+# namespace-remove on other ranks can take time, so we loop via
+# get_kvs_namespace_fails_all_ranks_loop()
+test_expect_success 'kvs: namespace remove works, recognized on other ranks' '
+	flux kvs namespace-create $NAMESPACETMP-ALL &&
+        put_kvs_key_namespace $NAMESPACETMP-ALL $DIR.all 1 &&
+        version_kvs_namespace $NAMESPACETMP-ALL VERS &&
+        flux exec sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-ALL; flux kvs wait ${VERS} && flux kvs get $DIR.all" &&
+	flux kvs namespace-remove $NAMESPACETMP-ALL &&
+        get_kvs_namespace_fails_all_ranks_loop $NAMESPACETMP-ALL $DIR.all
+'
+
+# A namespace-create races against the namespace-remove above, as we
+# can't confirm if the namespace-remove has garbage collected itself
+# yet.  So we use namespace_create_loop() to iterate and try
+# namespace-create many times until it succeeds.
+#
+# After putting the new value, we still don't know if ranks > 0 have
+# recognized the original remove.  So we will loop until the new
+# namespace is recognized everywhere.  Note that we cannot use flux
+# kvs wait, b/c the version may work against an old namespace.
+test_expect_success 'kvs: namespace can be re-created after remove, recognized on other ranks' '
+        namespace_create_loop $NAMESPACETMP-ALL &&
+        put_kvs_key_namespace $NAMESPACETMP-ALL $DIR.recreate 1 &&
+        get_kvs_namespace_all_ranks_loop $NAMESPACETMP-ALL $DIR.recreate &&
+	flux kvs namespace-remove $NAMESPACETMP-ALL
 '
 
 #
@@ -350,6 +464,69 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch fails on invalid namespace' '
 
 test_expect_success 'kvs: watch fails on invalid namespace on rank 1' '
         ! flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACEBAD ; flux kvs watch -c 1 $DIR.test"
+'
+
+# watch errors are output to stdout, so grep for "Operation not supported"
+test_expect_success NO_CHAIN_LINT 'kvs: watch gets ENOTSUP when namespace is removed' '
+        flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH0 &&
+        put_kvs_key_namespace $NAMESPACETMP-REMOVE-WATCH0 $DIR.watch 0 &&
+        wait_watch_namespace_put $NAMESPACETMP-REMOVE-WATCH0 "$DIR.watch" "0"
+        rm -f watch_out
+        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH0
+        stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
+        watchpid=$! &&
+        wait_watch_current watch_out "0"
+        flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH0 &&
+        wait $watchpid &&
+        unset FLUX_KVS_NAMESPACE
+        grep "Operation not supported" watch_out
+'
+
+# watch errors are output to stdout, so grep for "Operation not supported"
+test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namespace is removed' '
+        flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH1 &&
+        put_kvs_key_namespace $NAMESPACETMP-REMOVE-WATCH1 $DIR.watch 0 &&
+        version_kvs_namespace $NAMESPACETMP-REMOVE-WATCH1 VERS &&
+        rm -f watch_out
+        stdbuf -oL flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH1 ; flux kvs wait ${VERS}; flux kvs watch -o -c 1 $DIR.watch" > watch_out &
+        watchpid=$! &&
+        wait_watch_current watch_out "0" &&
+        flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH1 &&
+        wait $watchpid &&
+        grep "Operation not supported" watch_out
+'
+
+# When we call fence_namespace_remove, we know fence sent to server,
+# but no way of knowing if server has accepted/processed fence.  To
+# avoid racing in this test, we iterate on the fence stat until it is
+# non-zero to know it's ready for this test.
+test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when namespace is removed' '
+        flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE0 &&
+        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-FENCE0 &&
+        rm -f fence_out
+        stdbuf -oL ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove fence0 > fence_out &
+        watchpid=$! &&
+        wait_fencecount_nonzero 0 $NAMESPACETMP-REMOVE-FENCE0 &&
+        flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE0 &&
+        wait $watchpid &&
+        unset FLUX_KVS_NAMESPACE &&
+        grep "flux_future_get: Operation not supported" fence_out
+'
+
+
+# When we call fence_namespace_remove, we know fence sent to server,
+# but no way of knowing if server has accepted/processed fence.  To
+# avoid racing in this test, we iterate on the fence stat until it is
+# non-zero to know it's ready for this test.
+test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP when namespace is removed' '
+        flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE1 &&
+        rm -f fence_out
+        stdbuf -oL flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-FENCE1 ; ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove fence1" > fence_out &
+        watchpid=$! &&
+        wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
+        flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE1 &&
+        wait $watchpid &&
+        grep "flux_future_get: Operation not supported" fence_out
 '
 
 #
