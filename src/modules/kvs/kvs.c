@@ -757,8 +757,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
-                                  root->ref,
-                                  root_ref,
+                                  root_ref ? root_ref : root->ref,
                                   key,
                                   h,
                                   flags)))
@@ -886,7 +885,6 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
                                   root->ref,
-                                  NULL,
                                   key,
                                   h,
                                   flags)))

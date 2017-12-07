@@ -64,9 +64,7 @@ struct lookup {
     struct cache *cache;
     int current_epoch;
 
-    char *root_dir;
     char *root_ref;
-    char *root_ref_copy;
 
     char *path;
 
@@ -378,7 +376,6 @@ stall:
 
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
-                         const char *root_dir,
                          const char *root_ref,
                          const char *path,
                          flux_t *h,
@@ -387,7 +384,7 @@ lookup_t *lookup_create (struct cache *cache,
     lookup_t *lh = NULL;
     int saved_errno;
 
-    if (!cache || !root_dir || !path) {
+    if (!cache || !root_ref || !path) {
         errno = EINVAL;
         return NULL;
     }
@@ -400,22 +397,10 @@ lookup_t *lookup_create (struct cache *cache,
     lh->magic = LOOKUP_MAGIC;
     lh->cache = cache;
     lh->current_epoch = current_epoch;
-    /* must duplicate these strings, user may not keep pointer
-     * alive */
-    if (!(lh->root_dir = strdup (root_dir))) {
+    /* must duplicate ref, user may not keep pointer alive */
+    if (!(lh->root_ref = strdup (root_ref))) {
         saved_errno = ENOMEM;
         goto cleanup;
-    }
-    if (root_ref) {
-        if (!(lh->root_ref_copy = strdup (root_ref))) {
-            saved_errno = ENOMEM;
-            goto cleanup;
-        }
-        lh->root_ref = lh->root_ref_copy;
-    }
-    else {
-        lh->root_ref_copy = NULL;
-        lh->root_ref = lh->root_dir;
     }
     if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
         saved_errno = ENOMEM;
@@ -461,8 +446,7 @@ lookup_t *lookup_create (struct cache *cache,
 void lookup_destroy (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC) {
-        free (lh->root_dir);
-        free (lh->root_ref_copy);
+        free (lh->root_ref);
         free (lh->path);
         json_decref (lh->val);
         json_decref (lh->root_dirent);
@@ -575,13 +559,6 @@ int lookup_get_current_epoch (lookup_t *lh)
     if (lh && lh->magic == LOOKUP_MAGIC)
         return lh->current_epoch;
     return -1;
-}
-
-const char *lookup_get_root_dir (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->root_dir;
-    return NULL;
 }
 
 const char *lookup_get_root_ref (lookup_t *lh)
@@ -792,7 +769,7 @@ bool lookup (lookup_t *lh)
             /* special case root */
             if (!strcmp (lh->path, ".")) {
                 if ((lh->flags & FLUX_KVS_TREEOBJ)) {
-                    if (!(lh->val = treeobj_create_dirref (lh->root_dir))) {
+                    if (!(lh->val = treeobj_create_dirref (lh->root_ref))) {
                         lh->errnum = errno;
                         goto done;
                     }
