@@ -14,12 +14,9 @@ typedef int (*lookup_ref_f)(lookup_t *c,
                             void *data);
 
 /* Initialize a lookup handle
- * - If root_ref is same as root_dir, can be set to NULL.
- * - flux_t is optional, if NULL logging will go to stderr
  */
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
-                         const char *root_dir,
                          const char *root_ref,
                          const char *path,
                          flux_t *h,
@@ -63,11 +60,6 @@ struct cache *lookup_get_cache (lookup_t *lh);
  * presently.
  */
 int lookup_get_current_epoch (lookup_t *lh);
-
-/* Convenience function to get root dir from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-const char *lookup_get_root_dir (lookup_t *lh);
 
 /* Convenience function to get root ref from earlier instantiation.
  * Convenient if replaying RPC and don't have it presently.

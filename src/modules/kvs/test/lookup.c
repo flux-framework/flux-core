@@ -128,9 +128,8 @@ void basic_api (void)
 
     ok ((lh = lookup_create (cache,
                              42,
-                             "root.foo",
-                             "ref.bar",
-                             "path.baz",
+                             "root.ref.foo",
+                             "path.bar",
                              NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
@@ -140,17 +139,13 @@ void basic_api (void)
         "lookup_get_cache works");
     ok (lookup_get_current_epoch (lh) == 42,
         "lookup_get_current_epoch works");
-    ok ((tmp = lookup_get_root_dir (lh)) != NULL,
-        "lookup_get_root_dir works");
-    ok (!strcmp (tmp, "root.foo"),
-        "lookup_get_root_dir returns correct string");
     ok ((tmp = lookup_get_root_ref (lh)) != NULL,
         "lookup_get_root_ref works");
-    ok (!strcmp (tmp, "ref.bar"),
+    ok (!strcmp (tmp, "root.ref.foo"),
         "lookup_get_root_ref returns correct string");
     ok ((tmp = lookup_get_path (lh)) != NULL,
         "lookup_get_path works");
-    ok (!strcmp (tmp, "path.baz"),
+    ok (!strcmp (tmp, "path.bar"),
         "lookup_get_path returns correct string");
     ok (lookup_get_flags (lh) == (FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ),
         "lookup_get_flags works");
@@ -173,27 +168,6 @@ void basic_api (void)
 
     lookup_destroy (lh);
 
-    /* if root_ref is set to NULL, make sure both root_dir and
-     * root_ref goto root_dir */
-    ok ((lh = lookup_create (cache,
-                             42,
-                             "root.bar",
-                             NULL,
-                             "path.baz",
-                             NULL,
-                             FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
-        "lookup_create works");
-
-    ok ((tmp = lookup_get_root_dir (lh)) != NULL,
-        "lookup_get_root_dir works");
-    ok (!strcmp (tmp, "root.bar"),
-        "lookup_get_root_dir returns correct string");
-    ok ((tmp = lookup_get_root_ref (lh)) != NULL,
-        "lookup_get_root_ref works");
-    ok (!strcmp (tmp, "root.bar"),
-        "lookup_get_root_ref returns correct string");
-    lookup_destroy (lh);
-
     cache_destroy (cache);
 }
 
@@ -207,7 +181,6 @@ void basic_api_errors (void)
                        NULL,
                        NULL,
                        NULL,
-                       NULL,
                        0) == NULL,
         "lookup_create fails on bad input");
 
@@ -216,9 +189,8 @@ void basic_api_errors (void)
 
     ok ((lh = lookup_create (cache,
                              42,
-                             "root.foo",
-                             "ref.bar",
-                             "path.baz",
+                             "root.ref.foo",
+                             "path.bar",
                              NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ)) != NULL,
         "lookup_create works");
@@ -244,8 +216,6 @@ void basic_api_errors (void)
         "lookup_get_cache fails on NULL pointer");
     ok (lookup_get_current_epoch (NULL) < 0,
         "lookup_get_current_epoch fails on NULL pointer");
-    ok (lookup_get_root_dir (NULL) == NULL,
-        "lookup_get_root_dir fails on NULL pointer");
     ok (lookup_get_root_ref (NULL) == NULL,
         "lookup_get_root_ref fails on NULL pointer");
     ok (lookup_get_path (NULL) == NULL,
@@ -279,8 +249,6 @@ void basic_api_errors (void)
         "lookup_get_cache fails on bad pointer");
     ok (lookup_get_current_epoch (lh) < 0,
         "lookup_get_current_epoch fails on bad pointer");
-    ok (lookup_get_root_dir (lh) == NULL,
-        "lookup_get_root_dir fails on bad pointer");
     ok (lookup_get_root_ref (lh) == NULL,
         "lookup_get_root_ref fails on bad pointer");
     ok (lookup_get_path (lh) == NULL,
@@ -464,7 +432,6 @@ void lookup_root (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              ".",
                              NULL,
                              0)) != NULL,
@@ -475,7 +442,6 @@ void lookup_root (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              ".",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -485,7 +451,6 @@ void lookup_root (void) {
     /* flags = FLUX_KVS_TREEOBJ, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              ".",
                              NULL,
@@ -498,7 +463,6 @@ void lookup_root (void) {
     /* flags = FLUX_KVS_READDIR, bad root_ref, should error EINVAL */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              valref_ref,
                              ".",
                              NULL,
@@ -598,7 +562,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -608,7 +571,6 @@ void lookup_basic (void) {
     /* lookup value via valref */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref.valref",
                              NULL,
@@ -626,7 +588,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref.valref_with_dirref",
                              NULL,
                              0)) != NULL,
@@ -636,7 +597,6 @@ void lookup_basic (void) {
     /* Lookup value via valref with multiple blobrefs */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref.valref_multi",
                              NULL,
@@ -654,7 +614,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref.valref_multi_with_dirref",
                              NULL,
                              0)) != NULL,
@@ -664,7 +623,6 @@ void lookup_basic (void) {
     /* lookup value via val */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref.val",
                              NULL,
@@ -678,7 +636,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref.dir",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -688,7 +645,6 @@ void lookup_basic (void) {
     /* lookup symlink */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref.symlink",
                              NULL,
@@ -702,7 +658,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref",
                              NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
@@ -714,7 +669,6 @@ void lookup_basic (void) {
     /* lookup valref treeobj */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref.valref",
                              NULL,
@@ -728,7 +682,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref.val",
                              NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
@@ -741,7 +694,6 @@ void lookup_basic (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref.dir",
                              NULL,
                              FLUX_KVS_TREEOBJ)) != NULL,
@@ -751,7 +703,6 @@ void lookup_basic (void) {
     /* lookup symlink treeobj */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref.symlink",
                              NULL,
@@ -833,7 +784,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "foo",
                              NULL,
                              0)) != NULL,
@@ -844,7 +794,6 @@ void lookup_errors (void) {
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "val.foo",
                              NULL,
@@ -857,7 +806,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "valref.foo",
                              NULL,
                              0)) != NULL,
@@ -867,7 +815,6 @@ void lookup_errors (void) {
     /* Lookup path w/ dir in middle, should get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dir.foo",
                              NULL,
@@ -879,7 +826,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "symlink1",
                              NULL,
                              0)) != NULL,
@@ -889,7 +835,6 @@ void lookup_errors (void) {
     /* Lookup a dirref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref",
                              NULL,
@@ -901,7 +846,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dir",
                              NULL,
                              FLUX_KVS_READLINK)) != NULL,
@@ -911,7 +855,6 @@ void lookup_errors (void) {
     /* Lookup a valref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "valref",
                              NULL,
@@ -923,7 +866,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "val",
                              NULL,
                              FLUX_KVS_READLINK)) != NULL,
@@ -933,7 +875,6 @@ void lookup_errors (void) {
     /* Lookup a dirref, but don't expect a dir, should get EISDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref",
                              NULL,
@@ -945,7 +886,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dir",
                              NULL,
                              0)) != NULL,
@@ -955,7 +895,6 @@ void lookup_errors (void) {
     /* Lookup a valref, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "valref",
                              NULL,
@@ -967,7 +906,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "val",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -978,7 +916,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "symlink",
                              NULL,
                              FLUX_KVS_READLINK | FLUX_KVS_READDIR)) != NULL,
@@ -988,7 +925,6 @@ void lookup_errors (void) {
     /* Lookup a dirref that doesn't point to a dir, should get ENOTRECOVERABLE. */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref_bad",
                              NULL,
@@ -1001,7 +937,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref_bad.val",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1011,7 +946,6 @@ void lookup_errors (void) {
     /* Lookup with an invalid root_ref, should get EINVAL */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              valref_ref,
                              "val",
                              NULL,
@@ -1023,7 +957,6 @@ void lookup_errors (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref_multi",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1034,7 +967,6 @@ void lookup_errors (void) {
      * get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref_multi.foo",
                              NULL,
@@ -1130,7 +1062,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2dirref.symlink",
                              NULL,
                              0)) != NULL,
@@ -1142,7 +1073,6 @@ void lookup_links (void) {
     /* lookup val, link is middle of path */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.link2dirref.val",
                              NULL,
@@ -1156,7 +1086,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2dirref.valref",
                              NULL,
                              0)) != NULL,
@@ -1169,7 +1098,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2dirref.dir",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1180,7 +1108,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2dirref.dirref",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1190,7 +1117,6 @@ void lookup_links (void) {
     /* lookup symlink, link is middle of path */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.link2dirref.symlink",
                              NULL,
@@ -1204,7 +1130,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2val",
                              NULL,
                              0)) != NULL,
@@ -1216,7 +1141,6 @@ void lookup_links (void) {
     /* lookup valref, link is last part in path */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.link2valref",
                              NULL,
@@ -1230,7 +1154,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2dir",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1241,7 +1164,6 @@ void lookup_links (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.link2dirref",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1251,7 +1173,6 @@ void lookup_links (void) {
     /* lookup symlink, link is last part in path */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.link2symlink",
                              NULL,
@@ -1310,7 +1231,6 @@ void lookup_alt_root (void) {
     /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              dirref1_ref,
                              "val",
                              NULL,
@@ -1323,7 +1243,6 @@ void lookup_alt_root (void) {
     /* lookup val, alt root-ref dirref2_ref */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              dirref2_ref,
                              "val",
                              NULL,
@@ -1362,7 +1281,6 @@ void lookup_stall_root (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              ".",
                              NULL,
                              FLUX_KVS_READDIR)) != NULL,
@@ -1377,7 +1295,6 @@ void lookup_stall_root (void) {
     /* lookup root ".", now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              ".",
                              NULL,
@@ -1485,7 +1402,6 @@ void lookup_stall (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.val",
                              NULL,
                              0)) != NULL,
@@ -1508,7 +1424,6 @@ void lookup_stall (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.val",
                              NULL,
                              0)) != NULL,
@@ -1520,7 +1435,6 @@ void lookup_stall (void) {
     /* lookup symlink.val, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "symlink.val",
                              NULL,
@@ -1539,7 +1453,6 @@ void lookup_stall (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "symlink.val",
                              NULL,
                              0)) != NULL,
@@ -1551,7 +1464,6 @@ void lookup_stall (void) {
     /* lookup dirref1.valref, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.valref",
                              NULL,
@@ -1570,7 +1482,6 @@ void lookup_stall (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.valref",
                              NULL,
                              0)) != NULL,
@@ -1582,7 +1493,6 @@ void lookup_stall (void) {
     /* lookup dirref1.valref_multi, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.valref_multi",
                              NULL,
@@ -1603,7 +1513,6 @@ void lookup_stall (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.valref_multi",
                              NULL,
                              0)) != NULL,
@@ -1615,7 +1524,6 @@ void lookup_stall (void) {
     /* lookup dirref1.valref_multi2, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.valref_multi2",
                              NULL,
@@ -1636,7 +1544,6 @@ void lookup_stall (void) {
     ok ((lh = lookup_create (cache,
                              1,
                              root_ref,
-                             root_ref,
                              "dirref1.valref_multi2",
                              NULL,
                              0)) != NULL,
@@ -1648,7 +1555,6 @@ void lookup_stall (void) {
     /* lookup dirref1.valrefmisc, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.valrefmisc",
                              NULL,
@@ -1667,7 +1573,6 @@ void lookup_stall (void) {
     /* lookup dirref1.valrefmisc_multi, should stall */
     ok ((lh = lookup_create (cache,
                              1,
-                             root_ref,
                              root_ref,
                              "dirref1.valrefmisc_multi",
                              NULL,
