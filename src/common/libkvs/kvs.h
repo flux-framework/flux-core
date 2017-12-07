@@ -23,7 +23,11 @@ enum {
     FLUX_KVS_APPEND = 32,
 };
 
-/* Namespace */
+/* Namespace
+ * - namespace create only creates the namespace on rank 0.  Other
+ *   ranks initialize against that namespace the first time they use
+ *   it.
+ */
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
                                           int flags);
 
