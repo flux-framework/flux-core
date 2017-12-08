@@ -96,6 +96,7 @@ struct kvs_cb_data {
 };
 
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace);
+static struct kvsroot *lookup_root (kvs_ctx_t *ctx, const char *namespace);
 static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
                                json_t *names);
 static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
@@ -1077,7 +1078,7 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* if root not initialized, success automatically */
-    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+    if (!(root = lookup_root (ctx, namespace)))
         goto done;
 
     if (!(p.key = kvs_util_normalize_key (key, NULL))) {
@@ -1175,7 +1176,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* namespace must exist given we are on rank 0 */
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         flux_log (h, LOG_ERR, "%s: namespace %s not initialized",
                   __FUNCTION__, namespace);
         return;
@@ -1352,7 +1353,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (ctx->rank == 0) {
-        if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+        if (!(root = lookup_root (ctx, namespace))) {
             flux_log (h, LOG_DEBUG, "namespace %s not found", namespace);
             errno = ENOTSUP;
             goto error;
@@ -1435,6 +1436,11 @@ static void destroy_root (void *data)
 static void remove_root (kvs_ctx_t *ctx, const char *namespace)
 {
     zhash_delete (ctx->roothash, namespace);
+}
+
+static struct kvsroot *lookup_root (kvs_ctx_t *ctx, const char *namespace)
+{
+    return zhash_lookup (ctx->roothash, namespace);
 }
 
 static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
@@ -1555,7 +1561,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace)
     blobref_t rootref;
     int save_errno, rootseq, flags;
 
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         if (ctx->rank == 0) {
             flux_log (ctx->h, LOG_DEBUG, "namespace %s not found", namespace);
             errno = ENOTSUP;
@@ -1608,7 +1614,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
      * remove and the event being sent.  But generally speaking this
      * should be impossible to hit.
      */
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
                   __FUNCTION__, namespace);
         return;
@@ -1723,7 +1729,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
      * remove and the event being sent.  But generally speaking this
      * should be impossible to hit.
      */
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
                   __FUNCTION__, namespace);
         return;
@@ -1988,7 +1994,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
     int len;
 
     /* Namespace already exists */
-    if (zhash_lookup (ctx->roothash, namespace)) {
+    if (lookup_root (ctx, namespace)) {
         errno = EEXIST;
         goto cleanup;
     }
@@ -2189,7 +2195,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
 
-        if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE))) {
+        if (!(root = lookup_root (ctx, KVS_PRIMARY_NAMESPACE))) {
             if (!(root = create_root (ctx, KVS_PRIMARY_NAMESPACE, 0))) {
                 flux_log_error (h, "create_root");
                 goto done;
