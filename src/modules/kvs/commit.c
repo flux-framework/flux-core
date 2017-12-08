@@ -910,8 +910,13 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
                                  flux_t *h,
                                  void *aux)
 {
-    commit_mgr_t *cm;
+    commit_mgr_t *cm = NULL;
     int saved_errno;
+
+    if (!cache || !hash_name) {
+        saved_errno = EINVAL;
+        goto error;
+    }
 
     if (!(cm = calloc (1, sizeof (*cm)))) {
         saved_errno = ENOMEM;
