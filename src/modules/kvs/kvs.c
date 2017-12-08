@@ -1469,8 +1469,11 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
         goto error;
     }
 
-    if (!(root->cm = commit_mgr_create (ctx->cache, ctx->hash_name,
-                                        ctx->h, root))) {
+    if (!(root->cm = commit_mgr_create (ctx->cache,
+                                        root->namespace,
+                                        ctx->hash_name,
+                                        ctx->h,
+                                        root))) {
         flux_log_error (ctx->h, "commit_mgr_create");
         goto error;
     }

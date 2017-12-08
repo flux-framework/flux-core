@@ -45,6 +45,7 @@
 
 struct commit_mgr {
     struct cache *cache;
+    const char *namespace;
     const char *hash_name;
     int noop_stores;            /* for kvs.stats.get, etc.*/
     zhash_t *fences;
@@ -133,6 +134,11 @@ int commit_set_aux_errnum (commit_t *c, int errnum)
 fence_t *commit_get_fence (commit_t *c)
 {
     return c->f;
+}
+
+const char *commit_get_namespace (commit_t *c)
+{
+    return c->cm->namespace;
 }
 
 void *commit_get_aux (commit_t *c)
@@ -906,6 +912,7 @@ int commit_iter_dirty_cache_entries (commit_t *c,
 }
 
 commit_mgr_t *commit_mgr_create (struct cache *cache,
+                                 const char *namespace,
                                  const char *hash_name,
                                  flux_t *h,
                                  void *aux)
@@ -913,7 +920,7 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
     commit_mgr_t *cm = NULL;
     int saved_errno;
 
-    if (!cache || !hash_name) {
+    if (!cache || !namespace || !hash_name) {
         saved_errno = EINVAL;
         goto error;
     }
@@ -923,6 +930,7 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
         goto error;
     }
     cm->cache = cache;
+    cm->namespace = namespace;
     cm->hash_name = hash_name;
     if (!(cm->fences = zhash_new ())) {
         saved_errno = ENOMEM;

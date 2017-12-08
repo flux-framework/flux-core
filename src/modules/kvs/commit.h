@@ -38,6 +38,9 @@ int commit_set_aux_errnum (commit_t *c, int errnum);
 
 fence_t *commit_get_fence (commit_t *c);
 
+/* returns namespace passed into commit_mgr_create() */
+const char *commit_get_namespace (commit_t *c);
+
 /* returns aux data passed into commit_mgr_create() */
 void *commit_get_aux (commit_t *c);
 
@@ -99,6 +102,7 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *entry);
 
 /* flux_t is optional, if NULL logging will go to stderr */
 commit_mgr_t *commit_mgr_create (struct cache *cache,
+                                 const char *namespace,
                                  const char *hash_name,
                                  flux_t *h,
                                  void *aux);
