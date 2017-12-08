@@ -481,6 +481,7 @@ void verify_value (struct cache *cache,
 
     ok ((lh = lookup_create (cache,
                              1,
+                             KVS_PRIMARY_NAMESPACE,
                              root_ref,
                              key,
                              NULL,

@@ -64,6 +64,7 @@ struct lookup {
     struct cache *cache;
     int current_epoch;
 
+    char *namespace;
     char *root_ref;
 
     char *path;
@@ -376,6 +377,7 @@ stall:
 
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
+                         const char *namespace,
                          const char *root_ref,
                          const char *path,
                          flux_t *h,
@@ -384,7 +386,7 @@ lookup_t *lookup_create (struct cache *cache,
     lookup_t *lh = NULL;
     int saved_errno;
 
-    if (!cache || !root_ref || !path) {
+    if (!cache || !namespace || !root_ref || !path) {
         errno = EINVAL;
         return NULL;
     }
@@ -397,7 +399,11 @@ lookup_t *lookup_create (struct cache *cache,
     lh->magic = LOOKUP_MAGIC;
     lh->cache = cache;
     lh->current_epoch = current_epoch;
-    /* must duplicate ref, user may not keep pointer alive */
+    /* must duplicate strings, user may not keep pointer alive */
+    if (!(lh->namespace = strdup (namespace))) {
+        saved_errno = ENOMEM;
+        goto cleanup;
+    }
     if (!(lh->root_ref = strdup (root_ref))) {
         saved_errno = ENOMEM;
         goto cleanup;
@@ -446,6 +452,7 @@ lookup_t *lookup_create (struct cache *cache,
 void lookup_destroy (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC) {
+        free (lh->namespace);
         free (lh->root_ref);
         free (lh->path);
         json_decref (lh->val);
@@ -559,6 +566,13 @@ int lookup_get_current_epoch (lookup_t *lh)
     if (lh && lh->magic == LOOKUP_MAGIC)
         return lh->current_epoch;
     return -1;
+}
+
+const char *lookup_get_namespace (lookup_t *lh)
+{
+    if (lh && lh->magic == LOOKUP_MAGIC)
+        return lh->namespace;
+    return NULL;
 }
 
 const char *lookup_get_root_ref (lookup_t *lh)
