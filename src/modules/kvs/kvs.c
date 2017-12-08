@@ -1465,6 +1465,7 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
     }
 
     root->flags = flags;
+    root->ctx = ctx;
 
     if (zhash_insert (ctx->roothash, namespace, root) < 0) {
         flux_log_error (ctx->h, "zhash_insert");
@@ -1478,8 +1479,6 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
         errno = save_errnum;
         goto error;
     }
-
-    root->ctx = ctx;
 
     return root;
 
