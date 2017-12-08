@@ -1438,7 +1438,8 @@ static void remove_root (kvs_ctx_t *ctx, const char *namespace)
 }
 
 static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
-                                    int flags) {
+                                    int flags)
+{
     struct kvsroot *root;
     int save_errnum;
 
@@ -1549,7 +1550,8 @@ cleanup:
     return rc;
 }
 
-static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
+static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace)
+{
     struct kvsroot *root;
     blobref_t rootref;
     int save_errno, rootseq, flags;
