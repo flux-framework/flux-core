@@ -87,7 +87,6 @@ struct kvsroot {
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     int flags;
-    kvs_ctx_t *ctx;
     bool remove;
 };
 
@@ -1632,7 +1631,6 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
     }
 
     root->flags = flags;
-    root->ctx = ctx;
     root->remove = false;
 
     if (zhash_insert (ctx->roothash, namespace, root) < 0) {
