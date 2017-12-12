@@ -91,6 +91,10 @@ The KVS module is not loaded.
 ENOTSUP::
 An unknown namespace was requested.
 
+EOVERFLOW::
+`flux_kvs_fence()` has been called too many times and _nprocs_ has
+been exceeded.
+
 AUTHOR
 ------
 This page is maintained by the Flux community.

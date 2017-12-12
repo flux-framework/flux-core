@@ -93,7 +93,8 @@ error:
 
 bool fence_count_reached (fence_t *f)
 {
-    return (f->count >= f->nprocs);
+    assert (f->count <= f->nprocs);
+    return (f->count == f->nprocs);
 }
 
 int fence_get_flags (fence_t *f)
@@ -120,6 +121,11 @@ int fence_add_request_data (fence_t *f, json_t *ops)
 {
     json_t *op;
     int i;
+
+    if (f->count == f->nprocs) {
+        errno = EOVERFLOW;
+        return -1;
+    }
 
     if (ops) {
         for (i = 0; i < json_array_size (ops); i++) {
