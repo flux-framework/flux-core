@@ -101,6 +101,8 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
                                json_t *names);
 static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
                              json_t *names, int errnum);
+static int error_event_send_to_name (kvs_ctx_t *ctx, const char *namespace,
+                                     const char *name, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -1180,21 +1182,19 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(root = lookup_root (ctx, namespace))) {
         flux_log (h, LOG_ERR, "%s: namespace %s not initialized",
                   __FUNCTION__, namespace);
-        return;
+        errno = ENOTSUP;
+        goto error;
     }
 
-    /* FIXME: generate a kvs.fence.abort (or similar) if an error
-     * occurs after we know the fence name
-     */
     if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
             flux_log_error (h, "%s: fence_create", __FUNCTION__);
-            return;
+            goto error;
         }
         if (commit_mgr_add_fence (root->cm, f) < 0) {
             flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
-            return;
+            goto error;
         }
     }
     else
@@ -1202,15 +1202,22 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (fence_add_request_data (f, ops) < 0) {
         flux_log_error (h, "%s: fence_add_request_data", __FUNCTION__);
-        return;
+        goto error;
     }
 
     if (commit_mgr_process_fence_request (root->cm, f) < 0) {
         flux_log_error (h, "%s: commit_mgr_process_fence_request", __FUNCTION__);
-        return;
+        goto error;
     }
 
     return;
+
+error:
+    /* An error has occurred, so we will return an error similarly to
+     * how an error would be returned via a commit error.
+     */
+    if (error_event_send_to_name (ctx, namespace, name, errno) < 0)
+        flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
 }
 
 /* kvs.fence
@@ -1659,6 +1666,24 @@ done:
     flux_msg_destroy (msg);
     if (rc < 0)
         errno = saved_errno;
+    return rc;
+}
+
+static int error_event_send_to_name (kvs_ctx_t *ctx, const char *namespace,
+                                     const char *name, int errnum)
+{
+    json_t *names = NULL;
+    int rc = -1;
+
+    if (!(names = json_pack ("[ s ]", name))) {
+        flux_log_error (ctx->h, "%s: json_pack", __FUNCTION__);
+        errno = ENOMEM;
+        goto done;
+    }
+
+    rc = error_event_send (ctx, namespace, names, errnum);
+done:
+    json_decref (names);
     return rc;
 }
 
