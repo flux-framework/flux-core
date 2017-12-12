@@ -99,7 +99,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace);
 static struct kvsroot *lookup_root (kvs_ctx_t *ctx, const char *namespace);
 static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
                                json_t *names);
-static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
                              json_t *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
@@ -552,7 +552,8 @@ done:
         fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, root, fence_get_json_names (f), errnum);
+        error_event_send (ctx, root->namespace, fence_get_json_names (f),
+                          errnum);
     }
     wait_destroy (wait);
 
@@ -1623,21 +1624,21 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
     finalize_fences_bynames (ctx, root, names, errnum);
 }
 
-static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
                              json_t *names, int errnum)
 {
     flux_msg_t *msg = NULL;
     char *error_topic = NULL;
     int saved_errno, rc = -1;
 
-    if (asprintf (&error_topic, "kvs.error.%s", root->namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
     }
 
     if (!(msg = flux_event_pack (error_topic, "{ s:s s:O s:i }",
-                                 "namespace", root->namespace,
+                                 "namespace", namespace,
                                  "names", names,
                                  "errnum", errnum))) {
         saved_errno = errno;
