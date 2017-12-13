@@ -407,3 +407,4 @@ lookups
 mh
 namespaces
 ENOTSUP
+EOVERFLOW

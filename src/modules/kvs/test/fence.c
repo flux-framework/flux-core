@@ -73,6 +73,10 @@ void basic_api_tests (void)
     ok (json_equal (ops, o) == true,
         "initial fence_get_json_ops match");
 
+    ok (fence_add_request_data (f, ops) < 0
+        && errno == EOVERFLOW,
+        "fence_add_request_data fails with EOVERFLOW when exceeding nprocs");
+
     json_decref (ops);
 
     ok (fence_iter_request_copies (f, msg_cb, &count) == 0,
