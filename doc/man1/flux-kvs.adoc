@@ -27,14 +27,14 @@ UNIX file paths.  A single "." represents the root directory of
 the KVS.
 
 The KVS is distributed among the ranks of a comms session.  Rank 0
-is the master, and other ranks are caching slaves.  All writes are flushed
-to the master during a commit operation.  Data is stored in a hash tree
+is the leader, and other ranks are caching followers.  All writes are flushed
+to the leader during a commit operation.  Data is stored in a hash tree
 such that every commit results in a new root hash.  Each new root hash
-is multicast across the session.  When slaves update their root hash,
-they atomically update their view to match the master.  There may be a
-delay after a commit while old data is served on a slave that has not yet
+is multicast across the session.  When followers update their root hash,
+they atomically update their view to match the leader.  There may be a
+delay after a commit while old data is served on a follower that has not yet
 updated its root hash, thus the Flux KVS consistency model is "eventually
-consistent".  Slaves cache data temporally and fault in new data through
+consistent".  Followers cache data temporally and fault in new data through
 their parent in the overlay network.
 
 flux-kvs(1) runs a KVS 'COMMAND'.  The possible commands and their
