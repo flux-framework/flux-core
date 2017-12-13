@@ -28,6 +28,8 @@ typedef int (*commit_cache_entry_f)(commit_t *c,
                                      struct cache_entry *entry,
                                      void *data);
 
+typedef int (*commit_fence_f)(fence_t *f, void *data);
+
 int commit_get_errnum (commit_t *c);
 
 /* if user wishes to stall, but needs future knowledge to fail and
@@ -114,6 +116,11 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f);
 
 /* Lookup a fence previously stored via commit_mgr_add_fence(), via name */
 fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name);
+
+/* Iterate through all stored fences
+ * - do not call commit_mgr_remove_fence() within the callback, is unsafe
+ */
+int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data);
 
 /* commit_mgr_process_fence_request() should be called once per fence
  * request, after fence_add_request_data() has been called.

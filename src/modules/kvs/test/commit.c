@@ -134,6 +134,18 @@ struct cache *create_cache_with_empty_rootdir (blobref_t ref)
     return cache;
 }
 
+int commit_fence_count_cb (fence_t *f, void *data)
+{
+    int *count = data;
+    (*count)++;
+    return 0;
+}
+
+int commit_fence_error_cb (fence_t *f, void *data)
+{
+    return -1;
+}
+
 void commit_mgr_basic_tests (void)
 {
     struct cache *cache;
@@ -142,6 +154,7 @@ void commit_mgr_basic_tests (void)
     commit_t *c;
     fence_t *f, *tf;
     blobref_t rootref;
+    int count;
 
     ok (commit_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
         && errno == EINVAL,
@@ -160,6 +173,11 @@ void commit_mgr_basic_tests (void)
         "commit_mgr_get_noop_stores works");
 
     commit_mgr_clear_noop_stores (cm);
+
+    count = 0;
+    ok (commit_mgr_iter_fences (cm, commit_fence_count_cb, &count) == 0
+        && count == 0,
+        "commit_mgr_iter_fences success when no fences submitted");
 
     ok (commit_mgr_fences_count (cm) == 0,
         "commit_mgr_fences_count returns 0 when no fences submitted");
@@ -181,6 +199,14 @@ void commit_mgr_basic_tests (void)
 
     ok (commit_mgr_lookup_fence (cm, "invalid") == NULL,
         "commit_mgr_lookup_fence can't find invalid fence");
+
+    count = 0;
+    ok (commit_mgr_iter_fences (cm, commit_fence_count_cb, &count) == 0
+        && count == 1,
+        "commit_mgr_iter_fences success when fence submitted");
+
+    ok (commit_mgr_iter_fences (cm, commit_fence_error_cb, NULL) < 0,
+        "commit_mgr_iter_fences error on callback error");
 
     ok (commit_mgr_fences_count (cm) == 1,
         "commit_mgr_fences_count returns 1 when fence submitted");
