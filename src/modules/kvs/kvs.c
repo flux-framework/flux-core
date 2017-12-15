@@ -1907,11 +1907,15 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         while (root) {
             json_t *s;
 
-            if (!(s = json_pack ("{ s:i s:i s:i }",
+            if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
                                  "#watchers",
                                      wait_queue_length (root->watchlist),
                                  "#no-op stores",
                                      commit_mgr_get_noop_stores (root->cm),
+                                 "#fences",
+                                     commit_mgr_fences_count (root->cm),
+                                 "#readycommits",
+                                     commit_mgr_ready_commit_count (root->cm),
                                  "store revision", root->seq))) {
                 errno = ENOMEM;
                 goto done;
@@ -1925,9 +1929,11 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     else {
         json_t *s;
 
-        if (!(s = json_pack ("{ s:i s:i s:i }",
+        if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
                              "#watchers", 0,
                              "#no-op stores", 0,
+                             "#fences", 0,
+                             "#readycommits", 0,
                              "store revision", 0))) {
             errno = ENOMEM;
             goto done;
