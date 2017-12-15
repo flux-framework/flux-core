@@ -1033,6 +1033,16 @@ void commit_mgr_clear_noop_stores (commit_mgr_t *cm)
     cm->noop_stores = 0;
 }
 
+int commit_mgr_fences_count (commit_mgr_t *cm)
+{
+    return zhash_size (cm->fences);
+}
+
+int commit_mgr_ready_commit_count (commit_mgr_t *cm)
+{
+    return zlist_size (cm->ready);
+}
+
 /* Merge ready commits that are mergeable, where merging consists of
  * popping the "donor" commit off the ready list, and appending its
  * ops to the top commit.  The top commit can be appended to if it

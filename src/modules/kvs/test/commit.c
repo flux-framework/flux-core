@@ -157,6 +157,9 @@ void commit_mgr_basic_tests (void)
 
     commit_mgr_clear_noop_stores (cm);
 
+    ok (commit_mgr_fences_count (cm) == 0,
+        "commit_mgr_fences_count returns 0 when no fences submitted");
+
     ok ((f = fence_create ("fence1", 1, 0)) != NULL,
         "fence_create works");
 
@@ -175,8 +178,14 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_lookup_fence (cm, "invalid") == NULL,
         "commit_mgr_lookup_fence can't find invalid fence");
 
+    ok (commit_mgr_fences_count (cm) == 1,
+        "commit_mgr_fences_count returns 1 when fence submitted");
+
     ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
+
+    ok (commit_mgr_ready_commit_count (cm) == 0,
+        "commit_mgr_ready_commit_count is 0");
 
     ok (commit_mgr_commits_ready (cm) == false,
         "commit_mgr_commits_ready says no fences are ready");
@@ -194,6 +203,9 @@ void commit_mgr_basic_tests (void)
 
     ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
+
+    ok (commit_mgr_ready_commit_count (cm) == 1,
+        "commit_mgr_ready_commit_count is 1");
 
     ok (commit_mgr_commits_ready (cm) == true,
         "commit_mgr_commits_ready says a fence is ready");
