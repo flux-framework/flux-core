@@ -1925,8 +1925,9 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     else {
         json_t *s;
 
-        if (!(s = json_pack ("{ s:i s:i }",
+        if (!(s = json_pack ("{ s:i s:i s:i }",
                              "#watchers", 0,
+                             "#no-op stores", 0,
                              "store revision", 0))) {
             errno = ENOMEM;
             goto done;
