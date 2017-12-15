@@ -143,6 +143,10 @@ void commit_mgr_basic_tests (void)
     fence_t *f, *tf;
     blobref_t rootref;
 
+    ok (commit_mgr_create (NULL, NULL, NULL, NULL) == NULL
+        && errno == EINVAL,
+        "commit_mgr_create fails with EINVAL on bad input");
+
     cache = create_cache_with_empty_rootdir (rootref);
 
     ok ((cm = commit_mgr_create (cache, "sha1", NULL, &test_global)) != NULL,

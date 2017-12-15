@@ -96,9 +96,10 @@ struct kvs_cb_data {
 };
 
 static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace);
+static struct kvsroot *lookup_root (kvs_ctx_t *ctx, const char *namespace);
 static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
                                json_t *names);
-static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
                              json_t *names, int errnum);
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
@@ -551,7 +552,8 @@ done:
         fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, root, fence_get_json_names (f), errnum);
+        error_event_send (ctx, root->namespace, fence_get_json_names (f),
+                          errnum);
     }
     wait_destroy (wait);
 
@@ -1077,7 +1079,7 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* if root not initialized, success automatically */
-    if (!(root = zhash_lookup (ctx->roothash, namespace)))
+    if (!(root = lookup_root (ctx, namespace)))
         goto done;
 
     if (!(p.key = kvs_util_normalize_key (key, NULL))) {
@@ -1175,7 +1177,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* namespace must exist given we are on rank 0 */
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         flux_log (h, LOG_ERR, "%s: namespace %s not initialized",
                   __FUNCTION__, namespace);
         return;
@@ -1352,7 +1354,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (ctx->rank == 0) {
-        if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+        if (!(root = lookup_root (ctx, namespace))) {
             flux_log (h, LOG_DEBUG, "namespace %s not found", namespace);
             errno = ENOTSUP;
             goto error;
@@ -1437,8 +1439,14 @@ static void remove_root (kvs_ctx_t *ctx, const char *namespace)
     zhash_delete (ctx->roothash, namespace);
 }
 
+static struct kvsroot *lookup_root (kvs_ctx_t *ctx, const char *namespace)
+{
+    return zhash_lookup (ctx->roothash, namespace);
+}
+
 static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
-                                    int flags) {
+                                    int flags)
+{
     struct kvsroot *root;
     int save_errnum;
 
@@ -1464,6 +1472,7 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
     }
 
     root->flags = flags;
+    root->ctx = ctx;
 
     if (zhash_insert (ctx->roothash, namespace, root) < 0) {
         flux_log_error (ctx->h, "zhash_insert");
@@ -1477,8 +1486,6 @@ static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
         errno = save_errnum;
         goto error;
     }
-
-    root->ctx = ctx;
 
     return root;
 
@@ -1549,12 +1556,13 @@ cleanup:
     return rc;
 }
 
-static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace) {
+static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace)
+{
     struct kvsroot *root;
     blobref_t rootref;
     int save_errno, rootseq, flags;
 
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         if (ctx->rank == 0) {
             flux_log (ctx->h, LOG_DEBUG, "namespace %s not found", namespace);
             errno = ENOTSUP;
@@ -1607,7 +1615,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
      * remove and the event being sent.  But generally speaking this
      * should be impossible to hit.
      */
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
                   __FUNCTION__, namespace);
         return;
@@ -1616,21 +1624,21 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
     finalize_fences_bynames (ctx, root, names, errnum);
 }
 
-static int error_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
+static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
                              json_t *names, int errnum)
 {
     flux_msg_t *msg = NULL;
     char *error_topic = NULL;
     int saved_errno, rc = -1;
 
-    if (asprintf (&error_topic, "kvs.error.%s", root->namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
     }
 
     if (!(msg = flux_event_pack (error_topic, "{ s:s s:O s:i }",
-                                 "namespace", root->namespace,
+                                 "namespace", namespace,
                                  "names", names,
                                  "errnum", errnum))) {
         saved_errno = errno;
@@ -1722,7 +1730,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
      * remove and the event being sent.  But generally speaking this
      * should be impossible to hit.
      */
-    if (!(root = zhash_lookup (ctx->roothash, namespace))) {
+    if (!(root = lookup_root (ctx, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
                   __FUNCTION__, namespace);
         return;
@@ -1987,7 +1995,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
     int len;
 
     /* Namespace already exists */
-    if (zhash_lookup (ctx->roothash, namespace)) {
+    if (lookup_root (ctx, namespace)) {
         errno = EEXIST;
         goto cleanup;
     }
@@ -2188,7 +2196,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
 
-        if (!(root = zhash_lookup (ctx->roothash, KVS_PRIMARY_NAMESPACE))) {
+        if (!(root = lookup_root (ctx, KVS_PRIMARY_NAMESPACE))) {
             if (!(root = create_root (ctx, KVS_PRIMARY_NAMESPACE, 0))) {
                 flux_log_error (h, "create_root");
                 goto done;
