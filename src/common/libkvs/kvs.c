@@ -48,6 +48,18 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
                           "flags", flags);
 }
 
+flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace)
+{
+    if (!namespace) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return flux_rpc_pack (h, "kvs.namespace.remove", 0, 0,
+                          "{ s:s }",
+                          "namespace", namespace);
+}
+
 int flux_kvs_get_version (flux_t *h, int *versionp)
 {
     flux_future_t *f;

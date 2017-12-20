@@ -37,13 +37,29 @@ updated its root hash, thus the Flux KVS consistency model is "eventually
 consistent".  Followers cache data temporally and fault in new data through
 their parent in the overlay network.
 
+Different KVS namespaces can be created in which kvs values can be
+read from/written to.  By default, all KVS operations operate on the
+default KVS namespace "primary".  To use a different namespace, set
+the environment variable FLUX_KVS_NAMESPACE to the namespace you wish
+to use.  When a KVS namespace is first created, it is only created on
+the leader.  Followers will initialize itself against a namespace the
+first time it is used.  When a namespace is removed, a namespace is
+marked for removal on the leader and an event is multicast to
+followers to similarly mark the namespace for removal.  The namespace
+will then be garbage collected in the background.  There may be a
+delay in the namespace being recognized as removed.  Similar to
+commits, it is "eventually consistent".
+
 flux-kvs(1) runs a KVS 'COMMAND'.  The possible commands and their
 arguments are described below.
 
 COMMANDS
 --------
 *namespace-create* 'name' ['name...']::
-Create a namespace in which kvs values will be read/written to.
+Create a new kvs namespace.
+
+*namespace-remove* 'name' ['name...']::
+Remove a kvs namespace.
 
 *get* [-j|-r|-t] [-a treeobj] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under

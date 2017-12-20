@@ -17,6 +17,7 @@ typedef int (*lookup_ref_f)(lookup_t *c,
  */
 lookup_t *lookup_create (struct cache *cache,
                          int current_epoch,
+                         const char *namespace,
                          const char *root_ref,
                          const char *path,
                          flux_t *h,
@@ -60,6 +61,11 @@ struct cache *lookup_get_cache (lookup_t *lh);
  * presently.
  */
 int lookup_get_current_epoch (lookup_t *lh);
+
+/* Convenience function to get namespace from earlier instantiation.
+ * Convenient if replaying RPC and don't have it presently.
+ */
+const char *lookup_get_namespace (lookup_t *lh);
 
 /* Convenience function to get root ref from earlier instantiation.
  * Convenient if replaying RPC and don't have it presently.
