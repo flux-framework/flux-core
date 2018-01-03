@@ -20,17 +20,19 @@ DIR=test.a.b
 # observed racing between backgrounding watch process and foreground
 # activities.
 #
-# Loop count is just to make sure we don't spin forever on error, 50
-# loops/5 seconds seems like a decent maximum.
+# Loop on WAIT_ITERS is just to make sure we don't spin forever on
+# error.
+
+KVS_WAIT_ITERS=50
 
 wait_watch_put() {
         i=0
-        while [ "$(flux kvs get --json $1 2> /dev/null)" != "$2" ] && [ $i -lt 50 ]
+        while [ "$(flux kvs get --json $1 2> /dev/null)" != "$2" ] && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
+        if [ $i -eq ${KVS_WAIT_ITERS} ]
         then
             return 1
         fi
@@ -39,12 +41,12 @@ wait_watch_put() {
 
 wait_watch_empty() {
         i=0
-        while flux kvs get --json $1 2> /dev/null && [ $i -lt 50 ]
+        while flux kvs get --json $1 2> /dev/null && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
+        if [ $i -eq ${KVS_WAIT_ITERS} ]
         then
             return 1
         fi
@@ -53,12 +55,12 @@ wait_watch_empty() {
 
 wait_watch_file() {
         i=0
-        while [ "$(tail -n 1 $1 2> /dev/null)" != "$2" ] && [ $i -lt 50 ]
+        while [ "$(tail -n 1 $1 2> /dev/null)" != "$2" ] && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
+        if [ $i -eq ${KVS_WAIT_ITERS} ]
         then
             return 1
         fi
