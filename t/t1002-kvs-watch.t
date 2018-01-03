@@ -51,9 +51,9 @@ wait_watch_empty() {
         return 0
 }
 
-wait_watch_current() {
+wait_watch_file() {
         i=0
-        while [ "$(tail -n 1 watch_out 2> /dev/null)" != "$1" ] && [ $i -lt 50 ]
+        while [ "$(tail -n 1 $1 2> /dev/null)" != "$2" ] && [ $i -lt 50 ]
         do
                 sleep 0.1
                 i=$((i + 1))
@@ -79,7 +79,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
-        wait_watch_current "0"
+        wait_watch_file watch_out "0"
         flux kvs put --json $DIR.foo=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -95,7 +95,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that at first doesnt exist' 
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
-        wait_watch_current "nil" &&
+        wait_watch_file watch_out "nil" &&
         flux kvs put --json $DIR.foo=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -112,7 +112,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that gets removed'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$!
-        wait_watch_current "0" &&
+        wait_watch_file watch_out "0" &&
         flux kvs unlink $DIR.foo &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -129,7 +129,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key that becomes a dir'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.foo >watch_out &
         watchpid=$! &&
-        wait_watch_current "0" &&
+        wait_watch_file watch_out "0" &&
         flux kvs put --json $DIR.foo.bar.baz=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -149,7 +149,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
         watchpid=$! &&
-        wait_watch_current "======================" &&
+        wait_watch_file watch_out "======================" &&
         flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -167,7 +167,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir that at first doesnt exist' 
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR >watch_out &
         watchpid=$! &&
-        wait_watch_current "nil" &&
+        wait_watch_file watch_out "nil" &&
         flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -187,7 +187,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir that gets removed'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
-        wait_watch_current "======================" &&
+        wait_watch_file watch_out "======================" &&
         flux kvs unlink -R $DIR.a &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -207,7 +207,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir, converted into a key'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
-        wait_watch_current "======================" &&
+        wait_watch_file watch_out "======================" &&
         flux kvs put --json $DIR.a=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -230,7 +230,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir, prefix path converted into 
         rm -f watch_out
 	stdbuf -oL flux kvs watch -o -c 1 $DIR.a >watch_out &
         watchpid=$! &&
-        wait_watch_current "======================" &&
+        wait_watch_file watch_out "======================" &&
         flux kvs put --json $DIR=1 &&
         wait $watchpid
 	cat >expected <<-EOF &&
@@ -270,7 +270,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir with -R'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -R -o -c 1 $DIR >watch_out &
         watchpid=$! &&
-        wait_watch_current "======================" &&
+        wait_watch_file watch_out "======================" &&
         flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
         sort_watch_output
@@ -293,7 +293,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a dir with -R and -d'  '
         rm -f watch_out
 	stdbuf -oL flux kvs watch -R -d -o -c 1 $DIR >watch_out &
         watchpid=$! &&
-        wait_watch_current "======================" &&
+        wait_watch_file watch_out "======================" &&
         flux kvs put --json $DIR.a.a=1 &&
         wait $watchpid
         sort_watch_output
