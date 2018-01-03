@@ -3,6 +3,8 @@
 
 test_description='kvs watch tests in flux session'
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 if test "$TEST_LONG" = "t"; then
@@ -15,57 +17,6 @@ test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
 DIR=test.a.b
-
-# Various loops to wait for conditions before moving on.  Have
-# observed racing between backgrounding watch process and foreground
-# activities.
-#
-# Loop on WAIT_ITERS is just to make sure we don't spin forever on
-# error.
-
-KVS_WAIT_ITERS=50
-
-wait_watch_put() {
-        i=0
-        while [ "$(flux kvs get --json $1 2> /dev/null)" != "$2" ] && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ $i -eq ${KVS_WAIT_ITERS} ]
-        then
-            return 1
-        fi
-        return 0
-}
-
-wait_watch_empty() {
-        i=0
-        while flux kvs get --json $1 2> /dev/null && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ $i -eq ${KVS_WAIT_ITERS} ]
-        then
-            return 1
-        fi
-        return 0
-}
-
-wait_watch_file() {
-        i=0
-        while [ "$(tail -n 1 $1 2> /dev/null)" != "$2" ] && [ $i -lt ${KVS_WAIT_ITERS} ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ $i -eq ${KVS_WAIT_ITERS} ]
-        then
-            return 1
-        fi
-        return 0
-}
 
 # Note that we do not && after the final call to wait_watch_put or
 # wait_watch_empty.  We want that as a barrier before launching our

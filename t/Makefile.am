@@ -214,7 +214,8 @@ dist_check_SCRIPTS = \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
-	valgrind/valgrind-workload.sh
+	valgrind/valgrind-workload.sh \
+	kvs/kvs-helper.sh
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
