@@ -5,6 +5,8 @@ test_description='Test flux-kvs and kvs in flux session
 These are tests for ensuring multiple namespaces work.
 '
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 if test "$TEST_LONG" = "t"; then
@@ -144,20 +146,6 @@ wait_watch_namespace_put() {
         return 0
 }
 
-wait_watch_current() {
-        i=0
-        while [ "$(tail -n 1 $1 2> /dev/null)" != "$2" ] && [ $i -lt 50 ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ $i -eq 50 ]
-        then
-            return 1
-        fi
-        return 0
-}
-
 wait_fencecount_nonzero() {
         i=0
         while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#fences kvs" 2> /dev/null)" == "0" ] && [ $i -lt 50 ]
@@ -242,7 +230,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key in primary namespace works' 
         export FLUX_KVS_NAMESPACE=$PRIMARYNAMESPACE
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_current watch_out "0"
+        wait_watch_file watch_out "0"
         flux kvs put --json $DIR.watch=1 &&
         wait $watchpid
         unset FLUX_KVS_NAMESPACE
@@ -314,7 +302,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key in new namespace works'  '
         export FLUX_KVS_NAMESPACE=$NAMESPACETEST
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_current watch_out "0"
+        wait_watch_file watch_out "0"
         flux kvs put --json $DIR.watch=1 &&
         wait $watchpid
         unset FLUX_KVS_NAMESPACE
@@ -475,7 +463,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch gets ENOTSUP when namespace is rem
         export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH0
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
-        wait_watch_current watch_out "0"
+        wait_watch_file watch_out "0"
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH0 &&
         wait $watchpid &&
         unset FLUX_KVS_NAMESPACE
@@ -490,7 +478,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namesp
         rm -f watch_out
         stdbuf -oL flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH1 ; flux kvs wait ${VERS}; flux kvs watch -o -c 1 $DIR.watch" > watch_out &
         watchpid=$! &&
-        wait_watch_current watch_out "0" &&
+        wait_watch_file watch_out "0" &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH1 &&
         wait $watchpid &&
         grep "Operation not supported" watch_out
@@ -635,12 +623,12 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key in different namespaces work
 
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >primary_watch_out &
         primarywatchpid=$! &&
-        wait_watch_current primary_watch_out "0"
+        wait_watch_file primary_watch_out "0"
 
         export FLUX_KVS_NAMESPACE=$NAMESPACETEST
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >test_watch_out &
         testwatchpid=$! &&
-        wait_watch_current test_watch_out "1"
+        wait_watch_file test_watch_out "1"
         unset FLUX_KVS_NAMESPACE
 
         put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.watch 1 &&
