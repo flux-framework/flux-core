@@ -95,11 +95,7 @@ namespace_create_loop() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 get_kvs_namespace_all_ranks_loop() {
@@ -109,11 +105,7 @@ get_kvs_namespace_all_ranks_loop() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 get_kvs_namespace_fails_all_ranks_loop() {
@@ -123,11 +115,7 @@ get_kvs_namespace_fails_all_ranks_loop() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 wait_watch_put_namespace() {
@@ -139,11 +127,7 @@ wait_watch_put_namespace() {
                 i=$((i + 1))
         done
         unset FLUX_KVS_NAMESPACE
-        if [ $i -eq 50 ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 wait_fencecount_nonzero() {
@@ -153,11 +137,7 @@ wait_fencecount_nonzero() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq 50 ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 #

@@ -12,6 +12,15 @@
 
 KVS_WAIT_ITERS=50
 
+loophandlereturn() {
+    index=$1
+    if [ "$index" -eq "${KVS_WAIT_ITERS}" ]
+    then
+        return 1
+    fi
+    return 0
+}
+
 # arg1 - key to retrieve
 # arg2 - value to wait for
 wait_watch_put() {
@@ -21,11 +30,7 @@ wait_watch_put() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq ${KVS_WAIT_ITERS} ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 # arg1 - key to retrieve
@@ -36,11 +41,7 @@ wait_watch_empty() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq ${KVS_WAIT_ITERS} ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
 
 # arg1 - file to watch
@@ -52,9 +53,5 @@ wait_watch_file() {
                 sleep 0.1
                 i=$((i + 1))
         done
-        if [ $i -eq ${KVS_WAIT_ITERS} ]
-        then
-            return 1
-        fi
-        return 0
+        return $(loophandlereturn $i)
 }
