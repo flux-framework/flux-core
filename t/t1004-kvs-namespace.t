@@ -29,12 +29,6 @@ NAMESPACETEST=namespacetest
 NAMESPACETMP=namespacetmp
 NAMESPACERANK1=namespacerank1
 
-test_kvs_key() {
-	flux kvs get --json "$1" >output
-	echo "$2" >expected
-	test_cmp expected output
-}
-
 test_kvs_key_namespace() {
         export FLUX_KVS_NAMESPACE=$1
 	flux kvs get --json "$2" >output

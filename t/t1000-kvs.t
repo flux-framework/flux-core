@@ -7,6 +7,8 @@ These are the basic/core flux kvs tests and should be run before
 any other tests that require kvs functionality.
 '
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 if test "$TEST_LONG" = "t"; then
@@ -22,12 +24,6 @@ DIR=test.a.b
 KEY=test.a.b.c
 SUBDIR1=test.a.b.d
 SUBDIR2=test.a.b.e
-
-test_kvs_key() {
-	flux kvs get --json "$1" >output
-	echo "$2" >expected
-	test_cmp expected output
-}
 
 #
 # Basic put, get, unlink tests

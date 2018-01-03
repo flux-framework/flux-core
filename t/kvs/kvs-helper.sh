@@ -22,6 +22,14 @@ loophandlereturn() {
 }
 
 # arg1 - key to retrieve
+# arg2 - expected value
+test_kvs_key() {
+	flux kvs get --json "$1" >output
+	echo "$2" >expected
+	test_cmp expected output
+}
+
+# arg1 - key to retrieve
 # arg2 - value to wait for
 wait_watch_put() {
         i=0
