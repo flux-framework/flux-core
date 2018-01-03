@@ -130,7 +130,7 @@ get_kvs_namespace_fails_all_ranks_loop() {
         return 0
 }
 
-wait_watch_namespace_put() {
+wait_watch_put_namespace() {
         export FLUX_KVS_NAMESPACE=$1
         i=0
         while [ "$(flux kvs get --json $2 2> /dev/null)" != "$3" ] && [ $i -lt 50 ]
@@ -225,7 +225,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait on primary namespace works' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in primary namespace works'  '
         unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR &&
         put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.watch 0 &&
-        wait_watch_namespace_put $PRIMARYNAMESPACE "$DIR.watch" "0"
+        wait_watch_put_namespace $PRIMARYNAMESPACE "$DIR.watch" "0"
         rm -f watch_out
         export FLUX_KVS_NAMESPACE=$PRIMARYNAMESPACE
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
@@ -297,7 +297,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait in new namespace works' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in new namespace works'  '
         unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
         put_kvs_key_namespace $NAMESPACETEST $DIR.watch 0 &&
-        wait_watch_namespace_put $NAMESPACETEST "$DIR.watch" "0"
+        wait_watch_put_namespace $NAMESPACETEST "$DIR.watch" "0"
         rm -f watch_out
         export FLUX_KVS_NAMESPACE=$NAMESPACETEST
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
@@ -458,7 +458,7 @@ test_expect_success 'kvs: watch fails on invalid namespace on rank 1' '
 test_expect_success NO_CHAIN_LINT 'kvs: watch gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH0 &&
         put_kvs_key_namespace $NAMESPACETMP-REMOVE-WATCH0 $DIR.watch 0 &&
-        wait_watch_namespace_put $NAMESPACETMP-REMOVE-WATCH0 "$DIR.watch" "0"
+        wait_watch_put_namespace $NAMESPACETMP-REMOVE-WATCH0 "$DIR.watch" "0"
         rm -f watch_out
         export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH0
         stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
@@ -615,9 +615,9 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key in different namespaces work
         unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR &&
         unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
         put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.watch 0 &&
-        wait_watch_namespace_put $PRIMARYNAMESPACE "$DIR.watch" "0"
+        wait_watch_put_namespace $PRIMARYNAMESPACE "$DIR.watch" "0"
         put_kvs_key_namespace $NAMESPACETEST $DIR.watch 1 &&
-        wait_watch_namespace_put $NAMESPACETEST "$DIR.watch" "1"
+        wait_watch_put_namespace $NAMESPACETEST "$DIR.watch" "1"
         rm -f primary_watch_out
         rm -f test_watch_out
 
