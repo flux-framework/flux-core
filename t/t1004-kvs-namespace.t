@@ -90,7 +90,7 @@ dir_kvs_namespace_exitvalue() {
 
 namespace_create_loop() {
         i=0
-        while ! flux kvs namespace-create $1 && [ $i -lt 50 ]
+        while ! flux kvs namespace-create $1 && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
@@ -100,7 +100,8 @@ namespace_create_loop() {
 
 get_kvs_namespace_all_ranks_loop() {
         i=0
-        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; flux kvs get $2" && [ $i -lt 50 ]
+        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; flux kvs get $2" \
+              && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
@@ -110,7 +111,8 @@ get_kvs_namespace_all_ranks_loop() {
 
 get_kvs_namespace_fails_all_ranks_loop() {
         i=0
-        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; ! flux kvs get $2" && [ $i -lt 50 ]
+        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; ! flux kvs get $2" \
+              && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
@@ -120,19 +122,16 @@ get_kvs_namespace_fails_all_ranks_loop() {
 
 wait_watch_put_namespace() {
         export FLUX_KVS_NAMESPACE=$1
-        i=0
-        while [ "$(flux kvs get --json $2 2> /dev/null)" != "$3" ] && [ $i -lt 50 ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
+        wait_watch_put $2 $3
+        exitvalue=$?
         unset FLUX_KVS_NAMESPACE
-        return $(loophandlereturn $i)
+        return $exitvalue
 }
 
 wait_fencecount_nonzero() {
         i=0
-        while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#fences kvs" 2> /dev/null)" == "0" ] && [ $i -lt 50 ]
+        while [ "$(flux exec -r $1 sh -c "flux module stats --parse namespace.$2.#fences kvs" 2> /dev/null)" == "0" ] \
+              && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
