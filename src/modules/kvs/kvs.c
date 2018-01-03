@@ -2417,12 +2417,10 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
     }
 }
 
-/* Store initial root in local cache, and flush to content
- * cache synchronously. If 'rootdir' is NULL, store an empty one.
- * The corresponding blobref is written into 'ref'.
+/* Store initial root in local cache, and flush to content cache
+ * synchronously.  The corresponding blobref is written into 'ref'.
  */
-static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
-                                  blobref_t ref)
+static int store_initial_rootdir (kvs_ctx_t *ctx, blobref_t ref)
 {
     struct cache_entry *entry;
     int saved_errno, ret;
@@ -2430,17 +2428,10 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
     int len;
     flux_future_t *f = NULL;
     const char *newref;
-    json_t *empty_rootdir = NULL;
+    json_t *rootdir = NULL;
 
-    if (!rootdir) {
-        if (!(empty_rootdir = treeobj_create_dir ())) {
-            flux_log_error (ctx->h, "%s: treeobj_create_dir", __FUNCTION__);
-            goto error;
-        }
-        rootdir = empty_rootdir;
-    }
-    if (treeobj_validate (rootdir) < 0 || !treeobj_is_dir (rootdir)) {
-        errno = EINVAL;
+    if (!(rootdir = treeobj_create_dir ())) {
+        flux_log_error (ctx->h, "%s: treeobj_create_dir", __FUNCTION__);
         goto error;
     }
     if (!(data = treeobj_encode (rootdir)))
@@ -2479,7 +2470,7 @@ static int store_initial_rootdir (kvs_ctx_t *ctx, const json_t *rootdir,
     }
     free (data);
     flux_future_destroy (f);
-    json_decref (empty_rootdir);
+    json_decref (rootdir);
     return 0;
 error_uncache:
     saved_errno = errno;
@@ -2489,7 +2480,7 @@ error:
     saved_errno = errno;
     free (data);
     flux_future_destroy (f);
-    json_decref (empty_rootdir);
+    json_decref (rootdir);
     errno = saved_errno;
     return -1;
 }
@@ -2509,7 +2500,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         struct kvsroot *root;
         blobref_t rootref;
 
-        if (store_initial_rootdir (ctx, NULL, rootref) < 0) {
+        if (store_initial_rootdir (ctx, rootref) < 0) {
             flux_log_error (h, "storing initial root object");
             goto done;
         }
