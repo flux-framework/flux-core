@@ -1564,7 +1564,8 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
 {
     struct kvsroot *root;
 
-    if ((root = zhash_lookup (ctx->roothash, namespace))) {
+    /* safe lookup, if root removal in process, let it continue */
+    if ((root = lookup_root_safe (ctx, namespace))) {
         fence_t *f;
 
         root->remove = true;
