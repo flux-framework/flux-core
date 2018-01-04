@@ -1543,64 +1543,6 @@ static struct kvsroot *lookup_root_safe (kvs_ctx_t *ctx, const char *namespace)
     return root;
 }
 
-static int root_remove_process_fences (fence_t *f, void *data)
-{
-    kvs_ctx_t *ctx = data;
-
-    /* If fence count not reached, these fences will never finish,
-     * must alert them with ENOTSUP that namespace removed.  Put on
-     * list to process later, can't call commit_mgr_remove_fence()
-     * here.
-     */
-    if (!fence_count_reached (f)) {
-        if (zlist_append (ctx->removelist, f) < 0)
-            flux_log_error (ctx->h, "%s: zlist_append",
-                            __FUNCTION__);
-    }
-    return 0;
-}
-
-static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
-{
-    struct kvsroot *root;
-
-    /* safe lookup, if root removal in process, let it continue */
-    if ((root = lookup_root_safe (ctx, namespace))) {
-        fence_t *f;
-
-        root->remove = true;
-
-        /* Now that root has been marked for removal from roothash, run
-         * the watchlist.  watch requests will notice root removed, return
-         * ENOTSUP to watchers.
-         */
-
-        if (wait_runqueue (root->watchlist) < 0)
-            flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
-
-        /* Ready fences will be processed and errors returned to
-         * callers via the code path in commit_apply().  But not ready
-         * fences must be dealt with separately here.
-         *
-         * Note that now that the root has been marked as removable, no
-         * new fences can become ready in the future.  Checks in
-         * fence_request_cb() and relayfence_request_cb() ensure this.
-         */
-
-        if (commit_mgr_iter_fences (root->cm,
-                                    root_remove_process_fences,
-                                    ctx) < 0)
-            flux_log_error (ctx->h, "%s: commit_mgr_iter_fences", __FUNCTION__);
-
-        /* final call to commit_mgr_remove_fence() done in
-         * finalize_fences_bynames() */
-        while ((f = zlist_pop (ctx->removelist))) {
-            json_t *names = fence_get_json_names (f);
-            finalize_fences_bynames (ctx, root, names, ENOTSUP);
-        }
-    }
-}
-
 static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
                                     int flags)
 {
@@ -2294,6 +2236,64 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+}
+
+static int root_remove_process_fences (fence_t *f, void *data)
+{
+    kvs_ctx_t *ctx = data;
+
+    /* If fence count not reached, these fences will never finish,
+     * must alert them with ENOTSUP that namespace removed.  Put on
+     * list to process later, can't call commit_mgr_remove_fence()
+     * here.
+     */
+    if (!fence_count_reached (f)) {
+        if (zlist_append (ctx->removelist, f) < 0)
+            flux_log_error (ctx->h, "%s: zlist_append",
+                            __FUNCTION__);
+    }
+    return 0;
+}
+
+static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
+{
+    struct kvsroot *root;
+
+    /* safe lookup, if root removal in process, let it continue */
+    if ((root = lookup_root_safe (ctx, namespace))) {
+        fence_t *f;
+
+        root->remove = true;
+
+        /* Now that root has been marked for removal from roothash, run
+         * the watchlist.  watch requests will notice root removed, return
+         * ENOTSUP to watchers.
+         */
+
+        if (wait_runqueue (root->watchlist) < 0)
+            flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
+
+        /* Ready fences will be processed and errors returned to
+         * callers via the code path in commit_apply().  But not ready
+         * fences must be dealt with separately here.
+         *
+         * Note that now that the root has been marked as removable, no
+         * new fences can become ready in the future.  Checks in
+         * fence_request_cb() and relayfence_request_cb() ensure this.
+         */
+
+        if (commit_mgr_iter_fences (root->cm,
+                                    root_remove_process_fences,
+                                    ctx) < 0)
+            flux_log_error (ctx->h, "%s: commit_mgr_iter_fences", __FUNCTION__);
+
+        /* final call to commit_mgr_remove_fence() done in
+         * finalize_fences_bynames() */
+        while ((f = zlist_pop (ctx->removelist))) {
+            json_t *names = fence_get_json_names (f);
+            finalize_fences_bynames (ctx, root, names, ENOTSUP);
+        }
+    }
 }
 
 static int namespace_remove (kvs_ctx_t *ctx, const char *namespace)
