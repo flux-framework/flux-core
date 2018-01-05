@@ -1196,17 +1196,12 @@ done:
     free (p.sender);
 }
 
-struct finalize_data {
-    kvs_ctx_t *ctx;
-    int errnum;
-};
-
 static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
 {
-    struct finalize_data *d = data;
+    struct kvs_cb_data *cbd = data;
 
-    if (flux_respond (d->ctx->h, req, d->errnum, NULL) < 0)
-        flux_log_error (d->ctx->h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond (cbd->ctx->h, req, cbd->errnum, NULL) < 0)
+        flux_log_error (cbd->ctx->h, "%s: flux_respond", __FUNCTION__);
 
     return 0;
 }
@@ -1217,7 +1212,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
     int i, len;
     json_t *name;
     fence_t *f;
-    struct finalize_data d = { .ctx = ctx, .errnum = errnum };
+    struct kvs_cb_data cbd = { .ctx = ctx, .errnum = errnum };
 
     if (!(len = json_array_size (names))) {
         flux_log_error (ctx->h, "%s: parsing array", __FUNCTION__);
