@@ -990,15 +990,18 @@ fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name)
     return zhash_lookup (cm->fences, name);
 }
 
-int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data)
+int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
+                                      void *data)
 {
     fence_t *f;
     int rc = -1;
 
     f = zhash_first (cm->fences);
     while (f) {
-        if (cb (f, data) < 0)
-            goto done;
+        if (!(fence_get_aux_int (f) & FENCE_READY_MASK)) {
+            if (cb (f, data) < 0)
+                goto done;
+        }
 
         f = zhash_next (cm->fences);
     }

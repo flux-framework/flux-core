@@ -2242,16 +2242,13 @@ static int root_remove_process_fences (fence_t *f, void *data)
 {
     kvs_ctx_t *ctx = data;
 
-    /* If fence count not reached, these fences will never finish,
-     * must alert them with ENOTSUP that namespace removed.  Put on
-     * list to process later, can't call commit_mgr_remove_fence()
-     * here.
+    /* Not ready fences will never finish, must alert them with
+     * ENOTSUP that namespace removed.  Put on list to process later,
+     * can't call commit_mgr_remove_fence() here.
      */
-    if (!fence_count_reached (f)) {
-        if (zlist_append (ctx->removelist, f) < 0)
-            flux_log_error (ctx->h, "%s: zlist_append",
-                            __FUNCTION__);
-    }
+    if (zlist_append (ctx->removelist, f) < 0)
+        flux_log_error (ctx->h, "%s: zlist_append",
+                        __FUNCTION__);
     return 0;
 }
 
@@ -2282,9 +2279,9 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
          * fence_request_cb() and relayfence_request_cb() ensure this.
          */
 
-        if (commit_mgr_iter_fences (root->cm,
-                                    root_remove_process_fences,
-                                    ctx) < 0)
+        if (commit_mgr_iter_not_ready_fences (root->cm,
+                                              root_remove_process_fences,
+                                              ctx) < 0)
             flux_log_error (ctx->h, "%s: commit_mgr_iter_fences", __FUNCTION__);
 
         /* final call to commit_mgr_remove_fence() done in

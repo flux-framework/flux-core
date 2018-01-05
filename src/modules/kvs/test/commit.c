@@ -175,9 +175,9 @@ void commit_mgr_basic_tests (void)
     commit_mgr_clear_noop_stores (cm);
 
     count = 0;
-    ok (commit_mgr_iter_fences (cm, commit_fence_count_cb, &count) == 0
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
         && count == 0,
-        "commit_mgr_iter_fences success when no fences submitted");
+        "commit_mgr_iter_not_ready_fences success when no fences submitted");
 
     ok (commit_mgr_fences_count (cm) == 0,
         "commit_mgr_fences_count returns 0 when no fences submitted");
@@ -200,13 +200,13 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_lookup_fence (cm, "invalid") == NULL,
         "commit_mgr_lookup_fence can't find invalid fence");
 
-    count = 0;
-    ok (commit_mgr_iter_fences (cm, commit_fence_count_cb, &count) == 0
-        && count == 1,
-        "commit_mgr_iter_fences success when fence submitted");
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_error_cb, NULL) < 0,
+        "commit_mgr_iter_not_ready_fences error on callback error");
 
-    ok (commit_mgr_iter_fences (cm, commit_fence_error_cb, NULL) < 0,
-        "commit_mgr_iter_fences error on callback error");
+    count = 0;
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
+        && count == 1,
+        "commit_mgr_iter_not_ready_fences success when fence submitted but not ready");
 
     ok (commit_mgr_fences_count (cm) == 1,
         "commit_mgr_fences_count returns 1 when fence submitted");
@@ -243,6 +243,11 @@ void commit_mgr_basic_tests (void)
 
     ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
         "commit_mgr_process_fence_request works again");
+
+    count = 0;
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
+        && count == 0,
+        "commit_mgr_iter_not_ready_fences success when fence submitted and ready");
 
     ok (commit_mgr_ready_commit_count (cm) == 1,
         "commit_mgr_ready_commit_count is still 1, didn't double add fence");

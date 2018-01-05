@@ -117,10 +117,12 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f);
 /* Lookup a fence previously stored via commit_mgr_add_fence(), via name */
 fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name);
 
-/* Iterate through all stored fences
+/* Iterate through all not-ready fences
+ * - this is typically called during a needed cleanup path
  * - do not call commit_mgr_remove_fence() within the callback, is unsafe
  */
-int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data);
+int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
+                                      void *data);
 
 /* commit_mgr_process_fence_request() should be called once per fence
  * request, after fence_add_request_data() has been called.
