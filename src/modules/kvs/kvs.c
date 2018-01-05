@@ -92,6 +92,7 @@ struct kvsroot {
 
 struct kvs_cb_data {
     kvs_ctx_t *ctx;
+    struct kvsroot *root;
     wait_t *wait;
     int errnum;
 };
@@ -1224,8 +1225,10 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
             return;
         }
         if ((f = commit_mgr_lookup_fence (root->cm, json_string_value (name)))) {
-            fence_iter_request_copies (f, finalize_fence_req, &d);
-            commit_mgr_remove_fence (root->cm, json_string_value (name));
+            fence_iter_request_copies (f, finalize_fence_req, &cbd);
+            if (commit_mgr_remove_fence (root->cm, json_string_value (name)) < 0)
+                flux_log_error (ctx->h, "%s: commit_mgr_remove_fence",
+                                __FUNCTION__);
         }
     }
 }
@@ -2235,15 +2238,13 @@ error:
 
 static int root_remove_process_fences (fence_t *f, void *data)
 {
-    kvs_ctx_t *ctx = data;
+    struct kvs_cb_data *cbd = data;
 
     /* Not ready fences will never finish, must alert them with
-     * ENOTSUP that namespace removed.  Put on list to process later,
-     * can't call commit_mgr_remove_fence() here.
-     */
-    if (zlist_append (ctx->removelist, f) < 0)
-        flux_log_error (ctx->h, "%s: zlist_append",
-                        __FUNCTION__);
+     * ENOTSUP that namespace removed.  Final call to
+     * commit_mgr_remove_fence() done in finalize_fences_bynames() */
+    finalize_fences_bynames (cbd->ctx, cbd->root, fence_get_json_names (f),
+                             ENOTSUP);
     return 0;
 }
 
@@ -2253,7 +2254,7 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
 
     /* safe lookup, if root removal in process, let it continue */
     if ((root = lookup_root_safe (ctx, namespace))) {
-        fence_t *f;
+        struct kvs_cb_data cbd = { .ctx = ctx, .root = root };
 
         root->remove = true;
 
@@ -2276,15 +2277,8 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
 
         if (commit_mgr_iter_not_ready_fences (root->cm,
                                               root_remove_process_fences,
-                                              ctx) < 0)
+                                              &cbd) < 0)
             flux_log_error (ctx->h, "%s: commit_mgr_iter_fences", __FUNCTION__);
-
-        /* final call to commit_mgr_remove_fence() done in
-         * finalize_fences_bynames() */
-        while ((f = zlist_pop (ctx->removelist))) {
-            json_t *names = fence_get_json_names (f);
-            finalize_fences_bynames (ctx, root, names, ENOTSUP);
-        }
     }
 }
 

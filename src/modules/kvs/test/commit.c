@@ -134,18 +134,6 @@ struct cache *create_cache_with_empty_rootdir (blobref_t ref)
     return cache;
 }
 
-int commit_fence_count_cb (fence_t *f, void *data)
-{
-    int *count = data;
-    (*count)++;
-    return 0;
-}
-
-int commit_fence_error_cb (fence_t *f, void *data)
-{
-    return -1;
-}
-
 void commit_mgr_basic_tests (void)
 {
     struct cache *cache;
@@ -154,7 +142,6 @@ void commit_mgr_basic_tests (void)
     commit_t *c;
     fence_t *f, *tf;
     blobref_t rootref;
-    int count;
 
     ok (commit_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
         && errno == EINVAL,
@@ -173,11 +160,6 @@ void commit_mgr_basic_tests (void)
         "commit_mgr_get_noop_stores works");
 
     commit_mgr_clear_noop_stores (cm);
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
-        && count == 0,
-        "commit_mgr_iter_not_ready_fences success when no fences submitted");
 
     ok (commit_mgr_fences_count (cm) == 0,
         "commit_mgr_fences_count returns 0 when no fences submitted");
@@ -199,14 +181,6 @@ void commit_mgr_basic_tests (void)
 
     ok (commit_mgr_lookup_fence (cm, "invalid") == NULL,
         "commit_mgr_lookup_fence can't find invalid fence");
-
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_error_cb, NULL) < 0,
-        "commit_mgr_iter_not_ready_fences error on callback error");
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
-        && count == 1,
-        "commit_mgr_iter_not_ready_fences success when fence submitted but not ready");
 
     ok (commit_mgr_fences_count (cm) == 1,
         "commit_mgr_fences_count returns 1 when fence submitted");
@@ -243,11 +217,6 @@ void commit_mgr_basic_tests (void)
 
     ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
         "commit_mgr_process_fence_request works again");
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
-        && count == 0,
-        "commit_mgr_iter_not_ready_fences success when fence submitted and ready");
 
     ok (commit_mgr_ready_commit_count (cm) == 1,
         "commit_mgr_ready_commit_count is still 1, didn't double add fence");
@@ -791,6 +760,112 @@ void commit_basic_root_not_dir (void)
 
     ok (commit_get_errnum (c) == EINVAL,
         "commit_get_errnum return EINVAL");
+
+    commit_mgr_destroy (cm);
+    cache_destroy (cache);
+}
+
+int commit_fence_count_cb (fence_t *f, void *data)
+{
+    int *count = data;
+    (*count)++;
+    return 0;
+}
+
+int commit_fence_remove_cb (fence_t *f, void *data)
+{
+    commit_mgr_t *cm = data;
+    json_t *names = fence_get_json_names (f);
+
+    /* in this test no merging has been done, just get the first name
+     * in the array */
+    commit_mgr_remove_fence (cm, json_string_value (json_array_get (names, 0)));
+    return 0;
+}
+
+int commit_fence_error_cb (fence_t *f, void *data)
+{
+    return -1;
+}
+
+void commit_basic_iter_not_ready_tests (void)
+{
+    struct cache *cache;
+    json_t *ops = NULL;
+    commit_mgr_t *cm;
+    fence_t *f1, *f2;
+    blobref_t rootref;
+    int count;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((cm = commit_mgr_create (cache,
+                                 KVS_PRIMARY_NAMESPACE,
+                                 "sha1",
+                                 NULL,
+                                 &test_global)) != NULL,
+        "commit_mgr_create works");
+
+    count = 0;
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
+        && count == 0,
+        "commit_mgr_iter_not_ready_fences success when no fences submitted");
+
+    ok ((f1 = fence_create ("fence1", 1, 0)) != NULL,
+        "fence_create works");
+
+    ok ((f2 = fence_create ("fence2", 1, 0)) != NULL,
+        "fence_create works");
+
+    ok (commit_mgr_add_fence (cm, f1) == 0,
+        "commit_mgr_add_fence works");
+
+    ok (commit_mgr_add_fence (cm, f2) == 0,
+        "commit_mgr_add_fence works");
+
+    ok (commit_mgr_fences_count (cm) == 2,
+        "commit_mgr_fences_count returns correct count of fences");
+
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_error_cb, NULL) < 0,
+        "commit_mgr_iter_not_ready_fences error on callback error");
+
+    count = 0;
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,
+        "commit_mgr_iter_not_ready_fences success on count");
+
+    ok (count == 2,
+        "commit_mgr_iter_not_ready_fences returned correct count of not-ready fences");
+
+    ops = json_array ();
+    ops_append (ops, "key1", "1", 0);
+
+    ok (fence_add_request_data (f1, ops) == 0,
+        "fence_add_request_data add works");
+
+    json_decref (ops);
+
+    ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
+        "commit_mgr_process_fence_request works");
+
+    count = 0;
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,
+        "commit_mgr_iter_not_ready_fences success on count");
+
+    ok (count == 1,
+        "commit_mgr_iter_not_ready_fences returned correct count of not-ready fences");
+
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_remove_cb, cm) == 0,
+        "commit_mgr_iter_not_ready_fences success on remove");
+
+    count = 0;
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,
+        "commit_mgr_iter_not_ready_fences success on count");
+
+    ok (count == 0,
+        "commit_mgr_iter_not_ready_fences returned correct count of not-ready fences");
+
+    ok (commit_mgr_fences_count (cm) == 1,
+        "commit_mgr_fences_count returns correct count of fences");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -2190,6 +2265,7 @@ int main (int argc, char *argv[])
     commit_basic_commit_process_test_multiple_fences ();
     commit_basic_commit_process_test_multiple_fences_merge ();
     commit_basic_root_not_dir ();
+    commit_basic_iter_not_ready_tests ();
     commit_process_root_missing ();
     commit_process_missing_ref ();
     /* no need for dirty_cache_entries() test, as it is the most
