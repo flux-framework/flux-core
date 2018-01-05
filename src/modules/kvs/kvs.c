@@ -1285,7 +1285,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (commit_mgr_process_fence_request (root->cm, f) < 0) {
+    if (commit_mgr_process_fence_request (root->cm, name) < 0) {
         flux_log_error (h, "%s: commit_mgr_process_fence_request", __FUNCTION__);
         goto error;
     }
@@ -1351,7 +1351,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
 
-        if (commit_mgr_process_fence_request (root->cm, f) < 0) {
+        if (commit_mgr_process_fence_request (root->cm, name) < 0) {
             flux_log_error (h, "%s: commit_mgr_process_fence_request",
                             __FUNCTION__);
             goto error;

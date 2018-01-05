@@ -128,7 +128,7 @@ int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data);
  * If conditions are correct, will internally create at commit_t and
  * store it to a queue of ready to process commits.
  */
-int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f);
+int commit_mgr_process_fence_request (commit_mgr_t *cm, const char *name);
 
 /* returns true if there are commits ready for processing and are not
  * blocked, false if not.
