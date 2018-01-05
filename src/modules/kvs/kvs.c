@@ -1901,6 +1901,10 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
 
     finalize_fences_bynames (ctx, root, names, errnum);
 
+    /* if error, not need to complete setroot */
+    if (errnum)
+        return;
+
     /* Optimization: prime local cache with directory object, if provided
      * in event message.  Ignore failure here - object will be fetched on
      * demand from content cache if not in local cache.
