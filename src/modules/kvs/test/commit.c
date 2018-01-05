@@ -241,6 +241,12 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_ready_commit_count (cm) == 1,
         "commit_mgr_ready_commit_count is 1");
 
+    ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
+        "commit_mgr_process_fence_request works again");
+
+    ok (commit_mgr_ready_commit_count (cm) == 1,
+        "commit_mgr_ready_commit_count is still 1, didn't double add fence");
+
     ok (commit_mgr_commits_ready (cm) == true,
         "commit_mgr_commits_ready says a fence is ready");
 
