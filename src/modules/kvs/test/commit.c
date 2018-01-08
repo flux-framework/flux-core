@@ -783,6 +783,18 @@ int commit_fence_remove_cb (fence_t *f, void *data)
     return 0;
 }
 
+int commit_fence_add_error_cb (fence_t *f, void *data)
+{
+    commit_mgr_t *cm = data;
+    fence_t *f2;
+
+    f2 = fence_create ("foobar", 1, 0);
+
+    if (commit_mgr_add_fence (cm, f2) < 0)
+        return -1;
+    return 0;
+}
+
 int commit_fence_error_cb (fence_t *f, void *data)
 {
     return -1;
@@ -828,6 +840,10 @@ void commit_basic_iter_not_ready_tests (void)
 
     ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_error_cb, NULL) < 0,
         "commit_mgr_iter_not_ready_fences error on callback error");
+
+    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_add_error_cb, cm) < 0
+        && errno == EAGAIN,
+        "commit_mgr_iter_not_ready_fences error on callback error trying to add fence");
 
     count = 0;
     ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,

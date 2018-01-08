@@ -976,6 +976,12 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
 {
     json_t *name;
 
+    /* Don't modify hash while iterating */
+    if (cm->iterating_fences) {
+        errno = EAGAIN;
+        goto error;
+    }
+
     if (!(name = json_array_get (fence_get_json_names (f), 0))) {
         errno = EINVAL;
         goto error;
