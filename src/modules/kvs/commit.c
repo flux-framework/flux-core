@@ -974,6 +974,7 @@ void commit_mgr_destroy (commit_mgr_t *cm)
 
 int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
 {
+    json_t *names;
     json_t *name;
 
     /* Don't modify hash while iterating */
@@ -982,7 +983,15 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
         goto error;
     }
 
-    if (!(name = json_array_get (fence_get_json_names (f), 0))) {
+    if (!(names = fence_get_json_names (f))) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (json_array_size (names) != 1) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(name = json_array_get (names, 0))) {
         errno = EINVAL;
         goto error;
     }
