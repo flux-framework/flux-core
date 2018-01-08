@@ -665,17 +665,14 @@ static void content_store_completion (flux_future_t *f, void *arg)
 }
 
 static int content_store_request_send (kvs_ctx_t *ctx, const void *data,
-                                       int len, bool now)
+                                       int len)
 {
     flux_future_t *f;
     int saved_errno, rc = -1;
 
     if (!(f = flux_content_store (ctx->h, data, len, 0)))
         goto error;
-    if (now) {
-        if (content_store_get (f, ctx) < 0)
-            goto error;
-    } else if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
+    if (flux_future_then (f, -1., content_store_completion, ctx) < 0) {
         saved_errno = errno;
         flux_future_destroy (f);
         errno = saved_errno;
@@ -722,8 +719,7 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *entry, void *data)
     }
     if (content_store_request_send (cbd->ctx,
                                     storedata,
-                                    storedatalen,
-                                    false) < 0) {
+                                    storedatalen) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
                         __FUNCTION__);
