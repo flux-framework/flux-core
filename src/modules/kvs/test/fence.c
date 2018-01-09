@@ -100,6 +100,14 @@ void basic_api_tests (void)
     ok (fence_count_reached (f) == true,
         "later fence_count_reached() is true");
 
+    ok (fence_get_aux_int (f) == 0,
+        "fence_get_aux_int returns 0 initially");
+
+    fence_set_aux_int (f, 5);
+
+    ok (fence_get_aux_int (f) == 5,
+        "fence_get_aux_int returns 5 after set");
+
     flux_msg_destroy (request);
 
     fence_destroy (f);

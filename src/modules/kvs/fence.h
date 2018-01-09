@@ -45,6 +45,11 @@ int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
  */
 int fence_merge (fence_t *dest, fence_t *src);
 
+/* Auxiliary convenience data
+ */
+int fence_get_aux_int (fence_t *f);
+void fence_set_aux_int (fence_t *f, int n);
+
 #endif /* !_FLUX_KVS_FENCE_H */
 
 /*

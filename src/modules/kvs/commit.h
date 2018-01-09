@@ -117,10 +117,11 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f);
 /* Lookup a fence previously stored via commit_mgr_add_fence(), via name */
 fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name);
 
-/* Iterate through all stored fences
- * - do not call commit_mgr_remove_fence() within the callback, is unsafe
+/* Iterate through all not-ready fences
+ * - this is typically called during a needed cleanup path
  */
-int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data);
+int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
+                                      void *data);
 
 /* commit_mgr_process_fence_request() should be called once per fence
  * request, after fence_add_request_data() has been called.
@@ -128,7 +129,7 @@ int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data);
  * If conditions are correct, will internally create at commit_t and
  * store it to a queue of ready to process commits.
  */
-int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f);
+int commit_mgr_process_fence_request (commit_mgr_t *cm, const char *name);
 
 /* returns true if there are commits ready for processing and are not
  * blocked, false if not.
@@ -145,7 +146,7 @@ commit_t *commit_mgr_get_ready_commit (commit_mgr_t *cm);
 void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c);
 
 /* remove a fence from the commit manager */
-void commit_mgr_remove_fence (commit_mgr_t *cm, const char *name);
+int commit_mgr_remove_fence (commit_mgr_t *cm, const char *name);
 
 int commit_mgr_get_noop_stores (commit_mgr_t *cm);
 void commit_mgr_clear_noop_stores (commit_mgr_t *cm);

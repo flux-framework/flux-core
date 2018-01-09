@@ -45,6 +45,7 @@ struct fence {
     json_t *ops;
     json_t *names;
     int flags;
+    int aux_int;
 };
 
 void fence_destroy (fence_t *f)
@@ -72,6 +73,7 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     }
     f->nprocs = nprocs;
     f->flags = flags;
+    f->aux_int = 0;
     if (name) {
         if (!(s = json_string (name))) {
             saved_errno = ENOMEM;
@@ -222,6 +224,16 @@ error:
     json_decref (ops);
     errno = saved_errno;
     return -1;
+}
+
+int fence_get_aux_int (fence_t *f)
+{
+    return f->aux_int;
+}
+
+void fence_set_aux_int (fence_t *f, int n)
+{
+    f->aux_int = n;
 }
 
 /*

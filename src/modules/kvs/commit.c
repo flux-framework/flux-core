@@ -43,12 +43,16 @@
 #include "commit.h"
 #include "kvs_util.h"
 
+#define FENCE_READY_MASK 0x01
+
 struct commit_mgr {
     struct cache *cache;
     const char *namespace;
     const char *hash_name;
     int noop_stores;            /* for kvs.stats.get, etc.*/
     zhash_t *fences;
+    bool iterating_fences;
+    zlist_t *removelist;
     zlist_t *ready;
     flux_t *h;
     void *aux;
@@ -940,6 +944,11 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
         saved_errno = ENOMEM;
         goto error;
     }
+    cm->iterating_fences = false;
+    if (!(cm->removelist = zlist_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
     cm->h = h;
     cm->aux = aux;
     return cm;
@@ -957,15 +966,32 @@ void commit_mgr_destroy (commit_mgr_t *cm)
             zhash_destroy (&cm->fences);
         if (cm->ready)
             zlist_destroy (&cm->ready);
+        if (cm->removelist)
+            zlist_destroy (&cm->removelist);
         free (cm);
     }
 }
 
 int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
 {
+    json_t *names;
     json_t *name;
 
-    if (!(name = json_array_get (fence_get_json_names (f), 0))) {
+    /* Don't modify hash while iterating */
+    if (cm->iterating_fences) {
+        errno = EAGAIN;
+        goto error;
+    }
+
+    if (!(names = fence_get_json_names (f))) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (json_array_size (names) != 1) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(name = json_array_get (names, 0))) {
         errno = EINVAL;
         goto error;
     }
@@ -973,6 +999,8 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
         errno = EEXIST;
         goto error;
     }
+    /* initial fence aux int to 0 */
+    fence_set_aux_int (f, 0);
     zhash_freefn (cm->fences,
                   json_string_value (name),
                   (zhash_free_fn *)fence_destroy);
@@ -986,28 +1014,54 @@ fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name)
     return zhash_lookup (cm->fences, name);
 }
 
-int commit_mgr_iter_fences (commit_mgr_t *cm, commit_fence_f cb, void *data)
+int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
+                                      void *data)
 {
     fence_t *f;
+    char *name;
     int rc = -1;
+
+    cm->iterating_fences = true;
 
     f = zhash_first (cm->fences);
     while (f) {
-        if (cb (f, data) < 0)
-            goto done;
+        if (!(fence_get_aux_int (f) & FENCE_READY_MASK)) {
+            if (cb (f, data) < 0)
+                goto done;
+        }
 
         f = zhash_next (cm->fences);
     }
 
+    cm->iterating_fences = false;
+
+    while ((name = zlist_pop (cm->removelist))) {
+        commit_mgr_remove_fence (cm, name);
+        free (name);
+    }
+
     rc = 0;
 done:
+    cm->iterating_fences = false;
     return rc;
 }
 
-int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
+int commit_mgr_process_fence_request (commit_mgr_t *cm, const char *name)
 {
+    fence_t *f;
+
+    if (!(f = commit_mgr_lookup_fence (cm, name))) {
+        errno = EINVAL;
+        return -1;
+    }
+
     if (fence_count_reached (f)) {
         commit_t *c;
+        int aux_int = fence_get_aux_int (f);
+
+        /* fence is already ready */
+        if (aux_int & FENCE_READY_MASK)
+            return 0;
 
         if (!(c = commit_create (f, cm)))
             return -1;
@@ -1017,6 +1071,8 @@ int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
             errno = ENOMEM;
             return -1;
         }
+        /* we use this flag to indicate if a fence is "ready" */
+        fence_set_aux_int (f, aux_int | FENCE_READY_MASK);
         zlist_freefn (cm->ready, c, (zlist_free_fn *)commit_destroy, true);
     }
 
@@ -1044,9 +1100,28 @@ void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c)
     zlist_remove (cm->ready, c);
 }
 
-void commit_mgr_remove_fence (commit_mgr_t *cm, const char *name)
+int commit_mgr_remove_fence (commit_mgr_t *cm, const char *name)
 {
-    zhash_delete (cm->fences, name);
+    /* it's dangerous to remove if we're in the middle of an
+     * interation, so save name for removal later.
+     */
+    if (cm->iterating_fences) {
+        char *str = strdup (name);
+
+        if (!str) {
+            errno = ENOMEM;
+            return -1;
+        }
+
+        if (zlist_append (cm->removelist, str) < 0) {
+            free (str);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    else
+        zhash_delete (cm->fences, name);
+    return 0;
 }
 
 int commit_mgr_get_noop_stores (commit_mgr_t *cm)
