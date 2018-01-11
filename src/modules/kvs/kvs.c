@@ -59,6 +59,13 @@
  */
 const int max_lastuse_age = 5;
 
+/* Expire namespaces after 'max_namespace_age' heartbeats.
+ *
+ * If heartbeats are the default of 2 seconds, 1000 heartbeats is
+ * about half an hour.
+ */
+const int max_namespace_age = 1000;
+
 /* Include root directory in kvs.setroot event.
  */
 const bool event_includes_rootdir = true;
@@ -102,6 +109,7 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg);
+static void start_root_remove (kvs_ctx_t *ctx, const char *namespace);
 
 /*
  * kvs_ctx_t functions
@@ -1186,9 +1194,23 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
                                     __FUNCTION__);
             }
         }
+        else if (ctx->rank != 0
+                 && !root->remove
+                 && strcasecmp (root->namespace, KVS_PRIMARY_NAMESPACE)
+                 && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
+                 && !wait_queue_length (root->watchlist)
+                 && !commit_mgr_fences_count (root->cm)
+                 && !commit_mgr_ready_commit_count (root->cm)) {
+            /* remove a root if it not the primary one, has timed out
+             * on a follower node, and it does not have any watchers,
+             * and no one is trying to commit/change something.
+             */
+            start_root_remove (ctx, root->namespace);
+        }
         else {
             /* "touch" objects involved in watched keys */
-            if (ctx->epoch - root->watchlist_lastrun_epoch > max_lastuse_age) {
+            if (wait_queue_length (root->watchlist) > 0
+                && (ctx->epoch - root->watchlist_lastrun_epoch) > max_lastuse_age) {
                 /* log error on wait_runqueue(), don't error out.  watchers
                  * may miss value change, but will never get older one.
                  * Maintains consistency model */
