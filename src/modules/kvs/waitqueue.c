@@ -65,8 +65,8 @@ wait_t *wait_create (wait_cb_f cb, void *arg)
 }
 
 wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg,
-                                 flux_msg_handler_f cb, void *arg)
+                                 const flux_msg_t *msg, void *arg,
+                                 flux_msg_handler_f cb)
 {
     wait_t *w = wait_create (NULL, NULL);
     if (w) {

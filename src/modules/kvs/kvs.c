@@ -1324,7 +1324,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, get_request_cb, lh)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, lh, get_request_cb)))
             goto done;
 
         cbd.ctx = ctx;
@@ -1471,8 +1471,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg,
-                                              watch_request_cb, lh)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
+                                              watch_request_cb)))
             goto done;
 
         cbd.ctx = ctx;
@@ -1543,8 +1543,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(watcher = wait_create_msg_handler (h, mh, cpy,
-                                                 watch_request_cb, ctx)))
+        if (!(watcher = wait_create_msg_handler (h, mh, cpy, ctx,
+                                                 watch_request_cb)))
             goto done;
         if (wait_addqueue (root->watchlist, watcher) < 0) {
             saved_errno = errno;
@@ -1882,8 +1882,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (root->seq < rootseq) {
-        if (!(wait = wait_create_msg_handler (h, mh, msg,
-                                              sync_request_cb, arg)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, arg,
+                                              sync_request_cb)))
             goto error;
         if (wait_addqueue (root->watchlist, wait) < 0) {
             saved_errno = errno;
