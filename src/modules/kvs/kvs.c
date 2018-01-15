@@ -47,6 +47,7 @@
 #include "waitqueue.h"
 #include "cache.h"
 #include "kvs_util.h"
+#include "msg_cb_handler.h"
 
 #include "lookup.h"
 #include "fence.h"
@@ -397,49 +398,124 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
     }
 }
 
-static int getroot_rpc (kvs_ctx_t *ctx, const char *namespace, int *rootseq,
-                        blobref_t rootref, int *flagsp)
+static void getroot_completion (flux_future_t *f, void *arg)
 {
-    flux_future_t *f;
+    kvs_ctx_t *ctx = arg;
+    msg_cb_handler_t *mcb;
+    const flux_msg_t *msg;
+    const char *namespace;
+    int rootseq, flags;
     const char *ref;
-    int flags;
-    int saved_errno, rc = -1;
+    struct kvsroot *root;
+    int save_errno;
 
-    /* XXX: future make asynchronous */
-    if (!(f = flux_rpc_pack (ctx->h, "kvs.getroot", FLUX_NODEID_UPSTREAM, 0,
-                             "{ s:s }",
-                             "namespace", namespace))) {
-        saved_errno = errno;
-        goto done;
+    mcb = flux_future_aux_get (f, "handler");
+    assert (mcb);
+
+    msg = msg_cb_handler_get_msgcopy (mcb);
+    assert (msg);
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }",
+                             "namespace", &namespace) < 0) {
+        flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
     }
+
     if (flux_rpc_get_unpack (f, "{ s:i s:s s:i }",
-                             "rootseq", rootseq,
+                             "rootseq", &rootseq,
                              "rootref", &ref,
                              "flags", &flags) < 0) {
-        saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
-        goto done;
+        goto error;
     }
-    if (strlen (ref) > sizeof (blobref_t) - 1) {
-        saved_errno = EPROTO;
-        goto done;
+
+    /* possible root initialized by another message before we got this
+     * response.  Not relevant if namespace in process of being removed. */
+    if (!(root = lookup_root (ctx, namespace))) {
+        if (!(root = create_root (ctx, namespace, flags))) {
+            flux_log_error (ctx->h, "%s: create_root", __FUNCTION__);
+            goto error;
+        }
+
+        if (event_subscribe (ctx, namespace) < 0) {
+            save_errno = errno;
+            remove_root (ctx, namespace);
+            errno = save_errno;
+            flux_log_error (ctx->h, "%s: event_subscribe", __FUNCTION__);
+            goto error;
+        }
     }
-    strcpy (rootref, ref);
-    if (flagsp)
-        (*flagsp) = flags;
-    rc = 0;
-done:
+
+    /* if root now in process of being removed, error will be handled via
+     * the original callback
+     */
+    if (!root->remove)
+        setroot (ctx, root, ref, rootseq);
+
+    msg_cb_handler_call (mcb);
+
     flux_future_destroy (f);
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+    return;
+
+error:
+    if (flux_respond (ctx->h, msg, errno, NULL) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    flux_future_destroy (f);
 }
 
-static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace)
+static int getroot_request_send (kvs_ctx_t *ctx,
+                                 const char *namespace,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 flux_msg_handler_f cb,
+                                 int *rootseq,
+                                 blobref_t rootref,
+                                 int *flagsp)
+{
+    flux_future_t *f = NULL;
+    msg_cb_handler_t *mcb = NULL;
+    int saved_errno;
+
+    if (!(f = flux_rpc_pack (ctx->h, "kvs.getroot", FLUX_NODEID_UPSTREAM, 0,
+                             "{ s:s }",
+                             "namespace", namespace)))
+        goto error;
+
+    if (!(mcb = msg_cb_handler_create (ctx->h, mh, msg, ctx, cb))) {
+        flux_log_error (ctx->h, "%s: msg_cb_handler_create", __FUNCTION__);
+        goto error;
+    }
+
+    if (flux_future_aux_set (f, "handler", mcb,
+                             (flux_free_f)msg_cb_handler_destroy) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
+        goto error;
+    }
+    mcb = NULL;                 /* owned by future now */
+
+    if (flux_future_then (f, -1., getroot_completion, ctx) < 0)
+        goto error;
+
+    return 0;
+error:
+    saved_errno = errno;
+    msg_cb_handler_destroy (mcb);
+    flux_future_destroy (f);
+    errno = saved_errno;
+    return -1;
+}
+
+static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                flux_msg_handler_f cb,
+                                bool *stall)
 {
     struct kvsroot *root;
     blobref_t rootref;
-    int save_errno, rootseq, flags;
+    int rootseq, flags;
+
+    (*stall) = false;
 
     if (!(root = lookup_root_safe (ctx, namespace))) {
         if (ctx->rank == 0) {
@@ -449,25 +525,12 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace)
             return NULL;
         }
         else {
-            if (getroot_rpc (ctx, namespace, &rootseq, rootref, &flags) < 0) {
-                flux_log_error (ctx->h, "getroot_rpc");
+            if (getroot_request_send (ctx, namespace, mh, msg, cb,
+                                      &rootseq, rootref, &flags) < 0) {
+                flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
-
-            if (!(root = create_root (ctx, namespace, flags))) {
-                flux_log_error (ctx->h, "create_root");
-                return NULL;
-            }
-
-            setroot (ctx, root, rootref, rootseq);
-
-            if (event_subscribe (ctx, namespace) < 0) {
-                save_errno = errno;
-                remove_root (ctx, namespace);
-                errno = save_errno;
-                flux_log_error (ctx->h, "event_subscribe");
-                return NULL;
-            }
+            (*stall) = true;
         }
     }
     return root;
@@ -1175,6 +1238,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
     wait_t *wait = NULL;
+    bool stall = false;
     int rc = -1;
     int ret;
 
@@ -1192,8 +1256,12 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(root = getroot (ctx, namespace)))
+        if (!(root = getroot (ctx, namespace, mh, msg, get_request_cb,
+                              &stall))) {
+            if (stall)
+                goto stall;
             goto done;
+        }
 
         /* rootdir is optional */
         (void)flux_request_unpack (msg, NULL, "{ s:o }",
@@ -1256,7 +1324,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, get_request_cb, lh)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, lh, get_request_cb)))
             goto done;
 
         cbd.ctx = ctx;
@@ -1332,6 +1400,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     wait_t *watcher = NULL;
     bool isreplay = false;
     bool out = false;
+    bool stall = false;
     int rc = -1;
     int saved_errno, ret;
 
@@ -1348,8 +1417,12 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(root = getroot (ctx, namespace)))
+        if (!(root = getroot (ctx, namespace, mh, msg, watch_request_cb,
+                              &stall))) {
+            if (stall)
+                goto stall;
             goto done;
+        }
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->epoch,
@@ -1398,8 +1471,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg,
-                                              watch_request_cb, lh)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
+                                              watch_request_cb)))
             goto done;
 
         cbd.ctx = ctx;
@@ -1470,8 +1543,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(watcher = wait_create_msg_handler (h, mh, cpy,
-                                                 watch_request_cb, ctx)))
+        if (!(watcher = wait_create_msg_handler (h, mh, cpy, ctx,
+                                                 watch_request_cb)))
             goto done;
         if (wait_addqueue (root->watchlist, watcher) < 0) {
             saved_errno = errno;
@@ -1706,6 +1779,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *namespace;
     const char *name;
     int saved_errno, nprocs, flags;
+    bool stall = false;
     json_t *ops = NULL;
     fence_t *f;
 
@@ -1719,8 +1793,12 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace)))
+    if (!(root = getroot (ctx, namespace, mh, msg, fence_request_cb,
+                          &stall))) {
+        if (stall)
+            goto stall;
         goto error;
+    }
 
     if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
@@ -1772,6 +1850,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+stall:
+    return;
 }
 
 
@@ -1785,6 +1865,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     int saved_errno, rootseq;
     wait_t *wait = NULL;
+    bool stall = false;
 
     if (flux_request_unpack (msg, NULL, "{ s:i s:s }",
                              "rootseq", &rootseq,
@@ -1793,12 +1874,16 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace)))
+    if (!(root = getroot (ctx, namespace, mh, msg, sync_request_cb,
+                          &stall))) {
+        if (stall)
+            goto stall;
         goto error;
+    }
 
     if (root->seq < rootseq) {
-        if (!(wait = wait_create_msg_handler (h, mh, msg,
-                                              sync_request_cb, arg)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, arg,
+                                              sync_request_cb)))
             goto error;
         if (wait_addqueue (root->watchlist, wait) < 0) {
             saved_errno = errno;
@@ -1820,6 +1905,8 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+stall:
+    return;
 }
 
 static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -1847,8 +1934,13 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         /* If root is not initialized, we have to intialize ourselves
          * first.
          */
-        if (!(root = getroot (ctx, namespace)))
+        bool stall = false;
+        if (!(root = getroot (ctx, namespace, mh, msg, getroot_request_cb,
+                              &stall))) {
+            if (stall)
+                goto done;
             goto error;
+        }
     }
 
     if (flux_respond_pack (h, msg, "{ s:i s:s s:i }",
@@ -1858,6 +1950,8 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
+
+done:
     return;
 
 error:

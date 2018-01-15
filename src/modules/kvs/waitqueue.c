@@ -29,14 +29,7 @@
 #include <flux/core.h>
 
 #include "waitqueue.h"
-
-struct handler {
-    flux_msg_handler_f cb;
-    flux_t *h;
-    flux_msg_handler_t *mh;
-    flux_msg_t *msg;
-    void *arg;
-};
+#include "msg_cb_handler.h"
 
 #define WAIT_MAGIC 0xafad7777
 struct wait_struct {
@@ -44,7 +37,7 @@ struct wait_struct {
     int usecount;
     wait_cb_f cb;
     void *cb_arg;
-    struct handler hand; /* optional special case */
+    msg_cb_handler_t *mcb;      /* optional special case */
 };
 
 #define WAITQUEUE_MAGIC 0xafad7778
@@ -72,18 +65,15 @@ wait_t *wait_create (wait_cb_f cb, void *arg)
 }
 
 wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg,
-                                 flux_msg_handler_f cb, void *arg)
+                                 const flux_msg_t *msg, void *arg,
+                                 flux_msg_handler_f cb)
 {
     wait_t *w = wait_create (NULL, NULL);
     if (w) {
-        w->hand.cb = cb;
-        w->hand.arg = arg;
-        w->hand.h = h;
-        w->hand.mh = mh;
-        if (msg && !(w->hand.msg = flux_msg_copy (msg, true))) {
+        if (!(w->mcb = msg_cb_handler_create (h, mh, msg, arg, cb))) {
+            int saved_errno = errno;
             wait_destroy (w);
-            errno = ENOMEM;
+            errno = saved_errno;
             return NULL;
         }
     }
@@ -95,7 +85,7 @@ void wait_destroy (wait_t *w)
     if (w) {
         assert (w->magic == WAIT_MAGIC);
         assert (w->usecount == 0);
-        flux_msg_destroy (w->hand.msg);
+        msg_cb_handler_destroy (w->mcb);
         w->magic = ~WAIT_MAGIC;
         free (w);
     }
@@ -155,8 +145,8 @@ static void wait_runone (wait_t *w)
     if (--w->usecount == 0) {
         if (w->cb)
             w->cb (w->cb_arg);
-        else if (w->hand.cb)
-            w->hand.cb (w->hand.h, w->hand.mh, w->hand.msg, w->hand.arg);
+        else if (w->mcb)
+            msg_cb_handler_call (w->mcb);
         wait_destroy (w);
     }
 }
@@ -202,7 +192,11 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
 
     w = zlist_first (q->q);
     while (w) {
-        if (w->hand.msg && cb != NULL && cb (w->hand.msg, arg)) {
+        const flux_msg_t *msgcpy = NULL;
+
+        if (w->mcb)
+            msgcpy = msg_cb_handler_get_msgcopy (w->mcb);
+        if (msgcpy && cb != NULL && cb (msgcpy, arg)) {
             if (!tmp && !(tmp = zlist_new ())) {
                 saved_errno = ENOMEM;
                 goto error;
@@ -211,7 +205,9 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
                 saved_errno = ENOMEM;
                 goto error;
             }
-            w->hand.cb = NULL; // prevent wait_runone from restarting handler
+            /* prevent wait_runone from restarting handler by clearing
+             * callback function */
+            msg_cb_handler_set_cb (w->mcb, NULL);
             count++;
         }
         w = zlist_next (q->q);

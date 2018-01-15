@@ -95,7 +95,7 @@ int main (int argc, char *argv[])
     msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
     ok (msg != NULL,
         "flux_msg_create works");
-    w = wait_create_msg_handler (NULL, NULL, msg, msghand, &count);
+    w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand);
     ok (w != NULL,
         "wait_create_msg_handler with non-NULL msg works");
     flux_msg_destroy (msg);
@@ -140,7 +140,7 @@ int main (int argc, char *argv[])
             break;
         if (flux_msg_enable_route (msg) < 0 || flux_msg_push_route (msg, s) < 0)
             break;
-        if (!(w = wait_create_msg_handler (NULL, NULL, msg, msghand, &count)))
+        if (!(w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand)))
             break;
         flux_msg_destroy (msg); /* msg was copied into wait_t */
         if (wait_addqueue (q, w) < 0)

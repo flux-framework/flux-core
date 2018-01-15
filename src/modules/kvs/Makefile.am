@@ -24,7 +24,9 @@ kvs_la_SOURCES = \
 	fence.h \
 	fence.c \
 	commit.h \
-	commit.c
+	commit.c \
+	msg_cb_handler.h \
+	msg_cb_handler.c
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
@@ -38,7 +40,8 @@ TESTS = \
 	test_lookup.t \
 	test_fence.t \
 	test_commit.t \
-	test_kvs_util.t
+	test_kvs_util.t \
+	test_msg_cb_handler.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -61,6 +64,7 @@ test_waitqueue_t_SOURCES = test/waitqueue.c
 test_waitqueue_t_CPPFLAGS = $(test_cppflags)
 test_waitqueue_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -69,6 +73,7 @@ test_cache_t_CPPFLAGS = $(test_cppflags)
 test_cache_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -78,6 +83,7 @@ test_lookup_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -96,6 +102,7 @@ test_commit_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -103,4 +110,10 @@ test_kvs_util_t_SOURCES = test/kvs_util.c
 test_kvs_util_t_CPPFLAGS = $(test_cppflags)
 test_kvs_util_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
+	$(test_ldadd)
+
+test_msg_cb_handler_t_SOURCES = test/msg_cb_handler.c
+test_msg_cb_handler_t_CPPFLAGS = $(test_cppflags)
+test_msg_cb_handler_t_LDADD = \
+	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(test_ldadd)

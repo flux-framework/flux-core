@@ -55,9 +55,9 @@ int wait_runqueue (waitqueue_t *q);
  * The message handler will be reinvoked once the wait_t usecount reaches zero.
  * Message will be copied and destroyed with the wait_t.
  */
-wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *w,
-                                 const flux_msg_t *msg,
-                                 flux_msg_handler_f cb, void *arg);
+wait_t *wait_create_msg_handler (flux_t *h, flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg, void *arg,
+                                 flux_msg_handler_f cb);
 
 /* Destroy all wait_t's fitting message match critieria, tested with
  * wait_test_msg_f callback.
