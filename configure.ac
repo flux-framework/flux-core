@@ -18,7 +18,7 @@ X_AC_EXPAND_INSTALL_DIRS
 ##
 # Automake support
 ##
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE([subdir-objects tar-pax])
 AM_SILENT_RULES([yes])
 AM_CONFIG_HEADER([config/config.h])
 AM_MAINTAINER_MODE
@@ -296,6 +296,7 @@ AC_CONFIG_FILES( \
   src/common/liboptparse/Makefile \
   src/common/libjobspec/Makefile \
   src/common/libjobspec/flux-jobspec.pc \
+  src/common/libtomlc99/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
