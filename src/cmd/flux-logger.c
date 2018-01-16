@@ -82,7 +82,7 @@ int main (int argc, char *argv[])
         }
     }
     if (optind == argc) {
-        len = read_all (STDIN_FILENO, (uint8_t **)&message);
+        len = read_all (STDIN_FILENO, (void **)&message);
     } else {
         if ((e = argz_create (argv + optind, &message, &len)) != 0)
             log_errn_exit (e, "argz_create");

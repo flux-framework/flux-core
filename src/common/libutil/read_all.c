@@ -27,15 +27,14 @@
 #endif
 #include <stdlib.h>
 #include <unistd.h>
-#include <stdint.h>
 #include <errno.h>
 
 #include "read_all.h"
 
-int write_all (int fd, const uint8_t *buf, int len)
+ssize_t write_all (int fd, const void *buf, size_t len)
 {
-    int n;
-    int count = 0;
+    ssize_t n;
+    ssize_t count = 0;
 
     while (count < len) {
         if ((n = write (fd, buf + count, len - count)) < 0)
@@ -45,13 +44,13 @@ int write_all (int fd, const uint8_t *buf, int len)
     return count;
 }
 
-int read_all (int fd, uint8_t **bufp)
+ssize_t read_all (int fd, void **bufp)
 {
-    const int chunksize = 4096;
-    int len = 0;
-    uint8_t *buf = NULL;
-    int n;
-    int count = 0;
+    const size_t chunksize = 4096;
+    size_t len = 0;
+    void *buf = NULL;
+    ssize_t n;
+    ssize_t count = 0;
 
     do {
         if (len - count == 0) {
@@ -71,7 +70,6 @@ nomem:
     errno = ENOMEM;
     return -1;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

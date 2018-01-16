@@ -602,7 +602,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
                 put_flags |= FLUX_KVS_APPEND;
 
             if (!strcmp (val, "-")) { // special handling for "--raw key=-"
-                if ((len = read_all (STDIN_FILENO, &buf)) < 0)
+                if ((len = read_all (STDIN_FILENO, (void **)&buf)) < 0)
                     log_err_exit ("stdin");
                 val = (char *)buf;
             } else

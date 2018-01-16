@@ -1,9 +1,9 @@
 #ifndef _UTIL_READ_ALL_H
 #define _UTIL_READ_ALL_H
 
-#include <stdint.h>
+#include <sys/types.h>
 
-int write_all (int fd, const uint8_t *buf, int len);
-int read_all (int fd, uint8_t **bufp);
+ssize_t write_all (int fd, const void *buf, size_t len);
+ssize_t read_all (int fd, void **bufp);
 
 #endif /* !_UTIL_READ_ALL_H */
