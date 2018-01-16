@@ -78,7 +78,9 @@ libutil_la_SOURCES = \
 	tomltk.c \
 	tomltk.h \
 	timestamp.c \
-	timestamp.h
+	timestamp.h \
+	cf.c \
+	cf.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -100,7 +102,8 @@ TESTS = test_nodeset.t \
 	test_blobref.t \
 	test_dirwalk.t \
 	test_read_all.t \
-	test_tomltk.t
+	test_tomltk.t \
+	test_cf.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -196,3 +199,7 @@ test_read_all_t_LDADD = $(test_ldadd)
 test_tomltk_t_SOURCES = test/tomltk.c
 test_tomltk_t_CPPFLAGS = $(test_cppflags)
 test_tomltk_t_LDADD = $(test_ldadd)
+
+test_cf_t_SOURCES = test/cf.c
+test_cf_t_CPPFLAGS = $(test_cppflags)
+test_cf_t_LDADD = $(test_ldadd)
