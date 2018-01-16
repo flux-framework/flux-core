@@ -31,8 +31,8 @@ libutil_la_SOURCES = \
 	nodeset.c \
 	nodeset.h \
 	shortjson.h \
-	readall.c \
-	readall.h \
+	read_all.c \
+	read_all.h \
 	ev_zmq.c \
 	ev_zmq.h \
 	ev_zlist.c \

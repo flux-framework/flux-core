@@ -30,7 +30,7 @@
 #include <stdint.h>
 #include <errno.h>
 
-#include "readall.h"
+#include "read_all.h"
 
 int write_all (int fd, const uint8_t *buf, int len)
 {

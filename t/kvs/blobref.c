@@ -11,7 +11,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 
 int main (int argc, char *argv[])
 {

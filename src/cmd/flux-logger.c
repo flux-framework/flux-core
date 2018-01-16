@@ -34,7 +34,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/stdlog.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 
 
 #define OPTIONS "hs:n:"

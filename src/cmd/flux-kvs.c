@@ -34,7 +34,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 #include "src/common/libkvs/treeobj.h"
 
 int cmd_namespace_create (optparse_t *p, int argc, char **argv);

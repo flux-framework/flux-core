@@ -37,7 +37,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/iterators.h"
 

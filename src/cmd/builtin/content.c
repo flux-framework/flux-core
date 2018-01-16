@@ -26,7 +26,7 @@
 #include <unistd.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 
 static int internal_content_load (optparse_t *p, int ac, char *av[])
 {
