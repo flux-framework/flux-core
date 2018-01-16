@@ -74,7 +74,11 @@ libutil_la_SOURCES = \
 	lru_cache.h \
 	lru_cache.c \
 	dirwalk.h \
-	dirwalk.c
+	dirwalk.c \
+	tomltk.c \
+	tomltk.h \
+	timestamp.c \
+	timestamp.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -95,7 +99,8 @@ TESTS = test_nodeset.t \
 	test_cleanup.t \
 	test_blobref.t \
 	test_dirwalk.t \
-	test_read_all.t
+	test_read_all.t \
+	test_tomltk.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -103,11 +108,12 @@ test_ldadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libjson-c/libjson-c.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT)
+	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD) $(LIBRT) $(JANSSON_LIBS)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
-	$(AM_CPPFLAGS)
+	$(AM_CPPFLAGS) $(JANSSON_CFLAGS)
 
 check_PROGRAMS = $(TESTS)
 
@@ -186,3 +192,7 @@ test_dirwalk_t_LDADD = $(test_ldadd)
 test_read_all_t_SOURCES = test/read_all.c
 test_read_all_t_CPPFLAGS = $(test_cppflags)
 test_read_all_t_LDADD = $(test_ldadd)
+
+test_tomltk_t_SOURCES = test/tomltk.c
+test_tomltk_t_CPPFLAGS = $(test_cppflags)
+test_tomltk_t_LDADD = $(test_ldadd)
