@@ -36,9 +36,13 @@ ssize_t write_all (int fd, const void *buf, size_t len)
     ssize_t n;
     ssize_t count = 0;
 
+    if (fd < 0 || (buf == NULL && len != 0)) {
+        errno = EINVAL;
+        return -1;
+    }
     while (count < len) {
         if ((n = write (fd, buf + count, len - count)) < 0)
-            return n;
+            return -1;
         count += n;
     }
     return count;
@@ -51,23 +55,30 @@ ssize_t read_all (int fd, void **bufp)
     void *buf = NULL;
     ssize_t n;
     ssize_t count = 0;
+    void *new;
+    int saved_errno;
 
+    if (fd < 0 || !bufp) {
+        errno = EINVAL;
+        return -1;
+    }
     do {
         if (len - count == 0) {
             len += chunksize;
-            if (!(buf = buf ? realloc (buf, len) : malloc (len)))
-                goto nomem;
+            if (!(new = realloc (buf, len)))
+                goto error;
+            buf = new;
         }
-        if ((n = read (fd, buf + count, len - count)) < 0) {
-            free (buf);
-            return n;
-        }
+        if ((n = read (fd, buf + count, len - count)) < 0)
+            goto error;
         count += n;
     } while (n != 0);
     *bufp = buf;
     return count;
-nomem:
-    errno = ENOMEM;
+error:
+    saved_errno = errno;
+    free (buf);
+    errno = saved_errno;
     return -1;
 }
 
