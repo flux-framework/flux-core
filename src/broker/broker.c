@@ -418,6 +418,9 @@ int main (int argc, char *argv[])
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
     overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
 
+    if (create_rundir (ctx.attrs) < 0)
+        log_err_exit ("create_rundir");
+
     /* Boot with PMI.
      */
     double pmi_elapsed_sec;
@@ -444,10 +447,6 @@ int main (int argc, char *argv[])
     // Setup profiling
     setup_profiling (argv[0], rank);
 
-    /* Create/validate runtime directory (this function is idempotent)
-     */
-    if (create_rundir (ctx.attrs) < 0)
-        log_err_exit ("create_rundir");
     /* If persist-filesystem or persist-directory are set, initialize those,
      * but only on rank 0.
      */
@@ -873,8 +872,8 @@ static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
 
 /* If user set the 'broker.rundir' attribute on the command line,
  * validate the directory and its permissions, and set the immutable flag
- * on the attribute.  If unset, a unique directory and arrange to remove
- * it on exit.  This function is idempotent.
+ * on the attribute.  If unset, create a unique directory and arrange to remove
+ * it on exit.
  */
 static int create_rundir (attr_t *attrs)
 {
@@ -1122,13 +1121,6 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
         if (attr_add_int (attrs, "session-id", appnum,
                           FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
-    }
-
-    /* Initialize rundir
-     */
-    if (create_rundir (attrs) < 0) {
-        log_err ("could not initialize rundir");
-        goto done;
     }
 
     /* Set TBON endpoint and mcast endpoint based on user settings
