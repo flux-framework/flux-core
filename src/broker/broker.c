@@ -80,6 +80,7 @@
 #include "exec.h"
 #include "ping.h"
 #include "rusage.h"
+#include "boot_config.h"
 
 /* Generally accepted max, although some go higher (IE is 2083) */
 #define ENDPOINT_MAX 2048
@@ -312,6 +313,7 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers;
+    const char *boot_method;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -421,14 +423,32 @@ int main (int argc, char *argv[])
     if (create_rundir (ctx.attrs) < 0)
         log_err_exit ("create_rundir");
 
-    /* Boot with PMI.
+    /* Execute boot method selected by 'boot.method' attr.
+     * Default is pmi.
      */
-    double pmi_elapsed_sec;
-    struct timespec pmi_start_time;
-    monotime (&pmi_start_time);
-    if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
-        log_msg_exit ("bootstrap failed");
-    pmi_elapsed_sec = monotime_since (pmi_start_time) / 1000;
+    if (attr_get (ctx.attrs, "boot.method", &boot_method, NULL) < 0) {
+        boot_method = "pmi";
+        if (attr_add (ctx.attrs, "boot.method", boot_method, 0))
+            log_err_exit ("setattr boot.method");
+    }
+    if (attr_set_flags (ctx.attrs, "boot.method", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("attr_set_flags boot.method");
+    if (!strcmp (boot_method, "config")) {
+        if (boot_config (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
+            log_msg_exit ("bootstrap failed");
+    }
+    else if (!strcmp (boot_method, "pmi")) {
+        double elapsed_sec;
+        struct timespec start_time;
+        monotime (&start_time);
+        if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0)
+            log_msg_exit ("bootstrap failed");
+        elapsed_sec = monotime_since (start_time) / 1000;
+        flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", elapsed_sec);
+
+    }
+    else
+        log_err_exit ("unknown boot method: %s", boot_method);
     uint32_t rank = overlay_get_rank(ctx.overlay);
     uint32_t size = overlay_get_size(ctx.overlay);
 
@@ -481,8 +501,6 @@ int main (int argc, char *argv[])
         if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0)
             log_err_exit ("configuring runlevel attributes");
     }
-
-    flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", pmi_elapsed_sec);
 
     /* The previous value of FLUX_URI (refers to enclosing instance)
      * was stored above.  Clear it here so a connection to the enclosing
