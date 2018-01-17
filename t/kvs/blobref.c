@@ -11,7 +11,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 
 int main (int argc, char *argv[])
 {
@@ -26,7 +26,7 @@ int main (int argc, char *argv[])
     }
     hashtype = argv[1];
 
-    if ((size = read_all (STDIN_FILENO, &data)) < 0)
+    if ((size = read_all (STDIN_FILENO, (void **)&data)) < 0)
         log_err_exit ("read");
 
     if (blobref_hash (hashtype, data, size, blobref) < 0)

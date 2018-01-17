@@ -1,9 +1,10 @@
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/popen2.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 
 int main(int argc, char** argv)
 {

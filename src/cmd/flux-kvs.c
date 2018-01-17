@@ -34,7 +34,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 #include "src/common/libkvs/treeobj.h"
 
 int cmd_namespace_create (optparse_t *p, int argc, char **argv);
@@ -602,7 +602,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
                 put_flags |= FLUX_KVS_APPEND;
 
             if (!strcmp (val, "-")) { // special handling for "--raw key=-"
-                if ((len = read_all (STDIN_FILENO, &buf)) < 0)
+                if ((len = read_all (STDIN_FILENO, (void **)&buf)) < 0)
                     log_err_exit ("stdin");
                 val = (char *)buf;
             } else

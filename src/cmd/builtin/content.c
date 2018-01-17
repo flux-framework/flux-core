@@ -26,7 +26,7 @@
 #include <unistd.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/readall.h"
+#include "src/common/libutil/read_all.h"
 
 static int internal_content_load (optparse_t *p, int ac, char *av[])
 {
@@ -76,7 +76,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         flags |= CONTENT_FLAG_CACHE_BYPASS;
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if ((size = read_all (STDIN_FILENO, &data)) < 0)
+    if ((size = read_all (STDIN_FILENO, (void **)&data)) < 0)
         log_err_exit ("read");
     if (!(f = flux_content_store (h, data, size, flags)))
         log_err_exit ("flux_content_store");

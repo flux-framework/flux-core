@@ -31,8 +31,8 @@ libutil_la_SOURCES = \
 	nodeset.c \
 	nodeset.h \
 	shortjson.h \
-	readall.c \
-	readall.h \
+	read_all.c \
+	read_all.h \
 	ev_zmq.c \
 	ev_zmq.h \
 	ev_zlist.c \
@@ -94,7 +94,8 @@ TESTS = test_nodeset.t \
 	test_unlink.t \
 	test_cleanup.t \
 	test_blobref.t \
-	test_dirwalk.t
+	test_dirwalk.t \
+	test_read_all.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -181,3 +182,7 @@ test_cleanup_t_LDADD = $(test_ldadd) $(JANSSON_LIBS)
 test_dirwalk_t_SOURCES = test/dirwalk.c
 test_dirwalk_t_CPPFLAGS = $(test_cppflags)
 test_dirwalk_t_LDADD = $(test_ldadd)
+
+test_read_all_t_SOURCES = test/read_all.c
+test_read_all_t_CPPFLAGS = $(test_cppflags)
+test_read_all_t_LDADD = $(test_ldadd)
