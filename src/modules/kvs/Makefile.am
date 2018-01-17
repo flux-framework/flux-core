@@ -26,7 +26,9 @@ kvs_la_SOURCES = \
 	commit.h \
 	commit.c \
 	msg_cb_handler.h \
-	msg_cb_handler.c
+	msg_cb_handler.c \
+	kvsroot.h \
+	kvsroot.c
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
