@@ -45,7 +45,9 @@ flux_broker_SOURCES = \
 	rusage.h \
 	rusage.c \
 	boot_config.h \
-	boot_config.c
+	boot_config.c \
+	boot_pmi.h \
+	boot_pmi.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-core.la \
