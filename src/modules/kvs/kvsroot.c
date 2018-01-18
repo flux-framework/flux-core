@@ -38,6 +38,36 @@
 
 #include "kvsroot.h"
 
+kvsroot_mgr_t *kvsroot_mgr_create (void)
+{
+    kvsroot_mgr_t *km = NULL;
+    int saved_errno;
+
+    if (!(km = calloc (1, sizeof (*km)))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(km->roothash = zhash_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    return km;
+
+ error:
+    kvsroot_mgr_destroy (km);
+    errno = saved_errno;
+    return NULL;
+}
+
+void kvsroot_mgr_destroy (kvsroot_mgr_t *km)
+{
+    if (km) {
+        if (km->roothash)
+            zhash_destroy (&km->roothash);
+        free (km);
+    }
+}
+
 static void kvsroot_destroy (void *data)
 {
     if (data) {

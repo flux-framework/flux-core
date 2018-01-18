@@ -10,6 +10,12 @@
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
 
+struct kvsroot_mgr {
+    zhash_t *roothash;
+};
+
+typedef struct kvsroot_mgr kvsroot_mgr_t;
+
 struct kvsroot {
     char *namespace;
     int seq;
@@ -20,6 +26,10 @@ struct kvsroot {
     int flags;
     bool remove;
 };
+
+kvsroot_mgr_t *kvsroot_mgr_create (void);
+
+void kvsroot_mgr_destroy (kvsroot_mgr_t *km);
 
 void kvsroot_remove (zhash_t *roothash, const char *namespace);
 
