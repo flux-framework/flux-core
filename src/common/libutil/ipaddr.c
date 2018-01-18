@@ -32,27 +32,41 @@
 #include <netdb.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "log.h"
 #include "ipaddr.h"
 
-void ipaddr_getprimary (char *buf, int len)
+int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz)
 {
     char hostname[HOST_NAME_MAX + 1];
     struct addrinfo hints, *res = NULL;
     int e;
 
-    if (gethostname (hostname, sizeof (hostname)) < 0)
-        log_err_exit ("gethostname");
+    if (gethostname (hostname, sizeof (hostname)) < 0) {
+        if (errstr)
+            snprintf (errstr, errstrsz, "gethostname: %s", strerror (errno));
+        return -1;
+    }
     memset (&hints, 0, sizeof (hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL)
-        log_msg_exit ("getaddrinfo %s: %s", hostname, gai_strerror (e));
+
+    if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL) {
+        if (errstr)
+            snprintf (errstr, errstrsz, "getaddrinfo %s: %s",
+                      hostname, gai_strerror (e));
+        return -1;
+    }
     if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, buf, len,
-                          NULL, 0, NI_NUMERICHOST)))
-        log_msg_exit ("getnameinfo %s: %s", hostname, gai_strerror (e));
+                          NULL, 0, NI_NUMERICHOST))) {
+        if (errstr)
+            snprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (e));
+        freeaddrinfo (res);
+        return -1;
+    }
     freeaddrinfo (res);
+    return 0;
 }
 
 /*

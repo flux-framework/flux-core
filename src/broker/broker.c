@@ -1011,6 +1011,7 @@ static char * format_endpoint (attr_t *attrs, const char *endpoint)
     bool percent_flag = false;
     unsigned int len = 0;
     const char *rundir;
+    char error[200];
 
     buf = xzmalloc (ENDPOINT_MAX + 1);
 
@@ -1018,7 +1019,11 @@ static char * format_endpoint (attr_t *attrs, const char *endpoint)
     while (*ptr) {
         if (percent_flag) {
             if (*ptr == 'h') {
-                ipaddr_getprimary (ipaddr, sizeof (ipaddr));
+                if (ipaddr_getprimary (ipaddr, sizeof (ipaddr),
+                                       error, sizeof (error)) < 0) {
+                    log_msg ("%s", error);
+                    goto done;
+                }
                 if ((len + strlen (ipaddr)) > ENDPOINT_MAX) {
                     log_msg ("ipaddr overflow max endpoint length");
                     goto done;
