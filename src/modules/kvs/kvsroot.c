@@ -38,7 +38,7 @@
 
 #include "kvsroot.h"
 
-static void destroy_root (void *data)
+static void kvsroot_destroy (void *data)
 {
     if (data) {
         struct kvsroot *root = data;
@@ -52,34 +52,34 @@ static void destroy_root (void *data)
     }
 }
 
-void remove_root (zhash_t *roothash, const char *namespace)
+void kvsroot_remove (zhash_t *roothash, const char *namespace)
 {
     zhash_delete (roothash, namespace);
 }
 
-struct kvsroot *lookup_root (zhash_t *roothash, const char *namespace)
+struct kvsroot *kvsroot_lookup (zhash_t *roothash, const char *namespace)
 {
     return zhash_lookup (roothash, namespace);
 }
 
-struct kvsroot *lookup_root_safe (zhash_t *roothash, const char *namespace)
+struct kvsroot *kvsroot_lookup_safe (zhash_t *roothash, const char *namespace)
 {
     struct kvsroot *root;
 
-    if ((root = lookup_root (roothash, namespace))) {
+    if ((root = kvsroot_lookup (roothash, namespace))) {
         if (root->remove)
             root = NULL;
     }
     return root;
 }
 
-struct kvsroot *create_root (zhash_t *roothash,
-                             struct cache *cache,
-                             const char *hash_name,
-                             const char *namespace,
-                             int flags,
-                             flux_t *h,
-                             void *arg)
+struct kvsroot *kvsroot_create (zhash_t *roothash,
+                                struct cache *cache,
+                                const char *hash_name,
+                                const char *namespace,
+                                int flags,
+                                flux_t *h,
+                                void *arg)
 {
     struct kvsroot *root;
     int save_errnum;
@@ -116,7 +116,7 @@ struct kvsroot *create_root (zhash_t *roothash,
         goto error;
     }
 
-    if (!zhash_freefn (roothash, namespace, destroy_root)) {
+    if (!zhash_freefn (roothash, namespace, kvsroot_destroy)) {
         flux_log_error (h, "zhash_freefn");
         save_errnum = errno;
         zhash_delete (roothash, namespace);
@@ -128,7 +128,7 @@ struct kvsroot *create_root (zhash_t *roothash,
 
  error:
     save_errnum = errno;
-    destroy_root (root);
+    kvsroot_destroy (root);
     errno = save_errnum;
     return NULL;
 }

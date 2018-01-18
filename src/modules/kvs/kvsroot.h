@@ -21,22 +21,22 @@ struct kvsroot {
     bool remove;
 };
 
-void remove_root (zhash_t *roothash, const char *namespace);
+void kvsroot_remove (zhash_t *roothash, const char *namespace);
 
 /* returns NULL if not found */
-struct kvsroot *lookup_root (zhash_t *roothash, const char *namespace);
+struct kvsroot *kvsroot_lookup (zhash_t *roothash, const char *namespace);
 
 /* safe lookup, will return NULL if root in process of being removed,
  * i.e. remove flag set to true */
-struct kvsroot *lookup_root_safe (zhash_t *roothash, const char *namespace);
+struct kvsroot *kvsroot_lookup_safe (zhash_t *roothash, const char *namespace);
 
-struct kvsroot *create_root (zhash_t *roothash,
-                             struct cache *cache,
-                             const char *hash_name,
-                             const char *namespace,
-                             int flags,
-                             flux_t *h,
-                             void *arg);
+struct kvsroot *kvsroot_create (zhash_t *roothash,
+                                struct cache *cache,
+                                const char *hash_name,
+                                const char *namespace,
+                                int flags,
+                                flux_t *h,
+                                void *arg);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 
