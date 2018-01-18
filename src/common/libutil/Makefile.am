@@ -103,7 +103,8 @@ TESTS = test_nodeset.t \
 	test_dirwalk.t \
 	test_read_all.t \
 	test_tomltk.t \
-	test_cf.t
+	test_cf.t \
+	test_ipaddr.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -203,3 +204,7 @@ test_tomltk_t_LDADD = $(test_ldadd)
 test_cf_t_SOURCES = test/cf.c
 test_cf_t_CPPFLAGS = $(test_cppflags)
 test_cf_t_LDADD = $(test_ldadd)
+
+test_ipaddr_t_SOURCES = test/ipaddr.c
+test_ipaddr_t_CPPFLAGS = $(test_cppflags)
+test_ipaddr_t_LDADD = $(test_ldadd)
