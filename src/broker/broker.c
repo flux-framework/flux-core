@@ -724,24 +724,6 @@ static void init_attrs_from_environment (attr_t *attrs)
     }
 }
 
-static void init_attrs_overlay (attr_t *attrs)
-{
-    const char *tbonendpoint = "tbon.endpoint";
-    const char *mcastendpoint = "mcast.endpoint";
-
-    if (attr_add (attrs,
-                  tbonendpoint,
-                  "tcp://%h:*",
-                  0) < 0)
-        log_err_exit ("attr_add %s", tbonendpoint);
-
-    if (attr_add (attrs,
-                  mcastendpoint,
-                  "tbon",
-                  0) < 0)
-        log_err_exit ("attr_add %s", mcastendpoint);
-}
-
 static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
 {
     char *attrname = "broker.pid";
@@ -764,7 +746,6 @@ static void init_attrs (attr_t *attrs, pid_t pid)
 
     /* Initialize other miscellaneous attrs
      */
-    init_attrs_overlay (attrs);
     init_attrs_broker_pid (attrs, pid);
 }
 
@@ -1073,6 +1054,38 @@ done:
     return (rv);
 }
 
+/* Process attribute with format_endpoint(), writing it back to the
+ * attribute cache, then returning it in 'value'.
+ * If attribute was not initially set, start with 'default_value'.
+ * Return 0 on success, -1 on failure with diagnostics to stderr.
+ */
+static int update_endpoint_attr (attr_t *attrs, const char *name,
+                                 const char **value, const char *default_value)
+{
+    const char *val;
+    char *fmt_val = NULL;
+    int rc = -1;
+
+    if (attr_get (attrs, name, &val, NULL) < 0)
+        val = default_value;
+    if (!(fmt_val = format_endpoint (attrs, val))) {
+        log_msg ("malformed %s: %s", name, val);
+        return -1;
+    }
+    (void)attr_delete (attrs, name, true);
+    if (attr_add (attrs, name, fmt_val, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("setattr %s", name);
+        goto done;
+    }
+    if (attr_get (attrs, name, &val, NULL) < 0)
+        goto done;
+    *value = val;
+    rc = 0;
+done:
+    free (fmt_val);
+    return rc;
+}
+
 static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
 {
     int spawned;
@@ -1093,10 +1106,8 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
     char *val = NULL;
     int e;
     int rc = -1;
-    const char *attrtbonendpoint;
-    char *tbonendpoint = NULL;
-    const char *attrmcastendpoint;
-    char *mcastendpoint = NULL;
+    const char *tbonendpoint = NULL;
+    const char *mcastendpoint = NULL;
 
     if ((e = PMI_Init (&spawned)) != PMI_SUCCESS) {
         log_msg ("PMI_Init: %s", pmi_strerror (e));
@@ -1128,40 +1139,15 @@ static int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
             goto done;
     }
 
-    /* Set TBON endpoint and mcast endpoint based on user settings
-     */
-
-    if (attr_get (attrs, "tbon.endpoint", &attrtbonendpoint, NULL) < 0) {
-        log_err ("tbon.endpoint is not set");
+    if (update_endpoint_attr (attrs, "tbon.endpoint", &tbonendpoint,
+                                                        "tcp://%h:*") < 0)
         goto done;
-    }
-
-    if (!(tbonendpoint = format_endpoint (attrs, attrtbonendpoint))) {
-        log_msg ("format_endpoint error");
-        goto done;
-    }
-
-    if (attr_set (attrs, "tbon.endpoint", tbonendpoint, true) < 0) {
-        log_err ("tbon.endpoint could not be set");
-        goto done;
-    }
 
     overlay_set_child (overlay, tbonendpoint);
 
-    if (attr_get (attrs, "mcast.endpoint", &attrmcastendpoint, NULL) < 0) {
-        log_err ("mcast.endpoint is not set");
+    if (update_endpoint_attr (attrs, "mcast.endpoint", &mcastendpoint,
+                                                        "tbon") < 0)
         goto done;
-    }
-
-    if (!(mcastendpoint = format_endpoint (attrs, attrmcastendpoint))) {
-        log_msg ("format_endpoint error");
-        goto done;
-    }
-
-    if (attr_set (attrs, "mcast.endpoint", mcastendpoint, true) < 0) {
-        log_err ("mcast.endpoint could not be set");
-        goto done;
-    }
 
     /* Set up multicast (e.g. epgm) relay if multiple ranks are being
      * spawned per node, as indicated by "clique ranks".  FIXME: if
@@ -1339,10 +1325,6 @@ done:
         free (key);
     if (val)
         free (val);
-    if (tbonendpoint)
-        free (tbonendpoint);
-    if (mcastendpoint)
-        free (mcastendpoint);
     if (rc != 0)
         errno = EPROTO;
     return rc;
