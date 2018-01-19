@@ -25,7 +25,9 @@ struct kvsroot {
 /* return -1 on error, 0 on success, 1 on success & to stop iterating */
 typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
 
-kvsroot_mgr_t *kvsroot_mgr_create (void);
+/* flux_t optional, if NULL logging will go to stderr */
+/* void *arg passed as arg value to commit_mgr_create() internally */
+kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg);
 
 void kvsroot_mgr_destroy (kvsroot_mgr_t *km);
 
@@ -35,9 +37,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
                                          struct cache *cache,
                                          const char *hash_name,
                                          const char *namespace,
-                                         int flags,
-                                         flux_t *h,
-                                         void *arg);
+                                         int flags);
 
 void kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace);
 

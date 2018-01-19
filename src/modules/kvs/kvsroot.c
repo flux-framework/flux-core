@@ -40,9 +40,11 @@
 
 struct kvsroot_mgr {
     zhash_t *roothash;
+    flux_t *h;
+    void *arg;
 };
 
-kvsroot_mgr_t *kvsroot_mgr_create (void)
+kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
 {
     kvsroot_mgr_t *km = NULL;
     int saved_errno;
@@ -55,6 +57,8 @@ kvsroot_mgr_t *kvsroot_mgr_create (void)
         saved_errno = ENOMEM;
         goto error;
     }
+    km->h = h;
+    km->arg = arg;
     return km;
 
  error:
@@ -95,34 +99,32 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
                                          struct cache *cache,
                                          const char *hash_name,
                                          const char *namespace,
-                                         int flags,
-                                         flux_t *h,
-                                         void *arg)
+                                         int flags)
 {
     struct kvsroot *root;
     int save_errnum;
 
     if (!(root = calloc (1, sizeof (*root)))) {
-        flux_log_error (h, "calloc");
+        flux_log_error (km->h, "calloc");
         return NULL;
     }
 
     if (!(root->namespace = strdup (namespace))) {
-        flux_log_error (h, "strdup");
+        flux_log_error (km->h, "strdup");
         goto error;
     }
 
     if (!(root->cm = commit_mgr_create (cache,
                                         root->namespace,
                                         hash_name,
-                                        h,
-                                        arg))) {
-        flux_log_error (h, "commit_mgr_create");
+                                        km->h,
+                                        km->arg))) {
+        flux_log_error (km->h, "commit_mgr_create");
         goto error;
     }
 
     if (!(root->watchlist = wait_queue_create ())) {
-        flux_log_error (h, "wait_queue_create");
+        flux_log_error (km->h, "wait_queue_create");
         goto error;
     }
 
@@ -130,12 +132,12 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
     root->remove = false;
 
     if (zhash_insert (km->roothash, namespace, root) < 0) {
-        flux_log_error (h, "zhash_insert");
+        flux_log_error (km->h, "zhash_insert");
         goto error;
     }
 
     if (!zhash_freefn (km->roothash, namespace, kvsroot_destroy)) {
-        flux_log_error (h, "zhash_freefn");
+        flux_log_error (km->h, "zhash_freefn");
         save_errnum = errno;
         zhash_delete (km->roothash, namespace);
         errno = save_errnum;

@@ -147,7 +147,7 @@ static kvs_ctx_t *getctx (flux_t *h)
             saved_errno = ENOMEM;
             goto error;
         }
-        if (!(ctx->km = kvsroot_mgr_create ())) {
+        if (!(ctx->km = kvsroot_mgr_create (ctx->h, ctx))) {
             saved_errno = ENOMEM;
             goto error;
         }
@@ -346,9 +346,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
                                               ctx->cache,
                                               ctx->hash_name,
                                               namespace,
-                                              flags,
-                                              ctx->h,
-                                              ctx))) {
+                                              flags))) {
             flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
             goto error;
         }
@@ -2249,9 +2247,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
                                           ctx->cache,
                                           ctx->hash_name,
                                           namespace,
-                                          flags,
-                                          ctx->h,
-                                          ctx))) {
+                                          flags))) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
         goto cleanup;
     }
@@ -2582,9 +2578,7 @@ int mod_main (flux_t *h, int argc, char **argv)
                                                   ctx->cache,
                                                   ctx->hash_name,
                                                   KVS_PRIMARY_NAMESPACE,
-                                                  0,
-                                                  ctx->h,
-                                                  ctx))) {
+                                                  0))) {
                 flux_log_error (h, "kvsroot_mgr_create_root");
                 goto done;
             }
