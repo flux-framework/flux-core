@@ -163,6 +163,26 @@ struct kvsroot *kvsroot_create (zhash_t *roothash,
     return NULL;
 }
 
+int kvsroot_iter (zhash_t *roothash, kvsroot_root_f cb, void *arg)
+{
+    struct kvsroot *root;
+
+    root = zhash_first (roothash);
+    while (root) {
+        int ret;
+
+        if ((ret = cb (root, arg)) < 0)
+            return -1;
+
+        if (ret == 1)
+            break;
+
+        root = zhash_next (roothash);
+    }
+
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -27,6 +27,9 @@ struct kvsroot {
     bool remove;
 };
 
+/* return -1 on error, 0 on success, 1 on success & to stop iterating */
+typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
+
 kvsroot_mgr_t *kvsroot_mgr_create (void);
 
 void kvsroot_mgr_destroy (kvsroot_mgr_t *km);
@@ -47,6 +50,8 @@ struct kvsroot *kvsroot_create (zhash_t *roothash,
                                 int flags,
                                 flux_t *h,
                                 void *arg);
+
+int kvsroot_iter (zhash_t *roothash, kvsroot_root_f cb, void *arg);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 
