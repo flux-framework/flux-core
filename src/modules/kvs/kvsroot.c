@@ -38,6 +38,10 @@
 
 #include "kvsroot.h"
 
+struct kvsroot_mgr {
+    zhash_t *roothash;
+};
+
 kvsroot_mgr_t *kvsroot_mgr_create (void)
 {
     kvsroot_mgr_t *km = NULL;
@@ -87,34 +91,13 @@ static void kvsroot_destroy (void *data)
     }
 }
 
-void kvsroot_remove (zhash_t *roothash, const char *namespace)
-{
-    zhash_delete (roothash, namespace);
-}
-
-struct kvsroot *kvsroot_lookup (zhash_t *roothash, const char *namespace)
-{
-    return zhash_lookup (roothash, namespace);
-}
-
-struct kvsroot *kvsroot_lookup_safe (zhash_t *roothash, const char *namespace)
-{
-    struct kvsroot *root;
-
-    if ((root = kvsroot_lookup (roothash, namespace))) {
-        if (root->remove)
-            root = NULL;
-    }
-    return root;
-}
-
-struct kvsroot *kvsroot_create (zhash_t *roothash,
-                                struct cache *cache,
-                                const char *hash_name,
-                                const char *namespace,
-                                int flags,
-                                flux_t *h,
-                                void *arg)
+struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
+                                         struct cache *cache,
+                                         const char *hash_name,
+                                         const char *namespace,
+                                         int flags,
+                                         flux_t *h,
+                                         void *arg)
 {
     struct kvsroot *root;
     int save_errnum;
@@ -146,15 +129,15 @@ struct kvsroot *kvsroot_create (zhash_t *roothash,
     root->flags = flags;
     root->remove = false;
 
-    if (zhash_insert (roothash, namespace, root) < 0) {
+    if (zhash_insert (km->roothash, namespace, root) < 0) {
         flux_log_error (h, "zhash_insert");
         goto error;
     }
 
-    if (!zhash_freefn (roothash, namespace, kvsroot_destroy)) {
+    if (!zhash_freefn (km->roothash, namespace, kvsroot_destroy)) {
         flux_log_error (h, "zhash_freefn");
         save_errnum = errno;
-        zhash_delete (roothash, namespace);
+        zhash_delete (km->roothash, namespace);
         errno = save_errnum;
         goto error;
     }
@@ -168,11 +151,34 @@ struct kvsroot *kvsroot_create (zhash_t *roothash,
     return NULL;
 }
 
-int kvsroot_iter (zhash_t *roothash, kvsroot_root_f cb, void *arg)
+void kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace)
+{
+    zhash_delete (km->roothash, namespace);
+}
+
+struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *km,
+                                         const char *namespace)
+{
+    return zhash_lookup (km->roothash, namespace);
+}
+
+struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *km,
+                                              const char *namespace)
 {
     struct kvsroot *root;
 
-    root = zhash_first (roothash);
+    if ((root = kvsroot_mgr_lookup_root (km, namespace))) {
+        if (root->remove)
+            root = NULL;
+    }
+    return root;
+}
+
+int kvsroot_mgr_iter_roots (kvsroot_mgr_t *km, kvsroot_root_f cb, void *arg)
+{
+    struct kvsroot *root;
+
+    root = zhash_first (km->roothash);
     while (root) {
         int ret;
 
@@ -182,7 +188,7 @@ int kvsroot_iter (zhash_t *roothash, kvsroot_root_f cb, void *arg)
         if (ret == 1)
             break;
 
-        root = zhash_next (roothash);
+        root = zhash_next (km->roothash);
     }
 
     return 0;
