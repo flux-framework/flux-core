@@ -2126,7 +2126,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
 
     /* if no roots are initialized, respond with all zeroes as stats */
-    if (zhash_size (ctx->km->roothash)) {
+    if (kvsroot_mgr_root_count (ctx->km) > 0) {
         if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
             goto done;
     }
@@ -2156,7 +2156,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
     }
 
-    if (zhash_size (ctx->km->roothash)) {
+    if (kvsroot_mgr_root_count (ctx->km) > 0) {
         if (kvsroot_iter (ctx->km->roothash, stats_get_root_cb, nsstats) < 0) {
             flux_log_error (h, "%s: kvsroot_iter", __FUNCTION__);
             goto done;

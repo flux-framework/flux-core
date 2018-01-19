@@ -34,6 +34,8 @@ kvsroot_mgr_t *kvsroot_mgr_create (void);
 
 void kvsroot_mgr_destroy (kvsroot_mgr_t *km);
 
+int kvsroot_mgr_root_count (kvsroot_mgr_t *km);
+
 void kvsroot_remove (zhash_t *roothash, const char *namespace);
 
 /* returns NULL if not found */

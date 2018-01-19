@@ -68,6 +68,11 @@ void kvsroot_mgr_destroy (kvsroot_mgr_t *km)
     }
 }
 
+int kvsroot_mgr_root_count (kvsroot_mgr_t *km)
+{
+    return zhash_size (km->roothash);
+}
+
 static void kvsroot_destroy (void *data)
 {
     if (data) {
