@@ -39,7 +39,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
                                          const char *namespace,
                                          int flags);
 
-void kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace);
+int kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace);
 
 /* returns NULL if not found */
 struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *km,

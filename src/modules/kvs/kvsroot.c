@@ -40,6 +40,8 @@
 
 struct kvsroot_mgr {
     zhash_t *roothash;
+    zlist_t *removelist;
+    bool iterating_roots;
     flux_t *h;
     void *arg;
 };
@@ -57,6 +59,11 @@ kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg)
         saved_errno = ENOMEM;
         goto error;
     }
+    if (!(km->removelist = zlist_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    km->iterating_roots = false;
     km->h = h;
     km->arg = arg;
     return km;
@@ -72,6 +79,8 @@ void kvsroot_mgr_destroy (kvsroot_mgr_t *km)
     if (km) {
         if (km->roothash)
             zhash_destroy (&km->roothash);
+        if (km->removelist)
+            zlist_destroy (&km->removelist);
         free (km);
     }
 }
@@ -103,6 +112,12 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
 {
     struct kvsroot *root;
     int save_errnum;
+
+    /* Don't modify hash while iterating */
+    if (km->iterating_roots) {
+        errno = EAGAIN;
+        return NULL;
+    }
 
     if (!(root = calloc (1, sizeof (*root)))) {
         flux_log_error (km->h, "calloc");
@@ -153,9 +168,27 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
     return NULL;
 }
 
-void kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace)
+int kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace)
 {
-    zhash_delete (km->roothash, namespace);
+    /* don't want to remove while iterating, so save namespace for
+     * later removal */
+    if (km->iterating_roots) {
+        char *str = strdup (namespace);
+
+        if (!str) {
+            errno = ENOMEM;
+            return -1;
+        }
+
+        if (zlist_append (km->removelist, str) < 0) {
+            free (str);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    else
+        zhash_delete (km->roothash, namespace);
+    return 0;
 }
 
 struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *km,
@@ -179,13 +212,16 @@ struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *km,
 int kvsroot_mgr_iter_roots (kvsroot_mgr_t *km, kvsroot_root_f cb, void *arg)
 {
     struct kvsroot *root;
+    char *namespace;
+
+    km->iterating_roots = true;
 
     root = zhash_first (km->roothash);
     while (root) {
         int ret;
 
         if ((ret = cb (root, arg)) < 0)
-            return -1;
+            goto error;
 
         if (ret == 1)
             break;
@@ -193,7 +229,20 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *km, kvsroot_root_f cb, void *arg)
         root = zhash_next (km->roothash);
     }
 
+    km->iterating_roots = false;
+
+    while ((namespace = zlist_pop (km->removelist))) {
+        kvsroot_mgr_remove_root (km, namespace);
+        free (namespace);
+    }
+
     return 0;
+
+error:
+    while ((namespace = zlist_pop (km->removelist)))
+        free (namespace);
+    km->iterating_roots = false;
+    return -1;
 }
 
 /*

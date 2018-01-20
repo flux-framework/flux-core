@@ -75,7 +75,6 @@ typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
     kvsroot_mgr_t *km;
-    zlist_t *removelist;        /* temp for removing items */
     int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
@@ -112,7 +111,6 @@ static void freectx (void *arg)
     if (ctx) {
         cache_destroy (ctx->cache);
         kvsroot_mgr_destroy (ctx->km);
-        zlist_destroy (&ctx->removelist);
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
@@ -142,8 +140,7 @@ static kvs_ctx_t *getctx (flux_t *h)
             goto error;
         }
         ctx->cache = cache_create ();
-        ctx->removelist = zlist_new ();
-        if (!ctx->cache || !ctx->removelist) {
+        if (!ctx->cache) {
             saved_errno = ENOMEM;
             goto error;
         }
@@ -1095,10 +1092,8 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
                 flux_log_error (ctx->h, "%s: event_unsubscribe",
                                 __FUNCTION__);
 
-            /* can't delete items while iterating through hash,
-             * put on temp removelist */
-            if (zlist_append (ctx->removelist, root) < 0)
-                flux_log_error (ctx->h, "%s: zlist_append",
+            if (kvsroot_mgr_remove_root (ctx->km, root->namespace) < 0)
+                flux_log_error (ctx->h, "%s: kvsroot_mgr_remove_root",
                                 __FUNCTION__);
         }
     }
@@ -1137,19 +1132,15 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvsroot *root;
 
     if (flux_heartbeat_decode (msg, &ctx->epoch) < 0) {
         flux_log_error (ctx->h, "%s: flux_heartbeat_decode", __FUNCTION__);
         return;
     }
 
-    /* don't error return, fallthrough to deal with removelist as needed */
+    /* don't error return, fallthrough to deal with rest as necessary */
     if (kvsroot_mgr_iter_roots (ctx->km, heartbeat_root_cb, ctx) < 0)
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
-
-    while ((root = zlist_pop (ctx->removelist)))
-        kvsroot_mgr_remove_root (ctx->km, root->namespace);
 
     if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
