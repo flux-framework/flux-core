@@ -2,6 +2,8 @@
 systemdsystemunit_DATA = flux.service
 #endif
 
+dist_fluxcf_DATA = boot.conf
+
 noinst_DATA = \
 	flux/curve
 
