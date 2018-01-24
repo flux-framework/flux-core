@@ -43,7 +43,8 @@ TESTS = \
 	test_fence.t \
 	test_commit.t \
 	test_kvs_util.t \
-	test_msg_cb_handler.t
+	test_msg_cb_handler.t \
+	test_kvsroot.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -118,4 +119,16 @@ test_msg_cb_handler_t_SOURCES = test/msg_cb_handler.c
 test_msg_cb_handler_t_CPPFLAGS = $(test_cppflags)
 test_msg_cb_handler_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
+	$(test_ldadd)
+
+test_kvsroot_t_SOURCES = test/kvsroot.c
+test_kvsroot_t_CPPFLAGS = $(test_cppflags)
+test_kvsroot_t_LDADD = \
+	$(top_builddir)/src/modules/kvs/kvsroot.o \
+	$(top_builddir)/src/modules/kvs/waitqueue.o \
+	$(top_builddir)/src/modules/kvs/commit.o \
+	$(top_builddir)/src/modules/kvs/cache.o \
+	$(top_builddir)/src/modules/kvs/fence.o \
+	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
+	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
