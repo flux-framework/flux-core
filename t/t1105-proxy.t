@@ -92,26 +92,26 @@ test_expect_success 'ssh:// can work with events' '
 '
 
 test_expect_success 'ssh:// with bad query option fails in flux_open()' '
-	FLUX_URI=ssh://localhost/$TEST_JOBID?badarg=bar FLUX_SSH=$TEST_SSH \
-	  test_must_fail flux getattr size 2>badarg.out &&
+	! FLUX_URI=ssh://localhost/$TEST_JOBID?badarg=bar FLUX_SSH=$TEST_SSH \
+	  flux getattr size 2>badarg.out &&
 	grep -q "flux_open:" badarg.out
 '
 
 test_expect_success 'ssh:// with bad FLUX_SSH value fails in flux_open()' '
-	FLUX_URI=ssh://localhost/$TEST_JOBID FLUX_SSH=/noexist \
-	  test_must_fail flux getattr size 2>noexist.out &&
+	! FLUX_URI=ssh://localhost/$TEST_JOBID FLUX_SSH=/noexist \
+	  flux getattr size 2>noexist.out &&
 	grep -q "flux_open:" noexist.out
 '
 
 test_expect_success 'ssh:// with bad FLUX_SSH_RCMD value fails in flux_open()' '
-	FLUX_URI=ssh://localhost/$TEST_JOBID FLUX_SSH=$TEST_SSH \
-	  FLUX_SSH_RCMD=/nocmd test_must_fail flux getattr size 2>nocmd.out &&
+	! FLUX_URI=ssh://localhost/$TEST_JOBID FLUX_SSH=$TEST_SSH \
+	  FLUX_SSH_RCMD=/nocmd flux getattr size 2>nocmd.out &&
 	grep -q "flux_open:" nocmd.out
 '
 
 test_expect_success 'ssh:// with missing path component fails in flux_open()' '
-	FLUX_URI=ssh://localhost FLUX_SSH=$TEST_SSH \
-	  test_must_fail flux getattr size 2>nopath.out &&
+	! FLUX_URI=ssh://localhost FLUX_SSH=$TEST_SSH \
+	  flux getattr size 2>nopath.out &&
 	grep -q "flux_open:" nopath.out
 '
 
