@@ -52,6 +52,7 @@
 #include "lookup.h"
 #include "fence.h"
 #include "commit.h"
+#include "kvsroot.h"
 
 #define KVS_MAGIC 0xdeadbeef
 
@@ -73,8 +74,7 @@ const bool event_includes_rootdir = true;
 typedef struct {
     int magic;
     struct cache *cache;    /* blobref => cache_entry */
-    zhash_t *roothash;
-    zlist_t *removelist;        /* temp for removing items */
+    kvsroot_mgr_t *km;
     int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
@@ -87,22 +87,13 @@ typedef struct {
     const char *hash_name;
 } kvs_ctx_t;
 
-struct kvsroot {
-    char *namespace;
-    int seq;
-    blobref_t ref;
-    commit_mgr_t *cm;
-    waitqueue_t *watchlist;
-    int watchlist_lastrun_epoch;
-    int flags;
-    bool remove;
-};
-
 struct kvs_cb_data {
     kvs_ctx_t *ctx;
     struct kvsroot *root;
     wait_t *wait;
     int errnum;
+    bool ready;
+    char *sender;
 };
 
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -119,8 +110,7 @@ static void freectx (void *arg)
     kvs_ctx_t *ctx = arg;
     if (ctx) {
         cache_destroy (ctx->cache);
-        zhash_destroy (&ctx->roothash);
-        zlist_destroy (&ctx->removelist);
+        kvsroot_mgr_destroy (ctx->km);
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
@@ -150,9 +140,11 @@ static kvs_ctx_t *getctx (flux_t *h)
             goto error;
         }
         ctx->cache = cache_create ();
-        ctx->roothash = zhash_new ();
-        ctx->removelist = zlist_new ();
-        if (!ctx->cache || !ctx->roothash || !ctx->removelist) {
+        if (!ctx->cache) {
+            saved_errno = ENOMEM;
+            goto error;
+        }
+        if (!(ctx->km = kvsroot_mgr_create (ctx->h, ctx))) {
             saved_errno = ENOMEM;
             goto error;
         }
@@ -187,100 +179,6 @@ static kvs_ctx_t *getctx (flux_t *h)
 error:
     freectx (ctx);
     errno = saved_errno;
-    return NULL;
-}
-
-/*
- * kvsroot functions
- */
-
-static void destroy_root (void *data)
-{
-    if (data) {
-        struct kvsroot *root = data;
-        if (root->namespace)
-            free (root->namespace);
-        if (root->cm)
-            commit_mgr_destroy (root->cm);
-        if (root->watchlist)
-            wait_queue_destroy (root->watchlist);
-        free (data);
-    }
-}
-
-static void remove_root (kvs_ctx_t *ctx, const char *namespace)
-{
-    zhash_delete (ctx->roothash, namespace);
-}
-
-static struct kvsroot *lookup_root (kvs_ctx_t *ctx, const char *namespace)
-{
-    return zhash_lookup (ctx->roothash, namespace);
-}
-
-static struct kvsroot *lookup_root_safe (kvs_ctx_t *ctx, const char *namespace)
-{
-    struct kvsroot *root;
-
-    if ((root = lookup_root (ctx, namespace))) {
-        if (root->remove)
-            root = NULL;
-    }
-    return root;
-}
-
-static struct kvsroot *create_root (kvs_ctx_t *ctx, const char *namespace,
-                                    int flags)
-{
-    struct kvsroot *root;
-    int save_errnum;
-
-    if (!(root = calloc (1, sizeof (*root)))) {
-        flux_log_error (ctx->h, "calloc");
-        return NULL;
-    }
-
-    if (!(root->namespace = strdup (namespace))) {
-        flux_log_error (ctx->h, "strdup");
-        goto error;
-    }
-
-    if (!(root->cm = commit_mgr_create (ctx->cache,
-                                        root->namespace,
-                                        ctx->hash_name,
-                                        ctx->h,
-                                        ctx))) {
-        flux_log_error (ctx->h, "commit_mgr_create");
-        goto error;
-    }
-
-    if (!(root->watchlist = wait_queue_create ())) {
-        flux_log_error (ctx->h, "wait_queue_create");
-        goto error;
-    }
-
-    root->flags = flags;
-    root->remove = false;
-
-    if (zhash_insert (ctx->roothash, namespace, root) < 0) {
-        flux_log_error (ctx->h, "zhash_insert");
-        goto error;
-    }
-
-    if (!zhash_freefn (ctx->roothash, namespace, destroy_root)) {
-        flux_log_error (ctx->h, "zhash_freefn");
-        save_errnum = errno;
-        zhash_delete (ctx->roothash, namespace);
-        errno = save_errnum;
-        goto error;
-    }
-
-    return root;
-
- error:
-    save_errnum = errno;
-    destroy_root (root);
-    errno = save_errnum;
     return NULL;
 }
 
@@ -439,15 +337,20 @@ static void getroot_completion (flux_future_t *f, void *arg)
 
     /* possible root initialized by another message before we got this
      * response.  Not relevant if namespace in process of being removed. */
-    if (!(root = lookup_root (ctx, namespace))) {
-        if (!(root = create_root (ctx, namespace, flags))) {
-            flux_log_error (ctx->h, "%s: create_root", __FUNCTION__);
+    if (!(root = kvsroot_mgr_lookup_root (ctx->km, namespace))) {
+
+        if (!(root = kvsroot_mgr_create_root (ctx->km,
+                                              ctx->cache,
+                                              ctx->hash_name,
+                                              namespace,
+                                              flags))) {
+            flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
             goto error;
         }
 
         if (event_subscribe (ctx, namespace) < 0) {
             save_errno = errno;
-            remove_root (ctx, namespace);
+            kvsroot_mgr_remove_root (ctx->km, namespace);
             errno = save_errno;
             flux_log_error (ctx->h, "%s: event_subscribe", __FUNCTION__);
             goto error;
@@ -525,7 +428,7 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
 
     (*stall) = false;
 
-    if (!(root = lookup_root_safe (ctx, namespace))) {
+    if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace))) {
         if (ctx->rank == 0) {
             flux_log (ctx->h, LOG_DEBUG, "namespace %s not available",
                       namespace);
@@ -947,7 +850,7 @@ static void commit_apply (commit_t *c)
      * collected until all ready commits have been processed.
      */
 
-    root = lookup_root (ctx, namespace);
+    root = kvsroot_mgr_lookup_root (ctx->km, namespace);
     assert (root);
 
     if (root->remove) {
@@ -1062,56 +965,68 @@ stall:
  * pre/check event callbacks
  */
 
+static int commit_prep_root_cb (struct kvsroot *root, void *arg)
+{
+    struct kvs_cb_data *cbd = arg;
+
+    if (commit_mgr_commits_ready (root->cm)) {
+        cbd->ready = true;
+        return 1;
+    }
+
+    return 0;
+}
+
 static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvsroot *root;
-    bool ready = false;
+    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
 
-    root = zhash_first (ctx->roothash);
-    while (root) {
-
-        if (commit_mgr_commits_ready (root->cm)) {
-            ready = true;
-            break;
-        }
-
-        root = zhash_next (ctx->roothash);
+    if (kvsroot_mgr_iter_roots (ctx->km, commit_prep_root_cb, &cbd) < 0) {
+        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
+        return;
     }
 
-    if (ready)
+    if (cbd.ready)
         flux_watcher_start (ctx->idle_w);
+}
+
+static int commit_check_root_cb (struct kvsroot *root, void *arg)
+{
+    struct kvs_cb_data *cbd = arg;
+    commit_t *c;
+
+    if ((c = commit_mgr_get_ready_commit (root->cm))) {
+        if (cbd->ctx->commit_merge) {
+            /* if merge fails, set errnum in commit_t, let
+             * commit_apply() handle error handling.
+             */
+            if (commit_mgr_merge_ready_commits (root->cm) < 0)
+                commit_set_aux_errnum (c, errno);
+        }
+
+        /* It does not matter if root has been marked for removal,
+         * we want to process and clear all lingering ready
+         * commits in this commit mgr
+         */
+        commit_apply (c);
+    }
+
+    return 0;
 }
 
 static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvsroot *root;
-    commit_t *c;
+    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
 
     flux_watcher_stop (ctx->idle_w);
 
-    root = zhash_first (ctx->roothash);
-    while (root) {
-        if ((c = commit_mgr_get_ready_commit (root->cm))) {
-            if (ctx->commit_merge) {
-                /* if merge fails, set errnum in commit_t, let
-                 * commit_apply() handle error handling.
-                 */
-                if (commit_mgr_merge_ready_commits (root->cm) < 0)
-                    commit_set_aux_errnum (c, errno);
-            }
-
-            /* It does not matter if root has been marked for removal,
-             * we want to process and clear all lingering ready
-             * commits in this commit mgr
-             */
-            commit_apply (c);
-        }
-
-        root = zhash_next (ctx->roothash);
+    if (kvsroot_mgr_iter_roots (ctx->km, commit_check_root_cb, &cbd) < 0) {
+        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
+        return;
     }
 }
 
@@ -1164,69 +1079,68 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
                   expcount, size);
 }
 
+static int heartbeat_root_cb (struct kvsroot *root, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+
+    if (root->remove) {
+        if (!wait_queue_length (root->watchlist)
+            && !commit_mgr_fences_count (root->cm)
+            && !commit_mgr_ready_commit_count (root->cm)) {
+
+            if (event_unsubscribe (ctx, root->namespace) < 0)
+                flux_log_error (ctx->h, "%s: event_unsubscribe",
+                                __FUNCTION__);
+
+            if (kvsroot_mgr_remove_root (ctx->km, root->namespace) < 0)
+                flux_log_error (ctx->h, "%s: kvsroot_mgr_remove_root",
+                                __FUNCTION__);
+        }
+    }
+    else if (ctx->rank != 0
+             && !root->remove
+             && strcasecmp (root->namespace, KVS_PRIMARY_NAMESPACE)
+             && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
+             && !wait_queue_length (root->watchlist)
+             && !commit_mgr_fences_count (root->cm)
+             && !commit_mgr_ready_commit_count (root->cm)) {
+        /* remove a root if it not the primary one, has timed out
+         * on a follower node, and it does not have any watchers,
+         * and no one is trying to commit/change something.
+         */
+        start_root_remove (ctx, root->namespace);
+    }
+    else {
+        /* "touch" objects involved in watched keys */
+        if (wait_queue_length (root->watchlist) > 0
+            && (ctx->epoch - root->watchlist_lastrun_epoch) > max_lastuse_age) {
+            /* log error on wait_runqueue(), don't error out.  watchers
+             * may miss value change, but will never get older one.
+             * Maintains consistency model */
+            if (wait_runqueue (root->watchlist) < 0)
+                flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
+            root->watchlist_lastrun_epoch = ctx->epoch;
+        }
+        /* "touch" root */
+        (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
+    }
+
+    return 0;
+}
+
 static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvsroot *root;
 
     if (flux_heartbeat_decode (msg, &ctx->epoch) < 0) {
         flux_log_error (ctx->h, "%s: flux_heartbeat_decode", __FUNCTION__);
         return;
     }
 
-    root = zhash_first (ctx->roothash);
-    while (root) {
-
-        if (root->remove) {
-            if (!wait_queue_length (root->watchlist)
-                && !commit_mgr_fences_count (root->cm)
-                && !commit_mgr_ready_commit_count (root->cm)) {
-
-                if (event_unsubscribe (ctx, root->namespace) < 0)
-                    flux_log_error (ctx->h, "%s: event_unsubscribe",
-                                    __FUNCTION__);
-
-                /* can't delete items while iterating through hash,
-                 * put on temp removelist */
-                if (zlist_append (ctx->removelist, root) < 0)
-                    flux_log_error (ctx->h, "%s: zlist_append",
-                                    __FUNCTION__);
-            }
-        }
-        else if (ctx->rank != 0
-                 && !root->remove
-                 && strcasecmp (root->namespace, KVS_PRIMARY_NAMESPACE)
-                 && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
-                 && !wait_queue_length (root->watchlist)
-                 && !commit_mgr_fences_count (root->cm)
-                 && !commit_mgr_ready_commit_count (root->cm)) {
-            /* remove a root if it not the primary one, has timed out
-             * on a follower node, and it does not have any watchers,
-             * and no one is trying to commit/change something.
-             */
-            start_root_remove (ctx, root->namespace);
-        }
-        else {
-            /* "touch" objects involved in watched keys */
-            if (wait_queue_length (root->watchlist) > 0
-                && (ctx->epoch - root->watchlist_lastrun_epoch) > max_lastuse_age) {
-                /* log error on wait_runqueue(), don't error out.  watchers
-                 * may miss value change, but will never get older one.
-                 * Maintains consistency model */
-                if (wait_runqueue (root->watchlist) < 0)
-                    flux_log_error (h, "%s: wait_runqueue", __FUNCTION__);
-                root->watchlist_lastrun_epoch = ctx->epoch;
-            }
-            /* "touch" root */
-            (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
-        }
-
-        root = zhash_next (ctx->roothash);
-    }
-
-    while ((root = zlist_pop (ctx->removelist)))
-        remove_root (ctx, root->namespace);
+    /* don't error return, fallthrough to deal with rest as necessary */
+    if (kvsroot_mgr_iter_roots (ctx->km, heartbeat_root_cb, ctx) < 0)
+        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
 
     if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
@@ -1332,7 +1246,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         /* Chance kvsroot removed while we waited */
 
-        if (!lookup_root_safe (ctx, namespace)) {
+        if (!kvsroot_mgr_lookup_root_safe (ctx->km, namespace)) {
             flux_log (h, LOG_DEBUG, "%s: namespace %s lost", __FUNCTION__,
                       namespace);
             errno = ENOTSUP;
@@ -1477,7 +1391,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         /* Chance kvsroot removed while we waited */
 
-        if (!(root = lookup_root_safe (ctx, namespace))) {
+        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace))) {
             flux_log (h, LOG_DEBUG, "%s: namespace %s lost", __FUNCTION__,
                       namespace);
             errno = ENOTSUP;
@@ -1654,7 +1568,7 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * - any lingering watches on a namespace that is in the process
      *   of removal will be cleaned up through other means.
      */
-    if (!(root = lookup_root_safe (ctx, namespace)))
+    if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace)))
         goto done;
 
     if (!(p.key = kvs_util_normalize_key (key, NULL))) {
@@ -1749,7 +1663,7 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* namespace must exist given we are on rank 0 */
-    if (!(root = lookup_root_safe (ctx, namespace))) {
+    if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace))) {
         flux_log (h, LOG_ERR, "%s: namespace %s not available",
                   __FUNCTION__, namespace);
         errno = ENOTSUP;
@@ -1946,7 +1860,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (ctx->rank == 0) {
         /* namespace must exist given we are on rank 0 */
-        if (!(root = lookup_root_safe (ctx, namespace))) {
+        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace))) {
             flux_log (h, LOG_DEBUG, "namespace %s not available", namespace);
             errno = ENOTSUP;
             goto error;
@@ -2002,7 +1916,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
      * - it is ok that the namespace be marked for removal, we may be
      *   cleaning up lingering commits.
      */
-    if (!(root = lookup_root (ctx, namespace))) {
+    if (!(root = kvsroot_mgr_lookup_root (ctx->km, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
                   __FUNCTION__, namespace);
         return;
@@ -2081,7 +1995,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
      *   order (commit completes before namespace removed, but
      *   namespace remove event received before setroot).
      */
-    if (!(root = lookup_root (ctx, namespace))) {
+    if (!(root = kvsroot_mgr_lookup_root (ctx->km, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
                   __FUNCTION__, namespace);
         return;
@@ -2121,35 +2035,67 @@ static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
     return match;
 }
 
+static int disconnect_request_root_cb (struct kvsroot *root, void *arg)
+{
+    struct kvs_cb_data *cbd = arg;
+
+    /* Log error, but don't return -1, can continue to iterate
+     * remaining roots */
+    if (wait_destroy_msg (root->watchlist, disconnect_cmp, cbd->sender) < 0)
+        flux_log_error (cbd->ctx->h, "%s: wait_destroy_msg", __FUNCTION__);
+
+    return 0;
+}
+
 static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
-    struct kvsroot *root;
+    struct kvs_cb_data cbd;
     char *sender = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
-    /* N.B. impossible for a watch to be on watchlist and cache waiter
+   /* N.B. impossible for a watch to be on watchlist and cache waiter
      * at the same time (i.e. on watchlist means we're watching, if on
      * cache waiter we're not done processing towards being on the
      * watchlist).  So if wait_destroy_msg() on the waitlist succeeds
      * but cache_wait_destroy_msg() fails, it's not that big of a
      * deal.  The current state is still maintained.
      */
-    root = zhash_first (ctx->roothash);
-    while (root) {
+    cbd.ctx = ctx;
+    cbd.sender = sender;
+    if (kvsroot_mgr_iter_roots (ctx->km, disconnect_request_root_cb, &cbd) < 0)
+        flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
 
-        if (wait_destroy_msg (root->watchlist, disconnect_cmp, sender) < 0)
-            flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
-
-        root = zhash_next (ctx->roothash);
-    }
     if (cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender) < 0)
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
     free (sender);
+}
+
+static int stats_get_root_cb (struct kvsroot *root, void *arg)
+{
+    json_t *nsstats = arg;
+    json_t *s;
+
+    if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
+                         "#watchers",
+                         wait_queue_length (root->watchlist),
+                         "#no-op stores",
+                         commit_mgr_get_noop_stores (root->cm),
+                         "#fences",
+                         commit_mgr_fences_count (root->cm),
+                         "#readycommits",
+                         commit_mgr_ready_commit_count (root->cm),
+                         "store revision", root->seq))) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    json_object_set_new (nsstats, root->namespace, s);
+    return 0;
 }
 
 static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2169,7 +2115,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
 
     /* if no roots are initialized, respond with all zeroes as stats */
-    if (zhash_size (ctx->roothash)) {
+    if (kvsroot_mgr_root_count (ctx->km) > 0) {
         if (cache_get_stats (ctx->cache, &ts, &size, &incomplete, &dirty) < 0)
             goto done;
     }
@@ -2199,30 +2145,10 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
     }
 
-    if (zhash_size (ctx->roothash)) {
-        struct kvsroot *root;
-
-        root = zhash_first (ctx->roothash);
-        while (root) {
-            json_t *s;
-
-            if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
-                                 "#watchers",
-                                     wait_queue_length (root->watchlist),
-                                 "#no-op stores",
-                                     commit_mgr_get_noop_stores (root->cm),
-                                 "#fences",
-                                     commit_mgr_fences_count (root->cm),
-                                 "#readycommits",
-                                     commit_mgr_ready_commit_count (root->cm),
-                                 "store revision", root->seq))) {
-                errno = ENOMEM;
-                goto done;
-            }
-
-            json_object_set_new (nsstats, root->namespace, s);
-
-            root = zhash_next (ctx->roothash);
+    if (kvsroot_mgr_root_count (ctx->km) > 0) {
+        if (kvsroot_mgr_iter_roots (ctx->km, stats_get_root_cb, nsstats) < 0) {
+            flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
+            goto done;
         }
     }
     else {
@@ -2260,17 +2186,18 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
     json_decref (nsstats);
 }
 
+static int stats_clear_root_cb (struct kvsroot *root, void *arg)
+{
+    commit_mgr_clear_noop_stores (root->cm);
+    return 0;
+}
+
 static void stats_clear (kvs_ctx_t *ctx)
 {
-    struct kvsroot *root;
-
     ctx->faults = 0;
 
-    root = zhash_first (ctx->roothash);
-    while (root) {
-        commit_mgr_clear_noop_stores (root->cm);
-        root = zhash_next (ctx->roothash);
-    }
+    if (kvsroot_mgr_iter_roots (ctx->km, stats_clear_root_cb, NULL) < 0)
+        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
 }
 
 static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2302,13 +2229,17 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
 
     /* If namespace already exists, return EEXIST.  Doesn't matter if
      * namespace is in process of being removed */
-    if (lookup_root (ctx, namespace)) {
+    if (kvsroot_mgr_lookup_root (ctx->km, namespace)) {
         errno = EEXIST;
         goto cleanup;
     }
 
-    if (!(root = create_root (ctx, namespace, flags))) {
-        flux_log_error (ctx->h, "%s: create_root", __FUNCTION__);
+    if (!(root = kvsroot_mgr_create_root (ctx->km,
+                                          ctx->cache,
+                                          ctx->hash_name,
+                                          namespace,
+                                          flags))) {
+        flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
         goto cleanup;
     }
 
@@ -2338,7 +2269,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
     return 0;
 
 cleanup_remove_root:
-    remove_root (ctx, namespace);
+    kvsroot_mgr_remove_root (ctx->km, namespace);
 cleanup:
     free (data);
     json_decref (rootdir);
@@ -2389,7 +2320,7 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
     struct kvsroot *root;
 
     /* safe lookup, if root removal in process, let it continue */
-    if ((root = lookup_root_safe (ctx, namespace))) {
+    if ((root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace))) {
         struct kvs_cb_data cbd = { .ctx = ctx, .root = root };
 
         root->remove = true;
@@ -2425,7 +2356,7 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *namespace)
 
     /* Namespace doesn't exist or is already in process of being
      * removed */
-    if (!lookup_root_safe (ctx, namespace)) {
+    if (!kvsroot_mgr_lookup_root_safe (ctx->km, namespace)) {
         /* silently succeed */
         goto done;
     }
@@ -2631,9 +2562,15 @@ int mod_main (flux_t *h, int argc, char **argv)
         /* primary namespace must always be there and not marked
          * for removal
          */
-        if (!(root = lookup_root_safe (ctx, KVS_PRIMARY_NAMESPACE))) {
-            if (!(root = create_root (ctx, KVS_PRIMARY_NAMESPACE, 0))) {
-                flux_log_error (h, "create_root");
+        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km,
+                                                   KVS_PRIMARY_NAMESPACE))) {
+
+            if (!(root = kvsroot_mgr_create_root (ctx->km,
+                                                  ctx->cache,
+                                                  ctx->hash_name,
+                                                  KVS_PRIMARY_NAMESPACE,
+                                                  0))) {
+                flux_log_error (h, "kvsroot_mgr_create_root");
                 goto done;
             }
         }
