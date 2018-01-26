@@ -311,6 +311,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
     const flux_msg_t *msg;
     const char *namespace;
     int rootseq, flags;
+    uint32_t owner;
     const char *ref;
     struct kvsroot *root;
     int save_errno;
@@ -327,7 +328,9 @@ static void getroot_completion (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (flux_rpc_get_unpack (f, "{ s:i s:s s:i }",
+    /* N.B. owner read into uint32_t */
+    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i }",
+                             "owner", &owner,
                              "rootseq", &rootseq,
                              "rootref", &ref,
                              "flags", &flags) < 0) {
@@ -343,6 +346,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
                                               ctx->cache,
                                               ctx->hash_name,
                                               namespace,
+                                              owner,
                                               flags))) {
             flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
             goto error;
@@ -1879,7 +1883,9 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
-    if (flux_respond_pack (h, msg, "{ s:i s:s s:i }",
+    /* N.B. owner cast into int */
+    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i }",
+                           "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
                            "flags", root->flags) < 0) {
@@ -2219,7 +2225,8 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
+static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
+                             uint32_t owner, int flags)
 {
     struct kvsroot *root;
     json_t *rootdir = NULL;
@@ -2238,6 +2245,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
                                           ctx->cache,
                                           ctx->hash_name,
                                           namespace,
+                                          owner,
                                           flags))) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
         goto cleanup;
@@ -2281,18 +2289,21 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     const char *namespace;
+    uint32_t owner;
     int flags;
 
     assert (ctx->rank == 0);
 
-    if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
+    /* N.B. owner read into uint32_t */
+    if (flux_request_unpack (msg, NULL, "{ s:s s:i s:i }",
                              "namespace", &namespace,
+                             "owner", &owner,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (namespace_create (ctx, namespace, flags) < 0) {
+    if (namespace_create (ctx, namespace, owner, flags) < 0) {
         flux_log_error (h, "%s: namespace_create", __FUNCTION__);
         goto error;
     }
@@ -2553,6 +2564,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (ctx->rank == 0) {
         struct kvsroot *root;
         blobref_t rootref;
+        uint32_t owner = geteuid ();
 
         if (store_initial_rootdir (ctx, rootref) < 0) {
             flux_log_error (h, "storing initial root object");
@@ -2569,6 +2581,7 @@ int mod_main (flux_t *h, int argc, char **argv)
                                                   ctx->cache,
                                                   ctx->hash_name,
                                                   KVS_PRIMARY_NAMESPACE,
+                                                  owner,
                                                   0))) {
                 flux_log_error (h, "kvsroot_mgr_create_root");
                 goto done;

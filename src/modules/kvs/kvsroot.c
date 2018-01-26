@@ -108,6 +108,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
                                          struct cache *cache,
                                          const char *hash_name,
                                          const char *namespace,
+                                         uint32_t owner,
                                          int flags)
 {
     struct kvsroot *root;
@@ -143,6 +144,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
         goto error;
     }
 
+    root->owner = owner;
     root->flags = flags;
     root->remove = false;
 

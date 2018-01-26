@@ -13,6 +13,7 @@ typedef struct kvsroot_mgr kvsroot_mgr_t;
 
 struct kvsroot {
     char *namespace;
+    uint32_t owner;
     int seq;
     blobref_t ref;
     commit_mgr_t *cm;
@@ -37,6 +38,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
                                          struct cache *cache,
                                          const char *hash_name,
                                          const char *namespace,
+                                         uint32_t owner,
                                          int flags);
 
 int kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace);

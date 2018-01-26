@@ -25,6 +25,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
+
 #include <flux/core.h>
 
 const char *get_kvs_namespace (void)
@@ -42,9 +44,11 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
         return NULL;
     }
 
+    /* N.B. uid cast to int */
     return flux_rpc_pack (h, "kvs.namespace.create", 0, 0,
-                          "{ s:s s:i }",
+                          "{ s:s s:i s:i }",
                           "namespace", namespace,
+                          "owner", geteuid (),
                           "flags", flags);
 }
 
