@@ -37,18 +37,18 @@ const char *get_kvs_namespace (void)
 }
 
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
-                                          int flags)
+                                          uint32_t owner, int flags)
 {
     if (!namespace || flags) {
         errno = EINVAL;
         return NULL;
     }
 
-    /* N.B. uid cast to int */
+    /* N.B. owner cast to int */
     return flux_rpc_pack (h, "kvs.namespace.create", 0, 0,
                           "{ s:s s:i s:i }",
                           "namespace", namespace,
-                          "owner", geteuid (),
+                          "owner", owner,
                           "flags", flags);
 }
 

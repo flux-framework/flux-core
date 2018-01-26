@@ -364,7 +364,8 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
         int flags = 0;
-        if (!(f = flux_kvs_namespace_create (h, name, flags))
+        if (!(f = flux_kvs_namespace_create (h, name, FLUX_USERID_UNKNOWN,
+                                             flags))
             || flux_future_get (f, NULL) < 0)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
