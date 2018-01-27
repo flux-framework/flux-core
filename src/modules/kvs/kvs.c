@@ -285,6 +285,39 @@ cleanup:
 }
 
 /*
+ * security
+ */
+
+static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
+                       const flux_msg_t *msg)
+{
+    uint32_t rolemask;
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_rolemask");
+        return -1;
+    }
+
+    if (rolemask & FLUX_ROLE_OWNER)
+        return 0;
+
+    if (rolemask & FLUX_ROLE_USER) {
+        uint32_t userid;
+
+        if (flux_msg_get_userid (msg, &userid) < 0) {
+            flux_log_error (ctx->h, "flux_msg_get_userid");
+            return -1;
+        }
+
+        if (userid == root->owner)
+            return 0;
+    }
+
+    errno = EPERM;
+    return -1;
+}
+
+/*
  * set/get root
  */
 
@@ -446,8 +479,13 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
                 return NULL;
             }
             (*stall) = true;
+            return NULL;
         }
     }
+
+    if (check_user (ctx, root, msg) < 0)
+        return NULL;
+
     return root;
 }
 
@@ -1575,6 +1613,9 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace)))
         goto done;
 
+    if (check_user (ctx, root, msg) < 0)
+        goto done;
+
     if (!(p.key = kvs_util_normalize_key (key, NULL))) {
         errnum = errno;
         goto done;
@@ -1773,6 +1814,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     else {
         flux_future_t *f;
 
+        /* route to rank 0 as instance owner */
         if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i s:i }",
                                  "ops", ops,
@@ -1869,6 +1911,9 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOTSUP;
             goto error;
         }
+
+        if (check_user (ctx, root, msg) < 0)
+            goto error;
     }
     else {
         /* If root is not initialized, we have to intialize ourselves
@@ -2450,16 +2495,22 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.setroot.*",  setroot_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.error.*",    error_event_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",    getroot_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
+                            getroot_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",    unwatch_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",       sync_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.get",        get_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.watch",      watch_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",      fence_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",
+                            unwatch_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.sync",
+                            sync_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.get",
+                            get_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.watch",
+                            watch_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.fence",
+                            fence_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace.create",
                             namespace_create_request_cb, 0 },
