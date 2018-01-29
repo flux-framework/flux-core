@@ -44,6 +44,7 @@ TESTS = \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
+	t0013-config-file.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
@@ -119,6 +120,7 @@ check_SCRIPTS = \
 	t0010-generic-utils.t \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
+	t0013-config-file.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
 	t0016-cron-faketime.t \
@@ -206,7 +208,16 @@ dist_check_DATA = \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/1.xml \
-	valgrind/valgrind.supp
+	valgrind/valgrind.supp \
+	conf.d/private.conf \
+	conf.d/shared.conf \
+	conf.d/shared_ipc.conf \
+	conf.d/shared_none.conf \
+	conf.d/bad-toml.conf \
+	conf.d/bad-missing.conf \
+	conf.d/bad-rank.conf \
+	conf.d/priv2.0.conf \
+	conf.d/priv2.1.conf
 
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
