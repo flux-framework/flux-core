@@ -22,6 +22,21 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+/* A flux messages consist of a list of zeromq frames:
+ *
+ * [route]
+ * [route]
+ * [route]
+ * ...
+ * [route]
+ * [route delimiter - empty frame]
+ * topic frame
+ * [payload frame]
+ * PROTO frame
+ *
+ * See also: RFC 3
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -1300,6 +1315,9 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
         errno = EINVAL;
         goto error;
     }
+    /* Set skip_payload = true if caller set 'payload' flag false
+     * AND message contains a payload frame.
+     */
     if (flux_msg_get_flags (msg, &flags) < 0)
         goto error;
     if (!payload && (flags & FLUX_MSGFLAG_PAYLOAD)) {
@@ -1312,6 +1330,10 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
     if (!(cpy->zmsg = zmsg_new ()))
         goto nomem;
 
+    /* Copy frames from 'msg' to 'cpy'.
+     * 'count' indexes frames from 0 to zmsg_size (msg) - 1.
+     * The payload frame (if it exists) will be in the second to last position.
+     */
     count = 0;
     zf = zmsg_first (msg->zmsg);
     while (zf) {
