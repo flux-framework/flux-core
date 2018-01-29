@@ -401,15 +401,18 @@ int main (int argc, char *argv[])
     broker_handle_signals (&ctx, sigwatchers);
 
     /* Initialize security context.
+     * Delay calling flux_sec_comms_init() so that we can defer creating
+     * the libzmq work thread until we are ready to communicate.
      */
     const char *keydir;
     if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0)
         log_err_exit ("getattr security.keydir");
     if (!(ctx.sec = flux_sec_create (sec_typemask, keydir)))
         log_err_exit ("flux_sec_create");
-    if (flux_sec_comms_init (ctx.sec) < 0)
-        log_msg_exit ("flux_sec_comms_init: %s", flux_sec_errstr (ctx.sec));
 
+    /* The first call to overlay_bind() or overlay_connect() calls
+     * flux_sec_comms_init().
+     */
     overlay_set_sec (ctx.overlay, ctx.sec);
     overlay_set_flux (ctx.overlay, ctx.h);
 
