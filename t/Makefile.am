@@ -53,6 +53,7 @@ TESTS = \
 	t1002-kvs-watch.t \
 	t1003-kvs-stress.t \
 	t1004-kvs-namespace.t \
+	t1005-kvs-security.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
@@ -127,6 +128,7 @@ check_SCRIPTS = \
 	t1002-kvs-watch.t \
 	t1003-kvs-stress.t \
 	t1004-kvs-namespace.t \
+	t1005-kvs-security.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
