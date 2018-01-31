@@ -1082,6 +1082,7 @@ static bool job_is_finished (const char *state)
 static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
+    json_object *jcb = NULL;
     int64_t jobid = -1;
     const char *topic = NULL;
     const char *state = NULL;
@@ -1108,12 +1109,13 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     if (strcmp (state, jsc_job_num2state (J_RESERVED)) == 0)
         fixup_newjob_event (h, jobid);
 
-    if (invoke_cbs (h, jobid, get_update_jcb (h, jobid, state), 0) < 0)
+    if (invoke_cbs (h, jobid, jcb = get_update_jcb (h, jobid, state), 0) < 0)
         flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
 
     if (job_is_finished (state))
         delete_jobinfo (h, jobid);
 done:
+    Jput (jcb);
     return;
 }
 
