@@ -285,6 +285,39 @@ cleanup:
 }
 
 /*
+ * security
+ */
+
+static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
+                       const flux_msg_t *msg)
+{
+    uint32_t rolemask;
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_rolemask");
+        return -1;
+    }
+
+    if (rolemask & FLUX_ROLE_OWNER)
+        return 0;
+
+    if (rolemask & FLUX_ROLE_USER) {
+        uint32_t userid;
+
+        if (flux_msg_get_userid (msg, &userid) < 0) {
+            flux_log_error (ctx->h, "flux_msg_get_userid");
+            return -1;
+        }
+
+        if (userid == root->owner)
+            return 0;
+    }
+
+    errno = EPERM;
+    return -1;
+}
+
+/*
  * set/get root
  */
 
@@ -311,6 +344,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
     const flux_msg_t *msg;
     const char *namespace;
     int rootseq, flags;
+    uint32_t owner;
     const char *ref;
     struct kvsroot *root;
     int save_errno;
@@ -327,7 +361,9 @@ static void getroot_completion (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (flux_rpc_get_unpack (f, "{ s:i s:s s:i }",
+    /* N.B. owner read into uint32_t */
+    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i }",
+                             "owner", &owner,
                              "rootseq", &rootseq,
                              "rootref", &ref,
                              "flags", &flags) < 0) {
@@ -343,6 +379,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
                                               ctx->cache,
                                               ctx->hash_name,
                                               namespace,
+                                              owner,
                                               flags))) {
             flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
             goto error;
@@ -442,8 +479,13 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
                 return NULL;
             }
             (*stall) = true;
+            return NULL;
         }
     }
+
+    if (check_user (ctx, root, msg) < 0)
+        return NULL;
+
     return root;
 }
 
@@ -1571,6 +1613,9 @@ static void unwatch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace)))
         goto done;
 
+    if (check_user (ctx, root, msg) < 0)
+        goto done;
+
     if (!(p.key = kvs_util_normalize_key (key, NULL))) {
         errnum = errno;
         goto done;
@@ -1769,6 +1814,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     else {
         flux_future_t *f;
 
+        /* route to rank 0 as instance owner */
         if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i s:i }",
                                  "ops", ops,
@@ -1865,6 +1911,9 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOTSUP;
             goto error;
         }
+
+        if (check_user (ctx, root, msg) < 0)
+            goto error;
     }
     else {
         /* If root is not initialized, we have to intialize ourselves
@@ -1879,7 +1928,9 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
-    if (flux_respond_pack (h, msg, "{ s:i s:s s:i }",
+    /* N.B. owner cast into int */
+    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i }",
+                           "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
                            "flags", root->flags) < 0) {
@@ -2219,7 +2270,8 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
+static int namespace_create (kvs_ctx_t *ctx, const char *namespace,
+                             uint32_t owner, int flags)
 {
     struct kvsroot *root;
     json_t *rootdir = NULL;
@@ -2238,6 +2290,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *namespace, int flags)
                                           ctx->cache,
                                           ctx->hash_name,
                                           namespace,
+                                          owner,
                                           flags))) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_create_root", __FUNCTION__);
         goto cleanup;
@@ -2281,18 +2334,21 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     kvs_ctx_t *ctx = arg;
     const char *namespace;
+    uint32_t owner;
     int flags;
 
     assert (ctx->rank == 0);
 
-    if (flux_request_unpack (msg, NULL, "{ s:s s:i }",
+    /* N.B. owner read into uint32_t */
+    if (flux_request_unpack (msg, NULL, "{ s:s s:i s:i }",
                              "namespace", &namespace,
+                             "owner", &owner,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
 
-    if (namespace_create (ctx, namespace, flags) < 0) {
+    if (namespace_create (ctx, namespace, owner, flags) < 0) {
         flux_log_error (h, "%s: namespace_create", __FUNCTION__);
         goto error;
     }
@@ -2439,16 +2495,22 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.setroot.*",  setroot_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.error.*",    error_event_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",    getroot_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
+                            getroot_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",    unwatch_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",       sync_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.get",        get_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.watch",      watch_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",      fence_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",
+                            unwatch_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.sync",
+                            sync_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.get",
+                            get_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.watch",
+                            watch_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.fence",
+                            fence_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace.create",
                             namespace_create_request_cb, 0 },
@@ -2553,6 +2615,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (ctx->rank == 0) {
         struct kvsroot *root;
         blobref_t rootref;
+        uint32_t owner = geteuid ();
 
         if (store_initial_rootdir (ctx, rootref) < 0) {
             flux_log_error (h, "storing initial root object");
@@ -2569,6 +2632,7 @@ int mod_main (flux_t *h, int argc, char **argv)
                                                   ctx->cache,
                                                   ctx->hash_name,
                                                   KVS_PRIMARY_NAMESPACE,
+                                                  owner,
                                                   0))) {
                 flux_log_error (h, "kvsroot_mgr_create_root");
                 goto done;

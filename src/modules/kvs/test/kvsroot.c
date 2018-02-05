@@ -2,6 +2,7 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
+#include <unistd.h>
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
@@ -30,6 +31,7 @@ void basic_api_tests (void)
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
+                                         geteuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
@@ -119,6 +121,7 @@ void basic_iter_tests (void)
                                          cache,
                                          "sha1",
                                          "foo",
+                                         geteuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
@@ -126,6 +129,7 @@ void basic_iter_tests (void)
                                          cache,
                                          "sha1",
                                          "bar",
+                                         geteuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
@@ -187,6 +191,7 @@ void basic_commit_mgr_tests (void)
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
+                                         geteuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 

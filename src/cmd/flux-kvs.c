@@ -60,6 +60,13 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
+static struct optparse_option namespace_create_opts[] =  {
+    { .name = "owner", .key = 'o', .has_arg = 1,
+      .usage = "Specify alternate namespace owner via userid",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option readlink_opts[] =  {
     { .name = "at", .key = 'a', .has_arg = 1,
       .usage = "Lookup relative to RFC 11 snapshot reference",
@@ -176,7 +183,7 @@ static struct optparse_subcommand subcommands[] = {
       "Create a KVS namespace",
       cmd_namespace_create,
       0,
-      NULL
+      namespace_create_opts
     },
     { "namespace-remove",
       "name [name...]",
@@ -355,16 +362,26 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
     flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     flux_future_t *f;
     int optindex, i;
+    uint32_t owner = FLUX_USERID_UNKNOWN;
+    const char *str;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
         optparse_print_usage (p);
         exit (1);
     }
+
+    if ((str = optparse_get_str (p, "owner", NULL))) {
+        char *endptr;
+        owner = strtoul (str, &endptr, 10);
+        if (*endptr != '\0')
+            log_err_exit ("--owner requires an unsigned integer argument");
+    }
+
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
         int flags = 0;
-        if (!(f = flux_kvs_namespace_create (h, name, flags))
+        if (!(f = flux_kvs_namespace_create (h, name, owner, flags))
             || flux_future_get (f, NULL) < 0)
             log_err_exit ("%s", name);
         flux_future_destroy (f);

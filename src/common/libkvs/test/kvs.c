@@ -15,7 +15,7 @@ void errors (void)
     /* check simple error cases */
 
     errno = 0;
-    ok (flux_kvs_namespace_create (NULL, NULL, 5) == NULL && errno == EINVAL,
+    ok (flux_kvs_namespace_create (NULL, NULL, 0, 5) == NULL && errno == EINVAL,
         "flux_kvs_namespace_create fails on bad input");
 
     errno = 0;

@@ -225,6 +225,7 @@ static int internal_user_lookup (optparse_t *p, int ac, char *av[])
         exit (1);
     }
     userid = strtoul (av[n], &endptr, 10);
+
     if (*endptr != '\0')
         userid = lookup_user (av[n]);
     if (userid == FLUX_USERID_UNKNOWN)

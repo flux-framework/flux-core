@@ -33,7 +33,7 @@ enum {
  *   consistent".
  */
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
-                                          int flags);
+                                          uint32_t owner, int flags);
 flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace);
 
 /* Synchronization:
