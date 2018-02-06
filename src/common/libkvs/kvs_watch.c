@@ -30,7 +30,6 @@
 #include <czmq.h>
 
 #include "treeobj.h"
-#include "kvs_private.h"
 #include "kvs_dir_private.h"
 
 typedef enum {
@@ -148,13 +147,11 @@ static kvs_watcher_t *lookup_watcher (flux_t *h, uint32_t matchtag)
 int flux_kvs_unwatch (flux_t *h, const char *key)
 {
     flux_future_t *f = NULL;
-    const char *namespace = get_kvs_namespace ();
+    const char *namespace;
     int rc = -1;
 
-    if (!h) {
-        errno = EINVAL;
+    if (!(namespace = flux_kvs_get_namespace (h)))
         goto done;
-    }
     if (!(f = flux_rpc_pack (h, "kvs.unwatch", FLUX_NODEID_ANY, 0,
                              "{s:s s:s}",
                              "key", key,
@@ -240,14 +237,12 @@ static flux_future_t *kvs_watch_rpc (flux_t *h, const char *key,
                                      const char *json_str, int flags)
 {
     flux_future_t *f;
-    const char *namespace = get_kvs_namespace ();
+    const char *namespace;
     json_t *val = NULL;
     int saved_errno;
 
-    if (!h) {
-        errno = EINVAL;
+    if (!(namespace = flux_kvs_get_namespace (h)))
         goto error;
-    }
     if (!json_str)
         json_str = "null";
     if (!(val = json_loads (json_str, JSON_DECODE_ANY, NULL))) {

@@ -29,19 +29,16 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "kvs_private.h"
 #include "kvs_txn_private.h"
 #include "src/common/libutil/blobref.h"
 
 flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                int nprocs, flux_kvs_txn_t *txn)
 {
-    const char *namespace = get_kvs_namespace ();
+    const char *namespace;
 
-    if (!h) {
-        errno = EINVAL;
+    if (!(namespace = flux_kvs_get_namespace (h)))
         return NULL;
-    }
 
     if (txn) {
         json_t *ops;

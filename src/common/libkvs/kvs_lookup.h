@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-/* To use an alternate namespace, set environment variable FLUX_KVS_NAMESPACE */
-
 flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key);
 flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
                                   const char *treeobj);

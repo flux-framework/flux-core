@@ -13,7 +13,6 @@ noinst_LTLIBRARIES = libkvs.la
 
 libkvs_la_SOURCES = \
 	kvs.c \
-	kvs_private.h \
 	kvs_lookup.c \
 	kvs_dir.c \
 	kvs_dir_private.h \
