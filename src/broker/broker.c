@@ -1116,7 +1116,8 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
 
 static void broker_handle_signals (broker_ctx_t *ctx, zlist_t *sigwatchers)
 {
-    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE };
+    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
+                      SIGALRM };
     flux_watcher_t *w;
 
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
