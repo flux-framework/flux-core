@@ -21,6 +21,14 @@ void errors (void)
     errno = 0;
     ok (flux_kvs_namespace_remove (NULL, NULL) == NULL && errno == EINVAL,
         "flux_kvs_namespace_remove fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_get_version (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_kvs_get_version fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_wait_version (NULL, 0) < 0 && errno == EINVAL,
+        "flux_kvs_wait_version fails on bad input");
 }
 
 void namespace (void)

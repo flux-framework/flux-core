@@ -71,6 +71,11 @@ int flux_kvs_get_version (flux_t *h, int *versionp)
     int version;
     int rc = -1;
 
+    if (!h) {
+        errno = EINVAL;
+        return -1;
+    }
+
     if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
                              "namespace", namespace)))
         goto done;
@@ -89,6 +94,11 @@ int flux_kvs_wait_version (flux_t *h, int version)
     flux_future_t *f;
     const char *namespace = get_kvs_namespace ();
     int ret = -1;
+
+    if (!h) {
+        errno = EINVAL;
+        return -1;
+    }
 
     if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
                              "rootseq", version,

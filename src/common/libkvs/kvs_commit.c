@@ -38,6 +38,11 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
 {
     const char *namespace = get_kvs_namespace ();
 
+    if (!h) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (txn) {
         json_t *ops;
         if (!(ops = txn_get_ops (txn))) {

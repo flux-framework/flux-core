@@ -151,6 +151,10 @@ int flux_kvs_unwatch (flux_t *h, const char *key)
     const char *namespace = get_kvs_namespace ();
     int rc = -1;
 
+    if (!h) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!(f = flux_rpc_pack (h, "kvs.unwatch", FLUX_NODEID_ANY, 0,
                              "{s:s s:s}",
                              "key", key,
@@ -240,6 +244,10 @@ static flux_future_t *kvs_watch_rpc (flux_t *h, const char *key,
     json_t *val = NULL;
     int saved_errno;
 
+    if (!h) {
+        errno = EINVAL;
+        goto error;
+    }
     if (!json_str)
         json_str = "null";
     if (!(val = json_loads (json_str, JSON_DECODE_ANY, NULL))) {
@@ -413,6 +421,10 @@ int flux_kvs_watch_once_dir (flux_t *h, flux_kvsdir_t **dirp,
     char *key;
     int rc;
 
+    if (!fmt) {
+        errno = EINVAL;
+        return -1;
+    }
     va_start (ap, fmt);
     rc = vasprintf (&key, fmt, ap);
     va_end (ap);
@@ -480,6 +492,10 @@ int flux_kvs_watch_dir (flux_t *h, kvs_set_dir_f set, void *arg,
     char *key;
     int rc;
 
+    if (!fmt) {
+        errno = EINVAL;
+        return -1;
+    }
     va_start (ap, fmt);
     rc = vasprintf (&key, fmt, ap);
     va_end (ap);
