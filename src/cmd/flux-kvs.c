@@ -338,7 +338,7 @@ int main (int argc, char *argv[])
         exit (1);
 
     if ((argc - optindex == 0)
-        || !optparse_get_subcommand (p, argv[optind])) {
+        || !optparse_get_subcommand (p, argv[optindex])) {
         usage (p, NULL, NULL);
         exit (1);
     }
