@@ -60,6 +60,13 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
+static struct optparse_option global_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option namespace_create_opts[] =  {
     { .name = "owner", .key = 'o', .has_arg = 1,
       .usage = "Specify alternate namespace owner via userid",
@@ -314,10 +321,14 @@ int main (int argc, char *argv[])
     optparse_t *p;
     int optindex;
     int exitval;
+    const char *namespace;
 
     log_init ("flux-kvs");
 
     p = optparse_create ("flux-kvs");
+
+    if (optparse_add_option_table (p, global_opts) != OPTPARSE_SUCCESS)
+        log_msg_exit ("optparse_add_option_table() failed");
 
     /* Override help option for our own */
     if (optparse_set (p, OPTPARSE_USAGE, cmdusage) != OPTPARSE_SUCCESS)
@@ -345,6 +356,11 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
+
+    if ((namespace = optparse_get_str (p, "namespace", NULL))) {
+        if (flux_kvs_set_namespace (h, namespace) < 0)
+            log_msg_exit ("flux_kvs_set_namespace");
+    }
 
     optparse_set_data (p, "flux_handle", h);
 
