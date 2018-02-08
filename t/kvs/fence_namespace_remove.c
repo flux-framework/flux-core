@@ -47,7 +47,7 @@ static char *prefix = NULL;
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: fence_namespace_remove prefix\n");
+    fprintf (stderr, "Usage: fence_namespace_remove namespace prefix\n");
     exit (1);
 }
 
@@ -56,19 +56,26 @@ int main (int argc, char *argv[])
     flux_t *h = NULL;
     uint32_t rank;
     char *key = NULL;
+    char *namespace = NULL;
     char *fence_name = NULL;
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
 
     log_init (basename (argv[0]));
 
-    if (argc != 2)
+    if (argc != 3)
         usage ();
 
-    prefix = argv[1];
+    namespace = argv[1];
+    prefix = argv[2];
 
     if (!(h = flux_open (NULL, 0))) {
         log_err_exit ("flux_open");
+        goto done;
+    }
+
+    if (flux_kvs_set_namespace (h, namespace) < 0) {
+        log_err_exit ("flux_kvs_set_namespace");
         goto done;
     }
 

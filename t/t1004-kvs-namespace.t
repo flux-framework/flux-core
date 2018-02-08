@@ -28,59 +28,7 @@ PRIMARYNAMESPACE=primary
 NAMESPACETEST=namespacetest
 NAMESPACETMP=namespacetmp
 NAMESPACERANK1=namespacerank1
-
-test_kvs_key_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs get --json "$2" >output
-	echo "$3" >expected
-        unset FLUX_KVS_NAMESPACE
-	test_cmp expected output
-}
-
-put_kvs_key_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs put --json "$2=$3"
-        unset FLUX_KVS_NAMESPACE
-}
-
-dir_kvs_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs dir "$2" | sort > $3
-        unset FLUX_KVS_NAMESPACE
-}
-
-unlink_kvs_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs unlink $2
-        unset FLUX_KVS_NAMESPACE
-}
-
-unlink_kvs_dir_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs unlink -Rf $2
-        unset FLUX_KVS_NAMESPACE
-}
-
-version_kvs_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-	version=`flux kvs version`
-        eval $2=$version
-        unset FLUX_KVS_NAMESPACE
-}
-
-get_kvs_namespace_exitvalue() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs get --json "$2"
-        eval $3="$?"
-        unset FLUX_KVS_NAMESPACE
-}
-
-dir_kvs_namespace_exitvalue() {
-        export FLUX_KVS_NAMESPACE=$1
-	flux kvs dir "$2"
-        eval $3="$?"
-        unset FLUX_KVS_NAMESPACE
-}
+NAMESPACEORDER=namespaceorder
 
 namespace_create_loop() {
         i=0
@@ -94,7 +42,7 @@ namespace_create_loop() {
 
 get_kvs_namespace_all_ranks_loop() {
         i=0
-        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; flux kvs get $2" \
+        while ! flux exec sh -c "flux kvs --namespace=$1 get $2" \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
@@ -105,21 +53,13 @@ get_kvs_namespace_all_ranks_loop() {
 
 get_kvs_namespace_fails_all_ranks_loop() {
         i=0
-        while ! flux exec sh -c "export FLUX_KVS_NAMESPACE=$1; ! flux kvs get $2" \
+        while ! flux exec sh -c "! flux kvs --namespace=$1 get $2" \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
                 i=$((i + 1))
         done
         return $(loophandlereturn $i)
-}
-
-wait_watch_put_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-        wait_watch_put $2 $3
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        return $exitvalue
 }
 
 wait_fencecount_nonzero() {
@@ -151,17 +91,17 @@ test_expect_success 'kvs: get with primary namespace works' '
 '
 
 test_expect_success 'kvs: put with primary namespace works' '
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 2 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.test=2 &&
         test_kvs_key $DIR.test 2
 '
 
 test_expect_success 'kvs: put/get with primary namespace works' '
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 3 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.test=3 &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 3
 '
 
 test_expect_success 'kvs: unlink with primary namespace works' '
-        unlink_kvs_namespace $PRIMARYNAMESPACE $DIR.test &&
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink $DIR.test &&
         test_must_fail flux kvs get --json $DIR.test
 '
 
@@ -169,7 +109,7 @@ test_expect_success 'kvs: dir with primary namespace works' '
         flux kvs put --json $DIR.a=1 &&
         flux kvs put --json $DIR.b=2 &&
         flux kvs put --json $DIR.c=3 &&
-        dir_kvs_namespace $PRIMARYNAMESPACE $DIR output &&
+        flux kvs --namespace=$PRIMARYNAMESPACE dir $DIR | sort > output &&
         cat >expected <<EOF &&
 $DIR.a = 1
 $DIR.b = 2
@@ -179,34 +119,29 @@ EOF
 '
 
 test_expect_success 'kvs: unlink dir primary namespace works' '
-        unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR &&
-        dir_kvs_namespace_exitvalue $PRIMARYNAMESPACE $DIR exitvalue &&
-        test $exitvalue -ne 0
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR &&
+        ! flux kvs --namespace=$PRIMARYNAMESPACE dir $DIR
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait on primary namespace works' '
         VERS=$(flux kvs version)
         VERS=$((VERS + 1))
-        export FLUX_KVS_NAMESPACE=$PRIMARYNAMESPACE
-        flux kvs wait $VERS &
+        flux kvs --namespace=$PRIMARYNAMESPACE wait $VERS &
         kvswaitpid=$!
-        flux kvs put --json $DIR.xxx=99
-        unset FLUX_KVS_NAMESPACE
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.xxx=99
         test_expect_code 0 wait $kvswaitpid
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in primary namespace works'  '
-        unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.watch 0 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=0 &&
         wait_watch_put_namespace $PRIMARYNAMESPACE "$DIR.watch" "0"
         rm -f watch_out
-        export FLUX_KVS_NAMESPACE=$PRIMARYNAMESPACE
-        stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
+        stdbuf -oL flux kvs --namespace=$PRIMARYNAMESPACE watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
         wait_watch_file watch_out "0"
-        flux kvs put --json $DIR.watch=1 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=1 &&
         wait $watchpid
-        unset FLUX_KVS_NAMESPACE
 cat >expected <<-EOF &&
 0
 1
@@ -227,21 +162,20 @@ test_expect_success 'kvs: namespace create on rank 1 works' '
 '
 
 test_expect_success 'kvs: put/get value in new namespace works' '
-        put_kvs_key_namespace $NAMESPACETEST $DIR.test 1 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.test=1 &&
         test_kvs_key_namespace $NAMESPACETEST $DIR.test 1
 '
 
 test_expect_success 'kvs: unlink in new namespace works' '
-        unlink_kvs_namespace $NAMESPACETEST $DIR.test &&
-        get_kvs_namespace_exitvalue $NAMESPACETEST $DIR.test exitvalue &&
-        test $exitvalue -ne 0
+        flux kvs --namespace=$NAMESPACETEST unlink $DIR.test &&
+        ! flux kvs --namespace=$NAMESPACETEST get --json $DIR.test
 '
 
 test_expect_success 'kvs: dir in new namespace works' '
-        put_kvs_key_namespace $NAMESPACETEST $DIR.a 4 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.b 5 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.c 6 &&
-        dir_kvs_namespace $NAMESPACETEST $DIR output &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.a=4 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.b=5 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.c=6 &&
+        flux kvs --namespace=$NAMESPACETEST dir $DIR | sort > output &&
         cat >expected <<EOF &&
 $DIR.a = 4
 $DIR.b = 5
@@ -251,34 +185,29 @@ EOF
 '
 
 test_expect_success 'kvs: unlink dir in new namespace works' '
-        unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
-        dir_kvs_namespace_exitvalue $NAMESPACETEST $DIR exitvalue &&
-        test $exitvalue -ne 0
+        flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
+        ! flux kvs --namespace=$NAMESPACETEST dir $DIR
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait in new namespace works' '
-        version_kvs_namespace $NAMESPACETEST VERS
+        VERS=`flux kvs --namespace=$NAMESPACETEST version` &&
         VERS=$((VERS + 1))
-        export FLUX_KVS_NAMESPACE=$NAMESPACETEST
-        flux kvs wait $VERS &
+        flux kvs --namespace=$NAMESPACETEST wait $VERS &
         kvswaitpid=$!
-        flux kvs put --json $DIR.xxx=99
-        unset FLUX_KVS_NAMESPACE
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.xxx=99
         test_expect_code 0 wait $kvswaitpid
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in new namespace works'  '
-        unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.watch 0 &&
+        flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=0 &&
         wait_watch_put_namespace $NAMESPACETEST "$DIR.watch" "0"
         rm -f watch_out
-        export FLUX_KVS_NAMESPACE=$NAMESPACETEST
-        stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
+        stdbuf -oL flux kvs --namespace=$NAMESPACETEST watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
         wait_watch_file watch_out "0"
-        flux kvs put --json $DIR.watch=1 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=1 &&
         wait $watchpid
-        unset FLUX_KVS_NAMESPACE
 cat >expected <<-EOF &&
 0
 1
@@ -292,11 +221,10 @@ test_expect_success 'kvs: namespace remove non existing namespace silently passe
 
 test_expect_success 'kvs: namespace remove works' '
 	flux kvs namespace-create $NAMESPACETMP-BASIC &&
-        put_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.tmp 1 &&
+        flux kvs --namespace=$NAMESPACETMP-BASIC put --json $DIR.tmp=1 &&
         test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.tmp 1 &&
 	flux kvs namespace-remove $NAMESPACETMP-BASIC &&
-        get_kvs_namespace_exitvalue $NAMESPACETMP-BASIC $DIR.tmp exitvalue &&
-        test $exitvalue -ne 0
+        ! flux kvs --namespace=$NAMESPACETMP-BASIC get --json $DIR.tmp
 '
 
 # A namespace-create races against the namespace-remove above, as we
@@ -305,11 +233,10 @@ test_expect_success 'kvs: namespace remove works' '
 # namespace-create many times until it succeeds.
 test_expect_success 'kvs: namespace can be re-created after remove' '
         namespace_create_loop $NAMESPACETMP-BASIC &&
-        put_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.recreate 1 &&
+        flux kvs --namespace=$NAMESPACETMP-BASIC put --json $DIR.recreate=1 &&
         test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.recreate 1 &&
 	flux kvs namespace-remove $NAMESPACETMP-BASIC &&
-        get_kvs_namespace_exitvalue $NAMESPACETMP-BASIC $DIR.recreate exitvalue &&
-        test $exitvalue -ne 0
+        ! flux kvs --namespace=$NAMESPACETMP-BASIC get --json $DIR.recreate
 '
 
 #
@@ -317,25 +244,28 @@ test_expect_success 'kvs: namespace can be re-created after remove' '
 #
 
 test_expect_success 'kvs: put value in new namespace, available on other ranks' '
-        unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.all 1 &&
-        version_kvs_namespace $NAMESPACETEST VERS &&
-        flux exec sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETEST; flux kvs wait ${VERS} && flux kvs get $DIR.all"
+        flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.all=1 &&
+        VERS=`flux kvs --namespace=$NAMESPACETEST version` &&
+        flux exec sh -c "flux kvs --namespace=$NAMESPACETEST wait ${VERS} && \
+                         flux kvs --namespace=$NAMESPACETEST get $DIR.all"
 '
 
 test_expect_success 'kvs: unlink value in new namespace, does not exist all ranks' '
-        unlink_kvs_namespace $NAMESPACETEST $DIR.all &&
-        version_kvs_namespace $NAMESPACETEST VERS &&
-        flux exec sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETEST; flux kvs wait ${VERS} && ! flux kvs get $DIR.all"
+        flux kvs --namespace=$NAMESPACETEST unlink $DIR.all &&
+        VERS=`flux kvs --namespace=$NAMESPACETEST version` &&
+        flux exec sh -c "flux kvs --namespace=$NAMESPACETEST wait ${VERS} && \
+                         ! flux kvs --namespace=$NAMESPACETEST get $DIR.all"
 '
 
 # namespace-remove on other ranks can take time, so we loop via
 # get_kvs_namespace_fails_all_ranks_loop()
 test_expect_success 'kvs: namespace remove works, recognized on other ranks' '
 	flux kvs namespace-create $NAMESPACETMP-ALL &&
-        put_kvs_key_namespace $NAMESPACETMP-ALL $DIR.all 1 &&
-        version_kvs_namespace $NAMESPACETMP-ALL VERS &&
-        flux exec sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-ALL; flux kvs wait ${VERS} && flux kvs get $DIR.all" &&
+        flux kvs --namespace=$NAMESPACETMP-ALL put --json $DIR.all=1 &&
+        VERS=`flux kvs --namespace=$NAMESPACETMP-ALL version` &&
+        flux exec sh -c "flux kvs --namespace=$NAMESPACETMP-ALL wait ${VERS} && \
+                         flux kvs --namespace=$NAMESPACETMP-ALL get $DIR.all" &&
 	flux kvs namespace-remove $NAMESPACETMP-ALL &&
         get_kvs_namespace_fails_all_ranks_loop $NAMESPACETMP-ALL $DIR.all
 '
@@ -351,9 +281,44 @@ test_expect_success 'kvs: namespace remove works, recognized on other ranks' '
 # kvs wait, b/c the version may work against an old namespace.
 test_expect_success 'kvs: namespace can be re-created after remove, recognized on other ranks' '
         namespace_create_loop $NAMESPACETMP-ALL &&
-        put_kvs_key_namespace $NAMESPACETMP-ALL $DIR.recreate 1 &&
+        flux kvs --namespace=$NAMESPACETMP-ALL put --json $DIR.recreate=1 &&
         get_kvs_namespace_all_ranks_loop $NAMESPACETMP-ALL $DIR.recreate &&
 	flux kvs namespace-remove $NAMESPACETMP-ALL
+'
+
+#
+# Namespace specification priority
+#
+
+test_expect_success 'kvs: namespace order setup' '
+	flux kvs namespace-create $NAMESPACEORDER-1 &&
+	flux kvs namespace-create $NAMESPACEORDER-2 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put $DIR.ordertest=1 &&
+        flux kvs --namespace=$NAMESPACEORDER-1 put $DIR.ordertest=2 &&
+        flux kvs --namespace=$NAMESPACEORDER-2 put $DIR.ordertest=3 &&
+        test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.ordertest 1 &&
+        test_kvs_key_namespace $NAMESPACEORDER-1 $DIR.ordertest 2 &&
+        test_kvs_key_namespace $NAMESPACEORDER-2 $DIR.ordertest 3
+'
+
+test_expect_success 'kvs: no namespace specified, defaults to primary namespace' '
+        test_kvs_key $DIR.ordertest 1
+'
+
+test_expect_success 'kvs: namespace specified in environment variable works' '
+        export FLUX_KVS_NAMESPACE=$NAMESPACEORDER-1 &&
+        test_kvs_key $DIR.ordertest 2 &&
+        unset FLUX_KVS_NAMESPACE &&
+        export FLUX_KVS_NAMESPACE=$NAMESPACEORDER-2 &&
+        test_kvs_key $DIR.ordertest 3 &&
+        unset FLUX_KVS_NAMESPACE
+'
+
+test_expect_success 'kvs: namespace specified in command line overrides environment variable' '
+        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-BAD &&
+        test_kvs_key_namespace $NAMESPACEORDER-1 $DIR.ordertest 2 &&
+        test_kvs_key_namespace $NAMESPACEORDER-2 $DIR.ordertest 3 &&
+        unset FLUX_KVS_NAMESPACE
 '
 
 #
@@ -371,85 +336,67 @@ test_expect_success 'kvs: namespace create on existing namespace fails on rank 1
 '
 
 test_expect_success 'kvs: get fails on invalid namespace' '
-        get_kvs_namespace_exitvalue $NAMESPACEBAD $DIR.test exitvalue &&
-        test $exitvalue -ne 0
+        ! flux kvs --namespace=$NAMESPACEBAD get --json $DIR.test
 '
 
 test_expect_success 'kvs: get fails on invalid namespace on rank 1' '
-	! flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACEBAD ; flux kvs get $DIR.test"
+	! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD get $DIR.test"
 '
 
-test_expect_success NO_CHAIN_LINT 'kvs: put fails on invalid namespace' '
-        export FLUX_KVS_NAMESPACE=$NAMESPACEBAD
-	flux kvs put --json $DIR.test=1
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        test $exitvalue -ne 0
+test_expect_success 'kvs: put fails on invalid namespace' '
+	! flux kvs --namespace=$NAMESPACEBAD put --json $DIR.test=1
 '
 
 test_expect_success 'kvs: put fails on invalid namespace on rank 1' '
-        ! flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACEBAD ; flux kvs put $DIR.test=1"
+        ! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD put $DIR.test=1"
 '
 
-test_expect_success NO_CHAIN_LINT 'kvs: version fails on invalid namespace' '
-        export FLUX_KVS_NAMESPACE=$NAMESPACEBAD
-	flux kvs version
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        test $exitvalue -ne 0
+test_expect_success 'kvs: version fails on invalid namespace' '
+	! flux kvs --namespace=$NAMESPACEBAD version
 '
 
 test_expect_success 'kvs: version fails on invalid namespace on rank 1' '
-	! flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACEBAD ; flux kvs version"
+	! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD version"
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait fails on invalid namespace' '
-        export FLUX_KVS_NAMESPACE=$NAMESPACEBAD
-	flux kvs wait 1
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        test $exitvalue -ne 0
+	! flux kvs --namespace=$NAMESPACEBAD wait 1
 '
 
 test_expect_success 'kvs: wait fails on invalid namespace on rank 1' '
-        ! flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACEBAD ; flux kvs wait 1"
+        ! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD wait 1"
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch fails on invalid namespace' '
-        export FLUX_KVS_NAMESPACE=$NAMESPACEBAD
-	flux kvs watch -c 1 $DIR.test
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        test $exitvalue -ne 0
+	! flux kvs --namespace=$NAMESPACEBAD watch -c 1 $DIR.test
 '
 
 test_expect_success 'kvs: watch fails on invalid namespace on rank 1' '
-        ! flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACEBAD ; flux kvs watch -c 1 $DIR.test"
+        ! flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACEBAD watch -c 1 $DIR.test"
 '
 
 # watch errors are output to stdout, so grep for "Operation not supported"
 test_expect_success NO_CHAIN_LINT 'kvs: watch gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH0 &&
-        put_kvs_key_namespace $NAMESPACETMP-REMOVE-WATCH0 $DIR.watch 0 &&
+        flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH0 put --json $DIR.watch=0 &&
         wait_watch_put_namespace $NAMESPACETMP-REMOVE-WATCH0 "$DIR.watch" "0"
         rm -f watch_out
-        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH0
-        stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >watch_out &
+        stdbuf -oL flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH0 watch -o -c 1 $DIR.watch >watch_out &
         watchpid=$! &&
         wait_watch_file watch_out "0"
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH0 &&
         wait $watchpid &&
-        unset FLUX_KVS_NAMESPACE
         grep "Operation not supported" watch_out
 '
 
 # watch errors are output to stdout, so grep for "Operation not supported"
 test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-WATCH1 &&
-        put_kvs_key_namespace $NAMESPACETMP-REMOVE-WATCH1 $DIR.watch 0 &&
-        version_kvs_namespace $NAMESPACETMP-REMOVE-WATCH1 VERS &&
+        flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 put --json $DIR.watch=0 &&
+        VERS=`flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 version` &&
         rm -f watch_out
-        stdbuf -oL flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-WATCH1 ; flux kvs wait ${VERS}; flux kvs watch -o -c 1 $DIR.watch" > watch_out &
+        stdbuf -oL flux exec -r 1 sh -c "flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 wait ${VERS}; \
+                                         flux kvs --namespace=$NAMESPACETMP-REMOVE-WATCH1 watch -o -c 1 $DIR.watch" > watch_out &
         watchpid=$! &&
         wait_watch_file watch_out "0" &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-WATCH1 &&
@@ -463,14 +410,12 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namesp
 # non-zero to know it's ready for this test.
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE0 &&
-        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-FENCE0 &&
         rm -f fence_out
-        stdbuf -oL ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove fence0 > fence_out &
+        stdbuf -oL ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE0 fence0 > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 0 $NAMESPACETMP-REMOVE-FENCE0 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE0 &&
         wait $watchpid &&
-        unset FLUX_KVS_NAMESPACE &&
         grep "flux_future_get: Operation not supported" fence_out
 '
 
@@ -482,7 +427,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when names
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE1 &&
         rm -f fence_out
-        stdbuf -oL flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-FENCE1 ; ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove fence1" > fence_out &
+        stdbuf -oL flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE1 &&
@@ -495,38 +440,36 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP 
 #
 
 test_expect_success 'kvs: put/get in different namespaces works' '
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 1 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.test 2 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.test=1 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.test=2 &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 1 &&
         test_kvs_key_namespace $NAMESPACETEST $DIR.test 2
 '
 
 test_expect_success 'kvs: unlink in different namespaces works' '
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.testA 1 &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.testB 1 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.testA 2 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.testB 2 &&
-        unlink_kvs_namespace $PRIMARYNAMESPACE $DIR.testA &&
-        unlink_kvs_namespace $NAMESPACETEST $DIR.testB &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.testA=1 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.testB=1 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.testA=2 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.testB=2 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink $DIR.testA &&
+        flux kvs --namespace=$NAMESPACETEST unlink $DIR.testB &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.testB 1 &&
         test_kvs_key_namespace $NAMESPACETEST $DIR.testA 2 &&
-        get_kvs_namespace_exitvalue $PRIMARYNAMESPACE $DIR.testA exitvalue &&
-        test $exitvalue -ne 0 &&
-        get_kvs_namespace_exitvalue $NAMESPACETEST $DIR.testB exitvalue &&
-        test $exitvalue -ne 0
+        ! flux kvs --namespace=$PRIMARYNAMESPACE get --json $DIR.testA &&
+        ! flux kvs --namespace=$NAMESPACETEST get --json $DIR.testB
 '
 
 test_expect_success 'kvs: dir in different namespace works' '
-        unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR &&
-        unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.a 10 &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.b 11 &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.c 12 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.a 13 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.b 14 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.c 15 &&
-        dir_kvs_namespace $PRIMARYNAMESPACE $DIR primaryoutput &&
-        dir_kvs_namespace $NAMESPACETEST $DIR testoutput &&
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR &&
+        flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.a=10 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.b=11 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.c=12 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.a=13 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.b=14 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.c=15 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE dir $DIR | sort > primaryoutput &&
+        flux kvs --namespace=$NAMESPACETEST dir $DIR | sort > testoutput &&
         cat >primaryexpected <<EOF &&
 $DIR.a = 10
 $DIR.b = 11
@@ -542,54 +485,46 @@ EOF
 '
 
 test_expect_success 'kvs: unlink dir in different namespaces works' '
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.subdirA.A A &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.subdirA.B B &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.subdirB.A A &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.subdirB.A B &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.subdirA.A A &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.subdirA.B B &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.subdirB.A A &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.subdirB.A B &&
-        unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR.subdirA &&
-        unlink_kvs_dir_namespace $NAMESPACETEST $DIR.subdirB &&
-        dir_kvs_namespace_exitvalue $PRIMARYNAMESPACE $DIR.subdirA exitvalue &&
-        test $exitvalue -ne 0 &&
-        dir_kvs_namespace_exitvalue $PRIMARYNAMESPACE $DIR.subdirB exitvalue &&
-        test $exitvalue -eq 0 &&
-        dir_kvs_namespace_exitvalue $NAMESPACETEST $DIR.subdirA exitvalue &&
-        test $exitvalue -eq 0 &&
-        dir_kvs_namespace_exitvalue $NAMESPACETEST $DIR.subdirB exitvalue &&
-        test $exitvalue -ne 0
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.subdirA.A=A &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.subdirA.B=B &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.subdirB.A=A &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.subdirB.A=B &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.subdirA.A=A &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.subdirA.B=B &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.subdirB.A=A &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.subdirB.A=B &&
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR.subdirA &&
+        flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR.subdirB &&
+        ! flux kvs --namespace=$PRIMARYNAMESPACE dir $DIR.subdirA &&
+        flux kvs --namespace=$PRIMARYNAMESPACE dir $DIR.subdirB &&
+        flux kvs --namespace=$NAMESPACETEST dir $DIR.subdirA &&
+        ! flux kvs --namespace=$NAMESPACETEST dir $DIR.subdirB
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait in different namespaces works' '
-        export FLUX_KVS_NAMESPACE=$PRIMARYNAMESPACE
-        PRIMARYVERS=$(flux kvs version)
+        PRIMARYVERS=$(flux kvs --namespace=$PRIMARYNAMESPACE version)
         PRIMARYVERS=$((PRIMARYVERS + 1))
-        flux kvs wait $PRIMARYVERS &
+        flux kvs --namespace=$PRIMARYNAMESPACE wait $PRIMARYVERS &
         primarykvswaitpid=$!
-        unset FLUX_KVS_NAMESPACE
 
-        export FLUX_KVS_NAMESPACE=$NAMESPACETEST
-        TESTVERS=$(flux kvs version)
+        TESTVERS=$(flux kvs --namespace=$NAMESPACETEST version)
         TESTVERS=$((TESTVERS + 1))
-        flux kvs wait $TESTVERS &
+        flux kvs --namespace=$NAMESPACETEST wait $TESTVERS &
         testkvswaitpid=$!
-        unset FLUX_KVS_NAMESPACE
 
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.xxx X
-        put_kvs_key_namespace $NAMESPACETEST $DIR.xxx X
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.xxx=X
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.xxx=X
 
         test_expect_code 0 wait $primarykvswaitpid
         test_expect_code 0 wait $testkvswaitpid
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: watch a key in different namespaces works'  '
-        unlink_kvs_dir_namespace $PRIMARYNAMESPACE $DIR &&
-        unlink_kvs_dir_namespace $NAMESPACETEST $DIR &&
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.watch 0 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE unlink -Rf $DIR &&
+        flux kvs --namespace=$NAMESPACETEST unlink -Rf $DIR &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=0 &&
         wait_watch_put_namespace $PRIMARYNAMESPACE "$DIR.watch" "0"
-        put_kvs_key_namespace $NAMESPACETEST $DIR.watch 1 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=1 &&
         wait_watch_put_namespace $NAMESPACETEST "$DIR.watch" "1"
         rm -f primary_watch_out
         rm -f test_watch_out
@@ -598,14 +533,12 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch a key in different namespaces work
         primarywatchpid=$! &&
         wait_watch_file primary_watch_out "0"
 
-        export FLUX_KVS_NAMESPACE=$NAMESPACETEST
-        stdbuf -oL flux kvs watch -o -c 1 $DIR.watch >test_watch_out &
+        stdbuf -oL flux kvs --namespace=$NAMESPACETEST watch -o -c 1 $DIR.watch >test_watch_out &
         testwatchpid=$! &&
         wait_watch_file test_watch_out "1"
-        unset FLUX_KVS_NAMESPACE
 
-        put_kvs_key_namespace $PRIMARYNAMESPACE $DIR.watch 1 &&
-        put_kvs_key_namespace $NAMESPACETEST $DIR.watch 2 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put --json $DIR.watch=1 &&
+        flux kvs --namespace=$NAMESPACETEST put --json $DIR.watch=2 &&
         wait $primarywatchpid &&
         wait $testwatchpid
 cat >primaryexpected <<-EOF &&

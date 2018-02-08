@@ -13,7 +13,6 @@ noinst_LTLIBRARIES = libkvs.la
 
 libkvs_la_SOURCES = \
 	kvs.c \
-	kvs_private.h \
 	kvs_lookup.c \
 	kvs_dir.c \
 	kvs_dir_private.h \
@@ -39,6 +38,8 @@ TESTS = \
 	test_kvs_txn.t \
 	test_kvs_lookup.t \
 	test_kvs_dir.t \
+	test_kvs_commit.t \
+	test_kvs_watch.t \
 	test_treeobj.t
 
 check_PROGRAMS = \
@@ -74,6 +75,14 @@ test_kvs_lookup_t_LDADD = $(test_ldadd) $(LIBDL)
 test_kvs_dir_t_SOURCES = test/kvs_dir.c
 test_kvs_dir_t_CPPFLAGS = $(test_cppflags)
 test_kvs_dir_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_commit_t_SOURCES = test/kvs_commit.c
+test_kvs_commit_t_CPPFLAGS = $(test_cppflags)
+test_kvs_commit_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_kvs_watch_t_SOURCES = test/kvs_watch.c
+test_kvs_watch_t_CPPFLAGS = $(test_cppflags)
+test_kvs_watch_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_treeobj_t_SOURCES = test/treeobj.c
 test_treeobj_t_CPPFLAGS = $(test_cppflags)

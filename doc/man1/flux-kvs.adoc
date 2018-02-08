@@ -39,19 +39,19 @@ their parent in the overlay network.
 
 Different KVS namespaces can be created in which kvs values can be
 read from/written to.  By default, all KVS operations operate on the
-default KVS namespace "primary".  To use a different namespace, set
-the environment variable FLUX_KVS_NAMESPACE to the namespace you wish
-to use.  When a KVS namespace is first created, it is only created on
-the leader.  Followers will initialize itself against a namespace the
-first time it is used.  When a namespace is removed, a namespace is
-marked for removal on the leader and an event is multicast to
-followers to similarly mark the namespace for removal.  The namespace
-will then be garbage collected in the background.  There may be a
-delay in the namespace being recognized as removed.  Similar to
-commits, it is "eventually consistent".
+default KVS namespace "primary".  An alternate namespace can be
+specified via the '--namespace' option or the environment variable
+FLUX_KVS_NAMESPACE.
 
 flux-kvs(1) runs a KVS 'COMMAND'.  The possible commands and their
 arguments are described below.
+
+COMMON OPTIONS
+--------------
+*-N, --namespace*='name'::
+Specify a namespace to be used in all KVS commands.  A namespace
+specified via this option overrides a namespace set in the environment
+variable FLUX_KVS_NAMESPACE.
 
 COMMANDS
 --------
