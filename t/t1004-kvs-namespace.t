@@ -28,6 +28,7 @@ PRIMARYNAMESPACE=primary
 NAMESPACETEST=namespacetest
 NAMESPACETMP=namespacetmp
 NAMESPACERANK1=namespacerank1
+NAMESPACEORDER=namespaceorder
 
 namespace_create_loop() {
         i=0
@@ -283,6 +284,41 @@ test_expect_success 'kvs: namespace can be re-created after remove, recognized o
         flux kvs --namespace=$NAMESPACETMP-ALL put --json $DIR.recreate=1 &&
         get_kvs_namespace_all_ranks_loop $NAMESPACETMP-ALL $DIR.recreate &&
 	flux kvs namespace-remove $NAMESPACETMP-ALL
+'
+
+#
+# Namespace specification priority
+#
+
+test_expect_success 'kvs: namespace order setup' '
+	flux kvs namespace-create $NAMESPACEORDER-1 &&
+	flux kvs namespace-create $NAMESPACEORDER-2 &&
+        flux kvs --namespace=$PRIMARYNAMESPACE put $DIR.ordertest=1 &&
+        flux kvs --namespace=$NAMESPACEORDER-1 put $DIR.ordertest=2 &&
+        flux kvs --namespace=$NAMESPACEORDER-2 put $DIR.ordertest=3 &&
+        test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.ordertest 1 &&
+        test_kvs_key_namespace $NAMESPACEORDER-1 $DIR.ordertest 2 &&
+        test_kvs_key_namespace $NAMESPACEORDER-2 $DIR.ordertest 3
+'
+
+test_expect_success 'kvs: no namespace specified, defaults to primary namespace' '
+        test_kvs_key $DIR.ordertest 1
+'
+
+test_expect_success 'kvs: namespace specified in environment variable works' '
+        export FLUX_KVS_NAMESPACE=$NAMESPACEORDER-1 &&
+        test_kvs_key $DIR.ordertest 2 &&
+        unset FLUX_KVS_NAMESPACE &&
+        export FLUX_KVS_NAMESPACE=$NAMESPACEORDER-2 &&
+        test_kvs_key $DIR.ordertest 3 &&
+        unset FLUX_KVS_NAMESPACE
+'
+
+test_expect_success 'kvs: namespace specified in command line overrides environment variable' '
+        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-BAD &&
+        test_kvs_key_namespace $NAMESPACEORDER-1 $DIR.ordertest 2 &&
+        test_kvs_key_namespace $NAMESPACEORDER-2 $DIR.ordertest 3 &&
+        unset FLUX_KVS_NAMESPACE
 '
 
 #
