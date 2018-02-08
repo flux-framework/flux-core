@@ -29,12 +29,6 @@ NAMESPACETEST=namespacetest
 NAMESPACETMP=namespacetmp
 NAMESPACERANK1=namespacerank1
 
-test_kvs_key_namespace() {
-	flux kvs --namespace=$1 get --json "$2" >output
-	echo "$3" >expected
-	test_cmp expected output
-}
-
 namespace_create_loop() {
         i=0
         while ! flux kvs namespace-create $1 && [ $i -lt ${KVS_WAIT_ITERS} ]
@@ -65,14 +59,6 @@ get_kvs_namespace_fails_all_ranks_loop() {
                 i=$((i + 1))
         done
         return $(loophandlereturn $i)
-}
-
-wait_watch_put_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-        wait_watch_put $2 $3
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        return $exitvalue
 }
 
 wait_fencecount_nonzero() {

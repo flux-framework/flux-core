@@ -29,6 +29,15 @@ test_kvs_key() {
 	test_cmp expected output
 }
 
+# arg1 - namespace
+# arg2 - key to retrieve
+# arg3 - expected value
+test_kvs_key_namespace() {
+	flux kvs --namespace="$1" get --json "$2" >output
+	echo "$3" >expected
+	test_cmp expected output
+}
+
 # arg1 - key to retrieve
 # arg2 - value to wait for
 wait_watch_put() {
@@ -39,6 +48,17 @@ wait_watch_put() {
                 i=$((i + 1))
         done
         return $(loophandlereturn $i)
+}
+
+# arg1 - namespace
+# arg2 - key to retrieve
+# arg3 - value to wait for
+wait_watch_put_namespace() {
+        export FLUX_KVS_NAMESPACE=$1
+        wait_watch_put $2 $3
+        exitvalue=$?
+        unset FLUX_KVS_NAMESPACE
+        return $exitvalue
 }
 
 # arg1 - key to retrieve

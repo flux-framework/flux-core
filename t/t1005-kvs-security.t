@@ -25,20 +25,6 @@ unset FLUX_KVS_NAMESPACE
 
 NAMESPACETMP=namespacetmp
 
-test_kvs_key_namespace() {
-	flux kvs --namespace=$1 get --json "$2" >output
-	echo "$3" >expected
-	test_cmp expected output
-}
-
-wait_watch_put_namespace() {
-        export FLUX_KVS_NAMESPACE=$1
-        wait_watch_put $2 $3
-        exitvalue=$?
-        unset FLUX_KVS_NAMESPACE
-        return $exitvalue
-}
-
 set_userid() {
         export FLUX_HANDLE_USERID=$1
         export FLUX_HANDLE_ROLEMASK=0x2
