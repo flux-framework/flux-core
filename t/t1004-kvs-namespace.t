@@ -410,14 +410,12 @@ test_expect_success NO_CHAIN_LINT 'kvs: watch on rank 1 gets ENOTSUP when namesp
 # non-zero to know it's ready for this test.
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE0 &&
-        export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-FENCE0 &&
         rm -f fence_out
-        stdbuf -oL ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove fence0 > fence_out &
+        stdbuf -oL ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE0 fence0 > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 0 $NAMESPACETMP-REMOVE-FENCE0 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE0 &&
         wait $watchpid &&
-        unset FLUX_KVS_NAMESPACE &&
         grep "flux_future_get: Operation not supported" fence_out
 '
 
@@ -429,7 +427,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when names
 test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP when namespace is removed' '
         flux kvs namespace-create $NAMESPACETMP-REMOVE-FENCE1 &&
         rm -f fence_out
-        stdbuf -oL flux exec -r 1 sh -c "export FLUX_KVS_NAMESPACE=$NAMESPACETMP-REMOVE-FENCE1 ; ${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove fence1" > fence_out &
+        stdbuf -oL flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_namespace_remove $NAMESPACETMP-REMOVE-FENCE1 fence1" > fence_out &
         watchpid=$! &&
         wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
         flux kvs namespace-remove $NAMESPACETMP-REMOVE-FENCE1 &&
