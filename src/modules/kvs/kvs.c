@@ -1726,8 +1726,6 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
     }
-    else
-        fence_set_flags (f, fence_get_flags (f) | flags);
 
     if (fence_add_request_data (f, ops) < 0) {
         flux_log_error (h, "%s: fence_add_request_data", __FUNCTION__);

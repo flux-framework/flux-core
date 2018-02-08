@@ -99,6 +99,11 @@ bool fence_count_reached (fence_t *f)
     return (f->count == f->nprocs);
 }
 
+int fence_get_nprocs (fence_t *f)
+{
+    return f->nprocs;
+}
+
 int fence_get_flags (fence_t *f)
 {
     return f->flags;

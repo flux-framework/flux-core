@@ -41,6 +41,9 @@ void basic_api_tests (void)
     ok (fence_count_reached (f) == false,
         "initial fence_count_reached() is false");
 
+    ok (fence_get_nprocs (f) == 1,
+        "initial fence_get_nprocs works");
+
     ok (fence_get_flags (f) == 3,
         "initial fence_get_flags works");
 

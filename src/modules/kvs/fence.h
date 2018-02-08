@@ -15,6 +15,7 @@ void fence_destroy (fence_t *f);
 /* if number of calls to fence_add_request_data() is == nprocs */
 bool fence_count_reached (fence_t *f);
 
+int fence_get_nprocs (fence_t *f);
 int fence_get_flags (fence_t *f);
 void fence_set_flags (fence_t *f, int flags);
 
