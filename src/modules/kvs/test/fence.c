@@ -42,15 +42,10 @@ void basic_api_tests (void)
         "initial fence_count_reached() is false");
 
     ok (fence_get_nprocs (f) == 1,
-        "initial fence_get_nprocs works");
+        "fence_get_nprocs works");
 
     ok (fence_get_flags (f) == 3,
-        "initial fence_get_flags works");
-
-    fence_set_flags (f, 5),
-
-    ok (fence_get_flags (f) == 5,
-        "changed flags, fence_get_flags works");
+        "fence_get_flags works");
 
     ok ((o = fence_get_json_names (f)) != NULL,
         "initial fence_get_json_names works");

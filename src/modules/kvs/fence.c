@@ -109,11 +109,6 @@ int fence_get_flags (fence_t *f)
     return f->flags;
 }
 
-void fence_set_flags (fence_t *f, int flags)
-{
-    f->flags = flags;
-}
-
 json_t *fence_get_json_ops (fence_t *f)
 {
     return f->ops;
