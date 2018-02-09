@@ -31,10 +31,13 @@ enum {
  *   Garbage collection will happen in the background and the
  *   namespace will official be removed.  The removal is "eventually
  *   consistent".
+ *
+ *   NOTE: Take care to avoid conflicting with C++'s keyword "namespace"
+ *   in the external interfaces.
  */
-flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
+flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *name_space,
                                           uint32_t owner, int flags);
-flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace);
+flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *name_space);
 
 /* Namespace Selection
  * - configure a KVS namespace to use in all kvs operations using this
