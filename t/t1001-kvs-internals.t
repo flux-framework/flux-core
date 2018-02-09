@@ -297,4 +297,18 @@ test_expect_success 'kvs: clear stats globally' '
         flux exec sh -c "flux module stats kvs | grep no-op | grep -q 0"
 '
 
+#
+# test invalid fence arguments
+#
+
+test_expect_success 'kvs: test invalid fence arguments on rank 0' '
+        ${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest1 > invalid_output &&
+        grep "flux_future_get: Invalid argument" invalid_output
+'
+
+test_expect_success 'kvs: test invalid fence arguments on rank 1' '
+        flux exec -r 1 sh -c "${FLUX_BUILD_DIR}/t/kvs/fence_invalid invalidtest2" > invalid_output &&
+        grep "flux_future_get: Invalid argument" invalid_output
+'
+
 test_done
