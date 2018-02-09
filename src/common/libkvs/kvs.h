@@ -45,8 +45,11 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *name_space);
  * - if never set, the value from the environment variable
  *   FLUX_KVS_NAMESPACE is used.
  * - if FLUX_KVS_NAMESPACE is not set, KVS_PRIMARY_NAMESPACE is assumed.
+ *
+ *   NOTE: Take care to avoid conflicting with C++'s keyword "namespace"
+ *   in the external interfaces.
  */
-int flux_kvs_set_namespace (flux_t *h, const char *namespace);
+int flux_kvs_set_namespace (flux_t *h, const char *name_space);
 const char *flux_kvs_get_namespace (flux_t *h);
 
 /* Synchronization:
