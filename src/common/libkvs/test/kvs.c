@@ -21,6 +21,21 @@ void errors (void)
     ok (flux_kvs_namespace_remove (NULL, NULL) == NULL && errno == EINVAL,
         "flux_kvs_namespace_remove fails on bad input");
 
+    errno = 0;
+    ok (flux_kvs_namespace_list (NULL) == NULL && errno == EINVAL,
+        "flux_kvs_namespace_list fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_namespace_itr_next (NULL, NULL, NULL) == NULL && errno == EINVAL,
+        "flux_kvs_namespace_itr_next fails on bad input");
+
+    /* flux_kvs_namespace_itr_rewind() works on NULL pointer */
+    flux_kvs_namespace_itr_rewind (NULL);
+
+    /* flux_kvs_namespace_itr_destroy() works on NULL pointer */
+    flux_kvs_namespace_itr_destroy (NULL);
+
+    errno = 0;
     ok (flux_kvs_set_namespace (NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_set_namespace fails on bad input");
 
