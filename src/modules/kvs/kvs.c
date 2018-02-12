@@ -2356,6 +2356,9 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    if (owner == FLUX_USERID_UNKNOWN)
+        owner = geteuid ();
+
     if (namespace_create (ctx, namespace, owner, flags) < 0) {
         flux_log_error (h, "%s: namespace_create", __FUNCTION__);
         goto error;
