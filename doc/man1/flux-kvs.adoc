@@ -63,6 +63,9 @@ would allow a non-instance owner to read/write to a namespace.
 *namespace-remove* 'name' ['name...']::
 Remove a kvs namespace.
 
+*namespace-list*::
+List all current namespaces and info on each namespace.
+
 *get* [-j|-r|-t] [-a treeobj] 'key' ['key...']::
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.  If no options, value is displayed with

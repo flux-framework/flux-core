@@ -46,6 +46,7 @@ MAN3_FILES_PRIMARY = \
 	flux_kvs_commit.3 \
 	flux_kvs_txn_create.3 \
 	flux_kvs_namespace_create.3 \
+	flux_kvs_namespace_list.3 \
 	flux_kvs_set_namespace.3
 
 # These files are generated as roff .so includes of a primary page.
@@ -143,6 +144,9 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_txn_put_raw.3 \
 	# flux_kvs_txn_put_treeobj.3 \
 	flux_kvs_namespace_remove.3 \
+	flux_kvs_namespace_itr_next.3 \
+	flux_kvs_namespace_itr_rewind.3 \
+	flux_kvs_namespace_itr_destroy.3 \
 	flux_kvs_get_namespace.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
@@ -259,6 +263,9 @@ flux_kvs_txn_symlink.3: flux_kvs_txn_create.3
 flux_kvs_txn_put_raw.3: flux_kvs_txn_create.3
 # flux_kvs_txn_put_treeobj.3: flux_kvs_txn_create.3
 flux_kvs_namespace_remove.3: flux_kvs_namespace_create.3
+flux_kvs_namespace_itr_next.3: flux_kvs_namespace_list.3
+flux_kvs_namespace_itr_rewind.3: flux_kvs_namespace_list.3
+flux_kvs_namespace_itr_destroy.3: flux_kvs_namespace_list.3
 flux_kvs_get_namespace.3: flux_kvs_set_namespace.3
 
 flux_open.3: topen.c

@@ -39,6 +39,7 @@
 
 int cmd_namespace_create (optparse_t *p, int argc, char **argv);
 int cmd_namespace_remove (optparse_t *p, int argc, char **argv);
+int cmd_namespace_list (optparse_t *p, int argc, char **argv);
 int cmd_get (optparse_t *p, int argc, char **argv);
 int cmd_put (optparse_t *p, int argc, char **argv);
 int cmd_unlink (optparse_t *p, int argc, char **argv);
@@ -196,6 +197,13 @@ static struct optparse_subcommand subcommands[] = {
       "name [name...]",
       "Remove a KVS namespace",
       cmd_namespace_remove,
+      0,
+      NULL
+    },
+    { "namespace-list",
+      "",
+      "List namespaces on local rank",
+      cmd_namespace_list,
       0,
       NULL
     },
@@ -423,6 +431,29 @@ int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
     }
+    return (0);
+}
+
+int cmd_namespace_list (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_kvs_namespace_itr_t *itr;
+    const char *namespace;
+    uint32_t owner;
+    int optindex, flags;
+
+    optindex = optparse_option_index (p);
+    if ((optindex - argc) != 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(itr = flux_kvs_namespace_list (h)))
+        log_err_exit ("flux_kvs_namespace_list");
+    printf ("NAMESPACE                                 OWNER      FLAGS\n");
+    while ((namespace = flux_kvs_namespace_itr_next (itr, &owner, &flags))) {
+        printf ("%-36s %10u 0x%08X\n", namespace, owner, flags);
+    }
+    flux_kvs_namespace_itr_destroy (itr);
     return (0);
 }
 

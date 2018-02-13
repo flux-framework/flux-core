@@ -77,6 +77,10 @@ wait_fencecount_nonzero() {
 # Basic tests in default primary namespace
 #
 
+test_expect_success 'kvs: primary namespace exists/is listed' '
+        flux kvs namespace-list | grep primary
+'
+
 test_expect_success 'kvs: create primary namespace fails' '
 	! flux kvs namespace-create $PRIMARYNAMESPACE
 '
@@ -157,8 +161,16 @@ test_expect_success 'kvs: namespace create on rank 0 works' '
 	flux kvs namespace-create $NAMESPACETEST
 '
 
+test_expect_success 'kvs: new namespace exists/is listed' '
+        flux kvs namespace-list | grep $NAMESPACETEST
+'
+
 test_expect_success 'kvs: namespace create on rank 1 works' '
 	flux exec -r 1 sh -c "flux kvs namespace-create $NAMESPACERANK1"
+'
+
+test_expect_success 'kvs: new namespace exists/is listed' '
+        flux kvs namespace-list | grep $NAMESPACERANK1
 '
 
 test_expect_success 'kvs: put/get value in new namespace works' '
@@ -237,6 +249,10 @@ test_expect_success 'kvs: namespace can be re-created after remove' '
         test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.recreate 1 &&
 	flux kvs namespace-remove $NAMESPACETMP-BASIC &&
         ! flux kvs --namespace=$NAMESPACETMP-BASIC get --json $DIR.recreate
+'
+
+test_expect_success 'kvs: removed namespace not listed' '
+        ! flux kvs namespace-list | grep $NAMESPACETMP-BASIC
 '
 
 #

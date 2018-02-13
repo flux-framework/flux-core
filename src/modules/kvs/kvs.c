@@ -2356,6 +2356,9 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    if (owner == FLUX_USERID_UNKNOWN)
+        owner = geteuid ();
+
     if (namespace_create (ctx, namespace, owner, flags) < 0) {
         flux_log_error (h, "%s: namespace_create", __FUNCTION__);
         goto error;
@@ -2497,6 +2500,61 @@ static void namespace_remove_event_cb (flux_t *h, flux_msg_handler_t *mh,
     start_root_remove (ctx, namespace);
 }
 
+static int namespace_list_cb (struct kvsroot *root, void *arg)
+{
+    json_t *namespaces = arg;
+    json_t *o;
+
+    /* do not list namespaces marked for removal */
+    if (root->remove)
+        return 0;
+
+    if (!(o = json_pack ("{ s:s s:i s:i }",
+                         "namespace", root->namespace,
+                         "owner", root->owner,
+                         "flags", root->flags))) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    json_array_append_new (namespaces, o);
+    return 0;
+}
+
+static void namespace_list_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                       const flux_msg_t *msg, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+    json_t *namespaces = NULL;
+    int rc = -1;
+
+    if (!(namespaces = json_array ())) {
+        errno = ENOMEM;
+        goto done;
+    }
+
+    if (kvsroot_mgr_iter_roots (ctx->km, namespace_list_cb,
+                                namespaces) < 0) {
+        flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
+        goto done;
+    }
+
+    if (flux_respond_pack (h, msg, "{ s:O }",
+                           "namespaces",
+                           namespaces) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto done;
+    }
+
+    rc = 0;
+done:
+    if (rc < 0) {
+        if (flux_respond (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    }
+    json_decref (namespaces);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
@@ -2526,6 +2584,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             namespace_remove_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.namespace.remove",
                             namespace_remove_event_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.list",
+                            namespace_list_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

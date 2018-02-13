@@ -140,6 +140,10 @@ test_expect_success 'kvs: namespace create works (owner, for user)' '
 	flux kvs namespace-create -o 9999 $NAMESPACETMP-USER
 '
 
+test_expect_success 'kvs: namespace listed with correct owner' '
+        flux kvs namespace-list | grep $NAMESPACETMP-USER | grep 9999
+'
+
 test_expect_success 'kvs: namespace put/get works (user)' '
         set_userid 9999 &&
         flux kvs --namespace=$NAMESPACETMP-USER put --json $DIR.test=1 &&
