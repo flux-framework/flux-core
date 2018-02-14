@@ -171,63 +171,6 @@ int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data)
     return 0;
 }
 
-int fence_merge (fence_t *dest, fence_t *src)
-{
-    json_t *names = NULL;
-    json_t *ops = NULL;
-    int i, len, saved_errno;
-
-    if ((dest->flags & FLUX_KVS_NO_MERGE) || (src->flags & FLUX_KVS_NO_MERGE))
-        return 0;
-
-    if ((len = json_array_size (src->names))) {
-        if (!(names = json_copy (dest->names))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
-        for (i = 0; i < len; i++) {
-            json_t *name;
-            if ((name = json_array_get (src->names, i))) {
-                if (json_array_append (names, name) < 0) {
-                    saved_errno = ENOMEM;
-                    goto error;
-                }
-            }
-        }
-    }
-    if ((len = json_array_size (src->ops))) {
-        if (!(ops = json_copy (dest->ops))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
-        for (i = 0; i < len; i++) {
-            json_t *op;
-            if ((op = json_array_get (src->ops, i))) {
-                if (json_array_append (ops, op) < 0) {
-                    saved_errno = ENOMEM;
-                    goto error;
-                }
-            }
-        }
-    }
-
-    if (names) {
-        json_decref (dest->names);
-        dest->names = names;
-    }
-    if (ops) {
-        json_decref (dest->ops);
-        dest->ops = ops;
-    }
-    return 1;
-
-error:
-    json_decref (names);
-    json_decref (ops);
-    errno = saved_errno;
-    return -1;
-}
-
 int fence_get_aux_int (fence_t *f)
 {
     return f->aux_int;

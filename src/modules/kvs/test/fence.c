@@ -233,62 +233,6 @@ fence_t *create_fence (const char *name, const char *opname, int flags)
     return f;
 }
 
-void merge_tests (void)
-{
-    fence_t *f1, *f2;
-    json_t *names, *ops;
-    json_t *o;
-
-    f1 = create_fence ("foo", "A", 0);
-    f2 = create_fence ("bar", "B", 0);
-
-    ok (fence_merge (f1, f2) == 1,
-        "fence_merge success");
-
-    ok ((o = fence_get_json_names (f1)) != NULL,
-        "fence_get_json_names works");
-
-    names = json_array ();
-    json_array_append_new (names, json_string ("foo"));
-    json_array_append_new (names, json_string ("bar"));
-
-    ok (json_equal (names, o) == true,
-        "fence_get_json_names match");
-
-    json_decref (names);
-
-    ok ((o = fence_get_json_ops (f1)) != NULL,
-        "fence_get_json_ops works");
-
-    ops = json_array ();
-    json_array_append_new (ops, json_string ("A"));
-    json_array_append_new (ops, json_string ("B"));
-
-    ok (json_equal (ops, o) == true,
-        "fence_get_json_ops match");
-
-    fence_destroy (f1);
-    fence_destroy (f2);
-
-    f1 = create_fence ("foo", "A", FLUX_KVS_NO_MERGE);
-    f2 = create_fence ("bar", "B", 0);
-
-    ok (fence_merge (f1, f2) == 0,
-        "fence_merge no merge");
-
-    fence_destroy (f1);
-    fence_destroy (f2);
-
-    f1 = create_fence ("foo", "A", 0);
-    f2 = create_fence ("bar", "B", FLUX_KVS_NO_MERGE);
-
-    ok (fence_merge (f1, f2) == 0,
-        "fence_merge no merge");
-
-    fence_destroy (f1);
-    fence_destroy (f2);
-}
-
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -296,7 +240,6 @@ int main (int argc, char *argv[])
     basic_api_tests ();
     ops_tests ();
     request_tests ();
-    merge_tests ();
 
     done_testing ();
     return (0);

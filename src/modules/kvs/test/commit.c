@@ -141,7 +141,6 @@ void commit_mgr_basic_tests (void)
     commit_mgr_t *cm;
     commit_t *c;
     fence_t *f, *tf;
-    fence_t *f1, *f2;
     blobref_t rootref;
 
     ok (commit_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
@@ -240,20 +239,6 @@ void commit_mgr_basic_tests (void)
 
     ok (commit_mgr_lookup_fence (cm, "fence1") == NULL,
         "commit_mgr_lookup_fence can't find removed fence");
-
-    ok ((f1 = fence_create ("fenceF1", 1, 0)) != NULL,
-        "fence_create works");
-    ok ((f2 = fence_create ("fenceF2", 1, 0)) != NULL,
-        "fence_create works");
-    ok (fence_merge (f1, f2) == 1,
-        "fence_merge works");
-
-    ok (commit_mgr_add_fence (cm, f1) < 0
-        && errno == EINVAL,
-        "commit_mgr_add_fence fails on fence with multiple names");
-
-    fence_destroy (f1);
-    fence_destroy (f2);
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
