@@ -109,7 +109,7 @@ flux_future_t *flux_kvs_lookup (flux_t *h, int flags, const char *key)
         return NULL;
     if (!(ctx = alloc_ctx (h, flags, key)))
         return NULL;
-    if (!(f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
                              "{s:s s:s s:i}",
                              "key", key,
                              "namespace", namespace,
@@ -155,7 +155,7 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
             errno = EINVAL;
             return NULL;
         }
-        if (!(f = flux_rpc_pack (h, "kvs.get", FLUX_NODEID_ANY, 0,
+        if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
                                  "{s:s s:s s:i s:O}",
                                  "key", key,
                                  "namespace", namespace,

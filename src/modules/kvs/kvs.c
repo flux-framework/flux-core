@@ -1203,8 +1203,8 @@ static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
     return 0;
 }
 
-static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = NULL;
     int flags;
@@ -1234,7 +1234,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(root = getroot (ctx, namespace, mh, msg, get_request_cb,
+        if (!(root = getroot (ctx, namespace, mh, msg, lookup_request_cb,
                               &stall))) {
             if (stall)
                 goto stall;
@@ -1302,7 +1302,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, lh, get_request_cb)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
+                                              lookup_request_cb)))
             goto done;
 
         cbd.ctx = ctx;
@@ -2571,8 +2572,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             unwatch_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.sync",
                             sync_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.get",
-                            get_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.lookup",
+                            lookup_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",
                             watch_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",
