@@ -39,11 +39,11 @@
 #include "fence.h"
 
 struct fence {
+    char *name;
     int nprocs;
     int count;
     zlist_t *requests;
     json_t *ops;
-    json_t *names;
     int flags;
     int aux_int;
 };
@@ -51,7 +51,7 @@ struct fence {
 void fence_destroy (fence_t *f)
 {
     if (f) {
-        json_decref (f->names);
+        free (f->name);
         json_decref (f->ops);
         zlist_destroy (&f->requests);
         free (f);
@@ -61,7 +61,6 @@ void fence_destroy (fence_t *f)
 fence_t *fence_create (const char *name, int nprocs, int flags)
 {
     fence_t *f = NULL;
-    json_t *s = NULL;
     int saved_errno;
 
     if (!name || nprocs <= 0) {
@@ -70,23 +69,17 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     }
     if (!(f = calloc (1, sizeof (*f)))
         || !(f->ops = json_array ())
-        || !(f->names = json_array ())
         || !(f->requests = zlist_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(f->name = strdup (name))) {
         saved_errno = ENOMEM;
         goto error;
     }
     f->nprocs = nprocs;
     f->flags = flags;
     f->aux_int = 0;
-    if (!(s = json_string (name))) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
-    if (json_array_append_new (f->names, s) < 0) {
-        json_decref (s);
-        saved_errno = ENOMEM;
-        goto error;
-    }
 
     return f;
 error:
@@ -99,6 +92,11 @@ bool fence_count_reached (fence_t *f)
 {
     assert (f->count <= f->nprocs);
     return (f->count == f->nprocs);
+}
+
+const char *fence_get_name (fence_t *f)
+{
+    return f->name;
 }
 
 int fence_get_nprocs (fence_t *f)
@@ -114,11 +112,6 @@ int fence_get_flags (fence_t *f)
 json_t *fence_get_json_ops (fence_t *f)
 {
     return f->ops;
-}
-
-json_t *fence_get_json_names (fence_t *f)
-{
-    return f->names;
 }
 
 int fence_add_request_ops (fence_t *f, json_t *ops)

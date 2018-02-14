@@ -97,6 +97,7 @@ static void commit_destroy (commit_t *c)
 static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
 {
     commit_t *c;
+    const char *name;
     int saved_errno;
 
     if (!(c = calloc (1, sizeof (*c)))) {
@@ -107,9 +108,21 @@ static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(c->names = json_copy (fence_get_json_names (f)))) {
+    if (!(c->names = json_array ())) {
         saved_errno = ENOMEM;
         goto error;
+    }
+    if ((name = fence_get_name (f))) {
+        json_t *s;
+        if (!(s = json_string (name))) {
+            saved_errno = ENOMEM;
+            goto error;
+        }
+        if (json_array_append_new (c->names, s) < 0) {
+            json_decref (s);
+            saved_errno = ENOMEM;
+            goto error;
+        }
     }
     c->flags = fence_get_flags (f);
     if (!(c->missing_refs_list = zlist_new ())) {
@@ -991,35 +1004,21 @@ void commit_mgr_destroy (commit_mgr_t *cm)
 
 int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
 {
-    json_t *names;
-    json_t *name;
-
     /* Don't modify hash while iterating */
     if (cm->iterating_fences) {
         errno = EAGAIN;
         goto error;
     }
 
-    if (!(names = fence_get_json_names (f))) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (json_array_size (names) != 1) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (!(name = json_array_get (names, 0))) {
-        errno = EINVAL;
-        goto error;
-    }
-    if (zhash_insert (cm->fences, json_string_value (name), f) < 0) {
+    if (zhash_insert (cm->fences, fence_get_name (f), f) < 0) {
         errno = EEXIST;
         goto error;
     }
+
     /* initial fence aux int to 0 */
     fence_set_aux_int (f, 0);
     zhash_freefn (cm->fences,
-                  json_string_value (name),
+                  fence_get_name (f),
                   (zhash_free_fn *)fence_destroy);
     return 0;
 error:

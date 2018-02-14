@@ -15,12 +15,11 @@ void fence_destroy (fence_t *f);
 /* if number of calls to fence_add_request_data() is == nprocs */
 bool fence_count_reached (fence_t *f);
 
+const char *fence_get_name (fence_t *f);
 int fence_get_nprocs (fence_t *f);
 int fence_get_flags (fence_t *f);
 
 json_t *fence_get_json_ops (fence_t *f);
-
-json_t *fence_get_json_names (fence_t *f);
 
 /* fence_add_request_ops() should be called with ops on each
  * request, even if ops is NULL

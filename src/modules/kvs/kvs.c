@@ -2373,12 +2373,20 @@ error:
 static int root_remove_process_fences (fence_t *f, void *data)
 {
     struct kvs_cb_data *cbd = data;
+    json_t *names = NULL;
 
     /* Not ready fences will never finish, must alert them with
      * ENOTSUP that namespace removed.  Final call to
      * commit_mgr_remove_fence() done in finalize_fences_bynames() */
-    finalize_fences_bynames (cbd->ctx, cbd->root, fence_get_json_names (f),
-                             ENOTSUP);
+
+    if (!(names = json_pack ("[ s ]", fence_get_name (f)))) {
+        flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    finalize_fences_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
+    json_decref (names);
     return 0;
 }
 

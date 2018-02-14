@@ -775,11 +775,10 @@ int commit_fence_count_cb (fence_t *f, void *data)
 int commit_fence_remove_cb (fence_t *f, void *data)
 {
     commit_mgr_t *cm = data;
-    json_t *names = fence_get_json_names (f);
 
     /* in this test no merging has been done, just get the first name
      * in the array */
-    commit_mgr_remove_fence (cm, json_string_value (json_array_get (names, 0)));
+    commit_mgr_remove_fence (cm, fence_get_name (f));
     return 0;
 }
 

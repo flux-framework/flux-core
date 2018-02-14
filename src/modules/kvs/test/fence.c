@@ -30,9 +30,10 @@ int msg_cb_error (fence_t *f, const flux_msg_t *req, void *data)
 void basic_api_tests (void)
 {
     fence_t *f;
-    json_t *names, *ops;
+    json_t *ops;
     json_t *o;
     flux_msg_t *request;
+    const char *name;
     int count = 0;
 
     ok (fence_create (NULL, 0, 0) == NULL,
@@ -44,22 +45,17 @@ void basic_api_tests (void)
     ok (fence_count_reached (f) == false,
         "initial fence_count_reached() is false");
 
+    ok ((name = fence_get_name (f)) != NULL,
+        "fence_get_name works");
+
+    ok (strcmp (name, "foo") == 0,
+        "fence_get_name returns the correct name");
+
     ok (fence_get_nprocs (f) == 1,
         "fence_get_nprocs works");
 
     ok (fence_get_flags (f) == 3,
         "fence_get_flags works");
-
-    ok ((o = fence_get_json_names (f)) != NULL,
-        "initial fence_get_json_names works");
-
-    names = json_array ();
-    json_array_append_new (names, json_string ("foo"));
-
-    ok (json_equal (names, o) == true,
-        "initial fence_get_json_names match");
-
-    json_decref (names);
 
     /* for test ops can be anything */
     ops = json_array ();
