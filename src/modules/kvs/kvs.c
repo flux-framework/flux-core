@@ -216,7 +216,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
             goto cleanup;
         }
 
-        if (flux_event_subscribe (ctx->h, "kvs.namespace.remove") < 0) {
+        if (flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -224,7 +224,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
         ctx->events_init = true;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot.%s", namespace) < 0) {
+    if (asprintf (&setroot_topic, "kvs.setroot-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -234,7 +234,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
         goto cleanup;
     }
 
-    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -257,7 +257,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *namespace)
     char *error_topic = NULL;
     int rc = -1;
 
-    if (asprintf (&setroot_topic, "kvs.setroot.%s", namespace) < 0) {
+    if (asprintf (&setroot_topic, "kvs.setroot-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -267,7 +267,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *namespace)
         goto cleanup;
     }
 
-    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -778,7 +778,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         root_dir = nullobj;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot.%s", root->namespace) < 0) {
+    if (asprintf (&setroot_topic, "kvs.setroot-%s", root->namespace) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -819,7 +819,7 @@ static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
     char *error_topic = NULL;
     int saved_errno, rc = -1;
 
-    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error-%s", namespace) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -1203,8 +1203,8 @@ static int lookup_load_cb (lookup_t *lh, const char *ref, void *data)
     return 0;
 }
 
-static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = NULL;
     int flags;
@@ -1234,7 +1234,7 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(root = getroot (ctx, namespace, mh, msg, get_request_cb,
+        if (!(root = getroot (ctx, namespace, mh, msg, lookup_request_cb,
                               &stall))) {
             if (stall)
                 goto stall;
@@ -1302,7 +1302,8 @@ static void get_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!lookup (lh)) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create_msg_handler (h, mh, msg, lh, get_request_cb)))
+        if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
+                                              lookup_request_cb)))
             goto done;
 
         cbd.ctx = ctx;
@@ -1684,10 +1685,10 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
     }
 }
 
-/* kvs.relayfence (rank 0 only, no response).
+/* kvs.relaycommit (rank 0 only, no response).
  */
-static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1753,11 +1754,11 @@ error:
         flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
 }
 
-/* kvs.fence
+/* kvs.commit
  * Sent from users to local kvs module.
  */
-static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1778,7 +1779,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace, mh, msg, fence_request_cb,
+    if (!(root = getroot (ctx, namespace, mh, msg, commit_request_cb,
                           &stall))) {
         if (stall)
             goto stall;
@@ -1823,7 +1824,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_future_t *f;
 
         /* route to rank 0 as instance owner */
-        if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
+        if (!(f = flux_rpc_pack (h, "kvs.relaycommit", 0, FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i s:i }",
                                  "ops", ops,
                                  "name", name,
@@ -2406,7 +2407,7 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
          *
          * Note that now that the root has been marked as removable, no
          * new fences can become ready in the future.  Checks in
-         * fence_request_cb() and relayfence_request_cb() ensure this.
+         * commit_request_cb() and relaycommit_request_cb() ensure this.
          */
 
         if (commit_mgr_iter_not_ready_fences (root->cm,
@@ -2428,7 +2429,7 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *namespace)
         goto done;
     }
 
-    if (!(msg = flux_event_pack ("kvs.namespace.remove", "{ s:s }",
+    if (!(msg = flux_event_pack ("kvs.namespace-remove", "{ s:s }",
                                  "namespace", namespace))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
@@ -2559,8 +2560,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot.*",  setroot_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error.*",    error_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.setroot-*",  setroot_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.error-*",    error_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
                             getroot_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
@@ -2571,20 +2572,20 @@ static const struct flux_msg_handler_spec htab[] = {
                             unwatch_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.sync",
                             sync_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.get",
-                            get_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.lookup",
+                            lookup_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",
                             watch_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",
-                            fence_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.create",
+    { FLUX_MSGTYPE_REQUEST, "kvs.commit",
+                            commit_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.relaycommit", relaycommit_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-create",
                             namespace_create_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.remove",
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",
                             namespace_remove_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.namespace.remove",
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-remove",
                             namespace_remove_event_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.list",
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
                             namespace_list_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
