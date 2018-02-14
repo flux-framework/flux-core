@@ -119,7 +119,7 @@ json_t *fence_get_json_names (fence_t *f)
     return f->names;
 }
 
-int fence_add_request_data (fence_t *f, json_t *ops)
+int fence_add_request_ops (fence_t *f, json_t *ops)
 {
     json_t *op;
     int i;

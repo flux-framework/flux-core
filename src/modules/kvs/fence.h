@@ -22,10 +22,10 @@ json_t *fence_get_json_ops (fence_t *f);
 
 json_t *fence_get_json_names (fence_t *f);
 
-/* fence_add_request_data() should be called with data on each
+/* fence_add_request_ops() should be called with ops on each
  * request, even if ops is NULL
  */
-int fence_add_request_data (fence_t *f, json_t *ops);
+int fence_add_request_ops (fence_t *f, json_t *ops);
 
 /* copy the request message into the fence, where it can be retrieved
  * later.
