@@ -1684,10 +1684,10 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
     }
 }
 
-/* kvs.relayfence (rank 0 only, no response).
+/* kvs.relaycommit (rank 0 only, no response).
  */
-static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1753,11 +1753,11 @@ error:
         flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
 }
 
-/* kvs.fence
+/* kvs.commit
  * Sent from users to local kvs module.
  */
-static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                               const flux_msg_t *msg, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvsroot *root;
@@ -1778,7 +1778,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace, mh, msg, fence_request_cb,
+    if (!(root = getroot (ctx, namespace, mh, msg, commit_request_cb,
                           &stall))) {
         if (stall)
             goto stall;
@@ -1823,7 +1823,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_future_t *f;
 
         /* route to rank 0 as instance owner */
-        if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
+        if (!(f = flux_rpc_pack (h, "kvs.relaycommit", 0, FLUX_RPC_NORESPONSE,
                                  "{ s:O s:s s:s s:i s:i }",
                                  "ops", ops,
                                  "name", name,
@@ -2406,7 +2406,7 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
          *
          * Note that now that the root has been marked as removable, no
          * new fences can become ready in the future.  Checks in
-         * fence_request_cb() and relayfence_request_cb() ensure this.
+         * commit_request_cb() and relaycommit_request_cb() ensure this.
          */
 
         if (commit_mgr_iter_not_ready_fences (root->cm,
@@ -2575,9 +2575,9 @@ static const struct flux_msg_handler_spec htab[] = {
                             get_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",
                             watch_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.fence",
-                            fence_request_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.commit",
+                            commit_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.relaycommit", relaycommit_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace.create",
                             namespace_create_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace.remove",

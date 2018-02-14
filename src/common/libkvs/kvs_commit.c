@@ -46,7 +46,7 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
             errno = EINVAL;
             return NULL;
         }
-        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+        return flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
                                  "{s:s s:i s:s s:i s:O}",
                                  "name", name,
                                  "nprocs", nprocs,
@@ -54,7 +54,7 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                  "flags", flags,
                                  "ops", ops);
     } else {
-        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+        return flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
                                  "{s:s s:i s:s s:i s:[]}",
                                  "name", name,
                                  "nprocs", nprocs,
