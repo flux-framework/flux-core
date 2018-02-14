@@ -256,7 +256,7 @@ done:
     return rc;
 }
 
-static int flux_mrpc_vgetf (flux_mrpc_t *mrpc, const char *fmt, va_list ap)
+static int flux_mrpc_vget_unpack (flux_mrpc_t *mrpc, const char *fmt, va_list ap)
 {
     int rc = -1;
     const char *json_str;
@@ -277,13 +277,13 @@ done:
     return rc;
 }
 
-int flux_mrpc_getf (flux_mrpc_t *mrpc, const char *fmt, ...)
+int flux_mrpc_get_unpack (flux_mrpc_t *mrpc, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_mrpc_vgetf (mrpc, fmt, ap);
+    rc = flux_mrpc_vget_unpack (mrpc, fmt, ap);
     va_end (ap);
 
     return rc;
@@ -505,12 +505,12 @@ done:
     return rc;
 }
 
-flux_mrpc_t *flux_mrpcf (flux_t *h,
-                         const char *topic,
-                         const char *nodeset,
-                         int flags,
-                         const char *fmt,
-                         ...)
+flux_mrpc_t *flux_mrpc_pack (flux_t *h,
+                             const char *topic,
+                             const char *nodeset,
+                             int flags,
+                             const char *fmt,
+                             ...)
 {
     flux_msg_t *msg;
     flux_mrpc_t *rc = NULL;

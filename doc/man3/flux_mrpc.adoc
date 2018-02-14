@@ -15,12 +15,12 @@ SYNOPSIS
 flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *json_str,
                         const char *nodeset, int flags);
 
-flux_mrpc_t *flux_mrpcf (flux_t *h, const char *topic, const char *nodeset,
-                         int flags, const char *fmt, ...);
+flux_mrpc_t *flux_mrpc_pack (flux_t *h, const char *topic, const char *nodeset,
+                             int flags, const char *fmt, ...);
 
 int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str);
 
-int flux_mrpc_getf (flux_mrpc_t *mrpc, const char *fmt, ...);
+int flux_mrpc_get_unpack (flux_mrpc_t *mrpc, const char *fmt, ...);
 
 int flux_mrpc_get_raw (flux_mrpc_t *mrpc, const void **data, int *len);
 
@@ -87,7 +87,7 @@ a response containing an error, `flux_mrpc_get_nodeid()` will succeed,
 while `flux_mrpc_get()` will fail.  This allows the failing nodeid to
 be determined.
 
-`flux_mrpcf()` is a variant of `flux_mrpc()` that constructs a
+`flux_mrpc_pack()` is a variant of `flux_mrpc()` that constructs a
 JSON payload based on the provided _fmt_ string and variable arguments.
 The _fmt_ string and variable arguments are passed internally to
 jansson's `json_pack()` function.  See below for details.
@@ -116,7 +116,7 @@ include::JSON_PACK.adoc[]
 RETURN VALUE
 ------------
 
-`flux_mrpc()` and `flux_mrpcf()` returns a flux_mrpc_t object
+`flux_mrpc()` and `flux_mrpc_pack()` returns a flux_mrpc_t object
 on success.  On error, NULL is returned, and errno is set
 appropriately.
 

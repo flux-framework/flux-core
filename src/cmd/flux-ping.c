@@ -106,14 +106,14 @@ void ping_continuation (flux_mrpc_t *mrpc, void *arg)
     tstat_t *tstat = pdata->tstat;
     uint32_t rolemask, userid;
 
-    if (flux_mrpc_getf (mrpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
-                       "seq", &seq,
-                       "time.tv_sec", &sec,
-                       "time.tv_nsec", &nsec,
-                       "pad", &pad,
-                       "route", &route,
-                       "userid", &userid,
-                       "rolemask", &rolemask) < 0) {
+    if (flux_mrpc_get_unpack (mrpc, "{ s:i s:I s:I s:s s:s s:i s:i !}",
+                              "seq", &seq,
+                              "time.tv_sec", &sec,
+                              "time.tv_nsec", &nsec,
+                              "pad", &pad,
+                              "route", &route,
+                              "userid", &userid,
+                              "rolemask", &rolemask) < 0) {
         log_err ("%s!%s", ctx->rank, ctx->topic);
         goto done;
     }
@@ -173,14 +173,14 @@ void send_ping (struct ping_ctx *ctx)
 
     monotime (&t0);
 
-    mrpc = flux_mrpcf (ctx->h, ctx->topic, ctx->rank, 0,
+    mrpc = flux_mrpc_pack (ctx->h, ctx->topic, ctx->rank, 0,
                            "{s:i s:I s:I s:s}",
                            "seq", ctx->send_count,
                            "time.tv_sec", (uint64_t)t0.tv_sec,
                            "time.tv_nsec", (uint64_t)t0.tv_nsec,
                            "pad", ctx->pad);
     if (!mrpc)
-        log_err_exit ("flux_mrpcf");
+        log_err_exit ("flux_mrpc_pack");
     if (flux_mrpc_aux_set (mrpc, "ping", pdata, ping_data_free) < 0)
         log_err_exit ("flux_mrpc_aux_set");
     if (flux_mrpc_then (mrpc, ping_continuation, ctx) < 0)
