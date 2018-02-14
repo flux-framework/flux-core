@@ -26,8 +26,8 @@ flux_mrpc_t *flux_mrpc (flux_t *h, const char *topic, const char *json_str,
 /* Variant of flux_mrpc that encodes a json payload using jansson
  * pack format strings.
  */
-flux_mrpc_t *flux_mrpcf (flux_t *h, const char *topic, const char *nodeset,
-                         int flags, const char *fmt, ...);
+flux_mrpc_t *flux_mrpc_pack (flux_t *h, const char *topic, const char *nodeset,
+                             int flags, const char *fmt, ...);
 
 /* Destroy an mrpc, invalidating previous payload returned by flux_mrpc_get().
  */
@@ -48,7 +48,7 @@ int flux_mrpc_get (flux_mrpc_t *mrpc, const char **json_str);
  * jansson pack/unpack format strings.  Returned items are
  * invalidated by flux_mrpc_destroy() or flux_mrpc_next().
  */
-int flux_mrpc_getf (flux_mrpc_t *mrpc, const char *fmt, ...);
+int flux_mrpc_get_unpack (flux_mrpc_t *mrpc, const char *fmt, ...);
 
 /* Wait for response if necessary, then decode nodeid request was sent to.
  * This function succedes even if the RPC service is returning an error.

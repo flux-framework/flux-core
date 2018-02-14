@@ -166,7 +166,7 @@ static void thenf_cb (flux_mrpc_t *r, void *arg)
     uint32_t nodeid;
 
     if (flux_mrpc_get_nodeid (r, &nodeid) < 0
-            || flux_mrpc_getf (r, "{}") < 0
+            || flux_mrpc_get_unpack (r, "{}") < 0
             || !nodeset_add_rank (then_ns, nodeid)
             || ++then_count == 128) {
         flux_reactor_stop (flux_get_reactor (h));
@@ -417,84 +417,84 @@ void test_mrpcf (flux_t *h)
     rpctest_set_size (h, 1);
 
     errno = 0;
-    ok (!(r = flux_mrpcf (h, NULL, "all", 0, "{}")) && errno == EINVAL,
-        "flux_mrpcf with NULL topic fails with EINVAL");
+    ok (!(r = flux_mrpc_pack (h, NULL, "all", 0, "{}")) && errno == EINVAL,
+        "flux_mrpc_pack with NULL topic fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_mrpcf (h, "bar", NULL, 0, "{}")) && errno == EINVAL,
-        "flux_mrpcf with NULL nodeset fails with EINVAL");
+    ok (!(r = flux_mrpc_pack (h, "bar", NULL, 0, "{}")) && errno == EINVAL,
+        "flux_mrpc_pack with NULL nodeset fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_mrpcf (h, "bar", "xyz", 0, "{}")) && errno == EINVAL,
-        "flux_mrpcf with bad nodeset fails with EINVAL");
+    ok (!(r = flux_mrpc_pack (h, "bar", "xyz", 0, "{}")) && errno == EINVAL,
+        "flux_mrpc_pack with bad nodeset fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_mrpcf (h, "bar", "all", 0, NULL)) && errno == EINVAL,
-        "flux_mrpcf with NULL fmt fails with EINVAL");
+    ok (!(r = flux_mrpc_pack (h, "bar", "all", 0, NULL)) && errno == EINVAL,
+        "flux_mrpc_pack with NULL fmt fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_mrpcf (h, "bar", "all", 0, "")) && errno == EINVAL,
-        "flux_mrpcf with empty string fmt fails with EINVAL");
+    ok (!(r = flux_mrpc_pack (h, "bar", "all", 0, "")) && errno == EINVAL,
+        "flux_mrpc_pack with empty string fmt fails with EINVAL");
     errno = 0;
-    ok (!(r = flux_mrpcf (h, "bar", "all", 0, "{ s }", "foo")) && errno == EINVAL,
-        "flux_mrpcf with bad string fmt fails with EINVAL");
+    ok (!(r = flux_mrpc_pack (h, "bar", "all", 0, "{ s }", "foo")) && errno == EINVAL,
+        "flux_mrpc_pack with bad string fmt fails with EINVAL");
 
     /* working empty payload RPC */
     old_count = hello_count;
-    ok ((r = flux_mrpcf (h, "rpcftest.hello", "all", 0, "{}")) != NULL,
-        "flux_mrpcf all works");
+    ok ((r = flux_mrpc_pack (h, "rpcftest.hello", "all", 0, "{}")) != NULL,
+        "flux_mrpc_pack all works");
     if (!r)
         BAIL_OUT ("can't continue without successful rpc call");
     check_count = 0;
     while (flux_mrpc_check (r) == false)
         check_count++;
     diag ("flux_mrpc_check returned true after %d tries", check_count);
-    ok (flux_mrpc_getf (r, "{}") == 0,
-        "flux_mrpc_getf works");
+    ok (flux_mrpc_get_unpack (r, "{}") == 0,
+        "flux_mrpc_get_unpack works");
     ok (hello_count == old_count + 1,
         "rpc was called once");
     flux_mrpc_destroy (r);
 
     /* working empty payload RPC for "any" */
     old_count = hello_count;
-    ok ((r = flux_mrpcf (h, "rpcftest.hello", "any", 0, "{}")) != NULL,
-        "flux_mrpcf any works");
+    ok ((r = flux_mrpc_pack (h, "rpcftest.hello", "any", 0, "{}")) != NULL,
+        "flux_mrpc_pack any works");
     if (!r)
         BAIL_OUT ("can't continue without successful rpc call");
     check_count = 0;
     while (flux_mrpc_check (r) == false)
         check_count++;
     diag ("flux_mrpc_check returned true after %d tries", check_count);
-    ok (flux_mrpc_getf (r, "{}") == 0,
-        "flux_mrpc_getf works");
+    ok (flux_mrpc_get_unpack (r, "{}") == 0,
+        "flux_mrpc_get_unpack works");
     ok (hello_count == old_count + 1,
         "rpc was called once");
     flux_mrpc_destroy (r);
 
     /* working empty payload RPC for "upstream" */
     old_count = hello_count;
-    ok ((r = flux_mrpcf (h, "rpcftest.hello", "upstream", 0, "{}")) != NULL,
-        "flux_mrpcf upstream works");
+    ok ((r = flux_mrpc_pack (h, "rpcftest.hello", "upstream", 0, "{}")) != NULL,
+        "flux_mrpc_pack upstream works");
     if (!r)
         BAIL_OUT ("can't continue without successful rpc call");
     check_count = 0;
     while (flux_mrpc_check (r) == false)
         check_count++;
     diag ("flux_mrpc_check returned true after %d tries", check_count);
-    ok (flux_mrpc_getf (r, "{}") == 0,
-        "flux_mrpc_getf works");
+    ok (flux_mrpc_get_unpack (r, "{}") == 0,
+        "flux_mrpc_get_unpack works");
     ok (hello_count == old_count + 1,
         "rpc was called once");
     flux_mrpc_destroy (r);
 
     /* cause remote EPROTO (unexpected payload) - picked up in _getf() */
-    ok ((r = flux_mrpcf (h, "rpcftest.hello", "all", 0,
-                              "{ s:i }", "foo", 42)) != NULL,
-        "flux_mrpcf all works");
+    ok ((r = flux_mrpc_pack (h, "rpcftest.hello", "all", 0,
+                             "{ s:i }", "foo", 42)) != NULL,
+        "flux_mrpc_pack all works");
     check_count = 0;
     while (flux_mrpc_check (r) == false)
         check_count++;
     diag ("flux_mrpc_check returned true after %d tries", check_count);
     errno = 0;
-    ok (flux_mrpc_getf (r, "{}") < 0
+    ok (flux_mrpc_get_unpack (r, "{}") < 0
         && errno == EPROTO,
-        "flux_mrpc_getf fails with EPROTO (unexpected payload)");
+        "flux_mrpc_get_unpack fails with EPROTO (unexpected payload)");
     flux_mrpc_destroy (r);
 
     /* fake that we have a larger session */
@@ -502,17 +502,17 @@ void test_mrpcf (flux_t *h)
 
     /* repeat working empty-payload RPC test (now with 128 nodes) */
     old_count = hello_count;
-    ok ((r = flux_mrpcf (h, "rpcftest.hello", "all", 0, "{}")) != NULL,
-        "flux_mrpcf [0-%d] works",
+    ok ((r = flux_mrpc_pack (h, "rpcftest.hello", "all", 0, "{}")) != NULL,
+        "flux_mrpc_pack [0-%d] works",
         fake_size - 1);
     count = 0;
     do {
-        if (flux_mrpc_getf (r, "{}") < 0)
+        if (flux_mrpc_get_unpack (r, "{}") < 0)
             break;
         count++;
     } while (flux_mrpc_next (r) == 0);
     ok (count == fake_size,
-        "flux_mrpc_getf succeded %d times", fake_size);
+        "flux_mrpc_get_unpack succeded %d times", fake_size);
 
     cmp_ok (hello_count - old_count, "==", fake_size,
         "rpc was called %d times", fake_size);
@@ -520,25 +520,25 @@ void test_mrpcf (flux_t *h)
 
     /* same with a subset */
     old_count = hello_count;
-    ok ((r = flux_mrpcf (h, "rpcftest.hello", "[0-63]", 0, "{}")) != NULL,
-        "flux_mrpcf [0-%d] works", 64 - 1);
+    ok ((r = flux_mrpc_pack (h, "rpcftest.hello", "[0-63]", 0, "{}")) != NULL,
+        "flux_mrpc_pack [0-%d] works", 64 - 1);
     count = 0;
     do {
         if (flux_mrpc_get_nodeid (r, &nodeid) < 0
-                || flux_mrpc_getf (r, "{}") < 0 || nodeid != count)
+                || flux_mrpc_get_unpack (r, "{}") < 0 || nodeid != count)
             break;
         count++;
     } while (flux_mrpc_next (r) == 0);
     ok (count == 64,
-        "flux_mrpc_getf succeded %d times, with correct nodeid map", 64);
+        "flux_mrpc_get_unpack succeded %d times, with correct nodeid map", 64);
 
     cmp_ok (hello_count - old_count, "==", 64,
         "rpc was called %d times", 64);
     flux_mrpc_destroy (r);
 
     /* same with echo payload */
-    ok ((r = flux_mrpcf (h, "rpctest.echo", "[0-63]", 0, "{}")) != NULL,
-        "flux_mrpcf [0-%d] ok", 64 - 1);
+    ok ((r = flux_mrpc_pack (h, "rpctest.echo", "[0-63]", 0, "{}")) != NULL,
+        "flux_mrpc_pack [0-%d] ok", 64 - 1);
     count = 0;
     do {
         if (flux_mrpc_get (r, &json_str) < 0
@@ -552,8 +552,8 @@ void test_mrpcf (flux_t *h)
 
     /* detect partial failure without response */
     nodeid_fake_error = 20;
-    ok ((r = flux_mrpcf (h, "rpcftest.nodeid", "[0-63]", 0, "{}")) != NULL,
-        "flux_mrpcf [0-%d] ok", 64 - 1);
+    ok ((r = flux_mrpc_pack (h, "rpcftest.nodeid", "[0-63]", 0, "{}")) != NULL,
+        "flux_mrpc_pack [0-%d] ok", 64 - 1);
     int fail_count = 0;
     uint32_t fail_nodeid_last = FLUX_NODEID_ANY;
     int fail_errno_last = 0;
@@ -561,7 +561,7 @@ void test_mrpcf (flux_t *h)
     int flags;
     do {
         if (flux_mrpc_get_nodeid (r, &nodeid) < 0
-            || flux_mrpc_getf (r, "{ s:i s:i s:i !}",
+            || flux_mrpc_get_unpack (r, "{ s:i s:i s:i !}",
                               "errnum", &errnum,
                               "nodeid", &nodeid,
                               "flags", &flags) < 0
@@ -572,15 +572,15 @@ void test_mrpcf (flux_t *h)
         }
     } while (flux_mrpc_next (r) == 0);
     ok (fail_count == 1 && fail_nodeid_last == 20 && fail_errno_last == EPERM,
-        "flux_mrpc_getf correctly reports single error");
+        "flux_mrpc_get_unpack correctly reports single error");
     flux_mrpc_destroy (r);
 
     /* test that a fatal handle error causes flux_mrpc_next () to fail */
     flux_fatal_set (h, NULL, NULL); /* reset handler and flag */
     ok (flux_fatality (h) == false,
         "flux_fatality says all is well");
-    ok ((r = flux_mrpcf (h, "rpctest.nodeid", "[0-1]", 0, "{}")) != NULL,
-        "flux_mrpcf [0-1] ok");
+    ok ((r = flux_mrpc_pack (h, "rpctest.nodeid", "[0-1]", 0, "{}")) != NULL,
+        "flux_mrpc_pack [0-1] ok");
     flux_fatal_error (h, __FUNCTION__, "Foo");
     ok (flux_fatality (h) == true,
         "flux_fatality shows simulated failure");
@@ -599,8 +599,8 @@ void test_mrpcf_then (flux_t *h)
     ok ((then_ns = nodeset_create ()) != NULL,
         "nodeset created ok");
     then_count = 0;
-    ok ((then_r = flux_mrpcf (h, "rpcftest.hello", "[0-127]", 0, "{}")) != NULL,
-        "flux_mrpcf [0-127] ok");
+    ok ((then_r = flux_mrpc_pack (h, "rpcftest.hello", "[0-127]", 0, "{}")) != NULL,
+        "flux_mrpc_pack [0-127] ok");
     ok (flux_mrpc_then (then_r, thenf_cb, h) == 0,
         "flux_mrpc_then works");
     ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,

@@ -285,16 +285,16 @@ static void request_hwloc_reload (flux_t *h, const char *nodeset,
     flux_mrpc_t *mrpc;
 
     if (!walk_topology) {
-        if (!(mrpc = flux_mrpcf (h, "resource-hwloc.reload",
-                                 nodeset, 0, "{}")))
-            log_err_exit ("flux_mrpcf");
+        if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload",
+                                     nodeset, 0, "{}")))
+            log_err_exit ("flux_mrpc_pack");
     }
     else {
         bool v = hwloc_reload_bool_value (walk_topology);
 
-        if (!(mrpc = flux_mrpcf (h, "resource-hwloc.reload", nodeset, 0,
-                                 "{ s:b }", "walk_topology", v)))
-            log_err_exit ("flux_mrpcf");
+        if (!(mrpc = flux_mrpc_pack (h, "resource-hwloc.reload", nodeset, 0,
+                                     "{ s:b }", "walk_topology", v)))
+            log_err_exit ("flux_mrpc_pack");
     }
 
     do {
