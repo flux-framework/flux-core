@@ -974,21 +974,20 @@ static void commit_apply (commit_t *c)
      */
 done:
     if (errnum == 0) {
-        fence_t *f = commit_get_fence (c);
+        json_t *names = commit_get_names (c);
         int count;
-        if ((count = json_array_size (fence_get_json_names (f))) > 1) {
+        if ((count = json_array_size (names)) > 1) {
             int opcount = 0;
-            opcount = json_array_size (fence_get_json_ops (f));
+            opcount = json_array_size (commit_get_ops (c));
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
         setroot (ctx, root, commit_get_newroot_ref (c), root->seq + 1);
-        setroot_event_send (ctx, root, fence_get_json_names (f));
+        setroot_event_send (ctx, root, names);
     } else {
-        fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, root->namespace, fence_get_json_names (f),
+        error_event_send (ctx, root->namespace, commit_get_names (c),
                           errnum);
     }
     wait_destroy (wait);

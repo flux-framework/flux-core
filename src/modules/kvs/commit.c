@@ -61,8 +61,10 @@ struct commit_mgr {
 struct commit {
     int errnum;
     int aux_errnum;
-    fence_t *f;
     int blocked:1;
+    json_t *ops;
+    json_t *names;
+    int flags;
     json_t *rootcpy;   /* working copy of root dir */
     blobref_t newroot;
     zlist_t *missing_refs_list;
@@ -81,13 +83,13 @@ struct commit {
 static void commit_destroy (commit_t *c)
 {
     if (c) {
+        json_decref (c->ops);
+        json_decref (c->names);
         json_decref (c->rootcpy);
         if (c->missing_refs_list)
             zlist_destroy (&c->missing_refs_list);
         if (c->dirty_cache_entries_list)
             zlist_destroy (&c->dirty_cache_entries_list);
-        /* fence destroyed through management of fence, not commit_t's
-         * responsibility */
         free (c);
     }
 }
@@ -101,7 +103,15 @@ static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
         saved_errno = ENOMEM;
         goto error;
     }
-    c->f = f;
+    if (!(c->ops = json_copy (fence_get_json_ops (f)))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(c->names = json_copy (fence_get_json_names (f)))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    c->flags = fence_get_flags (f);
     if (!(c->missing_refs_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
@@ -135,9 +145,19 @@ int commit_set_aux_errnum (commit_t *c, int errnum)
     return c->aux_errnum;
 }
 
-fence_t *commit_get_fence (commit_t *c)
+json_t *commit_get_ops (commit_t *c)
 {
-    return c->f;
+    return c->ops;
+}
+
+json_t *commit_get_names (commit_t *c)
+{
+    return c->names;
+}
+
+int commit_get_flags (commit_t *c)
+{
+    return c->flags;
 }
 
 const char *commit_get_namespace (commit_t *c)
@@ -741,8 +761,7 @@ commit_process_t commit_process (commit_t *c,
              */
             json_t *op, *dirent;
             const char *missing_ref = NULL;
-            json_t *ops = fence_get_json_ops (c->f);
-            int i, len = json_array_size (ops);
+            int i, len = json_array_size (c->ops);
             const char *key;
             int flags;
 
@@ -752,7 +771,7 @@ commit_process_t commit_process (commit_t *c,
 
             for (i = 0; i < len; i++) {
                 missing_ref = NULL;
-                op = json_array_get (ops, i);
+                op = json_array_get (c->ops, i);
                 assert (op != NULL);
                 if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
                     c->errnum = errno;
@@ -1144,6 +1163,63 @@ int commit_mgr_ready_commit_count (commit_mgr_t *cm)
     return zlist_size (cm->ready);
 }
 
+static int commit_merge (commit_t *dest, commit_t *src)
+{
+    json_t *names = NULL;
+    json_t *ops = NULL;
+    int i, len, saved_errno;
+
+    if ((dest->flags & FLUX_KVS_NO_MERGE) || (src->flags & FLUX_KVS_NO_MERGE))
+        return 0;
+
+    if ((len = json_array_size (src->names))) {
+        if (!(names = json_copy (dest->names))) {
+            saved_errno = ENOMEM;
+            goto error;
+        }
+        for (i = 0; i < len; i++) {
+            json_t *name;
+            if ((name = json_array_get (src->names, i))) {
+                if (json_array_append (names, name) < 0) {
+                    saved_errno = ENOMEM;
+                    goto error;
+                }
+            }
+        }
+    }
+    if ((len = json_array_size (src->ops))) {
+        if (!(ops = json_copy (dest->ops))) {
+            saved_errno = ENOMEM;
+            goto error;
+        }
+        for (i = 0; i < len; i++) {
+            json_t *op;
+            if ((op = json_array_get (src->ops, i))) {
+                if (json_array_append (ops, op) < 0) {
+                    saved_errno = ENOMEM;
+                    goto error;
+                }
+            }
+        }
+    }
+
+    if (names) {
+        json_decref (dest->names);
+        dest->names = names;
+    }
+    if (ops) {
+        json_decref (dest->ops);
+        dest->ops = ops;
+    }
+    return 1;
+
+error:
+    json_decref (names);
+    json_decref (ops);
+    errno = saved_errno;
+    return -1;
+}
+
 /* Merge ready commits that are mergeable, where merging consists of
  * popping the "donor" commit off the ready list, and appending its
  * ops to the top commit.  The top commit can be appended to if it
@@ -1161,6 +1237,7 @@ int commit_mgr_ready_commit_count (commit_mgr_t *cm)
  * If we were to merge commit #1 and commit #3, A=2 would be set after
  * A=3.
  */
+
 int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
 {
     commit_t *c = zlist_first (cm->ready);
@@ -1170,12 +1247,12 @@ int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
     if (c
         && c->errnum == 0
         && c->state <= COMMIT_STATE_APPLY_OPS
-        && !(fence_get_flags (c->f) & FLUX_KVS_NO_MERGE)) {
+        && !(c->flags & FLUX_KVS_NO_MERGE)) {
         commit_t *nc;
         while ((nc = zlist_next (cm->ready))) {
             int ret;
 
-            if ((ret = fence_merge (c->f, nc->f)) < 0)
+            if ((ret = commit_merge (c, nc)) < 0)
                 return -1;
 
             /* if return == 0, we've merged as many as we currently
@@ -1183,7 +1260,7 @@ int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
             if (!ret)
                 break;
 
-            /* Merged fence, remove off ready list */
+            /* Merged commit, remove off ready list */
             zlist_remove (cm->ready, nc);
         }
     }
