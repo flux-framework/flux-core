@@ -216,7 +216,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
             goto cleanup;
         }
 
-        if (flux_event_subscribe (ctx->h, "kvs.namespace.remove") < 0) {
+        if (flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -224,7 +224,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
         ctx->events_init = true;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot.%s", namespace) < 0) {
+    if (asprintf (&setroot_topic, "kvs.setroot-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -234,7 +234,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *namespace)
         goto cleanup;
     }
 
-    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -257,7 +257,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *namespace)
     char *error_topic = NULL;
     int rc = -1;
 
-    if (asprintf (&setroot_topic, "kvs.setroot.%s", namespace) < 0) {
+    if (asprintf (&setroot_topic, "kvs.setroot-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -267,7 +267,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *namespace)
         goto cleanup;
     }
 
-    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error-%s", namespace) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -778,7 +778,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         root_dir = nullobj;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot.%s", root->namespace) < 0) {
+    if (asprintf (&setroot_topic, "kvs.setroot-%s", root->namespace) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -819,7 +819,7 @@ static int error_event_send (kvs_ctx_t *ctx, const char *namespace,
     char *error_topic = NULL;
     int saved_errno, rc = -1;
 
-    if (asprintf (&error_topic, "kvs.error.%s", namespace) < 0) {
+    if (asprintf (&error_topic, "kvs.error-%s", namespace) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -2429,7 +2429,7 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *namespace)
         goto done;
     }
 
-    if (!(msg = flux_event_pack ("kvs.namespace.remove", "{ s:s }",
+    if (!(msg = flux_event_pack ("kvs.namespace-remove", "{ s:s }",
                                  "namespace", namespace))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);
@@ -2560,8 +2560,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot.*",  setroot_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error.*",    error_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.setroot-*",  setroot_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.error-*",    error_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
                             getroot_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
@@ -2579,13 +2579,13 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",
                             commit_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.relaycommit", relaycommit_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.create",
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-create",
                             namespace_create_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.remove",
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",
                             namespace_remove_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.namespace.remove",
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-remove",
                             namespace_remove_event_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.namespace.list",
+    { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
                             namespace_list_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };

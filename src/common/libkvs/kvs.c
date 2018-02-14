@@ -47,7 +47,7 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *namespace,
     }
 
     /* N.B. owner cast to int */
-    return flux_rpc_pack (h, "kvs.namespace.create", 0, 0,
+    return flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
                           "{ s:s s:i s:i }",
                           "namespace", namespace,
                           "owner", owner,
@@ -61,7 +61,7 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *namespace)
         return NULL;
     }
 
-    return flux_rpc_pack (h, "kvs.namespace.remove", 0, 0,
+    return flux_rpc_pack (h, "kvs.namespace-remove", 0, 0,
                           "{ s:s }",
                           "namespace", namespace);
 }
@@ -76,7 +76,7 @@ flux_kvs_namespace_itr_t *flux_kvs_namespace_list (flux_t *h)
         errno = EINVAL;
         goto error;
     }
-    if (!(f = flux_rpc (h, "kvs.namespace.list", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "kvs.namespace-list", NULL, FLUX_NODEID_ANY, 0)))
         goto error;
     if (flux_rpc_get_unpack (f, "{ s:O }", "namespaces", &array) < 0)
         goto error;
