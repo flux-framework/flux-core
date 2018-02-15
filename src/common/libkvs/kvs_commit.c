@@ -37,6 +37,11 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
 {
     const char *namespace;
 
+    if (!name || nprocs <= 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (!(namespace = flux_kvs_get_namespace (h)))
         return NULL;
 
