@@ -811,7 +811,7 @@ commit_process_t commit_process (commit_t *c,
                                           false,
                                           c->newroot,
                                           &entry)) < 0)
-                     c->errnum = errno;
+                c->errnum = errno;
             else if (sret
                      && zlist_push (c->dirty_cache_entries_list, entry) < 0) {
                 commit_cleanup_dirty_cache_entry (c, entry);
