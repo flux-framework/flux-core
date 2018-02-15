@@ -35,6 +35,9 @@ void basic_api_tests (void)
     flux_msg_t *request;
     int count = 0;
 
+    ok (fence_create (NULL, 0, 0) == NULL,
+        "fence_create fails on bad input");
+
     ok ((f = fence_create ("foo", 1, 3)) != NULL,
         "fence_create works");
 

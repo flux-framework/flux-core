@@ -60,10 +60,14 @@ void fence_destroy (fence_t *f)
 
 fence_t *fence_create (const char *name, int nprocs, int flags)
 {
-    fence_t *f;
+    fence_t *f = NULL;
     json_t *s = NULL;
     int saved_errno;
 
+    if (!name || nprocs <= 0) {
+        saved_errno = EINVAL;
+        goto error;
+    }
     if (!(f = calloc (1, sizeof (*f)))
         || !(f->ops = json_array ())
         || !(f->names = json_array ())
@@ -74,16 +78,14 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     f->nprocs = nprocs;
     f->flags = flags;
     f->aux_int = 0;
-    if (name) {
-        if (!(s = json_string (name))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
-        if (json_array_append_new (f->names, s) < 0) {
-            json_decref (s);
-            saved_errno = ENOMEM;
-            goto error;
-        }
+    if (!(s = json_string (name))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (json_array_append_new (f->names, s) < 0) {
+        json_decref (s);
+        saved_errno = ENOMEM;
+        goto error;
     }
 
     return f;
