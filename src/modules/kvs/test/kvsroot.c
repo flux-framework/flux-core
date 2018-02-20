@@ -180,7 +180,7 @@ void basic_commit_mgr_tests (void)
     /* not a real operation */
     json_array_append_new (ops, json_string ("foo"));
 
-    fence_add_request_data (f, ops);
+    fence_add_request_ops (f, ops);
 
     json_decref (ops);
 

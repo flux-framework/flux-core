@@ -1734,8 +1734,8 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (fence_add_request_data (f, ops) < 0) {
-        flux_log_error (h, "%s: fence_add_request_data", __FUNCTION__);
+    if (fence_add_request_ops (f, ops) < 0) {
+        flux_log_error (h, "%s: fence_add_request_ops", __FUNCTION__);
         goto error;
     }
 
@@ -1809,8 +1809,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (fence_add_request_copy (f, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (fence_add_request_data (f, ops) < 0) {
-            flux_log_error (h, "%s: fence_add_request_data", __FUNCTION__);
+        if (fence_add_request_ops (f, ops) < 0) {
+            flux_log_error (h, "%s: fence_add_request_ops", __FUNCTION__);
             goto error;
         }
 

@@ -739,55 +739,53 @@ commit_process_t commit_process (commit_t *c,
              * the commit to be self-contained in the rootcpy until it
              * is unrolled later on.
              */
-            if (fence_get_json_ops (c->f)) {
-                json_t *op, *dirent;
-                const char *missing_ref = NULL;
-                json_t *ops = fence_get_json_ops (c->f);
-                int i, len = json_array_size (ops);
-                const char *key;
-                int flags;
+            json_t *op, *dirent;
+            const char *missing_ref = NULL;
+            json_t *ops = fence_get_json_ops (c->f);
+            int i, len = json_array_size (ops);
+            const char *key;
+            int flags;
 
-                /* Caller didn't call commit_iter_missing_refs() */
-                if (zlist_first (c->missing_refs_list))
-                    goto stall_load;
+            /* Caller didn't call commit_iter_missing_refs() */
+            if (zlist_first (c->missing_refs_list))
+                goto stall_load;
 
-                for (i = 0; i < len; i++) {
-                    missing_ref = NULL;
-                    op = json_array_get (ops, i);
-                    assert (op != NULL);
-                    if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
-                        c->errnum = errno;
+            for (i = 0; i < len; i++) {
+                missing_ref = NULL;
+                op = json_array_get (ops, i);
+                assert (op != NULL);
+                if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
+                    c->errnum = errno;
+                    break;
+                }
+                if (commit_link_dirent (c,
+                                        current_epoch,
+                                        c->rootcpy,
+                                        key,
+                                        dirent,
+                                        flags,
+                                        &missing_ref) < 0) {
+                    c->errnum = errno;
+                    break;
+                }
+                if (missing_ref) {
+                    if (zlist_push (c->missing_refs_list,
+                                    (void *)missing_ref) < 0) {
+                        c->errnum = ENOMEM;
                         break;
                     }
-                    if (commit_link_dirent (c,
-                                            current_epoch,
-                                            c->rootcpy,
-                                            key,
-                                            dirent,
-                                            flags,
-                                            &missing_ref) < 0) {
-                        c->errnum = errno;
-                        break;
-                    }
-                    if (missing_ref) {
-                        if (zlist_push (c->missing_refs_list,
-                                        (void *)missing_ref) < 0) {
-                            c->errnum = ENOMEM;
-                            break;
-                        }
-                    }
                 }
-
-                if (c->errnum != 0) {
-                    /* empty missing_refs_list to prevent mistakes later */
-                    while ((missing_ref = zlist_pop (c->missing_refs_list)));
-                    return COMMIT_PROCESS_ERROR;
-                }
-
-                if (zlist_first (c->missing_refs_list))
-                    goto stall_load;
-
             }
+
+            if (c->errnum != 0) {
+                /* empty missing_refs_list to prevent mistakes later */
+                while ((missing_ref = zlist_pop (c->missing_refs_list)));
+                return COMMIT_PROCESS_ERROR;
+            }
+
+            if (zlist_first (c->missing_refs_list))
+                goto stall_load;
+
             c->state = COMMIT_STATE_STORE;
             /* fallthrough */
         }
@@ -811,7 +809,7 @@ commit_process_t commit_process (commit_t *c,
                                           false,
                                           c->newroot,
                                           &entry)) < 0)
-                     c->errnum = errno;
+                c->errnum = errno;
             else if (sret
                      && zlist_push (c->dirty_cache_entries_list, entry) < 0) {
                 commit_cleanup_dirty_cache_entry (c, entry);

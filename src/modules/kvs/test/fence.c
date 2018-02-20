@@ -35,6 +35,9 @@ void basic_api_tests (void)
     flux_msg_t *request;
     int count = 0;
 
+    ok (fence_create (NULL, 0, 0) == NULL,
+        "fence_create fails on bad input");
+
     ok ((f = fence_create ("foo", 1, 3)) != NULL,
         "fence_create works");
 
@@ -62,8 +65,8 @@ void basic_api_tests (void)
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "initial fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "initial fence_add_request_ops add works");
 
     ok ((o = fence_get_json_ops (f)) != NULL,
         "initial fence_get_json_ops call works");
@@ -71,9 +74,9 @@ void basic_api_tests (void)
     ok (json_equal (ops, o) == true,
         "initial fence_get_json_ops match");
 
-    ok (fence_add_request_data (f, ops) < 0
+    ok (fence_add_request_ops (f, ops) < 0
         && errno == EOVERFLOW,
-        "fence_add_request_data fails with EOVERFLOW when exceeding nprocs");
+        "fence_add_request_ops fails with EOVERFLOW when exceeding nprocs");
 
     json_decref (ops);
 
@@ -123,8 +126,8 @@ void ops_tests (void)
     ok (fence_count_reached (f) == false,
         "initial fence_count_reached() is false");
 
-    ok (fence_add_request_data (f, NULL) == 0,
-        "fence_add_request_data works with NULL ops");
+    ok (fence_add_request_ops (f, NULL) == 0,
+        "fence_add_request_ops works with NULL ops");
 
     ok (fence_count_reached (f) == false,
         "fence_count_reached() is still false");
@@ -133,8 +136,8 @@ void ops_tests (void)
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "fence_add_request_ops add works");
 
     json_decref (ops);
 
@@ -145,8 +148,8 @@ void ops_tests (void)
     ops = json_array ();
     json_array_append_new (ops, json_string ("B"));
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "fence_add_request_ops add works");
 
     json_decref (ops);
 
@@ -222,8 +225,8 @@ fence_t *create_fence (const char *name, const char *opname, int flags)
     ops = json_array ();
     json_array_append_new (ops, json_string (opname));
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "fence_add_request_ops add works");
 
     json_decref (ops);
 

@@ -205,8 +205,8 @@ void commit_mgr_basic_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "fence_add_request_ops add works");
 
     json_decref (ops);
 
@@ -275,8 +275,8 @@ void create_ready_commit (commit_mgr_t *cm,
     ops = json_array ();
     ops_append (ops, key, val, op_flags);
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "fence_add_request_ops add works");
 
     json_decref (ops);
 
@@ -870,8 +870,8 @@ void commit_basic_iter_not_ready_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    ok (fence_add_request_data (f1, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f1, ops) == 0,
+        "fence_add_request_ops add works");
 
     json_decref (ops);
 
@@ -1367,8 +1367,8 @@ void commit_process_malformed_operation (void)
     ok ((f = fence_create ("malformed", 1, 0)) != NULL,
         "fence_create works");
 
-    ok (fence_add_request_data (f, ops) == 0,
-        "fence_add_request_data add works");
+    ok (fence_add_request_ops (f, ops) == 0,
+        "fence_add_request_ops add works");
 
     /* Submit fence_t to commit_mgr
      */
