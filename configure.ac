@@ -18,7 +18,7 @@ X_AC_EXPAND_INSTALL_DIRS
 ##
 # Automake support
 ##
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE([subdir-objects tar-pax])
 AM_SILENT_RULES([yes])
 AM_CONFIG_HEADER([config/config.h])
 AM_MAINTAINER_MODE
@@ -235,6 +235,9 @@ AC_PKGCONFIG
 AS_VAR_SET(fluxrcdir, $sysconfdir/flux)
 AC_SUBST(fluxrcdir)
 
+AS_VAR_SET(fluxcfdir, $sysconfdir/flux/conf.d)
+AC_SUBST(fluxcfdir)
+
 AS_VAR_SET(fluxlibexecdir, $libexecdir/flux)
 AC_SUBST(fluxlibexecdir)
 
@@ -296,6 +299,7 @@ AC_CONFIG_FILES( \
   src/common/liboptparse/Makefile \
   src/common/libjobspec/Makefile \
   src/common/libjobspec/flux-jobspec.pc \
+  src/common/libtomlc99/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \

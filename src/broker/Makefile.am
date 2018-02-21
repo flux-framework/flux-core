@@ -43,7 +43,11 @@ flux_broker_SOURCES = \
 	ping.h \
 	ping.c \
 	rusage.h \
-	rusage.c
+	rusage.c \
+	boot_config.h \
+	boot_config.c \
+	boot_pmi.h \
+	boot_pmi.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-core.la \

@@ -49,6 +49,7 @@ struct endpoint {
 
 struct overlay_struct {
     flux_sec_t *sec;
+    bool sec_initialized;
     flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
     flux_msg_handler_t *heartbeat;
@@ -571,6 +572,18 @@ error:
     return -1;
 }
 
+static int overlay_sec_init (overlay_t *ov)
+{
+    if (!ov->sec_initialized) {
+        if (flux_sec_comms_init (ov->sec) < 0) {
+            log_msg ("flux_sec_comms_init: %s", flux_sec_errstr (ov->sec));
+            return -1;
+        }
+        ov->sec_initialized = true;
+    }
+    return 0;
+}
+
 int overlay_connect (overlay_t *ov)
 {
     int rc = -1;
@@ -580,6 +593,8 @@ int overlay_connect (overlay_t *ov)
         errno = EINVAL;
         goto done;
     }
+    if (overlay_sec_init (ov) < 0)
+        goto done;
     if (ov->event && !ov->event->zs && ov->rank > 0)
         connect_event_sub (ov, ov->event);
     if (ov->parent && !ov->parent->zs) {
@@ -599,6 +614,8 @@ int overlay_bind (overlay_t *ov)
         errno = EINVAL;
         goto done;
     }
+    if (overlay_sec_init (ov) < 0)
+        goto done;
     if (ov->event && !ov->event->zs && ov->rank == 0)
         bind_event_pub (ov, ov->event);
 
