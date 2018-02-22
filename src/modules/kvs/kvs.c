@@ -974,21 +974,20 @@ static void commit_apply (commit_t *c)
      */
 done:
     if (errnum == 0) {
-        fence_t *f = commit_get_fence (c);
+        json_t *names = commit_get_names (c);
         int count;
-        if ((count = json_array_size (fence_get_json_names (f))) > 1) {
+        if ((count = json_array_size (names)) > 1) {
             int opcount = 0;
-            opcount = json_array_size (fence_get_json_ops (f));
+            opcount = json_array_size (commit_get_ops (c));
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
                       count, opcount);
         }
         setroot (ctx, root, commit_get_newroot_ref (c), root->seq + 1);
-        setroot_event_send (ctx, root, fence_get_json_names (f));
+        setroot_event_send (ctx, root, names);
     } else {
-        fence_t *f = commit_get_fence (c);
         flux_log (ctx->h, LOG_ERR, "commit failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, root->namespace, fence_get_json_names (f),
+        error_event_send (ctx, root->namespace, commit_get_names (c),
                           errnum);
     }
     wait_destroy (wait);
@@ -2374,12 +2373,20 @@ error:
 static int root_remove_process_fences (fence_t *f, void *data)
 {
     struct kvs_cb_data *cbd = data;
+    json_t *names = NULL;
 
     /* Not ready fences will never finish, must alert them with
      * ENOTSUP that namespace removed.  Final call to
      * commit_mgr_remove_fence() done in finalize_fences_bynames() */
-    finalize_fences_bynames (cbd->ctx, cbd->root, fence_get_json_names (f),
-                             ENOTSUP);
+
+    if (!(names = json_pack ("[ s ]", fence_get_name (f)))) {
+        flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    finalize_fences_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
+    json_decref (names);
     return 0;
 }
 

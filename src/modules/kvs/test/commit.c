@@ -141,7 +141,6 @@ void commit_mgr_basic_tests (void)
     commit_mgr_t *cm;
     commit_t *c;
     fence_t *f, *tf;
-    fence_t *f1, *f2;
     blobref_t rootref;
 
     ok (commit_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
@@ -241,20 +240,6 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_lookup_fence (cm, "fence1") == NULL,
         "commit_mgr_lookup_fence can't find removed fence");
 
-    ok ((f1 = fence_create ("fenceF1", 1, 0)) != NULL,
-        "fence_create works");
-    ok ((f2 = fence_create ("fenceF2", 1, 0)) != NULL,
-        "fence_create works");
-    ok (fence_merge (f1, f2) == 1,
-        "fence_merge works");
-
-    ok (commit_mgr_add_fence (cm, f1) < 0
-        && errno == EINVAL,
-        "commit_mgr_add_fence fails on fence with multiple names");
-
-    fence_destroy (f1);
-    fence_destroy (f2);
-
     commit_mgr_destroy (cm);
     cache_destroy (cache);
 }
@@ -293,29 +278,29 @@ void create_ready_commit (commit_mgr_t *cm,
 void verify_ready_commit (commit_mgr_t *cm,
                           json_t *names,
                           json_t *ops,
+                          int flags,
                           const char *extramsg)
 {
     json_t *o;
     commit_t *c;
-    fence_t *f;
 
     ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
         "commit_mgr_get_ready_commit returns ready commit");
 
-    ok ((f = commit_get_fence (c)) != NULL,
-        "commit_get_fence returns commit fence");
-
-    ok ((o = fence_get_json_names (f)) != NULL,
-        "fence_get_json_names works");
+    ok ((o = commit_get_names (c)) != NULL,
+        "commit_get_names works");
 
     ok (json_equal (names, o) == true,
         "names match %s", extramsg);
 
-    ok ((o = fence_get_json_ops (f)) != NULL,
-        "fence_get_json_ops works");
+    ok ((o = commit_get_ops (c)) != NULL,
+        "commit_get_ops works");
 
     ok (json_equal (ops, o) == true,
         "ops match %s", extramsg);
+
+    ok (commit_get_flags (c) == flags,
+        "flags do not match");
 }
 
 void clear_ready_commits (commit_mgr_t *cm)
@@ -358,7 +343,7 @@ void commit_mgr_merge_tests (void)
     ops_append (ops, "key1", "1", 0);
     ops_append (ops, "key2", "2", 0);
 
-    verify_ready_commit (cm, names, ops, "merged fence");
+    verify_ready_commit (cm, names, ops, 0, "merged fence");
 
     json_decref (names);
     json_decref (ops);
@@ -383,7 +368,7 @@ void commit_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_commit (cm, names, ops, "unmerged fence");
+    verify_ready_commit (cm, names, ops, FLUX_KVS_NO_MERGE, "unmerged fence");
 
     json_decref (names);
     json_decref (ops);
@@ -408,7 +393,7 @@ void commit_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_commit (cm, names, ops, "unmerged fence");
+    verify_ready_commit (cm, names, ops, 0, "unmerged fence");
 
     json_decref (names);
     json_decref (ops);
@@ -451,7 +436,7 @@ void commit_basic_tests (void)
                                  &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
+    create_ready_commit (cm, "fence1", "key1", "1", 0, 0x44);
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -459,7 +444,7 @@ void commit_basic_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_commit (cm, names, ops, "basic test");
+    verify_ready_commit (cm, names, ops, 0x44, "basic test");
 
     json_decref (names);
     json_decref (ops);
@@ -790,11 +775,10 @@ int commit_fence_count_cb (fence_t *f, void *data)
 int commit_fence_remove_cb (fence_t *f, void *data)
 {
     commit_mgr_t *cm = data;
-    json_t *names = fence_get_json_names (f);
 
     /* in this test no merging has been done, just get the first name
      * in the array */
-    commit_mgr_remove_fence (cm, json_string_value (json_array_get (names, 0)));
+    commit_mgr_remove_fence (cm, fence_get_name (f));
     return 0;
 }
 

@@ -38,7 +38,9 @@ int commit_get_errnum (commit_t *c);
 int commit_get_aux_errnum (commit_t *c);
 int commit_set_aux_errnum (commit_t *c, int errnum);
 
-fence_t *commit_get_fence (commit_t *c);
+json_t *commit_get_ops (commit_t *c);
+json_t *commit_get_names (commit_t *c);
+int commit_get_flags (commit_t *c);
 
 /* returns namespace passed into commit_mgr_create() */
 const char *commit_get_namespace (commit_t *c);
@@ -117,7 +119,8 @@ int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f);
 /* Lookup a fence previously stored via commit_mgr_add_fence(), via name */
 fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name);
 
-/* Iterate through all not-ready fences
+/* Iterate through all fences in that have never had its operations
+ * converted to a ready commit_t
  * - this is typically called during a needed cleanup path
  */
 int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
