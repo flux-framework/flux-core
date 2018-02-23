@@ -1064,15 +1064,8 @@ error:
     return -1;
 }
 
-int commit_mgr_process_fence_request (commit_mgr_t *cm, const char *name)
+int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
 {
-    fence_t *f;
-
-    if (!(f = commit_mgr_lookup_fence (cm, name))) {
-        errno = EINVAL;
-        return -1;
-    }
-
     if (fence_count_reached (f)) {
         commit_t *c;
         int aux_int = fence_get_aux_int (f);

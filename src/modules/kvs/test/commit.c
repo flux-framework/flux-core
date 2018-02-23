@@ -185,11 +185,7 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_fences_count (cm) == 1,
         "commit_mgr_fences_count returns 1 when fence submitted");
 
-    ok (commit_mgr_process_fence_request (cm, "fenceBAD") < 0
-        && errno == EINVAL,
-        "commit_mgr_process_fence_request fails on invalid fence");
-
-    ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
 
     ok (commit_mgr_ready_commit_count (cm) == 0,
@@ -209,13 +205,13 @@ void commit_mgr_basic_tests (void)
 
     json_decref (ops);
 
-    ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
 
     ok (commit_mgr_ready_commit_count (cm) == 1,
         "commit_mgr_ready_commit_count is 1");
 
-    ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works again");
 
     ok (commit_mgr_ready_commit_count (cm) == 1,
@@ -268,7 +264,7 @@ void create_ready_commit (commit_mgr_t *cm,
     ok (commit_mgr_add_fence (cm, f) == 0,
         "commit_mgr_add_fence works");
 
-    ok (commit_mgr_process_fence_request (cm, name) == 0,
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
 
     ok (commit_mgr_commits_ready (cm) == true,
@@ -859,7 +855,7 @@ void commit_basic_iter_not_ready_tests (void)
 
     json_decref (ops);
 
-    ok (commit_mgr_process_fence_request (cm, "fence1") == 0,
+    ok (commit_mgr_process_fence_request (cm, f1) == 0,
         "commit_mgr_process_fence_request works");
 
     count = 0;
@@ -1358,7 +1354,7 @@ void commit_process_malformed_operation (void)
      */
     ok (commit_mgr_add_fence (cm, f) == 0,
         "commit_mgr_add_fence works");
-    ok (commit_mgr_process_fence_request (cm, "malformed") == 0,
+    ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
 
     /* Process ready commit and verify EPROTO error
