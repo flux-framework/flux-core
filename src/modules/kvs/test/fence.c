@@ -210,25 +210,6 @@ void request_tests (void)
     fence_destroy (f);
 }
 
-fence_t *create_fence (const char *name, const char *opname, int flags)
-{
-    fence_t *f;
-    json_t *ops;
-
-    ok ((f = fence_create (name, 1, flags)) != NULL,
-        "fence_create works");
-
-    ops = json_array ();
-    json_array_append_new (ops, json_string (opname));
-
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
-
-    json_decref (ops);
-
-    return f;
-}
-
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
