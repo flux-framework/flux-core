@@ -27,12 +27,8 @@ int fence_mgr_add_fence (fence_mgr_t *fm, fence_t *f);
 /* Lookup a fence previously stored via fence_mgr_add_fence(), via name */
 fence_t *fence_mgr_lookup_fence (fence_mgr_t *fm, const char *name);
 
-/* Iterate through all fences in that have never had its operations
- * converted to a ready fence_t
- * - this is typically called during a needed cleanup path
- */
-int fence_mgr_iter_not_ready_fences (fence_mgr_t *fm, fence_itr_f cb,
-                                     void *data);
+/* Iterate through all fences */
+int fence_mgr_iter_fences (fence_mgr_t *fm, fence_itr_f cb, void *data);
 
 /* remove a fence from the fence manager */
 int fence_mgr_remove_fence (fence_mgr_t *fm, const char *name);

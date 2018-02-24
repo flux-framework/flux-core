@@ -123,8 +123,7 @@ fence_t *fence_mgr_lookup_fence (fence_mgr_t *fm, const char *name)
     return zhash_lookup (fm->fences, name);
 }
 
-int fence_mgr_iter_not_ready_fences (fence_mgr_t *fm, fence_itr_f cb,
-                                     void *data)
+int fence_mgr_iter_fences (fence_mgr_t *fm, fence_itr_f cb, void *data)
 {
     fence_t *f;
     char *name;
@@ -133,10 +132,8 @@ int fence_mgr_iter_not_ready_fences (fence_mgr_t *fm, fence_itr_f cb,
 
     f = zhash_first (fm->fences);
     while (f) {
-        if (!fence_count_reached (f)) {
-            if (cb (f, data) < 0)
-                goto error;
-        }
+        if (cb (f, data) < 0)
+            goto error;
 
         f = zhash_next (fm->fences);
     }
