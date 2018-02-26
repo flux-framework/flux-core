@@ -52,7 +52,6 @@ struct fence {
     json_t *ops;
     int flags;
     bool processed;
-    int aux_int;
 };
 
 /*
@@ -109,8 +108,6 @@ int fence_mgr_add_fence (fence_mgr_t *fm, fence_t *f)
         goto error;
     }
 
-    /* initial fence aux int to 0 */
-    fence_set_aux_int (f, 0);
     zhash_freefn (fm->fences,
                   fence_get_name (f),
                   (zhash_free_fn *)fence_destroy);
@@ -220,7 +217,6 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     f->nprocs = nprocs;
     f->flags = flags;
     f->processed = false;
-    f->aux_int = 0;
 
     return f;
 error:
@@ -313,16 +309,6 @@ bool fence_get_processed (fence_t *f)
 void fence_set_processed (fence_t *f, bool p)
 {
     f->processed = p;
-}
-
-int fence_get_aux_int (fence_t *f)
-{
-    return f->aux_int;
-}
-
-void fence_set_aux_int (fence_t *f, int n)
-{
-    f->aux_int = n;
 }
 
 /*

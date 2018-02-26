@@ -76,11 +76,6 @@ int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
 bool fence_get_processed (fence_t *f);
 void fence_set_processed (fence_t *f, bool p);
 
-/* Auxiliary convenience data
- */
-int fence_get_aux_int (fence_t *f);
-void fence_set_aux_int (fence_t *f, int n);
-
 #endif /* !_FLUX_KVS_FENCE_H */
 
 /*

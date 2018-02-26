@@ -105,14 +105,6 @@ void fence_basic_tests (void)
     ok (fence_get_processed (f) == true,
         "fence_get_processed returns true");
 
-    ok (fence_get_aux_int (f) == 0,
-        "fence_get_aux_int returns 0 initially");
-
-    fence_set_aux_int (f, 5);
-
-    ok (fence_get_aux_int (f) == 5,
-        "fence_get_aux_int returns 5 after set");
-
     flux_msg_destroy (request);
 
     fence_destroy (f);
