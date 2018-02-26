@@ -43,8 +43,6 @@
 #include "commit.h"
 #include "kvs_util.h"
 
-#define FENCE_READY_MASK 0x01
-
 struct commit_mgr {
     struct cache *cache;
     const char *namespace;
@@ -1040,7 +1038,7 @@ int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
 
     f = zhash_first (cm->fences);
     while (f) {
-        if (!(fence_get_aux_int (f) & FENCE_READY_MASK)) {
+        if (!fence_get_processed (f)) {
             if (cb (f, data) < 0)
                 goto error;
         }
@@ -1068,10 +1066,9 @@ int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
 {
     if (fence_count_reached (f)) {
         commit_t *c;
-        int aux_int = fence_get_aux_int (f);
 
-        /* fence is already ready */
-        if (aux_int & FENCE_READY_MASK)
+        /* fence is already processed */
+        if (fence_get_processed (f))
             return 0;
 
         if (!(c = commit_create (f, cm)))
@@ -1083,7 +1080,7 @@ int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
             return -1;
         }
         /* we use this flag to indicate if a fence is "ready" */
-        fence_set_aux_int (f, aux_int | FENCE_READY_MASK);
+        fence_set_processed (f, true);
         zlist_freefn (cm->ready, c, (zlist_free_fn *)commit_destroy, true);
     }
 

@@ -131,6 +131,9 @@ int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
  *
  * If conditions are correct, will internally create at commit_t and
  * store it to a queue of ready to process commits.
+ *
+ * The fence_t will have its processed flag set to true if a commit_t
+ * is created and queued.  See fence_get/set_processed().
  */
 int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f);
 
