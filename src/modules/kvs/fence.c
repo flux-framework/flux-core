@@ -51,6 +51,7 @@ struct fence {
     zlist_t *requests;
     json_t *ops;
     int flags;
+    bool processed;
     int aux_int;
 };
 
@@ -218,6 +219,7 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     }
     f->nprocs = nprocs;
     f->flags = flags;
+    f->processed = false;
     f->aux_int = 0;
 
     return f;
@@ -301,6 +303,16 @@ int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data)
     }
 
     return 0;
+}
+
+bool fence_get_processed (fence_t *f)
+{
+    return f->processed;
+}
+
+void fence_set_processed (fence_t *f, bool p)
+{
+    f->processed = p;
 }
 
 int fence_get_aux_int (fence_t *f)

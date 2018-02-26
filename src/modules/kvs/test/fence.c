@@ -97,6 +97,14 @@ void fence_basic_tests (void)
     ok (fence_count_reached (f) == true,
         "later fence_count_reached() is true");
 
+    ok (fence_get_processed (f) == false,
+        "fence_get_processed returns false initially");
+
+    fence_set_processed (f, true);
+
+    ok (fence_get_processed (f) == true,
+        "fence_get_processed returns true");
+
     ok (fence_get_aux_int (f) == 0,
         "fence_get_aux_int returns 0 initially");
 

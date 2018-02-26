@@ -71,6 +71,11 @@ int fence_add_request_copy (fence_t *f, const flux_msg_t *request);
  */
 int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
 
+/* convenience processing flag
+ */
+bool fence_get_processed (fence_t *f);
+void fence_set_processed (fence_t *f, bool p);
+
 /* Auxiliary convenience data
  */
 int fence_get_aux_int (fence_t *f);
