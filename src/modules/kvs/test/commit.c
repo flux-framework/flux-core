@@ -140,7 +140,7 @@ void commit_mgr_basic_tests (void)
     json_t *ops = NULL;
     commit_mgr_t *cm;
     commit_t *c;
-    fence_t *f, *tf;
+    fence_t *f;
     blobref_t rootref;
 
     ok (commit_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
@@ -161,29 +161,8 @@ void commit_mgr_basic_tests (void)
 
     commit_mgr_clear_noop_stores (cm);
 
-    ok (commit_mgr_fences_count (cm) == 0,
-        "commit_mgr_fences_count returns 0 when no fences submitted");
-
     ok ((f = fence_create ("fence1", 1, 0)) != NULL,
         "fence_create works");
-
-    ok (commit_mgr_add_fence (cm, f) == 0,
-        "commit_mgr_add_fence works");
-
-    ok (commit_mgr_add_fence (cm, f) < 0,
-        "commit_mgr_add_fence fails on duplicate fence");
-
-    ok ((tf = commit_mgr_lookup_fence (cm, "fence1")) != NULL,
-        "commit_mgr_lookup_fence works");
-
-    ok (f == tf,
-        "commit_mgr_lookup_fence returns correct fence");
-
-    ok (commit_mgr_lookup_fence (cm, "invalid") == NULL,
-        "commit_mgr_lookup_fence can't find invalid fence");
-
-    ok (commit_mgr_fences_count (cm) == 1,
-        "commit_mgr_fences_count returns 1 when fence submitted");
 
     ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
@@ -231,11 +210,6 @@ void commit_mgr_basic_tests (void)
     ok (commit_mgr_get_ready_commit (cm) == NULL,
         "commit_mgr_get_ready_commit returns NULL no ready commits");
 
-    commit_mgr_remove_fence (cm, "fence1");
-
-    ok (commit_mgr_lookup_fence (cm, "fence1") == NULL,
-        "commit_mgr_lookup_fence can't find removed fence");
-
     commit_mgr_destroy (cm);
     cache_destroy (cache);
 }
@@ -260,9 +234,6 @@ void create_ready_commit (commit_mgr_t *cm,
         "fence_add_request_ops add works");
 
     json_decref (ops);
-
-    ok (commit_mgr_add_fence (cm, f) == 0,
-        "commit_mgr_add_fence works");
 
     ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
@@ -347,9 +318,6 @@ void commit_mgr_merge_tests (void)
 
     clear_ready_commits (cm);
 
-    commit_mgr_remove_fence (cm, "fence1");
-    commit_mgr_remove_fence (cm, "fence2");
-
     /* test unsuccessful merge */
 
     create_ready_commit (cm, "fence1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
@@ -372,9 +340,6 @@ void commit_mgr_merge_tests (void)
 
     clear_ready_commits (cm);
 
-    commit_mgr_remove_fence (cm, "fence1");
-    commit_mgr_remove_fence (cm, "fence2");
-
     /* test unsuccessful merge */
 
     create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
@@ -396,9 +361,6 @@ void commit_mgr_merge_tests (void)
     ops = NULL;
 
     clear_ready_commits (cm);
-
-    commit_mgr_remove_fence (cm, "fence1");
-    commit_mgr_remove_fence (cm, "fence2");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -756,127 +718,6 @@ void commit_basic_root_not_dir (void)
 
     ok (commit_get_errnum (c) == EINVAL,
         "commit_get_errnum return EINVAL");
-
-    commit_mgr_destroy (cm);
-    cache_destroy (cache);
-}
-
-int commit_fence_count_cb (fence_t *f, void *data)
-{
-    int *count = data;
-    (*count)++;
-    return 0;
-}
-
-int commit_fence_remove_cb (fence_t *f, void *data)
-{
-    commit_mgr_t *cm = data;
-
-    /* in this test no merging has been done, just get the first name
-     * in the array */
-    commit_mgr_remove_fence (cm, fence_get_name (f));
-    return 0;
-}
-
-int commit_fence_add_error_cb (fence_t *f, void *data)
-{
-    commit_mgr_t *cm = data;
-    fence_t *f2;
-
-    f2 = fence_create ("foobar", 1, 0);
-
-    if (commit_mgr_add_fence (cm, f2) < 0)
-        return -1;
-    return 0;
-}
-
-int commit_fence_error_cb (fence_t *f, void *data)
-{
-    return -1;
-}
-
-void commit_basic_iter_not_ready_tests (void)
-{
-    struct cache *cache;
-    json_t *ops = NULL;
-    commit_mgr_t *cm;
-    fence_t *f1, *f2;
-    blobref_t rootref;
-    int count;
-
-    cache = create_cache_with_empty_rootdir (rootref);
-
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0
-        && count == 0,
-        "commit_mgr_iter_not_ready_fences success when no fences submitted");
-
-    ok ((f1 = fence_create ("fence1", 1, 0)) != NULL,
-        "fence_create works");
-
-    ok ((f2 = fence_create ("fence2", 1, 0)) != NULL,
-        "fence_create works");
-
-    ok (commit_mgr_add_fence (cm, f1) == 0,
-        "commit_mgr_add_fence works");
-
-    ok (commit_mgr_add_fence (cm, f2) == 0,
-        "commit_mgr_add_fence works");
-
-    ok (commit_mgr_fences_count (cm) == 2,
-        "commit_mgr_fences_count returns correct count of fences");
-
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_error_cb, NULL) < 0,
-        "commit_mgr_iter_not_ready_fences error on callback error");
-
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_add_error_cb, cm) < 0
-        && errno == EAGAIN,
-        "commit_mgr_iter_not_ready_fences error on callback error trying to add fence");
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,
-        "commit_mgr_iter_not_ready_fences success on count");
-
-    ok (count == 2,
-        "commit_mgr_iter_not_ready_fences returned correct count of not-ready fences");
-
-    ops = json_array ();
-    ops_append (ops, "key1", "1", 0);
-
-    ok (fence_add_request_ops (f1, ops) == 0,
-        "fence_add_request_ops add works");
-
-    json_decref (ops);
-
-    ok (commit_mgr_process_fence_request (cm, f1) == 0,
-        "commit_mgr_process_fence_request works");
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,
-        "commit_mgr_iter_not_ready_fences success on count");
-
-    ok (count == 1,
-        "commit_mgr_iter_not_ready_fences returned correct count of not-ready fences");
-
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_remove_cb, cm) == 0,
-        "commit_mgr_iter_not_ready_fences success on remove");
-
-    count = 0;
-    ok (commit_mgr_iter_not_ready_fences (cm, commit_fence_count_cb, &count) == 0,
-        "commit_mgr_iter_not_ready_fences success on count");
-
-    ok (count == 0,
-        "commit_mgr_iter_not_ready_fences returned correct count of not-ready fences");
-
-    ok (commit_mgr_fences_count (cm) == 1,
-        "commit_mgr_fences_count returns correct count of fences");
 
     commit_mgr_destroy (cm);
     cache_destroy (cache);
@@ -1352,8 +1193,6 @@ void commit_process_malformed_operation (void)
 
     /* Submit fence_t to commit_mgr
      */
-    ok (commit_mgr_add_fence (cm, f) == 0,
-        "commit_mgr_add_fence works");
     ok (commit_mgr_process_fence_request (cm, f) == 0,
         "commit_mgr_process_fence_request works");
 
@@ -2276,7 +2115,6 @@ int main (int argc, char *argv[])
     commit_basic_commit_process_test_multiple_fences ();
     commit_basic_commit_process_test_multiple_fences_merge ();
     commit_basic_root_not_dir ();
-    commit_basic_iter_not_ready_tests ();
     commit_process_root_missing ();
     commit_process_missing_ref ();
     /* no need for dirty_cache_entries() test, as it is the most

@@ -48,9 +48,6 @@ struct commit_mgr {
     const char *namespace;
     const char *hash_name;
     int noop_stores;            /* for kvs.stats.get, etc.*/
-    zhash_t *fences;
-    bool iterating_fences;
-    zlist_t *removelist;
     zlist_t *ready;
     flux_t *h;
     void *aux;
@@ -964,16 +961,7 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
     cm->cache = cache;
     cm->namespace = namespace;
     cm->hash_name = hash_name;
-    if (!(cm->fences = zhash_new ())) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
     if (!(cm->ready = zlist_new ())) {
-        saved_errno = ENOMEM;
-        goto error;
-    }
-    cm->iterating_fences = false;
-    if (!(cm->removelist = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -990,76 +978,10 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
 void commit_mgr_destroy (commit_mgr_t *cm)
 {
     if (cm) {
-        if (cm->fences)
-            zhash_destroy (&cm->fences);
         if (cm->ready)
             zlist_destroy (&cm->ready);
-        if (cm->removelist)
-            zlist_destroy (&cm->removelist);
         free (cm);
     }
-}
-
-int commit_mgr_add_fence (commit_mgr_t *cm, fence_t *f)
-{
-    /* Don't modify hash while iterating */
-    if (cm->iterating_fences) {
-        errno = EAGAIN;
-        goto error;
-    }
-
-    if (zhash_insert (cm->fences, fence_get_name (f), f) < 0) {
-        errno = EEXIST;
-        goto error;
-    }
-
-    /* initial fence aux int to 0 */
-    fence_set_aux_int (f, 0);
-    zhash_freefn (cm->fences,
-                  fence_get_name (f),
-                  (zhash_free_fn *)fence_destroy);
-    return 0;
-error:
-    return -1;
-}
-
-fence_t *commit_mgr_lookup_fence (commit_mgr_t *cm, const char *name)
-{
-    return zhash_lookup (cm->fences, name);
-}
-
-int commit_mgr_iter_not_ready_fences (commit_mgr_t *cm, commit_fence_f cb,
-                                      void *data)
-{
-    fence_t *f;
-    char *name;
-
-    cm->iterating_fences = true;
-
-    f = zhash_first (cm->fences);
-    while (f) {
-        if (!fence_get_processed (f)) {
-            if (cb (f, data) < 0)
-                goto error;
-        }
-
-        f = zhash_next (cm->fences);
-    }
-
-    cm->iterating_fences = false;
-
-    while ((name = zlist_pop (cm->removelist))) {
-        commit_mgr_remove_fence (cm, name);
-        free (name);
-    }
-
-    return 0;
-
-error:
-    while ((name = zlist_pop (cm->removelist)))
-        free (name);
-    cm->iterating_fences = false;
-    return -1;
 }
 
 int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
@@ -1108,30 +1030,6 @@ void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c)
     zlist_remove (cm->ready, c);
 }
 
-int commit_mgr_remove_fence (commit_mgr_t *cm, const char *name)
-{
-    /* it's dangerous to remove if we're in the middle of an
-     * interation, so save name for removal later.
-     */
-    if (cm->iterating_fences) {
-        char *str = strdup (name);
-
-        if (!str) {
-            errno = ENOMEM;
-            return -1;
-        }
-
-        if (zlist_append (cm->removelist, str) < 0) {
-            free (str);
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    else
-        zhash_delete (cm->fences, name);
-    return 0;
-}
-
 int commit_mgr_get_noop_stores (commit_mgr_t *cm)
 {
     return cm->noop_stores;
@@ -1140,11 +1038,6 @@ int commit_mgr_get_noop_stores (commit_mgr_t *cm)
 void commit_mgr_clear_noop_stores (commit_mgr_t *cm)
 {
     cm->noop_stores = 0;
-}
-
-int commit_mgr_fences_count (commit_mgr_t *cm)
-{
-    return zhash_size (cm->fences);
 }
 
 int commit_mgr_ready_commit_count (commit_mgr_t *cm)
