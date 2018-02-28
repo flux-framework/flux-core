@@ -6,6 +6,7 @@
 
 #include "cache.h"
 #include "commit.h"
+#include "fence.h"
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
 
@@ -17,6 +18,7 @@ struct kvsroot {
     int seq;
     blobref_t ref;
     commit_mgr_t *cm;
+    fence_mgr_t *fm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     int flags;

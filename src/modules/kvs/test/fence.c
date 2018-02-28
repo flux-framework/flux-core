@@ -27,7 +27,7 @@ int msg_cb_error (fence_t *f, const flux_msg_t *req, void *data)
     return -1;
 }
 
-void basic_api_tests (void)
+void fence_basic_tests (void)
 {
     fence_t *f;
     json_t *ops;
@@ -97,20 +97,20 @@ void basic_api_tests (void)
     ok (fence_count_reached (f) == true,
         "later fence_count_reached() is true");
 
-    ok (fence_get_aux_int (f) == 0,
-        "fence_get_aux_int returns 0 initially");
+    ok (fence_get_processed (f) == false,
+        "fence_get_processed returns false initially");
 
-    fence_set_aux_int (f, 5);
+    fence_set_processed (f, true);
 
-    ok (fence_get_aux_int (f) == 5,
-        "fence_get_aux_int returns 5 after set");
+    ok (fence_get_processed (f) == true,
+        "fence_get_processed returns true");
 
     flux_msg_destroy (request);
 
     fence_destroy (f);
 }
 
-void ops_tests (void)
+void fence_ops_tests (void)
 {
     fence_t *f;
     json_t *ops;
@@ -167,7 +167,7 @@ void ops_tests (void)
     fence_destroy (f);
 }
 
-void request_tests (void)
+void fence_request_tests (void)
 {
     fence_t *f;
     flux_msg_t *request;
@@ -210,32 +210,136 @@ void request_tests (void)
     fence_destroy (f);
 }
 
-fence_t *create_fence (const char *name, const char *opname, int flags)
+void fence_mgr_basic_tests (void)
 {
-    fence_t *f;
-    json_t *ops;
+    fence_mgr_t *fm;
+    fence_t *f, *tf;
 
-    ok ((f = fence_create (name, 1, flags)) != NULL,
+    ok ((fm = fence_mgr_create ()) != NULL,
+        "fence_mgr_create works");
+
+    ok (fence_mgr_fences_count (fm) == 0,
+        "fence_mgr_fences_count returns 0 when no fences added");
+
+    ok ((f = fence_create ("fence1", 1, 0)) != NULL,
         "fence_create works");
 
-    ops = json_array ();
-    json_array_append_new (ops, json_string (opname));
+    ok (fence_mgr_add_fence (fm, f) == 0,
+        "fence_mgr_add_fence works");
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
+    ok (fence_mgr_add_fence (fm, f) < 0,
+        "fence_mgr_add_fence fails on duplicate fence");
 
-    json_decref (ops);
+    ok ((tf = fence_mgr_lookup_fence (fm, "fence1")) != NULL,
+        "fence_mgr_lookup_fence works");
 
-    return f;
+    ok (f == tf,
+        "fence_mgr_lookup_fence returns correct fence");
+
+    ok (fence_mgr_lookup_fence (fm, "invalid") == NULL,
+        "fence_mgr_lookup_fence can't find invalid fence");
+
+    ok (fence_mgr_fences_count (fm) == 1,
+        "fence_mgr_fences_count returns 1 when fence submitted");
+
+    fence_mgr_remove_fence (fm, "fence1");
+
+    ok (fence_mgr_fences_count (fm) == 0,
+        "fence_mgr_fences_count returns 0 after fence remove");
+
+    ok (fence_mgr_lookup_fence (fm, "fence1") == NULL,
+        "fence_mgr_lookup_fence can't find removed fence");
+
+    fence_mgr_destroy (fm);
+}
+
+int fence_count_cb (fence_t *f, void *data)
+{
+    int *count = data;
+    (*count)++;
+    return 0;
+}
+
+int fence_remove_cb (fence_t *f, void *data)
+{
+    fence_mgr_t *fm = data;
+
+    fence_mgr_remove_fence (fm, fence_get_name (f));
+    return 0;
+}
+
+int fence_add_error_cb (fence_t *f, void *data)
+{
+    fence_mgr_t *fm = data;
+    fence_t *f2;
+
+    f2 = fence_create ("foobar", 1, 0);
+
+    if (fence_mgr_add_fence (fm, f2) < 0)
+        return -1;
+    return 0;
+}
+
+int fence_error_cb (fence_t *f, void *data)
+{
+    return -1;
+}
+
+void fence_mgr_iter_tests (void)
+{
+    fence_mgr_t *fm;
+    fence_t *f;
+    int count;
+
+    ok ((fm = fence_mgr_create ()) != NULL,
+        "fence_mgr_create works");
+
+    count = 0;
+    ok (fence_mgr_iter_fences (fm, fence_count_cb, &count) == 0
+        && count == 0,
+        "fence_mgr_iter_fences success when no fences submitted");
+
+    ok ((f = fence_create ("fence1", 1, 0)) != NULL,
+        "fence_create works");
+
+    ok (fence_mgr_add_fence (fm, f) == 0,
+        "fence_mgr_add_fence works");
+
+    ok (fence_mgr_fences_count (fm) == 1,
+        "fence_mgr_fences_count returns correct count of fences");
+
+    ok (fence_mgr_iter_fences (fm, fence_error_cb, NULL) < 0,
+        "fence_mgr_iter_fences error on callback error");
+
+    ok (fence_mgr_iter_fences (fm, fence_add_error_cb, fm) < 0
+        && errno == EAGAIN,
+        "fence_mgr_iter_fences error on callback error trying to add fence");
+
+    ok (fence_mgr_iter_fences (fm, fence_remove_cb, fm) == 0,
+        "fence_mgr_iter_fences success on remove");
+
+    count = 0;
+    ok (fence_mgr_iter_fences (fm, fence_count_cb, &count) == 0,
+        "fence_mgr_iter_fences success on count");
+
+    ok (count == 0,
+        "fence_mgr_iter_fences returned correct count of fences");
+
+    ok (fence_mgr_fences_count (fm) == 0,
+        "fence_mgr_fences_count returns correct count of fences");
+
+    fence_mgr_destroy (fm);
 }
 
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    basic_api_tests ();
-    ops_tests ();
-    request_tests ();
+    fence_basic_tests ();
+    fence_ops_tests ();
+    fence_request_tests ();
+    fence_mgr_basic_tests ();
+    fence_mgr_iter_tests ();
 
     done_testing ();
     return (0);

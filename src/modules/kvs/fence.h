@@ -4,9 +4,41 @@
 #include <czmq.h>
 #include <jansson.h>
 
+typedef struct fence_mgr fence_mgr_t;
+
 typedef struct fence fence_t;
 
+typedef int (*fence_itr_f)(fence_t *f, void *data);
+
 typedef int (*fence_msg_cb)(fence_t *f, const flux_msg_t *req, void *data);
+
+/*
+ * fence_mgr_t API
+ */
+
+/* flux_t is optional, if NULL logging will go to stderr */
+fence_mgr_t *fence_mgr_create (void);
+
+void fence_mgr_destroy (fence_mgr_t *fm);
+
+/* Add fence into the fence manager */
+int fence_mgr_add_fence (fence_mgr_t *fm, fence_t *f);
+
+/* Lookup a fence previously stored via fence_mgr_add_fence(), via name */
+fence_t *fence_mgr_lookup_fence (fence_mgr_t *fm, const char *name);
+
+/* Iterate through all fences */
+int fence_mgr_iter_fences (fence_mgr_t *fm, fence_itr_f cb, void *data);
+
+/* remove a fence from the fence manager */
+int fence_mgr_remove_fence (fence_mgr_t *fm, const char *name);
+
+/* Get count of fences stored */
+int fence_mgr_fences_count (fence_mgr_t *fm);
+
+/*
+ * fence_t API
+ */
 
 fence_t *fence_create (const char *name, int nprocs, int flags);
 
@@ -39,10 +71,10 @@ int fence_add_request_copy (fence_t *f, const flux_msg_t *request);
  */
 int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
 
-/* Auxiliary convenience data
+/* convenience processing flag
  */
-int fence_get_aux_int (fence_t *f);
-void fence_set_aux_int (fence_t *f, int n);
+bool fence_get_processed (fence_t *f);
+void fence_set_processed (fence_t *f, bool p);
 
 #endif /* !_FLUX_KVS_FENCE_H */
 

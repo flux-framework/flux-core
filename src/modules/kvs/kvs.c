@@ -1126,7 +1126,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
 
     if (root->remove) {
         if (!wait_queue_length (root->watchlist)
-            && !commit_mgr_fences_count (root->cm)
+            && !fence_mgr_fences_count (root->fm)
             && !commit_mgr_ready_commit_count (root->cm)) {
 
             if (event_unsubscribe (ctx, root->namespace) < 0)
@@ -1143,7 +1143,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
              && strcasecmp (root->namespace, KVS_PRIMARY_NAMESPACE)
              && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
              && !wait_queue_length (root->watchlist)
-             && !commit_mgr_fences_count (root->cm)
+             && !fence_mgr_fences_count (root->fm)
              && !commit_mgr_ready_commit_count (root->cm)) {
         /* remove a root if it not the primary one, has timed out
          * on a follower node, and it does not have any watchers,
@@ -1675,10 +1675,10 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = commit_mgr_lookup_fence (root->cm, json_string_value (name)))) {
+        if ((f = fence_mgr_lookup_fence (root->fm, json_string_value (name)))) {
             fence_iter_request_copies (f, finalize_fence_req, &cbd);
-            if (commit_mgr_remove_fence (root->cm, json_string_value (name)) < 0)
-                flux_log_error (ctx->h, "%s: commit_mgr_remove_fence",
+            if (fence_mgr_remove_fence (root->fm, json_string_value (name)) < 0)
+                flux_log_error (ctx->h, "%s: fence_mgr_remove_fence",
                                 __FUNCTION__);
         }
     }
@@ -1715,13 +1715,13 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
+    if (!(f = fence_mgr_lookup_fence (root->fm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
             flux_log_error (h, "%s: fence_create", __FUNCTION__);
             goto error;
         }
-        if (commit_mgr_add_fence (root->cm, f) < 0) {
-            flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
+        if (fence_mgr_add_fence (root->fm, f) < 0) {
+            flux_log_error (h, "%s: fence_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
             goto error;
         }
@@ -1738,7 +1738,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (commit_mgr_process_fence_request (root->cm, name) < 0) {
+    if (commit_mgr_process_fence_request (root->cm, f) < 0) {
         flux_log_error (h, "%s: commit_mgr_process_fence_request", __FUNCTION__);
         goto error;
     }
@@ -1785,14 +1785,14 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(f = commit_mgr_lookup_fence (root->cm, name))) {
+    if (!(f = fence_mgr_lookup_fence (root->fm, name))) {
         if (!(f = fence_create (name, nprocs, flags))) {
             flux_log_error (h, "%s: fence_create", __FUNCTION__);
             goto error;
         }
-        if (commit_mgr_add_fence (root->cm, f) < 0) {
+        if (fence_mgr_add_fence (root->fm, f) < 0) {
             saved_errno = errno;
-            flux_log_error (h, "%s: commit_mgr_add_fence", __FUNCTION__);
+            flux_log_error (h, "%s: fence_mgr_add_fence", __FUNCTION__);
             fence_destroy (f);
             errno = saved_errno;
             goto error;
@@ -1813,7 +1813,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
 
-        if (commit_mgr_process_fence_request (root->cm, name) < 0) {
+        if (commit_mgr_process_fence_request (root->cm, f) < 0) {
             flux_log_error (h, "%s: commit_mgr_process_fence_request",
                             __FUNCTION__);
             goto error;
@@ -2145,7 +2145,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          "#no-op stores",
                          commit_mgr_get_noop_stores (root->cm),
                          "#fences",
-                         commit_mgr_fences_count (root->cm),
+                         fence_mgr_fences_count (root->fm),
                          "#readycommits",
                          commit_mgr_ready_commit_count (root->cm),
                          "store revision", root->seq))) {
@@ -2373,20 +2373,23 @@ error:
 static int root_remove_process_fences (fence_t *f, void *data)
 {
     struct kvs_cb_data *cbd = data;
-    json_t *names = NULL;
 
-    /* Not ready fences will never finish, must alert them with
-     * ENOTSUP that namespace removed.  Final call to
-     * commit_mgr_remove_fence() done in finalize_fences_bynames() */
+    /* Fences that never reached their nprocs count will never finish,
+     * must alert them with ENOTSUP that namespace removed.  Final
+     * call to fence_mgr_remove_fence() done in
+     * finalize_fences_bynames() */
+    if (!fence_get_processed (f)) {
+        json_t *names = NULL;
 
-    if (!(names = json_pack ("[ s ]", fence_get_name (f)))) {
-        flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
-        errno = ENOMEM;
-        return -1;
+        if (!(names = json_pack ("[ s ]", fence_get_name (f)))) {
+            flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
+            errno = ENOMEM;
+            return -1;
+        }
+
+        finalize_fences_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
+        json_decref (names);
     }
-
-    finalize_fences_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
-    json_decref (names);
     return 0;
 }
 
@@ -2417,10 +2420,10 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
          * commit_request_cb() and relaycommit_request_cb() ensure this.
          */
 
-        if (commit_mgr_iter_not_ready_fences (root->cm,
-                                              root_remove_process_fences,
-                                              &cbd) < 0)
-            flux_log_error (ctx->h, "%s: commit_mgr_iter_fences", __FUNCTION__);
+        if (fence_mgr_iter_fences (root->fm,
+                                   root_remove_process_fences,
+                                   &cbd) < 0)
+            flux_log_error (ctx->h, "%s: fence_mgr_iter_fences", __FUNCTION__);
     }
 }
 

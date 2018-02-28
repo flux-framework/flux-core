@@ -38,6 +38,12 @@
 
 #include "fence.h"
 
+struct fence_mgr {
+    zhash_t *fences;
+    bool iterating_fences;
+    zlist_t *removelist;
+};
+
 struct fence {
     char *name;
     int nprocs;
@@ -45,8 +51,139 @@ struct fence {
     zlist_t *requests;
     json_t *ops;
     int flags;
-    int aux_int;
+    bool processed;
 };
+
+/*
+ * fence_mgr_t functions
+ */
+
+fence_mgr_t *fence_mgr_create (void)
+{
+    fence_mgr_t *fm = NULL;
+    int saved_errno;
+
+    if (!(fm = calloc (1, sizeof (*fm)))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(fm->fences = zhash_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    fm->iterating_fences = false;
+    if (!(fm->removelist = zlist_new ())) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    return fm;
+
+ error:
+    fence_mgr_destroy (fm);
+    errno = saved_errno;
+    return NULL;
+}
+
+void fence_mgr_destroy (fence_mgr_t *fm)
+{
+    if (fm) {
+        if (fm->fences)
+            zhash_destroy (&fm->fences);
+        if (fm->removelist)
+            zlist_destroy (&fm->removelist);
+        free (fm);
+    }
+}
+
+int fence_mgr_add_fence (fence_mgr_t *fm, fence_t *f)
+{
+    /* Don't modify hash while iterating */
+    if (fm->iterating_fences) {
+        errno = EAGAIN;
+        goto error;
+    }
+
+    if (zhash_insert (fm->fences, f->name, f) < 0) {
+        errno = EEXIST;
+        goto error;
+    }
+
+    zhash_freefn (fm->fences,
+                  fence_get_name (f),
+                  (zhash_free_fn *)fence_destroy);
+    return 0;
+ error:
+    return -1;
+}
+
+fence_t *fence_mgr_lookup_fence (fence_mgr_t *fm, const char *name)
+{
+    return zhash_lookup (fm->fences, name);
+}
+
+int fence_mgr_iter_fences (fence_mgr_t *fm, fence_itr_f cb, void *data)
+{
+    fence_t *f;
+    char *name;
+
+    fm->iterating_fences = true;
+
+    f = zhash_first (fm->fences);
+    while (f) {
+        if (cb (f, data) < 0)
+            goto error;
+
+        f = zhash_next (fm->fences);
+    }
+
+    fm->iterating_fences = false;
+
+    while ((name = zlist_pop (fm->removelist))) {
+        fence_mgr_remove_fence (fm, name);
+        free (name);
+    }
+
+    return 0;
+
+ error:
+    while ((name = zlist_pop (fm->removelist)))
+        free (name);
+    fm->iterating_fences = false;
+    return -1;
+}
+
+int fence_mgr_remove_fence (fence_mgr_t *fm, const char *name)
+{
+    /* it's dangerous to remove if we're in the middle of an
+     * interation, so save fence for removal later.
+     */
+    if (fm->iterating_fences) {
+        char *str = strdup (name);
+
+        if (!str) {
+            errno = ENOMEM;
+            return -1;
+        }
+
+        if (zlist_append (fm->removelist, str) < 0) {
+            free (str);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    else
+        zhash_delete (fm->fences, name);
+    return 0;
+}
+
+int fence_mgr_fences_count (fence_mgr_t *fm)
+{
+    return zhash_size (fm->fences);
+}
+
+/*
+ * fence_t functions
+ */
 
 void fence_destroy (fence_t *f)
 {
@@ -79,7 +216,7 @@ fence_t *fence_create (const char *name, int nprocs, int flags)
     }
     f->nprocs = nprocs;
     f->flags = flags;
-    f->aux_int = 0;
+    f->processed = false;
 
     return f;
 error:
@@ -164,14 +301,14 @@ int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data)
     return 0;
 }
 
-int fence_get_aux_int (fence_t *f)
+bool fence_get_processed (fence_t *f)
 {
-    return f->aux_int;
+    return f->processed;
 }
 
-void fence_set_aux_int (fence_t *f, int n)
+void fence_set_processed (fence_t *f, bool p)
 {
-    f->aux_int = n;
+    f->processed = p;
 }
 
 /*

@@ -98,6 +98,8 @@ static void kvsroot_destroy (void *data)
             free (root->namespace);
         if (root->cm)
             commit_mgr_destroy (root->cm);
+        if (root->fm)
+            fence_mgr_destroy (root->fm);
         if (root->watchlist)
             wait_queue_destroy (root->watchlist);
         free (data);
@@ -136,6 +138,11 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
                                         km->h,
                                         km->arg))) {
         flux_log_error (km->h, "commit_mgr_create");
+        goto error;
+    }
+
+    if (!(root->fm = fence_mgr_create ())) {
+        flux_log_error (km->h, "fence_mgr_create");
         goto error;
     }
 

@@ -195,10 +195,7 @@ void basic_commit_mgr_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (commit_mgr_add_fence (root->cm, f) == 0,
-        "commit_mgr_add_fence works");
-
-    ok (commit_mgr_process_fence_request (root->cm, "foo") == 0,
+    ok (commit_mgr_process_fence_request (root->cm, f) == 0,
         "commit_mgr_process_fence_request works");
 
     ok ((c = commit_mgr_get_ready_commit (root->cm)) != NULL,
