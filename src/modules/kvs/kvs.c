@@ -615,7 +615,7 @@ static int load (kvs_ctx_t *ctx, const blobref_t ref, wait_t *wait, bool *stall)
 }
 
 /*
- * store/commit
+ * store/write
  */
 
 static int content_store_get (flux_future_t *f, void *arg)
@@ -648,10 +648,10 @@ static int content_store_get (flux_future_t *f, void *arg)
      * content store, but we can't notify waiters that it has been
      * flushed.  We also can't notify waiters of an error occurring.
      *
-     * If a commit has hung, the most likely scenario is that that
-     * commiter will timeout or give up at some point.  setroot() will
-     * never happen, so the entire commit has failed and no
-     * consistency issue will occur.
+     * If a write (commit/fence) has hung, the most likely scenario is
+     * that the writer will timeout or give up at some point.
+     * setroot() will never happen, so the entire transaction has
+     * failed and no consistency issue will occur.
      *
      * We'll mark the cache entry not dirty, so that memory can be
      * reclaimed at a later time.  But we can't do that with
@@ -700,7 +700,7 @@ error:
     return rc;
 }
 
-static int commit_load_cb (commit_t *c, const char *ref, void *data)
+static int kvstxn_load_cb (kvstxn_t *kt, const char *ref, void *data)
 {
     struct kvs_cb_data *cbd = data;
     bool stall;
@@ -719,7 +719,7 @@ static int commit_load_cb (commit_t *c, const char *ref, void *data)
  * object's wait queue.  FIXME: asynchronous errors need to be
  * propagated back to caller.
  */
-static int commit_cache_cb (commit_t *c, struct cache_entry *entry, void *data)
+static int kvstxn_cache_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     struct kvs_cb_data *cbd = data;
     const void *storedata;
@@ -730,7 +730,7 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *entry, void *data)
     if (cache_entry_get_raw (entry, &storedata, &storedatalen) < 0) {
         flux_log_error (cbd->ctx->h, "%s: cache_entry_get_raw",
                         __FUNCTION__);
-        commit_cleanup_dirty_cache_entry (c, entry);
+        kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
     if (content_store_request_send (cbd->ctx,
@@ -739,13 +739,13 @@ static int commit_cache_cb (commit_t *c, struct cache_entry *entry, void *data)
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "%s: content_store_request_send",
                         __FUNCTION__);
-        commit_cleanup_dirty_cache_entry (c, entry);
+        kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
     if (cache_entry_wait_notdirty (entry, cbd->wait) < 0) {
         cbd->errnum = errno;
         flux_log_error (cbd->ctx->h, "cache_entry_wait_notdirty");
-        commit_cleanup_dirty_cache_entry (c, entry);
+        kvstxn_cleanup_dirty_cache_entry (kt, entry);
         return -1;
     }
     return 0;
@@ -868,28 +868,28 @@ done:
     return rc;
 }
 
-/* Commit all the ops for a particular commit/fence request (rank 0 only).
+/* Write all the ops for a particular commit/fence request (rank 0 only).
  * The setroot event will cause responses to be sent to the fence requests
  * and clean up the fence_t state.  This function is idempotent.
  */
-static void commit_apply (commit_t *c)
+static void kvstxn_apply (kvstxn_t *kt)
 {
-    kvs_ctx_t *ctx = commit_get_aux (c);
+    kvs_ctx_t *ctx = kvstxn_get_aux (kt);
     const char *namespace;
     struct kvsroot *root = NULL;
     wait_t *wait = NULL;
     int errnum = 0;
-    commit_process_t ret;
+    kvstxn_process_t ret;
 
-    namespace = commit_get_namespace (c);
+    namespace = kvstxn_get_namespace (kt);
     assert (namespace);
 
-    /* Between call to commit_mgr_process_fence_request() and here,
+    /* Between call to kvstxn_mgr_process_fence_request() and here,
      * possible namespace marked for removal.  Also namespace could
      * have been removed if we waited and this is a replay.
      *
      * root should never be NULL, as it should not be garbage
-     * collected until all ready commits have been processed.
+     * collected until all ready transactions have been processed.
      */
 
     root = kvsroot_mgr_lookup_root (ctx->km, namespace);
@@ -902,20 +902,20 @@ static void commit_apply (commit_t *c)
         goto done;
     }
 
-    if ((errnum = commit_get_aux_errnum (c)))
+    if ((errnum = kvstxn_get_aux_errnum (kt)))
         goto done;
 
-    if ((ret = commit_process (c,
+    if ((ret = kvstxn_process (kt,
                                ctx->epoch,
-                               root->ref)) == COMMIT_PROCESS_ERROR) {
-        errnum = commit_get_errnum (c);
+                               root->ref)) == KVSTXN_PROCESS_ERROR) {
+        errnum = kvstxn_get_errnum (kt);
         goto done;
     }
 
-    if (ret == COMMIT_PROCESS_LOAD_MISSING_REFS) {
+    if (ret == KVSTXN_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
+        if (!(wait = wait_create ((wait_cb_f)kvstxn_apply, kt))) {
             errnum = errno;
             goto done;
         }
@@ -924,12 +924,12 @@ static void commit_apply (commit_t *c)
         cbd.wait = wait;
         cbd.errnum = 0;
 
-        if (commit_iter_missing_refs (c, commit_load_cb, &cbd) < 0) {
+        if (kvstxn_iter_missing_refs (kt, kvstxn_load_cb, &cbd) < 0) {
             errnum = cbd.errnum;
 
             /* rpcs already in flight, stall for them to complete */
             if (wait_get_usecount (wait) > 0) {
-                commit_set_aux_errnum (c, cbd.errnum);
+                kvstxn_set_aux_errnum (kt, cbd.errnum);
                 goto stall;
             }
 
@@ -939,10 +939,10 @@ static void commit_apply (commit_t *c)
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    else if (ret == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES) {
+    else if (ret == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES) {
         struct kvs_cb_data cbd;
 
-        if (!(wait = wait_create ((wait_cb_f)commit_apply, c))) {
+        if (!(wait = wait_create ((wait_cb_f)kvstxn_apply, kt))) {
             errnum = errno;
             goto done;
         }
@@ -951,12 +951,12 @@ static void commit_apply (commit_t *c)
         cbd.wait = wait;
         cbd.errnum = 0;
 
-        if (commit_iter_dirty_cache_entries (c, commit_cache_cb, &cbd) < 0) {
+        if (kvstxn_iter_dirty_cache_entries (kt, kvstxn_cache_cb, &cbd) < 0) {
             errnum = cbd.errnum;
 
             /* rpcs already in flight, stall for them to complete */
             if (wait_get_usecount (wait) > 0) {
-                commit_set_aux_errnum (c, cbd.errnum);
+                kvstxn_set_aux_errnum (kt, cbd.errnum);
                 goto stall;
             }
 
@@ -966,28 +966,28 @@ static void commit_apply (commit_t *c)
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    /* else ret == COMMIT_PROCESS_FINISHED */
+    /* else ret == KVSTXN_PROCESS_FINISHED */
 
-    /* This is the transaction that finalizes the commit by replacing
-     * root->ref with newroot, incrementing root->seq, and sending out
-     * the setroot event for "eventual consistency" of other nodes.
+    /* This finalizes the transaction by replacing root->ref with
+     * newroot, incrementing root->seq, and sending out the setroot
+     * event for "eventual consistency" of other nodes.
      */
 done:
     if (errnum == 0) {
-        json_t *names = commit_get_names (c);
+        json_t *names = kvstxn_get_names (kt);
         int count;
         if ((count = json_array_size (names)) > 1) {
             int opcount = 0;
-            opcount = json_array_size (commit_get_ops (c));
-            flux_log (ctx->h, LOG_DEBUG, "aggregated %d commits (%d ops)",
+            opcount = json_array_size (kvstxn_get_ops (kt));
+            flux_log (ctx->h, LOG_DEBUG, "aggregated %d transactions (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, root, commit_get_newroot_ref (c), root->seq + 1);
+        setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
         setroot_event_send (ctx, root, names);
     } else {
-        flux_log (ctx->h, LOG_ERR, "commit failed: %s",
+        flux_log (ctx->h, LOG_ERR, "transaction failed: %s",
                   flux_strerror (errnum));
-        error_event_send (ctx, root->namespace, commit_get_names (c),
+        error_event_send (ctx, root->namespace, kvstxn_get_names (kt),
                           errnum);
     }
     wait_destroy (wait);
@@ -995,7 +995,7 @@ done:
     /* Completed: remove from 'ready' list.
      * N.B. fence_t remains in the fences hash until event is received.
      */
-    commit_mgr_remove_commit (root->cm, c);
+    kvstxn_mgr_remove_transaction (root->ktm, kt);
     return;
 
 stall:
@@ -1006,11 +1006,11 @@ stall:
  * pre/check event callbacks
  */
 
-static int commit_prep_root_cb (struct kvsroot *root, void *arg)
+static int kvstxn_prep_root_cb (struct kvsroot *root, void *arg)
 {
     struct kvs_cb_data *cbd = arg;
 
-    if (commit_mgr_commits_ready (root->cm)) {
+    if (kvstxn_mgr_transaction_ready (root->ktm)) {
         cbd->ready = true;
         return 1;
     }
@@ -1024,7 +1024,7 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
     kvs_ctx_t *ctx = arg;
     struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
 
-    if (kvsroot_mgr_iter_roots (ctx->km, commit_prep_root_cb, &cbd) < 0) {
+    if (kvsroot_mgr_iter_roots (ctx->km, kvstxn_prep_root_cb, &cbd) < 0) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
         return;
     }
@@ -1033,25 +1033,25 @@ static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_start (ctx->idle_w);
 }
 
-static int commit_check_root_cb (struct kvsroot *root, void *arg)
+static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
 {
     struct kvs_cb_data *cbd = arg;
-    commit_t *c;
+    kvstxn_t *kt;
 
-    if ((c = commit_mgr_get_ready_commit (root->cm))) {
+    if ((kt = kvstxn_mgr_get_ready_transaction (root->ktm))) {
         if (cbd->ctx->commit_merge) {
-            /* if merge fails, set errnum in commit_t, let
-             * commit_apply() handle error handling.
+            /* if merge fails, set errnum in txn_t, let
+             * txn_apply() handle error handling.
              */
-            if (commit_mgr_merge_ready_commits (root->cm) < 0)
-                commit_set_aux_errnum (c, errno);
+            if (kvstxn_mgr_merge_ready_transactions (root->ktm) < 0)
+                kvstxn_set_aux_errnum (kt, errno);
         }
 
         /* It does not matter if root has been marked for removal,
          * we want to process and clear all lingering ready
-         * commits in this commit mgr
+         * transactions in this kvstxn manager
          */
-        commit_apply (c);
+        kvstxn_apply (kt);
     }
 
     return 0;
@@ -1065,7 +1065,7 @@ static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     flux_watcher_stop (ctx->idle_w);
 
-    if (kvsroot_mgr_iter_roots (ctx->km, commit_check_root_cb, &cbd) < 0) {
+    if (kvsroot_mgr_iter_roots (ctx->km, kvstxn_check_root_cb, &cbd) < 0) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
         return;
     }
@@ -1127,7 +1127,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     if (root->remove) {
         if (!wait_queue_length (root->watchlist)
             && !fence_mgr_fences_count (root->fm)
-            && !commit_mgr_ready_commit_count (root->cm)) {
+            && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
             if (event_unsubscribe (ctx, root->namespace) < 0)
                 flux_log_error (ctx->h, "%s: event_unsubscribe",
@@ -1144,10 +1144,10 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
              && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
              && !wait_queue_length (root->watchlist)
              && !fence_mgr_fences_count (root->fm)
-             && !commit_mgr_ready_commit_count (root->cm)) {
+             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
          * on a follower node, and it does not have any watchers,
-         * and no one is trying to commit/change something.
+         * and no one is trying to write/change something.
          */
         start_root_remove (ctx, root->namespace);
     }
@@ -1505,8 +1505,9 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         out = true;
 
     /* No reply sent or this is a multi-response watch request.
-     * Arrange to wait on root->watchlist for each new commit.
-     * Reconstruct the payload with 'first' flag clear, and updated value.
+     * Arrange to wait on root->watchlist for each new transaction.
+     * Reconstruct the payload with 'first' flag clear, and updated
+     * value.
      */
     if (!out || !(flags & KVS_WATCH_ONCE)) {
         if (!(cpy = flux_msg_copy (msg, false)))
@@ -1738,8 +1739,9 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (commit_mgr_process_fence_request (root->cm, f) < 0) {
-        flux_log_error (h, "%s: commit_mgr_process_fence_request", __FUNCTION__);
+    if (kvstxn_mgr_process_fence_request (root->ktm, f) < 0) {
+        flux_log_error (h, "%s: kvstxn_mgr_process_fence_request",
+                        __FUNCTION__);
         goto error;
     }
 
@@ -1747,7 +1749,8 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
 error:
     /* An error has occurred, so we will return an error similarly to
-     * how an error would be returned via a commit error.
+     * how an error would be returned via a transaction error in
+     * kvstxn_apply().
      */
     if (error_event_send_to_name (ctx, namespace, name, errno) < 0)
         flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
@@ -1813,8 +1816,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
 
-        if (commit_mgr_process_fence_request (root->cm, f) < 0) {
-            flux_log_error (h, "%s: commit_mgr_process_fence_request",
+        if (kvstxn_mgr_process_fence_request (root->ktm, f) < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_process_fence_request",
                             __FUNCTION__);
             goto error;
         }
@@ -1973,7 +1976,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* if root not initialized, nothing to do
      * - it is ok that the namespace be marked for removal, we may be
-     *   cleaning up lingering commits.
+     *   cleaning up lingering transactions.
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->km, namespace))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
@@ -2051,7 +2054,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     /* if root not initialized, nothing to do
      * - small chance we could receive setroot event on namespace that
      *   is being removed.  Would require events to be received out of
-     *   order (commit completes before namespace removed, but
+     *   order (commit/fence completes before namespace removed, but
      *   namespace remove event received before setroot).
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->km, namespace))) {
@@ -2143,11 +2146,11 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          "#watchers",
                          wait_queue_length (root->watchlist),
                          "#no-op stores",
-                         commit_mgr_get_noop_stores (root->cm),
+                         kvstxn_mgr_get_noop_stores (root->ktm),
                          "#fences",
                          fence_mgr_fences_count (root->fm),
                          "#readycommits",
-                         commit_mgr_ready_commit_count (root->cm),
+                         kvstxn_mgr_ready_transaction_count (root->ktm),
                          "store revision", root->seq))) {
         errno = ENOMEM;
         return -1;
@@ -2247,7 +2250,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
 
 static int stats_clear_root_cb (struct kvsroot *root, void *arg)
 {
-    commit_mgr_clear_noop_stores (root->cm);
+    kvstxn_mgr_clear_noop_stores (root->ktm);
     return 0;
 }
 
@@ -2412,7 +2415,7 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
             flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
 
         /* Ready fences will be processed and errors returned to
-         * callers via the code path in commit_apply().  But not ready
+         * callers via the code path in kvstxn_apply().  But not ready
          * fences must be dealt with separately here.
          *
          * Note that now that the root has been marked as removable, no

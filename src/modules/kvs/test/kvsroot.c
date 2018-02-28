@@ -163,12 +163,12 @@ void basic_iter_tests (void)
     cache_destroy (cache);
 }
 
-void basic_commit_mgr_tests (void)
+void basic_kvstxn_mgr_tests (void)
 {
     kvsroot_mgr_t *km;
     struct cache *cache;
     struct kvsroot *root;
-    commit_t *c;
+    kvstxn_t *kt;
     fence_t *f;
     json_t *ops = NULL;
     void *tmpaux;
@@ -195,17 +195,17 @@ void basic_commit_mgr_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (commit_mgr_process_fence_request (root->cm, f) == 0,
-        "commit_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_fence_request (root->ktm, f) == 0,
+        "kvstxn_mgr_process_fence_request works");
 
-    ok ((c = commit_mgr_get_ready_commit (root->cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (root->ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok ((tmpaux = commit_get_aux (c)) != NULL,
-        "commit_get_aux returns non-NULL aux");
+    ok ((tmpaux = kvstxn_get_aux (kt)) != NULL,
+        "kvstxn_get_aux returns non-NULL aux");
 
     ok (tmpaux == &global,
-        "commit_get_aux returns correct aux value");
+        "kvstxn_get_aux returns correct aux value");
 
     kvsroot_mgr_destroy (km);
     cache_destroy (cache);
@@ -217,7 +217,7 @@ int main (int argc, char *argv[])
 
     basic_api_tests ();
     basic_iter_tests ();
-    basic_commit_mgr_tests ();
+    basic_kvstxn_mgr_tests ();
 
     done_testing ();
     return (0);

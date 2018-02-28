@@ -17,7 +17,7 @@ struct kvsroot {
     uint32_t owner;
     int seq;
     blobref_t ref;
-    commit_mgr_t *cm;
+    kvstxn_mgr_t *ktm;
     fence_mgr_t *fm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
@@ -29,7 +29,7 @@ struct kvsroot {
 typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
 
 /* flux_t optional, if NULL logging will go to stderr */
-/* void *arg passed as arg value to commit_mgr_create() internally */
+/* void *arg passed as arg value to txn_mgr_create() internally */
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg);
 
 void kvsroot_mgr_destroy (kvsroot_mgr_t *km);

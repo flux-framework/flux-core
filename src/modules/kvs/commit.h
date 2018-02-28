@@ -1,5 +1,5 @@
-#ifndef _FLUX_KVS_COMMIT_H
-#define _FLUX_KVS_COMMIT_H
+#ifndef _FLUX_KVS_KVSTXN_H
+#define _FLUX_KVS_KVSTXN_H
 
 #include <flux/core.h>
 #include <czmq.h>
@@ -8,151 +8,151 @@
 #include "fence.h"
 #include "src/common/libutil/blobref.h"
 
-typedef struct commit_mgr commit_mgr_t;
-typedef struct commit commit_t;
+typedef struct kvstxn_mgr kvstxn_mgr_t;
+typedef struct kvstxn kvstxn_t;
 
 typedef enum {
-    COMMIT_PROCESS_ERROR = 1,
-    COMMIT_PROCESS_LOAD_MISSING_REFS = 2,
-    COMMIT_PROCESS_DIRTY_CACHE_ENTRIES = 3,
-    COMMIT_PROCESS_FINISHED = 4,
-} commit_process_t;
+    KVSTXN_PROCESS_ERROR = 1,
+    KVSTXN_PROCESS_LOAD_MISSING_REFS = 2,
+    KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES = 3,
+    KVSTXN_PROCESS_FINISHED = 4,
+} kvstxn_process_t;
 
 /*
- * commit_t API
+ * kvstxn_t API
  */
 
-typedef int (*commit_ref_f)(commit_t *c, const char *ref, void *data);
+typedef int (*kvstxn_ref_f)(kvstxn_t *kt, const char *ref, void *data);
 
-typedef int (*commit_cache_entry_f)(commit_t *c,
-                                     struct cache_entry *entry,
-                                     void *data);
+typedef int (*kvstxn_cache_entry_f)(kvstxn_t *kt,
+                                    struct cache_entry *entry,
+                                    void *data);
 
-int commit_get_errnum (commit_t *c);
+int kvstxn_get_errnum (kvstxn_t *kt);
 
 /* if user wishes to stall, but needs future knowledge to fail and
  * what error caused the failure.
  */
-int commit_get_aux_errnum (commit_t *c);
-int commit_set_aux_errnum (commit_t *c, int errnum);
+int kvstxn_get_aux_errnum (kvstxn_t *kt);
+int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum);
 
-json_t *commit_get_ops (commit_t *c);
-json_t *commit_get_names (commit_t *c);
-int commit_get_flags (commit_t *c);
+json_t *kvstxn_get_ops (kvstxn_t *kt);
+json_t *kvstxn_get_names (kvstxn_t *kt);
+int kvstxn_get_flags (kvstxn_t *kt);
 
-/* returns namespace passed into commit_mgr_create() */
-const char *commit_get_namespace (commit_t *c);
+/* returns namespace passed into kvstxn_mgr_create() */
+const char *kvstxn_get_namespace (kvstxn_t *kt);
 
-/* returns aux data passed into commit_mgr_create() */
-void *commit_get_aux (commit_t *c);
+/* returns aux data passed into kvstxn_mgr_create() */
+void *kvstxn_get_aux (kvstxn_t *kt);
 
 /* returns non-NULL only if process state complete
- * (i.e. commit_process() returns COMMIT_PROCESS_FINISHED) */
-const char *commit_get_newroot_ref (commit_t *c);
+ * (i.e. kvstxn_process() returns KVSTXN_PROCESS_FINISHED) */
+const char *kvstxn_get_newroot_ref (kvstxn_t *kt);
 
-/* Primary commit processing funtion.
+/* Primary transaction processing function.
  *
- * Pass in a commit_t that was obtained via
- * commit_mgr_get_ready_commit().
+ * Pass in a kvstxn_t that was obtained via
+ * kvstxn_mgr_get_ready_transaction().
  *
- * Returns COMMIT_PROCESS_ERROR on error,
- * COMMIT_PROCESS_LOAD_MISSING_REFS stall & load,
- * COMMIT_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache
+ * Returns KVSTXN_PROCESS_ERROR on error,
+ * KVSTXN_PROCESS_LOAD_MISSING_REFS stall & load,
+ * KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache
  * entries,
- * COMMIT_PROCESS_FINISHED all done
+ * KVSTXN_PROCESS_FINISHED all done
  *
- * on error, call commit_get_errnum() to get error number
+ * on error, call kvstxn_get_errnum() to get error number
  *
- * on stall & load, call commit_iter_missing_refs()
+ * on stall & load, call kvstxn_iter_missing_refs()
  *
  * on stall & process dirty cache entries, call
- * commit_iter_dirty_cache_entries() to process entries.
+ * kvstxn_iter_dirty_cache_entries() to process entries.
  *
- * on completion, call commit_get_newroot_ref() to get reference to
+ * on completion, call kvstxn_get_newroot_ref() to get reference to
  * new root to be stored.
  */
-commit_process_t commit_process (commit_t *c,
+kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
                                  const blobref_t rootdir_ref);
 
-/* on commit stall, iterate through all missing refs that the caller
- * should load into the cache
+/* on stall, iterate through all missing refs that the caller should
+ * load into the cache
  *
  * return -1 in callback to break iteration
  */
-int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data);
+int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data);
 
-/* on commit stall, iterate through all dirty cache entries that need
- * to be pushed to the content store.
+/* on stall, iterate through all dirty cache entries that need to be
+ * pushed to the content store.
  *
  * return -1 in callback to break iteration
  */
-int commit_iter_dirty_cache_entries (commit_t *c,
-                                     commit_cache_entry_f cb,
+int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
+                                     kvstxn_cache_entry_f cb,
                                      void *data);
 
 /* convenience function for cleaning up a dirty cache entry that was
- * returned to the user via commit_process().  Generally speaking, this
+ * returned to the user via kvstxn_process().  Generally speaking, this
  * should only be used for error cleanup in the callback function used in
- * commit_iter_dirty_cache_entries().
+ * kvstxn_iter_dirty_cache_entries().
  */
-void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *entry);
+void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry);
 
 /*
- * commit_mgr_t API
+ * kvstxn_mgr_t API
  */
 
 /* flux_t is optional, if NULL logging will go to stderr */
-commit_mgr_t *commit_mgr_create (struct cache *cache,
+kvstxn_mgr_t *kvstxn_mgr_create (struct cache *ktache,
                                  const char *namespace,
                                  const char *hash_name,
                                  flux_t *h,
                                  void *aux);
 
-void commit_mgr_destroy (commit_mgr_t *cm);
+void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm);
 
-/* commit_mgr_process_fence_request() should be called once per fence
+/* kvstxn_mgr_process_fence_request() should be called once per fence
  * request, after fence_add_request_data() has been called.
  *
- * If conditions are correct, will internally create at commit_t and
- * store it to a queue of ready to process commits.
+ * If conditions are correct, will internally create at kvstxn_t and
+ * store it to a queue of ready to process kvstxns.
  *
- * The fence_t will have its processed flag set to true if a commit_t
+ * The fence_t will have its processed flag set to true if a kvstxn_t
  * is created and queued.  See fence_get/set_processed().
  */
-int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f);
+int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, fence_t *f);
 
-/* returns true if there are commits ready for processing and are not
- * blocked, false if not.
+/* returns true if there is a transaction ready for processing and is
+ * not blocked, false if not.
  */
-bool commit_mgr_commits_ready (commit_mgr_t *cm);
+bool kvstxn_mgr_transaction_ready (kvstxn_mgr_t *ktm);
 
-/* if commit_mgr_commits_ready() is true, return a ready commit to
- * process
+/* if kvstxn_mgr_transactions_ready() is true, return a ready
+ * transaction to process
  */
-commit_t *commit_mgr_get_ready_commit (commit_mgr_t *cm);
+kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm);
 
-/* remove a commit from the commit manager after it is done processing
+/* remove a transaction from the kvstxn manager after it is done
+ * processing
  */
-void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c);
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt);
 
-int commit_mgr_get_noop_stores (commit_mgr_t *cm);
-void commit_mgr_clear_noop_stores (commit_mgr_t *cm);
+int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm);
+void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm);
 
-/* return count of ready commits */
-int commit_mgr_ready_commit_count (commit_mgr_t *cm);
+/* return count of ready transactions */
+int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm);
 
-/* In internally stored ready commits (moved to ready status via
- * commit_mgr_process_fence_request()), merge them if they are capable
- * of being merged.
- * Returns -1 on error, 0 on success.  On error, it is possible that
- * the ready commit has been modified with different fence names
- * and operations.  The caller is responsible for sending errors to
- * all appropriately.
+/* In internally stored ready transactions (moved to ready status via
+ * kvstxn_mgr_process_fence_request()), merge them if they are capable
+ * of being merged.  Returns -1 on error, 0 on success.  On error, it
+ * is possible that the ready transaction has been modified with
+ * different fence names and operations.  The caller is responsible
+ * for sending errors to all appropriately.
  */
-int commit_mgr_merge_ready_commits (commit_mgr_t *cm);
+int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm);
 
-#endif /* !_FLUX_KVS_COMMIT_H */
+#endif /* !_FLUX_KVS_KVSTXN_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

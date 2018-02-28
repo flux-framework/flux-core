@@ -43,7 +43,7 @@
 #include "commit.h"
 #include "kvs_util.h"
 
-struct commit_mgr {
+struct kvstxn_mgr {
     struct cache *cache;
     const char *namespace;
     const char *hash_name;
@@ -53,7 +53,7 @@ struct commit_mgr {
     void *aux;
 };
 
-struct commit {
+struct kvstxn {
     int errnum;
     int aux_errnum;
     int blocked:1;
@@ -64,46 +64,46 @@ struct commit {
     blobref_t newroot;
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
-    commit_mgr_t *cm;
+    kvstxn_mgr_t *ktm;
     enum {
-        COMMIT_STATE_INIT = 1,
-        COMMIT_STATE_LOAD_ROOT = 2,
-        COMMIT_STATE_APPLY_OPS = 3,
-        COMMIT_STATE_STORE = 4,
-        COMMIT_STATE_PRE_FINISHED = 5,
-        COMMIT_STATE_FINISHED = 6,
+        KVSTXN_STATE_INIT = 1,
+        KVSTXN_STATE_LOAD_ROOT = 2,
+        KVSTXN_STATE_APPLY_OPS = 3,
+        KVSTXN_STATE_STORE = 4,
+        KVSTXN_STATE_PRE_FINISHED = 5,
+        KVSTXN_STATE_FINISHED = 6,
     } state;
 };
 
-static void commit_destroy (commit_t *c)
+static void kvstxn_destroy (kvstxn_t *kt)
 {
-    if (c) {
-        json_decref (c->ops);
-        json_decref (c->names);
-        json_decref (c->rootcpy);
-        if (c->missing_refs_list)
-            zlist_destroy (&c->missing_refs_list);
-        if (c->dirty_cache_entries_list)
-            zlist_destroy (&c->dirty_cache_entries_list);
-        free (c);
+    if (kt) {
+        json_decref (kt->ops);
+        json_decref (kt->names);
+        json_decref (kt->rootcpy);
+        if (kt->missing_refs_list)
+            zlist_destroy (&kt->missing_refs_list);
+        if (kt->dirty_cache_entries_list)
+            zlist_destroy (&kt->dirty_cache_entries_list);
+        free (kt);
     }
 }
 
-static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
+static kvstxn_t *kvstxn_create (fence_t *f, kvstxn_mgr_t *ktm)
 {
-    commit_t *c;
+    kvstxn_t *kt;
     const char *name;
     int saved_errno;
 
-    if (!(c = calloc (1, sizeof (*c)))) {
+    if (!(kt = calloc (1, sizeof (*kt)))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(c->ops = json_copy (fence_get_json_ops (f)))) {
+    if (!(kt->ops = json_copy (fence_get_json_ops (f)))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(c->names = json_array ())) {
+    if (!(kt->names = json_array ())) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -113,75 +113,75 @@ static commit_t *commit_create (fence_t *f, commit_mgr_t *cm)
             saved_errno = ENOMEM;
             goto error;
         }
-        if (json_array_append_new (c->names, s) < 0) {
+        if (json_array_append_new (kt->names, s) < 0) {
             json_decref (s);
             saved_errno = ENOMEM;
             goto error;
         }
     }
-    c->flags = fence_get_flags (f);
-    if (!(c->missing_refs_list = zlist_new ())) {
+    kt->flags = fence_get_flags (f);
+    if (!(kt->missing_refs_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(c->dirty_cache_entries_list = zlist_new ())) {
+    if (!(kt->dirty_cache_entries_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
-    c->cm = cm;
-    c->state = COMMIT_STATE_INIT;
-    return c;
-error:
-    commit_destroy (c);
+    kt->ktm = ktm;
+    kt->state = KVSTXN_STATE_INIT;
+    return kt;
+ error:
+    kvstxn_destroy (kt);
     errno = saved_errno;
     return NULL;
 }
 
-int commit_get_errnum (commit_t *c)
+int kvstxn_get_errnum (kvstxn_t *kt)
 {
-    return c->errnum;
+    return kt->errnum;
 }
 
-int commit_get_aux_errnum (commit_t *c)
+int kvstxn_get_aux_errnum (kvstxn_t *kt)
 {
-    return c->aux_errnum;
+    return kt->aux_errnum;
 }
 
-int commit_set_aux_errnum (commit_t *c, int errnum)
+int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum)
 {
-    c->aux_errnum = errnum;
-    return c->aux_errnum;
+    kt->aux_errnum = errnum;
+    return kt->aux_errnum;
 }
 
-json_t *commit_get_ops (commit_t *c)
+json_t *kvstxn_get_ops (kvstxn_t *kt)
 {
-    return c->ops;
+    return kt->ops;
 }
 
-json_t *commit_get_names (commit_t *c)
+json_t *kvstxn_get_names (kvstxn_t *kt)
 {
-    return c->names;
+    return kt->names;
 }
 
-int commit_get_flags (commit_t *c)
+int kvstxn_get_flags (kvstxn_t *kt)
 {
-    return c->flags;
+    return kt->flags;
 }
 
-const char *commit_get_namespace (commit_t *c)
+const char *kvstxn_get_namespace (kvstxn_t *kt)
 {
-    return c->cm->namespace;
+    return kt->ktm->namespace;
 }
 
-void *commit_get_aux (commit_t *c)
+void *kvstxn_get_aux (kvstxn_t *kt)
 {
-    return c->cm->aux;
+    return kt->ktm->aux;
 }
 
-const char *commit_get_newroot_ref (commit_t *c)
+const char *kvstxn_get_newroot_ref (kvstxn_t *kt)
 {
-    if (c->state == COMMIT_STATE_FINISHED)
-        return c->newroot;
+    if (kt->state == KVSTXN_STATE_FINISHED)
+        return kt->newroot;
     return NULL;
 }
 
@@ -199,10 +199,10 @@ const char *commit_get_newroot_ref (commit_t *c)
  * this dirty cache list (i.e. in store_cache() below when
  * cache_entry_set_raw() was called).
  */
-void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *entry)
+void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
 {
-    if (c->state == COMMIT_STATE_STORE
-        || c->state == COMMIT_STATE_PRE_FINISHED) {
+    if (kt->state == KVSTXN_STATE_STORE
+        || kt->state == KVSTXN_STATE_PRE_FINISHED) {
         blobref_t ref;
         const void *data;
         int len;
@@ -217,19 +217,19 @@ void commit_cleanup_dirty_cache_entry (commit_t *c, struct cache_entry *entry)
         ret = cache_entry_get_raw (entry, &data, &len);
         assert (ret == 0);
 
-        blobref_hash (c->cm->hash_name, data, len, ref);
+        blobref_hash (kt->ktm->hash_name, data, len, ref);
 
-        ret = cache_remove_entry (c->cm->cache, ref);
+        ret = cache_remove_entry (kt->ktm->cache, ref);
         assert (ret == 1);
     }
 }
 
-static void cleanup_dirty_cache_list (commit_t *c)
+static void cleanup_dirty_cache_list (kvstxn_t *kt)
 {
     struct cache_entry *entry;
 
-    while ((entry = zlist_pop (c->dirty_cache_entries_list)))
-        commit_cleanup_dirty_cache_entry (c, entry);
+    while ((entry = zlist_pop (kt->dirty_cache_entries_list)))
+        kvstxn_cleanup_dirty_cache_entry (kt, entry);
 }
 
 /* Store object 'o' under key 'ref' in local cache.
@@ -240,7 +240,7 @@ static void cleanup_dirty_cache_list (commit_t *c)
  * Returns -1 on error, 0 on success entry already there, 1 on success
  * entry needs to be flushed to content store
  */
-static int store_cache (commit_t *c, int current_epoch, json_t *o,
+static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
                         bool is_raw, blobref_t ref, struct cache_entry **entryp)
 {
     struct cache_entry *entry;
@@ -254,11 +254,11 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
         xlen = strlen (xdata);
         len = base64_decode_length (xlen);
         if (!(data = malloc (len))) {
-            flux_log_error (c->cm->h, "malloc");
+            flux_log_error (kt->ktm->h, "malloc");
             goto error;
         }
         if (base64_decode_block (data, &len, xdata, xlen) < 0) {
-            flux_log_error (c->cm->h, "base64_decode_block");
+            flux_log_error (kt->ktm->h, "base64_decode_block");
             errno = EPROTO;
             goto error;
         }
@@ -272,37 +272,37 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     }
     else {
         if (treeobj_validate (o) < 0 || !(data = treeobj_encode (o))) {
-            flux_log_error (c->cm->h, "%s: treeobj_encode", __FUNCTION__);
+            flux_log_error (kt->ktm->h, "%s: treeobj_encode", __FUNCTION__);
             goto error;
         }
         len = strlen (data);
     }
-    if (blobref_hash (c->cm->hash_name, data, len, ref) < 0) {
-        flux_log_error (c->cm->h, "%s: blobref_hash", __FUNCTION__);
+    if (blobref_hash (kt->ktm->hash_name, data, len, ref) < 0) {
+        flux_log_error (kt->ktm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
-    if (!(entry = cache_lookup (c->cm->cache, ref, current_epoch))) {
+    if (!(entry = cache_lookup (kt->ktm->cache, ref, current_epoch))) {
         if (!(entry = cache_entry_create ())) {
-            flux_log_error (c->cm->h, "%s: cache_entry_create", __FUNCTION__);
+            flux_log_error (kt->ktm->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
         }
-        cache_insert (c->cm->cache, ref, entry);
+        cache_insert (kt->ktm->cache, ref, entry);
     }
     if (cache_entry_get_valid (entry)) {
-        c->cm->noop_stores++;
+        kt->ktm->noop_stores++;
         rc = 0;
     }
     else {
         if (cache_entry_set_raw (entry, data, len) < 0) {
             int ret;
-            ret = cache_remove_entry (c->cm->cache, ref);
+            ret = cache_remove_entry (kt->ktm->cache, ref);
             assert (ret == 1);
             goto error;
         }
         if (cache_entry_set_dirty (entry, true) < 0) {
-            flux_log_error (c->cm->h, "%s: cache_entry_set_dirty",__FUNCTION__);
+            flux_log_error (kt->ktm->h, "%s: cache_entry_set_dirty",__FUNCTION__);
             int ret;
-            ret = cache_remove_entry (c->cm->cache, ref);
+            ret = cache_remove_entry (kt->ktm->cache, ref);
             assert (ret == 1);
             goto error;
         }
@@ -312,7 +312,7 @@ static int store_cache (commit_t *c, int current_epoch, json_t *o,
     free (data);
     return rc;
 
-error:
+ error:
     saved_errno = errno;
     free (data);
     errno = saved_errno;
@@ -323,11 +323,11 @@ error:
  * Store (large) FILEVAL objects, converting them to FILEREFs.
  * Return 0 on success, -1 on error
  */
-static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
+static int kvstxn_unroll (kvstxn_t *kt, int current_epoch, json_t *dir)
 {
     json_t *dir_entry;
     json_t *dir_data;
-    json_t *tmp;
+    json_t *ktmp;
     blobref_t ref;
     int ret;
     struct cache_entry *entry;
@@ -346,22 +346,22 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     while (iter) {
         dir_entry = json_object_iter_value (iter);
         if (treeobj_is_dir (dir_entry)) {
-            if (commit_unroll (c, current_epoch, dir_entry) < 0) /* depth first */
+            if (kvstxn_unroll (kt, current_epoch, dir_entry) < 0) /* depth first */
                 return -1;
-            if ((ret = store_cache (c, current_epoch, dir_entry,
+            if ((ret = store_cache (kt, current_epoch, dir_entry,
                                     false, ref, &entry)) < 0)
                 return -1;
             if (ret) {
-                if (zlist_push (c->dirty_cache_entries_list, entry) < 0) {
-                    commit_cleanup_dirty_cache_entry (c, entry);
+                if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
+                    kvstxn_cleanup_dirty_cache_entry (kt, entry);
                     errno = ENOMEM;
                     return -1;
                 }
             }
-            if (!(tmp = treeobj_create_dirref (ref)))
+            if (!(ktmp = treeobj_create_dirref (ref)))
                 return -1;
-            if (json_object_iter_set_new (dir, iter, tmp) < 0) {
-                json_decref (tmp);
+            if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
+                json_decref (ktmp);
                 errno = ENOMEM;
                 return -1;
             }
@@ -376,20 +376,20 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
             str = json_string_value (val_data);
             assert (str);
             if (strlen (str) > BLOBREF_MAX_STRING_SIZE) {
-                if ((ret = store_cache (c, current_epoch, val_data,
+                if ((ret = store_cache (kt, current_epoch, val_data,
                                         true, ref, &entry)) < 0)
                     return -1;
                 if (ret) {
-                    if (zlist_push (c->dirty_cache_entries_list, entry) < 0) {
-                        commit_cleanup_dirty_cache_entry (c, entry);
+                    if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
+                        kvstxn_cleanup_dirty_cache_entry (kt, entry);
                         errno = ENOMEM;
                         return -1;
                     }
                 }
-                if (!(tmp = treeobj_create_valref (ref)))
+                if (!(ktmp = treeobj_create_valref (ref)))
                     return -1;
-                if (json_object_iter_set_new (dir, iter, tmp) < 0) {
-                    json_decref (tmp);
+                if (json_object_iter_set_new (dir, iter, ktmp) < 0) {
+                    json_decref (ktmp);
                     errno = ENOMEM;
                     return -1;
                 }
@@ -401,7 +401,7 @@ static int commit_unroll (commit_t *c, int current_epoch, json_t *dir)
     return 0;
 }
 
-static int commit_val_data_to_cache (commit_t *c, int current_epoch,
+static int kvstxn_val_data_to_cache (kvstxn_t *kt, int current_epoch,
                                      json_t *val, blobref_t ref)
 {
     struct cache_entry *entry;
@@ -411,13 +411,13 @@ static int commit_val_data_to_cache (commit_t *c, int current_epoch,
     if (!(val_data = treeobj_get_data (val)))
         return -1;
 
-    if ((ret = store_cache (c, current_epoch, val_data,
+    if ((ret = store_cache (kt, current_epoch, val_data,
                             true, ref, &entry)) < 0)
         return -1;
 
     if (ret) {
-        if (zlist_push (c->dirty_cache_entries_list, entry) < 0) {
-            commit_cleanup_dirty_cache_entry (c, entry);
+        if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
+            kvstxn_cleanup_dirty_cache_entry (kt, entry);
             errno = ENOMEM;
             return -1;
         }
@@ -426,7 +426,7 @@ static int commit_val_data_to_cache (commit_t *c, int current_epoch,
     return 0;
 }
 
-static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
+static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
                           json_t *dir, const char *final_name)
 {
     json_t *entry;
@@ -458,8 +458,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
          * sitting in the KVS cache.
          */
 
-        if (commit_val_data_to_cache (c, current_epoch,
-                                      dirent, ref) < 0)
+        if (kvstxn_val_data_to_cache (kt, current_epoch, dirent, ref) < 0)
             return -1;
 
         if (!(cpy = treeobj_deep_copy (entry)))
@@ -476,7 +475,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
         }
     }
     else if (treeobj_is_val (entry)) {
-        json_t *tmp;
+        json_t *ktmp;
         blobref_t ref1, ref2;
 
         /* treeobj entry is val, so we need to convert the treeobj
@@ -484,24 +483,22 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
          * same as the treeobj valref case above.
          */
 
-        if (commit_val_data_to_cache (c, current_epoch,
-                                      entry, ref1) < 0)
+        if (kvstxn_val_data_to_cache (kt, current_epoch, entry, ref1) < 0)
             return -1;
 
-        if (commit_val_data_to_cache (c, current_epoch,
-                                      dirent, ref2) < 0)
+        if (kvstxn_val_data_to_cache (kt, current_epoch, dirent, ref2) < 0)
             return -1;
 
-        if (!(tmp = treeobj_create_valref (ref1)))
+        if (!(ktmp = treeobj_create_valref (ref1)))
             return -1;
 
-        if (treeobj_append_blobref (tmp, ref2) < 0) {
-            json_decref (tmp);
+        if (treeobj_append_blobref (ktmp, ref2) < 0) {
+            json_decref (ktmp);
             return -1;
         }
 
-        if (treeobj_insert_entry (dir, final_name, tmp) < 0) {
-            json_decref (tmp);
+        if (treeobj_insert_entry (dir, final_name, ktmp) < 0) {
+            json_decref (ktmp);
             return -1;
         }
     }
@@ -519,7 +516,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
     }
     else {
         char *s = json_dumps (entry, 0);
-        flux_log (c->cm->h, LOG_ERR, "%s: corrupt treeobj: %s",
+        flux_log (kt->ktm->h, LOG_ERR, "%s: corrupt treeobj: %s",
                   __FUNCTION__, s);
         free (s);
         errno = ENOTRECOVERABLE;
@@ -530,7 +527,7 @@ static int commit_append (commit_t *c, int current_epoch, json_t *dirent,
 
 /* link (key, dirent) into directory 'dir'.
  */
-static int commit_link_dirent (commit_t *c, int current_epoch,
+static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                                json_t *rootdir, const char *key,
                                json_t *dirent, int flags,
                                const char **missing_ref)
@@ -584,7 +581,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
         } else if (treeobj_is_dirref (dir_entry)) {
             struct cache_entry *entry;
             const char *ref;
-            const json_t *subdirtmp;
+            const json_t *subdirktmp;
             int refcount;
 
             if ((refcount = treeobj_get_count (dir_entry)) < 0) {
@@ -593,7 +590,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
 
             if (refcount != 1) {
-                flux_log (c->cm->h, LOG_ERR, "invalid dirref count: %d",
+                flux_log (kt->ktm->h, LOG_ERR, "invalid dirref count: %d",
                           refcount);
                 saved_errno = ENOTRECOVERABLE;
                 goto done;
@@ -604,19 +601,19 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 goto done;
             }
 
-            if (!(entry = cache_lookup (c->cm->cache, ref, current_epoch))
+            if (!(entry = cache_lookup (kt->ktm->cache, ref, current_epoch))
                 || !cache_entry_get_valid (entry)) {
                 *missing_ref = ref;
                 goto success; /* stall */
             }
 
-            if (!(subdirtmp = cache_entry_get_treeobj (entry))) {
+            if (!(subdirktmp = cache_entry_get_treeobj (entry))) {
                 saved_errno = ENOTRECOVERABLE;
                 goto done;
             }
 
             /* do not corrupt store by modifying orig. */
-            if (!(subdir = treeobj_deep_copy (subdirtmp))) {
+            if (!(subdir = treeobj_deep_copy (subdirktmp))) {
                 saved_errno = errno;
                 goto done;
             }
@@ -644,7 +641,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
                 saved_errno = ENOMEM;
                 goto done;
             }
-            if (commit_link_dirent (c,
+            if (kvstxn_link_dirent (kt,
                                     current_epoch,
                                     rootdir,
                                     nkey,
@@ -679,7 +676,7 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
      */
     if (!json_is_null (dirent)) {
         if (flags & FLUX_KVS_APPEND) {
-            if (commit_append (c, current_epoch, dirent, dir, name) < 0) {
+            if (kvstxn_append (kt, current_epoch, dirent, dir, name) < 0) {
                 saved_errno = errno;
                 goto done;
             }
@@ -701,203 +698,203 @@ static int commit_link_dirent (commit_t *c, int current_epoch,
             }
         }
     }
-success:
+ success:
     rc = 0;
-done:
+ done:
     free (cpy);
     if (rc < 0)
         errno = saved_errno;
     return rc;
 }
 
-commit_process_t commit_process (commit_t *c,
+kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                  int current_epoch,
                                  const blobref_t rootdir_ref)
 {
-    /* Incase user calls commit_process() again */
-    if (c->errnum)
-        return COMMIT_PROCESS_ERROR;
+    /* Incase user calls kvstxn_process() again */
+    if (kt->errnum)
+        return KVSTXN_PROCESS_ERROR;
 
-    switch (c->state) {
-        case COMMIT_STATE_INIT:
-        case COMMIT_STATE_LOAD_ROOT:
-        {
-            /* Make a copy of the root directory.
-             */
-            struct cache_entry *entry;
-            const json_t *rootdir;
+    switch (kt->state) {
+    case KVSTXN_STATE_INIT:
+    case KVSTXN_STATE_LOAD_ROOT:
+    {
+        /* Make a copy of the root directory.
+         */
+        struct cache_entry *entry;
+        const json_t *rootdir;
 
-            /* Caller didn't call commit_iter_missing_refs() */
-            if (zlist_first (c->missing_refs_list))
-                goto stall_load;
+        /* Caller didn't call kvstxn_iter_missing_refs() */
+        if (zlist_first (kt->missing_refs_list))
+            goto stall_load;
 
-            c->state = COMMIT_STATE_LOAD_ROOT;
+        kt->state = KVSTXN_STATE_LOAD_ROOT;
 
-            if (!(entry = cache_lookup (c->cm->cache,
-                                        rootdir_ref,
-                                        current_epoch))
-                || !cache_entry_get_valid (entry)) {
+        if (!(entry = cache_lookup (kt->ktm->cache,
+                                    rootdir_ref,
+                                    current_epoch))
+            || !cache_entry_get_valid (entry)) {
 
-                if (zlist_push (c->missing_refs_list,
-                                (void *)rootdir_ref) < 0) {
-                    c->errnum = ENOMEM;
-                    return COMMIT_PROCESS_ERROR;
-                }
-                goto stall_load;
+            if (zlist_push (kt->missing_refs_list,
+                            (void *)rootdir_ref) < 0) {
+                kt->errnum = ENOMEM;
+                return KVSTXN_PROCESS_ERROR;
             }
-
-            if (!(rootdir = cache_entry_get_treeobj (entry))) {
-                c->errnum = ENOTRECOVERABLE;
-                return COMMIT_PROCESS_ERROR;
-            }
-
-            if (!(c->rootcpy = treeobj_deep_copy (rootdir))) {
-                c->errnum = errno;
-                return COMMIT_PROCESS_ERROR;
-            }
-
-            c->state = COMMIT_STATE_APPLY_OPS;
-            /* fallthrough */
+            goto stall_load;
         }
-        case COMMIT_STATE_APPLY_OPS:
-        {
-            /* Apply each op (e.g. key = val) in sequence to the root
-             * copy.  A side effect of walking key paths is to convert
-             * dirref objects to dir objects in the copy.  This allows
-             * the commit to be self-contained in the rootcpy until it
-             * is unrolled later on.
-             */
-            json_t *op, *dirent;
-            const char *missing_ref = NULL;
-            int i, len = json_array_size (c->ops);
-            const char *key;
-            int flags;
 
-            /* Caller didn't call commit_iter_missing_refs() */
-            if (zlist_first (c->missing_refs_list))
-                goto stall_load;
+        if (!(rootdir = cache_entry_get_treeobj (entry))) {
+            kt->errnum = ENOTRECOVERABLE;
+            return KVSTXN_PROCESS_ERROR;
+        }
 
-            for (i = 0; i < len; i++) {
-                missing_ref = NULL;
-                op = json_array_get (c->ops, i);
-                assert (op != NULL);
-                if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
-                    c->errnum = errno;
+        if (!(kt->rootcpy = treeobj_deep_copy (rootdir))) {
+            kt->errnum = errno;
+            return KVSTXN_PROCESS_ERROR;
+        }
+
+        kt->state = KVSTXN_STATE_APPLY_OPS;
+        /* fallthrough */
+    }
+    case KVSTXN_STATE_APPLY_OPS:
+    {
+        /* Apply each op (e.g. key = val) in sequence to the root
+         * copy.  A side effect of walking key paths is to convert
+         * dirref objects to dir objects in the copy.  This allows
+         * the transaction to be self-contained in the rootcpy
+         * until it is unrolled later on.
+         */
+        json_t *op, *dirent;
+        const char *missing_ref = NULL;
+        int i, len = json_array_size (kt->ops);
+        const char *key;
+        int flags;
+
+        /* Caller didn't call kvstxn_iter_missing_refs() */
+        if (zlist_first (kt->missing_refs_list))
+            goto stall_load;
+
+        for (i = 0; i < len; i++) {
+            missing_ref = NULL;
+            op = json_array_get (kt->ops, i);
+            assert (op != NULL);
+            if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
+                kt->errnum = errno;
+                break;
+            }
+            if (kvstxn_link_dirent (kt,
+                                    current_epoch,
+                                    kt->rootcpy,
+                                    key,
+                                    dirent,
+                                    flags,
+                                    &missing_ref) < 0) {
+                kt->errnum = errno;
+                break;
+            }
+            if (missing_ref) {
+                if (zlist_push (kt->missing_refs_list,
+                                (void *)missing_ref) < 0) {
+                    kt->errnum = ENOMEM;
                     break;
                 }
-                if (commit_link_dirent (c,
-                                        current_epoch,
-                                        c->rootcpy,
-                                        key,
-                                        dirent,
-                                        flags,
-                                        &missing_ref) < 0) {
-                    c->errnum = errno;
-                    break;
-                }
-                if (missing_ref) {
-                    if (zlist_push (c->missing_refs_list,
-                                    (void *)missing_ref) < 0) {
-                        c->errnum = ENOMEM;
-                        break;
-                    }
-                }
             }
-
-            if (c->errnum != 0) {
-                /* empty missing_refs_list to prevent mistakes later */
-                while ((missing_ref = zlist_pop (c->missing_refs_list)));
-                return COMMIT_PROCESS_ERROR;
-            }
-
-            if (zlist_first (c->missing_refs_list))
-                goto stall_load;
-
-            c->state = COMMIT_STATE_STORE;
-            /* fallthrough */
         }
-        case COMMIT_STATE_STORE:
-        {
-            /* Unroll the root copy.
-             * When a dir is found, store an object and replace it
-             * with a dirref.  Finally, store the unrolled root copy
-             * as an object and keep its reference in c->newroot.
-             * Flushes to content cache are asynchronous but we don't
-             * proceed until they are completed.
-             */
-            struct cache_entry *entry;
-            int sret;
 
-            if (commit_unroll (c, current_epoch, c->rootcpy) < 0)
-                c->errnum = errno;
-            else if ((sret = store_cache (c,
-                                          current_epoch,
-                                          c->rootcpy,
-                                          false,
-                                          c->newroot,
-                                          &entry)) < 0)
-                c->errnum = errno;
-            else if (sret
-                     && zlist_push (c->dirty_cache_entries_list, entry) < 0) {
-                commit_cleanup_dirty_cache_entry (c, entry);
-                c->errnum = ENOMEM;
-            }
-
-            if (c->errnum) {
-                cleanup_dirty_cache_list (c);
-                return COMMIT_PROCESS_ERROR;
-            }
-
-            /* cache now has ownership of rootcpy, we don't need our
-             * rootcpy anymore.  But we may still need to stall user.
-             */
-            c->state = COMMIT_STATE_PRE_FINISHED;
-            json_decref (c->rootcpy);
-            c->rootcpy = NULL;
-
-            /* fallthrough */
+        if (kt->errnum != 0) {
+            /* empty missing_refs_list to prevent mistakes later */
+            while ((missing_ref = zlist_pop (kt->missing_refs_list)));
+            return KVSTXN_PROCESS_ERROR;
         }
-        case COMMIT_STATE_PRE_FINISHED:
-            /* If we did not fall through to here, caller didn't call
-             * commit_iter_dirty_cache_entries()
-             */
-            if (zlist_first (c->dirty_cache_entries_list))
-                goto stall_store;
 
-            c->state = COMMIT_STATE_FINISHED;
-            /* fallthrough */
-        case COMMIT_STATE_FINISHED:
-            break;
-        default:
-            flux_log (c->cm->h, LOG_ERR, "invalid commit state: %d", c->state);
-            c->errnum = ENOTRECOVERABLE;
-            return COMMIT_PROCESS_ERROR;
+        if (zlist_first (kt->missing_refs_list))
+            goto stall_load;
+
+        kt->state = KVSTXN_STATE_STORE;
+        /* fallthrough */
+    }
+    case KVSTXN_STATE_STORE:
+    {
+        /* Unroll the root copy.
+         * When a dir is found, store an object and replace it
+         * with a dirref.  Finally, store the unrolled root copy
+         * as an object and keep its reference in kt->newroot.
+         * Flushes to content cache are asynchronous but we don't
+         * proceed until they are completed.
+         */
+        struct cache_entry *entry;
+        int sret;
+
+        if (kvstxn_unroll (kt, current_epoch, kt->rootcpy) < 0)
+            kt->errnum = errno;
+        else if ((sret = store_cache (kt,
+                                      current_epoch,
+                                      kt->rootcpy,
+                                      false,
+                                      kt->newroot,
+                                      &entry)) < 0)
+            kt->errnum = errno;
+        else if (sret
+                 && zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
+            kvstxn_cleanup_dirty_cache_entry (kt, entry);
+            kt->errnum = ENOMEM;
+        }
+
+        if (kt->errnum) {
+            cleanup_dirty_cache_list (kt);
+            return KVSTXN_PROCESS_ERROR;
+        }
+
+        /* cache now has ownership of rootcpy, we don't need our
+         * rootcpy anymore.  But we may still need to stall user.
+         */
+        kt->state = KVSTXN_STATE_PRE_FINISHED;
+        json_decref (kt->rootcpy);
+        kt->rootcpy = NULL;
+
+        /* fallthrough */
+    }
+    case KVSTXN_STATE_PRE_FINISHED:
+        /* If we did not fall through to here, caller didn't call
+         * kvstxn_iter_dirty_cache_entries()
+         */
+        if (zlist_first (kt->dirty_cache_entries_list))
+            goto stall_store;
+
+        kt->state = KVSTXN_STATE_FINISHED;
+        /* fallthrough */
+    case KVSTXN_STATE_FINISHED:
+        break;
+    default:
+        flux_log (kt->ktm->h, LOG_ERR, "invalid kvstxn state: %d", kt->state);
+        kt->errnum = ENOTRECOVERABLE;
+        return KVSTXN_PROCESS_ERROR;
     }
 
-    return COMMIT_PROCESS_FINISHED;
+    return KVSTXN_PROCESS_FINISHED;
 
-stall_load:
-    c->blocked = 1;
-    return COMMIT_PROCESS_LOAD_MISSING_REFS;
+ stall_load:
+    kt->blocked = 1;
+    return KVSTXN_PROCESS_LOAD_MISSING_REFS;
 
-stall_store:
-    c->blocked = 1;
-    return COMMIT_PROCESS_DIRTY_CACHE_ENTRIES;
+ stall_store:
+    kt->blocked = 1;
+    return KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES;
 }
 
-int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
+int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 {
     const char *ref;
     int saved_errno, rc = 0;
 
-    if (c->state != COMMIT_STATE_LOAD_ROOT
-        && c->state != COMMIT_STATE_APPLY_OPS) {
+    if (kt->state != KVSTXN_STATE_LOAD_ROOT
+        && kt->state != KVSTXN_STATE_APPLY_OPS) {
         errno = EINVAL;
         return -1;
     }
 
-    while ((ref = zlist_pop (c->missing_refs_list))) {
-        if (cb (c, ref, data) < 0) {
+    while ((ref = zlist_pop (kt->missing_refs_list))) {
+        if (cb (kt, ref, data) < 0) {
             saved_errno = errno;
             rc = -1;
             break;
@@ -905,27 +902,27 @@ int commit_iter_missing_refs (commit_t *c, commit_ref_f cb, void *data)
     }
 
     if (rc < 0) {
-        while ((ref = zlist_pop (c->missing_refs_list)));
+        while ((ref = zlist_pop (kt->missing_refs_list)));
         errno = saved_errno;
     }
 
     return rc;
 }
 
-int commit_iter_dirty_cache_entries (commit_t *c,
-                                     commit_cache_entry_f cb,
+int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
+                                     kvstxn_cache_entry_f cb,
                                      void *data)
 {
     struct cache_entry *entry;
     int saved_errno, rc = 0;
 
-    if (c->state != COMMIT_STATE_PRE_FINISHED) {
+    if (kt->state != KVSTXN_STATE_PRE_FINISHED) {
         errno = EINVAL;
         return -1;
     }
 
-    while ((entry = zlist_pop (c->dirty_cache_entries_list))) {
-        if (cb (c, entry, data) < 0) {
+    while ((entry = zlist_pop (kt->dirty_cache_entries_list))) {
+        if (cb (kt, entry, data) < 0) {
             saved_errno = errno;
             rc = -1;
             break;
@@ -933,20 +930,20 @@ int commit_iter_dirty_cache_entries (commit_t *c,
     }
 
     if (rc < 0) {
-        cleanup_dirty_cache_list (c);
+        cleanup_dirty_cache_list (kt);
         errno = saved_errno;
     }
 
     return rc;
 }
 
-commit_mgr_t *commit_mgr_create (struct cache *cache,
+kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
                                  const char *namespace,
                                  const char *hash_name,
                                  flux_t *h,
                                  void *aux)
 {
-    commit_mgr_t *cm = NULL;
+    kvstxn_mgr_t *ktm = NULL;
     int saved_errno;
 
     if (!cache || !namespace || !hash_name) {
@@ -954,98 +951,98 @@ commit_mgr_t *commit_mgr_create (struct cache *cache,
         goto error;
     }
 
-    if (!(cm = calloc (1, sizeof (*cm)))) {
+    if (!(ktm = calloc (1, sizeof (*ktm)))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    cm->cache = cache;
-    cm->namespace = namespace;
-    cm->hash_name = hash_name;
-    if (!(cm->ready = zlist_new ())) {
+    ktm->cache = cache;
+    ktm->namespace = namespace;
+    ktm->hash_name = hash_name;
+    if (!(ktm->ready = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
-    cm->h = h;
-    cm->aux = aux;
-    return cm;
+    ktm->h = h;
+    ktm->aux = aux;
+    return ktm;
 
  error:
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     errno = saved_errno;
     return NULL;
 }
 
-void commit_mgr_destroy (commit_mgr_t *cm)
+void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
 {
-    if (cm) {
-        if (cm->ready)
-            zlist_destroy (&cm->ready);
-        free (cm);
+    if (ktm) {
+        if (ktm->ready)
+            zlist_destroy (&ktm->ready);
+        free (ktm);
     }
 }
 
-int commit_mgr_process_fence_request (commit_mgr_t *cm, fence_t *f)
+int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, fence_t *f)
 {
     if (fence_count_reached (f)) {
-        commit_t *c;
+        kvstxn_t *kt;
 
         /* fence is already processed */
         if (fence_get_processed (f))
             return 0;
 
-        if (!(c = commit_create (f, cm)))
+        if (!(kt = kvstxn_create (f, ktm)))
             return -1;
 
-        if (zlist_append (cm->ready, c) < 0) {
-            commit_destroy (c);
+        if (zlist_append (ktm->ready, kt) < 0) {
+            kvstxn_destroy (kt);
             errno = ENOMEM;
             return -1;
         }
         /* we use this flag to indicate if a fence is "ready" */
         fence_set_processed (f, true);
-        zlist_freefn (cm->ready, c, (zlist_free_fn *)commit_destroy, true);
+        zlist_freefn (ktm->ready, kt, (zlist_free_fn *)kvstxn_destroy, true);
     }
 
     return 0;
 }
 
-bool commit_mgr_commits_ready (commit_mgr_t *cm)
+bool kvstxn_mgr_transaction_ready (kvstxn_mgr_t *ktm)
 {
-    commit_t *c;
+    kvstxn_t *kt;
 
-    if ((c = zlist_first (cm->ready)) && !c->blocked)
+    if ((kt = zlist_first (ktm->ready)) && !kt->blocked)
         return true;
     return false;
 }
 
-commit_t *commit_mgr_get_ready_commit (commit_mgr_t *cm)
+kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
 {
-    if (commit_mgr_commits_ready (cm))
-        return zlist_first (cm->ready);
+    if (kvstxn_mgr_transaction_ready (ktm))
+        return zlist_first (ktm->ready);
     return NULL;
 }
 
-void commit_mgr_remove_commit (commit_mgr_t *cm, commit_t *c)
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt)
 {
-    zlist_remove (cm->ready, c);
+    zlist_remove (ktm->ready, kt);
 }
 
-int commit_mgr_get_noop_stores (commit_mgr_t *cm)
+int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm)
 {
-    return cm->noop_stores;
+    return ktm->noop_stores;
 }
 
-void commit_mgr_clear_noop_stores (commit_mgr_t *cm)
+void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm)
 {
-    cm->noop_stores = 0;
+    ktm->noop_stores = 0;
 }
 
-int commit_mgr_ready_commit_count (commit_mgr_t *cm)
+int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm)
 {
-    return zlist_size (cm->ready);
+    return zlist_size (ktm->ready);
 }
 
-static int commit_merge (commit_t *dest, commit_t *src)
+static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
 {
     json_t *names = NULL;
     json_t *ops = NULL;
@@ -1095,46 +1092,46 @@ static int commit_merge (commit_t *dest, commit_t *src)
     }
     return 1;
 
-error:
+ error:
     json_decref (names);
     json_decref (ops);
     errno = saved_errno;
     return -1;
 }
 
-/* Merge ready commits that are mergeable, where merging consists of
- * popping the "donor" commit off the ready list, and appending its
- * ops to the top commit.  The top commit can be appended to if it
- * hasn't started, or is still building the rootcpy, e.g. stalled
- * walking the namespace.
+/* Merge ready transactions that are mergeable, where merging consists
+ * of popping the "donor" transaction off the ready list, and
+ * appending its ops to the top transaction.  The top transaction can
+ * be appended to if it hasn't started, or is still building the
+ * rootcpy, e.g. stalled walking the namespace.
  *
- * Break when an unmergeable commit is discovered.  We do not wish to
- * merge non-adjacent fences, as it can create undesireable out of
- * order scenarios.  e.g.
+ * Break when an unmergeable transaction is discovered.  We do not
+ * wish to merge non-adjacent fences, as it can create undesireable
+ * out of order scenarios.  e.g.
  *
- * commit #1 is mergeable:     set A=1
- * commit #2 is non-mergeable: set A=2
- * commit #3 is mergeable:     set A=3
+ * transaction #1 is mergeable:     set A=1
+ * transaction #2 is non-mergeable: set A=2
+ * transaction #3 is mergeable:     set A=3
  *
- * If we were to merge commit #1 and commit #3, A=2 would be set after
- * A=3.
+ * If we were to merge transaction #1 and transaction #3, A=2 would be
+ * set after A=3.
  */
 
-int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
+int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
 {
-    commit_t *c = zlist_first (cm->ready);
+    kvstxn_t *kt = zlist_first (ktm->ready);
 
-    /* commit must still be in state where merged in ops can be
+    /* transaction must still be in state where merged in ops can be
      * applied */
-    if (c
-        && c->errnum == 0
-        && c->state <= COMMIT_STATE_APPLY_OPS
-        && !(c->flags & FLUX_KVS_NO_MERGE)) {
-        commit_t *nc;
-        while ((nc = zlist_next (cm->ready))) {
+    if (kt
+        && kt->errnum == 0
+        && kt->state <= KVSTXN_STATE_APPLY_OPS
+        && !(kt->flags & FLUX_KVS_NO_MERGE)) {
+        kvstxn_t *nkt;
+        while ((nkt = zlist_next (ktm->ready))) {
             int ret;
 
-            if ((ret = commit_merge (c, nc)) < 0)
+            if ((ret = kvstxn_merge (kt, nkt)) < 0)
                 return -1;
 
             /* if return == 0, we've merged as many as we currently
@@ -1142,8 +1139,8 @@ int commit_mgr_merge_ready_commits (commit_mgr_t *cm)
             if (!ret)
                 break;
 
-            /* Merged commit, remove off ready list */
-            zlist_remove (cm->ready, nc);
+            /* Merged kvstxn, remove off ready list */
+            zlist_remove (ktm->ready, nkt);
         }
     }
     return 0;

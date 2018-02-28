@@ -37,7 +37,7 @@ static int treeobj_hash (const char *hash_name, json_t *obj, blobref_t blobref)
     if (blobref_hash (hash_name, (uint8_t *)tmp, strlen (tmp), blobref) < 0)
         goto error;
     rc = 0;
-error:
+ error:
     free (tmp);
     return rc;
 }
@@ -57,7 +57,7 @@ static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
     if (cache_entry_set_raw (entry, s, strlen (s)) < 0)
         goto done;
     rc = 0;
-done:
+ done:
     saved_errno = errno;
     free (s);
     errno = saved_errno;
@@ -134,47 +134,47 @@ struct cache *create_cache_with_empty_rootdir (blobref_t ref)
     return cache;
 }
 
-void commit_mgr_basic_tests (void)
+void kvstxn_mgr_basic_tests (void)
 {
     struct cache *cache;
     json_t *ops = NULL;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     fence_t *f;
     blobref_t rootref;
 
-    ok (commit_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
+    ok (kvstxn_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
         && errno == EINVAL,
-        "commit_mgr_create fails with EINVAL on bad input");
+        "kvstxn_mgr_create fails with EINVAL on bad input");
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    ok (commit_mgr_get_noop_stores (cm) == 0,
-        "commit_mgr_get_noop_stores works");
+    ok (kvstxn_mgr_get_noop_stores (ktm) == 0,
+        "kvstxn_mgr_get_noop_stores works");
 
-    commit_mgr_clear_noop_stores (cm);
+    kvstxn_mgr_clear_noop_stores (ktm);
 
     ok ((f = fence_create ("fence1", 1, 0)) != NULL,
         "fence_create works");
 
-    ok (commit_mgr_process_fence_request (cm, f) == 0,
-        "commit_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+        "kvstxn_mgr_process_fence_request works");
 
-    ok (commit_mgr_ready_commit_count (cm) == 0,
-        "commit_mgr_ready_commit_count is 0");
+    ok (kvstxn_mgr_ready_transaction_count (ktm) == 0,
+        "kvstxn_mgr_ready_transaction_count is 0");
 
-    ok (commit_mgr_commits_ready (cm) == false,
-        "commit_mgr_commits_ready says no fences are ready");
+    ok (kvstxn_mgr_transaction_ready (ktm) == false,
+        "kvstxn_mgr_transaction_ready says no fences are ready");
 
-    ok (commit_mgr_get_ready_commit (cm) == NULL,
-        "commit_mgr_get_ready_commit returns NULL for no ready commits");
+    ok (kvstxn_mgr_get_ready_transaction (ktm) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL for no ready kvstxns");
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -184,37 +184,37 @@ void commit_mgr_basic_tests (void)
 
     json_decref (ops);
 
-    ok (commit_mgr_process_fence_request (cm, f) == 0,
-        "commit_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+        "kvstxn_mgr_process_fence_request works");
 
-    ok (commit_mgr_ready_commit_count (cm) == 1,
-        "commit_mgr_ready_commit_count is 1");
+    ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
+        "kvstxn_mgr_ready_transaction_count is 1");
 
-    ok (commit_mgr_process_fence_request (cm, f) == 0,
-        "commit_mgr_process_fence_request works again");
+    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+        "kvstxn_mgr_process_fence_request works again");
 
-    ok (commit_mgr_ready_commit_count (cm) == 1,
-        "commit_mgr_ready_commit_count is still 1, didn't double add fence");
+    ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
+        "kvstxn_mgr_ready_transaction_count is still 1, didn't double add fence");
 
-    ok (commit_mgr_commits_ready (cm) == true,
-        "commit_mgr_commits_ready says a fence is ready");
+    ok (kvstxn_mgr_transaction_ready (ktm) == true,
+        "kvstxn_mgr_transaction_ready says a fence is ready");
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns != NULL for ready commits");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns != NULL for ready kvstxns");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    ok (commit_mgr_commits_ready (cm) == false,
-        "commit_mgr_commits_ready says no fences are ready");
+    ok (kvstxn_mgr_transaction_ready (ktm) == false,
+        "kvstxn_mgr_transaction_ready says no fences are ready");
 
-    ok (commit_mgr_get_ready_commit (cm) == NULL,
-        "commit_mgr_get_ready_commit returns NULL no ready commits");
+    ok (kvstxn_mgr_get_ready_transaction (ktm) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL no ready kvstxns");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void create_ready_commit (commit_mgr_t *cm,
+void create_ready_kvstxn (kvstxn_mgr_t *ktm,
                           const char *name,
                           const char *key,
                           const char *val,
@@ -235,72 +235,72 @@ void create_ready_commit (commit_mgr_t *cm,
 
     json_decref (ops);
 
-    ok (commit_mgr_process_fence_request (cm, f) == 0,
-        "commit_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+        "kvstxn_mgr_process_fence_request works");
 
-    ok (commit_mgr_commits_ready (cm) == true,
-        "commit_mgr_commits_ready says a commit is ready");
+    ok (kvstxn_mgr_transaction_ready (ktm) == true,
+        "kvstxn_mgr_transaction_ready says a kvstxn is ready");
 }
 
-void verify_ready_commit (commit_mgr_t *cm,
+void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
                           json_t *names,
                           json_t *ops,
                           int flags,
                           const char *extramsg)
 {
     json_t *o;
-    commit_t *c;
+    kvstxn_t *kt;
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok ((o = commit_get_names (c)) != NULL,
-        "commit_get_names works");
+    ok ((o = kvstxn_get_names (kt)) != NULL,
+        "kvstxn_get_names works");
 
     ok (json_equal (names, o) == true,
         "names match %s", extramsg);
 
-    ok ((o = commit_get_ops (c)) != NULL,
-        "commit_get_ops works");
+    ok ((o = kvstxn_get_ops (kt)) != NULL,
+        "kvstxn_get_ops works");
 
     ok (json_equal (ops, o) == true,
         "ops match %s", extramsg);
 
-    ok (commit_get_flags (c) == flags,
+    ok (kvstxn_get_flags (kt) == flags,
         "flags do not match");
 }
 
-void clear_ready_commits (commit_mgr_t *cm)
+void clear_ready_kvstxns (kvstxn_mgr_t *ktm)
 {
-    commit_t *c;
+    kvstxn_t *kt;
 
-    while ((c = commit_mgr_get_ready_commit (cm)))
-        commit_mgr_remove_commit (cm, c);
+    while ((kt = kvstxn_mgr_get_ready_transaction (ktm)))
+        kvstxn_mgr_remove_transaction (ktm, kt);
 }
 
-void commit_mgr_merge_tests (void)
+void kvstxn_mgr_merge_tests (void)
 {
     struct cache *cache;
     json_t *names, *ops = NULL;
-    commit_mgr_t *cm;
+    kvstxn_mgr_t *ktm;
     blobref_t rootref;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /* test successful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
-    create_ready_commit (cm, "fence2", "key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "key2", "2", 0, 0);
 
-    ok (commit_mgr_merge_ready_commits (cm) == 0,
-        "commit_mgr_merge_ready_commits success");
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -310,21 +310,21 @@ void commit_mgr_merge_tests (void)
     ops_append (ops, "key1", "1", 0);
     ops_append (ops, "key2", "2", 0);
 
-    verify_ready_commit (cm, names, ops, 0, "merged fence");
+    verify_ready_kvstxn (ktm, names, ops, 0, "merged fence");
 
     json_decref (names);
     json_decref (ops);
     ops = NULL;
 
-    clear_ready_commits (cm);
+    clear_ready_kvstxns (ktm);
 
     /* test unsuccessful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
-    create_ready_commit (cm, "fence2", "key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
+    create_ready_kvstxn (ktm, "fence2", "key2", "2", 0, 0);
 
-    ok (commit_mgr_merge_ready_commits (cm) == 0,
-        "commit_mgr_merge_ready_commits success");
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -332,21 +332,21 @@ void commit_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_commit (cm, names, ops, FLUX_KVS_NO_MERGE, "unmerged fence");
+    verify_ready_kvstxn (ktm, names, ops, FLUX_KVS_NO_MERGE, "unmerged fence");
 
     json_decref (names);
     json_decref (ops);
     ops = NULL;
 
-    clear_ready_commits (cm);
+    clear_ready_kvstxns (ktm);
 
     /* test unsuccessful merge */
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
-    create_ready_commit (cm, "fence2", "key2", "2", 0, FLUX_KVS_NO_MERGE);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "key2", "2", 0, FLUX_KVS_NO_MERGE);
 
-    ok (commit_mgr_merge_ready_commits (cm) == 0,
-        "commit_mgr_merge_ready_commits success");
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -354,47 +354,47 @@ void commit_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_commit (cm, names, ops, 0, "unmerged fence");
+    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged fence");
 
     json_decref (names);
     json_decref (ops);
     ops = NULL;
 
-    clear_ready_commits (cm);
+    clear_ready_kvstxns (ktm);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-int ref_noop_cb (commit_t *c, const char *ref, void *data)
+int ref_noop_cb (kvstxn_t *kt, const char *ref, void *data)
 {
     return 0;
 }
 
-int cache_noop_cb (commit_t *c, struct cache_entry *entry, void *data)
+int cache_noop_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     return 0;
 }
 
-void commit_basic_tests (void)
+void kvstxn_basic_tests (void)
 {
     struct cache *cache;
     json_t *names, *ops = NULL;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     blobref_t rootref;
     const char *namespace;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0x44);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0x44);
 
     names = json_array ();
     json_array_append (names, json_string ("fence1"));
@@ -402,53 +402,53 @@ void commit_basic_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_commit (cm, names, ops, 0x44, "basic test");
+    verify_ready_kvstxn (ktm, names, ops, 0x44, "basic test");
 
     json_decref (names);
     json_decref (ops);
     ops = NULL;
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_get_errnum (c) == 0,
-        "commit_get_errnum returns no error");
+    ok (kvstxn_get_errnum (kt) == 0,
+        "kvstxn_get_errnum returns no error");
 
-    ok (commit_get_aux_errnum (c) == 0,
-        "commit_get_aux_errnum returns no error");
+    ok (kvstxn_get_aux_errnum (kt) == 0,
+        "kvstxn_get_aux_errnum returns no error");
 
-    ok (commit_set_aux_errnum (c, EINVAL) == EINVAL,
-        "commit_set_aux_errnum works");
+    ok (kvstxn_set_aux_errnum (kt, EINVAL) == EINVAL,
+        "kvstxn_set_aux_errnum works");
 
-    ok (commit_get_aux_errnum (c) == EINVAL,
-        "commit_get_aux_errnum gets EINVAL");
+    ok (kvstxn_get_aux_errnum (kt) == EINVAL,
+        "kvstxn_get_aux_errnum gets EINVAL");
 
-    ok (commit_get_errnum (c) == 0,
-        "commit_get_errnum still works");
+    ok (kvstxn_get_errnum (kt) == 0,
+        "kvstxn_get_errnum still works");
 
-    ok ((namespace = commit_get_namespace (c)) != NULL,
-        "commit_get_namespace returns non-NULL");
+    ok ((namespace = kvstxn_get_namespace (kt)) != NULL,
+        "kvstxn_get_namespace returns non-NULL");
 
     ok (!strcmp (namespace, KVS_PRIMARY_NAMESPACE),
-        "commit_get_namespace returns correct string");
+        "kvstxn_get_namespace returns correct string");
 
-    ok (commit_get_aux (c) == &test_global,
-        "commit_get_aux returns correct pointer");
+    ok (kvstxn_get_aux (kt) == &test_global,
+        "kvstxn_get_aux returns correct pointer");
 
-    ok (commit_get_newroot_ref (c) == NULL,
-        "commit_get_newroot_ref returns NULL when processing not complete");
+    ok (kvstxn_get_newroot_ref (kt) == NULL,
+        "kvstxn_get_newroot_ref returns NULL when processing not complete");
 
-    ok (commit_iter_missing_refs (c, ref_noop_cb, NULL) < 0,
-        "commit_iter_missing_refs returns < 0 for call on invalid state");
+    ok (kvstxn_iter_missing_refs (kt, ref_noop_cb, NULL) < 0,
+        "kvstxn_iter_missing_refs returns < 0 for call on invalid state");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) < 0,
-        "commit_iter_dirty_cache_entries returns < 0 for call on invalid state");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) < 0,
+        "kvstxn_iter_dirty_cache_entries returns < 0 for call on invalid state");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-int cache_count_dirty_cb (commit_t *c, struct cache_entry *entry, void *data)
+int cache_count_dirty_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     int *count = data;
     if (cache_entry_get_dirty (entry)) {
@@ -493,165 +493,165 @@ void verify_value (struct cache *cache,
     lookup_destroy (lh);
 }
 
-void commit_basic_commit_process_test (void)
+void kvstxn_basic_kvstxn_process_test (void)
 {
     struct cache *cache;
     int count = 0;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     blobref_t rootref;
     const char *newroot;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "key1", "1");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
-        "commit_mgr_get_ready_commit returns NULL, no more commits");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_basic_commit_process_test_multiple_fences (void)
+void kvstxn_basic_kvstxn_process_test_multiple_fences (void)
 {
     struct cache *cache;
     int count = 0;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     blobref_t rootref;
     const char *newroot;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
-    create_ready_commit (cm, "fence2", "dir.key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "dir.key2", "2", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     strcpy (rootref, newroot);
 
-    /* get rid of the this commit, we're done */
-    commit_mgr_remove_commit (cm, c);
+    /* get rid of the this kvstxn, we're done */
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* why two? 1 for root (new dir added), 1 for dir.key2 (a new dir) */
     ok (count == 2,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "key1", "1");
     verify_value (cache, newroot, "dir.key2", "2");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
-        "commit_mgr_get_ready_commit returns NULL, no more commits");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_basic_commit_process_test_multiple_fences_merge (void)
+void kvstxn_basic_kvstxn_process_test_multiple_fences_merge (void)
 {
     struct cache *cache;
     int count = 0;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     blobref_t rootref;
     const char *newroot;
 
     cache = create_cache_with_empty_rootdir (rootref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "foo.key1", "1", 0, 0);
-    create_ready_commit (cm, "fence2", "bar.key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "foo.key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "bar.key2", "2", 0, 0);
 
-    /* merge ready commits */
-    ok (commit_mgr_merge_ready_commits (cm) == 0,
-        "commit_mgr_merge_ready_commits success");
+    /* merge ready kvstxns */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* why three? 1 for root, 1 for foo.key1 (a new dir), and 1 for
      * bar.key2 (a new dir)
@@ -660,29 +660,29 @@ void commit_basic_commit_process_test_multiple_fences_merge (void)
     ok (count == 3,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "foo.key1", "1");
     verify_value (cache, newroot, "bar.key2", "2");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
-        "commit_mgr_get_ready_commit returns NULL, no more commits");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_basic_root_not_dir (void)
+void kvstxn_basic_root_not_dir (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t root_ref;
 
@@ -697,29 +697,29 @@ void commit_basic_root_not_dir (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "val", "42", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "val", "42", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* error is caught continuously */
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR again");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR again");
 
-    ok (commit_get_errnum (c) == EINVAL,
-        "commit_get_errnum return EINVAL");
+    ok (kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_get_errnum return EINVAL");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
@@ -728,7 +728,7 @@ struct rootref_data {
     const char *rootref;
 };
 
-int rootref_cb (commit_t *c, const char *ref, void *data)
+int rootref_cb (kvstxn_t *kt, const char *ref, void *data)
 {
     struct rootref_data *rd = data;
     json_t *rootdir;
@@ -748,11 +748,11 @@ int rootref_cb (commit_t *c, const char *ref, void *data)
     return 0;
 }
 
-void commit_process_root_missing (void)
+void kvstxn_process_root_missing (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     blobref_t rootref;
     struct rootref_data rd;
     json_t *rootdir;
@@ -769,50 +769,50 @@ void commit_process_root_missing (void)
 
     json_decref (rootdir);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_LOAD_MISSING_REFS,
-        "commit_process returns COMMIT_PROCESS_LOAD_MISSING_REFS");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
-    /* user forgot to call commit_iter_missing_refs() test */
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_LOAD_MISSING_REFS,
-        "commit_process returns COMMIT_PROCESS_LOAD_MISSING_REFS again");
+    /* user forgot to call kvstxn_iter_missing_refs() test */
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS again");
 
     rd.cache = cache;
     rd.rootref = rootref;
 
-    ok (commit_iter_missing_refs (c, rootref_cb, &rd) == 0,
-        "commit_iter_missing_refs works for dirty cache entries");
+    ok (kvstxn_iter_missing_refs (kt, rootref_cb, &rd) == 0,
+        "kvstxn_iter_missing_refs works for dirty cache entries");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    /* user forgot to call commit_iter_dirty_cache_entries() test */
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES again");
+    /* user forgot to call kvstxn_iter_dirty_cache_entries() test */
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES again");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (commit_process (c, 1, rootref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "key1", "1");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
@@ -822,7 +822,7 @@ struct missingref_data {
     json_t *dir;
 };
 
-int missingref_cb (commit_t *c, const char *ref, void *data)
+int missingref_cb (kvstxn_t *kt, const char *ref, void *data)
 {
     struct missingref_data *md = data;
     struct cache_entry *entry;
@@ -838,11 +838,11 @@ int missingref_cb (commit_t *c, const char *ref, void *data)
     return 0;
 }
 
-void commit_process_missing_ref (void)
+void kvstxn_process_missing_ref (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -879,75 +879,75 @@ void commit_process_missing_ref (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_LOAD_MISSING_REFS,
-        "commit_process returns COMMIT_PROCESS_LOAD_MISSING_REFS");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
-    /* user forgot to call commit_iter_missing_refs() test */
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_LOAD_MISSING_REFS,
-        "commit_process returns COMMIT_PROCESS_LOAD_MISSING_REFS again");
+    /* user forgot to call kvstxn_iter_missing_refs() test */
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS again");
 
     md.cache = cache;
     md.dir_ref = dir_ref;
     md.dir = dir;
 
-    ok (commit_iter_missing_refs (c, missingref_cb, &md) == 0,
-        "commit_iter_missing_refs works for dirty cache entries");
+    ok (kvstxn_iter_missing_refs (kt, missingref_cb, &md) == 0,
+        "kvstxn_iter_missing_refs works for dirty cache entries");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    /* user forgot to call commit_iter_dirty_cache_entries() test */
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES again");
+    /* user forgot to call kvstxn_iter_dirty_cache_entries() test */
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES again");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "dir.val", "52");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-int ref_error_cb (commit_t *c, const char *ref, void *data)
+int ref_error_cb (kvstxn_t *kt, const char *ref, void *data)
 {
     /* pick a weird errno */
     errno = ENOTTY;
     return -1;
 }
 
-int cache_error_cb (commit_t *c, struct cache_entry *entry, void *data)
+int cache_error_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
-    commit_cleanup_dirty_cache_entry (c, entry);
+    kvstxn_cleanup_dirty_cache_entry (kt, entry);
 
     /* pick a weird errno */
     errno = EXDEV;
     return -1;
 }
 
-void commit_process_error_callbacks (void)
+void kvstxn_process_error_callbacks (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -982,39 +982,39 @@ void commit_process_error_callbacks (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_LOAD_MISSING_REFS,
-        "commit_process returns COMMIT_PROCESS_LOAD_MISSING_REFS");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+        "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     errno = 0;
-    ok (commit_iter_missing_refs (c, ref_error_cb, NULL) < 0
+    ok (kvstxn_iter_missing_refs (kt, ref_error_cb, NULL) < 0
         && errno == ENOTTY,
-        "commit_iter_missing_refs errors on callback error & returns correct errno");
+        "kvstxn_iter_missing_refs errors on callback error & returns correct errno");
 
     /* insert cache entry now, want don't want missing refs on next
-     * commit_process call */
+     * kvstxn_process call */
     cache_insert (cache, dir_ref, create_cache_entry_treeobj (dir));
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     errno = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_error_cb, NULL) < 0
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_error_cb, NULL) < 0
         && errno == EXDEV,
-        "commit_iter_dirty_cache_entries errors on callback error & returns correct errno");
+        "kvstxn_iter_dirty_cache_entries errors on callback error & returns correct errno");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
@@ -1023,7 +1023,7 @@ struct error_partway_data {
     int success_returns;
 };
 
-int cache_error_partway_cb (commit_t *c, struct cache_entry *entry, void *data)
+int cache_error_partway_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     struct error_partway_data *epd = data;
     epd->total_calls++;
@@ -1035,12 +1035,12 @@ int cache_error_partway_cb (commit_t *c, struct cache_entry *entry, void *data)
     return 0;
 }
 
-void commit_process_error_callbacks_partway (void)
+void kvstxn_process_error_callbacks_partway (void)
 {
     struct cache *cache;
     struct error_partway_data epd = { .total_calls = 0, .success_returns = 0};
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -1075,45 +1075,45 @@ void commit_process_error_callbacks_partway (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.fileA", "52", 0, 0);
-    create_ready_commit (cm, "fence2", "dir.fileB", "53", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.fileA", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "dir.fileB", "53", 0, 0);
 
-    /* merge these commits */
-    ok (commit_mgr_merge_ready_commits (cm) == 0,
-        "commit_mgr_merge_ready_commits success");
+    /* merge these kvstxns */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     errno = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_error_partway_cb, &epd) < 0
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_error_partway_cb, &epd) < 0
         && errno == EDOM,
-        "commit_iter_dirty_cache_entries errors on callback error & returns correct errno");
+        "kvstxn_iter_dirty_cache_entries errors on callback error & returns correct errno");
 
     ok (epd.total_calls == 2,
         "correct number of total calls to dirty cache callback");
     ok (epd.success_returns == 1,
         "correct number of successful returns from dirty cache callback");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_invalid_operation (void)
+void kvstxn_process_invalid_operation (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t root_ref;
 
@@ -1128,49 +1128,49 @@ void commit_process_invalid_operation (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", ".", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", ".", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* error is caught continuously */
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR again");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR again");
 
-    ok (commit_get_errnum (c) == EINVAL,
-        "commit_get_errnum return EINVAL");
+    ok (kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_get_errnum return EINVAL");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_malformed_operation (void)
+void kvstxn_process_malformed_operation (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     blobref_t root_ref;
     fence_t *f;
     json_t *ops, *badop;
 
     cache = create_cache_with_empty_rootdir (root_ref);
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /* Create ops array containing one bad op.
      */
@@ -1191,30 +1191,30 @@ void commit_process_malformed_operation (void)
     ok (fence_add_request_ops (f, ops) == 0,
         "fence_add_request_ops add works");
 
-    /* Submit fence_t to commit_mgr
+    /* Submit fence_t to kvstxn_mgr
      */
-    ok (commit_mgr_process_fence_request (cm, f) == 0,
-        "commit_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+        "kvstxn_mgr_process_fence_request works");
 
-    /* Process ready commit and verify EPROTO error
+    /* Process ready kvstxn and verify EPROTO error
      */
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR
-        && commit_get_errnum (c) == EPROTO,
-        "commit_process encountered EPROTO error");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR
+        && kvstxn_get_errnum (kt) == EPROTO,
+        "kvstxn_process encountered EPROTO error");
 
     json_decref (ops);
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
 
-void commit_process_invalid_hash (void)
+void kvstxn_process_invalid_hash (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t root_ref;
 
@@ -1229,37 +1229,37 @@ void commit_process_invalid_hash (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "foobar",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "foobar",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.fileval", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.fileval", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
-    /* verify commit_process() does not continue processing */
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR on second call");
+    /* verify kvstxn_process() does not continue processing */
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR on second call");
 
-    ok (commit_get_errnum (c) == EINVAL,
-        "commit_get_errnum return EINVAL %d", commit_get_errnum (c));
+    ok (kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_get_errnum return EINVAL %d", kvstxn_get_errnum (kt));
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_follow_link (void)
+void kvstxn_process_follow_link (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -1298,41 +1298,41 @@ void commit_process_follow_link (void)
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "symlink.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "symlink.val", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "symlink.val", "52");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_dirval_test (void)
+void kvstxn_process_dirval_test (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -1359,41 +1359,41 @@ void commit_process_dirval_test (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "dir.val", "52");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_delete_test (void)
+void kvstxn_process_delete_test (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -1429,42 +1429,42 @@ void commit_process_delete_test (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "dir.val", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.val", NULL, 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "dir.val", NULL);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_delete_nosubdir_test (void)
+void kvstxn_process_delete_nosubdir_test (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t root_ref;
     const char *newroot;
@@ -1480,37 +1480,37 @@ void commit_process_delete_nosubdir_test (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /* subdir doesn't exist for this key */
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "noexistdir.val", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "noexistdir.val", NULL, 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "noexistdir.val", NULL);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_delete_filevalinpath_test (void)
+void kvstxn_process_delete_filevalinpath_test (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -1546,37 +1546,37 @@ void commit_process_delete_filevalinpath_test (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /* val is in path */
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence1", "dir.val.valbaz", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.val.valbaz", NULL, 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "dir.val.valbaz", NULL);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_bad_dirrefs (void)
+void kvstxn_process_bad_dirrefs (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dirref;
     json_t *dir;
@@ -1615,29 +1615,29 @@ void commit_process_bad_dirrefs (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    create_ready_commit (cm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* error is caught continuously */
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR again");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR again");
 
-    ok (commit_get_errnum (c) == ENOTRECOVERABLE,
-        "commit_get_errnum return ENOTRECOVERABLE");
+    ok (kvstxn_get_errnum (kt) == ENOTRECOVERABLE,
+        "kvstxn_get_errnum return ENOTRECOVERABLE");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
@@ -1646,7 +1646,7 @@ struct cache_count {
     int total_count;
 };
 
-int cache_count_treeobj_cb (commit_t *c, struct cache_entry *entry, void *data)
+int cache_count_treeobj_cb (kvstxn_t *kt, struct cache_entry *entry, void *data)
 {
     struct cache_count *cache_count = data;
 
@@ -1660,11 +1660,11 @@ int cache_count_treeobj_cb (commit_t *c, struct cache_entry *entry, void *data)
     return 0;
 }
 
-void commit_process_big_fileval (void)
+void kvstxn_process_big_fileval (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t root_ref;
     const char *newroot;
@@ -1690,29 +1690,29 @@ void commit_process_big_fileval (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    /* first commit a small value, to make sure it ends up as json in
+    /* first kvstxn a small value, to make sure it ends up as json in
      * the cache */
 
-    create_ready_commit (cm, "fence1", "val", "smallstr", 0, 0);
+    create_ready_kvstxn (ktm, "fence1", "val", "smallstr", 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     cache_count.treeobj_count = 0;
     cache_count.total_count = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_count_treeobj_cb,
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_treeobj_cb,
                                          &cache_count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     ok (cache_count.treeobj_count == 1,
         "correct number of cache entries were treeobj");
@@ -1720,36 +1720,36 @@ void commit_process_big_fileval (void)
     ok (cache_count.total_count == 1,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "val", "smallstr");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    /* next commit a big value, to make sure it is not json in the
+    /* next kvstxn a big value, to make sure it is not json in the
      * cache */
 
     memset (bigstr, '\0', bigstrsize);
     for (i = 0; i < bigstrsize - 1; i++)
         bigstr[i] = 'a';
 
-    create_ready_commit (cm, "fence2", "val", bigstr, 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "val", bigstr, 0, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     cache_count.treeobj_count = 0;
     cache_count.total_count = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_count_treeobj_cb,
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_treeobj_cb,
                                          &cache_count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* this entry should be not be json, it's raw b/c large val
      * converted into valref, but with change there are now two dirty entries */
@@ -1760,26 +1760,26 @@ void commit_process_big_fileval (void)
     ok (cache_count.total_count == 2,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "val", bigstr);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
 /* Test giant directory entry, as large json objects will iterate through
  * their entries randomly based on the internal hash data structure.
  */
-void commit_process_giant_dir (void)
+void kvstxn_process_giant_dir (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     json_t *dir;
     blobref_t root_ref;
@@ -1848,57 +1848,57 @@ void commit_process_giant_dir (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
-    /* make three ready commits */
-    create_ready_commit (cm, "fence1", "dir.val0200", "foo", 0, 0);
-    create_ready_commit (cm, "fence2", "dir.val0090", "bar", 0, 0);
+    /* make three ready kvstxns */
+    create_ready_kvstxn (ktm, "fence1", "dir.val0200", "foo", 0, 0);
+    create_ready_kvstxn (ktm, "fence2", "dir.val0090", "bar", 0, 0);
     /* NULL value --> delete */
-    create_ready_commit (cm, "fence3", "dir.val00D0", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "fence3", "dir.val00D0", NULL, 0, 0);
 
-    /* merge these three commits */
-    ok (commit_mgr_merge_ready_commits (cm) == 0,
-        "commit_mgr_merge_ready_commits success");
+    /* merge these three kvstxns */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
-    ok (commit_iter_dirty_cache_entries (c, cache_noop_cb, NULL) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "dir.val0200", "foo");
     verify_value (cache, newroot, "dir.val0090", "bar");
     verify_value (cache, newroot, "dir.val00D0", NULL);
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) == NULL,
-        "commit_mgr_get_ready_commit returns NULL, no more commits");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_append (void)
+void kvstxn_process_append (void)
 {
     struct cache *cache;
     int count = 0;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t valref_ref;
     blobref_t root_ref;
@@ -1929,114 +1929,114 @@ void commit_process_append (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /*
      * first test, append to a treeobj val
      */
 
-    create_ready_commit (cm, "fence1", "val", "efgh", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "fence1", "val", "efgh", FLUX_KVS_APPEND, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* 3 dirty entries, raw "abcd", raw "efgh", and a new root b/c val
      * has been changed into a valref. */
     ok (count == 3,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "val", "abcdefgh");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
     /*
      * second test, append to a treeobj valref
      */
 
-    create_ready_commit (cm, "fence2", "valref", "EFGH", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "fence2", "valref", "EFGH", FLUX_KVS_APPEND, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* 2 dirty entries, raw "EFGH", and a new root b/c valref has an
      * additional blobref */
     ok (count == 2,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "valref", "ABCDEFGH");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
     /*
      * third test, append to a non-existent value, it's like an insert
      */
 
-    create_ready_commit (cm, "fence3", "newval", "foobar", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "fence3", "newval", "foobar", FLUX_KVS_APPEND, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_DIRTY_CACHE_ENTRIES,
-        "commit_process returns COMMIT_PROCESS_DIRTY_CACHE_ENTRIES");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
-    ok (commit_iter_dirty_cache_entries (c, cache_count_dirty_cb, &count) == 0,
-        "commit_iter_dirty_cache_entries works for dirty cache entries");
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* 1 dirty entries, root simply has a new val in it */
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_FINISHED,
-        "commit_process returns COMMIT_PROCESS_FINISHED");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
-    ok ((newroot = commit_get_newroot_ref (c)) != NULL,
-        "commit_get_newroot_ref returns != NULL when processing complete");
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
     verify_value (cache, newroot, "newval", "foobar");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
-void commit_process_append_errors (void)
+void kvstxn_process_append_errors (void)
 {
     struct cache *cache;
-    commit_mgr_t *cm;
-    commit_t *c;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
     json_t *root;
     blobref_t root_ref;
 
@@ -2059,48 +2059,48 @@ void commit_process_append_errors (void)
 
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    ok ((cm = commit_mgr_create (cache,
-                                 KVS_PRIMARY_NAMESPACE,
-                                 "sha1",
-                                 NULL,
-                                 &test_global)) != NULL,
-        "commit_mgr_create works");
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
 
     /*
      * append to a dir, should get EISDIR
      */
 
-    create_ready_commit (cm, "fence1", "dir", "1", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "fence1", "dir", "1", FLUX_KVS_APPEND, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
-    ok (commit_get_errnum (c) == EISDIR,
-        "commit_get_errnum return EISDIR");
+    ok (kvstxn_get_errnum (kt) == EISDIR,
+        "kvstxn_get_errnum return EISDIR");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
     /*
      * append to a symlink, should get EOPNOTSUPP
      */
 
-    create_ready_commit (cm, "fence2", "symlink", "2", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "fence2", "symlink", "2", FLUX_KVS_APPEND, 0);
 
-    ok ((c = commit_mgr_get_ready_commit (cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (commit_process (c, 1, root_ref) == COMMIT_PROCESS_ERROR,
-        "commit_process returns COMMIT_PROCESS_ERROR");
+    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
-    ok (commit_get_errnum (c) == EOPNOTSUPP,
-        "commit_get_errnum return EOPNOTSUPP");
+    ok (kvstxn_get_errnum (kt) == EOPNOTSUPP,
+        "kvstxn_get_errnum return EOPNOTSUPP");
 
-    commit_mgr_remove_commit (cm, c);
+    kvstxn_mgr_remove_transaction (ktm, kt);
 
-    commit_mgr_destroy (cm);
+    kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
 
@@ -2108,33 +2108,33 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    commit_mgr_basic_tests ();
-    commit_mgr_merge_tests ();
-    commit_basic_tests ();
-    commit_basic_commit_process_test ();
-    commit_basic_commit_process_test_multiple_fences ();
-    commit_basic_commit_process_test_multiple_fences_merge ();
-    commit_basic_root_not_dir ();
-    commit_process_root_missing ();
-    commit_process_missing_ref ();
+    kvstxn_mgr_basic_tests ();
+    kvstxn_mgr_merge_tests ();
+    kvstxn_basic_tests ();
+    kvstxn_basic_kvstxn_process_test ();
+    kvstxn_basic_kvstxn_process_test_multiple_fences ();
+    kvstxn_basic_kvstxn_process_test_multiple_fences_merge ();
+    kvstxn_basic_root_not_dir ();
+    kvstxn_process_root_missing ();
+    kvstxn_process_missing_ref ();
     /* no need for dirty_cache_entries() test, as it is the most
      * "normal" situation and is tested throughout
      */
-    commit_process_error_callbacks ();
-    commit_process_error_callbacks_partway ();
-    commit_process_invalid_operation ();
-    commit_process_malformed_operation ();
-    commit_process_invalid_hash ();
-    commit_process_follow_link ();
-    commit_process_dirval_test ();
-    commit_process_delete_test ();
-    commit_process_delete_nosubdir_test ();
-    commit_process_delete_filevalinpath_test ();
-    commit_process_bad_dirrefs ();
-    commit_process_big_fileval ();
-    commit_process_giant_dir ();
-    commit_process_append ();
-    commit_process_append_errors ();
+    kvstxn_process_error_callbacks ();
+    kvstxn_process_error_callbacks_partway ();
+    kvstxn_process_invalid_operation ();
+    kvstxn_process_malformed_operation ();
+    kvstxn_process_invalid_hash ();
+    kvstxn_process_follow_link ();
+    kvstxn_process_dirval_test ();
+    kvstxn_process_delete_test ();
+    kvstxn_process_delete_nosubdir_test ();
+    kvstxn_process_delete_filevalinpath_test ();
+    kvstxn_process_bad_dirrefs ();
+    kvstxn_process_big_fileval ();
+    kvstxn_process_giant_dir ();
+    kvstxn_process_append ();
+    kvstxn_process_append_errors ();
 
     done_testing ();
     return (0);
