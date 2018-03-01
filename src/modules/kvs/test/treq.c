@@ -64,11 +64,11 @@ void treq_basic_tests (void)
     ok (treq_add_request_ops (tr, ops) == 0,
         "initial treq_add_request_ops add works");
 
-    ok ((o = treq_get_json_ops (tr)) != NULL,
-        "initial treq_get_json_ops call works");
+    ok ((o = treq_get_ops (tr)) != NULL,
+        "initial treq_get_ops call works");
 
     ok (json_equal (ops, o) == true,
-        "initial treq_get_json_ops match");
+        "initial treq_get_ops match");
 
     ok (treq_add_request_ops (tr, ops) < 0
         && errno == EOVERFLOW,
@@ -152,15 +152,15 @@ void treq_ops_tests (void)
     ok (treq_count_reached (tr) == true,
         "treq_count_reached() is true");
 
-    ok ((o = treq_get_json_ops (tr)) != NULL,
-        "initial treq_get_json_ops call works");
+    ok ((o = treq_get_ops (tr)) != NULL,
+        "initial treq_get_ops call works");
 
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
     json_array_append_new (ops, json_string ("B"));
 
     ok (json_equal (ops, o) == true,
-        "treq_get_json_ops match");
+        "treq_get_ops match");
 
     json_decref (ops);
 

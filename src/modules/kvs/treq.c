@@ -246,7 +246,7 @@ int treq_get_flags (treq_t *tr)
     return tr->flags;
 }
 
-json_t *treq_get_json_ops (treq_t *tr)
+json_t *treq_get_ops (treq_t *tr)
 {
     return tr->ops;
 }

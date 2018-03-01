@@ -99,7 +99,7 @@ static kvstxn_t *kvstxn_create (treq_t *tr, kvstxn_mgr_t *ktm)
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(kt->ops = json_copy (treq_get_json_ops (tr)))) {
+    if (!(kt->ops = json_copy (treq_get_ops (tr)))) {
         saved_errno = ENOMEM;
         goto error;
     }
