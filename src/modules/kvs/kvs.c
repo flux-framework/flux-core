@@ -2149,7 +2149,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#fences",
                          fence_mgr_fences_count (root->fm),
-                         "#readycommits",
+                         "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
                          "store revision", root->seq))) {
         errno = ENOMEM;
@@ -2220,7 +2220,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                              "#watchers", 0,
                              "#no-op stores", 0,
                              "#fences", 0,
-                             "#readycommits", 0,
+                             "#readytransactions", 0,
                              "store revision", 0))) {
             errno = ENOMEM;
             goto done;
