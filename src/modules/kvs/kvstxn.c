@@ -89,7 +89,7 @@ static void kvstxn_destroy (kvstxn_t *kt)
     }
 }
 
-static kvstxn_t *kvstxn_create (fence_t *f, kvstxn_mgr_t *ktm)
+static kvstxn_t *kvstxn_create (treq_t *tr, kvstxn_mgr_t *ktm)
 {
     kvstxn_t *kt;
     const char *name;
@@ -99,7 +99,7 @@ static kvstxn_t *kvstxn_create (fence_t *f, kvstxn_mgr_t *ktm)
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(kt->ops = json_copy (fence_get_json_ops (f)))) {
+    if (!(kt->ops = json_copy (treq_get_json_ops (tr)))) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -107,7 +107,7 @@ static kvstxn_t *kvstxn_create (fence_t *f, kvstxn_mgr_t *ktm)
         saved_errno = ENOMEM;
         goto error;
     }
-    if ((name = fence_get_name (f))) {
+    if ((name = treq_get_name (tr))) {
         json_t *s;
         if (!(s = json_string (name))) {
             saved_errno = ENOMEM;
@@ -119,7 +119,7 @@ static kvstxn_t *kvstxn_create (fence_t *f, kvstxn_mgr_t *ktm)
             goto error;
         }
     }
-    kt->flags = fence_get_flags (f);
+    kt->flags = treq_get_flags (tr);
     if (!(kt->missing_refs_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
@@ -981,16 +981,16 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
     }
 }
 
-int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, fence_t *f)
+int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, treq_t *tr)
 {
-    if (fence_count_reached (f)) {
+    if (treq_count_reached (tr)) {
         kvstxn_t *kt;
 
-        /* fence is already processed */
-        if (fence_get_processed (f))
+        /* treq is already processed */
+        if (treq_get_processed (tr))
             return 0;
 
-        if (!(kt = kvstxn_create (f, ktm)))
+        if (!(kt = kvstxn_create (tr, ktm)))
             return -1;
 
         if (zlist_append (ktm->ready, kt) < 0) {
@@ -998,8 +998,8 @@ int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, fence_t *f)
             errno = ENOMEM;
             return -1;
         }
-        /* we use this flag to indicate if a fence is "ready" */
-        fence_set_processed (f, true);
+        /* we use this flag to indicate if a treq is "ready" */
+        treq_set_processed (tr, true);
         zlist_freefn (ktm->ready, kt, (zlist_free_fn *)kvstxn_destroy, true);
     }
 
@@ -1106,8 +1106,8 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
  * rootcpy, e.g. stalled walking the namespace.
  *
  * Break when an unmergeable transaction is discovered.  We do not
- * wish to merge non-adjacent fences, as it can create undesireable
- * out of order scenarios.  e.g.
+ * wish to merge non-adjacent transactions, as it can create
+ * undesireable out of order scenarios.  e.g.
  *
  * transaction #1 is mergeable:     set A=1
  * transaction #2 is non-mergeable: set A=2

@@ -140,7 +140,7 @@ void kvstxn_mgr_basic_tests (void)
     json_t *ops = NULL;
     kvstxn_mgr_t *ktm;
     kvstxn_t *kt;
-    fence_t *f;
+    treq_t *tr;
     blobref_t rootref;
 
     ok (kvstxn_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
@@ -161,10 +161,10 @@ void kvstxn_mgr_basic_tests (void)
 
     kvstxn_mgr_clear_noop_stores (ktm);
 
-    ok ((f = fence_create ("fence1", 1, 0)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("fence1", 1, 0)) != NULL,
+        "treq_create works");
 
-    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
         "kvstxn_mgr_process_fence_request works");
 
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 0,
@@ -179,18 +179,18 @@ void kvstxn_mgr_basic_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "treq_add_request_ops add works");
 
     json_decref (ops);
 
-    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
         "kvstxn_mgr_process_fence_request works");
 
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
         "kvstxn_mgr_ready_transaction_count is 1");
 
-    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
         "kvstxn_mgr_process_fence_request works again");
 
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
@@ -221,21 +221,21 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
                           int op_flags,
                           int fence_flags)
 {
-    fence_t *f;
+    treq_t *tr;
     json_t *ops = NULL;
 
-    ok ((f = fence_create (name, 1, fence_flags)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create (name, 1, fence_flags)) != NULL,
+        "treq_create works");
 
     ops = json_array ();
     ops_append (ops, key, val, op_flags);
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "treq_add_request_ops add works");
 
     json_decref (ops);
 
-    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
         "kvstxn_mgr_process_fence_request works");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == true,
@@ -1160,7 +1160,7 @@ void kvstxn_process_malformed_operation (void)
     kvstxn_mgr_t *ktm;
     kvstxn_t *kt;
     blobref_t root_ref;
-    fence_t *f;
+    treq_t *tr;
     json_t *ops, *badop;
 
     cache = create_cache_with_empty_rootdir (root_ref);
@@ -1183,17 +1183,17 @@ void kvstxn_process_malformed_operation (void)
         && json_array_append_new (ops, badop) == 0,
         "created ops array with one malformed unlink op");
 
-    /* Create fence_t and add ops array to it.
+    /* Create treq_t and add ops array to it.
      */
-    ok ((f = fence_create ("malformed", 1, 0)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("malformed", 1, 0)) != NULL,
+        "treq_create works");
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "treq_add_request_ops add works");
 
-    /* Submit fence_t to kvstxn_mgr
+    /* Submit treq_t to kvstxn_mgr
      */
-    ok (kvstxn_mgr_process_fence_request (ktm, f) == 0,
+    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
         "kvstxn_mgr_process_fence_request works");
 
     /* Process ready kvstxn and verify EPROTO error

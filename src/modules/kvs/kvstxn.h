@@ -112,15 +112,15 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *ktache,
 void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm);
 
 /* kvstxn_mgr_process_fence_request() should be called once per fence
- * request, after fence_add_request_data() has been called.
+ * request, after treq_add_request_ops() has been called.
  *
  * If conditions are correct, will internally create at kvstxn_t and
  * store it to a queue of ready to process kvstxns.
  *
- * The fence_t will have its processed flag set to true if a kvstxn_t
- * is created and queued.  See fence_get/set_processed().
+ * The treq_t will have its processed flag set to true if a kvstxn_t
+ * is created and queued.  See treq_get/set_processed().
  */
-int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, fence_t *f);
+int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, treq_t *tr);
 
 /* returns true if there is a transaction ready for processing and is
  * not blocked, false if not.
@@ -147,7 +147,7 @@ int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm);
  * kvstxn_mgr_process_fence_request()), merge them if they are capable
  * of being merged.  Returns -1 on error, 0 on success.  On error, it
  * is possible that the ready transaction has been modified with
- * different fence names and operations.  The caller is responsible
+ * different transaction names and operations.  The caller is responsible
  * for sending errors to all appropriately.
  */
 int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm);

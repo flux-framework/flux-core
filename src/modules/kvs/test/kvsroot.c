@@ -169,18 +169,18 @@ void basic_kvstxn_mgr_tests (void)
     struct cache *cache;
     struct kvsroot *root;
     kvstxn_t *kt;
-    fence_t *f;
+    treq_t *tr;
     json_t *ops = NULL;
     void *tmpaux;
 
     cache = cache_create ();
 
-    f = fence_create ("foo", 1, 0);
+    tr = treq_create ("foo", 1, 0);
     ops = json_array ();
     /* not a real operation */
     json_array_append_new (ops, json_string ("foo"));
 
-    fence_add_request_ops (f, ops);
+    treq_add_request_ops (tr, ops);
 
     json_decref (ops);
 
@@ -195,7 +195,7 @@ void basic_kvstxn_mgr_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (kvstxn_mgr_process_fence_request (root->ktm, f) == 0,
+    ok (kvstxn_mgr_process_fence_request (root->ktm, tr) == 0,
         "kvstxn_mgr_process_fence_request works");
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (root->ktm)) != NULL,

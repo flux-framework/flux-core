@@ -18,7 +18,7 @@ struct kvsroot {
     int seq;
     blobref_t ref;
     kvstxn_mgr_t *ktm;
-    fence_mgr_t *fm;
+    treq_mgr_t *trm;
     waitqueue_t *watchlist;
     int watchlist_lastrun_epoch;
     int flags;

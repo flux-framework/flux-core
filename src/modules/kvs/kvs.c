@@ -868,9 +868,10 @@ done:
     return rc;
 }
 
-/* Write all the ops for a particular commit/fence request (rank 0 only).
- * The setroot event will cause responses to be sent to the fence requests
- * and clean up the fence_t state.  This function is idempotent.
+/* Write all the ops for a particular commit/fence request (rank 0
+ * only).  The setroot event will cause responses to be sent to the
+ * transaction requests and clean up the treq_t state.  This
+ * function is idempotent.
  */
 static void kvstxn_apply (kvstxn_t *kt)
 {
@@ -993,7 +994,7 @@ done:
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list.
-     * N.B. fence_t remains in the fences hash until event is received.
+     * N.B. treq_t remains in the treq_mgr_t hash until event is received.
      */
     kvstxn_mgr_remove_transaction (root->ktm, kt);
     return;
@@ -1126,7 +1127,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
 
     if (root->remove) {
         if (!wait_queue_length (root->watchlist)
-            && !fence_mgr_fences_count (root->fm)
+            && !treq_mgr_transactions_count (root->trm)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
             if (event_unsubscribe (ctx, root->namespace) < 0)
@@ -1143,7 +1144,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
              && strcasecmp (root->namespace, KVS_PRIMARY_NAMESPACE)
              && (ctx->epoch - root->watchlist_lastrun_epoch) > max_namespace_age
              && !wait_queue_length (root->watchlist)
-             && !fence_mgr_fences_count (root->fm)
+             && !treq_mgr_transactions_count (root->trm)
              && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
          * on a follower node, and it does not have any watchers,
@@ -1649,7 +1650,7 @@ done:
     free (p.sender);
 }
 
-static int finalize_fence_req (fence_t *f, const flux_msg_t *req, void *data)
+static int finalize_fence_req (treq_t *tr, const flux_msg_t *req, void *data)
 {
     struct kvs_cb_data *cbd = data;
 
@@ -1664,7 +1665,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
 {
     int i, len;
     json_t *name;
-    fence_t *f;
+    treq_t *tr;
     struct kvs_cb_data cbd = { .ctx = ctx, .errnum = errnum };
 
     if (!(len = json_array_size (names))) {
@@ -1672,14 +1673,16 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
         return;
     }
     for (i = 0; i < len; i++) {
+        const char *nameval;
         if (!(name = json_array_get (names, i))) {
             flux_log_error (ctx->h, "%s: parsing array[%d]", __FUNCTION__, i);
             return;
         }
-        if ((f = fence_mgr_lookup_fence (root->fm, json_string_value (name)))) {
-            fence_iter_request_copies (f, finalize_fence_req, &cbd);
-            if (fence_mgr_remove_fence (root->fm, json_string_value (name)) < 0)
-                flux_log_error (ctx->h, "%s: fence_mgr_remove_fence",
+        nameval = json_string_value (name);
+        if ((tr = treq_mgr_lookup_transaction (root->trm, nameval))) {
+            treq_iter_request_copies (tr, finalize_fence_req, &cbd);
+            if (treq_mgr_remove_transaction (root->trm, nameval) < 0)
+                flux_log_error (ctx->h, "%s: treq_mgr_remove_transaction",
                                 __FUNCTION__);
         }
     }
@@ -1696,7 +1699,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *name;
     int nprocs, flags;
     json_t *ops = NULL;
-    fence_t *f;
+    treq_t *tr;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
                              "ops", &ops,
@@ -1716,30 +1719,30 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(f = fence_mgr_lookup_fence (root->fm, name))) {
-        if (!(f = fence_create (name, nprocs, flags))) {
-            flux_log_error (h, "%s: fence_create", __FUNCTION__);
+    if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
+        if (!(tr = treq_create (name, nprocs, flags))) {
+            flux_log_error (h, "%s: treq_create", __FUNCTION__);
             goto error;
         }
-        if (fence_mgr_add_fence (root->fm, f) < 0) {
-            flux_log_error (h, "%s: fence_mgr_add_fence", __FUNCTION__);
-            fence_destroy (f);
+        if (treq_mgr_add_transaction (root->trm, tr) < 0) {
+            flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+            treq_destroy (tr);
             goto error;
         }
     }
 
-    if (fence_get_flags (f) != flags
-        || fence_get_nprocs (f) != nprocs) {
+    if (treq_get_flags (tr) != flags
+        || treq_get_nprocs (tr) != nprocs) {
         errno = EINVAL;
         goto error;
     }
 
-    if (fence_add_request_ops (f, ops) < 0) {
-        flux_log_error (h, "%s: fence_add_request_ops", __FUNCTION__);
+    if (treq_add_request_ops (tr, ops) < 0) {
+        flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
         goto error;
     }
 
-    if (kvstxn_mgr_process_fence_request (root->ktm, f) < 0) {
+    if (kvstxn_mgr_process_fence_request (root->ktm, tr) < 0) {
         flux_log_error (h, "%s: kvstxn_mgr_process_fence_request",
                         __FUNCTION__);
         goto error;
@@ -1769,7 +1772,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     int saved_errno, nprocs, flags;
     bool stall = false;
     json_t *ops = NULL;
-    fence_t *f;
+    treq_t *tr;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
                              "ops", &ops,
@@ -1788,35 +1791,35 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(f = fence_mgr_lookup_fence (root->fm, name))) {
-        if (!(f = fence_create (name, nprocs, flags))) {
-            flux_log_error (h, "%s: fence_create", __FUNCTION__);
+    if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
+        if (!(tr = treq_create (name, nprocs, flags))) {
+            flux_log_error (h, "%s: treq_create", __FUNCTION__);
             goto error;
         }
-        if (fence_mgr_add_fence (root->fm, f) < 0) {
+        if (treq_mgr_add_transaction (root->trm, tr) < 0) {
             saved_errno = errno;
-            flux_log_error (h, "%s: fence_mgr_add_fence", __FUNCTION__);
-            fence_destroy (f);
+            flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+            treq_destroy (tr);
             errno = saved_errno;
             goto error;
         }
     }
 
-    if (fence_get_flags (f) != flags
-        || fence_get_nprocs (f) != nprocs) {
+    if (treq_get_flags (tr) != flags
+        || treq_get_nprocs (tr) != nprocs) {
         errno = EINVAL;
         goto error;
     }
 
-    if (fence_add_request_copy (f, msg) < 0)
+    if (treq_add_request_copy (tr, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (fence_add_request_ops (f, ops) < 0) {
-            flux_log_error (h, "%s: fence_add_request_ops", __FUNCTION__);
+        if (treq_add_request_ops (tr, ops) < 0) {
+            flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
             goto error;
         }
 
-        if (kvstxn_mgr_process_fence_request (root->ktm, f) < 0) {
+        if (kvstxn_mgr_process_fence_request (root->ktm, tr) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_process_fence_request",
                             __FUNCTION__);
             goto error;
@@ -2148,7 +2151,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#fences",
-                         fence_mgr_fences_count (root->fm),
+                         treq_mgr_transactions_count (root->trm),
                          "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
                          "store revision", root->seq))) {
@@ -2373,18 +2376,18 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int root_remove_process_fences (fence_t *f, void *data)
+static int root_remove_process_fences (treq_t *tr, void *data)
 {
     struct kvs_cb_data *cbd = data;
 
     /* Fences that never reached their nprocs count will never finish,
      * must alert them with ENOTSUP that namespace removed.  Final
-     * call to fence_mgr_remove_fence() done in
+     * call to treq_mgr_remove_transaction() done in
      * finalize_fences_bynames() */
-    if (!fence_get_processed (f)) {
+    if (!treq_get_processed (tr)) {
         json_t *names = NULL;
 
-        if (!(names = json_pack ("[ s ]", fence_get_name (f)))) {
+        if (!(names = json_pack ("[ s ]", treq_get_name (tr)))) {
             flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
             errno = ENOMEM;
             return -1;
@@ -2423,10 +2426,11 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
          * commit_request_cb() and relaycommit_request_cb() ensure this.
          */
 
-        if (fence_mgr_iter_fences (root->fm,
-                                   root_remove_process_fences,
-                                   &cbd) < 0)
-            flux_log_error (ctx->h, "%s: fence_mgr_iter_fences", __FUNCTION__);
+        if (treq_mgr_iter_transactions (root->trm,
+                                          root_remove_process_fences,
+                                          &cbd) < 0)
+            flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions",
+                            __FUNCTION__);
     }
 }
 

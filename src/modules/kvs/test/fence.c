@@ -10,7 +10,7 @@
 #include "src/common/libflux/request.h"
 #include "src/modules/kvs/fence.h"
 
-int msg_cb (fence_t *f, const flux_msg_t *req, void *data)
+int msg_cb (treq_t *tr, const flux_msg_t *req, void *data)
 {
     int *count = data;
     const char *topic;
@@ -22,324 +22,324 @@ int msg_cb (fence_t *f, const flux_msg_t *req, void *data)
     return 0;
 }
 
-int msg_cb_error (fence_t *f, const flux_msg_t *req, void *data)
+int msg_cb_error (treq_t *tr, const flux_msg_t *req, void *data)
 {
     return -1;
 }
 
-void fence_basic_tests (void)
+void treq_basic_tests (void)
 {
-    fence_t *f;
+    treq_t *tr;
     json_t *ops;
     json_t *o;
     flux_msg_t *request;
     const char *name;
     int count = 0;
 
-    ok (fence_create (NULL, 0, 0) == NULL,
-        "fence_create fails on bad input");
+    ok (treq_create (NULL, 0, 0) == NULL,
+        "treq_create fails on bad input");
 
-    ok ((f = fence_create ("foo", 1, 3)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("foo", 1, 3)) != NULL,
+        "treq_create works");
 
-    ok (fence_count_reached (f) == false,
-        "initial fence_count_reached() is false");
+    ok (treq_count_reached (tr) == false,
+        "initial treq_count_reached() is false");
 
-    ok ((name = fence_get_name (f)) != NULL,
-        "fence_get_name works");
+    ok ((name = treq_get_name (tr)) != NULL,
+        "treq_get_name works");
 
     ok (strcmp (name, "foo") == 0,
-        "fence_get_name returns the correct name");
+        "treq_get_name returns the correct name");
 
-    ok (fence_get_nprocs (f) == 1,
-        "fence_get_nprocs works");
+    ok (treq_get_nprocs (tr) == 1,
+        "treq_get_nprocs works");
 
-    ok (fence_get_flags (f) == 3,
-        "fence_get_flags works");
+    ok (treq_get_flags (tr) == 3,
+        "treq_get_flags works");
 
     /* for test ops can be anything */
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "initial fence_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "initial treq_add_request_ops add works");
 
-    ok ((o = fence_get_json_ops (f)) != NULL,
-        "initial fence_get_json_ops call works");
+    ok ((o = treq_get_json_ops (tr)) != NULL,
+        "initial treq_get_json_ops call works");
 
     ok (json_equal (ops, o) == true,
-        "initial fence_get_json_ops match");
+        "initial treq_get_json_ops match");
 
-    ok (fence_add_request_ops (f, ops) < 0
+    ok (treq_add_request_ops (tr, ops) < 0
         && errno == EOVERFLOW,
-        "fence_add_request_ops fails with EOVERFLOW when exceeding nprocs");
+        "treq_add_request_ops fails with EOVERFLOW when exceeding nprocs");
 
     json_decref (ops);
 
-    ok (fence_iter_request_copies (f, msg_cb, &count) == 0,
-        "initial fence_iter_request_copies works");
+    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
+        "initial treq_iter_request_copies works");
 
     ok (count == 0,
-        "initial fence_iter_request_copies count is 0");
+        "initial treq_iter_request_copies count is 0");
 
     ok ((request = flux_request_encode ("mytopic", "{ bar : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok (fence_add_request_copy (f, request) == 0,
-        "initial fence_add_request_copy call works");
+    ok (treq_add_request_copy (tr, request) == 0,
+        "initial treq_add_request_copy call works");
 
-    ok (fence_iter_request_copies (f, msg_cb, &count) == 0,
-        "second fence_iter_request_copies works");
+    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
+        "second treq_iter_request_copies works");
 
     ok (count == 1,
-        "second fence_iter_request_copies count is 1");
+        "second treq_iter_request_copies count is 1");
 
-    ok (fence_count_reached (f) == true,
-        "later fence_count_reached() is true");
+    ok (treq_count_reached (tr) == true,
+        "later treq_count_reached() is true");
 
-    ok (fence_get_processed (f) == false,
-        "fence_get_processed returns false initially");
+    ok (treq_get_processed (tr) == false,
+        "treq_get_processed returns false initially");
 
-    fence_set_processed (f, true);
+    treq_set_processed (tr, true);
 
-    ok (fence_get_processed (f) == true,
-        "fence_get_processed returns true");
+    ok (treq_get_processed (tr) == true,
+        "treq_get_processed returns true");
 
     flux_msg_destroy (request);
 
-    fence_destroy (f);
+    treq_destroy (tr);
 }
 
-void fence_ops_tests (void)
+void treq_ops_tests (void)
 {
-    fence_t *f;
+    treq_t *tr;
     json_t *ops;
     json_t *o;
 
-    ok ((f = fence_create ("foo", 3, 3)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("foo", 3, 3)) != NULL,
+        "treq_create works");
 
-    ok (fence_count_reached (f) == false,
-        "initial fence_count_reached() is false");
+    ok (treq_count_reached (tr) == false,
+        "initial treq_count_reached() is false");
 
-    ok (fence_add_request_ops (f, NULL) == 0,
-        "fence_add_request_ops works with NULL ops");
+    ok (treq_add_request_ops (tr, NULL) == 0,
+        "treq_add_request_ops works with NULL ops");
 
-    ok (fence_count_reached (f) == false,
-        "fence_count_reached() is still false");
+    ok (treq_count_reached (tr) == false,
+        "treq_count_reached() is still false");
 
     /* for test ops can be anything */
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "treq_add_request_ops add works");
 
     json_decref (ops);
 
-    ok (fence_count_reached (f) == false,
-        "fence_count_reached() is still false");
+    ok (treq_count_reached (tr) == false,
+        "treq_count_reached() is still false");
 
     /* for test ops can be anything */
     ops = json_array ();
     json_array_append_new (ops, json_string ("B"));
 
-    ok (fence_add_request_ops (f, ops) == 0,
-        "fence_add_request_ops add works");
+    ok (treq_add_request_ops (tr, ops) == 0,
+        "treq_add_request_ops add works");
 
     json_decref (ops);
 
-    ok (fence_count_reached (f) == true,
-        "fence_count_reached() is true");
+    ok (treq_count_reached (tr) == true,
+        "treq_count_reached() is true");
 
-    ok ((o = fence_get_json_ops (f)) != NULL,
-        "initial fence_get_json_ops call works");
+    ok ((o = treq_get_json_ops (tr)) != NULL,
+        "initial treq_get_json_ops call works");
 
     ops = json_array ();
     json_array_append_new (ops, json_string ("A"));
     json_array_append_new (ops, json_string ("B"));
 
     ok (json_equal (ops, o) == true,
-        "fence_get_json_ops match");
+        "treq_get_json_ops match");
 
     json_decref (ops);
 
-    fence_destroy (f);
+    treq_destroy (tr);
 }
 
-void fence_request_tests (void)
+void treq_request_tests (void)
 {
-    fence_t *f;
+    treq_t *tr;
     flux_msg_t *request;
     int count = 0;
 
-    ok ((f = fence_create ("foo", 1, 3)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("foo", 1, 3)) != NULL,
+        "treq_create works");
 
-    ok (fence_iter_request_copies (f, msg_cb, &count) == 0,
-        "initial fence_iter_request_copies works");
+    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
+        "initial treq_iter_request_copies works");
 
     ok (count == 0,
-        "initial fence_iter_request_copies count is 0");
+        "initial treq_iter_request_copies count is 0");
 
     ok ((request = flux_request_encode ("mytopic", "{ A : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok (fence_add_request_copy (f, request) == 0,
-        "fence_add_request_copy works");
+    ok (treq_add_request_copy (tr, request) == 0,
+        "treq_add_request_copy works");
 
     flux_msg_destroy (request);
 
     ok ((request = flux_request_encode ("mytopic", "{ B : 1 }")) != NULL,
         "flux_request_encode works");
 
-    ok (fence_add_request_copy (f, request) == 0,
-        "fence_add_request_copy works");
+    ok (treq_add_request_copy (tr, request) == 0,
+        "treq_add_request_copy works");
 
     flux_msg_destroy (request);
 
-    ok (fence_iter_request_copies (f, msg_cb_error, &count) == -1,
-        "fence_iter_request_copies errors when cb errors");
+    ok (treq_iter_request_copies (tr, msg_cb_error, &count) == -1,
+        "treq_iter_request_copies errors when cb errors");
 
-    ok (fence_iter_request_copies (f, msg_cb, &count) == 0,
-        "second fence_iter_request_copies works");
+    ok (treq_iter_request_copies (tr, msg_cb, &count) == 0,
+        "second treq_iter_request_copies works");
 
     ok (count == 2,
-        "fence_iter_request_copies count is 2");
+        "treq_iter_request_copies count is 2");
 
-    fence_destroy (f);
+    treq_destroy (tr);
 }
 
-void fence_mgr_basic_tests (void)
+void treq_mgr_basic_tests (void)
 {
-    fence_mgr_t *fm;
-    fence_t *f, *tf;
+    treq_mgr_t *trm;
+    treq_t *tr, *tmp_tr;
 
-    ok ((fm = fence_mgr_create ()) != NULL,
-        "fence_mgr_create works");
+    ok ((trm = treq_mgr_create ()) != NULL,
+        "treq_mgr_create works");
 
-    ok (fence_mgr_fences_count (fm) == 0,
-        "fence_mgr_fences_count returns 0 when no fences added");
+    ok (treq_mgr_transactions_count (trm) == 0,
+        "treq_mgr_transactions_count returns 0 when no transactions added");
 
-    ok ((f = fence_create ("fence1", 1, 0)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("treq1", 1, 0)) != NULL,
+        "treq_create works");
 
-    ok (fence_mgr_add_fence (fm, f) == 0,
-        "fence_mgr_add_fence works");
+    ok (treq_mgr_add_transaction (trm, tr) == 0,
+        "treq_mgr_add_transaction works");
 
-    ok (fence_mgr_add_fence (fm, f) < 0,
-        "fence_mgr_add_fence fails on duplicate fence");
+    ok (treq_mgr_add_transaction (trm, tr) < 0,
+        "treq_mgr_add_transaction fails on duplicate treq");
 
-    ok ((tf = fence_mgr_lookup_fence (fm, "fence1")) != NULL,
-        "fence_mgr_lookup_fence works");
+    ok ((tmp_tr = treq_mgr_lookup_transaction (trm, "treq1")) != NULL,
+        "treq_mgr_lookup_transaction works");
 
-    ok (f == tf,
-        "fence_mgr_lookup_fence returns correct fence");
+    ok (tr == tmp_tr,
+        "treq_mgr_lookup_transaction returns correct treq");
 
-    ok (fence_mgr_lookup_fence (fm, "invalid") == NULL,
-        "fence_mgr_lookup_fence can't find invalid fence");
+    ok (treq_mgr_lookup_transaction (trm, "invalid") == NULL,
+        "treq_mgr_lookup_transaction can't find invalid treq");
 
-    ok (fence_mgr_fences_count (fm) == 1,
-        "fence_mgr_fences_count returns 1 when fence submitted");
+    ok (treq_mgr_transactions_count (trm) == 1,
+        "treq_mgr_transactions_count returns 1 when treq submitted");
 
-    fence_mgr_remove_fence (fm, "fence1");
+    treq_mgr_remove_transaction (trm, "treq1");
 
-    ok (fence_mgr_fences_count (fm) == 0,
-        "fence_mgr_fences_count returns 0 after fence remove");
+    ok (treq_mgr_transactions_count (trm) == 0,
+        "treq_mgr_transactions_count returns 0 after treq remove");
 
-    ok (fence_mgr_lookup_fence (fm, "fence1") == NULL,
-        "fence_mgr_lookup_fence can't find removed fence");
+    ok (treq_mgr_lookup_transaction (trm, "treq1") == NULL,
+        "treq_mgr_lookup_transaction can't find removed treq");
 
-    fence_mgr_destroy (fm);
+    treq_mgr_destroy (trm);
 }
 
-int fence_count_cb (fence_t *f, void *data)
+int treq_count_cb (treq_t *tr, void *data)
 {
     int *count = data;
     (*count)++;
     return 0;
 }
 
-int fence_remove_cb (fence_t *f, void *data)
+int treq_remove_cb (treq_t *tr, void *data)
 {
-    fence_mgr_t *fm = data;
+    treq_mgr_t *trm = data;
 
-    fence_mgr_remove_fence (fm, fence_get_name (f));
+    treq_mgr_remove_transaction (trm, treq_get_name (tr));
     return 0;
 }
 
-int fence_add_error_cb (fence_t *f, void *data)
+int treq_add_error_cb (treq_t *tr, void *data)
 {
-    fence_mgr_t *fm = data;
-    fence_t *f2;
+    treq_mgr_t *trm = data;
+    treq_t *tr2;
 
-    f2 = fence_create ("foobar", 1, 0);
+    tr2 = treq_create ("foobar", 1, 0);
 
-    if (fence_mgr_add_fence (fm, f2) < 0)
+    if (treq_mgr_add_transaction (trm, tr2) < 0)
         return -1;
     return 0;
 }
 
-int fence_error_cb (fence_t *f, void *data)
+int treq_error_cb (treq_t *tr, void *data)
 {
     return -1;
 }
 
-void fence_mgr_iter_tests (void)
+void treq_mgr_iter_tests (void)
 {
-    fence_mgr_t *fm;
-    fence_t *f;
+    treq_mgr_t *trm;
+    treq_t *tr;
     int count;
 
-    ok ((fm = fence_mgr_create ()) != NULL,
-        "fence_mgr_create works");
+    ok ((trm = treq_mgr_create ()) != NULL,
+        "treq_mgr_create works");
 
     count = 0;
-    ok (fence_mgr_iter_fences (fm, fence_count_cb, &count) == 0
+    ok (treq_mgr_iter_transactions (trm, treq_count_cb, &count) == 0
         && count == 0,
-        "fence_mgr_iter_fences success when no fences submitted");
+        "treq_mgr_iter_transactions success when no transactions submitted");
 
-    ok ((f = fence_create ("fence1", 1, 0)) != NULL,
-        "fence_create works");
+    ok ((tr = treq_create ("treq1", 1, 0)) != NULL,
+        "treq_create works");
 
-    ok (fence_mgr_add_fence (fm, f) == 0,
-        "fence_mgr_add_fence works");
+    ok (treq_mgr_add_transaction (trm, tr) == 0,
+        "treq_mgr_add_transaction works");
 
-    ok (fence_mgr_fences_count (fm) == 1,
-        "fence_mgr_fences_count returns correct count of fences");
+    ok (treq_mgr_transactions_count (trm) == 1,
+        "treq_mgr_transactions_count returns correct count of transactions");
 
-    ok (fence_mgr_iter_fences (fm, fence_error_cb, NULL) < 0,
-        "fence_mgr_iter_fences error on callback error");
+    ok (treq_mgr_iter_transactions (trm, treq_error_cb, NULL) < 0,
+        "treq_mgr_iter_transactions error on callback error");
 
-    ok (fence_mgr_iter_fences (fm, fence_add_error_cb, fm) < 0
+    ok (treq_mgr_iter_transactions (trm, treq_add_error_cb, trm) < 0
         && errno == EAGAIN,
-        "fence_mgr_iter_fences error on callback error trying to add fence");
+        "treq_mgr_iter_transactions error on callback error trying to add treq");
 
-    ok (fence_mgr_iter_fences (fm, fence_remove_cb, fm) == 0,
-        "fence_mgr_iter_fences success on remove");
+    ok (treq_mgr_iter_transactions (trm, treq_remove_cb, trm) == 0,
+        "treq_mgr_iter_transactions success on remove");
 
     count = 0;
-    ok (fence_mgr_iter_fences (fm, fence_count_cb, &count) == 0,
-        "fence_mgr_iter_fences success on count");
+    ok (treq_mgr_iter_transactions (trm, treq_count_cb, &count) == 0,
+        "treq_mgr_iter_transactions success on count");
 
     ok (count == 0,
-        "fence_mgr_iter_fences returned correct count of fences");
+        "treq_mgr_iter_transactions returned correct count of transactions");
 
-    ok (fence_mgr_fences_count (fm) == 0,
-        "fence_mgr_fences_count returns correct count of fences");
+    ok (treq_mgr_transactions_count (trm) == 0,
+        "treq_mgr_transactions_count returns correct count of transactions");
 
-    fence_mgr_destroy (fm);
+    treq_mgr_destroy (trm);
 }
 
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    fence_basic_tests ();
-    fence_ops_tests ();
-    fence_request_tests ();
-    fence_mgr_basic_tests ();
-    fence_mgr_iter_tests ();
+    treq_basic_tests ();
+    treq_ops_tests ();
+    treq_request_tests ();
+    treq_mgr_basic_tests ();
+    treq_mgr_iter_tests ();
 
     done_testing ();
     return (0);

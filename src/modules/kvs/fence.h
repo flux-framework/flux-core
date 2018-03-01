@@ -1,82 +1,83 @@
-#ifndef _FLUX_KVS_FENCE_H
-#define _FLUX_KVS_FENCE_H
+#ifndef _FLUX_KVS_TREQ_H
+#define _FLUX_KVS_TREQ_H
 
 #include <czmq.h>
 #include <jansson.h>
 
-typedef struct fence_mgr fence_mgr_t;
+typedef struct treq_mgr treq_mgr_t;
 
-typedef struct fence fence_t;
+typedef struct treq treq_t;
 
-typedef int (*fence_itr_f)(fence_t *f, void *data);
+typedef int (*treq_itr_f)(treq_t *tr, void *data);
 
-typedef int (*fence_msg_cb)(fence_t *f, const flux_msg_t *req, void *data);
+typedef int (*treq_msg_cb)(treq_t *tr, const flux_msg_t *req, void *data);
 
 /*
- * fence_mgr_t API
+ * treq_mgr_t API
  */
 
 /* flux_t is optional, if NULL logging will go to stderr */
-fence_mgr_t *fence_mgr_create (void);
+treq_mgr_t *treq_mgr_create (void);
 
-void fence_mgr_destroy (fence_mgr_t *fm);
+void treq_mgr_destroy (treq_mgr_t *trm);
 
-/* Add fence into the fence manager */
-int fence_mgr_add_fence (fence_mgr_t *fm, fence_t *f);
+/* Add transaction into the treq manager */
+int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr);
 
-/* Lookup a fence previously stored via fence_mgr_add_fence(), via name */
-fence_t *fence_mgr_lookup_fence (fence_mgr_t *fm, const char *name);
+/* Lookup a transaction previously stored via
+ * treq_mgr_add_transaction(), via name */
+treq_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name);
 
-/* Iterate through all fences */
-int fence_mgr_iter_fences (fence_mgr_t *fm, fence_itr_f cb, void *data);
+/* Iterate through all transactions */
+int treq_mgr_iter_transactions (treq_mgr_t *trm, treq_itr_f cb, void *data);
 
-/* remove a fence from the fence manager */
-int fence_mgr_remove_fence (fence_mgr_t *fm, const char *name);
+/* remove a transaction from the treq manager */
+int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name);
 
-/* Get count of fences stored */
-int fence_mgr_fences_count (fence_mgr_t *fm);
+/* Get count of transactions stored */
+int treq_mgr_transactions_count (treq_mgr_t *trm);
 
 /*
- * fence_t API
+ * treq_t API
  */
 
-fence_t *fence_create (const char *name, int nprocs, int flags);
+treq_t *treq_create (const char *name, int nprocs, int flags);
 
-void fence_destroy (fence_t *f);
+void treq_destroy (treq_t *tr);
 
-/* if number of calls to fence_add_request_data() is == nprocs */
-bool fence_count_reached (fence_t *f);
+/* if number of calls to treq_add_request_ops() is == nprocs */
+bool treq_count_reached (treq_t *tr);
 
-const char *fence_get_name (fence_t *f);
-int fence_get_nprocs (fence_t *f);
-int fence_get_flags (fence_t *f);
+const char *treq_get_name (treq_t *tr);
+int treq_get_nprocs (treq_t *tr);
+int treq_get_flags (treq_t *tr);
 
-json_t *fence_get_json_ops (fence_t *f);
+json_t *treq_get_json_ops (treq_t *tr);
 
-/* fence_add_request_ops() should be called with ops on each
+/* treq_add_request_ops() should be called with ops on each
  * request, even if ops is NULL
  */
-int fence_add_request_ops (fence_t *f, json_t *ops);
+int treq_add_request_ops (treq_t *tr, json_t *ops);
 
-/* copy the request message into the fence, where it can be retrieved
- * later.
+/* copy the request message into the transaction, where it can be
+ * retrieved later.
  */
-int fence_add_request_copy (fence_t *f, const flux_msg_t *request);
+int treq_add_request_copy (treq_t *tr, const flux_msg_t *request);
 
 /* Call callback for each request message copy stored internally via
- * fence_add_request_copy().
+ * treq_add_request_copy().
  *
  * If cb returns < 0 on a message, this function was quit and return
  * -1.
  */
-int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data);
+int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data);
 
 /* convenience processing flag
  */
-bool fence_get_processed (fence_t *f);
-void fence_set_processed (fence_t *f, bool p);
+bool treq_get_processed (treq_t *tr);
+void treq_set_processed (treq_t *tr, bool p);
 
-#endif /* !_FLUX_KVS_FENCE_H */
+#endif /* !_FLUX_KVS_TREQ_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
