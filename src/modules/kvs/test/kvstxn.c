@@ -161,17 +161,17 @@ void kvstxn_mgr_basic_tests (void)
 
     kvstxn_mgr_clear_noop_stores (ktm);
 
-    ok ((tr = treq_create ("fence1", 1, 0)) != NULL,
+    ok ((tr = treq_create ("transaction1", 1, 0)) != NULL,
         "treq_create works");
 
-    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works");
 
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 0,
         "kvstxn_mgr_ready_transaction_count is 0");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == false,
-        "kvstxn_mgr_transaction_ready says no fences are ready");
+        "kvstxn_mgr_transaction_ready says no transactions are ready");
 
     ok (kvstxn_mgr_get_ready_transaction (ktm) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL for no ready kvstxns");
@@ -184,20 +184,20 @@ void kvstxn_mgr_basic_tests (void)
 
     json_decref (ops);
 
-    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works");
 
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
         "kvstxn_mgr_ready_transaction_count is 1");
 
-    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_fence_request works again");
+    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works again");
 
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
-        "kvstxn_mgr_ready_transaction_count is still 1, didn't double add fence");
+        "kvstxn_mgr_ready_transaction_count is still 1, didn't double add");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == true,
-        "kvstxn_mgr_transaction_ready says a fence is ready");
+        "kvstxn_mgr_transaction_ready says a transaction is ready");
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns != NULL for ready kvstxns");
@@ -205,7 +205,7 @@ void kvstxn_mgr_basic_tests (void)
     kvstxn_mgr_remove_transaction (ktm, kt);
 
     ok (kvstxn_mgr_transaction_ready (ktm) == false,
-        "kvstxn_mgr_transaction_ready says no fences are ready");
+        "kvstxn_mgr_transaction_ready says no transactions are ready");
 
     ok (kvstxn_mgr_get_ready_transaction (ktm) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL no ready kvstxns");
@@ -219,12 +219,12 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
                           const char *key,
                           const char *val,
                           int op_flags,
-                          int fence_flags)
+                          int transaction_flags)
 {
     treq_t *tr;
     json_t *ops = NULL;
 
-    ok ((tr = treq_create (name, 1, fence_flags)) != NULL,
+    ok ((tr = treq_create (name, 1, transaction_flags)) != NULL,
         "treq_create works");
 
     ops = json_array ();
@@ -235,8 +235,8 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
 
     json_decref (ops);
 
-    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == true,
         "kvstxn_mgr_transaction_ready says a kvstxn is ready");
@@ -296,21 +296,21 @@ void kvstxn_mgr_merge_tests (void)
 
     /* test successful merge */
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
-    create_ready_kvstxn (ktm, "fence2", "key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0);
 
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("fence1"));
-    json_array_append (names, json_string ("fence2"));
+    json_array_append (names, json_string ("transaction1"));
+    json_array_append (names, json_string ("transaction2"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
     ops_append (ops, "key2", "2", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, "merged fence");
+    verify_ready_kvstxn (ktm, names, ops, 0, "merged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -320,19 +320,19 @@ void kvstxn_mgr_merge_tests (void)
 
     /* test unsuccessful merge */
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
-    create_ready_kvstxn (ktm, "fence2", "key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0);
 
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("fence1"));
+    json_array_append (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, FLUX_KVS_NO_MERGE, "unmerged fence");
+    verify_ready_kvstxn (ktm, names, ops, FLUX_KVS_NO_MERGE, "unmerged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -342,19 +342,19 @@ void kvstxn_mgr_merge_tests (void)
 
     /* test unsuccessful merge */
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
-    create_ready_kvstxn (ktm, "fence2", "key2", "2", 0, FLUX_KVS_NO_MERGE);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, FLUX_KVS_NO_MERGE);
 
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
         "kvstxn_mgr_merge_ready_transactions success");
 
     names = json_array ();
-    json_array_append (names, json_string ("fence1"));
+    json_array_append (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged fence");
+    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -394,10 +394,10 @@ void kvstxn_basic_tests (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0x44);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0x44);
 
     names = json_array ();
-    json_array_append (names, json_string ("fence1"));
+    json_array_append (names, json_string ("transaction1"));
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
@@ -511,7 +511,7 @@ void kvstxn_basic_kvstxn_process_test (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -542,7 +542,7 @@ void kvstxn_basic_kvstxn_process_test (void)
     cache_destroy (cache);
 }
 
-void kvstxn_basic_kvstxn_process_test_multiple_fences (void)
+void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
 {
     struct cache *cache;
     int count = 0;
@@ -560,8 +560,8 @@ void kvstxn_basic_kvstxn_process_test_multiple_fences (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
-    create_ready_kvstxn (ktm, "fence2", "dir.key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "dir.key2", "2", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -619,7 +619,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_fences (void)
     cache_destroy (cache);
 }
 
-void kvstxn_basic_kvstxn_process_test_multiple_fences_merge (void)
+void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
 {
     struct cache *cache;
     int count = 0;
@@ -637,8 +637,8 @@ void kvstxn_basic_kvstxn_process_test_multiple_fences_merge (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "foo.key1", "1", 0, 0);
-    create_ready_kvstxn (ktm, "fence2", "bar.key2", "2", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "foo.key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "bar.key2", "2", 0, 0);
 
     /* merge ready kvstxns */
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
@@ -704,7 +704,7 @@ void kvstxn_basic_root_not_dir (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "val", "42", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "val", "42", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -776,7 +776,7 @@ void kvstxn_process_root_missing (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -886,7 +886,7 @@ void kvstxn_process_missing_ref (void)
                                   &test_global)) != NULL,
         "commit_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -989,7 +989,7 @@ void kvstxn_process_error_callbacks (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1082,8 +1082,8 @@ void kvstxn_process_error_callbacks_partway (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "dir.fileA", "52", 0, 0);
-    create_ready_kvstxn (ktm, "fence2", "dir.fileB", "53", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.fileA", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "dir.fileB", "53", 0, 0);
 
     /* merge these kvstxns */
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
@@ -1135,7 +1135,7 @@ void kvstxn_process_invalid_operation (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", ".", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", ".", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1193,8 +1193,8 @@ void kvstxn_process_malformed_operation (void)
 
     /* Submit treq_t to kvstxn_mgr
      */
-    ok (kvstxn_mgr_process_fence_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works");
 
     /* Process ready kvstxn and verify EPROTO error
      */
@@ -1236,7 +1236,7 @@ void kvstxn_process_invalid_hash (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "dir.fileval", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.fileval", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1305,7 +1305,7 @@ void kvstxn_process_follow_link (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "symlink.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "symlink.val", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1366,7 +1366,7 @@ void kvstxn_process_dirval_test (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1437,7 +1437,7 @@ void kvstxn_process_delete_test (void)
         "kvstxn_mgr_create works");
 
     /* NULL value --> delete */
-    create_ready_kvstxn (ktm, "fence1", "dir.val", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val", NULL, 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1489,7 +1489,7 @@ void kvstxn_process_delete_nosubdir_test (void)
 
     /* subdir doesn't exist for this key */
     /* NULL value --> delete */
-    create_ready_kvstxn (ktm, "fence1", "noexistdir.val", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "noexistdir.val", NULL, 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1555,7 +1555,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
 
     /* val is in path */
     /* NULL value --> delete */
-    create_ready_kvstxn (ktm, "fence1", "dir.val.valbaz", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val.valbaz", NULL, 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1622,7 +1622,7 @@ void kvstxn_process_bad_dirrefs (void)
                                   &test_global)) != NULL,
         "kvstxn_mgr_create works");
 
-    create_ready_kvstxn (ktm, "fence1", "dir.val", "52", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val", "52", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1700,7 +1700,7 @@ void kvstxn_process_big_fileval (void)
     /* first kvstxn a small value, to make sure it ends up as json in
      * the cache */
 
-    create_ready_kvstxn (ktm, "fence1", "val", "smallstr", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "val", "smallstr", 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1737,7 +1737,7 @@ void kvstxn_process_big_fileval (void)
     for (i = 0; i < bigstrsize - 1; i++)
         bigstr[i] = 'a';
 
-    create_ready_kvstxn (ktm, "fence2", "val", bigstr, 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "val", bigstr, 0, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1856,10 +1856,10 @@ void kvstxn_process_giant_dir (void)
         "kvstxn_mgr_create works");
 
     /* make three ready kvstxns */
-    create_ready_kvstxn (ktm, "fence1", "dir.val0200", "foo", 0, 0);
-    create_ready_kvstxn (ktm, "fence2", "dir.val0090", "bar", 0, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir.val0200", "foo", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "dir.val0090", "bar", 0, 0);
     /* NULL value --> delete */
-    create_ready_kvstxn (ktm, "fence3", "dir.val00D0", NULL, 0, 0);
+    create_ready_kvstxn (ktm, "transaction3", "dir.val00D0", NULL, 0, 0);
 
     /* merge these three kvstxns */
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
@@ -1940,7 +1940,7 @@ void kvstxn_process_append (void)
      * first test, append to a treeobj val
      */
 
-    create_ready_kvstxn (ktm, "fence1", "val", "efgh", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "transaction1", "val", "efgh", FLUX_KVS_APPEND, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -1971,7 +1971,7 @@ void kvstxn_process_append (void)
      * second test, append to a treeobj valref
      */
 
-    create_ready_kvstxn (ktm, "fence2", "valref", "EFGH", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "transaction2", "valref", "EFGH", FLUX_KVS_APPEND, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -2002,7 +2002,7 @@ void kvstxn_process_append (void)
      * third test, append to a non-existent value, it's like an insert
      */
 
-    create_ready_kvstxn (ktm, "fence3", "newval", "foobar", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "transaction3", "newval", "foobar", FLUX_KVS_APPEND, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -2070,7 +2070,7 @@ void kvstxn_process_append_errors (void)
      * append to a dir, should get EISDIR
      */
 
-    create_ready_kvstxn (ktm, "fence1", "dir", "1", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "transaction1", "dir", "1", FLUX_KVS_APPEND, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -2087,7 +2087,7 @@ void kvstxn_process_append_errors (void)
      * append to a symlink, should get EOPNOTSUPP
      */
 
-    create_ready_kvstxn (ktm, "fence2", "symlink", "2", FLUX_KVS_APPEND, 0);
+    create_ready_kvstxn (ktm, "transaction2", "symlink", "2", FLUX_KVS_APPEND, 0);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -2112,8 +2112,8 @@ int main (int argc, char *argv[])
     kvstxn_mgr_merge_tests ();
     kvstxn_basic_tests ();
     kvstxn_basic_kvstxn_process_test ();
-    kvstxn_basic_kvstxn_process_test_multiple_fences ();
-    kvstxn_basic_kvstxn_process_test_multiple_fences_merge ();
+    kvstxn_basic_kvstxn_process_test_multiple_transactions ();
+    kvstxn_basic_kvstxn_process_test_multiple_transactions_merge ();
     kvstxn_basic_root_not_dir ();
     kvstxn_process_root_missing ();
     kvstxn_process_missing_ref ();

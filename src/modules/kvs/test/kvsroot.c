@@ -195,8 +195,8 @@ void basic_kvstxn_mgr_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (kvstxn_mgr_process_fence_request (root->ktm, tr) == 0,
-        "kvstxn_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_transaction_request (root->ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works");
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (root->ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");

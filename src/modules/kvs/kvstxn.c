@@ -981,7 +981,7 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
     }
 }
 
-int kvstxn_mgr_process_fence_request (kvstxn_mgr_t *ktm, treq_t *tr)
+int kvstxn_mgr_process_transaction_request (kvstxn_mgr_t *ktm, treq_t *tr)
 {
     if (treq_count_reached (tr)) {
         kvstxn_t *kt;

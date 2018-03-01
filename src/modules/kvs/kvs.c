@@ -885,7 +885,7 @@ static void kvstxn_apply (kvstxn_t *kt)
     namespace = kvstxn_get_namespace (kt);
     assert (namespace);
 
-    /* Between call to kvstxn_mgr_process_fence_request() and here,
+    /* Between call to kvstxn_mgr_process_transaction_request() and here,
      * possible namespace marked for removal.  Also namespace could
      * have been removed if we waited and this is a replay.
      *
@@ -1650,7 +1650,9 @@ done:
     free (p.sender);
 }
 
-static int finalize_fence_req (treq_t *tr, const flux_msg_t *req, void *data)
+static int finalize_transaction_req (treq_t *tr,
+                                     const flux_msg_t *req,
+                                     void *data)
 {
     struct kvs_cb_data *cbd = data;
 
@@ -1660,8 +1662,8 @@ static int finalize_fence_req (treq_t *tr, const flux_msg_t *req, void *data)
     return 0;
 }
 
-static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
-                                     json_t *names, int errnum)
+static void finalize_transaction_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
+                                          json_t *names, int errnum)
 {
     int i, len;
     json_t *name;
@@ -1680,7 +1682,7 @@ static void finalize_fences_bynames (kvs_ctx_t *ctx, struct kvsroot *root,
         }
         nameval = json_string_value (name);
         if ((tr = treq_mgr_lookup_transaction (root->trm, nameval))) {
-            treq_iter_request_copies (tr, finalize_fence_req, &cbd);
+            treq_iter_request_copies (tr, finalize_transaction_req, &cbd);
             if (treq_mgr_remove_transaction (root->trm, nameval) < 0)
                 flux_log_error (ctx->h, "%s: treq_mgr_remove_transaction",
                                 __FUNCTION__);
@@ -1742,8 +1744,8 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (kvstxn_mgr_process_fence_request (root->ktm, tr) < 0) {
-        flux_log_error (h, "%s: kvstxn_mgr_process_fence_request",
+    if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
+        flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
                         __FUNCTION__);
         goto error;
     }
@@ -1819,8 +1821,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
 
-        if (kvstxn_mgr_process_fence_request (root->ktm, tr) < 0) {
-            flux_log_error (h, "%s: kvstxn_mgr_process_fence_request",
+        if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
                             __FUNCTION__);
             goto error;
         }
@@ -1987,7 +1989,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    finalize_fences_bynames (ctx, root, names, errnum);
+    finalize_transaction_bynames (ctx, root, names, errnum);
 }
 
 /* Optimization: the current rootdir object is optionally included
@@ -2071,7 +2073,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     if (root->remove)
         errnum = ENOTSUP;
 
-    finalize_fences_bynames (ctx, root, names, errnum);
+    finalize_transaction_bynames (ctx, root, names, errnum);
 
     /* if error, not need to complete setroot */
     if (errnum)
@@ -2376,14 +2378,14 @@ error:
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 }
 
-static int root_remove_process_fences (treq_t *tr, void *data)
+static int root_remove_process_transactions (treq_t *tr, void *data)
 {
     struct kvs_cb_data *cbd = data;
 
-    /* Fences that never reached their nprocs count will never finish,
-     * must alert them with ENOTSUP that namespace removed.  Final
-     * call to treq_mgr_remove_transaction() done in
-     * finalize_fences_bynames() */
+    /* Transactions that never reached their nprocs count will never
+     * finish, must alert them with ENOTSUP that namespace removed.
+     * Final call to treq_mgr_remove_transaction() done in
+     * finalize_transaction_bynames() */
     if (!treq_get_processed (tr)) {
         json_t *names = NULL;
 
@@ -2393,7 +2395,7 @@ static int root_remove_process_fences (treq_t *tr, void *data)
             return -1;
         }
 
-        finalize_fences_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
+        finalize_transaction_bynames (cbd->ctx, cbd->root, names, ENOTSUP);
         json_decref (names);
     }
     return 0;
@@ -2417,17 +2419,18 @@ static void start_root_remove (kvs_ctx_t *ctx, const char *namespace)
         if (wait_runqueue (root->watchlist) < 0)
             flux_log_error (ctx->h, "%s: wait_runqueue", __FUNCTION__);
 
-        /* Ready fences will be processed and errors returned to
+        /* Ready transactions will be processed and errors returned to
          * callers via the code path in kvstxn_apply().  But not ready
-         * fences must be dealt with separately here.
+         * transactions must be dealt with separately here.
          *
-         * Note that now that the root has been marked as removable, no
-         * new fences can become ready in the future.  Checks in
-         * commit_request_cb() and relaycommit_request_cb() ensure this.
+         * Note that now that the root has been marked as removable,
+         * no new transactions can become ready in the future.  Checks
+         * in commit_request_cb() and relaycommit_request_cb() ensure
+         * this.
          */
 
         if (treq_mgr_iter_transactions (root->trm,
-                                          root_remove_process_fences,
+                                          root_remove_process_transactions,
                                           &cbd) < 0)
             flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions",
                             __FUNCTION__);
