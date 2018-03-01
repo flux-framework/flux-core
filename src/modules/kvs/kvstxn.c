@@ -40,7 +40,7 @@
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
 
-#include "commit.h"
+#include "kvstxn.h"
 #include "kvs_util.h"
 
 struct kvstxn_mgr {

@@ -11,7 +11,7 @@
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_txn_private.h"
 #include "src/modules/kvs/cache.h"
-#include "src/modules/kvs/commit.h"
+#include "src/modules/kvs/kvstxn.h"
 #include "src/modules/kvs/lookup.h"
 #include "src/modules/kvs/fence.h"
 #include "src/modules/kvs/kvs_util.h"

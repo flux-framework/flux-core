@@ -51,7 +51,7 @@
 
 #include "lookup.h"
 #include "fence.h"
-#include "commit.h"
+#include "kvstxn.h"
 #include "kvsroot.h"
 
 #define KVS_MAGIC 0xdeadbeef

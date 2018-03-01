@@ -5,7 +5,7 @@
 #include <flux/core.h>
 
 #include "cache.h"
-#include "commit.h"
+#include "kvstxn.h"
 #include "fence.h"
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
