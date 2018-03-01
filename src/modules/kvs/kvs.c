@@ -96,10 +96,10 @@ struct kvs_cb_data {
     char *sender;
 };
 
-static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg);
-static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                             int revents, void *arg);
+static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
+                                 int revents, void *arg);
+static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                                  int revents, void *arg);
 static void start_root_remove (kvs_ctx_t *ctx, const char *namespace);
 
 /*
@@ -154,12 +154,12 @@ static kvs_ctx_t *getctx (flux_t *h)
             goto error;
         }
         if (ctx->rank == 0) {
-            ctx->prep_w = flux_prepare_watcher_create (r, commit_prep_cb, ctx);
+            ctx->prep_w = flux_prepare_watcher_create (r, transaction_prep_cb, ctx);
             if (!ctx->prep_w) {
                 saved_errno = errno;
                 goto error;
             }
-            ctx->check_w = flux_check_watcher_create (r, commit_check_cb, ctx);
+            ctx->check_w = flux_check_watcher_create (r, transaction_check_cb, ctx);
             if (!ctx->check_w) {
                 saved_errno = errno;
                 goto error;
@@ -1018,8 +1018,8 @@ static int kvstxn_prep_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void commit_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
+static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
+                                 int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
@@ -1057,8 +1057,8 @@ static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void commit_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                             int revents, void *arg)
+static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                                  int revents, void *arg)
 {
     kvs_ctx_t *ctx = arg;
     struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
