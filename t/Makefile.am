@@ -186,7 +186,7 @@ check_PROGRAMS = \
 	kvs/watch \
 	kvs/watch_disconnect \
 	kvs/commit \
-	kvs/commitmerge \
+	kvs/transactionmerge \
 	kvs/fence_namespace_remove \
 	kvs/fence_invalid \
 	module/basic \
@@ -315,9 +315,9 @@ kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
-kvs_commitmerge_SOURCES = kvs/commitmerge.c
-kvs_commitmerge_CPPFLAGS = $(test_cppflags)
-kvs_commitmerge_LDADD = \
+kvs_transactionmerge_SOURCES = kvs/transactionmerge.c
+kvs_transactionmerge_CPPFLAGS = $(test_cppflags)
+kvs_transactionmerge_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_fence_namespace_remove_SOURCES = kvs/fence_namespace_remove.c

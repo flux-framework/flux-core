@@ -114,7 +114,7 @@ test_expect_success LONGTEST 'kvs: store 1,000,000 keys in one dir' '
 # THREADS.
 test_expect_success 'kvs: test that KVS_NO_MERGE works with kvs_commit()' '
         THREADS=64 &&
-        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge --nomerge ${THREADS} \
+        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/transactionmerge --nomerge ${THREADS} \
                 $(basename ${SHARNESS_TEST_FILE})` &&
 	test "$OUTPUT" = "${THREADS}"
 '
@@ -126,7 +126,7 @@ test_expect_success 'kvs: transaction-merge disabling works' '
         THREADS=64 &&
         flux module remove -r 0 kvs &&
         flux module load -r 0 kvs transaction-merge=0 &&
-        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/commitmerge ${THREADS} $(basename ${SHARNESS_TEST_FILE})` &&
+        OUTPUT=`${FLUX_BUILD_DIR}/t/kvs/transactionmerge ${THREADS} $(basename ${SHARNESS_TEST_FILE})` &&
 	test "$OUTPUT" = "${THREADS}"
 '
 
