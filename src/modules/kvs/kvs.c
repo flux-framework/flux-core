@@ -50,7 +50,7 @@
 #include "msg_cb_handler.h"
 
 #include "lookup.h"
-#include "fence.h"
+#include "treq.h"
 #include "kvstxn.h"
 #include "kvsroot.h"
 

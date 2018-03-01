@@ -8,7 +8,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/modules/kvs/kvsroot.h"
-#include "src/modules/kvs/fence.h"
+#include "src/modules/kvs/treq.h"
 
 int global = 0;
 

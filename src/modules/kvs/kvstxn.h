@@ -5,7 +5,7 @@
 #include <czmq.h>
 
 #include "cache.h"
-#include "fence.h"
+#include "treq.h"
 #include "src/common/libutil/blobref.h"
 
 typedef struct kvstxn_mgr kvstxn_mgr_t;

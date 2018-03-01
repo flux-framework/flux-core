@@ -6,7 +6,7 @@
 
 #include "cache.h"
 #include "kvstxn.h"
-#include "fence.h"
+#include "treq.h"
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
 

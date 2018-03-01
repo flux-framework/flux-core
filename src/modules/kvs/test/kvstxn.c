@@ -13,7 +13,7 @@
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/kvstxn.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/fence.h"
+#include "src/modules/kvs/treq.h"
 #include "src/modules/kvs/kvs_util.h"
 
 static int test_global = 5;

@@ -36,7 +36,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "fence.h"
+#include "treq.h"
 
 struct treq_mgr {
     zhash_t *transactions;

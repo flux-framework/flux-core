@@ -8,7 +8,7 @@
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/request.h"
-#include "src/modules/kvs/fence.h"
+#include "src/modules/kvs/treq.h"
 
 int msg_cb (treq_t *tr, const flux_msg_t *req, void *data)
 {

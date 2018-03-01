@@ -21,8 +21,8 @@ kvs_la_SOURCES = \
 	kvs_util.c \
 	lookup.h \
 	lookup.c \
-	fence.h \
-	fence.c \
+	treq.h \
+	treq.c \
 	kvstxn.h \
 	kvstxn.c \
 	msg_cb_handler.h \
@@ -40,7 +40,7 @@ TESTS = \
 	test_waitqueue.t \
 	test_cache.t \
 	test_lookup.t \
-	test_fence.t \
+	test_treq.t \
 	test_kvstxn.t \
 	test_kvs_util.t \
 	test_msg_cb_handler.t \
@@ -90,10 +90,10 @@ test_lookup_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
-test_fence_t_SOURCES = test/fence.c
-test_fence_t_CPPFLAGS = $(test_cppflags)
-test_fence_t_LDADD = \
-	$(top_builddir)/src/modules/kvs/fence.o \
+test_treq_t_SOURCES = test/treq.c
+test_treq_t_CPPFLAGS = $(test_cppflags)
+test_treq_t_LDADD = \
+	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -101,7 +101,7 @@ test_kvstxn_t_SOURCES = test/kvstxn.c
 test_kvstxn_t_CPPFLAGS = $(test_cppflags)
 test_kvstxn_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
-	$(top_builddir)/src/modules/kvs/fence.o \
+	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
@@ -128,7 +128,7 @@ test_kvsroot_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
-	$(top_builddir)/src/modules/kvs/fence.o \
+	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
