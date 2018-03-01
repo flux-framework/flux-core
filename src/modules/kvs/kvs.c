@@ -82,7 +82,7 @@ typedef struct {
     flux_watcher_t *prep_w;
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
-    int commit_merge;
+    int transaction_merge;
     bool events_init;            /* flag */
     const char *hash_name;
 } kvs_ctx_t;
@@ -172,7 +172,7 @@ static kvs_ctx_t *getctx (flux_t *h)
             flux_watcher_start (ctx->prep_w);
             flux_watcher_start (ctx->check_w);
         }
-        ctx->commit_merge = 1;
+        ctx->transaction_merge = 1;
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }
     return ctx;
@@ -1039,7 +1039,7 @@ static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
     kvstxn_t *kt;
 
     if ((kt = kvstxn_mgr_get_ready_transaction (root->ktm))) {
-        if (cbd->ctx->commit_merge) {
+        if (cbd->ctx->transaction_merge) {
             /* if merge fails, set errnum in txn_t, let
              * txn_apply() handle error handling.
              */
@@ -2608,8 +2608,8 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
     int i;
 
     for (i = 0; i < ac; i++) {
-        if (strncmp (av[i], "commit-merge=", 13) == 0)
-            ctx->commit_merge = strtoul (av[i]+13, NULL, 10);
+        if (strncmp (av[i], "transaction-merge=", 13) == 0)
+            ctx->transaction_merge = strtoul (av[i]+13, NULL, 10);
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
     }
