@@ -2150,7 +2150,7 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
                          wait_queue_length (root->watchlist),
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
-                         "#fences",
+                         "#transactions",
                          treq_mgr_transactions_count (root->trm),
                          "#readytransactions",
                          kvstxn_mgr_ready_transaction_count (root->ktm),
@@ -2222,7 +2222,7 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
         if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
                              "#watchers", 0,
                              "#no-op stores", 0,
-                             "#fences", 0,
+                             "#transactions", 0,
                              "#readytransactions", 0,
                              "store revision", 0))) {
             errno = ENOMEM;
