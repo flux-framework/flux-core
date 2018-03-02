@@ -1720,23 +1720,15 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
-        if (!(tr = treq_create (name, 1, flags))) {
-            flux_log_error (h, "%s: treq_create", __FUNCTION__);
-            goto error;
-        }
-        if (treq_mgr_add_transaction (root->trm, tr) < 0) {
-            saved_errno = errno;
-            flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
-            treq_destroy (tr);
-            errno = saved_errno;
-            goto error;
-        }
+    if (!(tr = treq_create (name, 1, flags))) {
+        flux_log_error (h, "%s: treq_create", __FUNCTION__);
+        goto error;
     }
-
-    if (treq_get_flags (tr) != flags
-        || treq_get_nprocs (tr) != 1) {
-        errno = EINVAL;
+    if (treq_mgr_add_transaction (root->trm, tr) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+        treq_destroy (tr);
+        errno = saved_errno;
         goto error;
     }
 
@@ -1793,23 +1785,15 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
-        if (!(tr = treq_create (name, 1, flags))) {
-            flux_log_error (h, "%s: treq_create", __FUNCTION__);
-            goto error;
-        }
-        if (treq_mgr_add_transaction (root->trm, tr) < 0) {
-            saved_errno = errno;
-            flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
-            treq_destroy (tr);
-            errno = saved_errno;
-            goto error;
-        }
+    if (!(tr = treq_create (name, 1, flags))) {
+        flux_log_error (h, "%s: treq_create", __FUNCTION__);
+        goto error;
     }
-
-    if (treq_get_flags (tr) != flags
-        || treq_get_nprocs (tr) != 1) {
-        errno = EINVAL;
+    if (treq_mgr_add_transaction (root->trm, tr) < 0) {
+        saved_errno = errno;
+        flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+        treq_destroy (tr);
+        errno = saved_errno;
         goto error;
     }
 
