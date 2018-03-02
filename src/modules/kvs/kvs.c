@@ -1699,7 +1699,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     const char *namespace;
     const char *name;
-    int nprocs, flags;
+    int saved_errno, nprocs, flags;
     json_t *ops = NULL;
     treq_t *tr;
 
@@ -1727,8 +1727,10 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
         if (treq_mgr_add_transaction (root->trm, tr) < 0) {
+            saved_errno = errno;
             flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
             treq_destroy (tr);
+            errno = saved_errno;
             goto error;
         }
     }
