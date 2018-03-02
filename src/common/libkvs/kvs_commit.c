@@ -95,9 +95,8 @@ flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
             goto cleanup;
         }
         if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:s s:i s:O}",
+                                 "{s:s s:s s:i s:O}",
                                  "name", name,
-                                 "nprocs", 1,
                                  "namespace", namespace,
                                  "flags", flags,
                                  "ops", ops))) {
@@ -106,9 +105,8 @@ flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
         }
     } else {
         if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:s s:i s:[]}",
+                                 "{s:s s:s s:i s:[]}",
                                  "name", name,
-                                 "nprocs", 1,
                                  "namespace", namespace,
                                  "flags", flags,
                                  "ops"))) {

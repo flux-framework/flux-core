@@ -1699,16 +1699,15 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     const char *namespace;
     const char *name;
-    int saved_errno, nprocs, flags;
+    int saved_errno, flags;
     json_t *ops = NULL;
     treq_t *tr;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i }",
                              "ops", &ops,
                              "name", &name,
                              "namespace", &namespace,
-                             "flags", &flags,
-                             "nprocs", &nprocs) < 0) {
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
@@ -1722,7 +1721,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
-        if (!(tr = treq_create (name, nprocs, flags))) {
+        if (!(tr = treq_create (name, 1, flags))) {
             flux_log_error (h, "%s: treq_create", __FUNCTION__);
             goto error;
         }
@@ -1736,7 +1735,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (treq_get_flags (tr) != flags
-        || treq_get_nprocs (tr) != nprocs) {
+        || treq_get_nprocs (tr) != 1) {
         errno = EINVAL;
         goto error;
     }
@@ -1773,17 +1772,16 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     const char *namespace;
     const char *name;
-    int saved_errno, nprocs, flags;
+    int saved_errno, flags;
     bool stall = false;
     json_t *ops = NULL;
     treq_t *tr;
 
-    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i }",
                              "ops", &ops,
                              "name", &name,
                              "namespace", &namespace,
-                             "flags", &flags,
-                             "nprocs", &nprocs) < 0) {
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -1796,7 +1794,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
-        if (!(tr = treq_create (name, nprocs, flags))) {
+        if (!(tr = treq_create (name, 1, flags))) {
             flux_log_error (h, "%s: treq_create", __FUNCTION__);
             goto error;
         }
@@ -1810,7 +1808,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (treq_get_flags (tr) != flags
-        || treq_get_nprocs (tr) != nprocs) {
+        || treq_get_nprocs (tr) != 1) {
         errno = EINVAL;
         goto error;
     }
@@ -1834,12 +1832,11 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
         /* route to rank 0 as instance owner */
         if (!(f = flux_rpc_pack (h, "kvs.relaycommit", 0, FLUX_RPC_NORESPONSE,
-                                 "{ s:O s:s s:s s:i s:i }",
+                                 "{ s:O s:s s:s s:i }",
                                  "ops", ops,
                                  "name", name,
                                  "namespace", namespace,
-                                 "flags", flags,
-                                 "nprocs", nprocs))) {
+                                 "flags", flags))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
             goto error;
         }
