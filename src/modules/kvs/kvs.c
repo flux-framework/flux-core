@@ -1855,6 +1855,170 @@ stall:
 }
 
 
+/* kvs.relayfence (rank 0 only, no response).
+ */
+static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
+    const char *namespace;
+    const char *name;
+    int saved_errno, nprocs, flags;
+    json_t *ops = NULL;
+    treq_t *tr;
+
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
+                             "ops", &ops,
+                             "name", &name,
+                             "namespace", &namespace,
+                             "flags", &flags,
+                             "nprocs", &nprocs) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        return;
+    }
+
+    /* namespace must exist given we are on rank 0 */
+    if (!(root = kvsroot_mgr_lookup_root_safe (ctx->km, namespace))) {
+        flux_log (h, LOG_ERR, "%s: namespace %s not available",
+                  __FUNCTION__, namespace);
+        errno = ENOTSUP;
+        goto error;
+    }
+
+    if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
+        if (!(tr = treq_create (name, nprocs, flags))) {
+            flux_log_error (h, "%s: treq_create", __FUNCTION__);
+            goto error;
+        }
+        if (treq_mgr_add_transaction (root->trm, tr) < 0) {
+            saved_errno = errno;
+            flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+            treq_destroy (tr);
+            errno = saved_errno;
+            goto error;
+        }
+    }
+
+    if (treq_get_flags (tr) != flags
+        || treq_get_nprocs (tr) != nprocs) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    if (treq_add_request_ops (tr, ops) < 0) {
+        flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
+        goto error;
+    }
+
+    if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
+        flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+                        __FUNCTION__);
+        goto error;
+    }
+
+    return;
+
+error:
+    /* An error has occurred, so we will return an error similarly to
+     * how an error would be returned via a transaction error in
+     * kvstxn_apply().
+     */
+    if (error_event_send_to_name (ctx, namespace, name, errno) < 0)
+        flux_log_error (h, "%s: error_event_send_to_name", __FUNCTION__);
+}
+
+/* kvs.fence
+ * Sent from users to local kvs module.
+ */
+static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                              const flux_msg_t *msg, void *arg)
+{
+    kvs_ctx_t *ctx = arg;
+    struct kvsroot *root;
+    const char *namespace;
+    const char *name;
+    int saved_errno, nprocs, flags;
+    bool stall = false;
+    json_t *ops = NULL;
+    treq_t *tr;
+
+    if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
+                             "ops", &ops,
+                             "name", &name,
+                             "namespace", &namespace,
+                             "flags", &flags,
+                             "nprocs", &nprocs) < 0) {
+        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+
+    if (!(root = getroot (ctx, namespace, mh, msg, fence_request_cb,
+                          &stall))) {
+        if (stall)
+            goto stall;
+        goto error;
+    }
+
+    if (!(tr = treq_mgr_lookup_transaction (root->trm, name))) {
+        if (!(tr = treq_create (name, nprocs, flags))) {
+            flux_log_error (h, "%s: treq_create", __FUNCTION__);
+            goto error;
+        }
+        if (treq_mgr_add_transaction (root->trm, tr) < 0) {
+            saved_errno = errno;
+            flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
+            treq_destroy (tr);
+            errno = saved_errno;
+            goto error;
+        }
+    }
+
+    if (treq_get_flags (tr) != flags
+        || treq_get_nprocs (tr) != nprocs) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    if (treq_add_request_copy (tr, msg) < 0)
+        goto error;
+    if (ctx->rank == 0) {
+        if (treq_add_request_ops (tr, ops) < 0) {
+            flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
+            goto error;
+        }
+
+        if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+                            __FUNCTION__);
+            goto error;
+        }
+    }
+    else {
+        flux_future_t *f;
+
+        /* route to rank 0 as instance owner */
+        if (!(f = flux_rpc_pack (h, "kvs.relayfence", 0, FLUX_RPC_NORESPONSE,
+                                 "{ s:O s:s s:s s:i s:i }",
+                                 "ops", ops,
+                                 "name", name,
+                                 "namespace", namespace,
+                                 "flags", flags,
+                                 "nprocs", nprocs))) {
+            flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
+            goto error;
+        }
+        flux_future_destroy (f);
+    }
+    return;
+
+error:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+stall:
+    return;
+}
+
 /* For wait_version().
  */
 static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -2601,6 +2765,9 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",
                             commit_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.relaycommit", relaycommit_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.fence",
+                            fence_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.relayfence", relayfence_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-create",
                             namespace_create_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",

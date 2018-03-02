@@ -51,7 +51,7 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
             errno = EINVAL;
             return NULL;
         }
-        return flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
                                  "{s:s s:i s:s s:i s:O}",
                                  "name", name,
                                  "nprocs", nprocs,
@@ -59,7 +59,7 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                  "flags", flags,
                                  "ops", ops);
     } else {
-        return flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
                                  "{s:s s:i s:s s:i s:[]}",
                                  "name", name,
                                  "nprocs", nprocs,
@@ -71,14 +71,53 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
 
 flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
 {
-    zuuid_t *uuid;
+    zuuid_t *uuid = NULL;
+    const char *namespace;
+    const char *name;
     flux_future_t *f = NULL;
     int saved_errno = 0;
 
-    if (!(uuid = zuuid_new ())
-        || !(f = flux_kvs_fence (h, flags, zuuid_str (uuid), 1, txn)))
+    if (!(uuid = zuuid_new ())) {
         saved_errno = errno;
+        goto cleanup;
+    }
+    name = zuuid_str (uuid);
 
+    if (!(namespace = flux_kvs_get_namespace (h))) {
+        saved_errno = errno;
+        goto cleanup;
+    }
+
+    if (txn) {
+        json_t *ops;
+        if (!(ops = txn_get_ops (txn))) {
+            saved_errno = EINVAL;
+            goto cleanup;
+        }
+        if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+                                 "{s:s s:i s:s s:i s:O}",
+                                 "name", name,
+                                 "nprocs", 1,
+                                 "namespace", namespace,
+                                 "flags", flags,
+                                 "ops", ops))) {
+            saved_errno = errno;
+            goto cleanup;
+        }
+    } else {
+        if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+                                 "{s:s s:i s:s s:i s:[]}",
+                                 "name", name,
+                                 "nprocs", 1,
+                                 "namespace", namespace,
+                                 "flags", flags,
+                                 "ops"))) {
+            saved_errno = errno;
+            goto cleanup;
+        }
+    }
+
+cleanup:
     zuuid_destroy (&uuid);
     if (saved_errno)
         errno = saved_errno;
