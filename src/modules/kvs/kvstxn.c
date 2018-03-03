@@ -89,17 +89,19 @@ static void kvstxn_destroy (kvstxn_t *kt)
     }
 }
 
-static kvstxn_t *kvstxn_create (treq_t *tr, kvstxn_mgr_t *ktm)
+static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
+                                const char *name,
+                                json_t *ops,
+                                int flags)
 {
     kvstxn_t *kt;
-    const char *name;
     int saved_errno;
 
     if (!(kt = calloc (1, sizeof (*kt)))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(kt->ops = json_copy (treq_get_ops (tr)))) {
+    if (!(kt->ops = json_copy (ops))) {
         saved_errno = ENOMEM;
         goto error;
     }
@@ -107,7 +109,7 @@ static kvstxn_t *kvstxn_create (treq_t *tr, kvstxn_mgr_t *ktm)
         saved_errno = ENOMEM;
         goto error;
     }
-    if ((name = treq_get_name (tr))) {
+    if (name) {
         json_t *s;
         if (!(s = json_string (name))) {
             saved_errno = ENOMEM;
@@ -119,7 +121,7 @@ static kvstxn_t *kvstxn_create (treq_t *tr, kvstxn_mgr_t *ktm)
             goto error;
         }
     }
-    kt->flags = treq_get_flags (tr);
+    kt->flags = flags;
     if (!(kt->missing_refs_list = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
@@ -990,7 +992,10 @@ int kvstxn_mgr_process_transaction_request (kvstxn_mgr_t *ktm, treq_t *tr)
         if (treq_get_processed (tr))
             return 0;
 
-        if (!(kt = kvstxn_create (tr, ktm)))
+        if (!(kt = kvstxn_create (ktm,
+                                  treq_get_name (tr),
+                                  treq_get_ops (tr),
+                                  treq_get_flags (tr))))
             return -1;
 
         if (zlist_append (ktm->ready, kt) < 0) {
