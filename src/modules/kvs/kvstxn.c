@@ -983,14 +983,22 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
     }
 }
 
-int kvstxn_mgr_process_transaction_request (kvstxn_mgr_t *ktm, treq_t *tr)
+int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
+                                const char *name,
+                                json_t *ops,
+                                int flags)
 {
     kvstxn_t *kt;
 
+    if (!name || !ops) {
+        errno = EINVAL;
+        return -1;
+    }
+
     if (!(kt = kvstxn_create (ktm,
-                              treq_get_name (tr),
-                              treq_get_ops (tr),
-                              treq_get_flags (tr))))
+                              name,
+                              ops,
+                              flags)))
         return -1;
 
     if (zlist_append (ktm->ready, kt) < 0) {

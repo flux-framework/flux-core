@@ -101,7 +101,6 @@ test_kvstxn_t_SOURCES = test/kvstxn.c
 test_kvstxn_t_CPPFLAGS = $(test_cppflags)
 test_kvstxn_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
-	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/lookup.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \

@@ -885,9 +885,9 @@ static void kvstxn_apply (kvstxn_t *kt)
     namespace = kvstxn_get_namespace (kt);
     assert (namespace);
 
-    /* Between call to kvstxn_mgr_process_transaction_request() and here,
-     * possible namespace marked for removal.  Also namespace could
-     * have been removed if we waited and this is a replay.
+    /* Between call to kvstxn_mgr_add_transaction() and here, possible
+     * namespace marked for removal.  Also namespace could have been
+     * removed if we waited and this is a replay.
      *
      * root should never be NULL, as it should not be garbage
      * collected until all ready transactions have been processed.
@@ -1741,8 +1741,11 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * the ready queue */
     treq_set_processed (tr, true);
 
-    if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
-        flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+    if (kvstxn_mgr_add_transaction (root->ktm,
+                                    treq_get_name (tr),
+                                    treq_get_ops (tr),
+                                    treq_get_flags (tr)) < 0) {
+        flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                         __FUNCTION__);
         goto error;
     }
@@ -1813,8 +1816,11 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * the ready queue */
         treq_set_processed (tr, true);
 
-        if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
-            flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+        if (kvstxn_mgr_add_transaction (root->ktm,
+                                        treq_get_name (tr),
+                                        treq_get_ops (tr),
+                                        treq_get_flags (tr)) < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
         }
@@ -1910,8 +1916,11 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * the ready queue */
         treq_set_processed (tr, true);
 
-        if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
-            flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+        if (kvstxn_mgr_add_transaction (root->ktm,
+                                        treq_get_name (tr),
+                                        treq_get_ops (tr),
+                                        treq_get_flags (tr)) < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
         }
@@ -1998,8 +2007,11 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
              * the ready queue */
             treq_set_processed (tr, true);
 
-            if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
-                flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+            if (kvstxn_mgr_add_transaction (root->ktm,
+                                            treq_get_name (tr),
+                                            treq_get_ops (tr),
+                                            treq_get_flags (tr)) < 0) {
+                flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                                 __FUNCTION__);
                 goto error;
             }
