@@ -985,28 +985,20 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
 
 int kvstxn_mgr_process_transaction_request (kvstxn_mgr_t *ktm, treq_t *tr)
 {
-    if (treq_count_reached (tr)) {
-        kvstxn_t *kt;
+    kvstxn_t *kt;
 
-        /* treq is already processed */
-        if (treq_get_processed (tr))
-            return 0;
+    if (!(kt = kvstxn_create (ktm,
+                              treq_get_name (tr),
+                              treq_get_ops (tr),
+                              treq_get_flags (tr))))
+        return -1;
 
-        if (!(kt = kvstxn_create (ktm,
-                                  treq_get_name (tr),
-                                  treq_get_ops (tr),
-                                  treq_get_flags (tr))))
-            return -1;
-
-        if (zlist_append (ktm->ready, kt) < 0) {
-            kvstxn_destroy (kt);
-            errno = ENOMEM;
-            return -1;
-        }
-        /* we use this flag to indicate if a treq is "ready" */
-        treq_set_processed (tr, true);
-        zlist_freefn (ktm->ready, kt, (zlist_free_fn *)kvstxn_destroy, true);
+    if (zlist_append (ktm->ready, kt) < 0) {
+        kvstxn_destroy (kt);
+        errno = ENOMEM;
+        return -1;
     }
+    zlist_freefn (ktm->ready, kt, (zlist_free_fn *)kvstxn_destroy, true);
 
     return 0;
 }

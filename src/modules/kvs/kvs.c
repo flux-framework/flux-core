@@ -1737,6 +1737,10 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    /* we use this flag to indicate if a treq has been added to
+     * the ready queue */
+    treq_set_processed (tr, true);
+
     if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
         flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
                         __FUNCTION__);
@@ -1804,6 +1808,10 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
             goto error;
         }
+
+        /* we use this flag to indicate if a treq has been added to
+         * the ready queue */
+        treq_set_processed (tr, true);
 
         if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
@@ -1892,10 +1900,21 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
-        flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
-                        __FUNCTION__);
-        goto error;
+    if (treq_count_reached (tr)) {
+
+        /* If user called fence > nprocs time, should have been caught
+         * earlier */
+        assert (!treq_get_processed (tr));
+
+        /* we use this flag to indicate if a treq has been added to
+         * the ready queue */
+        treq_set_processed (tr, true);
+
+        if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
+            flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+                            __FUNCTION__);
+            goto error;
+        }
     }
 
     return;
@@ -1969,10 +1988,21 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
 
-        if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
-            flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
-                            __FUNCTION__);
-            goto error;
+        if (treq_count_reached (tr)) {
+
+            /* If user called fence > nprocs time, should have been caught
+             * earlier */
+            assert (!treq_get_processed (tr));
+
+            /* we use this flag to indicate if a treq has been added to
+             * the ready queue */
+            treq_set_processed (tr, true);
+
+            if (kvstxn_mgr_process_transaction_request (root->ktm, tr) < 0) {
+                flux_log_error (h, "%s: kvstxn_mgr_process_transaction_request",
+                                __FUNCTION__);
+                goto error;
+            }
         }
     }
     else {
