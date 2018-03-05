@@ -1699,9 +1699,8 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvsroot *root;
     const char *namespace;
     const char *name;
-    int saved_errno, flags;
+    int flags;
     json_t *ops = NULL;
-    treq_t *tr;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i }",
                              "ops", &ops,
@@ -1720,31 +1719,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(tr = treq_create (name, 1, flags))) {
-        flux_log_error (h, "%s: treq_create", __FUNCTION__);
-        goto error;
-    }
-    if (treq_mgr_add_transaction (root->trm, tr) < 0) {
-        saved_errno = errno;
-        flux_log_error (h, "%s: treq_mgr_add_transaction", __FUNCTION__);
-        treq_destroy (tr);
-        errno = saved_errno;
-        goto error;
-    }
-
-    if (treq_add_request_ops (tr, ops) < 0) {
-        flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
-        goto error;
-    }
-
-    /* we use this flag to indicate if a treq has been added to
-     * the ready queue */
-    treq_set_processed (tr, true);
-
-    if (kvstxn_mgr_add_transaction (root->ktm,
-                                    treq_get_name (tr),
-                                    treq_get_ops (tr),
-                                    treq_get_flags (tr)) < 0) {
+    if (kvstxn_mgr_add_transaction (root->ktm, name, ops, flags) < 0) {
         flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                         __FUNCTION__);
         goto error;
@@ -1807,19 +1782,14 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (treq_add_request_copy (tr, msg) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (treq_add_request_ops (tr, ops) < 0) {
-            flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
-            goto error;
-        }
-
         /* we use this flag to indicate if a treq has been added to
          * the ready queue */
         treq_set_processed (tr, true);
 
         if (kvstxn_mgr_add_transaction (root->ktm,
-                                        treq_get_name (tr),
-                                        treq_get_ops (tr),
-                                        treq_get_flags (tr)) < 0) {
+                                        name,
+                                        ops,
+                                        flags) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
