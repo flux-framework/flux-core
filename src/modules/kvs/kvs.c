@@ -1779,11 +1779,18 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    /* save copy of request, will be used later via
+     * finalize_transaction_bynames() to send error code to original
+     * send.
+     */
     if (treq_add_request_copy (tr, msg) < 0)
         goto error;
+
     if (ctx->rank == 0) {
         /* we use this flag to indicate if a treq has been added to
-         * the ready queue */
+         * the ready queue.  We don't need to call
+         * treq_count_reached() b/c this is a commit and nprocs is 1
+         */
         treq_set_processed (tr, true);
 
         if (kvstxn_mgr_add_transaction (root->ktm,
@@ -1959,9 +1966,18 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    /* save copy of request, will be used later via
+     * finalize_transaction_bynames() to send error code to original
+     * send.
+     */
     if (treq_add_request_copy (tr, msg) < 0)
         goto error;
+
+    /* If we happen to be on rank 0, perform equivalent of
+     * relayfence_request_cb() here instead of sending an RPC
+     */
     if (ctx->rank == 0) {
+
         if (treq_add_request_ops (tr, ops) < 0) {
             flux_log_error (h, "%s: treq_add_request_ops", __FUNCTION__);
             goto error;
