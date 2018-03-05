@@ -36,15 +36,15 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "fence.h"
+#include "treq.h"
 
-struct fence_mgr {
-    zhash_t *fences;
-    bool iterating_fences;
+struct treq_mgr {
+    zhash_t *transactions;
+    bool iterating_transactions;
     zlist_t *removelist;
 };
 
-struct fence {
+struct treq {
     char *name;
     int nprocs;
     int count;
@@ -55,109 +55,109 @@ struct fence {
 };
 
 /*
- * fence_mgr_t functions
+ * treq_mgr_t functions
  */
 
-fence_mgr_t *fence_mgr_create (void)
+treq_mgr_t *treq_mgr_create (void)
 {
-    fence_mgr_t *fm = NULL;
+    treq_mgr_t *trm = NULL;
     int saved_errno;
 
-    if (!(fm = calloc (1, sizeof (*fm)))) {
+    if (!(trm = calloc (1, sizeof (*trm)))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(fm->fences = zhash_new ())) {
+    if (!(trm->transactions = zhash_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
-    fm->iterating_fences = false;
-    if (!(fm->removelist = zlist_new ())) {
+    trm->iterating_transactions = false;
+    if (!(trm->removelist = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
-    return fm;
+    return trm;
 
  error:
-    fence_mgr_destroy (fm);
+    treq_mgr_destroy (trm);
     errno = saved_errno;
     return NULL;
 }
 
-void fence_mgr_destroy (fence_mgr_t *fm)
+void treq_mgr_destroy (treq_mgr_t *trm)
 {
-    if (fm) {
-        if (fm->fences)
-            zhash_destroy (&fm->fences);
-        if (fm->removelist)
-            zlist_destroy (&fm->removelist);
-        free (fm);
+    if (trm) {
+        if (trm->transactions)
+            zhash_destroy (&trm->transactions);
+        if (trm->removelist)
+            zlist_destroy (&trm->removelist);
+        free (trm);
     }
 }
 
-int fence_mgr_add_fence (fence_mgr_t *fm, fence_t *f)
+int treq_mgr_add_transaction (treq_mgr_t *trm, treq_t *tr)
 {
     /* Don't modify hash while iterating */
-    if (fm->iterating_fences) {
+    if (trm->iterating_transactions) {
         errno = EAGAIN;
         goto error;
     }
 
-    if (zhash_insert (fm->fences, f->name, f) < 0) {
+    if (zhash_insert (trm->transactions, tr->name, tr) < 0) {
         errno = EEXIST;
         goto error;
     }
 
-    zhash_freefn (fm->fences,
-                  fence_get_name (f),
-                  (zhash_free_fn *)fence_destroy);
+    zhash_freefn (trm->transactions,
+                  treq_get_name (tr),
+                  (zhash_free_fn *)treq_destroy);
     return 0;
  error:
     return -1;
 }
 
-fence_t *fence_mgr_lookup_fence (fence_mgr_t *fm, const char *name)
+treq_t *treq_mgr_lookup_transaction (treq_mgr_t *trm, const char *name)
 {
-    return zhash_lookup (fm->fences, name);
+    return zhash_lookup (trm->transactions, name);
 }
 
-int fence_mgr_iter_fences (fence_mgr_t *fm, fence_itr_f cb, void *data)
+int treq_mgr_iter_transactions (treq_mgr_t *trm, treq_itr_f cb, void *data)
 {
-    fence_t *f;
+    treq_t *tr;
     char *name;
 
-    fm->iterating_fences = true;
+    trm->iterating_transactions = true;
 
-    f = zhash_first (fm->fences);
-    while (f) {
-        if (cb (f, data) < 0)
+    tr = zhash_first (trm->transactions);
+    while (tr) {
+        if (cb (tr, data) < 0)
             goto error;
 
-        f = zhash_next (fm->fences);
+        tr = zhash_next (trm->transactions);
     }
 
-    fm->iterating_fences = false;
+    trm->iterating_transactions = false;
 
-    while ((name = zlist_pop (fm->removelist))) {
-        fence_mgr_remove_fence (fm, name);
+    while ((name = zlist_pop (trm->removelist))) {
+        treq_mgr_remove_transaction (trm, name);
         free (name);
     }
 
     return 0;
 
  error:
-    while ((name = zlist_pop (fm->removelist)))
+    while ((name = zlist_pop (trm->removelist)))
         free (name);
-    fm->iterating_fences = false;
+    trm->iterating_transactions = false;
     return -1;
 }
 
-int fence_mgr_remove_fence (fence_mgr_t *fm, const char *name)
+int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name)
 {
     /* it's dangerous to remove if we're in the middle of an
-     * interation, so save fence for removal later.
+     * interation, so save name for removal later.
      */
-    if (fm->iterating_fences) {
+    if (trm->iterating_transactions) {
         char *str = strdup (name);
 
         if (!str) {
@@ -165,98 +165,98 @@ int fence_mgr_remove_fence (fence_mgr_t *fm, const char *name)
             return -1;
         }
 
-        if (zlist_append (fm->removelist, str) < 0) {
+        if (zlist_append (trm->removelist, str) < 0) {
             free (str);
             errno = ENOMEM;
             return -1;
         }
     }
     else
-        zhash_delete (fm->fences, name);
+        zhash_delete (trm->transactions, name);
     return 0;
 }
 
-int fence_mgr_fences_count (fence_mgr_t *fm)
+int treq_mgr_transactions_count (treq_mgr_t *trm)
 {
-    return zhash_size (fm->fences);
+    return zhash_size (trm->transactions);
 }
 
 /*
- * fence_t functions
+ * treq_t functions
  */
 
-void fence_destroy (fence_t *f)
+void treq_destroy (treq_t *tr)
 {
-    if (f) {
-        free (f->name);
-        json_decref (f->ops);
-        zlist_destroy (&f->requests);
-        free (f);
+    if (tr) {
+        free (tr->name);
+        json_decref (tr->ops);
+        zlist_destroy (&tr->requests);
+        free (tr);
     }
 }
 
-fence_t *fence_create (const char *name, int nprocs, int flags)
+treq_t *treq_create (const char *name, int nprocs, int flags)
 {
-    fence_t *f = NULL;
+    treq_t *tr = NULL;
     int saved_errno;
 
     if (!name || nprocs <= 0) {
         saved_errno = EINVAL;
         goto error;
     }
-    if (!(f = calloc (1, sizeof (*f)))
-        || !(f->ops = json_array ())
-        || !(f->requests = zlist_new ())) {
+    if (!(tr = calloc (1, sizeof (*tr)))
+        || !(tr->ops = json_array ())
+        || !(tr->requests = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
     }
-    if (!(f->name = strdup (name))) {
+    if (!(tr->name = strdup (name))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    f->nprocs = nprocs;
-    f->flags = flags;
-    f->processed = false;
+    tr->nprocs = nprocs;
+    tr->flags = flags;
+    tr->processed = false;
 
-    return f;
+    return tr;
 error:
-    fence_destroy (f);
+    treq_destroy (tr);
     errno = saved_errno;
     return NULL;
 }
 
-bool fence_count_reached (fence_t *f)
+bool treq_count_reached (treq_t *tr)
 {
-    assert (f->count <= f->nprocs);
-    return (f->count == f->nprocs);
+    assert (tr->count <= tr->nprocs);
+    return (tr->count == tr->nprocs);
 }
 
-const char *fence_get_name (fence_t *f)
+const char *treq_get_name (treq_t *tr)
 {
-    return f->name;
+    return tr->name;
 }
 
-int fence_get_nprocs (fence_t *f)
+int treq_get_nprocs (treq_t *tr)
 {
-    return f->nprocs;
+    return tr->nprocs;
 }
 
-int fence_get_flags (fence_t *f)
+int treq_get_flags (treq_t *tr)
 {
-    return f->flags;
+    return tr->flags;
 }
 
-json_t *fence_get_json_ops (fence_t *f)
+json_t *treq_get_ops (treq_t *tr)
 {
-    return f->ops;
+    return tr->ops;
 }
 
-int fence_add_request_ops (fence_t *f, json_t *ops)
+int treq_add_request_ops (treq_t *tr, json_t *ops)
 {
     json_t *op;
     int i;
 
-    if (f->count == f->nprocs) {
+    if (tr->count == tr->nprocs) {
         errno = EOVERFLOW;
         return -1;
     }
@@ -264,51 +264,51 @@ int fence_add_request_ops (fence_t *f, json_t *ops)
     if (ops) {
         for (i = 0; i < json_array_size (ops); i++) {
             if ((op = json_array_get (ops, i)))
-                if (json_array_append (f->ops, op) < 0) {
+                if (json_array_append (tr->ops, op) < 0) {
                     errno = ENOMEM;
                     return -1;
                 }
         }
     }
-    f->count++;
+    tr->count++;
     return 0;
 }
 
-int fence_add_request_copy (fence_t *f, const flux_msg_t *request)
+int treq_add_request_copy (treq_t *tr, const flux_msg_t *request)
 {
     flux_msg_t *cpy = flux_msg_copy (request, false);
     if (!cpy)
         return -1;
-    if (zlist_push (f->requests, cpy) < 0) {
+    if (zlist_push (tr->requests, cpy) < 0) {
         flux_msg_destroy (cpy);
         return -1;
     }
-    zlist_freefn (f->requests, cpy, (zlist_free_fn *)flux_msg_destroy, false);
+    zlist_freefn (tr->requests, cpy, (zlist_free_fn *)flux_msg_destroy, false);
     return 0;
 }
 
-int fence_iter_request_copies (fence_t *f, fence_msg_cb cb, void *data)
+int treq_iter_request_copies (treq_t *tr, treq_msg_cb cb, void *data)
 {
     flux_msg_t *msg;
 
-    msg = zlist_first (f->requests);
+    msg = zlist_first (tr->requests);
     while (msg) {
-        if (cb (f, msg, data) < 0)
+        if (cb (tr, msg, data) < 0)
             return -1;
-        msg = zlist_next (f->requests);
+        msg = zlist_next (tr->requests);
     }
 
     return 0;
 }
 
-bool fence_get_processed (fence_t *f)
+bool treq_get_processed (treq_t *tr)
 {
-    return f->processed;
+    return tr->processed;
 }
 
-void fence_set_processed (fence_t *f, bool p)
+void treq_set_processed (treq_t *tr, bool p)
 {
-    f->processed = p;
+    tr->processed = p;
 }
 
 /*

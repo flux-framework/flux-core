@@ -96,10 +96,10 @@ static void kvsroot_destroy (void *data)
         struct kvsroot *root = data;
         if (root->namespace)
             free (root->namespace);
-        if (root->cm)
-            commit_mgr_destroy (root->cm);
-        if (root->fm)
-            fence_mgr_destroy (root->fm);
+        if (root->ktm)
+            kvstxn_mgr_destroy (root->ktm);
+        if (root->trm)
+            treq_mgr_destroy (root->trm);
         if (root->watchlist)
             wait_queue_destroy (root->watchlist);
         free (data);
@@ -132,17 +132,17 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
         goto error;
     }
 
-    if (!(root->cm = commit_mgr_create (cache,
-                                        root->namespace,
-                                        hash_name,
-                                        km->h,
-                                        km->arg))) {
-        flux_log_error (km->h, "commit_mgr_create");
+    if (!(root->ktm = kvstxn_mgr_create (cache,
+                                         root->namespace,
+                                         hash_name,
+                                         km->h,
+                                         km->arg))) {
+        flux_log_error (km->h, "kvstxn_mgr_create");
         goto error;
     }
 
-    if (!(root->fm = fence_mgr_create ())) {
-        flux_log_error (km->h, "fence_mgr_create");
+    if (!(root->trm = treq_mgr_create ())) {
+        flux_log_error (km->h, "treq_mgr_create");
         goto error;
     }
 

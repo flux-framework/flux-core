@@ -8,7 +8,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/modules/kvs/kvsroot.h"
-#include "src/modules/kvs/fence.h"
+#include "src/modules/kvs/treq.h"
 
 int global = 0;
 
@@ -163,24 +163,24 @@ void basic_iter_tests (void)
     cache_destroy (cache);
 }
 
-void basic_commit_mgr_tests (void)
+void basic_kvstxn_mgr_tests (void)
 {
     kvsroot_mgr_t *km;
     struct cache *cache;
     struct kvsroot *root;
-    commit_t *c;
-    fence_t *f;
+    kvstxn_t *kt;
+    treq_t *tr;
     json_t *ops = NULL;
     void *tmpaux;
 
     cache = cache_create ();
 
-    f = fence_create ("foo", 1, 0);
+    tr = treq_create ("foo", 1, 0);
     ops = json_array ();
     /* not a real operation */
     json_array_append_new (ops, json_string ("foo"));
 
-    fence_add_request_ops (f, ops);
+    treq_add_request_ops (tr, ops);
 
     json_decref (ops);
 
@@ -195,17 +195,17 @@ void basic_commit_mgr_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (commit_mgr_process_fence_request (root->cm, f) == 0,
-        "commit_mgr_process_fence_request works");
+    ok (kvstxn_mgr_process_transaction_request (root->ktm, tr) == 0,
+        "kvstxn_mgr_process_transaction_request works");
 
-    ok ((c = commit_mgr_get_ready_commit (root->cm)) != NULL,
-        "commit_mgr_get_ready_commit returns ready commit");
+    ok ((kt = kvstxn_mgr_get_ready_transaction (root->ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok ((tmpaux = commit_get_aux (c)) != NULL,
-        "commit_get_aux returns non-NULL aux");
+    ok ((tmpaux = kvstxn_get_aux (kt)) != NULL,
+        "kvstxn_get_aux returns non-NULL aux");
 
     ok (tmpaux == &global,
-        "commit_get_aux returns correct aux value");
+        "kvstxn_get_aux returns correct aux value");
 
     kvsroot_mgr_destroy (km);
     cache_destroy (cache);
@@ -217,7 +217,7 @@ int main (int argc, char *argv[])
 
     basic_api_tests ();
     basic_iter_tests ();
-    basic_commit_mgr_tests ();
+    basic_kvstxn_mgr_tests ();
 
     done_testing ();
     return (0);
