@@ -5,7 +5,6 @@
 #include <czmq.h>
 
 #include "cache.h"
-#include "treq.h"
 #include "src/common/libutil/blobref.h"
 
 typedef struct kvstxn_mgr kvstxn_mgr_t;
@@ -111,17 +110,16 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *ktache,
 
 void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm);
 
-/* kvstxn_mgr_process_transaction_request() should be called once per
- * transaction (commit or fence) request, after
- * treq_add_request_ops() has been called.
+/* kvstxn_mgr_add_transaction() will internally create a kvstxn_t and
+ * store it in the queue of ready to process transactions.
  *
- * If conditions are correct, will internally create at kvstxn_t and
- * store it to a queue of ready to process kvstxns.
- *
- * The treq_t will have its processed flag set to true if a kvstxn_t
- * is created and queued.  See treq_get/set_processed().
+ * This should be called once per transaction (commit or fence)
+ * request.
  */
-int kvstxn_mgr_process_transaction_request (kvstxn_mgr_t *ktm, treq_t *tr);
+int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
+                                const char *name,
+                                json_t *ops,
+                                int flags);
 
 /* returns true if there is a transaction ready for processing and is
  * not blocked, false if not.

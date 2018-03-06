@@ -13,7 +13,6 @@
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/kvstxn.h"
 #include "src/modules/kvs/lookup.h"
-#include "src/modules/kvs/treq.h"
 #include "src/modules/kvs/kvs_util.h"
 
 static int test_global = 5;
@@ -140,7 +139,6 @@ void kvstxn_mgr_basic_tests (void)
     json_t *ops = NULL;
     kvstxn_mgr_t *ktm;
     kvstxn_t *kt;
-    treq_t *tr;
     blobref_t rootref;
 
     ok (kvstxn_mgr_create (NULL, NULL, NULL, NULL, NULL) == NULL
@@ -161,40 +159,32 @@ void kvstxn_mgr_basic_tests (void)
 
     kvstxn_mgr_clear_noop_stores (ktm);
 
-    ok ((tr = treq_create ("transaction1", 1, 0)) != NULL,
-        "treq_create works");
-
-    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_transaction_request works");
-
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 0,
-        "kvstxn_mgr_ready_transaction_count is 0");
+        "kvstxn_mgr_ready_transaction_count is initially 0");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == false,
-        "kvstxn_mgr_transaction_ready says no transactions are ready");
+        "kvstxn_mgr_transaction_ready initially says no transactions are ready");
 
     ok (kvstxn_mgr_get_ready_transaction (ktm) == NULL,
-        "kvstxn_mgr_get_ready_transaction returns NULL for no ready kvstxns");
+        "kvstxn_mgr_get_ready_transaction initially returns NULL for no ready transactions");
+
+    ok (kvstxn_mgr_add_transaction (ktm, NULL, NULL, 0) < 0
+        && errno == EINVAL,
+        "kvstxn_mgr_add_transaction fails with EINVAL on bad input");
 
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    ok (treq_add_request_ops (tr, ops) == 0,
-        "treq_add_request_ops add works");
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "transaction1",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
 
     json_decref (ops);
 
-    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_transaction_request works");
-
     ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
         "kvstxn_mgr_ready_transaction_count is 1");
-
-    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_transaction_request works again");
-
-    ok (kvstxn_mgr_ready_transaction_count (ktm) == 1,
-        "kvstxn_mgr_ready_transaction_count is still 1, didn't double add");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == true,
         "kvstxn_mgr_transaction_ready says a transaction is ready");
@@ -221,22 +211,18 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
                           int op_flags,
                           int transaction_flags)
 {
-    treq_t *tr;
     json_t *ops = NULL;
-
-    ok ((tr = treq_create (name, 1, transaction_flags)) != NULL,
-        "treq_create works");
 
     ops = json_array ();
     ops_append (ops, key, val, op_flags);
 
-    ok (treq_add_request_ops (tr, ops) == 0,
-        "treq_add_request_ops add works");
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    name,
+                                    ops,
+                                    transaction_flags) == 0,
+        "kvstxn_mgr_add_transaction works");
 
     json_decref (ops);
-
-    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_transaction_request works");
 
     ok (kvstxn_mgr_transaction_ready (ktm) == true,
         "kvstxn_mgr_transaction_ready says a kvstxn is ready");
@@ -1160,7 +1146,6 @@ void kvstxn_process_malformed_operation (void)
     kvstxn_mgr_t *ktm;
     kvstxn_t *kt;
     blobref_t root_ref;
-    treq_t *tr;
     json_t *ops, *badop;
 
     cache = create_cache_with_empty_rootdir (root_ref);
@@ -1183,18 +1168,11 @@ void kvstxn_process_malformed_operation (void)
         && json_array_append_new (ops, badop) == 0,
         "created ops array with one malformed unlink op");
 
-    /* Create treq_t and add ops array to it.
-     */
-    ok ((tr = treq_create ("malformed", 1, 0)) != NULL,
-        "treq_create works");
-
-    ok (treq_add_request_ops (tr, ops) == 0,
-        "treq_add_request_ops add works");
-
-    /* Submit treq_t to kvstxn_mgr
-     */
-    ok (kvstxn_mgr_process_transaction_request (ktm, tr) == 0,
-        "kvstxn_mgr_process_transaction_request works");
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "malformed",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
 
     /* Process ready kvstxn and verify EPROTO error
      */
