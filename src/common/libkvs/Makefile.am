@@ -70,7 +70,10 @@ test_kvs_txn_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_kvs_lookup_t_SOURCES = test/kvs_lookup.c
 test_kvs_lookup_t_CPPFLAGS = $(test_cppflags)
-test_kvs_lookup_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_lookup_t_LDADD = \
+	$(top_builddir)/src/common/libkvs/kvs_txn.o \
+	$(test_ldadd) \
+	$(LIBDL)
 
 test_kvs_dir_t_SOURCES = test/kvs_dir.c
 test_kvs_dir_t_CPPFLAGS = $(test_cppflags)

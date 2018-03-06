@@ -36,8 +36,9 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
                                int nprocs, flux_kvs_txn_t *txn)
 {
     const char *namespace;
+    json_t *ops;
 
-    if (!name || nprocs <= 0) {
+    if (!name || nprocs <= 0 || !txn) {
         errno = EINVAL;
         return NULL;
     }
@@ -45,28 +46,18 @@ flux_future_t *flux_kvs_fence (flux_t *h, int flags, const char *name,
     if (!(namespace = flux_kvs_get_namespace (h)))
         return NULL;
 
-    if (txn) {
-        json_t *ops;
-        if (!(ops = txn_get_ops (txn))) {
-            errno = EINVAL;
-            return NULL;
-        }
-        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:s s:i s:O}",
-                                 "name", name,
-                                 "nprocs", nprocs,
-                                 "namespace", namespace,
-                                 "flags", flags,
-                                 "ops", ops);
-    } else {
-        return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:i s:s s:i s:[]}",
-                                 "name", name,
-                                 "nprocs", nprocs,
-                                 "namespace", namespace,
-                                 "flags", flags,
-                                 "ops");
+    if (!(ops = txn_get_ops (txn))) {
+        errno = EINVAL;
+        return NULL;
     }
+
+    return flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+                          "{s:s s:i s:s s:i s:O}",
+                          "name", name,
+                          "nprocs", nprocs,
+                          "namespace", namespace,
+                          "flags", flags,
+                          "ops", ops);
 }
 
 flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
@@ -75,7 +66,13 @@ flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
     const char *namespace;
     const char *name;
     flux_future_t *f = NULL;
+    json_t *ops;
     int saved_errno = 0;
+
+    if (!txn) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(uuid = zuuid_new ())) {
         saved_errno = errno;
@@ -88,31 +85,18 @@ flux_future_t *flux_kvs_commit (flux_t *h, int flags, flux_kvs_txn_t *txn)
         goto cleanup;
     }
 
-    if (txn) {
-        json_t *ops;
-        if (!(ops = txn_get_ops (txn))) {
-            saved_errno = EINVAL;
-            goto cleanup;
-        }
-        if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:s s:i s:O}",
-                                 "name", name,
-                                 "namespace", namespace,
-                                 "flags", flags,
-                                 "ops", ops))) {
-            saved_errno = errno;
-            goto cleanup;
-        }
-    } else {
-        if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
-                                 "{s:s s:s s:i s:[]}",
-                                 "name", name,
-                                 "namespace", namespace,
-                                 "flags", flags,
-                                 "ops"))) {
-            saved_errno = errno;
-            goto cleanup;
-        }
+    if (!(ops = txn_get_ops (txn))) {
+        saved_errno = EINVAL;
+        goto cleanup;
+    }
+    if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+                             "{s:s s:s s:i s:O}",
+                             "name", name,
+                             "namespace", namespace,
+                             "flags", flags,
+                             "ops", ops))) {
+        saved_errno = errno;
+        goto cleanup;
     }
 
 cleanup:
