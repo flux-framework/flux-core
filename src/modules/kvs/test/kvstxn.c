@@ -652,6 +652,16 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
         "kvstxn_mgr_merge_ready_transactions success");
 
+    /* call merge again to ensure nothing happens */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    create_ready_kvstxn (ktm, "transaction3", "baz.key3", "3", 0, 0);
+
+    /* call merge again to ensure last transaction not merged */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
@@ -662,7 +672,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* why three? 1 for root, 1 for foo.key1 (a new dir), and 1 for
-     * bar.key2 (a new dir)
+     * bar.key2 (a new dir), "baz.key3" is not committed.
      */
 
     ok (count == 3,
@@ -678,6 +688,27 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     verify_value (cache, newroot, "bar.key2", "2");
 
     kvstxn_mgr_remove_transaction (ktm, kt);
+
+    /* process the lingering transaction */
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    ok (kvstxn_process (kt, 1, newroot) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (kvstxn_process (kt, 1, newroot) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "baz.key3", "3");
+
+    /* now the ready queue should be empty */
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");

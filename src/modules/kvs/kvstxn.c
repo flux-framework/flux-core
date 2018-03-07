@@ -43,7 +43,9 @@
 #include "kvstxn.h"
 #include "kvs_util.h"
 
-#define KVSTXN_PROCESSING 0x01
+#define KVSTXN_PROCESSING      0x01
+#define KVSTXN_MERGED          0x02 /* kvstxn is a merger of transactions */
+#define KVSTXN_MERGE_COMPONENT 0x04 /* kvstxn is member of a merger */
 
 struct kvstxn_mgr {
     struct cache *cache;
@@ -1040,8 +1042,22 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
 
 void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt)
 {
-    if (kt->internal_flags & KVSTXN_PROCESSING)
+    if (kt->internal_flags & KVSTXN_PROCESSING) {
+        bool kvstxn_is_merged = false;
+
+        if (kt->internal_flags & KVSTXN_MERGED)
+            kvstxn_is_merged = true;
+
         zlist_remove (ktm->ready, kt);
+
+        if (kvstxn_is_merged) {
+            kvstxn_t *kt_tmp = zlist_first (ktm->ready);
+            while (kt_tmp && (kt_tmp->internal_flags & KVSTXN_MERGE_COMPONENT)) {
+                zlist_remove (ktm->ready, kt_tmp);
+                kt_tmp = zlist_next (ktm->ready);
+            }
+        }
+    }
 }
 
 int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm)
@@ -1150,7 +1166,8 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
         || first->errnum != 0
         || first->aux_errnum != 0
         || first->state > KVSTXN_STATE_APPLY_OPS
-        || (first->flags & FLUX_KVS_NO_MERGE))
+        || (first->flags & FLUX_KVS_NO_MERGE)
+        || first->internal_flags & KVSTXN_MERGED)
         return 0;
 
     second = zlist_next (ktm->ready);
@@ -1161,6 +1178,7 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
 
     if (!(new = kvstxn_create_empty (ktm, first->flags)))
         return -1;
+    new->internal_flags |= KVSTXN_MERGED;
 
     nextkt = zlist_first (ktm->ready);
     do {
@@ -1177,12 +1195,17 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
         count++;
     } while ((nextkt = zlist_next (ktm->ready)));
 
-    /* We use the count variable, so that we only modify the ready
-     * queue if no errors occur above */
-    while (count--) {
-        nextkt = zlist_pop (ktm->ready);
-        kvstxn_destroy (nextkt);
-    }
+    /* if count is zero, checks at beginning of function are invalid */
+    assert (count);
+
+    nextkt = zlist_first (ktm->ready);
+    do {
+        /* Wipe out KVSTXN_PROCESSING flag if user previously got
+         * the kvstxn_t
+         */
+        nextkt->internal_flags &= ~KVSTXN_PROCESSING;
+        nextkt->internal_flags |= KVSTXN_MERGE_COMPONENT;
+    } while (--count && (nextkt = zlist_next (ktm->ready)));
 
     zlist_push (ktm->ready, new);
     zlist_freefn (ktm->ready, new, (zlist_free_fn *)kvstxn_destroy, false);
