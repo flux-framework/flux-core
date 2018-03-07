@@ -1046,6 +1046,12 @@ static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
              */
             if (kvstxn_mgr_merge_ready_transactions (root->ktm) < 0)
                 kvstxn_set_aux_errnum (kt, errno);
+            else {
+                /* grab new head ready commit, if above succeeds, this
+                 * must succeed */
+                kt = kvstxn_mgr_get_ready_transaction (root->ktm);
+                assert (kt);
+            }
         }
 
         /* It does not matter if root has been marked for removal,

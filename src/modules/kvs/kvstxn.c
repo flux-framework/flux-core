@@ -1104,11 +1104,36 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
     return -1;
 }
 
+static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm)
+{
+    kvstxn_t *ktnew;
+
+    if (!(ktnew = calloc (1, sizeof (*ktnew))))
+        goto error_enomem;
+    if (!(ktnew->ops = json_array ()))
+        goto error_enomem;
+    if (!(ktnew->names = json_array ()))
+        goto error_enomem;
+    if (!(ktnew->missing_refs_list = zlist_new ()))
+        goto error_enomem;
+    if (!(ktnew->dirty_cache_entries_list = zlist_new ()))
+        goto error_enomem;
+    ktnew->ktm = ktm;
+    ktnew->state = KVSTXN_STATE_INIT;
+    return ktnew;
+
+error_enomem:
+    kvstxn_destroy (ktnew);
+    errno = ENOMEM;
+    return NULL;
+}
+
 /* Merge ready transactions that are mergeable, where merging consists
- * of popping the "donor" transaction off the ready list, and
- * appending its ops to the top transaction.  The top transaction can
- * be appended to if it hasn't started, or is still building the
- * rootcpy, e.g. stalled walking the namespace.
+ * creating a new kvstxn_t, and merging the other transactions in the
+ * ready queue and appending their ops/names to the new transaction.
+ * After merging, push the new kvstxn_t onto the head of the ready
+ * queue.  Merging can occur if the top transaction hasn't started, or
+ * is still building the rootcpy, e.g. stalled walking the namespace.
  *
  * Break when an unmergeable transaction is discovered.  We do not
  * wish to merge non-adjacent transactions, as it can create
@@ -1124,30 +1149,44 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
 
 int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
 {
-    kvstxn_t *kt = zlist_first (ktm->ready);
+    kvstxn_t *first, *second, *new;
+    kvstxn_t *nextkt;
 
     /* transaction must still be in state where merged in ops can be
      * applied */
-    if (kt
-        && kt->errnum == 0
-        && kt->state <= KVSTXN_STATE_APPLY_OPS
-        && !(kt->flags & FLUX_KVS_NO_MERGE)) {
-        kvstxn_t *nkt;
-        while ((nkt = zlist_next (ktm->ready))) {
-            int ret;
+    first = zlist_first (ktm->ready);
+    if (!first
+        || first->errnum != 0
+        || first->aux_errnum != 0
+        || first->state > KVSTXN_STATE_APPLY_OPS
+        || (first->flags & FLUX_KVS_NO_MERGE))
+        return 0;
 
-            if ((ret = kvstxn_merge (kt, nkt)) < 0)
-                return -1;
+    second = zlist_next (ktm->ready);
+    if (!second
+        || (second->flags & FLUX_KVS_NO_MERGE))
+        return 0;
 
-            /* if return == 0, we've merged as many as we currently
-             * can */
-            if (!ret)
-                break;
+    if (!(new = kvstxn_create_empty (ktm)))
+        return -1;
 
-            /* Merged kvstxn, remove off ready list */
-            zlist_remove (ktm->ready, nkt);
+    nextkt = zlist_first (ktm->ready);
+    do {
+        int ret;
+
+        if ((ret = kvstxn_merge (new, nextkt)) < 0) {
+            kvstxn_destroy (new);
+            return -1;
         }
-    }
+
+        if (!ret)
+            break;
+
+        zlist_remove (ktm->ready, nextkt);
+    } while ((nextkt = zlist_next (ktm->ready)));
+
+    zlist_push (ktm->ready, new);
+    zlist_freefn (ktm->ready, new, (zlist_free_fn *)kvstxn_destroy, false);
     return 0;
 }
 
