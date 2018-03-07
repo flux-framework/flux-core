@@ -1051,7 +1051,8 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
 {
     int i, len;
 
-    if (src->flags & FLUX_KVS_NO_MERGE)
+    if (src->flags & FLUX_KVS_NO_MERGE
+        || dest->flags != src->flags)
         return 0;
 
     if ((len = json_array_size (src->names))) {
@@ -1080,7 +1081,7 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
     return 1;
 }
 
-static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm)
+static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm, int flags)
 {
     kvstxn_t *ktnew;
 
@@ -1094,6 +1095,7 @@ static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm)
         goto error_enomem;
     if (!(ktnew->dirty_cache_entries_list = zlist_new ()))
         goto error_enomem;
+    ktnew->flags = flags;
     ktnew->ktm = ktm;
     ktnew->state = KVSTXN_STATE_INIT;
     return ktnew;
@@ -1140,10 +1142,11 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
 
     second = zlist_next (ktm->ready);
     if (!second
-        || (second->flags & FLUX_KVS_NO_MERGE))
+        || (second->flags & FLUX_KVS_NO_MERGE)
+        || (first->flags != second->flags))
         return 0;
 
-    if (!(new = kvstxn_create_empty (ktm)))
+    if (!(new = kvstxn_create_empty (ktm, first->flags)))
         return -1;
 
     nextkt = zlist_first (ktm->ready);

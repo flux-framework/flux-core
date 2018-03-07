@@ -348,6 +348,28 @@ void kvstxn_mgr_merge_tests (void)
 
     clear_ready_kvstxns (ktm);
 
+    /* test unsuccessful merge - different flags */
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0x5);
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    names = json_array ();
+    json_array_append (names, json_string ("transaction1"));
+
+    ops = json_array ();
+    ops_append (ops, "key1", "1", 0);
+
+    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged fence");
+
+    json_decref (names);
+    json_decref (ops);
+    ops = NULL;
+
+    clear_ready_kvstxns (ktm);
+
     kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
 }
