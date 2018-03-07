@@ -2296,7 +2296,7 @@ void kvstxn_process_fallback_merge (void)
 
     memcpy (rootref, newroot, sizeof (blobref_t));
 
-    /* now we try and transaction the next fence, which should be the bad one */
+    /* now we try and process the next transaction, which should be the bad one */
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready transaction");
