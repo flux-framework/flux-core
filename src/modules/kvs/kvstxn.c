@@ -1049,59 +1049,35 @@ int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm)
 
 static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
 {
-    json_t *names = NULL;
-    json_t *ops = NULL;
-    int i, len, saved_errno;
+    int i, len;
 
-    if ((dest->flags & FLUX_KVS_NO_MERGE) || (src->flags & FLUX_KVS_NO_MERGE))
+    if (src->flags & FLUX_KVS_NO_MERGE)
         return 0;
 
     if ((len = json_array_size (src->names))) {
-        if (!(names = json_copy (dest->names))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
         for (i = 0; i < len; i++) {
             json_t *name;
             if ((name = json_array_get (src->names, i))) {
-                if (json_array_append (names, name) < 0) {
-                    saved_errno = ENOMEM;
-                    goto error;
+                if (json_array_append (dest->names, name) < 0) {
+                    errno = ENOMEM;
+                    return -1;
                 }
             }
         }
     }
     if ((len = json_array_size (src->ops))) {
-        if (!(ops = json_copy (dest->ops))) {
-            saved_errno = ENOMEM;
-            goto error;
-        }
         for (i = 0; i < len; i++) {
             json_t *op;
             if ((op = json_array_get (src->ops, i))) {
-                if (json_array_append (ops, op) < 0) {
-                    saved_errno = ENOMEM;
-                    goto error;
+                if (json_array_append (dest->ops, op) < 0) {
+                    errno = ENOMEM;
+                    return -1;
                 }
             }
         }
     }
 
-    if (names) {
-        json_decref (dest->names);
-        dest->names = names;
-    }
-    if (ops) {
-        json_decref (dest->ops);
-        dest->ops = ops;
-    }
     return 1;
-
- error:
-    json_decref (names);
-    json_decref (ops);
-    errno = saved_errno;
-    return -1;
 }
 
 static kvstxn_t *kvstxn_create_empty (kvstxn_mgr_t *ktm)
