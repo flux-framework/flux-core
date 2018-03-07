@@ -192,7 +192,7 @@ void kvstxn_mgr_basic_tests (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns != NULL for ready kvstxns");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok (kvstxn_mgr_transaction_ready (ktm) == false,
         "kvstxn_mgr_transaction_ready says no transactions are ready");
@@ -261,7 +261,7 @@ void clear_ready_kvstxns (kvstxn_mgr_t *ktm)
     kvstxn_t *kt;
 
     while ((kt = kvstxn_mgr_get_ready_transaction (ktm)))
-        kvstxn_mgr_remove_transaction (ktm, kt);
+        kvstxn_mgr_remove_transaction (ktm, kt, false);
 }
 
 void kvstxn_mgr_merge_tests (void)
@@ -341,6 +341,28 @@ void kvstxn_mgr_merge_tests (void)
     ops_append (ops, "key1", "1", 0);
 
     verify_ready_kvstxn (ktm, names, ops, 0, "unmerged transaction");
+
+    json_decref (names);
+    json_decref (ops);
+    ops = NULL;
+
+    clear_ready_kvstxns (ktm);
+
+    /* test unsuccessful merge - different flags */
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0x5);
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    names = json_array ();
+    json_array_append (names, json_string ("transaction1"));
+
+    ops = json_array ();
+    ops_append (ops, "key1", "1", 0);
+
+    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged fence");
 
     json_decref (names);
     json_decref (ops);
@@ -519,7 +541,7 @@ void kvstxn_basic_kvstxn_process_test (void)
 
     verify_value (cache, newroot, "key1", "1");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
@@ -570,7 +592,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     strcpy (rootref, newroot);
 
     /* get rid of the this kvstxn, we're done */
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
@@ -596,7 +618,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     verify_value (cache, newroot, "key1", "1");
     verify_value (cache, newroot, "dir.key2", "2");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
@@ -630,6 +652,16 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
         "kvstxn_mgr_merge_ready_transactions success");
 
+    /* call merge again to ensure nothing happens */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    create_ready_kvstxn (ktm, "transaction3", "baz.key3", "3", 0, 0);
+
+    /* call merge again to ensure last transaction not merged */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
@@ -640,7 +672,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
     /* why three? 1 for root, 1 for foo.key1 (a new dir), and 1 for
-     * bar.key2 (a new dir)
+     * bar.key2 (a new dir), "baz.key3" is not committed.
      */
 
     ok (count == 3,
@@ -655,10 +687,67 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     verify_value (cache, newroot, "foo.key1", "1");
     verify_value (cache, newroot, "bar.key2", "2");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    /* process the lingering transaction */
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    ok (kvstxn_process (kt, 1, newroot) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (kvstxn_process (kt, 1, newroot) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "baz.key3", "3");
+
+    /* now the ready queue should be empty */
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    kvstxn_mgr_destroy (ktm);
+    cache_destroy (cache);
+}
+
+void kvstxn_basic_kvstxn_process_test_invalid_transaction (void)
+{
+    struct cache *cache;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *ktbad, *kt;
+    blobref_t rootref;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0);
+
+    ok ((ktbad = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_process (ktbad, 1, rootref) == KVSTXN_PROCESS_ERROR
+        && kvstxn_get_errnum (ktbad) == EINVAL,
+        "kvstxn_process fails on bad kvstxn");
 
     kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
@@ -1706,7 +1795,7 @@ void kvstxn_process_big_fileval (void)
 
     verify_value (cache, newroot, "val", "smallstr");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /* next kvstxn a big value, to make sure it is not json in the
      * cache */
@@ -1862,7 +1951,7 @@ void kvstxn_process_giant_dir (void)
     verify_value (cache, newroot, "dir.val0090", "bar");
     verify_value (cache, newroot, "dir.val00D0", NULL);
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
@@ -1943,7 +2032,7 @@ void kvstxn_process_append (void)
 
     verify_value (cache, newroot, "val", "abcdefgh");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /*
      * second test, append to a treeobj valref
@@ -1974,7 +2063,7 @@ void kvstxn_process_append (void)
 
     verify_value (cache, newroot, "valref", "ABCDEFGH");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /*
      * third test, append to a non-existent value, it's like an insert
@@ -2004,7 +2093,7 @@ void kvstxn_process_append (void)
 
     verify_value (cache, newroot, "newval", "foobar");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
@@ -2059,7 +2148,7 @@ void kvstxn_process_append_errors (void)
     ok (kvstxn_get_errnum (kt) == EISDIR,
         "kvstxn_get_errnum return EISDIR");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     /*
      * append to a symlink, should get EOPNOTSUPP
@@ -2076,7 +2165,155 @@ void kvstxn_process_append_errors (void)
     ok (kvstxn_get_errnum (kt) == EOPNOTSUPP,
         "kvstxn_get_errnum return EOPNOTSUPP");
 
-    kvstxn_mgr_remove_transaction (ktm, kt);
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    kvstxn_mgr_destroy (ktm);
+    cache_destroy (cache);
+}
+
+void kvstxn_process_fallback_merge (void)
+{
+    struct cache *cache;
+    int count = 0;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    blobref_t rootref;
+    const char *newroot;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    /*
+     * This makes sure the basic "merge" works as we expect
+     */
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "42", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "43", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_fallback_mergeable (kt) == false,
+        "kvstxn_fallback_mergeable returns false on unmerged transaction");
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions works");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_fallback_mergeable (kt) == true,
+        "kvstxn_fallback_mergeable returns true on merged transaction");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "key1", "42");
+    verify_value (cache, newroot, "key2", "43");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more transactions");
+
+    memcpy (rootref, newroot, sizeof (blobref_t));
+
+    /*
+     * Now we create an error in a merge by writing to "."
+     */
+
+    create_ready_kvstxn (ktm, "transaction3", "key3", "44", 0, 0);
+    create_ready_kvstxn (ktm, "transaction4", ".", "45", 0, 0);
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions works");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
+
+    ok (kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_get_errnum returns EINVAL");
+
+    ok (kvstxn_fallback_mergeable (kt) == true,
+        "kvstxn_fallback_mergeable returns true on merged transaction");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, true);
+
+    /* now the original transactions should be back in the ready queue */
+
+    /* This should succeed, but shouldn't actually merge anything */
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions works");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_fallback_mergeable (kt) == false,
+        "kvstxn_fallback_mergeable returns false on unmerged transaction");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    count = 0;
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, newroot, "key3", "44");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    memcpy (rootref, newroot, sizeof (blobref_t));
+
+    /* now we try and transaction the next fence, which should be the bad one */
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_fallback_mergeable (kt) == false,
+        "kvstxn_fallback_mergeable returns false on unmerged transaction");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_ERROR,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR");
+
+    ok (kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_get_errnum returns EINVAL");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    /* now make sure the ready queue is back to empty */
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more transactions");
 
     kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
@@ -2092,6 +2329,7 @@ int main (int argc, char *argv[])
     kvstxn_basic_kvstxn_process_test ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions_merge ();
+    kvstxn_basic_kvstxn_process_test_invalid_transaction ();
     kvstxn_basic_root_not_dir ();
     kvstxn_process_root_missing ();
     kvstxn_process_missing_ref ();
@@ -2113,6 +2351,7 @@ int main (int argc, char *argv[])
     kvstxn_process_giant_dir ();
     kvstxn_process_append ();
     kvstxn_process_append_errors ();
+    kvstxn_process_fallback_merge ();
 
     done_testing ();
     return (0);
