@@ -686,6 +686,42 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     cache_destroy (cache);
 }
 
+void kvstxn_basic_kvstxn_process_test_invalid_transaction (void)
+{
+    struct cache *cache;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *ktbad, *kt;
+    blobref_t rootref;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0);
+
+    ok ((ktbad = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready transaction");
+
+    ok (kvstxn_process (ktbad, 1, rootref) == KVSTXN_PROCESS_ERROR
+        && kvstxn_get_errnum (ktbad) == EINVAL,
+        "kvstxn_process fails on bad kvstxn");
+
+    kvstxn_mgr_destroy (ktm);
+    cache_destroy (cache);
+}
+
 void kvstxn_basic_root_not_dir (void)
 {
     struct cache *cache;
@@ -2114,6 +2150,7 @@ int main (int argc, char *argv[])
     kvstxn_basic_kvstxn_process_test ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions_merge ();
+    kvstxn_basic_kvstxn_process_test_invalid_transaction ();
     kvstxn_basic_root_not_dir ();
     kvstxn_process_root_missing ();
     kvstxn_process_missing_ref ();

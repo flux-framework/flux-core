@@ -43,6 +43,8 @@
 #include "kvstxn.h"
 #include "kvs_util.h"
 
+#define KVSTXN_PROCESSING 0x01
+
 struct kvstxn_mgr {
     struct cache *cache;
     const char *namespace;
@@ -64,6 +66,7 @@ struct kvstxn {
     blobref_t newroot;
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
+    int internal_flags;
     kvstxn_mgr_t *ktm;
     enum {
         KVSTXN_STATE_INIT = 1,
@@ -717,6 +720,11 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
     if (kt->errnum)
         return KVSTXN_PROCESS_ERROR;
 
+    if (!(kt->internal_flags & KVSTXN_PROCESSING)) {
+        kt->errnum = EINVAL;
+        return KVSTXN_PROCESS_ERROR;
+    }
+
     switch (kt->state) {
     case KVSTXN_STATE_INIT:
     case KVSTXN_STATE_LOAD_ROOT:
@@ -1022,14 +1030,18 @@ bool kvstxn_mgr_transaction_ready (kvstxn_mgr_t *ktm)
 
 kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
 {
-    if (kvstxn_mgr_transaction_ready (ktm))
-        return zlist_first (ktm->ready);
+    if (kvstxn_mgr_transaction_ready (ktm)) {
+        kvstxn_t *kt = zlist_first (ktm->ready);
+        kt->internal_flags |= KVSTXN_PROCESSING;
+        return kt;
+    }
     return NULL;
 }
 
 void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt)
 {
-    zlist_remove (ktm->ready, kt);
+    if (kt->internal_flags & KVSTXN_PROCESSING)
+        zlist_remove (ktm->ready, kt);
 }
 
 int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm)
