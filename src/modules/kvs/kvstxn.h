@@ -35,6 +35,18 @@ int kvstxn_get_errnum (kvstxn_t *kt);
 int kvstxn_get_aux_errnum (kvstxn_t *kt);
 int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum);
 
+/* Returns true if a kvstxn was merged and the user can fallback to
+ * the original transactions that it was made up of.  This function
+ * should be used when a merged kvstxn has failed.  Instead of failing
+ * all transactions in this merged kvstxn, the kvstxn manager can be
+ * told to fallback to the original transactions via a flag in
+ * kvstxn_mgr_remove_transaction().  By falling back to the original
+ * transactions, each can be played one by one and only the specific
+ * failing transaction can be sent an error.  See
+ * kvstxn_mgr_remove_kvstxn() below for more details.
+ */
+bool kvstxn_fallback_mergeable (kvstxn_t *kt);
+
 json_t *kvstxn_get_ops (kvstxn_t *kt);
 json_t *kvstxn_get_names (kvstxn_t *kt);
 int kvstxn_get_flags (kvstxn_t *kt);
@@ -133,8 +145,22 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm);
 
 /* remove a transaction from the kvstxn manager after it is done
  * processing
+ *
+ * If the kvstxn was merged, and the caller would like to fallback to
+ * the original individual transactions (so they can be retried
+ * individually), set `fallback` to true.  This will put the original
+ * transactions back on the ready queue, but will make it so they
+ * cannot be merged in the future (e.g. setting FLUX_KVS_NO_MERGE on
+ * them).
+ *
+ * Be careful with the 'fallback' option.  If a transaction was
+ * successful, you can still fallback the merged kvstxn into its
+ * individual components.  'fallback' should only be set when you get
+ * an error (i.e. you don't use kvstxn_get_newroot_ref to get a new
+ * root).
  */
-void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt);
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt,
+                                    bool fallback);
 
 int kvstxn_mgr_get_noop_stores (kvstxn_mgr_t *ktm);
 void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm);
@@ -149,6 +175,10 @@ int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm);
  * Callers should be cautioned to re-call
  * kvstxn_mgr_get_ready_transaction() for the new head commit as the
  * prior one has been removed.
+ *
+ * A merged kvstxn can be backed out if an error occurs.  See
+ * kvstxn_fallback_mergeable() and kvstxn_mgr_remove_transaction()
+ * above.
  *
  * Returns -1 on error, 0 on success.
  */

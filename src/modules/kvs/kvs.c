@@ -881,6 +881,7 @@ static void kvstxn_apply (kvstxn_t *kt)
     wait_t *wait = NULL;
     int errnum = 0;
     kvstxn_process_t ret;
+    bool fallback = false;
 
     namespace = kvstxn_get_namespace (kt);
     assert (namespace);
@@ -986,17 +987,28 @@ done:
         setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
         setroot_event_send (ctx, root, names);
     } else {
-        flux_log (ctx->h, LOG_ERR, "transaction failed: %s",
-                  flux_strerror (errnum));
-        error_event_send (ctx, root->namespace, kvstxn_get_names (kt),
-                          errnum);
+        fallback = kvstxn_fallback_mergeable (kt);
+
+        flux_log (ctx->h, LOG_ERR, "kvstxn failed: %s%s",
+                  flux_strerror (errnum),
+                  fallback ? " (is fallbackable)" : "");
+
+        /* if merged transaction is fallbackable, ignore the fallback option
+         * if it's an extreme "death" like error.
+         */
+        if (errnum == ENOMEM || errnum == ENOTSUP)
+            fallback = false;
+
+        if (!fallback)
+            error_event_send (ctx, root->namespace, kvstxn_get_names (kt),
+                              errnum);
     }
     wait_destroy (wait);
 
     /* Completed: remove from 'ready' list.
      * N.B. treq_t remains in the treq_mgr_t hash until event is received.
      */
-    kvstxn_mgr_remove_transaction (root->ktm, kt);
+    kvstxn_mgr_remove_transaction (root->ktm, kt, fallback);
     return;
 
 stall:

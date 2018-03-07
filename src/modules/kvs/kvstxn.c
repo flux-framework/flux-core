@@ -160,6 +160,13 @@ int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum)
     return kt->aux_errnum;
 }
 
+bool kvstxn_fallback_mergeable (kvstxn_t *kt)
+{
+    if (kt->internal_flags & KVSTXN_MERGED)
+        return true;
+    return false;
+}
+
 json_t *kvstxn_get_ops (kvstxn_t *kt)
 {
     return kt->ops;
@@ -1040,7 +1047,8 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
     return NULL;
 }
 
-void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt)
+void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt,
+                                    bool fallback)
 {
     if (kt->internal_flags & KVSTXN_PROCESSING) {
         bool kvstxn_is_merged = false;
@@ -1053,7 +1061,13 @@ void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt)
         if (kvstxn_is_merged) {
             kvstxn_t *kt_tmp = zlist_first (ktm->ready);
             while (kt_tmp && (kt_tmp->internal_flags & KVSTXN_MERGE_COMPONENT)) {
-                zlist_remove (ktm->ready, kt_tmp);
+                if (fallback) {
+                    kt_tmp->internal_flags &= ~KVSTXN_MERGE_COMPONENT;
+                    kt_tmp->flags |= FLUX_KVS_NO_MERGE;
+                }
+                else
+                    zlist_remove (ktm->ready, kt_tmp);
+
                 kt_tmp = zlist_next (ktm->ready);
             }
         }
