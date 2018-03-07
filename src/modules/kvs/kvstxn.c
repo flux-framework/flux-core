@@ -1129,6 +1129,7 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
 {
     kvstxn_t *first, *second, *new;
     kvstxn_t *nextkt;
+    int count = 0;
 
     /* transaction must still be in state where merged in ops can be
      * applied */
@@ -1161,8 +1162,15 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
         if (!ret)
             break;
 
-        zlist_remove (ktm->ready, nextkt);
+        count++;
     } while ((nextkt = zlist_next (ktm->ready)));
+
+    /* We use the count variable, so that we only modify the ready
+     * queue if no errors occur above */
+    while (count--) {
+        nextkt = zlist_pop (ktm->ready);
+        kvstxn_destroy (nextkt);
+    }
 
     zlist_push (ktm->ready, new);
     zlist_freefn (ktm->ready, new, (zlist_free_fn *)kvstxn_destroy, false);
