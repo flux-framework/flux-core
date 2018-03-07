@@ -2252,8 +2252,13 @@ static void wreck_barrier_complete (flux_future_t *f, void *arg)
 static int wreck_pmi_barrier_enter (void *arg)
 {
     struct prog_ctx *ctx = arg;
-    flux_future_t *f;
+    flux_future_t *f = NULL;
 
+    if (!ctx->barrier_txn && !(ctx->barrier_txn = flux_kvs_txn_create ())) {
+        wlog_err (ctx, "pmi_barrier_enter: flux_kvs_txn_create: %s",
+                  strerror (errno));
+        goto out;
+    }
     if ((f = flux_kvs_fence (ctx->flux, 0, ctx->barrier_name,
                              ctx->nnodes, ctx->barrier_txn)) == NULL) {
         wlog_err (ctx, "pmi_barrier_enter: flux_kvs_fence: %s",
@@ -2264,6 +2269,7 @@ static int wreck_pmi_barrier_enter (void *arg)
         wlog_err (ctx, "pmi_barrier_enter: flux_future_then: %s",
                   strerror (errno));
         flux_future_destroy (f);
+        f = NULL;
     }
     flux_kvs_txn_destroy (ctx->barrier_txn);
     ctx->barrier_txn = NULL;
