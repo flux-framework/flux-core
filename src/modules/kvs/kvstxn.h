@@ -143,10 +143,10 @@ void kvstxn_mgr_clear_noop_stores (kvstxn_mgr_t *ktm);
 int kvstxn_mgr_ready_transaction_count (kvstxn_mgr_t *ktm);
 
 /* In internally stored ready transactions (moved to ready status via
- * kvstxn_mgr_process_transaction_request()), merge them if they are
- * capable of being merged.  Returns -1 on error, 0 on success.  On
- * error, it is possible that the ready transaction has been modified
- * with different transaction names and operations.  The caller is
+ * kvstxn_mgr_add_transaction()), merge them if they are capable of
+ * being merged.  Returns -1 on error, 0 on success.  On error, it is
+ * possible that the ready transaction has been modified with
+ * different transaction names and operations.  The caller is
  * responsible for sending errors to all appropriately.
  */
 int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm);
