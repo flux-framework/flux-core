@@ -689,18 +689,20 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
+    memcpy (rootref, newroot, sizeof (blobref_t));
+
     /* process the lingering transaction */
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
-    ok (kvstxn_process (kt, 1, newroot) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, newroot) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2294,7 +2296,7 @@ void kvstxn_process_fallback_merge (void)
 
     memcpy (rootref, newroot, sizeof (blobref_t));
 
-    /* now we try and transaction the next fence, which should be the bad one */
+    /* now we try and process the next transaction, which should be the bad one */
 
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready transaction");
