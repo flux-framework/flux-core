@@ -29,7 +29,7 @@ struct kvsroot {
 typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
 
 /* flux_t optional, if NULL logging will go to stderr */
-/* void *arg passed as arg value to txn_mgr_create() internally */
+/* void *arg passed as arg value to kvstxn_mgr_create() internally */
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg);
 
 void kvsroot_mgr_destroy (kvsroot_mgr_t *km);

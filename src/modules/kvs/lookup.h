@@ -100,8 +100,8 @@ int lookup_set_aux_data (lookup_t *lh, void *data);
  * checked via lookup_get_errnum().  On success, value of resulting
  * lookup can be retrieved via lookup_get_value().
  *
- * Return false if key name cannot be resolved.  Get missing reference
- * in via lookup_get_missing_ref().  Caller should then use
+ * Return false if key name cannot be resolved.  Get missing
+ * references via lookup_iter_missing_refs().  Caller should then use
  * missing reference to load missing reference into KVS cache via rpc
  * or otherwise.
  */
