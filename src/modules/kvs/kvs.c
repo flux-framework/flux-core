@@ -288,21 +288,32 @@ cleanup:
  * security
  */
 
+static int get_msg_cred (kvs_ctx_t *ctx,
+                         const flux_msg_t *msg,
+                         uint32_t *rolemask,
+                         uint32_t *userid)
+{
+    if (flux_msg_get_rolemask (msg, rolemask) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_rolemask");
+        return -1;
+    }
+
+    if (flux_msg_get_userid (msg, userid) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_userid");
+        return -1;
+    }
+
+    return 0;
+}
+
 static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
                        const flux_msg_t *msg)
 {
     uint32_t rolemask;
     uint32_t userid;
 
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0) {
-        flux_log_error (ctx->h, "flux_msg_get_rolemask");
+    if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
         return -1;
-    }
-
-    if (flux_msg_get_userid (msg, &userid) < 0) {
-        flux_log_error (ctx->h, "flux_msg_get_userid");
-        return -1;
-    }
 
     return kvsroot_check_user (ctx->krm, root, rolemask, userid);
 }
@@ -1229,6 +1240,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (lookup_validate (arg) == false) {
         struct kvsroot *root;
         bool stall = false;
+        uint32_t rolemask, userid;
 
         ctx = arg;
 
@@ -1263,11 +1275,17 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
             }
         }
 
+        if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
+            goto done;
+
         if (!(lh = lookup_create (ctx->cache,
+                                  ctx->krm,
                                   ctx->epoch,
                                   namespace,
                                   root_ref ? root_ref : root->ref,
                                   key,
+                                  rolemask,
+                                  userid,
                                   flags,
                                   h,
                                   ctx)))
@@ -1378,6 +1396,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
         bool stall = false;
+        uint32_t rolemask, userid;
 
         ctx = arg;
 
@@ -1397,11 +1416,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
+        if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
+            goto done;
+
         if (!(lh = lookup_create (ctx->cache,
+                                  ctx->krm,
                                   ctx->epoch,
                                   namespace,
                                   root->ref,
                                   key,
+                                  rolemask,
+                                  userid,
                                   flags,
                                   h,
                                   ctx)))

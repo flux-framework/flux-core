@@ -87,6 +87,9 @@ test_lookup_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
 	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
+	$(top_builddir)/src/modules/kvs/kvsroot.o \
+	$(top_builddir)/src/modules/kvs/kvstxn.o \
+	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \
 	$(test_ldadd)
 
@@ -103,6 +106,8 @@ test_kvstxn_t_LDADD = \
 	$(top_builddir)/src/modules/kvs/kvstxn.o \
 	$(top_builddir)/src/modules/kvs/cache.o \
 	$(top_builddir)/src/modules/kvs/lookup.o \
+	$(top_builddir)/src/modules/kvs/kvsroot.o \
+	$(top_builddir)/src/modules/kvs/treq.o \
 	$(top_builddir)/src/modules/kvs/waitqueue.o \
 	$(top_builddir)/src/modules/kvs/msg_cb_handler.o \
 	$(top_builddir)/src/modules/kvs/kvs_util.o \

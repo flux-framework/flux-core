@@ -40,6 +40,7 @@
 #include "src/common/libkvs/treeobj.h"
 
 #include "cache.h"
+#include "kvsroot.h"
 #include "kvs_util.h"
 
 #include "lookup.h"
@@ -62,6 +63,7 @@ struct lookup {
 
     /* inputs from user */
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     int current_epoch;
 
     char *namespace;
@@ -70,6 +72,9 @@ struct lookup {
     char *path;
 
     flux_t *h;
+
+    uint32_t rolemask;
+    uint32_t userid;
 
     int flags;
 
@@ -376,10 +381,13 @@ stall:
 }
 
 lookup_t *lookup_create (struct cache *cache,
+                         kvsroot_mgr_t *krm,
                          int current_epoch,
                          const char *namespace,
                          const char *root_ref,
                          const char *path,
+                         uint32_t rolemask,
+                         uint32_t userid,
                          int flags,
                          flux_t *h,
                          void *aux)
@@ -387,7 +395,7 @@ lookup_t *lookup_create (struct cache *cache,
     lookup_t *lh = NULL;
     int saved_errno;
 
-    if (!cache || !namespace || !root_ref || !path) {
+    if (!cache || !krm || !namespace || !root_ref || !path) {
         errno = EINVAL;
         return NULL;
     }
@@ -399,6 +407,7 @@ lookup_t *lookup_create (struct cache *cache,
 
     lh->magic = LOOKUP_MAGIC;
     lh->cache = cache;
+    lh->krm = krm;
     lh->current_epoch = current_epoch;
     /* must duplicate strings, user may not keep pointer alive */
     if (!(lh->namespace = strdup (namespace))) {
@@ -415,6 +424,9 @@ lookup_t *lookup_create (struct cache *cache,
     }
     lh->h = h;
     lh->aux = aux;
+
+    lh->rolemask = rolemask;
+    lh->userid = userid;
     lh->flags = flags;
 
     lh->val = NULL;

@@ -3,6 +3,7 @@
 
 #include <flux/core.h>
 #include "cache.h"
+#include "kvsroot.h"
 
 typedef struct lookup lookup_t;
 
@@ -16,10 +17,13 @@ typedef int (*lookup_ref_f)(lookup_t *c,
 /* Initialize a lookup handle
  */
 lookup_t *lookup_create (struct cache *cache,
+                         kvsroot_mgr_t *krm,
                          int current_epoch,
                          const char *namespace,
                          const char *root_ref,
                          const char *path,
+                         uint32_t rolemask,
+                         uint32_t userid,
                          int flags,
                          flux_t *h,
                          void *aux);
