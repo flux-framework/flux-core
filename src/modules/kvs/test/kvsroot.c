@@ -61,6 +61,18 @@ void basic_api_tests (void)
     ok (kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE) == NULL,
         "kvsroot_mgr_lookup_root_safe returns NULL on root marked removed");
 
+    /* test convenience functions */
+
+    kvsroot_setroot (krm, root, "foobar", 18);
+
+    ok (!strcmp (root->ref, "foobar"),
+        "kvsroot_setroot set ref correctly");
+
+    ok (root->seq == 18,
+        "kvsroot_setroot set seq correctly");
+
+    /* back to testing kvsroot_mgr functions */
+
     ok (kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE) == 0,
         "kvsroot_mgr_remove_root works");
 

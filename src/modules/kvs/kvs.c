@@ -325,9 +325,8 @@ static void setroot (kvs_ctx_t *ctx, struct kvsroot *root,
                      const char *rootref, int rootseq)
 {
     if (rootseq == 0 || rootseq > root->seq) {
-        assert (strlen (rootref) < sizeof (blobref_t));
-        strcpy (root->ref, rootref);
-        root->seq = rootseq;
+        kvsroot_setroot (ctx->krm, root, rootref, rootseq);
+
         /* log error on wait_runqueue(), don't error out.  watchers
          * may miss value change, but will never get older one.
          * Maintains consistency model */

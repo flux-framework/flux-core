@@ -254,6 +254,21 @@ error:
     return -1;
 }
 
+/* Convenience functions on struct kvsroot
+ */
+
+void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
+                      const char *root_ref, int root_seq)
+{
+    if (!root || !root_ref)
+        return;
+
+    assert (strlen (root_ref) < sizeof (blobref_t));
+
+    strcpy (root->ref, root_ref);
+    root->seq = root_seq;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

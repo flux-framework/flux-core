@@ -56,6 +56,12 @@ struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
 
 int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
 
+/* Convenience functions on struct kvsroot
+ */
+
+void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
+                      const char *root_ref, int root_seq);
+
 #endif /* !_FLUX_KVS_KVSROOT_H */
 
 /*
