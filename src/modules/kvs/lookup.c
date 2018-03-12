@@ -393,9 +393,10 @@ lookup_t *lookup_create (struct cache *cache,
                          void *aux)
 {
     lookup_t *lh = NULL;
+    struct kvsroot *root;
     int saved_errno;
 
-    if (!cache || !krm || !namespace || !root_ref || !path) {
+    if (!cache || !krm || !namespace || !path) {
         errno = EINVAL;
         return NULL;
     }
@@ -409,15 +410,38 @@ lookup_t *lookup_create (struct cache *cache,
     lh->cache = cache;
     lh->krm = krm;
     lh->current_epoch = current_epoch;
+
     /* must duplicate strings, user may not keep pointer alive */
     if (!(lh->namespace = strdup (namespace))) {
         saved_errno = ENOMEM;
         goto cleanup;
     }
-    if (!(lh->root_ref = strdup (root_ref))) {
-        saved_errno = ENOMEM;
-        goto cleanup;
+
+    if (!root_ref) {
+
+        root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
+
+        /* For time being, user must assure namespace exists in
+         * kvsroot_mgr_t */
+        assert (root);
+
+        if (kvsroot_check_user (lh->krm, root, rolemask, userid) < 0) {
+            saved_errno = errno;
+            goto cleanup;
+        }
+
+        if (!(lh->root_ref = strdup (root->ref))) {
+            saved_errno = ENOMEM;
+            goto cleanup;
+        }
     }
+    else {
+        if (!(lh->root_ref = strdup (root_ref))) {
+            saved_errno = ENOMEM;
+            goto cleanup;
+        }
+    }
+
     if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
         saved_errno = errno;
         goto cleanup;

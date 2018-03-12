@@ -1238,7 +1238,6 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
-        struct kvsroot *root;
         bool stall = false;
         uint32_t rolemask, userid;
 
@@ -1252,8 +1251,8 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(root = getroot (ctx, namespace, mh, msg, lookup_request_cb,
-                              &stall))) {
+        if (!getroot (ctx, namespace, mh, msg, lookup_request_cb,
+                      &stall)) {
             if (stall)
                 goto stall;
             goto done;
@@ -1282,7 +1281,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   ctx->krm,
                                   ctx->epoch,
                                   namespace,
-                                  root_ref ? root_ref : root->ref,
+                                  root_ref ? root_ref : NULL,
                                   key,
                                   rolemask,
                                   userid,
@@ -1423,7 +1422,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   ctx->krm,
                                   ctx->epoch,
                                   namespace,
-                                  root->ref,
+                                  NULL,
                                   key,
                                   rolemask,
                                   userid,

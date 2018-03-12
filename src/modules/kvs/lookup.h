@@ -15,6 +15,9 @@ typedef int (*lookup_ref_f)(lookup_t *c,
                             void *data);
 
 /* Initialize a lookup handle
+ *
+ * - root_ref is optional.  If not specified, will use root ref
+ *   specified in namespace.
  */
 lookup_t *lookup_create (struct cache *cache,
                          kvsroot_mgr_t *krm,

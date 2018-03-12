@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <jansson.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <assert.h>
 
 #include "src/common/libtap/tap.h"
@@ -119,6 +121,21 @@ int lookup_ref_error (lookup_t *c,
     return -1;
 }
 
+void setup_kvsroot (kvsroot_mgr_t *krm, struct cache *cache, const char *ref)
+{
+    struct kvsroot *root;
+
+    ok ((root = kvsroot_mgr_create_root (krm,
+                                         cache,
+                                         "sha1",
+                                         KVS_PRIMARY_NAMESPACE,
+                                         getuid (),
+                                         0)) != NULL,
+        "kvsroot_mgr_create_root works");
+
+    kvsroot_setroot (krm, root, ref, 0);
+}
+
 void basic_api (void)
 {
     struct cache *cache;
@@ -130,12 +147,13 @@ void basic_api (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
+    setup_kvsroot (krm, cache, "root.ref.foo");
 
     ok ((lh = lookup_create (cache,
                              krm,
                              42,
                              KVS_PRIMARY_NAMESPACE,
-                             "root.ref.foo",
+                             NULL,
                              "path.bar",
                              FLUX_ROLE_OWNER,
                              0,
@@ -193,12 +211,13 @@ void basic_api_errors (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
+    setup_kvsroot (krm, cache, "root.ref.foo");
 
     ok ((lh = lookup_create (cache,
                              krm,
                              42,
                              KVS_PRIMARY_NAMESPACE,
-                             "root.ref.foo",
+                             NULL,
                              "path.bar",
                              FLUX_ROLE_OWNER,
                              0,
@@ -441,12 +460,14 @@ void lookup_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
                              FLUX_ROLE_OWNER,
                              0,
@@ -461,7 +482,7 @@ void lookup_root (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
                              FLUX_ROLE_OWNER,
                              0,
@@ -476,7 +497,7 @@ void lookup_root (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
                              FLUX_ROLE_OWNER,
                              0,
@@ -595,12 +616,14 @@ void lookup_basic (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* lookup dir via dirref */
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -615,7 +638,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -636,7 +659,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref_with_dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -651,7 +674,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref_multi",
                              FLUX_ROLE_OWNER,
                              0,
@@ -672,7 +695,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref_multi_with_dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -687,7 +710,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -704,7 +727,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.dir",
                              FLUX_ROLE_OWNER,
                              0,
@@ -719,7 +742,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.symlink",
                              FLUX_ROLE_OWNER,
                              0,
@@ -736,7 +759,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -753,7 +776,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -770,7 +793,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -787,7 +810,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.dir",
                              FLUX_ROLE_OWNER,
                              0,
@@ -802,7 +825,7 @@ void lookup_basic (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.symlink",
                              FLUX_ROLE_OWNER,
                              0,
@@ -885,13 +908,15 @@ void lookup_errors (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "foo",
                              FLUX_ROLE_OWNER,
                              0,
@@ -907,7 +932,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "val.foo",
                              FLUX_ROLE_OWNER,
                              0,
@@ -923,7 +948,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "valref.foo",
                              FLUX_ROLE_OWNER,
                              0,
@@ -938,7 +963,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dir.foo",
                              FLUX_ROLE_OWNER,
                              0,
@@ -953,7 +978,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "symlink1",
                              FLUX_ROLE_OWNER,
                              0,
@@ -968,7 +993,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -983,7 +1008,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dir",
                              FLUX_ROLE_OWNER,
                              0,
@@ -998,7 +1023,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1013,7 +1038,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1028,7 +1053,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1043,7 +1068,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dir",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1058,7 +1083,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1073,7 +1098,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1088,7 +1113,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "symlink",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1103,7 +1128,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_bad",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1119,7 +1144,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_bad.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1149,7 +1174,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_multi",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1165,7 +1190,7 @@ void lookup_errors (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_multi.foo",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1263,12 +1288,14 @@ void lookup_links (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* lookup val, follow two links */
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.symlink",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1285,7 +1312,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1302,7 +1329,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1319,7 +1346,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.dir",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1334,7 +1361,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1349,7 +1376,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.symlink",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1366,7 +1393,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1383,7 +1410,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1400,7 +1427,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dir",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1415,7 +1442,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1430,7 +1457,7 @@ void lookup_links (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2symlink",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1493,6 +1520,8 @@ void lookup_alt_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
                              krm,
@@ -1554,6 +1583,8 @@ void lookup_stall_root (void) {
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
     treeobj_hash ("sha1", root, root_ref);
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* do not insert entries into cache until later for these stall tests */
 
     /* lookup root ".", should stall on root */
@@ -1561,7 +1592,7 @@ void lookup_stall_root (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1581,7 +1612,7 @@ void lookup_stall_root (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1689,6 +1720,8 @@ void lookup_stall (void) {
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
     treeobj_hash ("sha1", root, root_ref);
 
+    setup_kvsroot (krm, cache, root_ref);
+
     /* do not insert entries into cache until later for these stall tests */
 
     /* lookup dirref1.val, should stall on root */
@@ -1696,7 +1729,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1723,7 +1756,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1762,7 +1795,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "symlink.val",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1779,7 +1812,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1801,7 +1834,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1818,7 +1851,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1842,7 +1875,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1859,7 +1892,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi2",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1883,7 +1916,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi2",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1900,7 +1933,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valrefmisc",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1923,7 +1956,7 @@ void lookup_stall (void) {
                              krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valrefmisc_multi",
                              FLUX_ROLE_OWNER,
                              0,
