@@ -489,7 +489,7 @@ void verify_value (struct cache *cache,
                              NULL)) != NULL,
         "lookup_create key %s", key);
 
-    ok (lookup (lh) == true,
+    ok (lookup (lh) == LOOKUP_PROCESS_FINISHED,
         "lookup found result");
 
     if (val) {

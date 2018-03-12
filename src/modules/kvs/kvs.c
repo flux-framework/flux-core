@@ -1233,6 +1233,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
     wait_t *wait = NULL;
+    lookup_process_t lret;
     int rc = -1;
     int ret;
 
@@ -1320,7 +1321,13 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (ret == 0);
     }
 
-    if (!lookup (lh)) {
+    lret = lookup (lh);
+
+    if (lret == LOOKUP_PROCESS_ERROR) {
+        errno = lookup_get_errnum (lh);
+        goto done;
+    }
+    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
@@ -1346,13 +1353,12 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    if (lookup_get_errnum (lh) != 0) {
-        errno = lookup_get_errnum (lh);
-        goto done;
-    }
-    if ((val = lookup_get_value (lh)) == NULL) {
-        errno = ENOENT;
-        goto done;
+    else { /* lret == LOOKUP_PROCESS_FINISHED */
+        if ((val = lookup_get_value (lh)) == NULL) {
+            errno = ENOENT;
+            goto done;
+        }
+        /* fallthrough */
     }
 
     if (flux_respond_pack (h, msg, "{ s:O }",
@@ -1389,6 +1395,7 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     wait_t *watcher = NULL;
     bool isreplay = false;
     bool out = false;
+    lookup_process_t lret;
     int rc = -1;
     int saved_errno, ret;
 
@@ -1463,7 +1470,12 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         isreplay = true;
     }
 
-    if (!lookup (lh)) {
+    lret = lookup (lh);
+    if (lret == LOOKUP_PROCESS_ERROR) {
+        errno = lookup_get_errnum (lh);
+        goto done;
+    }
+    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
@@ -1489,11 +1501,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    if (lookup_get_errnum (lh) != 0) {
-        errno = lookup_get_errnum (lh);
-        goto done;
+    else { /* lret == LOOKUP_PROCESS_FINISHED */
+        val = lookup_get_value (lh);
+        /* fallthrough */
     }
-    val = lookup_get_value (lh);
 
     /* if no value, create json null object for remainder of code */
     if (!val) {

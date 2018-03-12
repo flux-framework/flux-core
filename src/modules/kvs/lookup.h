@@ -7,6 +7,12 @@
 
 typedef struct lookup lookup_t;
 
+typedef enum {
+    LOOKUP_PROCESS_ERROR = 1,
+    LOOKUP_PROCESS_LOAD_MISSING_REFS = 2,
+    LOOKUP_PROCESS_FINISHED = 3,
+} lookup_process_t;
+
 /* ref - missing reference
  * raw_data - true if reference points to raw data
  */
@@ -79,16 +85,23 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch);
 
 /* Lookup the key path in the KVS cache starting at root.
  *
- * Return true on success or error.  After return, error should be
- * checked via lookup_get_errnum().  On success, value of resulting
- * lookup can be retrieved via lookup_get_value().
+ * Returns LOOKUP_PROCESS_ERROR on error,
+ * LOOKUP_PROCESS_LOAD_MISSING_REFS on stall & load,
+ * LOOKUP_PROCESS_FINISHED on all done and success.
  *
- * Return false if key name cannot be resolved.  Get missing
- * references via lookup_iter_missing_refs().  Caller should then use
- * missing reference to load missing reference into KVS cache via rpc
- * or otherwise.
+ * On error, error should be retrieved via lookup_get_errnum().
+ *
+ * On stall & load, Get missing references via
+ * lookup_iter_missing_refs().  Caller should then use missing
+ * reference to load missing reference into KVS cache via rpc or
+ * otherwise.
+ *
+ * On success, value of resulting lookup can be retrieved via
+ * lookup_get_value().
+ *
+ * Return false if key name cannot be resolved.
  */
-bool lookup (lookup_t *lh);
+lookup_process_t lookup (lookup_t *lh);
 
 #endif /* !_FLUX_KVS_LOOKUP_H */
 

@@ -238,7 +238,7 @@ void basic_api_errors (void)
 
     ok (lookup_validate (NULL) == false,
         "lookup_validate fails on NULL pointer");
-    ok (lookup (NULL) == true,
+    ok (lookup (NULL) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on NULL pointer");
     ok (lookup_get_errnum (NULL) == EINVAL,
         "lookup_get_errnum returns EINVAL on NULL pointer");
@@ -263,7 +263,7 @@ void basic_api_errors (void)
 
     ok (lookup_validate (lh) == false,
         "lookup_validate fails on bad pointer");
-    ok (lookup (lh) == true,
+    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on bad pointer");
     ok (lookup_get_errnum (lh) == EINVAL,
         "lookup_get_errnum returns EINVAL on bad pointer");
@@ -287,7 +287,7 @@ void basic_api_errors (void)
 }
 
 void check_common (lookup_t *lh,
-                   bool lookup_result,
+                   lookup_process_t lookup_result,
                    int get_errnum_result,
                    bool check_is_val_treeobj,
                    json_t *get_value_result,
@@ -376,7 +376,7 @@ void check_value (lookup_t *lh,
                   const char *msg)
 {
     check_common (lh,
-                  true,
+                  LOOKUP_PROCESS_FINISHED,
                   0,
                   false,
                   get_value_result,
@@ -390,7 +390,7 @@ void check_treeobj_val_result (lookup_t *lh,
                                const char *msg)
 {
     check_common (lh,
-                  true,
+                  LOOKUP_PROCESS_FINISHED,
                   0,
                   true,
                   NULL,         /* doesn't matter */
@@ -407,7 +407,7 @@ void check_stall (lookup_t *lh,
                   const char *msg)
 {
     check_common (lh,
-                  false,
+                  LOOKUP_PROCESS_LOAD_MISSING_REFS,
                   get_errnum_result,
                   false,
                   NULL,
@@ -422,7 +422,7 @@ void check_error (lookup_t *lh,
                   const char *msg)
 {
     check_common (lh,
-                  true,
+                  LOOKUP_PROCESS_ERROR,
                   get_errnum_result,
                   false,
                   NULL,
@@ -2024,7 +2024,7 @@ void lookup_stall (void) {
         "lookup_create stalltest dirref1.valrefmisc");
     /* don't call check_stall, this is primarily to test if callback
      * functions returning errors are caught */
-    ok (lookup (lh) == false,
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_REFS,
         "dirref1.valrefmisc: lookup stalled");
     errno = 0;
     ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0
@@ -2047,7 +2047,7 @@ void lookup_stall (void) {
         "lookup_create stalltest dirref1.valrefmisc_multi");
     /* don't call check_stall, this is primarily to test if callback
      * functions returning errors are caught */
-    ok (lookup (lh) == false,
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_REFS,
         "dirref1.valrefmisc_multi: lookup stalled");
     errno = 0;
     ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0

@@ -764,7 +764,7 @@ done:
     return rc;
 }
 
-bool lookup (lookup_t *lh)
+lookup_process_t lookup (lookup_t *lh)
 {
     const json_t *valtmp = NULL;
     const char *reftmp;
@@ -773,7 +773,7 @@ bool lookup (lookup_t *lh)
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
         errno = EINVAL;
-        return true;
+        return LOOKUP_PROCESS_ERROR;
     }
 
     switch (lh->state) {
@@ -797,7 +797,7 @@ bool lookup (lookup_t *lh)
                         || !cache_entry_get_valid (entry)) {
                         lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
-                        goto stall;
+                        return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                     }
                     if (!(valtmp = cache_entry_get_treeobj (entry))) {
                         flux_log (lh->h, LOG_ERR,
@@ -822,7 +822,7 @@ bool lookup (lookup_t *lh)
             /* fallthrough */
         case LOOKUP_STATE_WALK:
             if (!walk (lh))
-                goto stall;
+                return LOOKUP_PROCESS_LOAD_MISSING_REFS;
             if (lh->errnum != 0)
                 goto done;
             if (!lh->wdirent) {
@@ -866,7 +866,7 @@ bool lookup (lookup_t *lh)
                                             lh->current_epoch))
                     || !cache_entry_get_valid (entry)) {
                     lh->missing_ref = reftmp;
-                    goto stall;
+                    return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                 }
                 if (!(valtmp = cache_entry_get_treeobj (entry))) {
                     flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
@@ -907,7 +907,7 @@ bool lookup (lookup_t *lh)
                     if (get_single_blobref_valref_value (lh, &stall) < 0)
                         goto done;
                     if (stall)
-                        goto stall;
+                        return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                 }
                 else {
                     if (get_multi_blobref_valref_value (lh,
@@ -915,7 +915,7 @@ bool lookup (lookup_t *lh)
                                                         &stall) < 0)
                         goto done;
                     if (stall)
-                        goto stall;
+                        return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                 }
             } else if (treeobj_is_dir (lh->wdirent)) {
                 if ((lh->flags & FLUX_KVS_READLINK)) {
@@ -978,9 +978,9 @@ bool lookup (lookup_t *lh)
 
 done:
     lh->state = LOOKUP_STATE_FINISHED;
-    return true;
-stall:
-    return false;
+    if (lh->errnum)
+        return LOOKUP_PROCESS_ERROR;
+    return LOOKUP_PROCESS_FINISHED;
 }
 
 /*
