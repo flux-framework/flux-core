@@ -1203,6 +1203,29 @@ void lookup_errors (void) {
         "lookup_create on dirref_multi, part of path");
     check_error (lh, ENOTRECOVERABLE, "lookup dirref_multi, part of path");
 
+    /* This last test to just to make sure if we call lookup ()
+     * multiple times, we can the same error each time.
+     */
+
+    /* Lookup with an invalid root_ref, should get EINVAL */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             valref_ref,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on bad root_ref for double call test");
+    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
+        "lookup returns LOOKUP_PROCESS_ERROR on first call");
+    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
+        "lookup still returns LOOKUP_PROCESS_ERROR on second call");
+    lookup_destroy (lh);
+
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
 }
