@@ -98,6 +98,7 @@ struct lookup {
     const json_t *wdirent;       /* result after walk() */
     enum {
         LOOKUP_STATE_INIT,
+        LOOKUP_STATE_CHECK_NAMESPACE,
         LOOKUP_STATE_CHECK_ROOT,
         LOOKUP_STATE_WALK,
         LOOKUP_STATE_VALUE,
@@ -400,7 +401,6 @@ lookup_t *lookup_create (struct cache *cache,
                          void *aux)
 {
     lookup_t *lh = NULL;
-    struct kvsroot *root;
     int saved_errno;
 
     if (!cache || !krm || !namespace || !path) {
@@ -424,25 +424,7 @@ lookup_t *lookup_create (struct cache *cache,
         goto cleanup;
     }
 
-    if (!root_ref) {
-
-        root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
-
-        /* For time being, user must assure namespace exists in
-         * kvsroot_mgr_t */
-        assert (root);
-
-        if (kvsroot_check_user (lh->krm, root, rolemask, userid) < 0) {
-            saved_errno = errno;
-            goto cleanup;
-        }
-
-        if (!(lh->root_ref = strdup (root->ref))) {
-            saved_errno = ENOMEM;
-            goto cleanup;
-        }
-    }
-    else {
+    if (root_ref) {
         if (!(lh->root_ref = strdup (root_ref))) {
             saved_errno = ENOMEM;
             goto cleanup;
@@ -465,19 +447,8 @@ lookup_t *lookup_create (struct cache *cache,
     lh->missing_ref = NULL;
     lh->errnum = 0;
 
-    if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
-        saved_errno = errno;
-        goto cleanup;
-    }
-
     if (!(lh->levels = zlist_new ())) {
         saved_errno = ENOMEM;
-        goto cleanup;
-    }
-
-    /* first depth is level 0 */
-    if (!walk_levels_push (lh, lh->path, 0)) {
-        saved_errno = errno;
         goto cleanup;
     }
 
@@ -518,7 +489,8 @@ int lookup_get_errnum (lookup_t *lh)
     if (lh && lh->magic == LOOKUP_MAGIC) {
         if (lh->state == LOOKUP_STATE_FINISHED)
             return lh->errnum;
-        if (lh->state == LOOKUP_STATE_CHECK_ROOT
+        if (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
+            || lh->state == LOOKUP_STATE_CHECK_ROOT
             || lh->state == LOOKUP_STATE_WALK
             || lh->state == LOOKUP_STATE_VALUE)
             return EAGAIN;
@@ -788,6 +760,49 @@ lookup_process_t lookup (lookup_t *lh)
 
     switch (lh->state) {
         case LOOKUP_STATE_INIT:
+        case LOOKUP_STATE_CHECK_NAMESPACE:
+            /* If user did not specify root ref, must get from
+             * namespace
+             */
+            if (!lh->root_ref) {
+                struct kvsroot *root;
+
+                root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
+
+                /* For time being, user must assure namespace exists in
+                 * kvsroot_mgr_t */
+                assert (root);
+
+                if (kvsroot_check_user (lh->krm,
+                                        root,
+                                        lh->rolemask,
+                                        lh->userid) < 0) {
+                    lh->errnum = errno;
+                    goto error;
+                }
+
+                /* copy instead of storing pointer, always chance
+                 * namespace could timeout or be removed when
+                 * stalling */
+                if (!(lh->root_ref = strdup (root->ref))) {
+                    lh->errnum = ENOMEM;
+                    goto error;
+                }
+            }
+
+            if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
+                lh->errnum = errno;
+                goto error;
+            }
+
+            /* initialize walk - first depth is level 0 */
+            if (!walk_levels_push (lh, lh->path, 0)) {
+                lh->errnum = errno;
+                goto error;
+            }
+
+            lh->state = LOOKUP_STATE_CHECK_ROOT;
+            /* fallthrough */
         case LOOKUP_STATE_CHECK_ROOT:
             /* special case root */
             if (!strcmp (lh->path, ".")) {

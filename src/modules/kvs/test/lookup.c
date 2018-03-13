@@ -156,7 +156,7 @@ void basic_api (void)
                              krm,
                              42,
                              KVS_PRIMARY_NAMESPACE,
-                             NULL,
+                             "root.ref.foo",
                              "path.bar",
                              FLUX_ROLE_OWNER,
                              0,
@@ -1290,19 +1290,19 @@ void lookup_security (void) {
     check_value (lh, test, "lookup val with rolemask user and valid owner");
     json_decref (test);
 
-    ok (!lookup_create (cache,
-                        krm,
-                        1,
-                        KVS_PRIMARY_NAMESPACE,
-                        NULL,
-                        "val",
-                        FLUX_ROLE_USER,
-                        6,
-                        0,
-                        NULL,
-                        NULL)
-        && errno == EPERM,
-        "lookup_create on val with rolemask user and invalid owner, returns EPERM");
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_USER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and invalid owner");
+    check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner");
 
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
