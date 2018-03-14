@@ -89,6 +89,10 @@ struct lookup {
     const json_t *valref_missing_refs;
     const char *missing_ref;
 
+    /* for namespace callback */
+
+    char *missing_namespace;
+
     int errnum;                 /* errnum if error */
     int aux_errnum;
 
@@ -470,6 +474,7 @@ void lookup_destroy (lookup_t *lh)
         free (lh->root_ref);
         free (lh->path);
         json_decref (lh->val);
+        free (lh->missing_namespace);
         json_decref (lh->root_dirent);
         zlist_destroy (&lh->levels);
         lh->magic = ~LOOKUP_MAGIC;
@@ -567,6 +572,17 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
     }
     errno = EINVAL;
     return -1;
+}
+
+const char *lookup_missing_namespace (lookup_t *lh)
+{
+   if (lh
+       && lh->magic == LOOKUP_MAGIC
+       && lh->state == LOOKUP_STATE_CHECK_NAMESPACE) {
+       return lh->missing_namespace;
+    }
+    errno = EINVAL;
+    return NULL;
 }
 
 int lookup_get_current_epoch (lookup_t *lh)
@@ -760,6 +776,8 @@ lookup_process_t lookup (lookup_t *lh)
 
     switch (lh->state) {
         case LOOKUP_STATE_INIT:
+            lh->state = LOOKUP_STATE_CHECK_NAMESPACE;
+            /* fallthrough */
         case LOOKUP_STATE_CHECK_NAMESPACE:
             /* If user did not specify root ref, must get from
              * namespace
@@ -769,9 +787,13 @@ lookup_process_t lookup (lookup_t *lh)
 
                 root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
 
-                /* For time being, user must assure namespace exists in
-                 * kvsroot_mgr_t */
-                assert (root);
+                if (!root) {
+                    if (!(lh->missing_namespace = strdup (lh->namespace))) {
+                        lh->errnum = ENOMEM;
+                        goto error;
+                    }
+                    return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
+                }
 
                 if (kvsroot_check_user (lh->krm,
                                         root,

@@ -9,8 +9,9 @@ typedef struct lookup lookup_t;
 
 typedef enum {
     LOOKUP_PROCESS_ERROR = 1,
-    LOOKUP_PROCESS_LOAD_MISSING_REFS = 2,
-    LOOKUP_PROCESS_FINISHED = 3,
+    LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE = 2,
+    LOOKUP_PROCESS_LOAD_MISSING_REFS = 3,
+    LOOKUP_PROCESS_FINISHED = 4,
 } lookup_process_t;
 
 /* ref - missing reference
@@ -58,12 +59,19 @@ int lookup_set_aux_errnum (lookup_t *lh, int errnum);
  * json_decref()'ed to free memory. */
 json_t *lookup_get_value (lookup_t *lh);
 
-/* On lookup stall, get missing reference that should be loaded into
- * the KVS cache via callback function.
+/* On lookup stall b/c of missing reference(s), get missing reference
+ * that should be loaded into the KVS cache via callback function.
  *
  * return -1 in callback to break iteration
  */
 int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data);
+
+/* On lookup stall b/c of missing namespace, get missing namespace
+ * returned by this function.
+ *
+ * returns NULL on error
+ */
+const char *lookup_missing_namespace (lookup_t *lh);
 
 /* Convenience function to get current epoch from earlier
  * instantiation.  Convenient if replaying RPC and don't have it
@@ -86,12 +94,17 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch);
 /* Lookup the key path in the KVS cache starting at root.
  *
  * Returns LOOKUP_PROCESS_ERROR on error,
- * LOOKUP_PROCESS_LOAD_MISSING_REFS on stall & load,
+ * LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE on stall & load missing namespace,
+ * LOOKUP_PROCESS_LOAD_MISSING_REFS on stall & load missing references,
  * LOOKUP_PROCESS_FINISHED on all done and success.
  *
  * On error, error should be retrieved via lookup_get_errnum().
  *
- * On stall & load, Get missing references via
+ * On stall & load missing namespace, get missing namespace via
+ * lookup_missing_namespace().  Caller should then use missing
+ * namespace to load missing namespace into kvsroot_mgr_t.
+ *
+ * On stall & load missing references, get missing references via
  * lookup_iter_missing_refs().  Caller should then use missing
  * reference to load missing reference into KVS cache via rpc or
  * otherwise.
