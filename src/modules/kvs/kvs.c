@@ -1234,13 +1234,13 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
     wait_t *wait = NULL;
-    bool stall = false;
     int rc = -1;
     int ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
         struct kvsroot *root;
+        bool stall = false;
 
         ctx = arg;
 
@@ -1397,12 +1397,13 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     wait_t *watcher = NULL;
     bool isreplay = false;
     bool out = false;
-    bool stall = false;
     int rc = -1;
     int saved_errno, ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
+        bool stall = false;
+
         ctx = arg;
 
         if (flux_request_unpack (msg, NULL, "{ s:s s:s s:o s:i }",
