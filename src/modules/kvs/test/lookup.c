@@ -172,6 +172,8 @@ void basic_api (void)
         "lookup_get_namespace works");
     ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
         "lookup_get_namespace returns correct string");
+    ok (lookup_missing_namespace (lh) == NULL,
+        "lookup_missing_namespace returned NULL, no missing namespace yet");
     ok (lookup_set_current_epoch (lh, 43) == 0,
         "lookup_set_current_epoch works");
     ok (lookup_get_current_epoch (lh) == 43,
@@ -246,6 +248,8 @@ void basic_api_errors (void)
         "lookup_get_value fails on NULL pointer");
     ok (lookup_iter_missing_refs (NULL, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails on NULL pointer");
+    ok (lookup_missing_namespace (NULL) == NULL,
+        "lookup_missing_namespace fails on NULL pointer");
     ok (lookup_get_current_epoch (NULL) < 0,
         "lookup_get_current_epoch fails on NULL pointer");
     ok (lookup_get_namespace (NULL) == NULL,
@@ -271,6 +275,8 @@ void basic_api_errors (void)
         "lookup_get_value fails on bad pointer");
     ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails on bad pointer");
+    ok (lookup_missing_namespace (lh) == NULL,
+        "lookup_missing_namespace fails on bad pointer");
     ok (lookup_get_current_epoch (lh) < 0,
         "lookup_get_current_epoch fails on bad pointer");
     ok (lookup_get_namespace (lh) == NULL,
@@ -1664,8 +1670,84 @@ void lookup_alt_root (void) {
     kvsroot_mgr_destroy (krm);
 }
 
-/* lookup stall tests on root */
-void lookup_stall_root (void) {
+/* lookup stall namespace tests */
+void lookup_stall_namespace (void) {
+    json_t *root;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_ref;
+    const char *tmp;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-ref
+     * "val" : val to "foo"
+     */
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    treeobj_hash ("sha1", root, root_ref);
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    /* do not insert root into kvsroot_mgr until later for these stall tests */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest");
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
+        "lookup stalled on missing namespace");
+    ok ((tmp = lookup_missing_namespace (lh)) != NULL,
+        "lookup_missing_namespace returned non-NULL");
+    ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
+        "lookup_missing_namespace returned correct namespace");
+
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup "val", should succeed now */
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "val");
+    json_decref (test);
+
+    /* lookup "val" should succeed cleanly */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest #2");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "val #2");
+    json_decref (test);
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+/* lookup stall ref tests on root */
+void lookup_stall_ref_root (void) {
     json_t *root;
     struct cache *cache;
     kvsroot_mgr_t *krm;
@@ -1730,8 +1812,8 @@ void lookup_stall_root (void) {
     kvsroot_mgr_destroy (krm);
 }
 
-/* lookup stall tests */
-void lookup_stall (void) {
+/* lookup stall ref tests */
+void lookup_stall_ref (void) {
     json_t *root;
     json_t *valref_tmp;
     json_t *dirref1;
@@ -2095,8 +2177,9 @@ int main (int argc, char *argv[])
     lookup_security ();
     lookup_links ();
     lookup_alt_root ();
-    lookup_stall_root ();
-    lookup_stall ();
+    lookup_stall_namespace ();
+    lookup_stall_ref_root ();
+    lookup_stall_ref ();
     done_testing ();
     return (0);
 }
