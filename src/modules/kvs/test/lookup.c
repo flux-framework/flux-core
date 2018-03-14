@@ -136,8 +136,6 @@ void basic_api (void)
         "lookup_create works");
     ok (lookup_validate (lh) == true,
         "lookup_validate works");
-    ok (lookup_get_cache (lh) == cache,
-        "lookup_get_cache works");
     ok (lookup_get_current_epoch (lh) == 42,
         "lookup_get_current_epoch works");
     ok ((tmp = lookup_get_namespace (lh)) != NULL,
@@ -148,12 +146,6 @@ void basic_api (void)
         "lookup_get_root_ref works");
     ok (!strcmp (tmp, "root.ref.foo"),
         "lookup_get_root_ref returns correct string");
-    ok ((tmp = lookup_get_path (lh)) != NULL,
-        "lookup_get_path works");
-    ok (!strcmp (tmp, "path.bar"),
-        "lookup_get_path returns correct string");
-    ok (lookup_get_flags (lh) == (FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ),
-        "lookup_get_flags works");
     ok (lookup_set_current_epoch (lh, 43) == 0,
         "lookup_set_current_epoch works");
     ok (lookup_get_current_epoch (lh) == 43,
@@ -219,18 +211,12 @@ void basic_api_errors (void)
         "lookup_get_value fails on NULL pointer");
     ok (lookup_iter_missing_refs (NULL, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails on NULL pointer");
-    ok (lookup_get_cache (NULL) == NULL,
-        "lookup_get_cache fails on NULL pointer");
     ok (lookup_get_current_epoch (NULL) < 0,
         "lookup_get_current_epoch fails on NULL pointer");
     ok (lookup_get_namespace (NULL) == NULL,
         "lookup_get_namespace fails on NULL pointer");
     ok (lookup_get_root_ref (NULL) == NULL,
         "lookup_get_root_ref fails on NULL pointer");
-    ok (lookup_get_path (NULL) == NULL,
-        "lookup_get_path fails on NULL pointer");
-    ok (lookup_get_flags (NULL) < 0,
-        "lookup_get_flags fails on NULL pointer");
     ok (lookup_get_aux_data (NULL) == NULL,
         "lookup_get_aux_data fails on NULL pointer");
     ok (lookup_set_current_epoch (NULL, 42) < 0,
@@ -254,18 +240,12 @@ void basic_api_errors (void)
         "lookup_get_value fails on bad pointer");
     ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails on bad pointer");
-    ok (lookup_get_cache (lh) == NULL,
-        "lookup_get_cache fails on bad pointer");
     ok (lookup_get_current_epoch (lh) < 0,
         "lookup_get_current_epoch fails on bad pointer");
     ok (lookup_get_namespace (lh) == NULL,
         "lookup_get_namespace fails on bad pointer");
     ok (lookup_get_root_ref (lh) == NULL,
         "lookup_get_root_ref fails on bad pointer");
-    ok (lookup_get_path (lh) == NULL,
-        "lookup_get_path fails on bad pointer");
-    ok (lookup_get_flags (lh) < 0,
-        "lookup_get_flags fails on bad pointer");
     ok (lookup_get_aux_data (lh) == NULL,
         "lookup_get_aux_data fails on bad pointer");
     ok (lookup_set_current_epoch (lh, 42) < 0,

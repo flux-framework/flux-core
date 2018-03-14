@@ -554,13 +554,6 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
     return -1;
 }
 
-struct cache *lookup_get_cache (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->cache;
-    return NULL;
-}
-
 int lookup_get_current_epoch (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC)
@@ -580,20 +573,6 @@ const char *lookup_get_root_ref (lookup_t *lh)
     if (lh && lh->magic == LOOKUP_MAGIC)
         return lh->root_ref;
     return NULL;
-}
-
-const char *lookup_get_path (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->path;
-    return NULL;
-}
-
-int lookup_get_flags (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->flags;
-    return -1;
 }
 
 void *lookup_get_aux_data (lookup_t *lh)

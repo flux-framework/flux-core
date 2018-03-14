@@ -51,11 +51,6 @@ json_t *lookup_get_value (lookup_t *lh);
  */
 int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data);
 
-/* Convenience function to get cache from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-struct cache *lookup_get_cache (lookup_t *lh);
-
 /* Convenience function to get current epoch from earlier
  * instantiation.  Convenient if replaying RPC and don't have it
  * presently.
@@ -71,16 +66,6 @@ const char *lookup_get_namespace (lookup_t *lh);
  * Convenient if replaying RPC and don't have it presently.
  */
 const char *lookup_get_root_ref (lookup_t *lh);
-
-/* Convenience function to get path from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-const char *lookup_get_path (lookup_t *lh);
-
-/* Convenience function to get flags from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-int lookup_get_flags (lookup_t *lh);
 
 /* Get auxiliarry data set by user */
 void *lookup_get_aux_data (lookup_t *lh);
