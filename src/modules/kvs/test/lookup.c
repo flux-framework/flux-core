@@ -1328,7 +1328,7 @@ void lookup_stall_root (void) {
     /* This cache is
      *
      * root-ref
-     * { "dir" : { "DIRREF" : "dir-ref" } }
+     * "val" : val to "foo"
      */
 
     root = treeobj_create_dir ();
