@@ -409,7 +409,7 @@ lookup_t *lookup_create (struct cache *cache,
         goto cleanup;
     }
     if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto cleanup;
     }
     lh->h = h;
