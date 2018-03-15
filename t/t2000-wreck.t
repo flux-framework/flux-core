@@ -361,6 +361,13 @@ test_expect_success 'flux-wreck: ls works' '
 	flux wreck ls | sort -n >ls.out &&
 	tail -1 ls.out | grep "hostname$"
 '
+test_expect_success 'flux-wreck: purge works' '
+	flux wreck purge &&
+	flux wreck purge -t 2 -R &&
+	flux wreck ls &&
+	COUNT=$(flux wreck ls | grep -v NTASKS | wc -l) &&
+	test "$COUNT" = 2
+'
 
 flux module list | grep -q sched || test_set_prereq NO_SCHED
 test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded' '
