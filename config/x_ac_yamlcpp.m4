@@ -1,9 +1,17 @@
 AC_DEFUN([X_AC_YAMLCPP], [
 
-    PKG_CHECK_MODULES([YAMLCPP], [yaml-cpp >= 0.5.1],
-                      [enable_jobspec=yes], [enable_jobspec=no])
+    AC_ARG_ENABLE([jobspec],
+        AS_HELP_STRING([--disable-jobspec],
+            [Disable compilation of jobspec library]))
 
-    if test "$enable_jobspec" = yes; then
+    AS_IF([test "x$enable_jobspec" != "xno"], [
+
+        PKG_CHECK_MODULES([YAMLCPP], [yaml-cpp >= 0.5.1],
+                          ,
+			  [AC_MSG_ERROR(dnl
+[Required yaml-cpp package version not installed.
+Add --disable-jobspec, or set the PKG_CONFIG_PATH env var appropriately.])])
+
         ac_save_LIBS="$LIBS"
         LIBS="$LIBS $YAMLCPP_LIBS"
         ac_save_CFLAGS="$CFLAGS"
@@ -28,8 +36,8 @@ AC_DEFUN([X_AC_YAMLCPP], [
         AC_LANG_POP([C++])
         LIBS="$ac_save_LIBS"
         CFLAGS="$ac_save_CFLAGS"
-    fi
+    ])
 
-    AM_CONDITIONAL([ENABLE_JOBSPEC], [test "$enable_jobspec" = yes])
+    AM_CONDITIONAL([ENABLE_JOBSPEC], [test "x$enable_jobspec" != "xno"])
   ]
 )
