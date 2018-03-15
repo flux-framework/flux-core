@@ -414,7 +414,9 @@ lookup_t *lookup_create (struct cache *cache,
                          void *aux)
 {
     lookup_t *lh = NULL;
-    int saved_errno;
+    char *ns_prefix = NULL;
+    char *p_suffix = NULL;
+    int pret, saved_errno;
 
     if (!cache || !krm || !namespace || !path) {
         errno = EINVAL;
@@ -431,10 +433,40 @@ lookup_t *lookup_create (struct cache *cache,
     lh->krm = krm;
     lh->current_epoch = current_epoch;
 
-    /* must duplicate strings, user may not keep pointer alive */
-    if (!(lh->namespace = strdup (namespace))) {
-        saved_errno = ENOMEM;
+    if ((pret = kvs_namespace_prefix (path, &ns_prefix, &p_suffix)) < 0) {
+        saved_errno = errno;
         goto cleanup;
+    }
+
+    if (pret) {
+        /* Cannot leap namespaces if user specified root reference to
+         * start at.  With minor exception if namespace is identical
+         * to one input by user. */
+        if (root_ref
+            && strcmp (namespace, ns_prefix)) {
+            saved_errno = EINVAL;
+            goto cleanup;
+        }
+
+        lh->namespace = ns_prefix;
+        ns_prefix = NULL;
+
+        if (!(lh->path = kvs_util_normalize_key (p_suffix, NULL))) {
+            saved_errno = errno;
+            goto cleanup;
+        }
+    }
+    else {
+        /* must duplicate strings, user may not keep pointer alive */
+        if (!(lh->namespace = strdup (namespace))) {
+            saved_errno = ENOMEM;
+            goto cleanup;
+        }
+
+        if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
+            saved_errno = errno;
+            goto cleanup;
+        }
     }
 
     if (root_ref) {
@@ -444,10 +476,6 @@ lookup_t *lookup_create (struct cache *cache,
         }
     }
 
-    if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
-        saved_errno = errno;
-        goto cleanup;
-    }
     lh->h = h;
     lh->aux = aux;
 
@@ -471,6 +499,8 @@ lookup_t *lookup_create (struct cache *cache,
     return lh;
 
  cleanup:
+    free (ns_prefix);
+    free (p_suffix);
     lookup_destroy (lh);
     errno = saved_errno;
     return NULL;
@@ -825,6 +855,7 @@ lookup_process_t lookup (lookup_t *lh)
                 root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
 
                 if (!root) {
+                    free (lh->missing_namespace);
                     if (!(lh->missing_namespace = strdup (lh->namespace))) {
                         lh->errnum = ENOMEM;
                         goto error;
