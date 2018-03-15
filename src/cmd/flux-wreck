@@ -418,7 +418,7 @@ prog:SubCommand {
         --
         local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
         if self.opt.R then
-            f:commit()
+            f:kvs_commit()
             if verbose then
                 self:log ("%4.03fs: unlinked %d entries\n", tt:get0(), #hl)
             end
