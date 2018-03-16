@@ -1280,12 +1280,10 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   namespace,
                                   root_ref ? root_ref : root->ref,
                                   key,
+                                  flags,
                                   h,
-                                  flags)))
+                                  ctx)))
             goto done;
-
-        ret = lookup_set_aux_data (lh, ctx);
-        assert (ret == 0);
     }
     else {
         int err;
@@ -1427,12 +1425,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                   namespace,
                                   root->ref,
                                   key,
+                                  flags,
                                   h,
-                                  flags)))
+                                  ctx)))
             goto done;
-
-        ret = lookup_set_aux_data (lh, ctx);
-        assert (ret == 0);
     }
     else {
         int err;

@@ -380,8 +380,9 @@ lookup_t *lookup_create (struct cache *cache,
                          const char *namespace,
                          const char *root_ref,
                          const char *path,
+                         int flags,
                          flux_t *h,
-                         int flags)
+                         void *aux)
 {
     lookup_t *lh = NULL;
     int saved_errno;
@@ -413,9 +414,8 @@ lookup_t *lookup_create (struct cache *cache,
         goto cleanup;
     }
     lh->h = h;
+    lh->aux = aux;
     lh->flags = flags;
-
-    lh->aux = NULL;
 
     lh->val = NULL;
     lh->valref_missing_refs = NULL;
@@ -586,15 +586,6 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch)
 {
     if (lh && lh->magic == LOOKUP_MAGIC) {
         lh->current_epoch = epoch;
-        return 0;
-    }
-    return -1;
-}
-
-int lookup_set_aux_data (lookup_t *lh, void *data)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC) {
-        lh->aux = data;
         return 0;
     }
     return -1;
