@@ -28,7 +28,7 @@
 local f, err = require 'flux' .new()
 local wreck = require 'wreck'
 local hostlist = require 'flux.hostlist'
-local posix = require 'posix'
+local posix = require 'flux.posix'
 local prog = require 'flux.Subcommander'.create {
     usage = "COMMAND [OPTIONS]",
     handler = function (self, arg)

@@ -14,7 +14,7 @@ end
 -- Set common environment and working directory for all tasks
 --
 function rexecd_init ()
-    local posix = require 'posix'
+    local posix = require 'flux.posix'
 
     -- Initialize environment with top level lwj.environ
     local k = wreck.flux:kvsdir("lwj")
@@ -39,7 +39,7 @@ end
 --  from lwj.{environ,cwd}:
 --
 function rexecd_task_init ()
-    local posix = require 'posix'
+    local posix = require 'flux.posix'
     local taskid = wreck.taskid;
 
     local task = wreck.by_task
