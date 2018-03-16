@@ -41,6 +41,10 @@ Return the status of running or completed job 'jobid'. Prints the current
 job status, and if exited, the exit codes of all tasks. This command will
 exit with the highest exit code of all tasks.
 
+*cancel* 'jobid'::
+Make a request to the scheduler to cancel a pending job 'jobid'. Only supported
+if a job scheduler module is loaded.
+
 *kill* [--signal=N] 'jobid'::
 Send SIGTERM to running job 'jobid'. If '--signal' is used, send signal 'N'
 where 'N' may  be a signal number or name such as 'SIGKILL'.
