@@ -14,20 +14,20 @@ int global = 0;
 
 void basic_api_tests (void)
 {
-    kvsroot_mgr_t *km;
+    kvsroot_mgr_t *krm;
     struct cache *cache;
     struct kvsroot *root;
     struct kvsroot *tmproot;
 
     cache = cache_create ();
 
-    ok ((km = kvsroot_mgr_create (NULL, &global)) != NULL,
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
         "kvsroot_mgr_create works");
 
-    ok (kvsroot_mgr_root_count (km) == 0,
+    ok (kvsroot_mgr_root_count (krm) == 0,
         "kvsroot_mgr_root_count returns correct count of roots");
 
-    ok ((root = kvsroot_mgr_create_root (km,
+    ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
@@ -35,16 +35,16 @@ void basic_api_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (kvsroot_mgr_root_count (km) == 1,
+    ok (kvsroot_mgr_root_count (krm) == 1,
         "kvsroot_mgr_root_count returns correct count of roots");
 
-    ok ((tmproot = kvsroot_mgr_lookup_root (km, KVS_PRIMARY_NAMESPACE)) != NULL,
+    ok ((tmproot = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE)) != NULL,
         "kvsroot_mgr_lookup_root works");
 
     ok (tmproot == root,
         "kvsroot_mgr_lookup_root returns correct root");
 
-    ok ((tmproot = kvsroot_mgr_lookup_root_safe (km, KVS_PRIMARY_NAMESPACE)) != NULL,
+    ok ((tmproot = kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE)) != NULL,
         "kvsroot_mgr_lookup_root_safe works");
 
     ok (tmproot == root,
@@ -52,25 +52,25 @@ void basic_api_tests (void)
 
     root->remove = true;
 
-    ok ((tmproot = kvsroot_mgr_lookup_root (km, KVS_PRIMARY_NAMESPACE)) != NULL,
+    ok ((tmproot = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE)) != NULL,
         "kvsroot_mgr_lookup_root works");
 
     ok (tmproot == root,
         "kvsroot_mgr_lookup_root returns correct root");
 
-    ok (kvsroot_mgr_lookup_root_safe (km, KVS_PRIMARY_NAMESPACE) == NULL,
+    ok (kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE) == NULL,
         "kvsroot_mgr_lookup_root_safe returns NULL on root marked removed");
 
-    ok (kvsroot_mgr_remove_root (km, KVS_PRIMARY_NAMESPACE) == 0,
+    ok (kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE) == 0,
         "kvsroot_mgr_remove_root works");
 
-    ok (kvsroot_mgr_lookup_root (km, KVS_PRIMARY_NAMESPACE) == NULL,
+    ok (kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE) == NULL,
         "kvsroot_mgr_lookup_root returns NULL after namespace removed");
 
-    ok (kvsroot_mgr_lookup_root_safe (km, KVS_PRIMARY_NAMESPACE) == NULL,
+    ok (kvsroot_mgr_lookup_root_safe (krm, KVS_PRIMARY_NAMESPACE) == NULL,
         "kvsroot_mgr_lookup_root_safe returns NULL after namespace removed");
 
-    kvsroot_mgr_destroy (km);
+    kvsroot_mgr_destroy (krm);
 
     /* destroy works with NULL */
     kvsroot_mgr_destroy (NULL);
@@ -100,24 +100,24 @@ int roots_error_cb (struct kvsroot *root, void *arg)
 
 int roots_remove_cb (struct kvsroot *root, void *arg)
 {
-    kvsroot_mgr_t *km = arg;
-    kvsroot_mgr_remove_root (km, root->namespace);
+    kvsroot_mgr_t *krm = arg;
+    kvsroot_mgr_remove_root (krm, root->namespace);
     return 1;
 }
 
 void basic_iter_tests (void)
 {
-    kvsroot_mgr_t *km;
+    kvsroot_mgr_t *krm;
     struct cache *cache;
     struct kvsroot *root;
     int count;
 
     cache = cache_create ();
 
-    ok ((km = kvsroot_mgr_create (NULL, &global)) != NULL,
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
         "kvsroot_mgr_create works");
 
-    ok ((root = kvsroot_mgr_create_root (km,
+    ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
                                          "foo",
@@ -125,7 +125,7 @@ void basic_iter_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok ((root = kvsroot_mgr_create_root (km,
+    ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
                                          "bar",
@@ -133,39 +133,39 @@ void basic_iter_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
-    ok (kvsroot_mgr_root_count (km) == 2,
+    ok (kvsroot_mgr_root_count (krm) == 2,
         "kvsroot_mgr_root_count returns correct count of roots");
 
     count = 0;
-    ok (kvsroot_mgr_iter_roots (km, count_roots_cb, &count) == 0,
+    ok (kvsroot_mgr_iter_roots (krm, count_roots_cb, &count) == 0,
         "kvsroot_mgr_iter_roots works");
 
     ok (count == 2,
         "kvsroot_mgr_iter_roots called callback correct number of times");
 
     count = 0;
-    ok (kvsroot_mgr_iter_roots (km, count_roots_early_exit_cb, &count) == 0,
+    ok (kvsroot_mgr_iter_roots (krm, count_roots_early_exit_cb, &count) == 0,
         "kvsroot_mgr_iter_roots works if exitting midway");
 
     ok (count == 1,
         "kvsroot_mgr_iter_roots called callback correct number of times");
 
-    ok (kvsroot_mgr_iter_roots (km, roots_error_cb, NULL) < 0,
+    ok (kvsroot_mgr_iter_roots (krm, roots_error_cb, NULL) < 0,
         "kvsroot_mgr_iter_roots errors on error in callback");
 
-    ok (kvsroot_mgr_iter_roots (km, roots_remove_cb, km) == 0,
+    ok (kvsroot_mgr_iter_roots (krm, roots_remove_cb, krm) == 0,
         "kvsroot_mgr_iter_roots works on remove callback");
 
-    ok (kvsroot_mgr_root_count (km) == 1,
+    ok (kvsroot_mgr_root_count (krm) == 1,
         "kvsroot_mgr_root_count returns correct count of roots after a removal");
 
-    kvsroot_mgr_destroy (km);
+    kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
 }
 
 void basic_kvstxn_mgr_tests (void)
 {
-    kvsroot_mgr_t *km;
+    kvsroot_mgr_t *krm;
     struct cache *cache;
     struct kvsroot *root;
     kvstxn_t *kt;
@@ -174,10 +174,10 @@ void basic_kvstxn_mgr_tests (void)
 
     cache = cache_create ();
 
-    ok ((km = kvsroot_mgr_create (NULL, &global)) != NULL,
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
         "kvsroot_mgr_create works");
 
-    ok ((root = kvsroot_mgr_create_root (km,
+    ok ((root = kvsroot_mgr_create_root (krm,
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
@@ -206,7 +206,7 @@ void basic_kvstxn_mgr_tests (void)
     ok (tmpaux == &global,
         "kvstxn_get_aux returns correct aux value");
 
-    kvsroot_mgr_destroy (km);
+    kvsroot_mgr_destroy (krm);
     cache_destroy (cache);
 }
 
