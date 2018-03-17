@@ -315,10 +315,11 @@ end
 
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
-    fixup_nnodes (self)
-
+    if self.fixup_nnodes then
+        fixup_nnodes (self)
+    end
     local jobreq = {
-        nnodes =  self.nnodes,
+        nnodes =  self.nnodes or 0,
         ntasks =  self.ntasks,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
@@ -373,6 +374,7 @@ function wreck:submit ()
 end
 
 function wreck:createjob ()
+    self.fixup_nnodes = true
     local resp, err = send_job_request (self, "job.create")
     if not resp then return nil, err end
     --
