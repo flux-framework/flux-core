@@ -158,13 +158,6 @@ local f, err = flux.new()
 if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
 --
---  Create a job request as Lua table:
---
-local jobreq = wreck:jobreq (f)
-wreck:verbose ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
-    tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
-
---
 --  Create a new job in kvs
 --
 local jobid, err = wreck:createjob ()
