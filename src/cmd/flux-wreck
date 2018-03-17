@@ -259,10 +259,16 @@ end
 
 prog:SubCommand {
  name = "ls",
- usage = "",
+ usage = "[OPTIONS]",
+ options = {
+  { name = "max", char = 'n', arg="COUNT",
+    usage = "Display at most COUNT jobs",
+  }
+ },
  description = "List jobs in kvs",
  handler = function (self, arg)
-    local dirs = wreck.joblist{ flux = f } or {}
+    local max = tonumber (self.opt.n) or 25
+    local dirs = wreck.joblist{ flux = f, max = max } or {}
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
     printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
@@ -282,10 +288,16 @@ prog:SubCommand {
 
 prog:SubCommand {
  name = "timing",
- usage = "",
+ usage = "[OPTIONS]",
+ options = {
+  { name = "max", char = 'n', arg="COUNT",
+    usage = "Display at most COUNT jobs",
+  }
+ },
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
-    local dirs = wreck.joblist{ flux = f } or {}
+    local max = tonumber (self.opt.n) or 25
+    local dirs = wreck.joblist{ flux = f, max = max } or {}
     if #dirs == 0 then return end
     local fmt = "%6s %12s %12s %12s %12s %12s\n"
     printf (fmt, "ID", "NTASKS", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
