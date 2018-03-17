@@ -2,7 +2,7 @@
 -- Register timer on nodeid 0 if kvs `walltime` is set for this job.
 --  Kill job on timeout if reached.
 --
-local posix = require 'posix'
+local posix = require 'flux.posix'
 
 local function signal_to_number (s)
     if not s then return nil end

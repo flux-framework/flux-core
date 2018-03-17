@@ -26,7 +26,7 @@
 -- flux-cron: Flux's cron request cmdline utility
 --
 local f, err = require 'flux' .new()
-local posix = require 'posix'
+local posix = require 'flux.posix'
 
 local program = require 'flux.Subcommander'.create {
     name = "flux-cron",

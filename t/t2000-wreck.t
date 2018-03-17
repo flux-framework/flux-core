@@ -378,6 +378,14 @@ test_expect_success NO_SCHED 'flux-submit: returns ENOSYS when sched not loaded'
 	test_cmp expected.submit err.submit
 '
 
+test_expect_success NO_SCHED 'flux-wreck cancel: fails when sched not loaded' '
+	test_must_fail flux wreck cancel 1 2>err.cancel &&
+	cat >expected.cancel <<-EOF &&
+	flux-wreck: job cancel not supported when scheduler not loaded
+	EOF
+	test_cmp expected.cancel err.cancel
+'
+
 check_complete_link() {
     for i in `seq 0 5`; do
         lastepoch=$(flux kvs dir lwj-complete | awk -F. '{print $2}' | sort -n | tail -1)

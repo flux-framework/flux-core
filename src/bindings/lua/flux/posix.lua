@@ -31,5 +31,17 @@ if not status then
                     " Please check LUA_PATH or install package\n")
     os.exit (1)
 end
+
+-- Use non-deprecated version of clock_gettime if available:
+local status, time = pcall (require, 'posix.time')
+if time then
+    local _clock_gettime = time.clock_gettime
+    local CLOCK_REALTIME = time.CLOCK_REALTIME
+    rc.clock_gettime = function ()
+        local ts = _clock_gettime (CLOCK_REALTIME)
+        return ts.tv_sec, ts.tv_nsec
+    end
+end
+
 return rc
 -- vi: ts=4 sw=4 expandtab

@@ -29,6 +29,10 @@ local T = {}
 T.__index = T
 local clock_gettime = require 'flux.posix'.clock_gettime
 
+-- Use version of clock_gettime from posix.time if it exists, o/w fallback to
+--  version from posix/deprecated.lua
+--
+
 local getsec = function ()
     local s,ns = clock_gettime()
     return (s + (ns / 1000000000))
