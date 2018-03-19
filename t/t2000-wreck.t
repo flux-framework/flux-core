@@ -361,6 +361,14 @@ test_expect_success 'flux-wreck: ls works' '
 	flux wreck ls | sort -n >ls.out &&
 	tail -1 ls.out | grep "hostname$"
 '
+test_expect_success 'flux-wreck: ls -n, --max works' '
+        test $(flux wreck ls --max=1 | wc -l) = 2
+'
+test_expect_success 'flux-wreck: ls JOBID works' '
+        LASTID=$(last_job_id) &&
+	flux wreck ls $LASTID > ls-jobid.out &&
+        tail -1 ls-jobid.out | grep "^ *$LASTID"
+'
 test_expect_success 'flux-wreck: purge works' '
 	flux wreck purge &&
 	flux wreck purge -t 2 -R &&
