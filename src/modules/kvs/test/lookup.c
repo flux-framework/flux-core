@@ -2164,6 +2164,244 @@ void lookup_stall_ref (void) {
     kvsroot_mgr_destroy (krm);
 }
 
+void lookup_stall_namespace_removed (void) {
+    json_t *root;
+    json_t *valref;
+    json_t *dirref;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t valref_ref;
+    blobref_t dirref_ref;
+    blobref_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * valref_ref
+     * "abcd"
+
+     * dirref_ref
+     * "valref" : valref to valref_ref
+     *
+     * root_ref
+     * "dirref" : dirref to dirref_ref
+     *
+     */
+
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
+
+    dirref = treeobj_create_dir ();
+    valref = treeobj_create_valref (valref_ref);
+    treeobj_insert_entry (dirref, "valref", valref);
+
+    treeobj_hash ("sha1", dirref, dirref_ref);
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    treeobj_hash ("sha1", root, root_ref);
+
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* do not insert entries into cache until later for these stall tests */
+
+    /*
+     * Check for each stall situation and that if namespace is
+     * removed, that is caught
+     */
+
+    /* lookup dirref.valref, should stall on root */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1");
+
+    /* insert cache entry, but remove namespace */
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* lookup should error out because namespace is now gone */
+
+    check_error (lh, ENOTSUP, "namespace removed on root ref results in ENOTSUP");
+
+    /* reset test */
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup dirref.valref, should stall on dirref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* lookup should error out because namespace is now gone */
+
+    check_error (lh, ENOTSUP, "namespace removed on dirref results in ENOTSUP");
+
+    /* reset test */
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup dirref.valref, should stall on valref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
+
+    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* lookup should error out because namespace is now gone */
+
+    check_error (lh, ENOTSUP, "namespace removed on valref results in ENOTSUP");
+
+    /* reset test */
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /*
+     * Check for each stall situation and that if namespace is
+     * replaced, it is caught
+     */
+
+    /* lookup dirref.valref, should stall on root */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1");
+
+    /* insert cache entry, but remove namespace */
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, cache, root_ref, 2);
+
+    /* lookup should EPERM b/c owner of new namespace is different */
+
+    check_error (lh, EPERM, "namespace replaced on root ref results in EPERM");
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup dirref.valref, should stall on dirref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, cache, root_ref, 2);
+
+    /* lookup should EPERM b/c owner of new namespace is different */
+
+    check_error (lh, EPERM, "namespace replaced on dirref results in EPERM");
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+
+    /* lookup dirref.valref, should stall on valref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
+
+    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, cache, root_ref, 2);
+
+    /* lookup should EPERM b/c owner of new namespace is different */
+
+    check_error (lh, EPERM, "namespace replaced on valref results in EPERM");
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -2180,6 +2418,7 @@ int main (int argc, char *argv[])
     lookup_stall_namespace ();
     lookup_stall_ref_root ();
     lookup_stall_ref ();
+    lookup_stall_namespace_removed ();
     done_testing ();
     return (0);
 }
