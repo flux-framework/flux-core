@@ -615,6 +615,29 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch)
     return -1;
 }
 
+static int namespace_still_valid (lookup_t *lh)
+{
+    struct kvsroot *root;
+
+    if (!(root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace))) {
+        lh->errnum = ENOTSUP;
+        return -1;
+    }
+
+    /* Small chance root removed, then re-inserted, check security
+     * checks again */
+
+    if (kvsroot_check_user (lh->krm,
+                            root,
+                            lh->rolemask,
+                            lh->userid) < 0) {
+        lh->errnum = errno;
+        return -1;
+    }
+
+    return 0;
+}
+
 /* return 0 on success, -1 on failure.  On success, stall should be
  * checked */
 static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
@@ -764,6 +787,7 @@ lookup_process_t lookup (lookup_t *lh)
     const json_t *valtmp = NULL;
     const char *reftmp;
     struct cache_entry *entry;
+    bool is_replay = false;
     int refcount;
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
@@ -773,6 +797,10 @@ lookup_process_t lookup (lookup_t *lh)
 
     if (lh->errnum)
         return LOOKUP_PROCESS_ERROR;
+
+    if (lh->state != LOOKUP_STATE_INIT
+        && lh->state != LOOKUP_STATE_FINISHED)
+        is_replay = true;
 
     switch (lh->state) {
         case LOOKUP_STATE_INIT:
@@ -826,6 +854,12 @@ lookup_process_t lookup (lookup_t *lh)
             lh->state = LOOKUP_STATE_CHECK_ROOT;
             /* fallthrough */
         case LOOKUP_STATE_CHECK_ROOT:
+
+            if (is_replay) {
+                if (namespace_still_valid (lh) < 0)
+                    goto error;
+            }
+
             /* special case root */
             if (!strcmp (lh->path, ".")) {
                 if ((lh->flags & FLUX_KVS_TREEOBJ)) {
@@ -871,6 +905,11 @@ lookup_process_t lookup (lookup_t *lh)
         {
             lookup_process_t lret;
 
+            if (is_replay) {
+                if (namespace_still_valid (lh) < 0)
+                    goto error;
+            }
+
             lret = walk (lh);
 
             if (lret == LOOKUP_PROCESS_ERROR)
@@ -886,6 +925,11 @@ lookup_process_t lookup (lookup_t *lh)
             /* fallthrough */
         }
         case LOOKUP_STATE_VALUE:
+            if (is_replay) {
+                if (namespace_still_valid (lh) < 0)
+                    goto error;
+            }
+
             if ((lh->flags & FLUX_KVS_TREEOBJ)) {
                 if (!(lh->val = treeobj_deep_copy (lh->wdirent))) {
                     lh->errnum = errno;
