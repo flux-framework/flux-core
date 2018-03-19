@@ -143,8 +143,13 @@ end
 
 local function job_kvspath (f, id)
     assert (id, "Required argument id missing!")
-    local r, err = f:rpc ("job.kvspath", {ids = { id }})
+    local arg = { id }
+    if type (id) == "table" then
+        arg = id
+    end
+    local r, err = f:rpc ("job.kvspath", {ids = arg })
     if not r then error (err) end
+    if type (id) == "table" then return r.paths end
     return r.paths [1]
 end
 
@@ -157,6 +162,14 @@ local function kvs_path (f, id)
         kvs_paths [id] = job_kvspath (f, id)
     end
     return kvs_paths [id]
+end
+
+local function kvs_path_multi (f, ids)
+    local result = job_kvspath (f, ids)
+    for i,id in ipairs (ids) do
+        kvs_paths [id] = result [id]
+    end
+    return result
 end
 
 function wreck:lwj_path (id)
@@ -521,6 +534,35 @@ function wreck.id_to_path (arg)
     return kvs_path (f, id)
 end
 
+local function kvsdir_reverse_keys (dir)
+    local result = {}
+    for k in dir:keys () do
+        if tonumber (k) then
+            table.insert (result, k)
+        end
+    end
+    table.sort (result, function (a,b) return tonumber(b) < tonumber(a) end)
+    return result
+end
+
+local function reverse (t)
+    local len = #t
+    local r = {}
+    for i = len, 1, -1 do
+        table.insert (r, t[i])
+    end
+    return r
+end
+
+function wreck.jobids_to_kvspath (arg)
+    local f = arg.flux
+    local ids = arg.jobids
+    if not ids then return nil, 'missing required arg jobids' end
+    if not f then f, err = require 'flux'.new () end
+    if not f then return nil, err end
+    return kvs_path_multi (f, ids)
+end
+
 function wreck.joblist (arg)
     local flux = require 'flux'
     local f = arg.flux
@@ -530,7 +572,8 @@ function wreck.joblist (arg)
     local function visit (d, r)
         local results = r or {}
         if not d then return end
-        for k in d:keys () do
+        local dirs = kvsdir_reverse_keys (d)
+        for _,k in pairs (dirs) do
             local path = tostring (d) .. "." .. k
             local dir = f:kvsdir (path)
             if dir then
@@ -541,6 +584,7 @@ function wreck.joblist (arg)
                     -- recurse to find lwj dirs lower in the directory tree
                     visit (dir, results)
                 end
+		if arg.max and #results >= arg.max then return results end
             end
         end
         return results
@@ -549,7 +593,7 @@ function wreck.joblist (arg)
     local dir, err = f:kvsdir ("lwj")
     if not dir then return nil, err end
 
-    return visit (dir)
+    return reverse (visit (dir))
 end
 
 local function shortprog ()

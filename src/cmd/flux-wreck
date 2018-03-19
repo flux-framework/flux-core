@@ -257,12 +257,37 @@ local function seconds_to_string (s)
     return f ("%.03fs", s)
 end
 
+local function bracketify (args)
+    local r = {}
+    for _,v in ipairs (args) do
+        table.insert (r, "[" .. v .. "]")
+    end
+    return (r)
+end
+
+local function joblist_from_args (self, args)
+    local max = tonumber (self.opt.n) or 25
+    if #args == 0 then
+        return wreck.joblist{ flux = f, max = max }
+    end
+    -- otherwise use dirs on cmdline
+    local hl,err = hostlist.union (unpack (bracketify (args)))
+    if not hl then return nil, err end
+    return wreck.jobids_to_kvspath { flux = f, jobids = hl:expand() }
+end
+
 prog:SubCommand {
  name = "ls",
- usage = "",
+ usage = "[OPTIONS] [JOBIDs]",
+ options = {
+  { name = "max", char = 'n', arg="COUNT",
+    usage = "Display at most COUNT jobs",
+  }
+ },
  description = "List jobs in kvs",
  handler = function (self, arg)
-    local dirs = wreck.joblist{ flux = f } or {}
+    local dirs,err = joblist_from_args (self, arg)
+    if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
     printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
@@ -282,10 +307,16 @@ prog:SubCommand {
 
 prog:SubCommand {
  name = "timing",
- usage = "",
+ usage = "[OPTIONS] [JOBIDs]...",
+ options = {
+  { name = "max", char = 'n', arg="COUNT",
+    usage = "Display at most COUNT jobs",
+  }
+ },
  description = "List timings of jobs in kvs",
  handler = function (self, arg) 
-    local dirs = wreck.joblist{ flux = f } or {}
+    local dirs,err = joblist_from_args (self, arg)
+    if not dirs then self:die (err) end
     if #dirs == 0 then return end
     local fmt = "%6s %12s %12s %12s %12s %12s\n"
     printf (fmt, "ID", "NTASKS", "STARTING", "RUNNING", "COMPLETE", "TOTAL")
