@@ -34,7 +34,7 @@ end
 
 -- Use non-deprecated version of clock_gettime if available:
 local status, time = pcall (require, 'posix.time')
-if time then
+if time and time.clock_gettime then
     local _clock_gettime = time.clock_gettime
     local CLOCK_REALTIME = time.CLOCK_REALTIME
     rc.clock_gettime = function ()
