@@ -63,11 +63,6 @@ int lookup_get_current_epoch (lookup_t *lh);
  */
 const char *lookup_get_namespace (lookup_t *lh);
 
-/* Convenience function to get root ref from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-const char *lookup_get_root_ref (lookup_t *lh);
-
 /* Get auxiliarry data set by user in lookup_create() */
 void *lookup_get_aux_data (lookup_t *lh);
 

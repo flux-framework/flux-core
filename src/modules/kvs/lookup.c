@@ -568,13 +568,6 @@ const char *lookup_get_namespace (lookup_t *lh)
     return NULL;
 }
 
-const char *lookup_get_root_ref (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->root_ref;
-    return NULL;
-}
-
 void *lookup_get_aux_data (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC)

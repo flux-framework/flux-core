@@ -145,10 +145,6 @@ void basic_api (void)
         "lookup_get_namespace works");
     ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
         "lookup_get_namespace returns correct string");
-    ok ((tmp = lookup_get_root_ref (lh)) != NULL,
-        "lookup_get_root_ref works");
-    ok (!strcmp (tmp, "root.ref.foo"),
-        "lookup_get_root_ref returns correct string");
     ok (lookup_set_current_epoch (lh, 43) == 0,
         "lookup_set_current_epoch works");
     ok (lookup_get_current_epoch (lh) == 43,
@@ -216,8 +212,6 @@ void basic_api_errors (void)
         "lookup_get_current_epoch fails on NULL pointer");
     ok (lookup_get_namespace (NULL) == NULL,
         "lookup_get_namespace fails on NULL pointer");
-    ok (lookup_get_root_ref (NULL) == NULL,
-        "lookup_get_root_ref fails on NULL pointer");
     ok (lookup_get_aux_data (NULL) == NULL,
         "lookup_get_aux_data fails on NULL pointer");
     ok (lookup_set_current_epoch (NULL, 42) < 0,
@@ -243,8 +237,6 @@ void basic_api_errors (void)
         "lookup_get_current_epoch fails on bad pointer");
     ok (lookup_get_namespace (lh) == NULL,
         "lookup_get_namespace fails on bad pointer");
-    ok (lookup_get_root_ref (lh) == NULL,
-        "lookup_get_root_ref fails on bad pointer");
     ok (lookup_get_aux_data (lh) == NULL,
         "lookup_get_aux_data fails on bad pointer");
     ok (lookup_set_current_epoch (lh, 42) < 0,
