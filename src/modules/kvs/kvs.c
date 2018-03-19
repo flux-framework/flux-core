@@ -1230,7 +1230,6 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *key;
     json_t *val = NULL;
     json_t *root_dirent = NULL;
-    json_t *tmp_dirent = NULL;
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
     wait_t *wait = NULL;
@@ -1350,17 +1349,7 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto done;
     }
 
-    if (!root_dirent) {
-        char *tmprootref = (char *)lookup_get_root_ref (lh);
-        if (!(tmp_dirent = treeobj_create_dirref (tmprootref))) {
-            flux_log_error (h, "%s: treeobj_create_dirref", __FUNCTION__);
-            goto done;
-        }
-        root_dirent = tmp_dirent;
-    }
-
-    if (flux_respond_pack (h, msg, "{ s:O s:O }",
-                           "rootdir", root_dirent,
+    if (flux_respond_pack (h, msg, "{ s:O }",
                            "val", val) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto done;
@@ -1375,7 +1364,6 @@ done:
     wait_destroy (wait);
     lookup_destroy (lh);
 stall:
-    json_decref (tmp_dirent);
     json_decref (val);
 }
 
