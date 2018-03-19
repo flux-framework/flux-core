@@ -143,8 +143,13 @@ end
 
 local function job_kvspath (f, id)
     assert (id, "Required argument id missing!")
-    local r, err = f:rpc ("job.kvspath", {ids = { id }})
+    local arg = { id }
+    if type (id) == "table" then
+        arg = id
+    end
+    local r, err = f:rpc ("job.kvspath", {ids = arg })
     if not r then error (err) end
+    if type (id) == "table" then return r.paths end
     return r.paths [1]
 end
 
@@ -157,6 +162,14 @@ local function kvs_path (f, id)
         kvs_paths [id] = job_kvspath (f, id)
     end
     return kvs_paths [id]
+end
+
+local function kvs_path_multi (f, ids)
+    local result = job_kvspath (f, ids)
+    for i,id in ipairs (ids) do
+        kvs_paths [id] = result [id]
+    end
+    return result
 end
 
 function wreck:lwj_path (id)
@@ -539,6 +552,15 @@ local function reverse (t)
         table.insert (r, t[i])
     end
     return r
+end
+
+function wreck.jobids_to_kvspath (arg)
+    local f = arg.flux
+    local ids = arg.jobids
+    if not ids then return nil, 'missing required arg jobids' end
+    if not f then f, err = require 'flux'.new () end
+    if not f then return nil, err end
+    return kvs_path_multi (f, ids)
 end
 
 function wreck.joblist (arg)
