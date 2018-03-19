@@ -27,9 +27,11 @@ COMMANDS
 *help* 'cmd'
 Print help. If 'cmd' is provided, print help for that sub-command.
 
-*ls*
+*ls* [-n, --max=COUNT] [JOBIDS...]::
 Display a list of wreck jobs currently in kvs, along with their current
-states.
+states. If '-n, --max' option is provided, then display at most 'COUNT'
+jobs (default: 25). If an optional list of 'JOBIDS' is provided on the
+command line, then display only those jobs.
 
 *attach* [--status] [--label-io] 'jobid'::
 Attach to output of a running or completed job. If input was not previously
@@ -49,9 +51,12 @@ if a job scheduler module is loaded.
 Send SIGTERM to running job 'jobid'. If '--signal' is used, send signal 'N'
 where 'N' may  be a signal number or name such as 'SIGKILL'.
 
-*timing*::
-List timing information for lwj entries in Flux KVS. This command lists
-four specific intervals in the wreck job lifecycle:
+*timing* [-n, --max=COUNT] [JOBIDS...]::
+List timing information for lwj entries in Flux KVS. if '-n, --max' option is
+provided, then display at most 'COUNT' jobs (default: 25). If an optional list
+of 'JOBIDS' is provided on the command line, then display timing information
+for only those jobs. This command lists four specific intervals in the wreck
+job lifecycle:
  'STARTING'::: Time from LWJ entry creation until the job reaches the
               "starting" state. The "starting" state is when the first
               rexec daemon receives the request to launch tasks.
