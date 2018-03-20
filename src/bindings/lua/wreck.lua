@@ -252,14 +252,16 @@ function wreck:parse_cmdline (arg)
         os.exit (1)
     end
 
+    self.nnodes = self.opts.N and tonumber (self.opts.N)
+
     -- If nnodes was provided but -n, --ntasks not set, then
-    --  set ntasks to nnodes
+    --  set ntasks to nnodes.
     if self.opts.N and not self.opts.n then
-        self.opts.n = self.opts.N
+        self.ntasks = self.nnodes
+    else
+        self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
     end
 
-    self.nnodes = self.opts.N and tonumber (self.opts.N)
-    self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
     self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
