@@ -269,6 +269,26 @@ void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
     root->seq = root_seq;
 }
 
+int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
+                        uint32_t rolemask, uint32_t userid)
+{
+    if (!root) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (rolemask & FLUX_ROLE_OWNER)
+        return 0;
+
+    if (rolemask & FLUX_ROLE_USER) {
+        if (userid == root->owner)
+            return 0;
+    }
+
+    errno = EPERM;
+    return -1;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

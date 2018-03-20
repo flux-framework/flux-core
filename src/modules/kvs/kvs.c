@@ -292,29 +292,19 @@ static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
                        const flux_msg_t *msg)
 {
     uint32_t rolemask;
+    uint32_t userid;
 
     if (flux_msg_get_rolemask (msg, &rolemask) < 0) {
         flux_log_error (ctx->h, "flux_msg_get_rolemask");
         return -1;
     }
 
-    if (rolemask & FLUX_ROLE_OWNER)
-        return 0;
-
-    if (rolemask & FLUX_ROLE_USER) {
-        uint32_t userid;
-
-        if (flux_msg_get_userid (msg, &userid) < 0) {
-            flux_log_error (ctx->h, "flux_msg_get_userid");
-            return -1;
-        }
-
-        if (userid == root->owner)
-            return 0;
+    if (flux_msg_get_userid (msg, &userid) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_userid");
+        return -1;
     }
 
-    errno = EPERM;
-    return -1;
+    return kvsroot_check_user (ctx->krm, root, rolemask, userid);
 }
 
 /*

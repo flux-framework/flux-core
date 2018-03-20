@@ -62,6 +62,9 @@ int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
 void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
                       const char *root_ref, int root_seq);
 
+int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
+                        uint32_t rolemask, uint32_t userid);
+
 #endif /* !_FLUX_KVS_KVSROOT_H */
 
 /*

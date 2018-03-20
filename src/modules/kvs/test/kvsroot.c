@@ -31,7 +31,7 @@ void basic_api_tests (void)
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
-                                         geteuid (),
+                                         1234,
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
@@ -70,6 +70,24 @@ void basic_api_tests (void)
 
     ok (root->seq == 18,
         "kvsroot_setroot set seq correctly");
+
+    ok (kvsroot_check_user (krm, NULL, FLUX_ROLE_OWNER, 0) < 0
+        && errno == EINVAL,
+        "kvsroot_check_user failed with EINVAL on bad input");
+
+    ok (!kvsroot_check_user (krm, root, FLUX_ROLE_OWNER, 0),
+        "kvsroot_check_user works on role owner");
+
+    ok (!kvsroot_check_user (krm, root, FLUX_ROLE_USER, 1234),
+        "kvsroot_check_user works on role user and correct id");
+
+    ok (kvsroot_check_user (krm, root, FLUX_ROLE_USER, 0) < 0
+        && errno == EPERM,
+        "kvsroot_check_user fails with EPERM on role user and incorrect id");
+
+    ok (kvsroot_check_user (krm, root, 0, 0) < 0
+        && errno == EPERM,
+        "kvsroot_check_user fails with EPERM on bad role");
 
     /* back to testing kvsroot_mgr functions */
 
