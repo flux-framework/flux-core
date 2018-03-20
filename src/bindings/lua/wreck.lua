@@ -324,7 +324,11 @@ function wreck:jobreq ()
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),
-        walltime =self.walltime or 0
+        walltime =self.walltime or 0,
+
+        ["opts.nnodes"] = self.opts.N,
+        ["opts.ntasks"]  = self.opts.n,
+        ["opts.tasks-per-node"] = self.opts.t,
     }
     if self.opts.o then
         for opt in self.opts.o:gmatch ('[^,]+') do
