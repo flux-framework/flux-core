@@ -105,7 +105,7 @@ const char *jsc_job_num2state (job_state_t i)
     return NULL;
 }
 
-static int jsc_job_state2num (const char *s)
+int jsc_job_state2num (const char *s)
 {
     stab_t *ss = job_state_tab;
     while (ss->s != NULL) {
