@@ -163,17 +163,36 @@ static void wait_for_event (flux_t *h, int64_t id, char *topic)
 }
 
 static void send_create_event (flux_t *h, int64_t id,
-                               const char *path, const char *state)
+                               const char *path, const char *state,
+                               json_object *req)
 {
+    int val;
+    int nnodes = 0;
+    int ntasks = 0;
+    int walltime = 0;
+
     char *topic;
     flux_msg_t *msg;
-
-    if (asprintf (&topic, "wreck.state.%s", state) < 0) {
+   if (asprintf (&topic, "wreck.state.%s", state) < 0) {
         flux_log_error (h, "send_create_event: asprintf");
         return;
     }
-    msg = flux_event_pack (topic, "{s:I,s:s}",
-                          "lwj", id, "kvs_path", path);
+
+    /* Pull ntasks, nnodes directly out of request
+     */
+    if (Jget_int (req, "ntasks", &val))
+        ntasks = val;
+    if (Jget_int (req, "nnodes", &val))
+        nnodes = val;
+    if (Jget_int (req, "walltime", &val))
+        walltime = val;
+
+    msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i}",
+                          "lwj", id, "kvs_path", path,
+                          "ntasks", ntasks,
+                          "nnodes", nnodes,
+                          "walltime", walltime);
+
     if (msg == NULL) {
         flux_log_error (h, "failed to create state change event");
         free (topic);
@@ -273,7 +292,7 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
         goto done;
     }
 
-    send_create_event (h, jobid, kvs_path, state);
+    send_create_event (h, jobid, kvs_path, state, req);
     rc = 0;
 
 done:
