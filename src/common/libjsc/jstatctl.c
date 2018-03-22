@@ -63,7 +63,6 @@ typedef struct {
     lru_cache_t *kvs_paths;
     flux_msg_handler_t **handlers;
     zlist_t *callbacks;
-    int first_time;
     flux_t *h;
 } jscctx_t;
 
@@ -137,7 +136,6 @@ static jscctx_t *getctx (flux_t *h)
         lru_cache_set_free_f (ctx->kvs_paths, free);
         if (!(ctx->callbacks = zlist_new ()))
             oom ();
-        ctx->first_time = 1;
         ctx->h = h;
         flux_aux_set (h, "jstatctrl", ctx, freectx);
     }
