@@ -121,7 +121,10 @@ int lookup_ref_error (lookup_t *c,
     return -1;
 }
 
-void setup_kvsroot (kvsroot_mgr_t *krm, struct cache *cache, const char *ref)
+void setup_kvsroot (kvsroot_mgr_t *krm,
+                    struct cache *cache,
+                    const char *ref,
+                    uint32_t owner)
 {
     struct kvsroot *root;
 
@@ -129,7 +132,7 @@ void setup_kvsroot (kvsroot_mgr_t *krm, struct cache *cache, const char *ref)
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
-                                         getuid (),
+                                         owner,
                                          0)) != NULL,
         "kvsroot_mgr_create_root works");
 
@@ -147,7 +150,7 @@ void basic_api (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
-    setup_kvsroot (krm, cache, "root.ref.foo");
+    setup_kvsroot (krm, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -211,7 +214,7 @@ void basic_api_errors (void)
         "cache_create works");
     ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
         "kvsroot_mgr_create works");
-    setup_kvsroot (krm, cache, "root.ref.foo");
+    setup_kvsroot (krm, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -460,7 +463,7 @@ void lookup_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
@@ -616,7 +619,7 @@ void lookup_basic (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* lookup dir via dirref */
     ok ((lh = lookup_create (cache,
@@ -908,7 +911,7 @@ void lookup_errors (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
      * decides what to do with entry not found */
@@ -1204,6 +1207,84 @@ void lookup_errors (void) {
     kvsroot_mgr_destroy (krm);
 }
 
+void lookup_security (void) {
+    json_t *root;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root_ref
+     * "val" : val to "foo"
+     */
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+
+    treeobj_hash ("sha1", root, root_ref);
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    setup_kvsroot (krm, cache, root_ref, 5);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             5,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask owner and valid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup val with rolemask owner and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_USER,
+                             5,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and valid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup val with rolemask user and valid owner");
+    json_decref (test);
+
+    ok (!lookup_create (cache,
+                        krm,
+                        1,
+                        KVS_PRIMARY_NAMESPACE,
+                        NULL,
+                        "val",
+                        FLUX_ROLE_USER,
+                        6,
+                        0,
+                        NULL,
+                        NULL)
+        && errno == EPERM,
+        "lookup_create on val with rolemask user and invalid owner, returns EPERM");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
 /* lookup link tests */
 void lookup_links (void) {
     json_t *root;
@@ -1288,7 +1369,7 @@ void lookup_links (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* lookup val, follow two links */
     ok ((lh = lookup_create (cache,
@@ -1520,7 +1601,7 @@ void lookup_alt_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
@@ -1583,7 +1664,7 @@ void lookup_stall_root (void) {
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
     treeobj_hash ("sha1", root, root_ref);
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -1720,7 +1801,7 @@ void lookup_stall (void) {
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
     treeobj_hash ("sha1", root, root_ref);
 
-    setup_kvsroot (krm, cache, root_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
 
     /* do not insert entries into cache until later for these stall tests */
 
@@ -1988,6 +2069,7 @@ int main (int argc, char *argv[])
     lookup_root ();
     lookup_basic ();
     lookup_errors ();
+    lookup_security ();
     lookup_links ();
     lookup_alt_root ();
     lookup_stall_root ();
