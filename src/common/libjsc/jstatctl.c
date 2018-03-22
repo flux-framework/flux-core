@@ -60,7 +60,6 @@ typedef struct {
 } cb_pair_t;
 
 typedef struct {
-    zhash_t *active_jobs;
     lru_cache_t *kvs_paths;
     flux_msg_handler_t **handlers;
     zlist_t *callbacks;
@@ -120,7 +119,6 @@ int jsc_job_state2num (const char *s)
 static void freectx (void *arg)
 {
     jscctx_t *ctx = arg;
-    zhash_destroy (&(ctx->active_jobs));
     lru_cache_destroy (ctx->kvs_paths);
     zlist_destroy (&(ctx->callbacks));
     flux_msg_handler_delvec (ctx->handlers);
@@ -132,8 +130,6 @@ static jscctx_t *getctx (flux_t *h)
     jscctx_t *ctx = (jscctx_t *)flux_aux_get (h, "jstatctrl");
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->active_jobs = zhash_new ()))
-            oom ();
         if (!(ctx->kvs_paths = lru_cache_create (256)))
             oom ();
         lru_cache_set_free_f (ctx->kvs_paths, free);
@@ -273,28 +269,6 @@ static inline bool is_pdesc (const char *k)
 {
     return (!strncmp (JSC_PDESC, k, JSC_MAX_ATTR_LEN))? true : false;
 }
-
-static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
-{
-    int *t = NULL;
-    char *key = NULL;
-
-    if (!aj) return J_FOR_RENT;
-    key = xasprintf ("%"PRId64, j);
-    if ( !(t = ((int *)zhash_lookup (aj, (const char *)key)))) {
-        free (key);
-        return J_FOR_RENT;
-    }
-    if (ns == J_COMPLETE || ns == J_FAILED)
-        zhash_delete (aj, key);
-    else
-        zhash_update (aj, key, (void *)(intptr_t)ns);
-    free (key);
-
-    /* safe to convert t to int */
-    return (intptr_t) t;
-}
-
 
 /******************************************************************************
  *                                                                            *
@@ -989,34 +963,25 @@ done:
     return rc;
 }
 
-static json_object *get_update_jcb (flux_t *h, int64_t j, const char *val)
-{
-    json_object *o = NULL;
-    json_object *ss = NULL;
-    jscctx_t *ctx = getctx (h);
-    int64_t ostate = (int64_t) J_FOR_RENT;
-    int64_t nstate = (int64_t) J_FOR_RENT;
-
-    nstate = jsc_job_state2num (val);
-    if ( (ostate = fetch_and_update_state (ctx->active_jobs, j, nstate)) < 0) {
-        flux_log (h, LOG_INFO, "%"PRId64"'s old state unavailable", j);
-        ostate = nstate;
-    }
-    o = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (o, JSC_JOBID, j);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) ostate);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) nstate);
-    json_object_object_add (o, JSC_STATE_PAIR, ss);
-    return o;
-}
-
 
 /******************************************************************************
  *                                                                            *
  *                 Internal Asynchronous Notification Mechanisms              *
  *                                                                            *
  ******************************************************************************/
+
+static json_object *get_update_jcb (int64_t id, int64_t ostate, int64_t nstate)
+{
+    json_object *o = Jnew ();
+    json_object *ss = Jnew ();
+
+    Jadd_int64 (o, JSC_JOBID, id);
+    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , ostate);
+    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE,  nstate);
+    json_object_object_add (o, JSC_STATE_PAIR, ss);
+
+    return o;
+}
 
 static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
 {
@@ -1032,44 +997,37 @@ static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
     return rc;
 }
 
-static inline void delete_jobinfo (flux_t *h, int64_t jobid)
-{
-    jscctx_t *ctx = getctx (h);
-    char *key = xasprintf ("%"PRId64, jobid);
-    zhash_delete (ctx->active_jobs, key);
-    free (key);
-}
-
-static bool job_is_finished (const char *state)
-{
-    if (strcmp (state, jsc_job_num2state (J_COMPLETE)) == 0
-        || strcmp (state, jsc_job_num2state (J_FAILED)) == 0)
-        return true;
-    return false;
-}
-
 /* Handle the jsc state changes.
  */
 static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
+    jscctx_t *ctx = arg;
     json_object *jcb = NULL;
     int64_t jobid;
     const char *topic;
     const char *state;
+    struct wreck_job *job;
+    int prev_state;
 
     if (flux_event_unpack (msg, &topic, "{ s:I }", "lwj", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         return;
     }
     state = topic + 10; // jsc.state.<state>  (10 chars)
-    jcb = get_update_jcb (h, jobid, state);
+    if (!(job = wreck_job_lookup (ctx->wreck, jobid))) {
+        flux_log (h, LOG_ERR, "%s: id=%lld state=%s not an active job",
+                  __FUNCTION__, (long long)jobid, state);
+        return;
+    }
+    prev_state = job->jsc_state;
+    job->jsc_state = jsc_job_state2num (state);
+
+    jcb = get_update_jcb (jobid, prev_state, job->jsc_state);
     if (invoke_cbs (h, jobid, jcb, 0) < 0)
         flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
-
-    if (job_is_finished (state))
-        delete_jobinfo (h, jobid);
     Jput (jcb);
+    wreck_job_decref (job);
 }
 
 /* Handle the wreck job state changes.
@@ -1080,25 +1038,21 @@ static void job_state_wreck_cb (struct wreck_job *job, void *arg)
     jscctx_t *ctx = arg;
     const char *state = wreck_state2str (job->state);
     json_object *jcb;
+    int prev_state;
 
     if (jscctx_add_jobid_path (ctx, job->id, job->kvs_path) < 0)
         flux_log_error (ctx->h, "jscctx_add_jobid_path");
 
-    /* New job: set previous state to J_NULL.
-     */
-    if (job->state == WRECK_STATE_RESERVED) {
-        char key[16];
-        snprintf (key, sizeof (key), "%"PRId64, job->id);
-        zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)J_NULL);
-    }
+    if (job->state == WRECK_STATE_RESERVED
+                            || job->state == WRECK_STATE_SUBMITTED)
+        prev_state = J_NULL; // new job, job->jsc_state not initialized
+    else
+        prev_state = job->jsc_state;
+    job->jsc_state = jsc_job_state2num (state);
 
-    jcb = get_update_jcb (ctx->h, job->id, state);
+    jcb = get_update_jcb (job->id, prev_state, job->jsc_state);
     if (invoke_cbs (ctx->h, job->id, jcb, 0) < 0)
         flux_log (ctx->h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
-
-    if (job_is_finished (state))
-        delete_jobinfo (ctx->h, job->id);
-
     Jput (jcb);
 }
 
@@ -1128,7 +1082,7 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
             flux_log_error (h, "subscribing to job event");
             goto done;
         }
-        if (flux_msg_handler_addvec (h, htab, NULL, &ctx->handlers) < 0) {
+        if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
             flux_log_error (h, "registering resource event handler");
             goto done;
         }
