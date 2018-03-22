@@ -33,6 +33,7 @@
 #include <inttypes.h>
 #include <flux/core.h>
 
+#include "wreck.h"
 #include "jstatctl.h"
 #include "jstatctl_deprecated.h"
 #include "src/common/libutil/log.h"
@@ -64,6 +65,7 @@ typedef struct {
     flux_msg_handler_t **handlers;
     zlist_t *callbacks;
     flux_t *h;
+    struct wreck *wreck;
 } jscctx_t;
 
 static stab_t job_state_tab[] = {
@@ -122,6 +124,7 @@ static void freectx (void *arg)
     lru_cache_destroy (ctx->kvs_paths);
     zlist_destroy (&(ctx->callbacks));
     flux_msg_handler_delvec (ctx->handlers);
+    wreck_destroy (ctx->wreck);
 }
 
 static jscctx_t *getctx (flux_t *h)
@@ -1133,28 +1136,31 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
     int rc = -1;
     cb_pair_t *c = NULL;
     jscctx_t *ctx = NULL;
-    flux_msg_handler_t **handlers;
 
-    if (!func)
-        goto done;
-    if (flux_event_subscribe (h, "wreck.state.") < 0) {
-        flux_log_error (h, "subscribing to job event");
-        rc = -1;
+    if (!func) {
+        errno = EINVAL;
         goto done;
     }
-    if (flux_event_subscribe (h, "jsc.state.") < 0) {
-        flux_log_error (h, "subscribing to job event");
-        rc = -1;
-        goto done;
-    }
-    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
-        flux_log_error (h, "registering resource event handler");
-        rc = -1;
-        goto done;
-    }
-
     ctx = getctx (h);
-    ctx->handlers = handlers;
+    if (!ctx->handlers) {
+        if (flux_event_subscribe (h, "wreck.state.") < 0) {
+            flux_log_error (h, "subscribing to job event");
+            goto done;
+        }
+        if (flux_event_subscribe (h, "jsc.state.") < 0) {
+            flux_log_error (h, "subscribing to job event");
+            goto done;
+        }
+        if (flux_msg_handler_addvec (h, htab, NULL, &ctx->handlers) < 0) {
+            flux_log_error (h, "registering resource event handler");
+            goto done;
+        }
+        if (!(ctx->wreck = wreck_create (h))) {
+            flux_log_error (h, "wreck_create failed");
+            goto done;
+        }
+    }
+
     c = (cb_pair_t *) xzmalloc (sizeof(*c));
     c->cb = func;
     c->arg = d;
