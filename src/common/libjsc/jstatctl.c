@@ -1080,44 +1080,53 @@ static bool job_is_finished (const char *state)
     return false;
 }
 
+/* Handle the jsc state changes.
+ */
 static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     json_object *jcb = NULL;
-    int64_t jobid = -1;
-    const char *topic = NULL;
-    const char *state = NULL;
-    const char *kvs_path = NULL;
-    int len = 12;
+    int64_t jobid;
+    const char *topic;
+    const char *state;
 
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        goto done;
-
-    if (flux_event_unpack (msg, NULL, "{ s:I }", "lwj", &jobid) < 0) {
+    if (flux_event_unpack (msg, &topic, "{ s:I }", "lwj", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
-        goto done;
+        return;
     }
-
-    if (!flux_event_unpack (msg, NULL, "{ s:s }", "kvs_path", &kvs_path)) {
-        if (jscctx_add_jobid_path (getctx (h), jobid, kvs_path) < 0)
-            flux_log_error (h, "jscctx_add_jobid_path");
-    }
-
-    if (strncmp (topic, "jsc", 3) == 0)
-       len = 10;
-
-    state = topic + len;
-    if (strcmp (state, jsc_job_num2state (J_RESERVED)) == 0)
-        fixup_newjob_event (h, jobid);
-
-    if (invoke_cbs (h, jobid, jcb = get_update_jcb (h, jobid, state), 0) < 0)
+    state = topic + 10; // jsc.state.<state>  (10 chars)
+    jcb = get_update_jcb (h, jobid, state);
+    if (invoke_cbs (h, jobid, jcb, 0) < 0)
         flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
 
     if (job_is_finished (state))
         delete_jobinfo (h, jobid);
-done:
     Jput (jcb);
-    return;
+}
+
+/* Handle the wreck job state changes.
+ * N.B. job->state numbering does not match J_<state> values.
+ */
+static void job_state_wreck_cb (struct wreck_job *job, void *arg)
+{
+    jscctx_t *ctx = arg;
+    const char *state = wreck_state2str (job->state);
+    json_object *jcb;
+
+    if (jscctx_add_jobid_path (ctx, job->id, job->kvs_path) < 0)
+        flux_log_error (ctx->h, "jscctx_add_jobid_path");
+
+    if (job->state == WRECK_STATE_RESERVED)
+        fixup_newjob_event (ctx->h, job->id);
+
+    jcb = get_update_jcb (ctx->h, job->id, state);
+    if (invoke_cbs (ctx->h, job->id, jcb, 0) < 0)
+        flux_log (ctx->h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
+
+    if (job_is_finished (state))
+        delete_jobinfo (ctx->h, job->id);
+
+    Jput (jcb);
 }
 
 /******************************************************************************
@@ -1126,7 +1135,6 @@ done:
  *                                                                            *
  ******************************************************************************/
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb, 0 },
     { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb, 0 },
       FLUX_MSGHANDLER_TABLE_END
 };
@@ -1143,10 +1151,6 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
     }
     ctx = getctx (h);
     if (!ctx->handlers) {
-        if (flux_event_subscribe (h, "wreck.state.") < 0) {
-            flux_log_error (h, "subscribing to job event");
-            goto done;
-        }
         if (flux_event_subscribe (h, "jsc.state.") < 0) {
             flux_log_error (h, "subscribing to job event");
             goto done;
@@ -1157,6 +1161,11 @@ static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
         }
         if (!(ctx->wreck = wreck_create (h))) {
             flux_log_error (h, "wreck_create failed");
+            goto done;
+        }
+        if (wreck_set_notify (ctx->wreck, WRECK_STATE_ALL,
+                              job_state_wreck_cb, ctx) < 0) {
+            flux_log_error (h, "wreck_set_notify failed");
             goto done;
         }
     }
