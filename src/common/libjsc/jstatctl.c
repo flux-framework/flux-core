@@ -1032,38 +1032,6 @@ static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
     return rc;
 }
 
-static void fixup_newjob_event (flux_t *h, int64_t nj)
-{
-    json_object *ss = NULL;
-    json_object *jcb = NULL;
-    int64_t js = J_NULL;
-    char *key = xasprintf ("%"PRId64, nj);
-    jscctx_t *ctx = getctx (h);
-
-    /* We fix up ordering problem only when new job
-       event hasn't been reported through a kvs watch
-     */
-    jcb = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (jcb, JSC_JOBID, nj);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js);
-    json_object_object_add (jcb, JSC_STATE_PAIR, ss);
-    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js) < 0) {
-        flux_log (h, LOG_ERR, "new_job_cb: inserting a job to hash failed");
-        goto done;
-    }
-    if (invoke_cbs (h, nj, jcb, 0) < 0) {
-        flux_log (h, LOG_ERR,
-                     "makeup_newjob_event: failed to invoke callbacks");
-        goto done;
-    }
-done:
-    Jput (jcb);
-    free (key);
-    return;
-}
-
 static inline void delete_jobinfo (flux_t *h, int64_t jobid)
 {
     jscctx_t *ctx = getctx (h);
@@ -1116,8 +1084,13 @@ static void job_state_wreck_cb (struct wreck_job *job, void *arg)
     if (jscctx_add_jobid_path (ctx, job->id, job->kvs_path) < 0)
         flux_log_error (ctx->h, "jscctx_add_jobid_path");
 
-    if (job->state == WRECK_STATE_RESERVED)
-        fixup_newjob_event (ctx->h, job->id);
+    /* New job: set previous state to J_NULL.
+     */
+    if (job->state == WRECK_STATE_RESERVED) {
+        char key[16];
+        snprintf (key, sizeof (key), "%"PRId64, job->id);
+        zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)J_NULL);
+    }
 
     jcb = get_update_jcb (ctx->h, job->id, state);
     if (invoke_cbs (ctx->h, job->id, jcb, 0) < 0)
