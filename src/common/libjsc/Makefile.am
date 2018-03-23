@@ -16,4 +16,6 @@ libjsc_la_SOURCES = \
 	jstatctl.c \
 	jstatctl_deprecated.h \
 	wreck.c \
-	wreck.h
+	wreck.h \
+	wreck_jobpath.c \
+	wreck_jobpath.h
