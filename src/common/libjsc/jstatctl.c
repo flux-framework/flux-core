@@ -635,6 +635,15 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     return 0;
 }
 
+int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes, int64_t *ntasks, int64_t *walltime)
+{
+    if (extract_raw_nnodes (h, j, nnodes) < 0) return -1;
+    if (extract_raw_ntasks (h, j, ntasks) < 0) return -1;
+    if (extract_raw_walltime (h, j, walltime) < 0) return -1;
+
+    return 0;
+}
+
 static int query_rdl (flux_t *h, int64_t j, json_object **jcb)
 {
     char *rdlstr = NULL;
