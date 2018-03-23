@@ -345,6 +345,17 @@ int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target)
     return 0;
 }
 
+const char *flux_kvs_lookup_get_key (flux_future_t *f)
+{
+    struct lookup_ctx *ctx;
+
+    if (!(ctx = flux_future_aux_get (f, auxkey))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return ctx->key;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
