@@ -393,6 +393,20 @@ test_expect_success NO_SCHED 'flux-wreck cancel: fails when sched not loaded' '
 	EOF
 	test_cmp expected.cancel err.cancel
 '
+test_expect_success 'flux-wreck cancel: falls back to SIGKILL with -f' '
+	run_timeout 1 flux wreckrun --detach sleep 100 &&
+	id=$(last_job_id) &&
+	LWJ=$(last_job_path) &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 $LWJ.state "v == \"running\"" &&
+	flux wreck cancel -f $id &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 $LWJ.state "v == \"complete\"" &&
+	test_expect_code 137 flux wreck status $id >output.cancel-f &&
+	cat >expected.cancel-f <<-EOF &&
+	Job $id status: complete
+	task0: exited with signal 9
+	EOF
+	test_cmp expected.cancel-f output.cancel-f
+'
 
 check_complete_link() {
     for i in `seq 0 5`; do
