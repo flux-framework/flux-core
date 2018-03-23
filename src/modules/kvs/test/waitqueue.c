@@ -73,8 +73,6 @@ int main (int argc, char *argv[])
         "wait_runqueue success");
     ok (count == 1,
        "wait_runqueue ran callback");
-    ok (wait_get_usecount (w) == 0,
-       "wait_get_usecount 0 after run");
     wait_queue_destroy (q);
 
     /**
