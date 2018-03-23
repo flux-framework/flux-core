@@ -123,6 +123,7 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb);
  * A convenience routine (returning the internal state name correponding to "s.")
  */
 const char *jsc_job_num2state (job_state_t s);
+int jsc_job_state2num (const char *s);
 
 #ifdef __cplusplus
 }
