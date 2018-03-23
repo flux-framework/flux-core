@@ -35,7 +35,6 @@
 
 #include "wreck.h"
 #include "jstatctl.h"
-#include "jstatctl_deprecated.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
@@ -55,7 +54,7 @@ typedef struct {
 } stab_t;
 
 typedef struct {
-   jsc_handler_obj_f cb;
+   jsc_handler_f cb;
    void *arg;
 } cb_pair_t;
 
@@ -989,7 +988,7 @@ static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
     cb_pair_t *c = NULL;
     jscctx_t *ctx = getctx (h);
     for (c = zlist_first (ctx->callbacks); c; c = zlist_next (ctx->callbacks)) {
-        if (c->cb (jcb, c->arg, errnum) < 0) {
+        if (c->cb (Jtostr (jcb), c->arg, errnum) < 0) {
             flux_log (h, LOG_ERR, "callback returns an error");
             rc = -1;
         }
@@ -1066,7 +1065,7 @@ static const struct flux_msg_handler_spec htab[] = {
       FLUX_MSGHANDLER_TABLE_END
 };
 
-static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
+int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL;
@@ -1109,98 +1108,55 @@ done:
     return rc;
 }
 
-/* deprecated */
-int jsc_notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
-{
-    return notify_status_obj (h, func, d);
-}
-
-struct callback_wrapper {
-    jsc_handler_f cb;
-    void *arg;
-};
-
-static int wrap_handler (json_object *base_jcb, void *arg, int errnum)
-{
-    struct callback_wrapper *wrap = arg;
-    return wrap->cb (Jtostr (base_jcb), wrap->arg, errnum);
-}
-
-int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
+int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
 {
     int rc = -1;
-    struct callback_wrapper *wrap = xzmalloc (sizeof (*wrap));
-
-    wrap->cb = func;
-    wrap->arg = d;
-
-    rc = notify_status_obj (h, wrap_handler, wrap);
-    if (rc < 0)
-        free (wrap);
-    return rc;
-}
-
-static int query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-		       json_object **jcb)
-{
-    int rc = -1;
+    json_object *jcb = NULL;
 
     if (!key) return -1;
     if (jobid_exist (h, jobid) != 0) return -1;
 
     if (is_jobid (key)) {
-        if ( (rc = query_jobid (h, jobid, jcb)) < 0)
+        if ( (rc = query_jobid (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_jobid failed");
     } else if (is_state_pair (key)) {
-        if ( (rc = query_state_pair (h, jobid, jcb)) < 0)
+        if ( (rc = query_state_pair (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
     } else if (is_rdesc (key)) {
-        if ( (rc = query_rdesc (h, jobid, jcb)) < 0)
+        if ( (rc = query_rdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdesc failed");
     } else if (is_rdl (key)) {
-        if ( (rc = query_rdl (h, jobid, jcb)) < 0)
+        if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl failed");
     } else if (is_rdl_alloc (key)) {
-        if ( (rc = query_rdl_alloc (h, jobid, jcb)) < 0)
+        if ( (rc = query_rdl_alloc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl_alloc failed");
     } else if (is_pdesc (key)) {
-        if ( (rc = query_pdesc (h, jobid, jcb)) < 0)
+        if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
     } else
         flux_log (h, LOG_ERR, "key (%s) not understood", key);
-
-    return rc;
-}
-
-/* deprecated */
-int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-		       json_object **jcb)
-{
-    return query_jcb_obj (h, jobid, key, jcb);
-}
-
-int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb)
-{
-    int rc;
-    json_object *o = NULL;
-
-    rc = query_jcb_obj (h, jobid, key, &o);
     if (rc < 0)
         goto done;
-    *jcb = o ? xstrdup (Jtostr (o)) : NULL;
+    *jcb_str = jcb ? xstrdup (Jtostr (jcb)) : NULL;
 done:
-    Jput (o);
+    Jput (jcb);
     return rc;
 }
 
-static int update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-			json_object *jcb)
+int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
+        const char *jcb_str)
 {
     int rc = -1;
     json_object *o = NULL;
+    json_object *jcb = NULL;
 
-    if (!jcb) return -1;
-    if (jobid_exist (h, jobid) != 0) return -1;
+    if (!jcb_str || !(jcb = Jfromstr (jcb_str))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (jobid_exist (h, jobid) != 0)
+        goto done;
 
     if (is_jobid (key)) {
         flux_log (h, LOG_ERR, "jobid attr cannot be updated");
@@ -1223,29 +1179,8 @@ static int update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
     }
     else
         flux_log (h, LOG_ERR, "key (%s) not understood", key);
-
-    return rc;
-}
-
-/* deprecated */
-int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-			json_object *jcb)
-{
-    return update_jcb_obj (h, jobid, key, jcb);
-}
-
-int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb)
-{
-    int rc = -1;
-    json_object *o = NULL;
-
-    if (!jcb || !(o = Jfromstr (jcb))) {
-        errno = EINVAL;
-        goto done;
-    }
-    rc = update_jcb_obj (h, jobid, key, o);
 done:
-    Jput (o);
+    Jput (jcb);
     return rc;
 }
 
