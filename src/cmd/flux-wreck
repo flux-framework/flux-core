@@ -118,14 +118,19 @@ end
 prog:SubCommand {
  name = "cancel",
  description = "Cancel a pending job",
- usage = "JOBID",
+ usage = "[-f|--force] JOBID",
+ options = {
+    { name = "force", char = "f",
+      usage = "Force cancel even if scheduler is not loaded"
+    },
+ },
  handler = function (self, arg)
     local id = check_jobid_arg (self, arg[1])
     local resp, err = f:rpc ("sched.cancel", { jobid = tonumber (id) })
     if not resp then
-        if err == "Function not implemented" then
+        if err == "Function not implemented" and not self.opt.f then
             prog:die ("job cancel not supported when scheduler not loaded")
-        elseif err == "Invalid argument" then
+        elseif self.opt.f or err == "Invalid argument" then
             prog:log ("Sending SIGKILL to %d\n", id)
             local rc, err = f:sendevent ({signal = 9}, "wreck.%d.kill", id)
             if not rc then self:die ("signal: %s\n", err) end
