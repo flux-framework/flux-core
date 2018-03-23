@@ -479,8 +479,9 @@ void verify_value (struct cache *cache,
                              KVS_PRIMARY_NAMESPACE,
                              root_ref,
                              key,
+                             0,
                              NULL,
-                             0)) != NULL,
+                             NULL)) != NULL,
         "lookup_create key %s", key);
 
     ok (lookup (lh) == true,

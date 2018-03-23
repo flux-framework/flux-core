@@ -61,7 +61,7 @@ char *kvs_util_normalize_key (const char *key, bool *want_directory)
             len--;
             has_sep_suffix = true;
         }
-        if (cpy[0] == '.')
+        if (cpy[0] == sep)
             has_sep_suffix = true;
         if (want_directory)
             *want_directory = has_sep_suffix;

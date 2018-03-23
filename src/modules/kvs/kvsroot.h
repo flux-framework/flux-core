@@ -29,32 +29,41 @@ struct kvsroot {
 typedef int (*kvsroot_root_f)(struct kvsroot *root, void *arg);
 
 /* flux_t optional, if NULL logging will go to stderr */
-/* void *arg passed as arg value to txn_mgr_create() internally */
+/* void *arg passed as arg value to kvstxn_mgr_create() internally */
 kvsroot_mgr_t *kvsroot_mgr_create (flux_t *h, void *arg);
 
-void kvsroot_mgr_destroy (kvsroot_mgr_t *km);
+void kvsroot_mgr_destroy (kvsroot_mgr_t *krm);
 
-int kvsroot_mgr_root_count (kvsroot_mgr_t *km);
+int kvsroot_mgr_root_count (kvsroot_mgr_t *krm);
 
-struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *km,
+struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
                                          struct cache *cache,
                                          const char *hash_name,
                                          const char *namespace,
                                          uint32_t owner,
                                          int flags);
 
-int kvsroot_mgr_remove_root (kvsroot_mgr_t *km, const char *namespace);
+int kvsroot_mgr_remove_root (kvsroot_mgr_t *krm, const char *namespace);
 
 /* returns NULL if not found */
-struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *km,
+struct kvsroot *kvsroot_mgr_lookup_root (kvsroot_mgr_t *krm,
                                          const char *namespace);
 
 /* safe lookup, will return NULL if root in process of being removed,
  * i.e. remove flag set to true */
-struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *km,
+struct kvsroot *kvsroot_mgr_lookup_root_safe (kvsroot_mgr_t *krm,
                                               const char *namespace);
 
-int kvsroot_mgr_iter_roots (kvsroot_mgr_t *km, kvsroot_root_f cb, void *arg);
+int kvsroot_mgr_iter_roots (kvsroot_mgr_t *krm, kvsroot_root_f cb, void *arg);
+
+/* Convenience functions on struct kvsroot
+ */
+
+void kvsroot_setroot (kvsroot_mgr_t *krm, struct kvsroot *root,
+                      const char *root_ref, int root_seq);
+
+int kvsroot_check_user (kvsroot_mgr_t *krm, struct kvsroot *root,
+                        uint32_t rolemask, uint32_t userid);
 
 #endif /* !_FLUX_KVS_KVSROOT_H */
 

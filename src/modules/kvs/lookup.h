@@ -20,8 +20,9 @@ lookup_t *lookup_create (struct cache *cache,
                          const char *namespace,
                          const char *root_ref,
                          const char *path,
+                         int flags,
                          flux_t *h,
-                         int flags);
+                         void *aux);
 
 /* Destroy a lookup handle */
 void lookup_destroy (lookup_t *lh);
@@ -51,11 +52,6 @@ json_t *lookup_get_value (lookup_t *lh);
  */
 int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data);
 
-/* Convenience function to get cache from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-struct cache *lookup_get_cache (lookup_t *lh);
-
 /* Convenience function to get current epoch from earlier
  * instantiation.  Convenient if replaying RPC and don't have it
  * presently.
@@ -67,32 +63,12 @@ int lookup_get_current_epoch (lookup_t *lh);
  */
 const char *lookup_get_namespace (lookup_t *lh);
 
-/* Convenience function to get root ref from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-const char *lookup_get_root_ref (lookup_t *lh);
-
-/* Convenience function to get path from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-const char *lookup_get_path (lookup_t *lh);
-
-/* Convenience function to get flags from earlier instantiation.
- * Convenient if replaying RPC and don't have it presently.
- */
-int lookup_get_flags (lookup_t *lh);
-
-/* Get auxiliarry data set by user */
+/* Get auxiliarry data set by user in lookup_create() */
 void *lookup_get_aux_data (lookup_t *lh);
 
 /* Set a new current epoch.  Convenience on RPC replays and epoch may
  * be new */
 int lookup_set_current_epoch (lookup_t *lh, int epoch);
-
-/* Set auxiliarry data for convenience.  User is responsible for
- * freeing data.
- */
-int lookup_set_aux_data (lookup_t *lh, void *data);
 
 /* Lookup the key path in the KVS cache starting at root.
  *
@@ -100,8 +76,8 @@ int lookup_set_aux_data (lookup_t *lh, void *data);
  * checked via lookup_get_errnum().  On success, value of resulting
  * lookup can be retrieved via lookup_get_value().
  *
- * Return false if key name cannot be resolved.  Get missing reference
- * in via lookup_get_missing_ref().  Caller should then use
+ * Return false if key name cannot be resolved.  Get missing
+ * references via lookup_iter_missing_refs().  Caller should then use
  * missing reference to load missing reference into KVS cache via rpc
  * or otherwise.
  */

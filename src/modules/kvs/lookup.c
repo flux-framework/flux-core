@@ -380,8 +380,9 @@ lookup_t *lookup_create (struct cache *cache,
                          const char *namespace,
                          const char *root_ref,
                          const char *path,
+                         int flags,
                          flux_t *h,
-                         int flags)
+                         void *aux)
 {
     lookup_t *lh = NULL;
     int saved_errno;
@@ -409,13 +410,12 @@ lookup_t *lookup_create (struct cache *cache,
         goto cleanup;
     }
     if (!(lh->path = kvs_util_normalize_key (path, NULL))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto cleanup;
     }
     lh->h = h;
+    lh->aux = aux;
     lh->flags = flags;
-
-    lh->aux = NULL;
 
     lh->val = NULL;
     lh->valref_missing_refs = NULL;
@@ -554,13 +554,6 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
     return -1;
 }
 
-struct cache *lookup_get_cache (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->cache;
-    return NULL;
-}
-
 int lookup_get_current_epoch (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC)
@@ -575,27 +568,6 @@ const char *lookup_get_namespace (lookup_t *lh)
     return NULL;
 }
 
-const char *lookup_get_root_ref (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->root_ref;
-    return NULL;
-}
-
-const char *lookup_get_path (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->path;
-    return NULL;
-}
-
-int lookup_get_flags (lookup_t *lh)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC)
-        return lh->flags;
-    return -1;
-}
-
 void *lookup_get_aux_data (lookup_t *lh)
 {
     if (lh && lh->magic == LOOKUP_MAGIC)
@@ -607,15 +579,6 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch)
 {
     if (lh && lh->magic == LOOKUP_MAGIC) {
         lh->current_epoch = epoch;
-        return 0;
-    }
-    return -1;
-}
-
-int lookup_set_aux_data (lookup_t *lh, void *data)
-{
-    if (lh && lh->magic == LOOKUP_MAGIC) {
-        lh->aux = data;
         return 0;
     }
     return -1;
