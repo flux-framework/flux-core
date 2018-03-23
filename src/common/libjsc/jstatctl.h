@@ -62,7 +62,6 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 /* TODO: find a better way to manage this hierarchical
  * JCB attributes space
  */
-#define JSC_MAX_ATTR_LEN 32
 #define JSC_JOBID "jobid"
 #define JSC_STATE_PAIR "state-pair"
 # define JSC_STATE_PAIR_OSTATE "ostate"

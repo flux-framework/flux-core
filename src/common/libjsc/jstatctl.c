@@ -239,36 +239,6 @@ static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
     return (path);
 }
 
-static inline bool is_jobid (const char *k)
-{
-    return (!strncmp (JSC_JOBID, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_state_pair (const char *k)
-{
-    return (!strncmp (JSC_STATE_PAIR, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_rdesc (const char *k)
-{
-    return (!strncmp (JSC_RDESC, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_rdl (const char *k)
-{
-    return (!strncmp (JSC_RDL, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_rdl_alloc (const char *k)
-{
-    return (!strncmp (JSC_RDL_ALLOC, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_pdesc (const char *k)
-{
-    return (!strncmp (JSC_PDESC, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
 /******************************************************************************
  *                                                                            *
  *                         Internal JCB Accessors                             *
@@ -1116,22 +1086,22 @@ int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
     if (!key) return -1;
     if (jobid_exist (h, jobid) != 0) return -1;
 
-    if (is_jobid (key)) {
+    if (!strcmp (key, JSC_JOBID)) {
         if ( (rc = query_jobid (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_jobid failed");
-    } else if (is_state_pair (key)) {
+    } else if (!strcmp (key, JSC_STATE_PAIR)) {
         if ( (rc = query_state_pair (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
-    } else if (is_rdesc (key)) {
+    } else if (!strcmp (key, JSC_RDESC)) {
         if ( (rc = query_rdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdesc failed");
-    } else if (is_rdl (key)) {
+    } else if (!strcmp (key, JSC_RDL)) {
         if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl failed");
-    } else if (is_rdl_alloc (key)) {
+    } else if (!strcmp (key, JSC_RDL_ALLOC)) {
         if ( (rc = query_rdl_alloc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl_alloc failed");
-    } else if (is_pdesc (key)) {
+    } else if (!strcmp(key, JSC_PDESC)) {
         if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
     } else
@@ -1158,22 +1128,22 @@ int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
     if (jobid_exist (h, jobid) != 0)
         goto done;
 
-    if (is_jobid (key)) {
+    if (!strcmp(key, JSC_JOBID)) {
         flux_log (h, LOG_ERR, "jobid attr cannot be updated");
-    } else if (is_state_pair (key)) {
+    } else if (!strcmp (key, JSC_STATE_PAIR)) {
         if (Jget_obj (jcb, JSC_STATE_PAIR, &o))
             rc = update_state (h, jobid, o);
-    } else if (is_rdesc (key)) {
+    } else if (!strcmp (key, JSC_RDESC)) {
         if (Jget_obj (jcb, JSC_RDESC, &o))
             rc = update_rdesc (h, jobid, o);
-    } else if (is_rdl (key)) {
+    } else if (!strcmp (key, JSC_RDL)) {
         const char *s = NULL;
         if (Jget_str (jcb, JSC_RDL, &s))
             rc = update_rdl (h, jobid, s);
-    } else if (is_rdl_alloc (key)) {
+    } else if (!strcmp (key, JSC_RDL_ALLOC)) {
         if (Jget_obj (jcb, JSC_RDL_ALLOC, &o))
             rc = update_rdl_alloc (h, jobid, o);
-    } else if (is_pdesc (key)) {
+    } else if (!strcmp (key, JSC_PDESC)) {
         if (Jget_obj (jcb, JSC_PDESC, &o))
             rc = update_pdesc (h, jobid, o);
     }
