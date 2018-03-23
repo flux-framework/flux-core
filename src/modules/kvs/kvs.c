@@ -43,6 +43,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_txn_private.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -486,6 +487,58 @@ static struct kvsroot *getroot (kvs_ctx_t *ctx, const char *namespace,
     if (check_user (ctx, root, msg) < 0)
         return NULL;
 
+    return root;
+}
+
+/* Identical to getroot(), but will also check for namespace prefix in
+ * key, and return result if warranted
+ */
+static struct kvsroot *getroot_namespace_prefix (kvs_ctx_t *ctx,
+                                                 const char *namespace,
+                                                 flux_msg_handler_t *mh,
+                                                 const flux_msg_t *msg,
+                                                 flux_msg_handler_f cb,
+                                                 bool *stall,
+                                                 json_t *ops,
+                                                 char **namespace_prefix)
+{
+    struct kvsroot *root = NULL;
+    char *ns_prefix = NULL;
+    int len = json_array_size (ops);
+
+    /* We only check the first operation to determine the namespace
+     * all operations should belong to.  If the user specifies
+     * multiple namespaces, it will error out when the operations are
+     * applied.
+     */
+
+    if (len) {
+        json_t *op = json_array_get (ops, 0);
+        const char *key;
+
+        if (txn_decode_op (op, &key, NULL, NULL) < 0)
+            goto done;
+
+        if (kvs_namespace_prefix (key, &ns_prefix, NULL) < 0)
+            goto done;
+    }
+
+    if (!(root = getroot (ctx,
+                          ns_prefix ? ns_prefix : namespace,
+                          mh,
+                          msg,
+                          cb,
+                          stall)))
+        goto done;
+
+    /* return alt-namespace to caller */
+    if (ns_prefix) {
+        (*namespace_prefix) = ns_prefix;
+        ns_prefix = NULL;
+    }
+
+done:
+    free (ns_prefix);
     return root;
 }
 
@@ -1771,6 +1824,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     bool stall = false;
     json_t *ops = NULL;
     treq_t *tr;
+    char *alt_ns = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i }",
                              "ops", &ops,
@@ -1781,8 +1835,14 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace, mh, msg, commit_request_cb,
-                          &stall))) {
+    if (!(root = getroot_namespace_prefix (ctx,
+                                           namespace,
+                                           mh,
+                                           msg,
+                                           commit_request_cb,
+                                           &stall,
+                                           ops,
+                                           &alt_ns))) {
         if (stall)
             goto stall;
         goto error;
@@ -1831,7 +1891,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "{ s:O s:s s:s s:i }",
                                  "ops", ops,
                                  "name", name,
-                                 "namespace", namespace,
+                                 "namespace", alt_ns ? alt_ns :  namespace,
                                  "flags", flags))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
             goto error;
@@ -1844,6 +1904,7 @@ error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 stall:
+    free (alt_ns);
     return;
 }
 
@@ -1949,6 +2010,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     bool stall = false;
     json_t *ops = NULL;
     treq_t *tr;
+    char *alt_ns = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
                              "ops", &ops,
@@ -1960,8 +2022,14 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, namespace, mh, msg, fence_request_cb,
-                          &stall))) {
+    if (!(root = getroot_namespace_prefix (ctx,
+                                           namespace,
+                                           mh,
+                                           msg,
+                                           fence_request_cb,
+                                           &stall,
+                                           ops,
+                                           &alt_ns))) {
         if (stall)
             goto stall;
         goto error;
@@ -2032,7 +2100,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "{ s:O s:s s:s s:i s:i }",
                                  "ops", ops,
                                  "name", name,
-                                 "namespace", namespace,
+                                 "namespace", alt_ns ? alt_ns : namespace,
                                  "flags", flags,
                                  "nprocs", nprocs))) {
             flux_log_error (h, "%s: flux_rpc_pack", __FUNCTION__);
@@ -2046,6 +2114,7 @@ error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 stall:
+    free (alt_ns);
     return;
 }
 
