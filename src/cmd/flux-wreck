@@ -221,9 +221,33 @@ function LWJ:timediff (tstart, tend, talt)
     return s > 0 and s or 0
 end
 
+function LWJ:exit_string ()
+    local flux = require 'flux'
+    local state = self.state
+    local max = self.lwj.exit_status.max
+    if max then
+        local s, code, core = flux.exitstatus (max)
+        state = s
+        if s == "exited" and code > 0 then
+            state = "failed"
+        end
+    end
+    return state
+end
+
+function LWJ:state_string ()
+    if self.state == "complete" then
+        return self:exit_string ()
+    end
+    return self.state
+end
+
 LWJ.__index = function (self, key)
     if key == "state" then
-        return self.lwj.state
+        if not self._state then
+            self._state = self.lwj.state
+        end
+        return self._state
     elseif key == "ranks" then
         local hl = hostlist.new()
         local rank = self.lwj.rank
@@ -305,7 +329,7 @@ prog:SubCommand {
         if tonumber (id) then
             local j, err = LWJ.open (f, id, dir)
             if not j then self:die ("job%d: %s", id, err) end
-            printf (fmt, id, j.ntasks, j.state, j.start,
+            printf (fmt, id, j.ntasks, j:state_string(), j.start,
                     seconds_to_string (j.runtime),
                     tostring (j.ranks),
                     j.command:match ("([^/]+)$"))
