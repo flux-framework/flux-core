@@ -2419,6 +2419,99 @@ void kvstxn_process_fallback_merge (void)
     cache_destroy (cache);
 }
 
+void kvstxn_namespace_prefix (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    int count = 0;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    blobref_t rootref;
+    const char *newroot;
+    json_t *ops = NULL;
+
+    cache = create_cache_with_empty_rootdir (rootref);
+
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    /* First test if basic prefix works */
+
+    create_ready_kvstxn (ktm, "transaction1", "ns:primary/key1", "1", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+        "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
+
+    count = 0;
+    ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
+        "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
+
+    ok (count == 1,
+        "correct number of cache entries were dirty");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    verify_value (cache, krm, newroot, "key1", "1");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    /* Second, test if invalid namespace prefix fails */
+
+    create_ready_kvstxn (ktm, "transaction2", "ns:foobar/key2", "2", 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_ERROR
+        && kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR with EINVAL set");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    /* Third, test if invalid prefix across multiple prefixes fails */
+
+    ops = json_array ();
+    ops_append (ops, "ns:primary/key3", "3", 0);
+    ops_append (ops, "ns:foobar/key4", "4", 0);
+
+    ok (kvstxn_mgr_add_transaction (ktm,
+                                    "transaction3",
+                                    ops,
+                                    0) == 0,
+        "kvstxn_mgr_add_transaction works");
+
+    json_decref (ops);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_ERROR
+        && kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_process returns KVSTXN_PROCESS_ERROR with EINVAL set");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    kvstxn_mgr_destroy (ktm);
+    cache_destroy (cache);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -2452,6 +2545,7 @@ int main (int argc, char *argv[])
     kvstxn_process_append ();
     kvstxn_process_append_errors ();
     kvstxn_process_fallback_merge ();
+    kvstxn_namespace_prefix ();
 
     done_testing ();
     return (0);
