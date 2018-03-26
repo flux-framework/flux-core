@@ -11,16 +11,14 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
-tr1="null->null"
-tr2="null->reserved"
-tr3="reserved->starting"
-tr4="starting->running"
-tr5="running->complete"
+tr1="null->reserved"
+tr2="reserved->starting"
+tr3="starting->running"
+tr4="running->complete"
 trans="$tr1
 $tr2
 $tr3
-$tr4
-$tr5"
+$tr4"
 
 #  Return previous job path in kvs
 last_job_path() {
@@ -261,7 +259,6 @@ test_expect_success 'jstat 15: jstat detects failed state' '
     p=$(run_flux_jstat 15) &&
     test_must_fail run_timeout 4 flux wreckrun -i /bad/input -n4 -N4 hostname &&
     cat >expected15 <<-EOF &&
-	null->null
 	null->reserved
 	reserved->starting
 	starting->failed
