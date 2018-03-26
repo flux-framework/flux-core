@@ -1024,43 +1024,86 @@ static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
     jscctx_t *ctx = getctx (h);
     for (c = zlist_first (ctx->callbacks); c; c = zlist_next (ctx->callbacks)) {
         if (c->cb (jcb, c->arg, errnum) < 0) {
-            flux_log (h, LOG_ERR, "callback returns an error");
+            flux_log (h, LOG_DEBUG, "callback returns an error");
             rc = -1;
         }
     }
     return rc;
 }
 
-static void fixup_newjob_event (flux_t *h, int64_t nj)
+static json_object *get_reserve_jcb (flux_t *h, int64_t nj)
 {
     json_object *ss = NULL;
     json_object *jcb = NULL;
     int64_t js = J_NULL;
+    int64_t js2 = J_RESERVED;
     char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
-    /* We fix up ordering problem only when new job
-       event hasn't been reported through a kvs watch
-     */
     jcb = Jnew ();
     ss = Jnew ();
     Jadd_int64 (jcb, JSC_JOBID, nj);
     Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js);
+    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js2);
     json_object_object_add (jcb, JSC_STATE_PAIR, ss);
-    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js) < 0) {
-        flux_log (h, LOG_ERR, "new_job_cb: inserting a job to hash failed");
+    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
+        flux_log (h, LOG_ERR, "%s: inserting a job to hash failed",
+                  __FUNCTION__);
         goto done;
     }
-    if (invoke_cbs (h, nj, jcb, 0) < 0) {
-        flux_log (h, LOG_ERR,
-                     "makeup_newjob_event: failed to invoke callbacks");
-        goto done;
-    }
+    return jcb;
+
 done:
     Jput (jcb);
     free (key);
-    return;
+    return NULL;
+}
+
+static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj)
+{
+    int ntasks = 0;
+    int nnodes = 0;
+    int walltime = 0;
+    int64_t js = J_NULL;
+    int64_t js2 = J_SUBMITTED;
+    json_object *o = NULL;
+    json_object *o2 = NULL;
+    json_object *jcb = NULL;
+    char *key = xasprintf ("%"PRId64, nj);
+    jscctx_t *ctx = getctx (h);
+
+    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i }", "ntasks", &ntasks,
+                           "nnodes", &nnodes, "walltime", &walltime) < 0) {
+        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto error;
+    }
+
+    jcb = Jnew ();
+    o = Jnew ();
+    Jadd_int64 (jcb, JSC_JOBID, nj);
+    Jadd_int64 (o, JSC_STATE_PAIR_OSTATE , (int64_t)js);
+    Jadd_int64 (o, JSC_STATE_PAIR_NSTATE, (int64_t)js2);
+    json_object_object_add (jcb, JSC_STATE_PAIR, o);
+    o2 = Jnew ();
+    Jadd_int64 (o2, JSC_RDESC_NNODES, (int64_t)nnodes);
+    Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
+    Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
+    json_object_object_add (jcb, JSC_RDESC, o2);
+
+    if (zhash_lookup (ctx->active_jobs, key)) {
+        /* Note that we don't use the old state (reserved) in this case */
+        zhash_update (ctx->active_jobs, key, (void *)(intptr_t)js2);
+    } else if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
+        flux_log (h, LOG_ERR, "%s: hash insertion failed", __FUNCTION__);
+        goto error;
+    }
+
+    return jcb;
+
+error:
+    Jput (jcb);
+    free (key);
+    return NULL;
 }
 
 static inline void delete_jobinfo (flux_t *h, int64_t jobid)
@@ -1107,15 +1150,20 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
 
     state = topic + len;
     if (strcmp (state, jsc_job_num2state (J_RESERVED)) == 0)
-        fixup_newjob_event (h, jobid);
+        jcb = get_reserve_jcb (h, jobid);
+    else if (strcmp (state, jsc_job_num2state (J_SUBMITTED)) == 0)
+        jcb = get_submit_jcb (h, msg, jobid);
+    else
+        jcb = get_update_jcb (h, jobid, state);
 
-    if (invoke_cbs (h, jobid, jcb = get_update_jcb (h, jobid, state), 0) < 0)
-        flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
+    if (invoke_cbs (h, jobid, jcb, (jcb)? 0 : EINVAL) < 0)
+        flux_log (h, LOG_DEBUG, "%s: failed to invoke callbacks", __FUNCTION__);
 
     if (job_is_finished (state))
         delete_jobinfo (h, jobid);
 done:
-    Jput (jcb);
+    if (jcb)
+        Jput (jcb);
     return;
 }
 
