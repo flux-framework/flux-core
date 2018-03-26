@@ -407,6 +407,16 @@ prog:SubCommand {
  end
 }
 
+-- return keys in dir as a table sorted by number
+local function sorted_keys (dir)
+    local results = {}
+    for k in dir:keys () do
+        table.insert (results, k)
+    end
+    table.sort (results, function (a,b) return tonumber (a) < tonumber (b) end)
+    return results
+end
+
 prog:SubCommand {
  name = "purge",
  usage = "[OPTIONS]",
@@ -465,10 +475,10 @@ prog:SubCommand {
         local r = {}
         (function() -- anonymous function used for early return
             local completed = f:kvsdir ("lwj-complete")
-            for hb in completed:keys () do
+            for _,hb in ipairs (sorted_keys (completed)) do
                 local hb_unlink = true
                 local d = completed [hb]
-                for id in d:keys() do
+                for _,id in ipairs (sorted_keys (d)) do
                     -- Save name of this kvs path:
                     local complink = tostring (d).."."..id
                     if keep (id) then
