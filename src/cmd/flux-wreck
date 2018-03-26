@@ -417,6 +417,21 @@ local function sorted_keys (dir)
     return results
 end
 
+local function remove_if_empty (key, r)
+   local results = r or {}
+   local dir  = f:kvsdir (key)
+   if not dir or dir.state then return false, results end
+   local remove = true
+   for k in dir:keys () do
+       remove, results = remove_if_empty (key .. "." .. k, results)
+   end
+   if remove then
+       f:kvs_unlink (key)
+       table.insert (results, key)
+   end
+   return remove, results
+end
+
 prog:SubCommand {
  name = "purge",
  usage = "[OPTIONS]",
@@ -508,11 +523,14 @@ prog:SubCommand {
         -- gather ids to remove in hostlist for condensed output:
         --
         local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
+        local rmdirs = {}
         if self.opt.R then
             f:kvs_commit()
             if verbose then
                 self:log ("%4.03fs: unlinked %d entries\n", tt:get0(), #hl)
             end
+            _, rmdirs = remove_if_empty ("lwj")
+            f:kvs_commit ()
         elseif verbose then
             self:log ("%4.03fs: finished walking %d entries in lwj-complete\n",
                       tt:get0(), #hl)
@@ -525,6 +543,12 @@ prog:SubCommand {
         self:log ("%s %d lwj entries%s\n",
                   self.opt.R and "removed" or "would remove", #hl,
                   idstring)
+        if #rmdirs > 0 then
+            self:log ("removed %d empty dirs under lwj.\n", #rmdirs)
+            if verbose then
+                self:log ("removed: %s\n", table.concat (rmdirs, ", "))
+            end
+        end
         if verbose then
             self:log ("%4.03fs: all done.\n", tt:get0());
         end
