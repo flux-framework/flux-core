@@ -876,7 +876,6 @@ lookup_process_t lookup (lookup_t *lh)
                                                 lh->root_ref,
                                                 lh->current_epoch))
                         || !cache_entry_get_valid (entry)) {
-                        lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                     }
