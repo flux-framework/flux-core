@@ -191,7 +191,8 @@ check_PROGRAMS = \
 	kvs/fence_invalid \
 	module/basic \
 	request/treq \
-	barrier/tbarrier
+	barrier/tbarrier \
+	wreck/rcalc
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -372,3 +373,9 @@ request_req_la_CPPFLAGS = $(test_cppflags)
 request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 request_req_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+wreck_rcalc_SOURCES = wreck/rcalc.c
+wreck_rcalc_CPPFLAGS = $(test_cppflags)
+wreck_rcalc_LDADD = \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL) \
+	$(top_builddir)/src/modules/wreck/rcalc.o
