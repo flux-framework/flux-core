@@ -657,7 +657,7 @@ int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes, int64_t 
 {
     if (extract_raw_nnodes (h, j, nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, ntasks) < 0) return -1;
-    if (extract_raw_ncores (h, j, ncores < 0) return -1;
+    if (extract_raw_ncores (h, j, ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, walltime) < 0) return -1;
 
     return 0;

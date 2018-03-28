@@ -327,7 +327,7 @@ function wreck:jobreq ()
     local jobreq = {
         nnodes =  self.nnodes,
         ntasks =  self.ntasks,
-        ntasks =  self.ncores,
+        ncores =  self.ncores,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),
