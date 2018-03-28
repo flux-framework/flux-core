@@ -62,7 +62,6 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 /* TODO: find a better way to manage this hierarchical
  * JCB attributes space
  */
-#define JSC_MAX_ATTR_LEN 32
 #define JSC_JOBID "jobid"
 #define JSC_STATE_PAIR "state-pair"
 # define JSC_STATE_PAIR_OSTATE "ostate"
@@ -92,8 +91,7 @@ typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
  * "d" is arbitrary data that will transparently be passed into "callback."
  * However, one should pass its flux_t object as part of this callback data.
  * Note that the caller must start its reactor to get an asynchronous status
- * change notification via "callback." This is because it uses the KVS-watch
- * facility which has the same limitation.
+ * change notification via "callback."
  * One can register mutliple callbacks by calling this function
  * multiple times. The callbacks will be invoked in the order
  * they are registered. Returns 0 on success; otherwise -1.
@@ -102,10 +100,8 @@ int jsc_notify_status (flux_t *h, jsc_handler_f callback, void *d);
 
 /**
  * Query the "key" attribute of JCB of "jobid." The JCB info on this attribute
- * will be passed via "jcb." It is the caller's responsibility to release "jcb."
- * All of the ownership associated with the sub-attributes in jcb's hierarchy
- * are trasferred to "jcb," so that json_object_put (*jcb) will free this hierarchy
- * in its entirety.  Returns 0 on success; otherwise -1.
+ * will be passed via "jcb." It is the caller's responsibility to free "jcb."
+ * Returns 0 on success; otherwise -1.
  */
 int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb);
 

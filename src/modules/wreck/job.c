@@ -47,76 +47,10 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
-
-#define MAX_JOB_PATH    1024
-
-/*
- *  lwj directory hierarchy parameters:
- *   XXX: should be in module context struct perhaps, but
- *    this all needs to go away soon anyway, so...
- *
- *  directory levels is the number of parent directories
- *   (e.g. 3 would result in lwj-active.x.y.z.jobid,
- *    0 is lwj.jobid)
- *
- *  bits_per_directory is the number of prefix bits to use
- *   for each parent directory, results in 2^bits entries
- *   per subdirectory, except for the top-level which will
- *   grow without bound (well up to 64bit lwj id values).
- *
- *  These values can be set as broker attrs during flux-start,
- *   e.g. flux start -o,-Swreck.lwj-dir-levels=3
- *                   -o,-Swreck.lwj-bits-per-dir=8
- */
-static int kvs_dir_levels = 2;
-static int kvs_bits_per_dir = 7;
+#include "src/common/libjsc/wreck_jobpath.h"
 
 uint32_t broker_rank;
 const char *local_uri = NULL;
-
-/*
- *  Return as 64bit integer the portion of integer `n`
- *   masked from bit position `a` to position `b`,
- *   then subsequently shifted by `a` bits (to keep
- *   numbers small).
- */
-static inline uint64_t prefix64 (uint64_t n, int a, int b)
-{
-    uint64_t mask = ((-1ULL >> (64 - b)) & ~((1ULL << a) - 1));
-    return ((n & mask) >> a);
-}
-
-/*
- *  Convert lwj id to kvs path under `lwj-active` using a kind of
- *   prefix hiearchy of max levels `levels`, using `bits_per_dir` bits
- *   for each directory. Returns a kvs key path or NULL on failure.
- */
-static char * lwj_to_path (uint64_t id, int levels, int bits_per_dir)
-{
-    char buf [MAX_JOB_PATH] = "lwj";
-    int len = 3;
-    int nleft = sizeof (buf) - len;
-    int i, n;
-
-    /* Build up kvs directory from lwj. down */
-    for (i = levels; i > 0; i--) {
-        int b = bits_per_dir * i;
-        uint64_t d = prefix64 (id, b, b + bits_per_dir);
-        if ((n = snprintf (buf+len, nleft, ".%"PRIu64, d)) < 0 || n > nleft)
-            return NULL;
-        len += n;
-        nleft -= n;
-    }
-    n = snprintf (buf+len, sizeof (buf) - len, ".%"PRIu64, id);
-    if (n < 0 || n > nleft)
-        return NULL;
-    return (strdup (buf));
-}
-
-static char * id_to_path (uint64_t id)
-{
-    return (lwj_to_path (id, kvs_dir_levels, kvs_bits_per_dir));
-}
 
 static int64_t next_jobid (flux_t *h)
 {
@@ -188,7 +122,7 @@ static int add_jobinfo_txn (flux_kvs_txn_t *txn,
     int rc = -1;
     char buf [64];
     json_object_iter i;
-    char key[MAX_JOB_PATH];
+    char key[WRECK_MAX_JOB_PATH];
 
     json_object_object_foreachC (req, i) {
         if (snprintf (key, sizeof (key), "%s.%s", kvs_path, i.key)
@@ -241,7 +175,7 @@ static int do_submit_job (flux_t *h, unsigned long jobid, const char *kvs_path,
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
     const char *state = "submitted";
-    char key[MAX_JOB_PATH];
+    char key[WRECK_MAX_JOB_PATH];
     int rc = -1;
 
     if (!(txn = flux_kvs_txn_create ())) {
@@ -278,11 +212,11 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
     const char *state = "reserved";
-    char key[MAX_JOB_PATH];
+    char key[WRECK_MAX_JOB_PATH];
     int rc = -1;
 
     if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "%s: id_to_path", __FUNCTION__);
+        flux_log_error (h, "%s: kvs_txn_create", __FUNCTION__);
         goto done;
     }
     if (snprintf (key, sizeof (key), "%s.state", kvs_path) >= sizeof (key)) {
@@ -318,13 +252,14 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
 {
     int64_t id;
     const char *state;
-    char *kvs_path = NULL;
+    char *kvs_path;
+    char buf[WRECK_MAX_JOB_PATH];
 
     if ((id = next_jobid (h)) < 0) {
         flux_log_error (h, "%s: next_jobid", __FUNCTION__);
         goto error;
     }
-    if (!(kvs_path = id_to_path (id))) {
+    if (!(kvs_path = wreck_id_to_path (h, buf, sizeof (buf), id))) {
         flux_log_error (h, "%s: id_to_path", __FUNCTION__);
         goto error;
     }
@@ -344,12 +279,10 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
                                                     "state", state,
                                                     "kvs_path", kvs_path) < 0)
         flux_log_error (h, "flux_respond_pack");
-    free (kvs_path);
     return;
 error:
     if (flux_respond (h, msg, errno, NULL) < 0)
         flux_log_error (h, "job_request: flux_respond");
-    free (kvs_path);
 }
 
 static void job_request_cb (flux_t *h, flux_msg_handler_t *w,
@@ -395,6 +328,7 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
     json_object *out = NULL;
     json_object *ar = NULL;
     json_object *id_list = NULL;
+    char buf[WRECK_MAX_JOB_PATH];
 
     if (flux_msg_get_json (msg, &json_str) < 0)
         goto out;
@@ -422,12 +356,11 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
         json_object *v = json_object_array_get_idx (id_list, i);
         int64_t id = json_object_get_int64 (v);
         char * path;
-        if (!(path = id_to_path (id))) {
+        if (!(path = wreck_id_to_path (h, buf, sizeof (buf), id))) {
             flux_log (h, LOG_ERR, "kvspath_cb: lwj_to_path failed");
             goto out;
         }
         r = json_object_new_string (path);
-        free (path);
         if (r == NULL) {
             flux_log_error (h, "kvspath_cb: json_object_new_string");
             goto out;
@@ -443,34 +376,6 @@ out:
     Jput (in);
     Jput (ar);
     Jput (out);
-}
-
-static int flux_attr_set_int (flux_t *h, const char *attr, int val)
-{
-    char buf [16];
-    int n = snprintf (buf, sizeof (buf), "%d", val);
-    if (n < 0 || n >= sizeof (buf))
-        return (-1);
-    return flux_attr_set (h, attr, buf);
-}
-
-static int flux_attr_get_int (flux_t *h, const char *attr, int *valp)
-{
-    long n;
-    const char *tmp;
-    char *p;
-
-    if ((tmp = flux_attr_get (h, attr, 0)) == NULL)
-        return (-1);
-    n = strtoul (tmp, &p, 10);
-    if (n == LONG_MAX)
-        return (-1);
-    if ((p == tmp) || (*p != '\0')) {
-        errno = EINVAL;
-        return (-1);
-    }
-    *valp = (int) n;
-    return (0);
 }
 
 static void exec_close_fd (void *arg, int fd)
@@ -545,7 +450,7 @@ static int spawn_exec_handler (flux_t *h, int64_t id, const char *kvspath)
 
 static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
 {
-    char key[MAX_JOB_PATH];
+    char key[WRECK_MAX_JOB_PATH];
     flux_future_t *f = NULL;
     const flux_kvsdir_t *dir;
     bool result = false;
@@ -592,6 +497,7 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
     char *kvspath = NULL;
     json_object *in = NULL;
     int64_t id = -1;
+    char buf[WRECK_MAX_JOB_PATH];
 
     if (flux_msg_get_topic (msg, &topic) < 0) {
         flux_log_error (h, "run: flux_msg_get_topic");
@@ -601,10 +507,11 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
         flux_log_error (h, "wrexec.run: invalid topic: %s\n", topic);
         return;
     }
-    kvspath = id_to_path (id);
+    if (!(kvspath = wreck_id_to_path (h, buf, sizeof (buf), id)))
+        goto done;
     if (lwj_targets_this_node (h, kvspath))
         spawn_exec_handler (h, id, kvspath);
-    free (kvspath);
+done:
     Jput (in);
 }
 
@@ -636,19 +543,6 @@ int mod_main (flux_t *h, int argc, char **argv)
        || (flux_event_subscribe (h, "wreck.state.submitted") < 0)
        || (flux_event_subscribe (h, "wrexec.run.") < 0)) {
         flux_log_error (h, "flux_event_subscribe");
-        goto done;
-    }
-
-    if ((flux_attr_get_int (h, "wreck.lwj-dir-levels", &kvs_dir_levels) < 0)
-       && (flux_attr_set_int (h, "wreck.lwj-dir-levels", kvs_dir_levels) < 0)) {
-        flux_log_error (h, "failed to get or set lwj-dir-levels");
-        goto done;
-    }
-    if ((flux_attr_get_int (h, "wreck.lwj-bits-per-dir",
-                            &kvs_bits_per_dir) < 0)
-       && (flux_attr_set_int (h, "wreck.lwj-bits-per-dir",
-                              kvs_bits_per_dir) < 0)) {
-        flux_log_error (h, "failed to get or set lwj-bits-per-dir");
         goto done;
     }
 

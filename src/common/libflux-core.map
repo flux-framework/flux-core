@@ -1,6 +1,7 @@
 { global:
     flux_*;
     jsc_*;
+    wreck_*;
     local: *;
 };
 
