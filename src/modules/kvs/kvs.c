@@ -288,21 +288,32 @@ cleanup:
  * security
  */
 
+static int get_msg_cred (kvs_ctx_t *ctx,
+                         const flux_msg_t *msg,
+                         uint32_t *rolemask,
+                         uint32_t *userid)
+{
+    if (flux_msg_get_rolemask (msg, rolemask) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_rolemask");
+        return -1;
+    }
+
+    if (flux_msg_get_userid (msg, userid) < 0) {
+        flux_log_error (ctx->h, "flux_msg_get_userid");
+        return -1;
+    }
+
+    return 0;
+}
+
 static int check_user (kvs_ctx_t *ctx, struct kvsroot *root,
                        const flux_msg_t *msg)
 {
     uint32_t rolemask;
     uint32_t userid;
 
-    if (flux_msg_get_rolemask (msg, &rolemask) < 0) {
-        flux_log_error (ctx->h, "flux_msg_get_rolemask");
+    if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
         return -1;
-    }
-
-    if (flux_msg_get_userid (msg, &userid) < 0) {
-        flux_log_error (ctx->h, "flux_msg_get_userid");
-        return -1;
-    }
 
     return kvsroot_check_user (ctx->krm, root, rolemask, userid);
 }
@@ -1222,13 +1233,13 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
     lookup_t *lh = NULL;
     const char *root_ref = NULL;
     wait_t *wait = NULL;
+    lookup_process_t lret;
     int rc = -1;
     int ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
-        struct kvsroot *root;
-        bool stall = false;
+        uint32_t rolemask, userid;
 
         ctx = arg;
 
@@ -1237,13 +1248,6 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "namespace", &namespace,
                                  "flags", &flags) < 0) {
             flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
-            goto done;
-        }
-
-        if (!(root = getroot (ctx, namespace, mh, msg, lookup_request_cb,
-                              &stall))) {
-            if (stall)
-                goto stall;
             goto done;
         }
 
@@ -1263,11 +1267,17 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
             }
         }
 
+        if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
+            goto done;
+
         if (!(lh = lookup_create (ctx->cache,
+                                  ctx->krm,
                                   ctx->epoch,
                                   namespace,
-                                  root_ref ? root_ref : root->ref,
+                                  root_ref ? root_ref : NULL,
                                   key,
+                                  rolemask,
+                                  userid,
                                   flags,
                                   h,
                                   ctx)))
@@ -1284,26 +1294,33 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        namespace = lookup_get_namespace (lh);
-        assert (namespace);
-
         ctx = lookup_get_aux_data (lh);
         assert (ctx);
-
-        /* Chance kvsroot removed while we waited */
-
-        if (!kvsroot_mgr_lookup_root_safe (ctx->krm, namespace)) {
-            flux_log (h, LOG_DEBUG, "%s: namespace %s lost", __FUNCTION__,
-                      namespace);
-            errno = ENOTSUP;
-            goto done;
-        }
 
         ret = lookup_set_current_epoch (lh, ctx->epoch);
         assert (ret == 0);
     }
 
-    if (!lookup (lh)) {
+    lret = lookup (lh);
+
+    if (lret == LOOKUP_PROCESS_ERROR) {
+        errno = lookup_get_errnum (lh);
+        goto done;
+    }
+    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
+        bool stall = false;
+
+        namespace = lookup_missing_namespace (lh);
+        assert (namespace);
+
+        if (!getroot (ctx, namespace, mh, msg, lookup_request_cb,
+                      &stall)) {
+            if (stall)
+                goto stall;
+            goto done;
+        }
+    }
+    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
@@ -1329,13 +1346,12 @@ static void lookup_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    if (lookup_get_errnum (lh) != 0) {
-        errno = lookup_get_errnum (lh);
-        goto done;
-    }
-    if ((val = lookup_get_value (lh)) == NULL) {
-        errno = ENOENT;
-        goto done;
+    else { /* lret == LOOKUP_PROCESS_FINISHED */
+        if ((val = lookup_get_value (lh)) == NULL) {
+            errno = ENOENT;
+            goto done;
+        }
+        /* fallthrough */
     }
 
     if (flux_respond_pack (h, msg, "{ s:O }",
@@ -1372,12 +1388,13 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
     wait_t *watcher = NULL;
     bool isreplay = false;
     bool out = false;
+    lookup_process_t lret;
     int rc = -1;
     int saved_errno, ret;
 
     /* if bad lh, then first time rpc and not a replay */
     if (lookup_validate (arg) == false) {
-        bool stall = false;
+        uint32_t rolemask, userid;
 
         ctx = arg;
 
@@ -1390,18 +1407,17 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        if (!(root = getroot (ctx, namespace, mh, msg, watch_request_cb,
-                              &stall))) {
-            if (stall)
-                goto stall;
+        if (get_msg_cred (ctx, msg, &rolemask, &userid) < 0)
             goto done;
-        }
 
         if (!(lh = lookup_create (ctx->cache,
+                                  ctx->krm,
                                   ctx->epoch,
                                   namespace,
-                                  root->ref,
+                                  NULL,
                                   key,
+                                  rolemask,
+                                  userid,
                                   flags,
                                   h,
                                   ctx)))
@@ -1418,20 +1434,8 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto done;
         }
 
-        namespace = lookup_get_namespace (lh);
-        assert (namespace);
-
         ctx = lookup_get_aux_data (lh);
         assert (ctx);
-
-        /* Chance kvsroot removed while we waited */
-
-        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, namespace))) {
-            flux_log (h, LOG_DEBUG, "%s: namespace %s lost", __FUNCTION__,
-                      namespace);
-            errno = ENOTSUP;
-            goto done;
-        }
 
         ret = lookup_set_current_epoch (lh, ctx->epoch);
         assert (ret == 0);
@@ -1439,7 +1443,25 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         isreplay = true;
     }
 
-    if (!lookup (lh)) {
+    lret = lookup (lh);
+    if (lret == LOOKUP_PROCESS_ERROR) {
+        errno = lookup_get_errnum (lh);
+        goto done;
+    }
+    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE) {
+        bool stall = false;
+
+        namespace = lookup_missing_namespace (lh);
+        assert (namespace);
+
+        if (!getroot (ctx, namespace, mh, msg, watch_request_cb,
+                      &stall)) {
+            if (stall)
+                goto stall;
+            goto done;
+        }
+    }
+    else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS) {
         struct kvs_cb_data cbd;
 
         if (!(wait = wait_create_msg_handler (h, mh, msg, lh,
@@ -1465,11 +1487,10 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
         assert (wait_get_usecount (wait) > 0);
         goto stall;
     }
-    if (lookup_get_errnum (lh) != 0) {
-        errno = lookup_get_errnum (lh);
-        goto done;
+    else { /* lret == LOOKUP_PROCESS_FINISHED */
+        val = lookup_get_value (lh);
+        /* fallthrough */
     }
-    val = lookup_get_value (lh);
 
     /* if no value, create json null object for remainder of code */
     if (!val) {
@@ -1503,6 +1524,14 @@ static void watch_request_cb (flux_t *h, flux_msg_handler_t *mh,
      * value.
      */
     if (!out || !(flags & KVS_WATCH_ONCE)) {
+        namespace = lookup_get_namespace (lh);
+        assert (namespace);
+
+        /* If lookup() succeeded, then namespace must still be valid */
+
+        root = kvsroot_mgr_lookup_root_safe (ctx->krm, namespace);
+        assert (root);
+
         if (!(cpy = flux_msg_copy (msg, false)))
             goto done;
 

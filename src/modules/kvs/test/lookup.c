@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <jansson.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <assert.h>
 
 #include "src/common/libtap/tap.h"
@@ -119,20 +121,45 @@ int lookup_ref_error (lookup_t *c,
     return -1;
 }
 
+void setup_kvsroot (kvsroot_mgr_t *krm,
+                    struct cache *cache,
+                    const char *ref,
+                    uint32_t owner)
+{
+    struct kvsroot *root;
+
+    ok ((root = kvsroot_mgr_create_root (krm,
+                                         cache,
+                                         "sha1",
+                                         KVS_PRIMARY_NAMESPACE,
+                                         owner,
+                                         0)) != NULL,
+        "kvsroot_mgr_create_root works");
+
+    kvsroot_setroot (krm, root, ref, 0);
+}
+
 void basic_api (void)
 {
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     const char *tmp;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+    setup_kvsroot (krm, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
+                             krm,
                              42,
                              KVS_PRIMARY_NAMESPACE,
                              "root.ref.foo",
                              "path.bar",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ,
                              NULL,
                              &aux_global)) != NULL,
@@ -145,6 +172,8 @@ void basic_api (void)
         "lookup_get_namespace works");
     ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
         "lookup_get_namespace returns correct string");
+    ok (lookup_missing_namespace (lh) == NULL,
+        "lookup_missing_namespace returned NULL, no missing namespace yet");
     ok (lookup_set_current_epoch (lh, 43) == 0,
         "lookup_set_current_epoch works");
     ok (lookup_get_current_epoch (lh) == 43,
@@ -161,18 +190,23 @@ void basic_api (void)
     lookup_destroy (lh);
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 void basic_api_errors (void)
 {
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
 
     ok (lookup_create (NULL,
+                       NULL,
                        0,
                        NULL,
                        NULL,
                        NULL,
+                       FLUX_ROLE_OWNER,
+                       0,
                        0,
                        NULL,
                        NULL) == NULL,
@@ -180,12 +214,18 @@ void basic_api_errors (void)
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+    setup_kvsroot (krm, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
+                             krm,
                              42,
                              KVS_PRIMARY_NAMESPACE,
-                             "root.ref.foo",
+                             NULL,
                              "path.bar",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK | FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -200,7 +240,7 @@ void basic_api_errors (void)
 
     ok (lookup_validate (NULL) == false,
         "lookup_validate fails on NULL pointer");
-    ok (lookup (NULL) == true,
+    ok (lookup (NULL) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on NULL pointer");
     ok (lookup_get_errnum (NULL) == EINVAL,
         "lookup_get_errnum returns EINVAL on NULL pointer");
@@ -208,6 +248,8 @@ void basic_api_errors (void)
         "lookup_get_value fails on NULL pointer");
     ok (lookup_iter_missing_refs (NULL, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails on NULL pointer");
+    ok (lookup_missing_namespace (NULL) == NULL,
+        "lookup_missing_namespace fails on NULL pointer");
     ok (lookup_get_current_epoch (NULL) < 0,
         "lookup_get_current_epoch fails on NULL pointer");
     ok (lookup_get_namespace (NULL) == NULL,
@@ -225,7 +267,7 @@ void basic_api_errors (void)
 
     ok (lookup_validate (lh) == false,
         "lookup_validate fails on bad pointer");
-    ok (lookup (lh) == true,
+    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
         "lookup does not segfault on bad pointer");
     ok (lookup_get_errnum (lh) == EINVAL,
         "lookup_get_errnum returns EINVAL on bad pointer");
@@ -233,6 +275,8 @@ void basic_api_errors (void)
         "lookup_get_value fails on bad pointer");
     ok (lookup_iter_missing_refs (lh, lookup_ref, NULL) < 0,
         "lookup_iter_missing_refs fails on bad pointer");
+    ok (lookup_missing_namespace (lh) == NULL,
+        "lookup_missing_namespace fails on bad pointer");
     ok (lookup_get_current_epoch (lh) < 0,
         "lookup_get_current_epoch fails on bad pointer");
     ok (lookup_get_namespace (lh) == NULL,
@@ -245,10 +289,11 @@ void basic_api_errors (void)
     lookup_destroy (lh);
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 void check_common (lookup_t *lh,
-                   bool lookup_result,
+                   lookup_process_t lookup_result,
                    int get_errnum_result,
                    bool check_is_val_treeobj,
                    json_t *get_value_result,
@@ -337,7 +382,7 @@ void check_value (lookup_t *lh,
                   const char *msg)
 {
     check_common (lh,
-                  true,
+                  LOOKUP_PROCESS_FINISHED,
                   0,
                   false,
                   get_value_result,
@@ -351,7 +396,7 @@ void check_treeobj_val_result (lookup_t *lh,
                                const char *msg)
 {
     check_common (lh,
-                  true,
+                  LOOKUP_PROCESS_FINISHED,
                   0,
                   true,
                   NULL,         /* doesn't matter */
@@ -368,7 +413,7 @@ void check_stall (lookup_t *lh,
                   const char *msg)
 {
     check_common (lh,
-                  false,
+                  LOOKUP_PROCESS_LOAD_MISSING_REFS,
                   get_errnum_result,
                   false,
                   NULL,
@@ -383,7 +428,7 @@ void check_error (lookup_t *lh,
                   const char *msg)
 {
     check_common (lh,
-                  true,
+                  LOOKUP_PROCESS_ERROR,
                   get_errnum_result,
                   false,
                   NULL,
@@ -398,12 +443,15 @@ void lookup_root (void) {
     json_t *root;
     json_t *test;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t valref_ref;
     blobref_t root_ref;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -421,12 +469,17 @@ void lookup_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* flags = 0, should error EISDIR */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -435,10 +488,13 @@ void lookup_root (void) {
 
     /* flags = FLUX_KVS_READDIR, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -447,10 +503,13 @@ void lookup_root (void) {
 
     /* flags = FLUX_KVS_TREEOBJ, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -461,10 +520,13 @@ void lookup_root (void) {
 
     /* flags = FLUX_KVS_READDIR, bad root_ref, should error EINVAL */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
                              valref_ref,
                              ".",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -472,6 +534,7 @@ void lookup_root (void) {
     check_error (lh, EINVAL, "root w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 /* lookup basic tests */
@@ -484,6 +547,7 @@ void lookup_basic (void) {
     json_t *valref_multi_with_dirref;
     json_t *test;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t valref_ref;
     blobref_t valref2_ref;
@@ -493,6 +557,8 @@ void lookup_basic (void) {
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -559,12 +625,17 @@ void lookup_basic (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* lookup dir via dirref */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -573,10 +644,13 @@ void lookup_basic (void) {
 
     /* lookup value via valref */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -591,10 +665,13 @@ void lookup_basic (void) {
      *    treeobj of whatever the dirref was pointing to.
      */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref_with_dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -603,10 +680,13 @@ void lookup_basic (void) {
 
     /* Lookup value via valref with multiple blobrefs */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref_multi",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -621,10 +701,13 @@ void lookup_basic (void) {
      *    treeobj of whatever the dirref was pointing to.
      */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref_multi_with_dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -633,10 +716,13 @@ void lookup_basic (void) {
 
     /* lookup value via val */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -647,10 +733,13 @@ void lookup_basic (void) {
 
     /* lookup dir via dir */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.dir",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -659,10 +748,13 @@ void lookup_basic (void) {
 
     /* lookup symlink */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -673,10 +765,13 @@ void lookup_basic (void) {
 
     /* lookup dirref treeobj */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -687,10 +782,13 @@ void lookup_basic (void) {
 
     /* lookup valref treeobj */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -701,10 +799,13 @@ void lookup_basic (void) {
 
     /* lookup val treeobj */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -715,10 +816,13 @@ void lookup_basic (void) {
 
     /* lookup dir treeobj */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.dir",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -727,10 +831,13 @@ void lookup_basic (void) {
 
     /* lookup symlink treeobj */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref.symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_TREEOBJ,
                              NULL,
                              NULL)) != NULL,
@@ -740,6 +847,7 @@ void lookup_basic (void) {
     json_decref (test);
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 /* lookup tests reach an error or "non-good" result */
@@ -749,6 +857,7 @@ void lookup_errors (void) {
     json_t *dir;
     json_t *dirref_multi;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t dirref_ref;
     blobref_t valref_ref;
@@ -756,6 +865,8 @@ void lookup_errors (void) {
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -806,13 +917,18 @@ void lookup_errors (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* Lookup non-existent field.  Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "foo",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -822,10 +938,13 @@ void lookup_errors (void) {
     /* Lookup path w/ val in middle, Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "val.foo",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -835,10 +954,13 @@ void lookup_errors (void) {
     /* Lookup path w/ valref in middle, Not ENOENT - caller of lookup
      * decides what to do with entry not found */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "valref.foo",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -847,10 +969,13 @@ void lookup_errors (void) {
 
     /* Lookup path w/ dir in middle, should get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dir.foo",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -859,10 +984,13 @@ void lookup_errors (void) {
 
     /* Lookup path w/ infinite link loop, should get ELOOP */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "symlink1",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -871,10 +999,13 @@ void lookup_errors (void) {
 
     /* Lookup a dirref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -883,10 +1014,13 @@ void lookup_errors (void) {
 
     /* Lookup a dir, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dir",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -895,10 +1029,13 @@ void lookup_errors (void) {
 
     /* Lookup a valref, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -907,10 +1044,13 @@ void lookup_errors (void) {
 
     /* Lookup a val, but expecting a link, should get EINVAL. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -919,10 +1059,13 @@ void lookup_errors (void) {
 
     /* Lookup a dirref, but don't expect a dir, should get EISDIR. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -931,10 +1074,13 @@ void lookup_errors (void) {
 
     /* Lookup a dir, but don't expect a dir, should get EISDIR. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dir",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -943,10 +1089,13 @@ void lookup_errors (void) {
 
     /* Lookup a valref, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -955,10 +1104,13 @@ void lookup_errors (void) {
 
     /* Lookup a val, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -967,10 +1119,13 @@ void lookup_errors (void) {
 
     /* Lookup a symlink, but expecting a dir, should get ENOTDIR. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK | FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -979,10 +1134,13 @@ void lookup_errors (void) {
 
     /* Lookup a dirref that doesn't point to a dir, should get ENOTRECOVERABLE. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_bad",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -992,10 +1150,13 @@ void lookup_errors (void) {
     /* Lookup a dirref that doesn't point to a dir, in middle of path,
      * should get ENOTRECOVERABLE. */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_bad.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1004,10 +1165,13 @@ void lookup_errors (void) {
 
     /* Lookup with an invalid root_ref, should get EINVAL */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
                              valref_ref,
                              "val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1016,10 +1180,13 @@ void lookup_errors (void) {
 
     /* Lookup dirref with multiple blobrefs, should get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_multi",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1029,17 +1196,122 @@ void lookup_errors (void) {
     /* Lookup path w/ dirref w/ multiple blobrefs in middle, should
      * get ENOTRECOVERABLE */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref_multi.foo",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
         "lookup_create on dirref_multi, part of path");
     check_error (lh, ENOTRECOVERABLE, "lookup dirref_multi, part of path");
 
+    /* This last test to just to make sure if we call lookup ()
+     * multiple times, we can the same error each time.
+     */
+
+    /* Lookup with an invalid root_ref, should get EINVAL */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             valref_ref,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on bad root_ref for double call test");
+    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
+        "lookup returns LOOKUP_PROCESS_ERROR on first call");
+    ok (lookup (lh) == LOOKUP_PROCESS_ERROR,
+        "lookup still returns LOOKUP_PROCESS_ERROR on second call");
+    lookup_destroy (lh);
+
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+void lookup_security (void) {
+    json_t *root;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root_ref
+     * "val" : val to "foo"
+     */
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+
+    treeobj_hash ("sha1", root, root_ref);
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    setup_kvsroot (krm, cache, root_ref, 5);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             5,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask owner and valid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup val with rolemask owner and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_USER,
+                             5,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and valid owner");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup val with rolemask user and valid owner");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_USER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and invalid owner");
+    check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 /* lookup link tests */
@@ -1051,6 +1323,7 @@ void lookup_links (void) {
     json_t *dir;
     json_t *test;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t valref_ref;
     blobref_t dirref3_ref;
@@ -1060,6 +1333,8 @@ void lookup_links (void) {
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -1123,12 +1398,17 @@ void lookup_links (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* lookup val, follow two links */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1139,10 +1419,13 @@ void lookup_links (void) {
 
     /* lookup val, link is middle of path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1153,10 +1436,13 @@ void lookup_links (void) {
 
     /* lookup valref, link is middle of path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1167,10 +1453,13 @@ void lookup_links (void) {
 
     /* lookup dir, link is middle of path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.dir",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1179,10 +1468,13 @@ void lookup_links (void) {
 
     /* lookup dirref, link is middle of path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1191,10 +1483,13 @@ void lookup_links (void) {
 
     /* lookup symlink, link is middle of path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref.symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -1205,10 +1500,13 @@ void lookup_links (void) {
 
     /* lookup val, link is last part in path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1219,10 +1517,13 @@ void lookup_links (void) {
 
     /* lookup valref, link is last part in path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1233,10 +1534,13 @@ void lookup_links (void) {
 
     /* lookup dir, link is last part in path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dir",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1245,10 +1549,13 @@ void lookup_links (void) {
 
     /* lookup dirref, link is last part in path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2dirref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1257,10 +1564,13 @@ void lookup_links (void) {
 
     /* lookup symlink, link is last part in path */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.link2symlink",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READLINK,
                              NULL,
                              NULL)) != NULL,
@@ -1270,6 +1580,7 @@ void lookup_links (void) {
     json_decref (test);
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 /* lookup alternate root tests */
@@ -1279,12 +1590,16 @@ void lookup_alt_root (void) {
     json_t *dirref2;
     json_t *test;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t dirref1_ref;
     blobref_t dirref2_ref;
     blobref_t root_ref;
+
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -1315,12 +1630,17 @@ void lookup_alt_root (void) {
     treeobj_hash ("sha1", root, root_ref);
     cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
 
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* lookup val, alt root-ref dirref1_ref */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
                              dirref1_ref,
                              "val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1331,10 +1651,13 @@ void lookup_alt_root (void) {
 
     /* lookup val, alt root-ref dirref2_ref */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
                              dirref2_ref,
                              "val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1344,17 +1667,23 @@ void lookup_alt_root (void) {
     json_decref (test);
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
-/* lookup stall tests on root */
-void lookup_stall_root (void) {
+/* lookup stall namespace tests */
+void lookup_stall_namespace (void) {
     json_t *root;
+    json_t *test;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t root_ref;
+    const char *tmp;
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -1366,14 +1695,93 @@ void lookup_stall_root (void) {
     treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
     treeobj_hash ("sha1", root, root_ref);
 
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    /* do not insert root into kvsroot_mgr until later for these stall tests */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest");
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE,
+        "lookup stalled on missing namespace");
+    ok ((tmp = lookup_missing_namespace (lh)) != NULL,
+        "lookup_missing_namespace returned non-NULL");
+    ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
+        "lookup_missing_namespace returned correct namespace");
+
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup "val", should succeed now */
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "val");
+    json_decref (test);
+
+    /* lookup "val" should succeed cleanly */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest #2");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "val #2");
+    json_decref (test);
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+/* lookup stall ref tests on root */
+void lookup_stall_ref_root (void) {
+    json_t *root;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * root-ref
+     * "val" : val to "foo"
+     */
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    treeobj_hash ("sha1", root, root_ref);
+
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* do not insert entries into cache until later for these stall tests */
 
     /* lookup root ".", should stall on root */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1387,10 +1795,13 @@ void lookup_stall_root (void) {
 
     /* lookup root ".", now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              ".",
+                             FLUX_ROLE_OWNER,
+                             0,
                              FLUX_KVS_READDIR,
                              NULL,
                              NULL)) != NULL,
@@ -1398,16 +1809,18 @@ void lookup_stall_root (void) {
     check_value (lh, root, "root \".\" #2");
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
-/* lookup stall tests */
-void lookup_stall (void) {
+/* lookup stall ref tests */
+void lookup_stall_ref (void) {
     json_t *root;
     json_t *valref_tmp;
     json_t *dirref1;
     json_t *dirref2;
     json_t *test;
     struct cache *cache;
+    kvsroot_mgr_t *krm;
     lookup_t *lh;
     blobref_t valref1_ref;
     blobref_t valref2_ref;
@@ -1421,6 +1834,8 @@ void lookup_stall (void) {
 
     ok ((cache = cache_create ()) != NULL,
         "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
 
     /* This cache is
      *
@@ -1491,14 +1906,19 @@ void lookup_stall (void) {
     treeobj_insert_entry (root, "symlink", treeobj_create_symlink ("dirref2"));
     treeobj_hash ("sha1", root, root_ref);
 
+    setup_kvsroot (krm, cache, root_ref, 0);
+
     /* do not insert entries into cache until later for these stall tests */
 
     /* lookup dirref1.val, should stall on root */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1519,10 +1939,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.val, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1533,10 +1956,13 @@ void lookup_stall (void) {
 
     /* lookup symlink.val, should stall */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
                              root_ref,
                              "symlink.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1552,10 +1978,13 @@ void lookup_stall (void) {
 
     /* lookup symlink.val, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "symlink.val",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1566,10 +1995,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valref, should stall */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1585,10 +2017,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valref, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1599,10 +2034,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valref_multi, should stall */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1620,10 +2058,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valref_multi, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1634,10 +2075,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valref_multi2, should stall */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi2",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1655,10 +2099,13 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valref_multi2, now fully cached, should succeed */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valref_multi2",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
@@ -1669,17 +2116,20 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valrefmisc, should stall */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valrefmisc",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valrefmisc");
     /* don't call check_stall, this is primarily to test if callback
      * functions returning errors are caught */
-    ok (lookup (lh) == false,
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_REFS,
         "dirref1.valrefmisc: lookup stalled");
     errno = 0;
     ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0
@@ -1689,17 +2139,20 @@ void lookup_stall (void) {
 
     /* lookup dirref1.valrefmisc_multi, should stall */
     ok ((lh = lookup_create (cache,
+                             krm,
                              1,
                              KVS_PRIMARY_NAMESPACE,
-                             root_ref,
+                             NULL,
                              "dirref1.valrefmisc_multi",
+                             FLUX_ROLE_OWNER,
+                             0,
                              0,
                              NULL,
                              NULL)) != NULL,
         "lookup_create stalltest dirref1.valrefmisc_multi");
     /* don't call check_stall, this is primarily to test if callback
      * functions returning errors are caught */
-    ok (lookup (lh) == false,
+    ok (lookup (lh) == LOOKUP_PROCESS_LOAD_MISSING_REFS,
         "dirref1.valrefmisc_multi: lookup stalled");
     errno = 0;
     ok (lookup_iter_missing_refs (lh, lookup_ref_error, NULL) < 0
@@ -1708,6 +2161,245 @@ void lookup_stall (void) {
     lookup_destroy (lh);
 
     cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+void lookup_stall_namespace_removed (void) {
+    json_t *root;
+    json_t *valref;
+    json_t *dirref;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t valref_ref;
+    blobref_t dirref_ref;
+    blobref_t root_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * valref_ref
+     * "abcd"
+
+     * dirref_ref
+     * "valref" : valref to valref_ref
+     *
+     * root_ref
+     * "dirref" : dirref to dirref_ref
+     *
+     */
+
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
+
+    dirref = treeobj_create_dir ();
+    valref = treeobj_create_valref (valref_ref);
+    treeobj_insert_entry (dirref, "valref", valref);
+
+    treeobj_hash ("sha1", dirref, dirref_ref);
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    treeobj_hash ("sha1", root, root_ref);
+
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* do not insert entries into cache until later for these stall tests */
+
+    /*
+     * Check for each stall situation and that if namespace is
+     * removed, that is caught
+     */
+
+    /* lookup dirref.valref, should stall on root */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1");
+
+    /* insert cache entry, but remove namespace */
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* lookup should error out because namespace is now gone */
+
+    check_error (lh, ENOTSUP, "namespace removed on root ref results in ENOTSUP");
+
+    /* reset test */
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup dirref.valref, should stall on dirref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* lookup should error out because namespace is now gone */
+
+    check_error (lh, ENOTSUP, "namespace removed on dirref results in ENOTSUP");
+
+    /* reset test */
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup dirref.valref, should stall on valref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
+
+    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* lookup should error out because namespace is now gone */
+
+    check_error (lh, ENOTSUP, "namespace removed on valref results in ENOTSUP");
+
+    /* reset test */
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /*
+     * Check for each stall situation and that if namespace is
+     * replaced, it is caught
+     */
+
+    /* lookup dirref.valref, should stall on root */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1");
+
+    /* insert cache entry, but remove namespace */
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, cache, root_ref, 2);
+
+    /* lookup should EPERM b/c owner of new namespace is different */
+
+    check_error (lh, EPERM, "namespace replaced on root ref results in EPERM");
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* lookup dirref.valref, should stall on dirref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, cache, root_ref, 2);
+
+    /* lookup should EPERM b/c owner of new namespace is different */
+
+    check_error (lh, EPERM, "namespace replaced on dirref results in EPERM");
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+
+    /* lookup dirref.valref, should stall on valref */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref");
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
+
+    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, cache, root_ref, 2);
+
+    /* lookup should EPERM b/c owner of new namespace is different */
+
+    check_error (lh, EPERM, "namespace replaced on valref results in EPERM");
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
 }
 
 int main (int argc, char *argv[])
@@ -1720,10 +2412,13 @@ int main (int argc, char *argv[])
     lookup_root ();
     lookup_basic ();
     lookup_errors ();
+    lookup_security ();
     lookup_links ();
     lookup_alt_root ();
-    lookup_stall_root ();
-    lookup_stall ();
+    lookup_stall_namespace ();
+    lookup_stall_ref_root ();
+    lookup_stall_ref ();
+    lookup_stall_namespace_removed ();
     done_testing ();
     return (0);
 }
