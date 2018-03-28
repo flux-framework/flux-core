@@ -1310,6 +1310,20 @@ void lookup_security (void) {
         "lookup_create on val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner");
 
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "val",
+                             FLUX_ROLE_USER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and invalid owner w/ root_ref");
+    check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner w/ root_ref");
+
     cache_destroy (cache);
     kvsroot_mgr_destroy (krm);
 }

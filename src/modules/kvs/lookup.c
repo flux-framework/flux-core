@@ -790,6 +790,7 @@ lookup_process_t lookup (lookup_t *lh)
     struct cache_entry *entry;
     bool is_replay = false;
     int refcount;
+    struct kvsroot *root;
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
         errno = EINVAL;
@@ -808,30 +809,28 @@ lookup_process_t lookup (lookup_t *lh)
             lh->state = LOOKUP_STATE_CHECK_NAMESPACE;
             /* fallthrough */
         case LOOKUP_STATE_CHECK_NAMESPACE:
+            root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
+
+            if (!root) {
+                if (!(lh->missing_namespace = strdup (lh->namespace))) {
+                    lh->errnum = ENOMEM;
+                    goto error;
+                }
+                return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
+            }
+
+            if (kvsroot_check_user (lh->krm,
+                                    root,
+                                    lh->rolemask,
+                                    lh->userid) < 0) {
+                lh->errnum = errno;
+                goto error;
+            }
+
             /* If user did not specify root ref, must get from
              * namespace
              */
             if (!lh->root_ref) {
-                struct kvsroot *root;
-
-                root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
-
-                if (!root) {
-                    if (!(lh->missing_namespace = strdup (lh->namespace))) {
-                        lh->errnum = ENOMEM;
-                        goto error;
-                    }
-                    return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
-                }
-
-                if (kvsroot_check_user (lh->krm,
-                                        root,
-                                        lh->rolemask,
-                                        lh->userid) < 0) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-
                 /* copy instead of storing pointer, always chance
                  * namespace could timeout or be removed when
                  * stalling */

@@ -473,8 +473,21 @@ void verify_value (struct cache *cache,
                    const char *key,
                    const char *val)
 {
+    struct kvsroot *root;
     lookup_t *lh;
     json_t *test, *o;
+
+    /* Need to make sure the namespace exists before doing a lookup */
+    if (!(root = kvsroot_mgr_lookup_root (krm, KVS_PRIMARY_NAMESPACE))) {
+        ok ((root = kvsroot_mgr_create_root (krm,
+                                             cache,
+                                             "sha1",
+                                             KVS_PRIMARY_NAMESPACE,
+                                             0,
+                                             0)) != NULL,
+            "kvsroot_mgr_create_root works");
+    }
+    kvsroot_setroot (krm, root, root_ref, 0);
 
     ok ((lh = lookup_create (cache,
                              krm,
