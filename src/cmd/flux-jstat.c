@@ -27,6 +27,8 @@
 #endif
 #include <stdio.h>
 #include <getopt.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <libgen.h>
 #include <signal.h>
 #include <unistd.h>
@@ -154,9 +156,10 @@ static int job_status_cb (const char *jcbstr, void *arg, int errnum)
     get_states (jcb, &os, &ns);
     Jput (jcb);
 
-    fprintf (ctx->op, "%s->%s\n", 
-    jsc_job_num2state ((job_state_t)os), 
-    jsc_job_num2state ((job_state_t)ns));
+    fprintf (ctx->op, "%"PRId64":%s->%s\n", 
+      j,
+      jsc_job_num2state ((job_state_t)os), 
+      jsc_job_num2state ((job_state_t)ns));
     fflush (ctx->op);
 
     return 0;

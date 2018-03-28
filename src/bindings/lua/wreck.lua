@@ -43,6 +43,7 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['cores-per-task']  = { char = 'c', arg = "N" },
     ['nnodes']  = { char = 'N', arg = "N" },
     ['tasks-per-node']  =
                    { char = 't', arg = "N" },
@@ -97,6 +98,7 @@ function wreck:usage()
   -h, --help                 Display this message
   -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
+  -c, --cores-per-task=N     Request N cores per task
   -N, --nnodes=N             Force number of nodes
   -t, --tasks-per-node=N     Force number of tasks per node
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
@@ -260,6 +262,11 @@ function wreck:parse_cmdline (arg)
 
     self.nnodes = self.opts.N and tonumber (self.opts.N)
     self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
+    if self.opts.c then
+        self.ncores = self.opts.c * self.ntasks
+    else
+        self.ncores = self.ntasks
+    end
     self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
@@ -320,6 +327,7 @@ function wreck:jobreq ()
     local jobreq = {
         nnodes =  self.nnodes,
         ntasks =  self.ntasks,
+        ntasks =  self.ncores,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),

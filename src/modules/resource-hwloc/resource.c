@@ -44,6 +44,7 @@ typedef struct
     hwloc_topology_t topology;
     bool loaded;
     bool walk_topology;
+    bool lite;
 } resource_ctx_t;
 
 static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
@@ -70,10 +71,16 @@ static int ctx_hwloc_init (flux_t *h, resource_ctx_t *ctx)
         flux_log_error (h, "flux_topology_init");
         goto done;
     }
-    if (hwloc_topology_set_flags (ctx->topology,
-                                HWLOC_TOPOLOGY_FLAG_WHOLE_IO) < 0) {
-        flux_log_error (h, "hwloc_topology_set_flags");
-        goto done;
+    if (! ctx->lite) {
+        if (hwloc_topology_set_flags (ctx->topology,
+                                    HWLOC_TOPOLOGY_FLAG_WHOLE_IO) < 0) {
+            flux_log_error (h, "hwloc_topology_set_flags");
+            goto done;
+        }
+    } else {
+        hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_CACHE);
+        hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_PU);
+        hwloc_topology_ignore_type (ctx->topology, HWLOC_OBJ_GROUP);
     }
 
     key = xasprintf ("config.resource.hwloc.xml.%" PRIu32, ctx->rank);
@@ -583,6 +590,8 @@ static void process_args (flux_t *h, resource_ctx_t *ctx, int argc, char **argv)
     for (i = 0; i < argc; i++) {
         if (strcmp (argv[i], "walk_topology") == 0)
             ctx->walk_topology = true;
+        else if (strcmp (argv[i], "lite") == 0)
+            ctx->lite = true;
         else
             flux_log (h, LOG_ERR, "Unknown option: %s\n", argv[i]);
     }

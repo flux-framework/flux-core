@@ -405,6 +405,24 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
     return rc;
 }
 
+static int extract_raw_ncores (flux_t *h, int64_t j, int64_t *ncores)
+{
+    int rc = 0;
+    char *key = lwj_key (h, j, ".ncores");
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "I", ncores) < 0) {
+        flux_log_error (h, "extract %s", key);
+        rc = -1;
+    }
+    else
+        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ncores);
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
 {
     int rc = 0;
@@ -635,10 +653,11 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     return 0;
 }
 
-int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes, int64_t *ntasks, int64_t *walltime)
+int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes, int64_t *ntasks, int64_t *ncores, int64_t *walltime)
 {
     if (extract_raw_nnodes (h, j, nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, ntasks) < 0) return -1;
+    if (extract_raw_ncores (h, j, ncores < 0) return -1;
     if (extract_raw_walltime (h, j, walltime) < 0) return -1;
 
     return 0;
