@@ -163,13 +163,39 @@ static void wait_for_event (flux_t *h, int64_t id, char *topic)
 }
 
 static void send_create_event (flux_t *h, int64_t id,
-                               const char *path, char *topic)
+                               const char *path, const char *state,
+                               json_object *req)
 {
+    int val;
+    int nnodes = 0;
+    int ntasks = 0;
+    int walltime = 0;
+
+    char *topic;
     flux_msg_t *msg;
-    msg = flux_event_pack (topic, "{s:I,s:s}",
-                          "lwj", id, "kvs_path", path);
+   if (asprintf (&topic, "wreck.state.%s", state) < 0) {
+        flux_log_error (h, "send_create_event: asprintf");
+        return;
+    }
+
+    /* Pull ntasks, nnodes directly out of request
+     */
+    if (Jget_int (req, "ntasks", &val))
+        ntasks = val;
+    if (Jget_int (req, "nnodes", &val))
+        nnodes = val;
+    if (Jget_int (req, "walltime", &val))
+        walltime = val;
+
+    msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i}",
+                          "lwj", id, "kvs_path", path,
+                          "ntasks", ntasks,
+                          "nnodes", nnodes,
+                          "walltime", walltime);
+
     if (msg == NULL) {
         flux_log_error (h, "failed to create state change event");
+        free (topic);
         return;
     }
     if (flux_send (h, msg, 0) < 0)
@@ -180,6 +206,7 @@ static void send_create_event (flux_t *h, int64_t id,
      *  blocking recv. XXX: Remove when publish is synchronous.
      */
     wait_for_event (h, id, topic);
+    free (topic);
 }
 
 static int add_jobinfo_txn (flux_kvs_txn_t *txn,
@@ -235,49 +262,11 @@ static bool sched_loaded (flux_t *h)
     return (v);
 }
 
-static int do_submit_job (flux_t *h, unsigned long jobid, const char *kvs_path,
-                          const char **statep)
-{
-    flux_kvs_txn_t *txn = NULL;
-    flux_future_t *f = NULL;
-    const char *state = "submitted";
-    char key[MAX_JOB_PATH];
-    int rc = -1;
-
-    if (!(txn = flux_kvs_txn_create ())) {
-        flux_log_error (h, "%s: flux_kvs_txn_create", __FUNCTION__);
-        goto done;
-    }
-    if (snprintf (key, sizeof (key), "%s.state", kvs_path) >= sizeof (key)) {
-        flux_log (h, LOG_ERR, "%s: key overflow", __FUNCTION__);
-        goto done;
-    }
-    if (flux_kvs_txn_pack (txn, 0, key, "s", state) < 0) {
-        flux_log_error (h, "%s: flux_kvs_txn_pack", __FUNCTION__);
-        goto done;
-    }
-    flux_log (h, LOG_DEBUG, "Setting job %ld to %s", jobid, state);
-    if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "%s: flux_kvs_commit", __FUNCTION__);
-        goto done;
-    }
-
-    send_create_event (h, jobid, kvs_path, "wreck.state.submitted");
-    *statep = state;
-    rc = 0;
-
-done:
-    flux_kvs_txn_destroy (txn);
-    flux_future_destroy (f);
-    return (rc);
-}
-
 static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
-                          json_object* req, const char **statep)
+                          json_object* req, const char *state)
 {
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
-    const char *state = "reserved";
     char key[MAX_JOB_PATH];
     int rc = -1;
 
@@ -303,8 +292,7 @@ static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
         goto done;
     }
 
-    send_create_event (h, jobid, kvs_path, "wreck.state.reserved");
-    *statep = state;
+    send_create_event (h, jobid, kvs_path, state, req);
     rc = 0;
 
 done:
@@ -317,7 +305,7 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
                                const char *topic, json_object *req)
 {
     int64_t id;
-    const char *state;
+    char *state = "reserved";
     char *kvs_path = NULL;
 
     if ((id = next_jobid (h)) < 0) {
@@ -329,15 +317,11 @@ static void handle_job_create (flux_t *h, const flux_msg_t *msg,
         goto error;
     }
 
-    /* Create job with state "reserved" */
-    if (do_create_job (h, id, kvs_path, req, &state) < 0)
-        goto error;
-
     /* If called as "job.submit", transition to "submitted" */
-    if (strcmp (topic, "job.submit") == 0) {
-        if (do_submit_job (h, id, kvs_path, &state) < 0)
-            goto error;
-    }
+    if (strcmp (topic, "job.submit") == 0)
+        state = "submitted";
+    if (do_create_job (h, id, kvs_path, req, state) < 0)
+        goto error;
 
     /* Generate reply with new jobid */
     if (flux_respond_pack (h, msg, "{s:I,s:s,s:s}", "jobid", id,
