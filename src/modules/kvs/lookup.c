@@ -54,6 +54,8 @@
 typedef struct {
     int depth;
     char *path_copy;            /* for internal parsing, do not use */
+    char *root_ref;             /* internal copy, in case root_ref is changed */
+    json_t *root_dirent;        /* root dirent for this level */
     const json_t *dirent;
     zlist_t *pathcomps;
 } walk_level_t;
@@ -97,7 +99,6 @@ struct lookup {
     int aux_errnum;
 
     /* API internal */
-    json_t *root_dirent;
     zlist_t *levels;
     const json_t *wdirent;       /* result after walk() */
     enum {
@@ -164,13 +165,15 @@ static void walk_level_destroy (void *data)
     walk_level_t *wl = (walk_level_t *)data;
     if (wl) {
         zlist_destroy (&wl->pathcomps);
+        free (wl->root_ref);
+        json_decref (wl->root_dirent);
         free (wl->path_copy);
         free (wl);
     }
 }
 
-static walk_level_t *walk_level_create (const char *path,
-                                        json_t *root_dirent,
+static walk_level_t *walk_level_create (const char *root_ref,
+                                        const char *path,
                                         int depth)
 {
     walk_level_t *wl = calloc (1, sizeof (*wl));
@@ -185,7 +188,15 @@ static walk_level_t *walk_level_create (const char *path,
         goto error;
     }
     wl->depth = depth;
-    wl->dirent = root_dirent;
+    if (!(wl->root_ref = strdup (root_ref))) {
+        saved_errno = ENOMEM;
+        goto error;
+    }
+    if (!(wl->root_dirent = treeobj_create_dirref (root_ref))) {
+        saved_errno = errno;
+        goto error;
+    }
+    wl->dirent = wl->root_dirent;
     if (!(wl->pathcomps = walk_pathcomps_zlist_create (wl))) {
         saved_errno = errno;
         goto error;
@@ -200,12 +211,13 @@ static walk_level_t *walk_level_create (const char *path,
 }
 
 static walk_level_t *walk_levels_push (lookup_t *lh,
+                                       const char *root_ref,
                                        const char *path,
                                        int depth)
 {
     walk_level_t *wl;
 
-    if (!(wl = walk_level_create (path, lh->root_dirent, depth)))
+    if (!(wl = walk_level_create (root_ref, path, depth)))
         return NULL;
 
     if (zlist_push (lh->levels, wl) < 0) {
@@ -271,7 +283,7 @@ static lookup_process_t walk (lookup_t *lh)
                  * root_dirent is bad, is EINVAL from user.
                  */
                 flux_log (lh->h, LOG_ERR, "dirref points to non-treeobj");
-                if (wl->depth == 0 && wl->dirent == lh->root_dirent)
+                if (wl->depth == 0 && wl->dirent == wl->root_dirent)
                     lh->errnum = EINVAL;
                 else
                     lh->errnum = ENOTRECOVERABLE;
@@ -281,7 +293,7 @@ static lookup_process_t walk (lookup_t *lh)
                 /* dirref pointed to non-dir error, special case when
                  * root_dirent is bad, is EINVAL from user.
                  */
-                if (wl->depth == 0 && wl->dirent == lh->root_dirent)
+                if (wl->depth == 0 && wl->dirent == wl->root_dirent)
                     lh->errnum = EINVAL;
                 else
                     lh->errnum = ENOTRECOVERABLE;
@@ -337,7 +349,6 @@ static lookup_process_t walk (lookup_t *lh)
             if (!last_pathcomp (wl->pathcomps, pathcomp)
                 || (!(lh->flags & FLUX_KVS_READLINK)
                     && !(lh->flags & FLUX_KVS_TREEOBJ))) {
-
                 if (wl->depth == SYMLINK_CYCLE_LIMIT) {
                     lh->errnum = ELOOP;
                     goto error;
@@ -347,11 +358,12 @@ static lookup_process_t walk (lookup_t *lh)
                  * root_dirent and continue on.
                  */
                 if (!strcmp (linkstr, ".")) {
-                    wl->dirent = lh->root_dirent;
+                    wl->dirent = wl->root_dirent;
                 }
                 else {
                     /* "recursively" determine link dirent */
                     if (!(wl = walk_levels_push (lh,
+                                                 wl->root_ref,
                                                  linkstr,
                                                  wl->depth + 1))) {
                         lh->errnum = errno;
@@ -511,7 +523,6 @@ void lookup_destroy (lookup_t *lh)
         free (lh->path);
         json_decref (lh->val);
         free (lh->missing_namespace);
-        json_decref (lh->root_dirent);
         zlist_destroy (&lh->levels);
         lh->magic = ~LOOKUP_MAGIC;
         free (lh);
@@ -929,12 +940,7 @@ lookup_process_t lookup (lookup_t *lh)
         case LOOKUP_STATE_WALK_INIT:
             /* initialize walk - first depth is level 0 */
 
-            if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
-                lh->errnum = errno;
-                goto error;
-            }
-
-            if (!walk_levels_push (lh, lh->path, 0)) {
+            if (!walk_levels_push (lh, lh->root_ref, lh->path, 0)) {
                 lh->errnum = errno;
                 goto error;
             }
