@@ -57,6 +57,7 @@ typedef struct {
     char *root_ref;             /* internal copy, in case root_ref is changed */
     json_t *root_dirent;        /* root dirent for this level */
     const json_t *dirent;
+    json_t *tmp_dirent;         /* tmp dirent that may need to be created */
     zlist_t *pathcomps;
 } walk_level_t;
 
@@ -167,6 +168,7 @@ static void walk_level_destroy (void *data)
         zlist_destroy (&wl->pathcomps);
         free (wl->root_ref);
         json_decref (wl->root_dirent);
+        json_decref (wl->tmp_dirent);
         free (wl->path_copy);
         free (wl);
     }
@@ -230,19 +232,79 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
     return wl;
 }
 
+static lookup_process_t symlink_namespace (lookup_t *lh,
+                                           const char *linkpath,
+                                           struct kvsroot **rootp,
+                                           char **linkpathp)
+{
+    struct kvsroot *root = NULL;
+    char *linkpath_norm = NULL;
+    char *ns_prefix = NULL;
+    char *p_suffix = NULL;
+    lookup_process_t ret = LOOKUP_PROCESS_ERROR;
+    int pret;
+
+    if ((pret = kvs_namespace_prefix (linkpath,
+                                      &ns_prefix,
+                                      &p_suffix)) < 0) {
+        lh->errnum = errno;
+        goto done;
+    }
+
+    if (pret) {
+        root = kvsroot_mgr_lookup_root (lh->krm, ns_prefix);
+
+        if (!root) {
+            free (lh->missing_namespace);
+            lh->missing_namespace = ns_prefix;
+            ns_prefix = NULL;
+            ret = LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
+            goto done;
+        }
+
+        if (kvsroot_check_user (lh->krm,
+                                root,
+                                lh->rolemask,
+                                lh->userid) < 0) {
+            lh->errnum = EPERM;
+            goto done;
+        }
+
+        if (!(linkpath_norm = kvs_util_normalize_key (p_suffix, NULL))) {
+            lh->errnum = errno;
+            goto done;
+        }
+    }
+
+    /* if no namespace prefix, these are set to NULL so caller knows
+     * no namespace prefix
+     */
+    (*rootp) = root;
+    (*linkpathp) = linkpath_norm;
+    ret = LOOKUP_PROCESS_FINISHED;
+done:
+    free (ns_prefix);
+    free (p_suffix);
+    return ret;
+}
+
 /* If recursing, wlp will be set to new walk level pointer
  */
 static lookup_process_t walk_symlink (lookup_t *lh,
                                       walk_level_t *wl,
+                                      const json_t *dirent_tmp,
                                       char *current_pathcomp,
                                       walk_level_t **wlp)
 {
+    lookup_process_t ret = LOOKUP_PROCESS_ERROR;
+    struct kvsroot *root = NULL;
+    char *linkpath = NULL;
     walk_level_t *wltmp;
     const char *linkstr;
 
-    if (!(linkstr = treeobj_get_symlink (wl->dirent))) {
+    if (!(linkstr = treeobj_get_symlink (dirent_tmp))) {
         lh->errnum = errno;
-        return LOOKUP_PROCESS_ERROR;
+        goto cleanup;
     }
 
     /* Follow link if in middle of path or if end of path,
@@ -251,35 +313,66 @@ static lookup_process_t walk_symlink (lookup_t *lh,
     if (!last_pathcomp (wl->pathcomps, current_pathcomp)
         || (!(lh->flags & FLUX_KVS_READLINK)
             && !(lh->flags & FLUX_KVS_TREEOBJ))) {
+        lookup_process_t sret;
 
         if (wl->depth == SYMLINK_CYCLE_LIMIT) {
             lh->errnum = ELOOP;
-            return LOOKUP_PROCESS_ERROR;
+            goto cleanup;
         }
+
+        sret = symlink_namespace (lh,
+                                  linkstr,
+                                  &root,
+                                  &linkpath);
+        if (sret != LOOKUP_PROCESS_FINISHED) {
+            ret = sret;
+            goto cleanup;
+        }
+
+        /* Set wl->dirent, now that we've resolved any
+         * namespaces in the linkstr.
+         */
+        wl->dirent = dirent_tmp;
 
         /* if symlink is root, no need to recurse, just get
          * root_dirent and continue on.
          */
-        if (!strcmp (linkstr, ".")) {
-            wl->dirent = wl->root_dirent;
+        if (!strcmp (linkpath ? linkpath : linkstr, ".")) {
+            if (root) {
+                free (wl->tmp_dirent);
+                wl->tmp_dirent = treeobj_create_dirref (root->ref);
+                if (!wl->tmp_dirent) {
+                    lh->errnum = errno;
+                    goto cleanup;
+                }
+                wl->dirent = wl->tmp_dirent;
+            }
+            else
+                wl->dirent = wl->root_dirent;
         }
         else {
             /* "recursively" determine link dirent */
             if (!(wltmp = walk_levels_push (lh,
-                                            wl->root_ref,
-                                            linkstr,
+                                            root ? root->ref : wl->root_ref,
+                                            linkpath ? linkpath : linkstr,
                                             wl->depth + 1))) {
                 lh->errnum = errno;
-                return LOOKUP_PROCESS_ERROR;
+                goto cleanup;
             }
 
             (*wlp) = wltmp;
-            return LOOKUP_PROCESS_FINISHED;
+            goto done;
         }
     }
+    else
+        wl->dirent = dirent_tmp;
 
     (*wlp) = NULL;
-    return LOOKUP_PROCESS_FINISHED;
+done:
+    ret = LOOKUP_PROCESS_FINISHED;
+cleanup:
+    free (linkpath);
+    return ret;
 }
 
 /* Get dirent of the requested path starting at the given root.
@@ -296,6 +389,7 @@ static lookup_process_t walk (lookup_t *lh)
     const json_t *dir;
     walk_level_t *wl = NULL;
     char *pathcomp;
+    const json_t *dirent_tmp;
 
     wl = zlist_head (lh->levels);
 
@@ -373,7 +467,7 @@ static lookup_process_t walk (lookup_t *lh)
 
         /* Get directory reference of path component from directory */
 
-        if (!(wl->dirent = treeobj_peek_entry (dir, pathcomp))) {
+        if (!(dirent_tmp = treeobj_peek_entry (dir, pathcomp))) {
             /* if entry does not exist, not necessarily ENOENT error,
              * let caller decide.  If error not ENOENT, return to
              * caller. */
@@ -387,13 +481,15 @@ static lookup_process_t walk (lookup_t *lh)
 
         /* Resolve dirent if it is a link */
 
-        if (treeobj_is_symlink (wl->dirent)) {
+        if (treeobj_is_symlink (dirent_tmp)) {
             walk_level_t *wltmp = NULL;
             lookup_process_t sret;
 
-            sret = walk_symlink (lh, wl, pathcomp, &wltmp);
+            sret = walk_symlink (lh, wl, dirent_tmp, pathcomp, &wltmp);
             if (sret == LOOKUP_PROCESS_ERROR)
                 goto error;
+            else if (sret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE)
+                return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
             /* else sret == LOOKUP_PROCESS_FINISHED */
 
             if (wltmp) {
@@ -401,6 +497,8 @@ static lookup_process_t walk (lookup_t *lh)
                 continue;
             }
         }
+        else
+            wl->dirent = dirent_tmp;
 
         if (last_pathcomp (wl->pathcomps, pathcomp)
             && wl->depth) {
@@ -652,7 +750,8 @@ const char *lookup_missing_namespace (lookup_t *lh)
 {
    if (lh
        && lh->magic == LOOKUP_MAGIC
-       && lh->state == LOOKUP_STATE_CHECK_NAMESPACE) {
+       && (lh->state == LOOKUP_STATE_CHECK_NAMESPACE
+           || lh->state == LOOKUP_STATE_WALK)) {
        return lh->missing_namespace;
     }
     errno = EINVAL;
@@ -987,6 +1086,8 @@ lookup_process_t lookup (lookup_t *lh)
 
             if (lret == LOOKUP_PROCESS_ERROR)
                 goto error;
+            else if (lret == LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE)
+                return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
             else if (lret == LOOKUP_PROCESS_LOAD_MISSING_REFS)
                 return LOOKUP_PROCESS_LOAD_MISSING_REFS;
             else if (!lh->wdirent) {
