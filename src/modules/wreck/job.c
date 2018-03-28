@@ -424,6 +424,11 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
         goto out;
     }
 
+    if (!json_object_is_type (id_list, json_type_array)) {
+        errno = EPROTO;
+        goto out;
+    }
+
     if (!(out = json_object_new_object ())
         || !(ar = json_object_new_array ())) {
         flux_log (h, LOG_ERR, "kvspath_cb: json_object_new_object failed");
