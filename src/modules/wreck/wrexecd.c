@@ -88,7 +88,7 @@ struct prog_ctx {
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     flux_kvsdir_t *kvs;     /* Handle to this job's dir in kvs */
     flux_kvsdir_t *resources; /* Handle to this node's resource dir in kvs */
-    int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
+    int *tasks_per_node;    /* Number of tasks per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
 
@@ -656,7 +656,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     if (ctx->pmi)
         pmi_simple_server_destroy (ctx->pmi);
 
-    free (ctx->cores_per_node);
+    free (ctx->tasks_per_node);
 
     if (ctx->options)
         zhash_destroy (&ctx->options);
@@ -813,13 +813,13 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
     return (rc < 0 ? -1 : ncores);
 }
 
-static int *cores_per_node_create (struct prog_ctx *ctx, int *nodeids, int n)
+static int *tasks_per_node_create (struct prog_ctx *ctx, int *nodeids, int n)
 {
     int i;
-    int * cores_per_node = xzmalloc (sizeof (int) * n);
+    int * tasks_per_node = xzmalloc (sizeof (int) * n);
     for (i = 0; i < n; i++)
-        cores_per_node [i] = cores_on_node (ctx, nodeids [i]);
-    return (cores_per_node);
+        tasks_per_node [i] = cores_on_node (ctx, nodeids [i]);
+    return (tasks_per_node);
 }
 
 static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
@@ -864,7 +864,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     if (nodeids == NULL)
         wlog_fatal (ctx, 1, "Failed to create nodeid map");
 
-    ctx->cores_per_node = cores_per_node_create (ctx, nodeids, n);
+    ctx->tasks_per_node = tasks_per_node_create (ctx, nodeids, n);
 
     for (i = 0; i < n; i++) {
         if (nodeids[i] == ctx->noderank) {
@@ -1678,7 +1678,7 @@ static int l_wreck_log_error (lua_State *L)
     return wreck_log_error (L, 0);
 }
 
-static int l_wreck_cores_per_node (struct prog_ctx *ctx, lua_State *L)
+static int l_wreck_tasks_per_node (struct prog_ctx *ctx, lua_State *L)
 {
     int i;
     int t;
@@ -1686,7 +1686,7 @@ static int l_wreck_cores_per_node (struct prog_ctx *ctx, lua_State *L)
     t = lua_gettop (L);
     for (i = 0; i < ctx->nnodes; i++) {
         lua_pushnumber (L, i);
-        lua_pushnumber (L, ctx->cores_per_node [i]);
+        lua_pushnumber (L, ctx->tasks_per_node [i]);
         lua_settable (L, t);
     }
     return (1);
@@ -1810,8 +1810,8 @@ static int l_wreck_index (lua_State *L)
         lua_pushnumber (L, ctx->nnodes);
         return (1);
     }
-    if (strcmp (key, "cores_per_node") == 0)
-        return (l_wreck_cores_per_node (ctx, L));
+    if (strcmp (key, "tasks_per_node") == 0)
+        return (l_wreck_tasks_per_node (ctx, L));
     return (0);
 }
 

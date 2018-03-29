@@ -1,7 +1,7 @@
 -- Set pmi.PMI_process_mapping
 
 
--- compute blocks list as a Lua table from cores_per_node and nnodes:
+-- compute blocks list as a Lua table from tasks_per_node and nnodes:
 local function compute_blocks (cpn, nnodes)
     local blocks = {}
     local last = nil
@@ -31,7 +31,7 @@ end
 function rexecd_init ()
     if (wreck.nodeid ~= 0) then return end
 
-    local blocks = compute_blocks (wreck.cores_per_node, wreck.nnodes)
+    local blocks = compute_blocks (wreck.tasks_per_node, wreck.nnodes)
     local mapping = blocks_to_pmi_mapping (blocks)
     wreck.kvsdir ["pmi.PMI_process_mapping"] = mapping
 end
