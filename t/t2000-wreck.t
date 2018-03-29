@@ -210,7 +210,7 @@ test "$($cpus_allowed count)" = "0" || test_set_prereq MULTICORE
 test_expect_success MULTICORE 'wreckrun: supports affinity assignment' '
 	newmask=$($cpus_allowed last) &&
 	run_timeout 5 flux wreckrun -n1 \
-	  --pre-launch-hook="lwj.rank[0].cpumask = \"$newmask\"" \
+	  --pre-launch-hook="lwj[\"rank.0.cpumask\"] = \"$newmask\"" \
 	  $cpus_allowed > output_cpus &&
 	cat <<-EOF >expected_cpus &&
 	$newmask
