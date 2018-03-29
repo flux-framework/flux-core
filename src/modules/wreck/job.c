@@ -47,6 +47,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
+#include "rcalc.h"
 
 #define MAX_JOB_PATH    1024
 
@@ -569,21 +570,44 @@ static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
     flux_future_t *f = NULL;
     const flux_kvsdir_t *dir;
     bool result = false;
-    /*
-     *  If no 'rank' subdir exists for this lwj, then we are running
-     *   without resource assignment so we run everywhere
-     */
+
     snprintf (key, sizeof (key), "%s.rank", kvspath);
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
             || flux_kvs_lookup_get_dir (f, &dir) < 0) {
         flux_log (h, LOG_INFO, "No dir %s.rank: %s",
                   kvspath, flux_strerror (errno));
-        result = true;
         goto done;
     }
     snprintf (key, sizeof (key), "%d", broker_rank);
     if (flux_kvsdir_isdir (dir, key))
         result = true;
+done:
+    flux_future_destroy (f);
+    return result;
+}
+
+static bool Rlite_targets_this_node (flux_t *h, const char *kvspath)
+{
+    const char *R_lite;
+    rcalc_t *r = NULL;
+    char key[MAX_JOB_PATH];
+    flux_future_t *f = NULL;
+    bool result = false;
+
+    snprintf (key, sizeof (key), "%s.R_lite", kvspath);
+    if (!(f = flux_kvs_lookup (h, 0, key))
+       || flux_kvs_lookup_get (f, &R_lite) < 0)  {
+        flux_log (h, LOG_INFO, "No %s.R_lite: %s",
+                 kvspath, flux_strerror (errno));
+        goto done;
+    }
+    if (!(r = rcalc_create (R_lite))) {
+        flux_log (h, LOG_ERR, "Unable to parse %s.R_lite", kvspath);
+        goto done;
+    }
+    if (rcalc_has_rank (r, broker_rank))
+        result = true;
+    rcalc_destroy (r);
 done:
     flux_future_destroy (f);
     return result;
@@ -622,7 +646,8 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
         return;
     }
     kvspath = id_to_path (id);
-    if (lwj_targets_this_node (h, kvspath))
+    if (Rlite_targets_this_node (h, kvspath)
+       || lwj_targets_this_node (h, kvspath))
         spawn_exec_handler (h, id, kvspath);
     free (kvspath);
     Jput (in);
