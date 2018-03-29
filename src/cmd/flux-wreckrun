@@ -70,6 +70,7 @@ local function alloc_tasks (f, wreck, lwj)
     local r = {}
     local size = f.size
     local res
+    local Rlite = {}
 
     res = fake_resource_array (wreck, wreck.nnodes or f.size)
     wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
@@ -89,12 +90,16 @@ local function alloc_tasks (f, wreck, lwj)
         end
     end
     for i, ntasks in pairs (counts) do
-        local key = "rank."..i..".cores"
-        lwj [key] = ntasks
+        local corelist = "0"
+        if ntasks > 1 then
+            corelist = corelist .. "-" .. ntasks - 1
+        end
+        table.insert (Rlite, { rank = i, children = { core = corelist } })
         if not r[ntasks] then r[ntasks] = {} end
         table.insert (r[ntasks], i)
     end
     wreck:verbose ("tasks per node: %s\n", summarize_tasks_per_node (r))
+    lwj.R_lite = Rlite
     lwj:commit()
 end
 
