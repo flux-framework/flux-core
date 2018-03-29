@@ -371,6 +371,24 @@ static int extract_raw_ntasks (flux_t *h, int64_t j, int64_t *ntasks)
     return rc;
 }
 
+static int extract_raw_ncores (flux_t *h, int64_t j, int64_t *ncores)
+{
+    int rc = 0;
+    char *key = lwj_key (h, j, ".ncores");
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+            || flux_kvs_lookup_get_unpack (f, "I", ncores) < 0) {
+        flux_log_error (h, "extract %s", key);
+        rc = -1;
+    }
+    else
+        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *ncores);
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int extract_raw_walltime (flux_t *h, int64_t j, int64_t *walltime)
 {
     int rc = 0;
@@ -586,16 +604,19 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     json_object *o = NULL;
     int64_t nnodes = -1;
     int64_t ntasks = -1;
+    int64_t ncores = -1;
     int64_t walltime = -1;
 
     if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
+    if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
 
     *jcb = Jnew ();
     o = Jnew ();
     Jadd_int64 (o, JSC_RDESC_NNODES, nnodes);
     Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
+    Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
     Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
     json_object_object_add (*jcb, JSC_RDESC, o);
     return 0;
@@ -704,10 +725,12 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
     int rc = -1;
     int64_t nnodes = 0;
     int64_t ntasks = 0;
+    int64_t ncores = 0;
     int64_t walltime = 0;
     char *key1 = NULL;
     char *key2 = NULL;
     char *key3 = NULL;
+    char *key4 = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
@@ -715,14 +738,17 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
         goto done;
     if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks))
         goto done;
+    if (!Jget_int64 (o, JSC_RDESC_NCORES, &ncores))
+        goto done;
     if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime))
         goto done;
-    if ((nnodes < 0) || (ntasks < 0) || (walltime < 0))
+    if ((nnodes < 0) || (ntasks < 0) || (ncores < 0) || (walltime < 0))
         goto done;
     key1 = lwj_key (h, j, ".nnodes");
     key2 = lwj_key (h, j, ".ntasks");
     key3 = lwj_key (h, j, ".walltime");
-    if (!key1 || !key2 || !key3)
+    key4 = lwj_key (h, j, ".ncores");
+    if (!key1 || !key2 || !key3 || !key4)
         goto done;
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "txn_create");
@@ -740,6 +766,10 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
         flux_log_error (h, "update %s", key3);
         goto done;
     }
+    if (flux_kvs_txn_pack (txn, 0, key4, "I", ncores) < 0) {
+        flux_log_error (h, "update %s", key4);
+        goto done;
+    }
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "commit failed");
         goto done;
@@ -752,6 +782,7 @@ done:
     free (key1);
     free (key2);
     free (key3);
+    free (key4);
 
     return rc;
 }
@@ -1029,6 +1060,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
 {
     int ntasks = 0;
     int nnodes = 0;
+    int ncores = 0;
     int walltime = 0;
     int64_t js = J_NULL;
     int64_t js2 = J_SUBMITTED;
@@ -1038,8 +1070,11 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
-    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i }", "ntasks", &ntasks,
-                           "nnodes", &nnodes, "walltime", &walltime) < 0) {
+    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i }",
+                           "ntasks", &ntasks,
+                           "nnodes", &nnodes,
+                           "ncores", &ncores,
+                           "walltime", &walltime) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto error;
     }
@@ -1053,6 +1088,7 @@ static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj
     o2 = Jnew ();
     Jadd_int64 (o2, JSC_RDESC_NNODES, (int64_t)nnodes);
     Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
+    Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
     Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
     json_object_object_add (jcb, JSC_RDESC, o2);
 
