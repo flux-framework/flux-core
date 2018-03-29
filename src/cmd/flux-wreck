@@ -242,18 +242,27 @@ function LWJ:state_string ()
     return self.state
 end
 
+function LWJ:ranks ()
+    local hl = hostlist.new()
+    local R = self.lwj.R_lite
+    if not R then
+        local rank = self.lwj.rank
+        if not rank then return nil end
+        for i in rank:keys() do hl:concat (i) end
+    else
+        for _,entry in ipairs (R) do
+            hl:concat (entry.rank)
+        end
+    end
+    return hl:sort()
+end
+
 LWJ.__index = function (self, key)
     if key == "state" then
         if not self._state then
             self._state = self.lwj.state
         end
         return self._state
-    elseif key == "ranks" then
-        local hl = hostlist.new()
-        local rank = self.lwj.rank
-        if not rank then return nil end
-        for i in rank:keys() do hl:concat (i) end
-        return hl:sort()
     elseif key == "ntasks" then
         return self.lwj.ntasks
     elseif key == "nnodes" then
@@ -331,7 +340,7 @@ prog:SubCommand {
             if not j then self:die ("job%d: %s", id, err) end
             printf (fmt, id, j.ntasks, j:state_string(), j.start,
                     seconds_to_string (j.runtime),
-                    tostring (j.ranks),
+                    tostring (j:ranks()),
                     j.command:match ("([^/]+)$"))
         end
     end
