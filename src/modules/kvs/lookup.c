@@ -104,6 +104,7 @@ struct lookup {
         LOOKUP_STATE_INIT,
         LOOKUP_STATE_CHECK_NAMESPACE,
         LOOKUP_STATE_CHECK_ROOT,
+        LOOKUP_STATE_WALK_INIT,
         LOOKUP_STATE_WALK,
         LOOKUP_STATE_VALUE,
         LOOKUP_STATE_FINISHED,
@@ -789,6 +790,7 @@ lookup_process_t lookup (lookup_t *lh)
     struct cache_entry *entry;
     bool is_replay = false;
     int refcount;
+    struct kvsroot *root;
 
     if (!lh || lh->magic != LOOKUP_MAGIC) {
         errno = EINVAL;
@@ -807,30 +809,28 @@ lookup_process_t lookup (lookup_t *lh)
             lh->state = LOOKUP_STATE_CHECK_NAMESPACE;
             /* fallthrough */
         case LOOKUP_STATE_CHECK_NAMESPACE:
+            root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
+
+            if (!root) {
+                if (!(lh->missing_namespace = strdup (lh->namespace))) {
+                    lh->errnum = ENOMEM;
+                    goto error;
+                }
+                return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
+            }
+
+            if (kvsroot_check_user (lh->krm,
+                                    root,
+                                    lh->rolemask,
+                                    lh->userid) < 0) {
+                lh->errnum = errno;
+                goto error;
+            }
+
             /* If user did not specify root ref, must get from
              * namespace
              */
             if (!lh->root_ref) {
-                struct kvsroot *root;
-
-                root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace);
-
-                if (!root) {
-                    if (!(lh->missing_namespace = strdup (lh->namespace))) {
-                        lh->errnum = ENOMEM;
-                        goto error;
-                    }
-                    return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
-                }
-
-                if (kvsroot_check_user (lh->krm,
-                                        root,
-                                        lh->rolemask,
-                                        lh->userid) < 0) {
-                    lh->errnum = errno;
-                    goto error;
-                }
-
                 /* copy instead of storing pointer, always chance
                  * namespace could timeout or be removed when
                  * stalling */
@@ -838,17 +838,6 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = ENOMEM;
                     goto error;
                 }
-            }
-
-            if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
-                lh->errnum = errno;
-                goto error;
-            }
-
-            /* initialize walk - first depth is level 0 */
-            if (!walk_levels_push (lh, lh->path, 0)) {
-                lh->errnum = errno;
-                goto error;
             }
 
             lh->state = LOOKUP_STATE_CHECK_ROOT;
@@ -876,7 +865,6 @@ lookup_process_t lookup (lookup_t *lh)
                                                 lh->root_ref,
                                                 lh->current_epoch))
                         || !cache_entry_get_valid (entry)) {
-                        lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                     }
@@ -897,6 +885,21 @@ lookup_process_t lookup (lookup_t *lh)
                     }
                 }
                 goto done;
+            }
+
+            lh->state = LOOKUP_STATE_WALK_INIT;
+            /* fallthrough */
+        case LOOKUP_STATE_WALK_INIT:
+            /* initialize walk - first depth is level 0 */
+
+            if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
+                lh->errnum = errno;
+                goto error;
+            }
+
+            if (!walk_levels_push (lh, lh->path, 0)) {
+                lh->errnum = errno;
+                goto error;
             }
 
             lh->state = LOOKUP_STATE_WALK;

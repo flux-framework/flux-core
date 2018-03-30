@@ -184,6 +184,15 @@ test_expect_success 'kvs: get fails on other ranks (wrong user)' '
                                 flux kvs --namespace=$NAMESPACETMP-USER get $DIR.test"
 '
 
+test_expect_success 'kvs: get fails (wrong user, with at reference)' '
+        set_userid 9999 &&
+        ref=`flux kvs --namespace=$NAMESPACETMP-USER get --treeobj .` &&
+        unset_userid &&
+        set_userid 9000 &&
+      	! flux kvs --namespace=$NAMESPACETMP-USER get --at ${ref} --json $DIR.test &&
+        unset_userid
+'
+
 test_expect_success NO_CHAIN_LINT 'kvs: watch works (user)'  '
         set_userid 9999 &&
         flux kvs --namespace=$NAMESPACETMP-USER unlink -Rf $DIR &&
