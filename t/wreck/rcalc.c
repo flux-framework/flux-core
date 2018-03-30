@@ -43,7 +43,7 @@ int main (int ac, char **av)
         exit (1);
     }
     if (!(r = rcalc_createf (stdin)))  {
-        fprintf (stderr, "Unable to create r");
+        fprintf (stderr, "Unable to create r: %s\n", strerror (errno));
         exit (1);
     }
     if ((ntasks = strtoul (av[1], NULL, 10)) <= 0 || ntasks > 1e20) {
@@ -57,6 +57,7 @@ int main (int ac, char **av)
         fprintf (stderr, "rcalc_distribute: %s\n", strerror (errno));
         exit (1);
     }
+    printf ("Used %d nodes\n", rcalc_total_nodes_used (r));
 
     for (i = 0; i < rcalc_total_nodes (r); i++) {
         struct rcalc_rankinfo ri;
