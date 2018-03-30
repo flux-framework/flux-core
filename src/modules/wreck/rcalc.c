@@ -294,10 +294,22 @@ int rcalc_total_cores (rcalc_t *r)
 {
     return r->ncores;
 }
+
+int rcalc_total_nodes_used (rcalc_t *r)
+{
+    int i;
+    int count = 0;
+    for (i = 0; i < r->nranks; i++)
+        if (r->alloc[i].ntasks > 0)
+            count++;
+    return (count);
+}
+
 int rcalc_total_nodes (rcalc_t *r)
 {
     return r->nranks;
 }
+
 
 static void allocinfo_clear (rcalc_t *r)
 {
