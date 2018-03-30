@@ -160,6 +160,8 @@ static void wlog_msg (struct prog_ctx *ctx, const char *fmt, ...)
 static void wlog_debug (struct prog_ctx *ctx, const char *fmt, ...)
     __attribute__ ((format (printf, 2, 3)));
 
+void send_job_state_event (struct prog_ctx *ctx, const char *state);
+int update_job_state (struct prog_ctx *ctx, const char *state);
 
 void *lsd_nomem_error (const char *file, int line, char *msg)
 {
@@ -273,6 +275,13 @@ static void wlog_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
         if (archive_lwj (ctx) < 0)
             flux_log_error (ctx->flux, "wlog_fatal: archive_lwj");
     }
+    /*  Attempt to update job state to failed so commands do not hang */
+    if (ctx->rankinfo.nodeid == 0 && ctx->flux) {
+        update_job_state (ctx, "failed");
+        send_job_state_event (ctx, "failed");
+        flux_kvs_commit_anon (ctx->flux, 0);
+    }
+
     if (code > 0)
         exit (code);
 }
