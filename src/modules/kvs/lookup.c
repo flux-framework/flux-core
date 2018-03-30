@@ -343,15 +343,23 @@ static lookup_process_t walk (lookup_t *lh)
                     goto error;
                 }
 
-                /* "recursively" determine link dirent */
-                if (!(wl = walk_levels_push (lh,
-                                             linkstr,
-                                             wl->depth + 1))) {
-                    lh->errnum = errno;
-                    goto error;
+                /* if symlink is root, no need to recurse, just get
+                 * root_dirent and continue on.
+                 */
+                if (!strcmp (linkstr, ".")) {
+                    wl->dirent = lh->root_dirent;
                 }
+                else {
+                    /* "recursively" determine link dirent */
+                    if (!(wl = walk_levels_push (lh,
+                                                 linkstr,
+                                                 wl->depth + 1))) {
+                        lh->errnum = errno;
+                        goto error;
+                    }
 
-                continue;
+                    continue;
+                }
             }
         }
 

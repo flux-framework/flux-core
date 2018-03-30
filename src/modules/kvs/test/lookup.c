@@ -1670,6 +1670,167 @@ void lookup_alt_root (void) {
     kvsroot_mgr_destroy (krm);
 }
 
+/* lookup tests on root dir, if in a symlink */
+void lookup_root_symlink (void) {
+    json_t *root;
+    json_t *dirref;
+    json_t *test;
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    lookup_t *lh;
+    blobref_t root_ref;
+    blobref_t valref_ref;
+    blobref_t dirref_ref;
+
+    ok ((cache = cache_create ()) != NULL,
+        "cache_create works");
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    /* This cache is
+     *
+     * valref_ref
+     * "abcd"
+     *
+     * dirref_ref
+     * "symlinkroot" : symlink to "."
+     *
+     * root_ref
+     * "val" : val to "foo"
+     * "symlinkroot" : symlink to "."
+     * "dirref" : dirref to dirref_ref
+     */
+
+    blobref_hash ("sha1", "abcd", 4, valref_ref);
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+
+    dirref = treeobj_create_dir ();
+    treeobj_insert_entry (dirref, "symlinkroot", treeobj_create_symlink ("."));
+    treeobj_hash ("sha1", dirref, dirref_ref);
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    root = treeobj_create_dir ();
+    treeobj_insert_entry (root, "val", treeobj_create_val ("foo", 3));
+    treeobj_insert_entry (root, "symlinkroot", treeobj_create_symlink ("."));
+    treeobj_insert_entry (root, "dirref", treeobj_create_dirref (dirref_ref));
+    treeobj_hash ("sha1", root, root_ref);
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    setup_kvsroot (krm, cache, root_ref, 0);
+
+    /* flags = 0, should error EISDIR */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "symlinkroot",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlinkroot, no flags, works");
+    check_error (lh, EISDIR, "symlinkroot no flags");
+
+    /* flags = FLUX_KVS_READDIR, should succeed */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "symlinkroot",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, works");
+    check_value (lh, root, "symlinkroot w/ FLUX_KVS_READDIR");
+
+    /* flags = FLUX_KVS_READDIR, should succeed */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "dirref.symlinkroot",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on dirref.symlinkroot w/ flag = FLUX_KVS_READDIR, works");
+    check_value (lh, root, "dirref.symlinkroot w/ FLUX_KVS_READDIR");
+
+    /* tricky, this returns a symlink now, not the root dir */
+    /* flags = FLUX_KVS_TREEOBJ, should succeed */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "symlinkroot",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_TREEOBJ,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlinkroot w/ flag = FLUX_KVS_TREEOBJ, works");
+    test = treeobj_create_symlink (".");
+    check_value (lh, test, "symlinkroot w/ FLUX_KVS_TREEOBJ");
+    json_decref (test);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             NULL,
+                             "symlinkroot.val",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlinkroot.val, works");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "symlinkroot.val");
+    json_decref (test);
+
+    /* flags = FLUX_KVS_READDIR, should succeed */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             dirref_ref,
+                             "symlinkroot",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, and alt root_ref, works");
+    check_value (lh, dirref, "symlinkroot w/ FLUX_KVS_READDIR, and alt root_ref");
+
+    /* flags = FLUX_KVS_READDIR, bad root_ref, should error EINVAL */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             valref_ref,
+                             "symlinkroot",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             FLUX_KVS_READDIR,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, bad root_ref, should EINVAL");
+    check_error (lh, EINVAL, "symlinkroot w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
+
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
 /* lookup stall namespace tests */
 void lookup_stall_namespace (void) {
     json_t *root;
@@ -2415,6 +2576,7 @@ int main (int argc, char *argv[])
     lookup_security ();
     lookup_links ();
     lookup_alt_root ();
+    lookup_root_symlink ();
     lookup_stall_namespace ();
     lookup_stall_ref_root ();
     lookup_stall_ref ();
