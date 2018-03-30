@@ -204,13 +204,25 @@ test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	test "$n" = "${SIZE}"
 '
 
+test_expect_success 'wreckrun: fallback to old rank.N.cores format works' '
+	flux wreckrun -N2 -n2 \
+             -P "lwj[\"rank.0.cores\"] = 1; lwj[\"rank.1.cores\"] = 1; lwj.R_lite = nil" \
+	     /bin/echo hello >oldrankN.out &&
+	LWJ=$(last_job_path) &&
+	test_must_fail flux kvs get ${LWJ}.R_lite &&
+	cat <<-EOF >oldrankN.expected &&
+	hello
+	hello
+	EOF
+	test_cmp oldrankN.expected oldrankN.out
+'
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
 test "$($cpus_allowed count)" = "0" || test_set_prereq MULTICORE
 
 test_expect_success MULTICORE 'wreckrun: supports affinity assignment' '
 	newmask=$($cpus_allowed last) &&
 	run_timeout 5 flux wreckrun -n1 \
-	  --pre-launch-hook="lwj.rank[0].cpumask = \"$newmask\"" \
+	  --pre-launch-hook="lwj[\"rank.0.cpumask\"] = \"$newmask\"" \
 	  $cpus_allowed > output_cpus &&
 	cat <<-EOF >expected_cpus &&
 	$newmask

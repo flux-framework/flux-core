@@ -47,6 +47,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/fdwalk.h"
+#include "rcalc.h"
 
 #define MAX_JOB_PATH    1024
 
@@ -169,6 +170,7 @@ static void send_create_event (flux_t *h, int64_t id,
     int val;
     int nnodes = 0;
     int ntasks = 0;
+    int ncores = 0;
     int walltime = 0;
 
     char *topic;
@@ -184,12 +186,15 @@ static void send_create_event (flux_t *h, int64_t id,
         ntasks = val;
     if (Jget_int (req, "nnodes", &val))
         nnodes = val;
+    if (Jget_int (req, "ncores", &val))
+        ncores = val;
     if (Jget_int (req, "walltime", &val))
         walltime = val;
 
-    msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i}",
+    msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i,s:i}",
                           "lwj", id, "kvs_path", path,
                           "ntasks", ntasks,
+                          "ncores", ncores,
                           "nnodes", nnodes,
                           "walltime", walltime);
 
@@ -260,6 +265,37 @@ static bool sched_loaded (flux_t *h)
     if (!v && ping_sched (h))
         v = true;
     return (v);
+}
+
+static void job_submit_only (flux_t *h, flux_msg_handler_t *w,
+                             const flux_msg_t *msg, void *arg)
+{
+    int64_t jobid;
+    const char *kvs_path;
+    const char *json_str;
+    json_object *o;
+
+    if (!sched_loaded (h)) {
+        errno = ENOSYS;
+        goto err;
+    }
+    if (flux_msg_get_json (msg, &json_str) < 0)
+        goto err;
+    if (!(o = json_tokener_parse (json_str)))
+        goto err;
+    if (!Jget_int64 (o, "jobid", &jobid)
+        || !Jget_str (o, "kvs_path", &kvs_path)) {
+        errno = EINVAL;
+        goto err;
+    }
+    send_create_event (h, jobid, kvs_path, "submitted", o);
+    json_object_put (o);
+    if (flux_respond_pack (h, msg, "{s:I}", "jobid", jobid) < 0)
+        flux_log_error (h, "flux_respond");
+    return;
+err:
+    if (flux_respond (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond");
 }
 
 static int do_create_job (flux_t *h, unsigned long jobid, const char *kvs_path,
@@ -390,6 +426,11 @@ static void job_kvspath_cb (flux_t *h, flux_msg_handler_t *w,
 
     if (!Jget_obj (in, "ids", &id_list)) {
         flux_log (h, LOG_ERR, "kvspath_cb: required key ids missing");
+        goto out;
+    }
+
+    if (!json_object_is_type (id_list, json_type_array)) {
+        errno = EPROTO;
         goto out;
     }
 
@@ -533,21 +574,44 @@ static bool lwj_targets_this_node (flux_t *h, const char *kvspath)
     flux_future_t *f = NULL;
     const flux_kvsdir_t *dir;
     bool result = false;
-    /*
-     *  If no 'rank' subdir exists for this lwj, then we are running
-     *   without resource assignment so we run everywhere
-     */
+
     snprintf (key, sizeof (key), "%s.rank", kvspath);
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, key))
             || flux_kvs_lookup_get_dir (f, &dir) < 0) {
         flux_log (h, LOG_INFO, "No dir %s.rank: %s",
                   kvspath, flux_strerror (errno));
-        result = true;
         goto done;
     }
     snprintf (key, sizeof (key), "%d", broker_rank);
     if (flux_kvsdir_isdir (dir, key))
         result = true;
+done:
+    flux_future_destroy (f);
+    return result;
+}
+
+static bool Rlite_targets_this_node (flux_t *h, const char *kvspath)
+{
+    const char *R_lite;
+    rcalc_t *r = NULL;
+    char key[MAX_JOB_PATH];
+    flux_future_t *f = NULL;
+    bool result = false;
+
+    snprintf (key, sizeof (key), "%s.R_lite", kvspath);
+    if (!(f = flux_kvs_lookup (h, 0, key))
+       || flux_kvs_lookup_get (f, &R_lite) < 0)  {
+        flux_log (h, LOG_INFO, "No %s.R_lite: %s",
+                 kvspath, flux_strerror (errno));
+        goto done;
+    }
+    if (!(r = rcalc_create (R_lite))) {
+        flux_log (h, LOG_ERR, "Unable to parse %s.R_lite", kvspath);
+        goto done;
+    }
+    if (rcalc_has_rank (r, broker_rank))
+        result = true;
+    rcalc_destroy (r);
 done:
     flux_future_destroy (f);
     return result;
@@ -586,7 +650,8 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
         return;
     }
     kvspath = id_to_path (id);
-    if (lwj_targets_this_node (h, kvspath))
+    if (Rlite_targets_this_node (h, kvspath)
+       || lwj_targets_this_node (h, kvspath))
         spawn_exec_handler (h, id, kvspath);
     free (kvspath);
     Jput (in);
@@ -595,6 +660,7 @@ static void runevent_cb (flux_t *h, flux_msg_handler_t *w,
 static const struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.create", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.submit", job_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job.submit-nocreate", job_submit_only, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.shutdown", job_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job.kvspath",  job_kvspath_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "wrexec.run.*", runevent_cb, 0 },

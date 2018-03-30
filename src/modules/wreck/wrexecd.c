@@ -58,6 +58,7 @@
 #include "src/bindings/lua/kvs-lua.h"
 #include "src/bindings/lua/flux-lua.h"
 
+#include "rcalc.h"
 enum { IN=0, OUT, ERR, NR_IO };
 const char *ionames [] = { "stdin", "stdout", "stderr" };
 
@@ -88,7 +89,7 @@ struct prog_ctx {
     char *kvspath;          /* basedir path in kvs for this lwj.id */
     flux_kvsdir_t *kvs;     /* Handle to this job's dir in kvs */
     flux_kvsdir_t *resources; /* Handle to this node's resource dir in kvs */
-    int *cores_per_node;    /* Number of tasks/cores per nodeid in this job */
+    int *tasks_per_node;    /* Number of tasks per nodeid in this job */
 
     kz_t *kz_err;           /* kz stream for errors and debug */
 
@@ -107,10 +108,9 @@ struct prog_ctx {
     int64_t id;             /* id of this execution */
     int total_ntasks;       /* Total number of tasks in job */
     int nnodes;
-    int nodeid;
-    int nprocs;             /* number of copies of command to execute */
-    int globalbasis;        /* Global rank of first task on this node */
     int exited;
+
+    struct rcalc_rankinfo rankinfo;  /* Rank information from `R_lite` */
 
     int errnum;
 
@@ -330,7 +330,7 @@ int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
 
 int globalid (struct prog_ctx *ctx, int localid)
 {
-    return (ctx->globalbasis + localid);
+    return (ctx->rankinfo.global_basis + localid);
 }
 
 const char * ioname (int s)
@@ -626,7 +626,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 {
     int i;
 
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         task_io_flush (ctx->task [i]);
         task_info_destroy (ctx->task [i]);
     }
@@ -656,7 +656,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     if (ctx->pmi)
         pmi_simple_server_destroy (ctx->pmi);
 
-    free (ctx->cores_per_node);
+    free (ctx->tasks_per_node);
 
     if (ctx->options)
         zhash_destroy (&ctx->options);
@@ -741,7 +741,6 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->envz_len = 0;
 
     ctx->id = -1;
-    ctx->nodeid = -1;
     ctx->taskid = -1;
 
     ctx->envref = -1;
@@ -794,89 +793,6 @@ int cmp_int (const void *x, const void *y)
     else if (a == b)
         return (0);
     return (1);
-}
-
-int cores_on_node (struct prog_ctx *ctx, int nodeid)
-{
-    int rc;
-    int ncores;
-    char *key;
-    flux_future_t *f;
-
-    if (asprintf (&key, "%s.rank.%d.cores", ctx->kvspath, nodeid) < 0)
-        wlog_fatal (ctx, 1, "cores_on_node: out of memory");
-    if (!(f = flux_kvs_lookup (ctx->flux, 0, key)))
-        wlog_fatal (ctx, 1, "flux_kvs_lookup");
-    rc = flux_kvs_lookup_get_unpack (f, "i", &ncores);
-    free (key);
-    flux_future_destroy (f);
-    return (rc < 0 ? -1 : ncores);
-}
-
-static int *cores_per_node_create (struct prog_ctx *ctx, int *nodeids, int n)
-{
-    int i;
-    int * cores_per_node = xzmalloc (sizeof (int) * n);
-    for (i = 0; i < n; i++)
-        cores_per_node [i] = cores_on_node (ctx, nodeids [i]);
-    return (cores_per_node);
-}
-
-static int *nodeid_map_create (struct prog_ctx *ctx, int *lenp)
-{
-    int n = 0;
-    flux_kvsdir_t *rank = NULL;
-    flux_kvsitr_t *i;
-    const char *key;
-    int *nodeids;
-    uint32_t size;
-
-    if (flux_get_size (ctx->flux, &size) < 0)
-        return (NULL);
-    nodeids = xzmalloc (size * sizeof (int));
-
-    if (flux_kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0)
-        wlog_fatal (ctx, 1, "get_dir (%s.rank) failed: %s",
-                    flux_kvsdir_key (ctx->kvs),
-                    flux_strerror (errno));
-
-    i = flux_kvsitr_create (rank);
-    while ((key = flux_kvsitr_next (i))) {
-        nodeids[n] = atoi (key);
-        n++;
-    }
-    flux_kvsitr_destroy (i);
-    flux_kvsdir_destroy (rank);
-    ctx->nnodes = n;
-    qsort (nodeids, n, sizeof (int), &cmp_int);
-
-    *lenp = n;
-    return (nodeids);
-}
-
-/*
- *  Get total number of nodes in this job from lwj.%d.rank dir
- */
-int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
-{
-    int i, n = 0;
-    int * nodeids = nodeid_map_create (ctx, &n);
-    if (nodeids == NULL)
-        wlog_fatal (ctx, 1, "Failed to create nodeid map");
-
-    ctx->cores_per_node = cores_per_node_create (ctx, nodeids, n);
-
-    for (i = 0; i < n; i++) {
-        if (nodeids[i] == ctx->noderank) {
-            ctx->nodeid = i;
-            break;
-        }
-        ctx->globalbasis += ctx->cores_per_node [i];
-    }
-    free (nodeids);
-    wlog_debug (ctx, "%s: node%d: basis=%d",
-        ctx->kvspath, ctx->nodeid, ctx->globalbasis);
-    return (0);
 }
 
 int prog_ctx_options_init (struct prog_ctx *ctx)
@@ -941,11 +857,80 @@ static void prog_ctx_kz_err_open (struct prog_ctx *ctx)
         KZ_FLAGS_NOCOMMIT_CLOSE |
         KZ_FLAGS_WRITE;
 
-    n = snprintf (key, sizeof (key), "%s.log.%d", ctx->kvspath, ctx->nodeid);
+    n = snprintf (key, sizeof (key), "%s.log.%d", ctx->kvspath,
+                  ctx->rankinfo.nodeid);
     if ((n < 0) || (n > sizeof (key)))
         wlog_fatal (ctx, 1, "snprintf: %s", flux_strerror (errno));
     if (!(ctx->kz_err = kz_open (ctx->flux, key, kz_flags)))
         wlog_fatal (ctx, 1, "kz_open (%s): %s", key, flux_strerror (errno));
+}
+
+
+static int * rcalc_tasks_per_node_create (rcalc_t *r)
+{
+    int i;
+    int n = rcalc_total_nodes (r);
+    int *tpn = calloc (n, sizeof (int));
+    if (!tpn)
+        return (NULL);
+    for (i = 0; i < n; i++) {
+        struct rcalc_rankinfo ri;
+        if (rcalc_get_nth (r, i, &ri) < 0)
+            goto fail;
+        tpn[i] = ri.ntasks;
+    }
+    return tpn;
+fail:
+    free (tpn);
+    return (NULL);
+
+}
+
+static int prog_ctx_process_rcalc (struct prog_ctx *ctx, rcalc_t *r)
+{
+    if (rcalc_distribute (r, ctx->total_ntasks) < 0)
+        wlog_fatal (ctx, 1, "failed to distribute tasks over R_lite");
+
+    ctx->nnodes = rcalc_total_nodes (r);
+
+    if (rcalc_get_rankinfo (r, ctx->noderank, &ctx->rankinfo) < 0)
+        wlog_fatal (ctx, 1, "no info about this rank in R_lite");
+
+    if (!(ctx->tasks_per_node = rcalc_tasks_per_node_create (r)))
+        wlog_fatal (ctx, 1, "Failed to create tasks-per-node array");
+
+    return (0);
+}
+
+static int prog_ctx_read_R_lite (struct prog_ctx *ctx)
+{
+    rcalc_t *r = NULL;
+    char *json_str;
+    if (flux_kvsdir_get (ctx->kvs, "R_lite", &json_str) < 0)
+        return (-1);
+    if ((r = rcalc_create (json_str)) == NULL)
+        wlog_fatal (ctx, 1, "failed to load R_lite");
+    if (prog_ctx_process_rcalc (ctx, r) < 0)
+        wlog_fatal (ctx, 1, "Failed to process resource information");
+    rcalc_destroy (r);
+    free (json_str);
+    return (0);
+}
+
+static int prog_ctx_R_lite_from_rank_dirs (struct prog_ctx *ctx)
+{
+    rcalc_t *r = NULL;
+    flux_kvsdir_t *dir;
+
+    if (flux_kvsdir_get_dir (ctx->kvs, &dir, "rank") < 0)
+        return (-1);
+    if ((r = rcalc_create_kvsdir (dir)) == NULL)
+        wlog_fatal (ctx, 1, "failed to load lwj.rank dir as rcalc_t");
+    if (prog_ctx_process_rcalc (ctx, r) < 0)
+        wlog_fatal (ctx, 1, "Failed to process resource information");
+    rcalc_destroy (r);
+    flux_kvsdir_destroy (dir);
+    return (0);
 }
 
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
@@ -956,7 +941,17 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     flux_future_t *f = NULL;
     char *key;
 
-    prog_ctx_get_nodeinfo (ctx);
+    key = flux_kvsdir_key_at (ctx->kvs, "ntasks");
+    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "i", &ctx->total_ntasks) < 0)
+        wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
+    flux_future_destroy (f);
+    free (key);
+
+    if (prog_ctx_read_R_lite (ctx) < 0
+        && prog_ctx_R_lite_from_rank_dirs (ctx) < 0)
+        wlog_fatal (ctx, 1, "Failed to read resource info from kvs");
+
     prog_ctx_kz_err_open (ctx);
 
     if (prog_ctx_options_init (ctx) < 0)
@@ -972,47 +967,13 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         wlog_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
-    key = flux_kvsdir_key_at (ctx->kvs, "ntasks");
-    if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-             || flux_kvs_lookup_get_unpack (f, "i", &ctx->total_ntasks) < 0)
-        wlog_fatal (ctx, 1, "Failed to get ntasks from kvs");
-    flux_future_destroy (f);
-    free (key);
-
-    /*
-     *  See if we've got 'cores' assigned for this host
-     */
-    if (ctx->resources) {
-        f = NULL;
-        key = flux_kvsdir_key_at (ctx->resources, "cores");
-        if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-                 || flux_kvs_lookup_get_unpack (f, "i", &ctx->nprocs) < 0)
-            wlog_fatal (ctx, 1, "Failed to get resources for this node");
-        flux_future_destroy (f);
-        free (key);
-    }
-    else {
-        f = NULL;
-        key = flux_kvsdir_key_at (ctx->kvs, "tasks-per-node");
-        if (!key || !(f = flux_kvs_lookup (ctx->flux, 0, key))
-                 || flux_kvs_lookup_get_unpack (f, "i", &ctx->nprocs) < 0)
-            ctx->nprocs = 1;
-        flux_future_destroy (f);
-        free (key);
-    }
-
-    if (ctx->nprocs <= 0) {
-        wlog_fatal (ctx, 0,
-            "Invalid spec on node%d: ncores = %d", ctx->nodeid, ctx->nprocs);
-    }
-
-    ctx->task = xzmalloc (ctx->nprocs * sizeof (struct task_info *));
-    for (i = 0; i < ctx->nprocs; i++)
+    ctx->task = xzmalloc (ctx->rankinfo.ntasks * sizeof (struct task_info *));
+    for (i = 0; i < ctx->rankinfo.ntasks; i++)
         ctx->task[i] = task_info_create (ctx, i);
 
     wlog_msg (ctx, "lwj %" PRIi64 ": node%d: nprocs=%d, nnodes=%d, cmdline=%s",
-                   ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
-                   json_object_to_json_string (v));
+                   ctx->id, ctx->rankinfo.nodeid, ctx->rankinfo.ntasks,
+                   ctx->nnodes, json_object_to_json_string (v));
     free (json_str);
     json_object_put (v);
 
@@ -1069,27 +1030,9 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 
     if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
         wlog_fatal (ctx, 1, "flux_get_rank");
-    /*
-     *  If the "rank" dir exists in kvs, then this LWJ has been
-     *   assigned specific resources by a scheduler.
-     *
-     *  First check to see if resources directory exists, if not
-     *   then we'll fall back to tasks-per-node. O/w, if 'rank'
-     *   exists and our rank isn't present, then there is nothing
-     *   to do on this node and we'll just exit.
-     *
-     */
-    if (flux_kvsdir_isdir (ctx->kvs, "rank")) {
-        int rc = flux_kvsdir_get_dir (ctx->kvs,
-                                 &ctx->resources,
-                                 "rank.%d", ctx->noderank);
-        if (rc < 0) {
-            if (errno == ENOENT)
-                return (-1);
-            wlog_fatal (ctx, 1, "flux_kvs_get_dir (%s.rank.%d): %s",
-                        ctx->kvspath, ctx->noderank, flux_strerror (errno));
-        }
-    }
+
+    /* Ok if this fails, ctx->resources existence is now optional */
+    flux_kvsdir_get_dir (ctx->kvs, &ctx->resources, "rank.%d", ctx->noderank);
 
     if ((lua_pattern = flux_attr_get (ctx->flux, "wrexec.lua_pattern", NULL)))
         ctx->lua_pattern = lua_pattern;
@@ -1189,7 +1132,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     char *timestr = realtime_string (buf, sizeof (buf));
     char *key;
 
-    assert (ctx->nodeid == 0);
+    assert (ctx->rankinfo.nodeid == 0);
 
     wlog_debug (ctx, "updating job state to %s", state);
 
@@ -1215,7 +1158,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
                     flux_strerror (errno));
 
     /* Rank 0 writes new job state */
-    if ((ctx->nodeid == 0) && update_job_state (ctx, state) < 0)
+    if ((ctx->rankinfo.nodeid == 0) && update_job_state (ctx, state) < 0)
         wlog_fatal (ctx, 1, "update_job_state");
 
     /* Wait for all wrexecds to finish and commit */
@@ -1223,7 +1166,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         wlog_fatal (ctx, 1, "flux_kvs_fence_anon");
 
     /* Also emit event to avoid racy flux_kvs_watch for clients */
-    if (ctx->nodeid == 0)
+    if (ctx->rankinfo.nodeid == 0)
         send_job_state_event (ctx, state);
 
     free (name);
@@ -1274,7 +1217,7 @@ int send_startup_message (struct prog_ctx *ctx)
     int i;
     const char * state = "running";
 
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         if (rexec_taskinfo_put (ctx, i) < 0)
             return (-1);
     }
@@ -1515,7 +1458,7 @@ char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
 
     memset (buf, 0, len);
 
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         int count;
 
         if (!truncated)  {
@@ -1678,7 +1621,7 @@ static int l_wreck_log_error (lua_State *L)
     return wreck_log_error (L, 0);
 }
 
-static int l_wreck_cores_per_node (struct prog_ctx *ctx, lua_State *L)
+static int l_wreck_tasks_per_node (struct prog_ctx *ctx, lua_State *L)
 {
     int i;
     int t;
@@ -1686,7 +1629,7 @@ static int l_wreck_cores_per_node (struct prog_ctx *ctx, lua_State *L)
     t = lua_gettop (L);
     for (i = 0; i < ctx->nnodes; i++) {
         lua_pushnumber (L, i);
-        lua_pushnumber (L, ctx->cores_per_node [i]);
+        lua_pushnumber (L, ctx->tasks_per_node [i]);
         lua_settable (L, t);
     }
     return (1);
@@ -1724,7 +1667,8 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "by_rank") == 0) {
-        lua_push_kvsdir_external (L, ctx->resources);
+        if (ctx->resources)
+            lua_push_kvsdir_external (L, ctx->resources);
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {
@@ -1741,7 +1685,7 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "nodeid") == 0) {
-        lua_pushnumber (L, ctx->nodeid);
+        lua_pushnumber (L, ctx->rankinfo.nodeid);
         return (1);
     }
     if (strcmp (key, "environ") == 0) {
@@ -1810,8 +1754,8 @@ static int l_wreck_index (lua_State *L)
         lua_pushnumber (L, ctx->nnodes);
         return (1);
     }
-    if (strcmp (key, "cores_per_node") == 0)
-        return (l_wreck_cores_per_node (ctx, L));
+    if (strcmp (key, "tasks_per_node") == 0)
+        return (l_wreck_tasks_per_node (ctx, L));
     return (0);
 }
 
@@ -1969,17 +1913,17 @@ int exec_commands (struct prog_ctx *ctx)
 
     prog_ctx_setenvf (ctx, "FLUX_JOB_ID",    1, "%d", ctx->id);
     prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);
-    prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->nodeid);
+    prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->rankinfo.nodeid);
     prog_ctx_setenvf (ctx, "FLUX_JOB_SIZE",  1, "%d", ctx->total_ntasks);
     gtid_list_create (ctx, buf, sizeof (buf));
     prog_ctx_setenvf (ctx, "FLUX_LOCAL_RANKS",  1, "%s", buf);
 
-    for (i = 0; i < ctx->nprocs; i++)
+    for (i = 0; i < ctx->rankinfo.ntasks; i++)
         exec_command (ctx, i);
 
     if (prog_ctx_getopt (ctx, "stop-children-in-exec"))
         stop_children = 1;
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         if (stop_children)
             start_trace_task (ctx->task [i]);
     }
@@ -1992,7 +1936,7 @@ struct task_info *pid_to_task (struct prog_ctx *ctx, pid_t pid)
     int i;
     struct task_info *t = NULL;
 
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         t = ctx->task[i];
         if (t->pid == pid)
             break;
@@ -2028,7 +1972,7 @@ int reap_child (struct prog_ctx *ctx)
 int prog_ctx_signal (struct prog_ctx *ctx, int sig)
 {
     int i;
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         pid_t pid = ctx->task[i]->pid;
         /*  XXX: there is a race between a process starting and
          *   changing its process group, so killpg(2) may fail here
@@ -2143,7 +2087,7 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
         return wlog_err (ctx, "flux_event_subscribe (hb): %s",
                         flux_strerror (errno));
 
-    for (i = 0; i < ctx->nprocs; i++) {
+    for (i = 0; i < ctx->rankinfo.ntasks; i++) {
         task_info_io_setup (ctx->task [i]);
         zio_flux_attach (ctx->task[i]->pmi_zio, ctx->flux);
         zio_flux_attach (ctx->task[i]->pmi_client, ctx->flux);
@@ -2304,7 +2248,7 @@ static int prog_ctx_initialize_pmi (struct prog_ctx *ctx)
     wreck_barrier_next (ctx);
     ctx->pmi = pmi_simple_server_create (ops, (int) ctx->id,
                                          ctx->total_ntasks,
-                                         ctx->nprocs,
+                                         ctx->rankinfo.ntasks,
                                          kvsname,
                                          flags,
                                          ctx);
@@ -2424,7 +2368,7 @@ int main (int ac, char **av)
     if (exec_rc == 0 && flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
         wlog_err (ctx, "flux_reactor_run: %s", flux_strerror (errno));
 
-    if (ctx->nodeid == 0) {
+    if (ctx->rankinfo.nodeid == 0) {
         /* At final job state, archive the completed lwj back to the
          * its final resting place in lwj.<id>
          */

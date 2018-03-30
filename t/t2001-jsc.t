@@ -221,7 +221,7 @@ test_expect_success 'jstat 10: update procdescs' "
 "
 
 test_expect_success 'jstat 11: update rdesc' "
-    flux jstat update 1 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\":3600}}' &&
+    flux jstat update 1 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"ncores\":128, \"walltime\":3600}}' &&
     flux kvs get --json $(flux wreck kvs-path 1).ntasks > output.11.1 &&
     cat > expected.11.1 <<-EOF &&
 128
@@ -249,9 +249,9 @@ EOF
 
 test_expect_success 'jstat 14: update detects bad inputs' "
     test_expect_code 42 flux jstat update 1 jobid '{\"jobid\": 1}' &&
-    test_expect_code 42 flux jstat update 0 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 1800}}' &&
-    test_expect_code 42 flux jstat update 1 rdesctypo '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 3600}}' &&
-    test_expect_code 42 flux jstat update 1 rdesc '{\"pdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 2700}}' &&
+    test_expect_code 42 flux jstat update 0 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128,  \"ncores\":128, \"walltime\": 1800}}' &&
+    test_expect_code 42 flux jstat update 1 rdesctypo '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"ncores\":128, \"walltime\": 3600}}' &&
+    test_expect_code 42 flux jstat update 1 rdesc '{\"pdesc\": {\"nnodes\": 128, \"ntasks\": 128,\"ncores\":128, \"walltime\": 2700}}' &&
     test_expect_code 42 flux jstat update 1 state-pair '{\"unknown\": {\"ostate\": 12, \"nstate\": 11}}'
 "
 

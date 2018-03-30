@@ -43,6 +43,7 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['cores-per-task']  = { char = 'c', arg = "N" },
     ['nnodes']  = { char = 'N', arg = "N" },
     ['tasks-per-node']  =
                    { char = 't', arg = "N" },
@@ -97,6 +98,7 @@ function wreck:usage()
   -h, --help                 Display this message
   -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
+  -c, --cores-per-task=N     Request N cores per task
   -N, --nnodes=N             Force number of nodes
   -t, --tasks-per-node=N     Force number of tasks per node
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
@@ -252,14 +254,21 @@ function wreck:parse_cmdline (arg)
         os.exit (1)
     end
 
+    self.nnodes = self.opts.N and tonumber (self.opts.N)
+
     -- If nnodes was provided but -n, --ntasks not set, then
-    --  set ntasks to nnodes
+    --  set ntasks to nnodes.
     if self.opts.N and not self.opts.n then
-        self.opts.n = self.opts.N
+        self.ntasks = self.nnodes
+    else
+        self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
+    end
+    if self.opts.c then
+        self.ncores = self.opts.c * self.ntasks
+    else
+        self.ncores = self.ntasks
     end
 
-    self.nnodes = self.opts.N and tonumber (self.opts.N)
-    self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
     self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
@@ -315,15 +324,22 @@ end
 
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
-    fixup_nnodes (self)
-
+    if self.fixup_nnodes then
+        fixup_nnodes (self)
+    end
     local jobreq = {
-        nnodes =  self.nnodes,
+        nnodes =  self.nnodes or 0,
         ntasks =  self.ntasks,
+        ncores =  self.ncores,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),
-        walltime =self.walltime or 0
+        walltime =self.walltime or 0,
+
+        ["opts.nnodes"] = self.opts.N,
+        ["opts.ntasks"]  = self.opts.n,
+        ["opts.cores-per-task"] = self.opts.c,
+        ["opts.tasks-per-node"] = self.opts.t,
     }
     if self.opts.o then
         for opt in self.opts.o:gmatch ('[^,]+') do
@@ -373,6 +389,7 @@ function wreck:submit ()
 end
 
 function wreck:createjob ()
+    self.fixup_nnodes = true
     local resp, err = send_job_request (self, "job.create")
     if not resp then return nil, err end
     --
