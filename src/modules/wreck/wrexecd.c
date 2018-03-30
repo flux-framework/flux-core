@@ -963,6 +963,12 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx)
 
     prog_ctx_kz_err_open (ctx);
 
+    if (ctx->nnodes > ctx->total_ntasks) {
+        wlog_fatal (ctx, 1,
+            "nnodes assigned to job (%d) greater than ntasks (%d)!",
+            ctx->nnodes, ctx->total_ntasks);
+    }
+
     if (prog_ctx_options_init (ctx) < 0)
         wlog_fatal (ctx, 1, "failed to read %s.options",
                     flux_kvsdir_key (ctx->kvs));
