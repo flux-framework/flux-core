@@ -216,6 +216,14 @@ test_expect_success 'wreckrun: fallback to old rank.N.cores format works' '
 	EOF
 	test_cmp oldrankN.expected oldrankN.out
 '
+test_expect_success 'wreckrun: job with more nodes than tasks fails' '
+	test_must_fail flux wreckrun -n2 \
+	    -P "for i=1,3 do lwj[\"rank.\"..i..\".cores\"] = 1 end; lwj.R_lite = nil" \
+	    hostname &&
+	LWJ=$(last_job_path) &&
+	test_must_fail flux kvs get ${LWJ}.R_lite &&
+	test "$(flux kvs get --json ${LWJ}.state)" = "failed"
+'
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
 test "$($cpus_allowed count)" = "0" || test_set_prereq MULTICORE
 
