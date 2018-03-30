@@ -1,0 +1,10 @@
+Distributing 16 tasks across 8 nodes with 20 cores
+Used 8 nodes
+0: rank=0 ntasks=3 basis=0
+1: rank=1 ntasks=3 basis=3
+2: rank=2 ntasks=3 basis=6
+3: rank=3 ntasks=3 basis=9
+4: rank=4 ntasks=1 basis=12
+5: rank=5 ntasks=1 basis=13
+6: rank=6 ntasks=1 basis=14
+7: rank=7 ntasks=1 basis=15
