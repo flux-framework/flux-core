@@ -104,6 +104,7 @@ struct lookup {
         LOOKUP_STATE_INIT,
         LOOKUP_STATE_CHECK_NAMESPACE,
         LOOKUP_STATE_CHECK_ROOT,
+        LOOKUP_STATE_WALK_INIT,
         LOOKUP_STATE_WALK,
         LOOKUP_STATE_VALUE,
         LOOKUP_STATE_FINISHED,
@@ -840,17 +841,6 @@ lookup_process_t lookup (lookup_t *lh)
                 }
             }
 
-            if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
-                lh->errnum = errno;
-                goto error;
-            }
-
-            /* initialize walk - first depth is level 0 */
-            if (!walk_levels_push (lh, lh->path, 0)) {
-                lh->errnum = errno;
-                goto error;
-            }
-
             lh->state = LOOKUP_STATE_CHECK_ROOT;
             /* fallthrough */
         case LOOKUP_STATE_CHECK_ROOT:
@@ -876,7 +866,6 @@ lookup_process_t lookup (lookup_t *lh)
                                                 lh->root_ref,
                                                 lh->current_epoch))
                         || !cache_entry_get_valid (entry)) {
-                        lh->state = LOOKUP_STATE_CHECK_ROOT;
                         lh->missing_ref = lh->root_ref;
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
                     }
@@ -897,6 +886,21 @@ lookup_process_t lookup (lookup_t *lh)
                     }
                 }
                 goto done;
+            }
+
+            lh->state = LOOKUP_STATE_WALK_INIT;
+            /* fallthrough */
+        case LOOKUP_STATE_WALK_INIT:
+            /* initialize walk - first depth is level 0 */
+
+            if (!(lh->root_dirent = treeobj_create_dirref (lh->root_ref))) {
+                lh->errnum = errno;
+                goto error;
+            }
+
+            if (!walk_levels_push (lh, lh->path, 0)) {
+                lh->errnum = errno;
+                goto error;
             }
 
             lh->state = LOOKUP_STATE_WALK;
