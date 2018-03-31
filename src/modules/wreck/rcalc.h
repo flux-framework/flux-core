@@ -55,6 +55,8 @@ void rcalc_destroy (rcalc_t *r);
 int rcalc_total_cores (rcalc_t *r);
 /*  Return total # of nodes/ranks in rcalc object */
 int rcalc_total_nodes (rcalc_t *r);
+/*  Return the total # of nodes/ranks with at least 1 task assigned */
+int rcalc_total_nodes_used (rcalc_t *r);
 /*  Return 1 if rcalc_t contains information for rank `rank`, 0 otherwise */
 int rcalc_has_rank (rcalc_t *r, int rank);
 

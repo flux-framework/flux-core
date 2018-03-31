@@ -60,6 +60,7 @@ TESTS = \
 	t1103-apidisconnect.t \
 	t1104-kz.t \
 	t1105-proxy.t \
+	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
@@ -102,7 +103,9 @@ EXTRA_DIST= \
 	rc/rc1-testenv \
 	rc/rc3-kvs \
 	rc/rc3-wreck \
-	rc/rc3-testenv
+	rc/rc3-testenv \
+	wreck/input \
+	wreck/output
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -136,6 +139,7 @@ check_SCRIPTS = \
 	t1103-apidisconnect.t \
 	t1104-kz.t \
 	t1105-proxy.t \
+	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
