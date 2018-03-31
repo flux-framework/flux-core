@@ -20,7 +20,7 @@ for file in ${OUTPUTDIR}/*.expected; do
     input=${INPUTDIR}/${base}.json
     output=${base}.${count}.out
     err=${base}.${count}.err
-    test_expect_success "$(head -1 $file)" '
+    test_expect_success NO_CHAIN_LINT "$(head -1 $file)" '
         ${rcalc} $count <$input >$output 2>$err || : &&
         test_cmp $file $output &&
         test_cmp $OUTPUTDIR/$err $err
