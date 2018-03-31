@@ -416,6 +416,66 @@ prog:SubCommand {
  end
 }
 
+prog:SubCommand {
+ name = "setenv",
+ usage = "[VAR=VALUE|all]",
+ description = "Export environment to all jobs",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local getenv = wreck.get_filtered_env
+    local env = f:kvs_get ("lwj.environ") or {}
+    for _,expr in ipairs (arg) do
+        if expr == "all" then
+            for k,v in pairs(getenv()) do
+                env[k] = v
+            end
+        else
+            local var,val = expr:match("(.*)=(.*)")
+            env[var] = val
+        end
+    end
+    f:kvs_put ("lwj.environ", env)
+    f:kvs_commit ()
+ end
+}
+
+prog:SubCommand {
+ name = "unsetenv",
+ usage = "VAR [VAR...]",
+ description = "Export environment to all jobs",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local env = f:kvs_get ("lwj.environ") or {}
+    for _,var in ipairs (arg) do
+        env[var] = nil
+    end
+    f:kvs_put ("lwj.environ", env)
+    f:kvs_commit ()
+ end
+}
+
+prog:SubCommand {
+ name = "getenv",
+ usage = "VAR [VAR...]",
+ description = "Export environment to all jobs",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local env = f:kvs_get ("lwj.environ") or {}
+    if #arg == 0 then
+        for k,v in pairs (env) do
+            print (k.."="..v)
+        end
+    end
+    for _,k in ipairs (arg) do
+        local v = env[k] or ""
+        print (k.."="..v)
+    end
+ end
+}
+
+
+
+
 -- return keys in dir as a table sorted by number
 local function sorted_keys (dir)
     local results = {}
