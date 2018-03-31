@@ -52,6 +52,7 @@ local default_opts = {
     ['error'] =    { char = "E", arg = "FILENAME" },
     ['input'] =    { char = "i", arg = "HOW" },
     ['label-io'] = { char = "l", },
+    ['skip-env'] = { char = "S", },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -119,6 +120,7 @@ function wreck:usage()
                              -i /dev/null:* closes all stdin, etc.)
   -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
+  -S, --skip-env             Skip export of environment to job
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -346,7 +348,7 @@ function wreck:jobreq ()
         ntasks =  self.ntasks,
         ncores =  self.ncores,
         cmdline = self.cmdline,
-        environ = get_job_env { flux = self.flux },
+        environ = self.opts.S and {} or get_job_env { flux = self.flux },
         cwd =     posix.getcwd (),
         walltime =self.walltime or 0,
 
