@@ -62,6 +62,7 @@ TESTS = \
 	t1105-proxy.t \
 	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
+	t2000-wreck-env.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
@@ -141,6 +142,7 @@ check_SCRIPTS = \
 	t1105-proxy.t \
 	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
+	t2000-wreck-env.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
