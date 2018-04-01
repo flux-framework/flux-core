@@ -52,6 +52,7 @@ local default_opts = {
     ['error'] =    { char = "E", arg = "FILENAME" },
     ['input'] =    { char = "i", arg = "HOW" },
     ['label-io'] = { char = "l", },
+    ['skip-env'] = { char = "S", },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -119,6 +120,7 @@ function wreck:usage()
                              -i /dev/null:* closes all stdin, etc.)
   -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
+  -S, --skip-env             Skip export of environment to job
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -131,13 +133,27 @@ function wreck:usage()
     end
 end
 
-local function get_filtered_env ()
+
+function wreck.get_filtered_env ()
     local env = posix.getenv()
     env.HOSTNAME = nil
     env.ENVIRONMENT = nil
     for k,v in pairs (env) do
         if k:match ("SLURM_") then env[k] = nil end
         if k:match ("FLUX_URI") then env[k] = nil end
+    end
+    return (env)
+end
+
+local function get_job_env (arg)
+    local f = arg.flux
+    local env = wreck.get_filtered_env ()
+    local default_env = {}
+    if f then default_env = f:kvs_get ("lwj.environ") or {} end
+    for k,v in pairs (env) do
+        -- If same key=value is already in default env no need to
+        --  export it again, remove:
+        if default_env[k] == env[k] then env[k] = nil end
     end
     return (env)
 end
@@ -332,7 +348,7 @@ function wreck:jobreq ()
         ntasks =  self.ntasks,
         ncores =  self.ncores,
         cmdline = self.cmdline,
-        environ = get_filtered_env (),
+        environ = self.opts.S and {} or get_job_env { flux = self.flux },
         cwd =     posix.getcwd (),
         walltime =self.walltime or 0,
 
