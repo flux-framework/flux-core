@@ -68,7 +68,9 @@
 
 struct kz_struct {
     int flags;
-    char *name;
+    char *key;
+    int key_sz;
+    int name_len;
     flux_t *h;
     int seq;
     flux_kvsdir_t *dir;
@@ -85,7 +87,7 @@ static void kz_destroy (kz_t *kz)
 {
     if (kz) {
         int saved_errno = errno;
-        free (kz->name);
+        free (kz->key);
         flux_kvsdir_destroy (kz->dir);
         free (kz->grpname);
         free (kz);
@@ -109,12 +111,58 @@ done:
     return ret;
 }
 
+/* Initialize kz->key, kz->key_sz, and kz->name_len.
+ * kz->key is allocated to fit a sequenced key written by format_key().
+ * The base 'name' is stored.
+ */
+static int init_key (kz_t *kz, const char *name)
+{
+    int n;
+
+    if (!name) {
+        errno = EINVAL;
+        return -1;
+    }
+    kz->name_len = strlen (name);
+    kz->key_sz = kz->name_len + 16; // name.XXXXXX (with \0) is name_len + 8
+    if (!(kz->key = malloc (kz->key_sz)))
+        return -1;
+    n = snprintf (kz->key, kz->key_sz, "%s", name);
+    assert (n < kz->key_sz);
+
+    return 0;
+}
+
+/* Update kz->key to contain name.<seq> and return it.
+ */
+static const char *format_key (kz_t *kz, int seq)
+{
+    int n;
+
+    n = snprintf (kz->key + kz->name_len,
+                  kz->key_sz - kz->name_len, ".%.6d", seq);
+    assert (n < kz->key_sz - kz->name_len);
+    return kz->key;
+}
+
+/* Update kz->key to contain just name (the directory) and return it.
+ */
+static char *clear_key (kz_t *kz)
+{
+    kz->key[kz->name_len] = '\0';
+    return kz->key;
+}
+
 kz_t *kz_open (flux_t *h, const char *name, int flags)
 {
-    kz_t *kz = xzmalloc (sizeof (*kz));
+    kz_t *kz;
+
+    if (!(kz = calloc (1, sizeof (*kz))))
+        return NULL;
+    if (init_key (kz, name) < 0)
+        goto error;
 
     kz->flags = flags;
-    kz->name = xstrdup (name);
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
@@ -187,26 +235,18 @@ error:
 
 static int putnext (kz_t *kz, const char *json_str)
 {
-    char *key = NULL;
-    int rc = -1;
-
     if (!(kz->flags & KZ_FLAGS_WRITE)) {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
-    if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
-        oom ();
+    const char *key = format_key (kz, kz->seq++);
     if (flux_kvs_put (kz->h, key, json_str) < 0)
-        goto done;
+        return -1;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
         if (flux_kvs_commit_anon (kz->h, 0) < 0)
-            goto done;
+            return -1;
     }
-    rc = 0;
-done:
-    if (key)
-        free (key);
-    return rc;
+    return 0;
 }
 
 int kz_put_json (kz_t *kz, const char *json_str)
@@ -243,7 +283,6 @@ done:
 static char *getnext (kz_t *kz)
 {
     const char *json_str;
-    char *key = NULL;
     flux_future_t *f = NULL;
     char *result = NULL;
 
@@ -251,8 +290,7 @@ static char *getnext (kz_t *kz)
         errno = EINVAL;
         goto done;
     }
-    if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
-        oom ();
+    const char *key = format_key (kz, kz->seq);
     if (!(f = flux_kvs_lookup (kz->h, 0, key))
                         || flux_kvs_lookup_get (f, &json_str) < 0) {
         if (errno == ENOENT)
@@ -264,8 +302,6 @@ static char *getnext (kz_t *kz)
     kz->seq++;
 done:
     flux_future_destroy (f);
-    if (key)
-        free (key);
     return result;
 }
 
@@ -276,7 +312,8 @@ static char *getnext_blocking (kz_t *kz)
     while (!(json_str = getnext (kz))) {
         if (errno != EAGAIN)
             break;
-        if (flux_kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
+        const char *key = clear_key (kz);
+        if (flux_kvs_watch_once_dir (kz->h, &kz->dir, "%s", key) < 0) {
             if (errno != ENOENT)
                 break;
             if (kz->dir) {
@@ -345,12 +382,10 @@ int kz_close (kz_t *kz)
 {
     int rc = -1;
     char *json_str = NULL;
-    char *key = NULL;
 
     if ((kz->flags & KZ_FLAGS_WRITE)) {
         if (!(kz->flags & KZ_FLAGS_RAW)) {
-            if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
-                oom ();
+            const char *key = format_key (kz, kz->seq++);
             if (!(json_str = zio_json_encode (NULL, 0, true))) { /* EOF */
                 errno = EPROTO;
                 goto done;
@@ -368,15 +403,14 @@ int kz_close (kz_t *kz)
         }
     }
     if (kz->watching) {
-        (void)flux_kvs_unwatch (kz->h, kz->name);
+        const char *key = clear_key (kz);
+        (void)flux_kvs_unwatch (kz->h, key);
         kz->watching = false;
     }
     rc = 0;
 done:
     if (json_str)
         free (json_str);
-    if (key)
-        free (key);
     kz_destroy (kz);
     return rc;
 }
@@ -402,7 +436,8 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
     if (!kz->watching) {
-        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
+        const char *key = clear_key (kz);
+        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
             return -1;
         kz->watching = true;
     }
