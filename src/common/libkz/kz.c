@@ -36,7 +36,7 @@
  * If the value contains an EOF flag, return 0.
  *
  * kz_put (only valid for kz_open KZ_FLAGS_WRITE):
- * If KZ_FLAGS_TRUNC, any existing contents are removed.
+ * Any existing contents are removed.
  * Writing begins at '000000'.  Each kz_put returns either -1 or
  * the number of bytes requested to be written (there are no short writes).
  * A kvs_commit is issued after every kz_put, unless disabled.
@@ -95,22 +95,6 @@ static void kz_destroy (kz_t *kz)
     }
 }
 
-static bool key_exists (flux_t *h, const char *key)
-{
-    bool ret = false;
-    flux_future_t *f = NULL;
-
-    if (!(f = flux_kvs_lookup (h, 0, key)) || flux_future_get (f, NULL) < 0) {
-        if (errno == EISDIR)
-            ret = true;
-        goto done;
-    }
-    ret = true;
-done:
-    flux_future_destroy (f);
-    return ret;
-}
-
 /* Initialize kz->key, kz->key_sz, and kz->name_len.
  * kz->key is allocated to fit a sequenced key written by format_key().
  * The base 'name' is stored.
@@ -166,14 +150,7 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
-        if (key_exists (h, name)) {
-            if (!(flags & KZ_FLAGS_TRUNC)) {
-                errno = EEXIST;
-                goto error;
-            } else if (flux_kvs_unlink (h, name) < 0)
-                goto error;
-        }
-        if (flux_kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
+        if (flux_kvs_mkdir (h, name) < 0) // overwrites existing
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
             if (flux_kvs_commit_anon (h, 0) < 0)

@@ -53,14 +53,13 @@ static void copy (flux_t *h, const char *src, const char *dst, int kzoutflags,
 static void attach (flux_t *h, const char *key, bool raw, int kzoutflags,
                    int blocksize);
 
-#define OPTIONS "ha:crk:tb:d"
+#define OPTIONS "ha:crk:b:d"
 static const struct option longopts[] = {
     {"help",         no_argument,        0, 'h'},
     {"attach",       required_argument,  0, 'a'},
     {"copy",         no_argument,        0, 'c'},
     {"key",          required_argument,  0, 'k'},
     {"raw-tty",      no_argument,        0, 'r'},
-    {"trunc",        no_argument,        0, 't'},
     {"delay-commit", no_argument,        0, 'd'},
     {"blocksize",    required_argument,  0, 'b'},
     { 0, 0, 0, 0 },
@@ -74,7 +73,6 @@ void usage (void)
 "Where OPTIONS are:\n"
 "  -k,--key NAME         stdio should use the specified KVS dir\n"
 "  -r,--raw-tty          attach tty in raw mode\n"
-"  -t,--trunc            truncate KVS on write\n"
 "  -b,--blocksize BYTES  set stdin blocksize (default 4096)\n"
 "  -d,--delay-commit     flush data to KVS lazily (defer commit until close)\n"
 );
@@ -109,9 +107,6 @@ int main (int argc, char *argv[])
                 break;
             case 'r': /* --raw-tty */
                 rawtty = true;
-                break;
-            case 't': /* --trunc */
-                kzoutflags |= KZ_FLAGS_TRUNC;
                 break;
             case 'd': /* --delay-commit */
                 kzoutflags |= KZ_FLAGS_DELAYCOMMIT;

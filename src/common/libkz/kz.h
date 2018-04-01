@@ -16,7 +16,6 @@ enum kz_flags {
     KZ_FLAGS_NOEXIST        = 0x0020, /* allow open for reading to succeed */
                                       /*   even if stream doesn't exist yet */
 
-    KZ_FLAGS_TRUNC          = 0x0100, /* remove contents before writing */
     KZ_FLAGS_RAW            = 0x0200, /* use only *_json I/O methods */
     KZ_FLAGS_NOCOMMIT_OPEN  = 0x0400, /* skip commit at open (FLAGS_WRITE) */
     KZ_FLAGS_NOCOMMIT_PUT   = 0x0800, /* skip commit at put */
@@ -26,6 +25,7 @@ enum kz_flags {
 };
 
 /* Prepare to read or write a KVS stream.
+ * If open for writing, any existing content is overwritten.
  */
 kz_t *kz_open (flux_t *h, const char *name, int flags);
 
