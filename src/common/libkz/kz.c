@@ -399,11 +399,16 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     }
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
-    if (!kz->watching) {
-        const char *key = clear_key (kz);
+    const char *key = clear_key (kz);
+    if (kz->ready_cb != NULL && !kz->watching) {
         if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
             return -1;
         kz->watching = true;
+    }
+    if (kz->ready_cb == NULL && kz->watching) {
+        if (flux_kvs_unwatch (kz->h, key) < 0)
+            return -1;
+        kz->watching = false;
     }
     return 0;
 }
