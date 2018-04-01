@@ -665,7 +665,7 @@ static int send_state_event (flux_t *h, job_state_t st, int64_t j)
                         jsc_job_num2state (st));
         goto done;
     }
-    if ((msg = flux_event_pack (topic, "{ s:I }", "lwj", j)) == NULL) {
+    if ((msg = flux_event_pack (topic, "{ s:I }", "jobid", j)) == NULL) {
         flux_log_error (h, "flux_event_pack");
         goto done;
     }
@@ -1137,7 +1137,7 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
 
-    if (flux_event_unpack (msg, NULL, "{ s:I }", "lwj", &jobid) < 0) {
+    if (flux_event_unpack (msg, NULL, "{ s:I }", "jobid", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
