@@ -156,19 +156,6 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
             if (flux_kvs_commit_anon (h, 0) < 0)
                 goto error;
         }
-    } else if ((flags & KZ_FLAGS_READ)) {
-        if (!(flags & KZ_FLAGS_NOEXIST)) {
-            const flux_kvsdir_t *dir;
-            flux_future_t *f;
-
-            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, name))
-                || flux_kvs_lookup_get_dir (f, &dir) < 0
-                || !(kz->dir = flux_kvsdir_copy (dir))) {
-                flux_future_destroy (f);
-                goto error;
-            }
-            flux_future_destroy (f);
-        }
     }
     return kz;
 error:

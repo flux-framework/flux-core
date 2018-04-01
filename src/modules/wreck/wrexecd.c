@@ -478,8 +478,7 @@ kz_t *task_kz_open (struct task_info *t, int type)
     int flags = prog_ctx_io_flags (ctx);
 
     if (type == IN)
-        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST
-                 | KZ_FLAGS_RAW;
+        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_RAW;
     else
         flags |= KZ_FLAGS_WRITE;
 

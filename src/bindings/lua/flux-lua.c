@@ -1362,7 +1362,7 @@ static int l_iowatcher_add (lua_State *L)
     }
     lua_getfield (L, 2, "key");
     if (!lua_isnil (L, -1)) {
-        int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
+        int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
         kz_t *kz;
         const char *key = lua_tostring (L, -1);
         if ((kz = kz_open (f, key, flags)) == NULL)
@@ -2023,7 +2023,7 @@ static int l_flux_kz_open (lua_State *L)
     if (mode == NULL)
         mode = "r";
     if (mode[0] == 'r')
-        flags = KZ_FLAGS_READ | KZ_FLAGS_NOEXIST | KZ_FLAGS_NONBLOCK;
+        flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
     else if (mode[0] == 'w')
         flags = KZ_FLAGS_WRITE;
     else
