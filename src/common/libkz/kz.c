@@ -69,7 +69,6 @@
 struct kz_struct {
     int flags;
     char *name;
-    char *stream;
     flux_t *h;
     int seq;
     flux_kvsdir_t *dir;
@@ -116,10 +115,6 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
 
     kz->flags = flags;
     kz->name = xstrdup (name);
-    if ((kz->stream = strchr (kz->name, '.')))
-        kz->stream++;
-    else
-        kz->stream = kz->name;
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
