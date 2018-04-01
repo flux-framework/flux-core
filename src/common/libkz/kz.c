@@ -84,13 +84,14 @@ struct kz_struct {
 
 static void kz_destroy (kz_t *kz)
 {
-    if (kz->name)
+    if (kz) {
+        int saved_errno = errno;
         free (kz->name);
-    if (kz->dir)
         flux_kvsdir_destroy (kz->dir);
-    if (kz->grpname)
         free (kz->grpname);
-    free (kz);
+        free (kz);
+        errno = saved_errno;
+    }
 }
 
 static bool key_exists (flux_t *h, const char *key)
