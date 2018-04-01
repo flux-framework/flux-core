@@ -192,7 +192,7 @@ static void send_create_event (flux_t *h, int64_t id,
         walltime = val;
 
     msg = flux_event_pack (topic, "{s:I,s:s,s:i,s:i,s:i,s:i}",
-                          "lwj", id, "kvs_path", path,
+                          "jobid", id, "kvs_path", path,
                           "ntasks", ntasks,
                           "ncores", ncores,
                           "nnodes", nnodes,
