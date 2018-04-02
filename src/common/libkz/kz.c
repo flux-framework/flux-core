@@ -76,9 +76,6 @@ struct kz_struct {
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
-    int nprocs;
-    char *grpname;
-    int fencecount;
     bool watching;
     flux_future_t *lookup_f; // kvs_lookup in progress for kz->seq
     int last_dir_size;
@@ -89,7 +86,6 @@ static void kz_destroy (kz_t *kz)
     if (kz) {
         int saved_errno = errno;
         free (kz->key);
-        free (kz->grpname);
         flux_future_destroy (kz->lookup_f);
         free (kz);
         errno = saved_errno;
@@ -158,40 +154,6 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
                 goto error;
         }
     }
-    return kz;
-error:
-    kz_destroy (kz);
-    return NULL;
-}
-
-static int kz_fence (kz_t *kz)
-{
-    char *name;
-    int rc;
-    if (asprintf (&name, "%s.%d", kz->grpname, kz->fencecount++) < 0)
-        oom ();
-    rc = flux_kvs_fence_anon (kz->h, name, kz->nprocs, 0);
-    free (name);
-    return rc;
-}
-
-kz_t *kz_gopen (flux_t *h, const char *grpname, int nprocs,
-               const char *name, int flags)
-{
-    kz_t *kz;
-
-    if (!(flags & KZ_FLAGS_WRITE) || !grpname || nprocs <= 0) {
-        errno = EINVAL;
-        return NULL;
-    }
-    flags |= KZ_FLAGS_NOCOMMIT_OPEN;
-    flags |= KZ_FLAGS_NOCOMMIT_CLOSE;
-    if (!(kz = kz_open (h, name, flags)))
-        return NULL;
-    kz->grpname = xstrdup (grpname);
-    kz->nprocs = nprocs;
-    if (kz_fence (kz) < 0)
-        goto error;
     return kz;
 error:
     kz_destroy (kz);
@@ -360,10 +322,6 @@ int kz_close (kz_t *kz)
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
             if (flux_kvs_commit_anon (kz->h, 0) < 0)
-                goto done;
-        }
-        if (kz->nprocs > 0 && kz->grpname) {
-            if (kz_fence (kz) < 0)
                 goto done;
         }
     }
