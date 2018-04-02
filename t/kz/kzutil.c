@@ -202,16 +202,14 @@ static void attach_stdout_ready_cb (kz_t *kz, void *arg)
     char *data;
     int len;
 
-    do {
-        if ((len = kz_get (kz, &data)) < 0) {
-            if (errno != EAGAIN)
-                log_err_exit ("kz_get stdout");
-        } else if (len > 0) {
-            if (write_all (STDOUT_FILENO, data, len) < 0)
-                log_err_exit ("write_all stdout");
-            free (data);
-        }
-    } while (len > 0);
+    if ((len = kz_get (kz, &data)) < 0) {
+        if (errno != EAGAIN)
+            log_err_exit ("kz_get stdout");
+    } else if (len > 0) {
+        if (write_all (STDOUT_FILENO, data, len) < 0)
+            log_err_exit ("write_all stdout");
+        free (data);
+    }
     if (len == 0) { /* EOF */
         if (--ctx->readers == 0)
             flux_reactor_stop (flux_get_reactor (ctx->h));
@@ -224,16 +222,14 @@ static void attach_stderr_ready_cb (kz_t *kz, void *arg)
     int len;
     char *data;
 
-    do {
-        if ((len = kz_get (kz, &data)) < 0) {
-            if (errno != EAGAIN)
-                log_err_exit ("kz_get stderr");
-        } else if (len > 0) {
-            if (write_all (STDERR_FILENO, data, len) < 0)
-                log_err_exit ("write_all stderr");
-            free (data);
-        }
-    } while (len > 0);
+    if ((len = kz_get (kz, &data)) < 0) {
+        if (errno != EAGAIN)
+            log_err_exit ("kz_get stderr");
+    } else if (len > 0) {
+        if (write_all (STDERR_FILENO, data, len) < 0)
+            log_err_exit ("write_all stderr");
+        free (data);
+    }
     if (len == 0) { /* EOF */
         if (--ctx->readers == 0)
             flux_reactor_stop (flux_get_reactor (ctx->h));
