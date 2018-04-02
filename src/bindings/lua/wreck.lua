@@ -624,7 +624,10 @@ function wreck.joblist (arg)
     end
 
     local dir, err = f:kvsdir ("lwj")
-    if not dir then return nil, err end
+    if not dir then
+        if err:match ("No such") then err = "No job information in KVS" end
+        return nil, err
+    end
 
     return reverse (visit (dir))
 end
