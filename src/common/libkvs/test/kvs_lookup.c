@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <flux/core.h>
 
 #include "src/common/libflux/flux.h"
 #include "kvs_lookup.h"
@@ -11,6 +12,7 @@
 
 void errors (void)
 {
+    flux_future_t *f;
     /* check simple error cases */
 
     errno = 0;
@@ -32,6 +34,17 @@ void errors (void)
     errno = 0;
     ok (flux_kvs_lookup_get_raw (NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_kvs_lookup_get_raw fails on bad input");
+
+    errno = 0;
+    ok (flux_kvs_lookup_get_key (NULL) == NULL && errno == EINVAL,
+        "flux_kvs_lookup_get_key future=NULL fails with EINVAL");
+
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    errno = 0;
+    ok (flux_kvs_lookup_get_key (f) == NULL && errno == EINVAL,
+        "flux_kvs_lookup_get_key future=(wrong type) fails with EINVAL");
+    flux_future_destroy (f);
 }
 
 int main (int argc, char *argv[])
