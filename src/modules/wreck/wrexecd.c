@@ -451,11 +451,11 @@ int io_cb (zio_t *z, const char *s, int len, void *arg)
 void kz_stdin (kz_t *kz, struct task_info *t)
 {
     char *json_str;
-    while ((json_str = kz_get_json (kz))) {
+    if ((json_str = kz_get_json (kz))) {
         zio_write_json (t->zio [IN], json_str);
         free (json_str);
     }
-    if (errno != 0 && errno != EAGAIN)
+    else if (errno != 0 && errno != EAGAIN)
         wlog_err (t->ctx, "kz_get_json: %s", flux_strerror (errno));
     return;
 }
@@ -478,8 +478,7 @@ kz_t *task_kz_open (struct task_info *t, int type)
     int flags = prog_ctx_io_flags (ctx);
 
     if (type == IN)
-        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST
-                 | KZ_FLAGS_RAW;
+        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_RAW;
     else
         flags |= KZ_FLAGS_WRITE;
 

@@ -1300,29 +1300,18 @@ static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
-    while ((len = kz_get (kz, &data)) >= 0) {
-        /*
-         *  Recreate stack on each iteration:
-         */
-        lua_pushvalue (L, 2);
-        assert (lua_isfunction (L, -1));
-        lua_pushvalue (L, 3);
-        assert (lua_isuserdata (L, -1));
-
-        if (len > 0) {
-            lua_pushlstring (L, data, len);
-            free (data);
-        }
-        if (len == 0)
-            lua_pushnil (L);
-
-        if (lua_pcall (L, 2, 1, 0)) {
+    len = kz_get (kz, &data);
+    if (len > 0) {
+        lua_pushlstring (L, data, len);
+        free (data);
+    }
+    if (len == 0)
+        lua_pushnil (L);
+    if (len >= 0) {
+        if (lua_pcall (L, 2, 1, 0))
             fprintf (stderr, "kz_ready: %s\n",  lua_tostring (L, -1));
-            break;
-        }
-        if (len == 0)
-            break;
-        lua_pop (L, 1);
+        else
+            lua_pop (L, 1);
     }
 
     lua_settop (L, 0);
@@ -1362,7 +1351,7 @@ static int l_iowatcher_add (lua_State *L)
     }
     lua_getfield (L, 2, "key");
     if (!lua_isnil (L, -1)) {
-        int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
+        int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
         kz_t *kz;
         const char *key = lua_tostring (L, -1);
         if ((kz = kz_open (f, key, flags)) == NULL)
@@ -2023,7 +2012,7 @@ static int l_flux_kz_open (lua_State *L)
     if (mode == NULL)
         mode = "r";
     if (mode[0] == 'r')
-        flags = KZ_FLAGS_READ | KZ_FLAGS_NOEXIST | KZ_FLAGS_NONBLOCK;
+        flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
     else if (mode[0] == 'w')
         flags = KZ_FLAGS_WRITE;
     else
