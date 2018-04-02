@@ -61,7 +61,7 @@ int kz_close (kz_t *kz);
 
 /* Register a callback that will be called when data is available to
  * be read from kz.  Call kz_open with (KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK).
- * Your function should call kz_get() until it returns -1, errno = EAGAIN.
+ * Your function may call kz_get() once without blocking.
  */
 int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg);
 
