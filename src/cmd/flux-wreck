@@ -118,15 +118,24 @@ end
 prog:SubCommand {
  name = "cancel",
  description = "Cancel a pending job",
- usage = "JOBID",
+ usage = "[-f|--force] JOBID",
+ options = {
+    { name = "force", char = "f",
+      usage = "Force cancel even if scheduler is not loaded"
+    },
+ },
  handler = function (self, arg)
     local id = check_jobid_arg (self, arg[1])
     local resp, err = f:rpc ("sched.cancel", { jobid = tonumber (id) })
     if not resp then
-	if err == "Function not implemented" then
+        if err == "Function not implemented" and not self.opt.f then
             prog:die ("job cancel not supported when scheduler not loaded")
-	else
-	    prog:die ("Unable to cancel %d: %s\n", id, err)
+        elseif self.opt.f or err == "Invalid argument" then
+            prog:log ("Sending SIGKILL to %d\n", id)
+            local rc, err = f:sendevent ({signal = 9}, "wreck.%d.kill", id)
+            if not rc then self:die ("signal: %s\n", err) end
+        else
+            prog:die ("Unable to cancel %d: %s\n", id, err)
         end
     end
  end
@@ -212,15 +221,48 @@ function LWJ:timediff (tstart, tend, talt)
     return s > 0 and s or 0
 end
 
-LWJ.__index = function (self, key)
-    if key == "state" then
-        return self.lwj.state
-    elseif key == "ranks" then
-        local hl = hostlist.new()
+function LWJ:exit_string ()
+    local flux = require 'flux'
+    local state = self.state
+    local max = self.lwj.exit_status.max
+    if max then
+        local s, code, core = flux.exitstatus (max)
+        state = s
+        if s == "exited" and code > 0 then
+            state = "failed"
+        end
+    end
+    return state
+end
+
+function LWJ:state_string ()
+    if self.state == "complete" then
+        return self:exit_string ()
+    end
+    return self.state
+end
+
+function LWJ:ranks ()
+    local hl = hostlist.new()
+    local R = self.lwj.R_lite
+    if not R then
         local rank = self.lwj.rank
         if not rank then return nil end
         for i in rank:keys() do hl:concat (i) end
-        return hl:sort()
+    else
+        for _,entry in ipairs (R) do
+            hl:concat (entry.rank)
+        end
+    end
+    return hl:sort()
+end
+
+LWJ.__index = function (self, key)
+    if key == "state" then
+        if not self._state then
+            self._state = self.lwj.state
+        end
+        return self._state
     elseif key == "ntasks" then
         return self.lwj.ntasks
     elseif key == "nnodes" then
@@ -296,9 +338,9 @@ prog:SubCommand {
         if tonumber (id) then
             local j, err = LWJ.open (f, id, dir)
             if not j then self:die ("job%d: %s", id, err) end
-            printf (fmt, id, j.ntasks, j.state, j.start,
+            printf (fmt, id, j.ntasks, j:state_string(), j.start,
                     seconds_to_string (j.runtime),
-                    tostring (j.ranks),
+                    tostring (j:ranks()),
                     j.command:match ("([^/]+)$"))
         end
     end
@@ -375,6 +417,91 @@ prog:SubCommand {
 }
 
 prog:SubCommand {
+ name = "setenv",
+ usage = "[VAR=VALUE|all]",
+ description = "Export environment to all jobs",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local getenv = wreck.get_filtered_env
+    local env = f:kvs_get ("lwj.environ") or {}
+    for _,expr in ipairs (arg) do
+        if expr == "all" then
+            for k,v in pairs(getenv()) do
+                env[k] = v
+            end
+        else
+            local var,val = expr:match("(.*)=(.*)")
+            env[var] = val
+        end
+    end
+    f:kvs_put ("lwj.environ", env)
+    f:kvs_commit ()
+ end
+}
+
+prog:SubCommand {
+ name = "unsetenv",
+ usage = "VAR [VAR...]",
+ description = "Export environment to all jobs",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local env = f:kvs_get ("lwj.environ") or {}
+    for _,var in ipairs (arg) do
+        env[var] = nil
+    end
+    f:kvs_put ("lwj.environ", env)
+    f:kvs_commit ()
+ end
+}
+
+prog:SubCommand {
+ name = "getenv",
+ usage = "VAR [VAR...]",
+ description = "Export environment to all jobs",
+ handler = function (self, arg)
+    local f = assert (require 'flux'.new ())
+    local env = f:kvs_get ("lwj.environ") or {}
+    if #arg == 0 then
+        for k,v in pairs (env) do
+            print (k.."="..v)
+        end
+    end
+    for _,k in ipairs (arg) do
+        local v = env[k] or ""
+        print (k.."="..v)
+    end
+ end
+}
+
+
+
+
+-- return keys in dir as a table sorted by number
+local function sorted_keys (dir)
+    local results = {}
+    for k in dir:keys () do
+        table.insert (results, k)
+    end
+    table.sort (results, function (a,b) return tonumber (a) < tonumber (b) end)
+    return results
+end
+
+local function remove_if_empty (key, r)
+   local results = r or {}
+   local dir  = f:kvsdir (key)
+   if not dir or dir.state then return false, results end
+   local remove = true
+   for k in dir:keys () do
+       remove, results = remove_if_empty (key .. "." .. k, results)
+   end
+   if remove then
+       f:kvs_unlink (key)
+       table.insert (results, key)
+   end
+   return remove, results
+end
+
+prog:SubCommand {
  name = "purge",
  usage = "[OPTIONS]",
  options = {
@@ -432,10 +559,10 @@ prog:SubCommand {
         local r = {}
         (function() -- anonymous function used for early return
             local completed = f:kvsdir ("lwj-complete")
-            for hb in completed:keys () do
+            for _,hb in ipairs (sorted_keys (completed)) do
                 local hb_unlink = true
                 local d = completed [hb]
-                for id in d:keys() do
+                for _,id in ipairs (sorted_keys (d)) do
                     -- Save name of this kvs path:
                     local complink = tostring (d).."."..id
                     if keep (id) then
@@ -465,11 +592,14 @@ prog:SubCommand {
         -- gather ids to remove in hostlist for condensed output:
         --
         local hl = require 'flux.hostlist' .new (table.concat (r, ",")):uniq ()
+        local rmdirs = {}
         if self.opt.R then
             f:kvs_commit()
             if verbose then
                 self:log ("%4.03fs: unlinked %d entries\n", tt:get0(), #hl)
             end
+            _, rmdirs = remove_if_empty ("lwj")
+            f:kvs_commit ()
         elseif verbose then
             self:log ("%4.03fs: finished walking %d entries in lwj-complete\n",
                       tt:get0(), #hl)
@@ -482,6 +612,12 @@ prog:SubCommand {
         self:log ("%s %d lwj entries%s\n",
                   self.opt.R and "removed" or "would remove", #hl,
                   idstring)
+        if #rmdirs > 0 then
+            self:log ("removed %d empty dirs under lwj.\n", #rmdirs)
+            if verbose then
+                self:log ("removed: %s\n", table.concat (rmdirs, ", "))
+            end
+        end
         if verbose then
             self:log ("%4.03fs: all done.\n", tt:get0());
         end

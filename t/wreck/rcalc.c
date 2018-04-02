@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2015 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -25,50 +25,55 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
+#include <errno.h>
 
-char *kvs_util_normalize_key (const char *key, bool *want_directory)
+#include "src/modules/wreck/rcalc.h"
+
+int main (int ac, char **av)
 {
-    const char sep = '.';
-    char *cpy = strdup (key);
-    int i, len = strlen (key) + 1;
-    bool has_sep_suffix = false;
+    int i, ntasks;
+    rcalc_t *r;
 
-    if (cpy) {
-        /* Transform duplicate path separators into a single one.
-         */
-        for (i = 0; i < len; ) {
-            if (cpy[i] == sep && cpy[i + 1] == sep) {
-                memmove (&cpy[i], &cpy[i + 1], len - i - 1);
-                len--;
-            }
-            else
-                i++;
-        }
-        /* Eliminate leading path separator
-         */
-        if (len > 2 && cpy[0] == sep) {
-            memmove (&cpy[0], &cpy[1], len - 1);
-            len--;
-        }
-        /* Eliminate trailing path separator
-         */
-        if (len > 2 && cpy[len - 2] == sep) {
-            cpy[len - 2] = '\0';
-            len--;
-            has_sep_suffix = true;
-        }
-        if (cpy[0] == sep)
-            has_sep_suffix = true;
-        if (want_directory)
-            *want_directory = has_sep_suffix;
+    if (ac < 2) {
+        fprintf (stderr, "Usage: %s NTASKS\n", av[0]);
+        exit (1);
     }
-    return cpy;
+    if (!(r = rcalc_createf (stdin)))  {
+        fprintf (stderr, "Unable to create r: %s\n", strerror (errno));
+        exit (1);
+    }
+    if ((ntasks = strtoul (av[1], NULL, 10)) <= 0 || ntasks > 1e20) {
+        fprintf (stderr, "Invalid value for ntasks: %s\n", av[1]);
+        exit (1);
+    }
+    printf ("Distributing %d tasks across %d nodes with %d cores\n",
+            ntasks, rcalc_total_nodes (r), rcalc_total_cores (r));
+
+    if (rcalc_distribute (r, ntasks) < 0) {
+        fprintf (stderr, "rcalc_distribute: %s\n", strerror (errno));
+        exit (1);
+    }
+    printf ("Used %d nodes\n", rcalc_total_nodes_used (r));
+
+    for (i = 0; i < rcalc_total_nodes (r); i++) {
+        struct rcalc_rankinfo ri;
+        if (rcalc_get_nth (r, i, &ri) < 0) {
+            fprintf (stderr, "rcalc_get_rankinfo (rank=%d): %s\n",
+                     i, strerror (errno));
+            exit (1);
+        }
+        printf ("%d: rank=%d ntasks=%d basis=%d\n",
+                ri.nodeid, ri.rank, ri.ntasks, ri.global_basis);
+    }
+    rcalc_destroy (r);
+    return (0);
 }
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
+

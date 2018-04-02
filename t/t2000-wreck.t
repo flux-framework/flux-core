@@ -204,13 +204,33 @@ test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
 	test "$n" = "${SIZE}"
 '
 
+test_expect_success 'wreckrun: fallback to old rank.N.cores format works' '
+	flux wreckrun -N2 -n2 \
+             -P "lwj[\"rank.0.cores\"] = 1; lwj[\"rank.1.cores\"] = 1; lwj.R_lite = nil" \
+	     /bin/echo hello >oldrankN.out &&
+	LWJ=$(last_job_path) &&
+	test_must_fail flux kvs get ${LWJ}.R_lite &&
+	cat <<-EOF >oldrankN.expected &&
+	hello
+	hello
+	EOF
+	test_cmp oldrankN.expected oldrankN.out
+'
+test_expect_success 'wreckrun: job with more nodes than tasks fails' '
+	test_must_fail flux wreckrun -n2 \
+	    -P "for i=1,3 do lwj[\"rank.\"..i..\".cores\"] = 1 end; lwj.R_lite = nil" \
+	    hostname &&
+	LWJ=$(last_job_path) &&
+	test_must_fail flux kvs get ${LWJ}.R_lite &&
+	test "$(flux kvs get --json ${LWJ}.state)" = "failed"
+'
 cpus_allowed=${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua
 test "$($cpus_allowed count)" = "0" || test_set_prereq MULTICORE
 
 test_expect_success MULTICORE 'wreckrun: supports affinity assignment' '
 	newmask=$($cpus_allowed last) &&
 	run_timeout 5 flux wreckrun -n1 \
-	  --pre-launch-hook="lwj.rank[0].cpumask = \"$newmask\"" \
+	  --pre-launch-hook="lwj[\"rank.0.cpumask\"] = \"$newmask\"" \
 	  $cpus_allowed > output_cpus &&
 	cat <<-EOF >expected_cpus &&
 	$newmask
@@ -392,6 +412,20 @@ test_expect_success NO_SCHED 'flux-wreck cancel: fails when sched not loaded' '
 	flux-wreck: job cancel not supported when scheduler not loaded
 	EOF
 	test_cmp expected.cancel err.cancel
+'
+test_expect_success 'flux-wreck cancel: falls back to SIGKILL with -f' '
+	run_timeout 1 flux wreckrun --detach sleep 100 &&
+	id=$(last_job_id) &&
+	LWJ=$(last_job_path) &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 $LWJ.state "v == \"running\"" &&
+	flux wreck cancel -f $id &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 $LWJ.state "v == \"complete\"" &&
+	test_expect_code 137 flux wreck status $id >output.cancel-f &&
+	cat >expected.cancel-f <<-EOF &&
+	Job $id status: complete
+	task0: exited with signal 9
+	EOF
+	test_cmp expected.cancel-f output.cancel-f
 '
 
 check_complete_link() {

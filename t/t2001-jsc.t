@@ -11,16 +11,14 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
-tr1="null->null"
-tr2="null->reserved"
-tr3="reserved->starting"
-tr4="starting->running"
-tr5="running->complete"
+tr1="null->reserved"
+tr2="reserved->starting"
+tr3="starting->running"
+tr4="running->complete"
 trans="$tr1
 $tr2
 $tr3
-$tr4
-$tr5"
+$tr4"
 
 #  Return previous job path in kvs
 last_job_path() {
@@ -223,7 +221,7 @@ test_expect_success 'jstat 10: update procdescs' "
 "
 
 test_expect_success 'jstat 11: update rdesc' "
-    flux jstat update 1 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\":3600}}' &&
+    flux jstat update 1 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"ncores\":128, \"walltime\":3600}}' &&
     flux kvs get --json $(flux wreck kvs-path 1).ntasks > output.11.1 &&
     cat > expected.11.1 <<-EOF &&
 128
@@ -251,9 +249,9 @@ EOF
 
 test_expect_success 'jstat 14: update detects bad inputs' "
     test_expect_code 42 flux jstat update 1 jobid '{\"jobid\": 1}' &&
-    test_expect_code 42 flux jstat update 0 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 1800}}' &&
-    test_expect_code 42 flux jstat update 1 rdesctypo '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 3600}}' &&
-    test_expect_code 42 flux jstat update 1 rdesc '{\"pdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 2700}}' &&
+    test_expect_code 42 flux jstat update 0 rdesc '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128,  \"ncores\":128, \"walltime\": 1800}}' &&
+    test_expect_code 42 flux jstat update 1 rdesctypo '{\"rdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"ncores\":128, \"walltime\": 3600}}' &&
+    test_expect_code 42 flux jstat update 1 rdesc '{\"pdesc\": {\"nnodes\": 128, \"ntasks\": 128,\"ncores\":128, \"walltime\": 2700}}' &&
     test_expect_code 42 flux jstat update 1 state-pair '{\"unknown\": {\"ostate\": 12, \"nstate\": 11}}'
 "
 
@@ -261,7 +259,6 @@ test_expect_success 'jstat 15: jstat detects failed state' '
     p=$(run_flux_jstat 15) &&
     test_must_fail run_timeout 4 flux wreckrun -i /bad/input -n4 -N4 hostname &&
     cat >expected15 <<-EOF &&
-	null->null
 	null->reserved
 	reserved->starting
 	starting->failed

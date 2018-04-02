@@ -70,6 +70,7 @@ local function alloc_tasks (f, wreck, lwj)
     local r = {}
     local size = f.size
     local res
+    local Rlite = {}
 
     res = fake_resource_array (wreck, wreck.nnodes or f.size)
     wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
@@ -89,12 +90,16 @@ local function alloc_tasks (f, wreck, lwj)
         end
     end
     for i, ntasks in pairs (counts) do
-        local key = "rank."..i..".cores"
-        lwj [key] = ntasks
+        local corelist = "0"
+        if ntasks > 1 then
+            corelist = corelist .. "-" .. ntasks - 1
+        end
+        table.insert (Rlite, { rank = i, children = { core = corelist } })
         if not r[ntasks] then r[ntasks] = {} end
         table.insert (r[ntasks], i)
     end
     wreck:verbose ("tasks per node: %s\n", summarize_tasks_per_node (r))
+    lwj.R_lite = Rlite
     lwj:commit()
 end
 
@@ -141,6 +146,8 @@ wreck:add_options ({
         usage = "Detach immediately after starting job" },
     { name = 'wait-until', char = "w", arg = "STATE",
         usage = "Do not process stdio, but block until 'STATE'" },
+    { name = 'immediate', char = "I",
+        usage = "Bypass scheduler and run immediately" },
 })
 
 if not wreck:parse_cmdline (arg) then
@@ -210,12 +217,27 @@ local kw, err = f:kvswatcher  {
 }
 if not kw then wreck:die ("kvs watch: %s\n", err) end
 
-
---if wreck:getopt ("i") then
--- Always run in "immediate" mode for now:
-if true then
+local submitted = false
+if not wreck:getopt ("I") then
+    -- Attempt to submit this existing job via submit-nocreate RPC:
     --
-    --  Send event to run the job
+    local rc, err = f:rpc ("job.submit-nocreate",
+                       { jobid = jobid, kvs_path = tostring (lwj),
+                         nnodes = wreck.nnodes, ntasks = wreck.ntasks,
+                         walltime  = wreck.walltime })
+    if rc then
+        submitted = true
+        wreck:verbose ("%-4.03fs: job.submit: Success\n", tt:get0());
+    else
+        wreck:verbose ("%-4.03fs: job.submit: %s\n", tt:get0(), err)
+    end
+end
+
+if not submitted then
+    --
+    --  If submit failed due to lack of scheduler or use of the
+    --   -I, --immediate option, manually distribute tasks and
+    ---  send event to run the job.
     --
     alloc_tasks (f, wreck, lwj)
     -- Ensure lwj nnodes matches fake allocation
@@ -240,13 +262,6 @@ if true then
         print (jobid)
         os.exit(0)
     end
-else
-    --
-    --  Update job state to 'pending' to notify scheduler:
-    --
-    lwj.state = 'pending'
-    lwj['pending-time'] = posix.strftime ("%FT%T")
-    lwj:commit()
 end
 
 -- Only process stdio if no --wait-until option used

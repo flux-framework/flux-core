@@ -52,6 +52,7 @@ local default_opts = {
     ['error'] =    { char = "E", arg = "FILENAME" },
     ['input'] =    { char = "i", arg = "HOW" },
     ['label-io'] = { char = "l", },
+    ['skip-env'] = { char = "S", },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -119,6 +120,7 @@ function wreck:usage()
                              -i /dev/null:* closes all stdin, etc.)
   -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
+  -S, --skip-env             Skip export of environment to job
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -131,13 +133,27 @@ function wreck:usage()
     end
 end
 
-local function get_filtered_env ()
+
+function wreck.get_filtered_env ()
     local env = posix.getenv()
     env.HOSTNAME = nil
     env.ENVIRONMENT = nil
     for k,v in pairs (env) do
         if k:match ("SLURM_") then env[k] = nil end
         if k:match ("FLUX_URI") then env[k] = nil end
+    end
+    return (env)
+end
+
+local function get_job_env (arg)
+    local f = arg.flux
+    local env = wreck.get_filtered_env ()
+    local default_env = {}
+    if f then default_env = f:kvs_get ("lwj.environ") or {} end
+    for k,v in pairs (env) do
+        -- If same key=value is already in default env no need to
+        --  export it again, remove:
+        if default_env[k] == env[k] then env[k] = nil end
     end
     return (env)
 end
@@ -254,19 +270,21 @@ function wreck:parse_cmdline (arg)
         os.exit (1)
     end
 
-    -- If nnodes was provided but -n, --ntasks not set, then
-    --  set ntasks to nnodes
-    if self.opts.N and not self.opts.n then
-        self.opts.n = self.opts.N
-    end
-
     self.nnodes = self.opts.N and tonumber (self.opts.N)
-    self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
+
+    -- If nnodes was provided but -n, --ntasks not set, then
+    --  set ntasks to nnodes.
+    if self.opts.N and not self.opts.n then
+        self.ntasks = self.nnodes
+    else
+        self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
+    end
     if self.opts.c then
         self.ncores = self.opts.c * self.ntasks
     else
         self.ncores = self.ntasks
     end
+
     self.tasks_per_node = self.opts.t
 
     self.cmdline = {}
@@ -322,16 +340,22 @@ end
 
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
-    fixup_nnodes (self)
-
+    if self.fixup_nnodes then
+        fixup_nnodes (self)
+    end
     local jobreq = {
-        nnodes =  self.nnodes,
+        nnodes =  self.nnodes or 0,
         ntasks =  self.ntasks,
         ncores =  self.ncores,
         cmdline = self.cmdline,
-        environ = get_filtered_env (),
+        environ = self.opts.S and {} or get_job_env { flux = self.flux },
         cwd =     posix.getcwd (),
-        walltime =self.walltime or 0
+        walltime =self.walltime or 0,
+
+        ["opts.nnodes"] = self.opts.N,
+        ["opts.ntasks"]  = self.opts.n,
+        ["opts.cores-per-task"] = self.opts.c,
+        ["opts.tasks-per-node"] = self.opts.t,
     }
     if self.opts.o then
         for opt in self.opts.o:gmatch ('[^,]+') do
@@ -381,6 +405,7 @@ function wreck:submit ()
 end
 
 function wreck:createjob ()
+    self.fixup_nnodes = true
     local resp, err = send_job_request (self, "job.create")
     if not resp then return nil, err end
     --

@@ -23,7 +23,7 @@ information;
 The first consideration has led us to use a C enumerator (i.e.,
 *job\_state\_t*) to capture the job states. However, because Flux has
 not yet defined its job schema, the second consideration discouraged us
-to use a Cuser-defined type to pass job information with the client
+to use a C user-defined type to pass job information with the client
 software. Instead, JSC uses an JSON to capture the job information and
 introduce the notion of Job Control Block (JCB) to have a structure on
 this information. We will try to keep backward compatibility on JCB's
@@ -153,10 +153,10 @@ errnum);
 >- int jsc\_notify\_status (flux\_t h, jsc\_handler\_f callback, void
 \*d);
 >- int jsc\_query\_jcb (flux\_t h, int64\_t jobid, const char \*key,
-json\_object
+char
 \*\*jcb);
 >- int jsc\_update\_jcb (flux\_t h, int64\_t jobid, const char \*key,
-json\_object
+const char
 \*jcb);
 
 
@@ -184,7 +184,7 @@ sub-attributes in *jcb*'s hierarchy are transferred to *jcb*, so that
 json_object_put (\*jcb) will free this hierarchy in its entirety.
 Returns 0 on success; otherwise -1.
 
-####jsc\_update\_jcb
+#### jsc\_update\_jcb
 Update the *key* attribute within the JCB of *jobid*. The top-level
 attribute of *jcb* should be the same as *key*. Returns 0 on success;
 otherwise -1. This will not release *jcb* so it is the responsibility
@@ -197,19 +197,6 @@ information piggybacked with each notification (*base_jcb*). One can
 further extend the single attribute-wise query/update pattern to
 group-wise ones once the access patterns of JCS API's clients are
 known.
-
->2. JCB producer-consumer synchronization -- currently there is no
-built-in synchronization between JCB producers and consumers and thus a
-race condition can occur. When the remote parallel execution changes
-the state of a job, and the registered callbacks will be invoked.
-However, when one of the invoked callbacks is trying to read an JCB
-attribute, nothing prevents the remote execution from modifying the
-same JCB attribute! Because producers and consumers use the KVS like a
-distributed shared memory, one must devise ways to guarantee
-synchronization. One solution is for the producers also use the JSC API
-and we build some synchronization primitives into this API. But for
-now, we ignore these synchronization issues.
-
 
 5. Testing
 -------------

@@ -34,7 +34,6 @@
 #include <flux/core.h>
 
 #include "jstatctl.h"
-#include "jstatctl_deprecated.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
@@ -54,7 +53,7 @@ typedef struct {
 } stab_t;
 
 typedef struct {
-   jsc_handler_obj_f cb;
+   jsc_handler_f cb;
    void *arg;
 } cb_pair_t;
 
@@ -63,7 +62,6 @@ typedef struct {
     lru_cache_t *kvs_paths;
     flux_msg_handler_t **handlers;
     zlist_t *callbacks;
-    int first_time;
     flux_t *h;
 } jscctx_t;
 
@@ -137,7 +135,6 @@ static jscctx_t *getctx (flux_t *h)
         lru_cache_set_free_f (ctx->kvs_paths, free);
         if (!(ctx->callbacks = zlist_new ()))
             oom ();
-        ctx->first_time = 1;
         ctx->h = h;
         flux_aux_set (h, "jstatctrl", ctx, freectx);
     }
@@ -243,36 +240,6 @@ static const char * jscctx_jobid_path (jscctx_t *ctx, int64_t id)
     return (path);
 }
 
-static inline bool is_jobid (const char *k)
-{
-    return (!strncmp (JSC_JOBID, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_state_pair (const char *k)
-{
-    return (!strncmp (JSC_STATE_PAIR, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_rdesc (const char *k)
-{
-    return (!strncmp (JSC_RDESC, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_rdl (const char *k)
-{
-    return (!strncmp (JSC_RDL, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_rdl_alloc (const char *k)
-{
-    return (!strncmp (JSC_RDL_ALLOC, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
-static inline bool is_pdesc (const char *k)
-{
-    return (!strncmp (JSC_PDESC, k, JSC_MAX_ATTR_LEN))? true : false;
-}
-
 static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
 {
     int *t = NULL;
@@ -293,7 +260,6 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
     /* safe to convert t to int */
     return (intptr_t) t;
 }
-
 
 /******************************************************************************
  *                                                                            *
@@ -638,16 +604,19 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     json_object *o = NULL;
     int64_t nnodes = -1;
     int64_t ntasks = -1;
+    int64_t ncores = -1;
     int64_t walltime = -1;
 
     if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
+    if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
 
     *jcb = Jnew ();
     o = Jnew ();
     Jadd_int64 (o, JSC_RDESC_NNODES, nnodes);
     Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
+    Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
     Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
     json_object_object_add (*jcb, JSC_RDESC, o);
     return 0;
@@ -706,7 +675,7 @@ static int send_state_event (flux_t *h, job_state_t st, int64_t j)
                         jsc_job_num2state (st));
         goto done;
     }
-    if ((msg = flux_event_pack (topic, "{ s:I }", "lwj", j)) == NULL) {
+    if ((msg = flux_event_pack (topic, "{ s:I }", "jobid", j)) == NULL) {
         flux_log_error (h, "flux_event_pack");
         goto done;
     }
@@ -766,10 +735,12 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
     int rc = -1;
     int64_t nnodes = 0;
     int64_t ntasks = 0;
+    int64_t ncores = 0;
     int64_t walltime = 0;
     char *key1 = NULL;
     char *key2 = NULL;
     char *key3 = NULL;
+    char *key4 = NULL;
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
@@ -777,14 +748,17 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
         goto done;
     if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks))
         goto done;
+    if (!Jget_int64 (o, JSC_RDESC_NCORES, &ncores))
+        goto done;
     if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime))
         goto done;
-    if ((nnodes < 0) || (ntasks < 0) || (walltime < 0))
+    if ((nnodes < 0) || (ntasks < 0) || (ncores < 0) || (walltime < 0))
         goto done;
     key1 = lwj_key (h, j, ".nnodes");
     key2 = lwj_key (h, j, ".ntasks");
     key3 = lwj_key (h, j, ".walltime");
-    if (!key1 || !key2 || !key3)
+    key4 = lwj_key (h, j, ".ncores");
+    if (!key1 || !key2 || !key3 || !key4)
         goto done;
     if (!(txn = flux_kvs_txn_create ())) {
         flux_log_error (h, "txn_create");
@@ -802,6 +776,10 @@ static int update_rdesc (flux_t *h, int64_t j, json_object *o)
         flux_log_error (h, "update %s", key3);
         goto done;
     }
+    if (flux_kvs_txn_pack (txn, 0, key4, "I", ncores) < 0) {
+        flux_log_error (h, "update %s", key4);
+        goto done;
+    }
     if (!(f = flux_kvs_commit (h, 0, txn)) || flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "commit failed");
         goto done;
@@ -814,6 +792,7 @@ done:
     free (key1);
     free (key2);
     free (key3);
+    free (key4);
 
     return rc;
 }
@@ -1051,44 +1030,92 @@ static int invoke_cbs (flux_t *h, int64_t j, json_object *jcb, int errnum)
     cb_pair_t *c = NULL;
     jscctx_t *ctx = getctx (h);
     for (c = zlist_first (ctx->callbacks); c; c = zlist_next (ctx->callbacks)) {
-        if (c->cb (jcb, c->arg, errnum) < 0) {
-            flux_log (h, LOG_ERR, "callback returns an error");
+        if (c->cb (Jtostr (jcb), c->arg, errnum) < 0) {
+            flux_log (h, LOG_DEBUG, "callback returns an error");
             rc = -1;
         }
     }
     return rc;
 }
 
-static void fixup_newjob_event (flux_t *h, int64_t nj)
+static json_object *get_reserve_jcb (flux_t *h, int64_t nj)
 {
     json_object *ss = NULL;
     json_object *jcb = NULL;
     int64_t js = J_NULL;
+    int64_t js2 = J_RESERVED;
     char *key = xasprintf ("%"PRId64, nj);
     jscctx_t *ctx = getctx (h);
 
-    /* We fix up ordering problem only when new job
-       event hasn't been reported through a kvs watch
-     */
     jcb = Jnew ();
     ss = Jnew ();
     Jadd_int64 (jcb, JSC_JOBID, nj);
     Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js);
+    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js2);
     json_object_object_add (jcb, JSC_STATE_PAIR, ss);
-    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js) < 0) {
-        flux_log (h, LOG_ERR, "new_job_cb: inserting a job to hash failed");
+    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
+        flux_log (h, LOG_ERR, "%s: inserting a job to hash failed",
+                  __FUNCTION__);
         goto done;
     }
-    if (invoke_cbs (h, nj, jcb, 0) < 0) {
-        flux_log (h, LOG_ERR,
-                     "makeup_newjob_event: failed to invoke callbacks");
-        goto done;
-    }
+    return jcb;
+
 done:
     Jput (jcb);
     free (key);
-    return;
+    return NULL;
+}
+
+static json_object *get_submit_jcb (flux_t *h, const flux_msg_t *msg, int64_t nj)
+{
+    int ntasks = 0;
+    int nnodes = 0;
+    int ncores = 0;
+    int walltime = 0;
+    int64_t js = J_NULL;
+    int64_t js2 = J_SUBMITTED;
+    json_object *o = NULL;
+    json_object *o2 = NULL;
+    json_object *jcb = NULL;
+    char *key = xasprintf ("%"PRId64, nj);
+    jscctx_t *ctx = getctx (h);
+
+    if (flux_event_unpack (msg, NULL, "{ s:i s:i s:i s:i }",
+                           "ntasks", &ntasks,
+                           "nnodes", &nnodes,
+                           "ncores", &ncores,
+                           "walltime", &walltime) < 0) {
+        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto error;
+    }
+
+    jcb = Jnew ();
+    o = Jnew ();
+    Jadd_int64 (jcb, JSC_JOBID, nj);
+    Jadd_int64 (o, JSC_STATE_PAIR_OSTATE , (int64_t)js);
+    Jadd_int64 (o, JSC_STATE_PAIR_NSTATE, (int64_t)js2);
+    json_object_object_add (jcb, JSC_STATE_PAIR, o);
+    o2 = Jnew ();
+    Jadd_int64 (o2, JSC_RDESC_NNODES, (int64_t)nnodes);
+    Jadd_int64 (o2, JSC_RDESC_NTASKS, (int64_t)ntasks);
+    Jadd_int64 (o2, JSC_RDESC_NCORES, (int64_t)ncores);
+    Jadd_int64 (o2, JSC_RDESC_WALLTIME, (int64_t)walltime);
+    json_object_object_add (jcb, JSC_RDESC, o2);
+
+    if (zhash_lookup (ctx->active_jobs, key)) {
+        /* Note that we don't use the old state (reserved) in this case */
+        zhash_update (ctx->active_jobs, key, (void *)(intptr_t)js2);
+    } else if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js2) < 0) {
+        flux_log (h, LOG_ERR, "%s: hash insertion failed", __FUNCTION__);
+        goto error;
+    }
+
+    return jcb;
+
+error:
+    Jput (jcb);
+    free (key);
+    return NULL;
 }
 
 static inline void delete_jobinfo (flux_t *h, int64_t jobid)
@@ -1120,7 +1147,7 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
 
-    if (flux_event_unpack (msg, NULL, "{ s:I }", "lwj", &jobid) < 0) {
+    if (flux_event_unpack (msg, NULL, "{ s:I }", "jobid", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -1135,15 +1162,20 @@ static void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
 
     state = topic + len;
     if (strcmp (state, jsc_job_num2state (J_RESERVED)) == 0)
-        fixup_newjob_event (h, jobid);
+        jcb = get_reserve_jcb (h, jobid);
+    else if (strcmp (state, jsc_job_num2state (J_SUBMITTED)) == 0)
+        jcb = get_submit_jcb (h, msg, jobid);
+    else
+        jcb = get_update_jcb (h, jobid, state);
 
-    if (invoke_cbs (h, jobid, jcb = get_update_jcb (h, jobid, state), 0) < 0)
-        flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
+    if (invoke_cbs (h, jobid, jcb, (jcb)? 0 : EINVAL) < 0)
+        flux_log (h, LOG_DEBUG, "%s: failed to invoke callbacks", __FUNCTION__);
 
     if (job_is_finished (state))
         delete_jobinfo (h, jobid);
 done:
-    Jput (jcb);
+    if (jcb)
+        Jput (jcb);
     return;
 }
 
@@ -1158,7 +1190,7 @@ static const struct flux_msg_handler_spec htab[] = {
       FLUX_MSGHANDLER_TABLE_END
 };
 
-static int notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
+int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL;
@@ -1197,143 +1229,79 @@ done:
     return rc;
 }
 
-/* deprecated */
-int jsc_notify_status_obj (flux_t *h, jsc_handler_obj_f func, void *d)
-{
-    return notify_status_obj (h, func, d);
-}
-
-struct callback_wrapper {
-    jsc_handler_f cb;
-    void *arg;
-};
-
-static int wrap_handler (json_object *base_jcb, void *arg, int errnum)
-{
-    struct callback_wrapper *wrap = arg;
-    return wrap->cb (Jtostr (base_jcb), wrap->arg, errnum);
-}
-
-int jsc_notify_status (flux_t *h, jsc_handler_f func, void *d)
+int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb_str)
 {
     int rc = -1;
-    struct callback_wrapper *wrap = xzmalloc (sizeof (*wrap));
-
-    wrap->cb = func;
-    wrap->arg = d;
-
-    rc = notify_status_obj (h, wrap_handler, wrap);
-    if (rc < 0)
-        free (wrap);
-    return rc;
-}
-
-static int query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-		       json_object **jcb)
-{
-    int rc = -1;
+    json_object *jcb = NULL;
 
     if (!key) return -1;
     if (jobid_exist (h, jobid) != 0) return -1;
 
-    if (is_jobid (key)) {
-        if ( (rc = query_jobid (h, jobid, jcb)) < 0)
+    if (!strcmp (key, JSC_JOBID)) {
+        if ( (rc = query_jobid (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_jobid failed");
-    } else if (is_state_pair (key)) {
-        if ( (rc = query_state_pair (h, jobid, jcb)) < 0)
+    } else if (!strcmp (key, JSC_STATE_PAIR)) {
+        if ( (rc = query_state_pair (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
-    } else if (is_rdesc (key)) {
-        if ( (rc = query_rdesc (h, jobid, jcb)) < 0)
+    } else if (!strcmp (key, JSC_RDESC)) {
+        if ( (rc = query_rdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdesc failed");
-    } else if (is_rdl (key)) {
-        if ( (rc = query_rdl (h, jobid, jcb)) < 0)
+    } else if (!strcmp (key, JSC_RDL)) {
+        if ( (rc = query_rdl (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl failed");
-    } else if (is_rdl_alloc (key)) {
-        if ( (rc = query_rdl_alloc (h, jobid, jcb)) < 0)
+    } else if (!strcmp (key, JSC_RDL_ALLOC)) {
+        if ( (rc = query_rdl_alloc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_rdl_alloc failed");
-    } else if (is_pdesc (key)) {
-        if ( (rc = query_pdesc (h, jobid, jcb)) < 0)
+    } else if (!strcmp(key, JSC_PDESC)) {
+        if ( (rc = query_pdesc (h, jobid, &jcb)) < 0)
             flux_log (h, LOG_ERR, "query_pdesc failed");
     } else
         flux_log (h, LOG_ERR, "key (%s) not understood", key);
-
-    return rc;
-}
-
-/* deprecated */
-int jsc_query_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-		       json_object **jcb)
-{
-    return query_jcb_obj (h, jobid, key, jcb);
-}
-
-int jsc_query_jcb (flux_t *h, int64_t jobid, const char *key, char **jcb)
-{
-    int rc;
-    json_object *o = NULL;
-
-    rc = query_jcb_obj (h, jobid, key, &o);
     if (rc < 0)
         goto done;
-    *jcb = o ? xstrdup (Jtostr (o)) : NULL;
+    *jcb_str = jcb ? xstrdup (Jtostr (jcb)) : NULL;
 done:
-    Jput (o);
+    Jput (jcb);
     return rc;
 }
 
-static int update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-			json_object *jcb)
+int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key,
+        const char *jcb_str)
 {
     int rc = -1;
     json_object *o = NULL;
+    json_object *jcb = NULL;
 
-    if (!jcb) return -1;
-    if (jobid_exist (h, jobid) != 0) return -1;
+    if (!jcb_str || !(jcb = Jfromstr (jcb_str))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (jobid_exist (h, jobid) != 0)
+        goto done;
 
-    if (is_jobid (key)) {
+    if (!strcmp(key, JSC_JOBID)) {
         flux_log (h, LOG_ERR, "jobid attr cannot be updated");
-    } else if (is_state_pair (key)) {
+    } else if (!strcmp (key, JSC_STATE_PAIR)) {
         if (Jget_obj (jcb, JSC_STATE_PAIR, &o))
             rc = update_state (h, jobid, o);
-    } else if (is_rdesc (key)) {
+    } else if (!strcmp (key, JSC_RDESC)) {
         if (Jget_obj (jcb, JSC_RDESC, &o))
             rc = update_rdesc (h, jobid, o);
-    } else if (is_rdl (key)) {
+    } else if (!strcmp (key, JSC_RDL)) {
         const char *s = NULL;
         if (Jget_str (jcb, JSC_RDL, &s))
             rc = update_rdl (h, jobid, s);
-    } else if (is_rdl_alloc (key)) {
+    } else if (!strcmp (key, JSC_RDL_ALLOC)) {
         if (Jget_obj (jcb, JSC_RDL_ALLOC, &o))
             rc = update_rdl_alloc (h, jobid, o);
-    } else if (is_pdesc (key)) {
+    } else if (!strcmp (key, JSC_PDESC)) {
         if (Jget_obj (jcb, JSC_PDESC, &o))
             rc = update_pdesc (h, jobid, o);
     }
     else
         flux_log (h, LOG_ERR, "key (%s) not understood", key);
-
-    return rc;
-}
-
-/* deprecated */
-int jsc_update_jcb_obj (flux_t *h, int64_t jobid, const char *key,
-			json_object *jcb)
-{
-    return update_jcb_obj (h, jobid, key, jcb);
-}
-
-int jsc_update_jcb (flux_t *h, int64_t jobid, const char *key, const char *jcb)
-{
-    int rc = -1;
-    json_object *o = NULL;
-
-    if (!jcb || !(o = Jfromstr (jcb))) {
-        errno = EINVAL;
-        goto done;
-    }
-    rc = update_jcb_obj (h, jobid, key, o);
 done:
-    Jput (o);
+    Jput (jcb);
     return rc;
 }
 

@@ -15,7 +15,7 @@ SYNOPSIS
 'flux wreckrun' [-n <ntasks>] [-N <nnodes>] [-t <tasks-per-node>]
                 [-l|--label-io] [-d|--detach] [-o|--options='OPTIONS']
                 [-O|--output='FILENAME'] [-E|--error='FILENAME']
-                [-i|--input='HOW'] ['COMMANDS'...]
+                [-i|--input='HOW'] [-I, --immediate] ['COMMANDS'...]
 
 
 DESCRIPTION
@@ -93,6 +93,10 @@ OPTIONS
         for seconds (default), 'm' for minutes, 'h' for hours or 'd'
         for days.  N may be an arbitrary floating point number, but
         will be rounded up to nearest second.
+
+--immediate::
+-I::
+       Bypass scheduler and run job immediately.
 
 --options='options,...'::
 -o 'options,...'::

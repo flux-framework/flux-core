@@ -60,7 +60,9 @@ TESTS = \
 	t1103-apidisconnect.t \
 	t1104-kz.t \
 	t1105-proxy.t \
+	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
+	t2000-wreck-env.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
@@ -102,7 +104,9 @@ EXTRA_DIST= \
 	rc/rc1-testenv \
 	rc/rc3-kvs \
 	rc/rc3-wreck \
-	rc/rc3-testenv
+	rc/rc3-testenv \
+	wreck/input \
+	wreck/output
 
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
@@ -136,7 +140,9 @@ check_SCRIPTS = \
 	t1103-apidisconnect.t \
 	t1104-kz.t \
 	t1105-proxy.t \
+	t1999-wreck-rcalc.t \
 	t2000-wreck.t \
+	t2000-wreck-env.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
@@ -152,7 +158,6 @@ check_SCRIPTS = \
         issues/t0441-kvs-put-get.sh \
         issues/t0505-msg-handler-reg.lua \
         issues/t0821-kvs-segfault.sh \
-        issues/t0900-wreck-invalid-cores.sh \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -191,7 +196,8 @@ check_PROGRAMS = \
 	kvs/fence_invalid \
 	module/basic \
 	request/treq \
-	barrier/tbarrier
+	barrier/tbarrier \
+	wreck/rcalc
 
 check_LTLIBRARIES = \
 	module/parent.la \
@@ -372,3 +378,9 @@ request_req_la_CPPFLAGS = $(test_cppflags)
 request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 request_req_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+wreck_rcalc_SOURCES = wreck/rcalc.c
+wreck_rcalc_CPPFLAGS = $(test_cppflags)
+wreck_rcalc_LDADD = \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL) \
+	$(top_builddir)/src/modules/wreck/rcalc.o

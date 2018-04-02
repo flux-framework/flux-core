@@ -468,13 +468,8 @@ static void topo_request_cb (flux_t *h,
     int buflen;
     hwloc_topology_t global = NULL;
     int count = 0;
-    uint32_t size;
     int rc = -1;
 
-    if (flux_get_size (h, &size) < 0) {
-        flux_log_error (h, "%s: flux_get_size", __FUNCTION__);
-        goto done;
-    }
     if (!ctx->loaded) {
         flux_log (h,
                   LOG_ERR,
@@ -559,17 +554,10 @@ static void topo_request_cb (flux_t *h,
             break;
     }
 
-    if (count < size) {
-        flux_log (h, LOG_ERR, "only got %d out of %d ranks aggregated",
-                count, size);
-        errno = EAGAIN;
+    if (flux_respond_pack (h, msg, "{ s:s# }",
+                "topology", buffer, buflen) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto done;
-    } else {
-        if (flux_respond_pack (h, msg, "{ s:s# }",
-                               "topology", buffer, buflen) < 0) {
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-            goto done;
-        }
     }
     rc = 0;
 done:
