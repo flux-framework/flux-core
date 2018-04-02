@@ -1300,29 +1300,18 @@ static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
-    while ((len = kz_get (kz, &data)) >= 0) {
-        /*
-         *  Recreate stack on each iteration:
-         */
-        lua_pushvalue (L, 2);
-        assert (lua_isfunction (L, -1));
-        lua_pushvalue (L, 3);
-        assert (lua_isuserdata (L, -1));
-
-        if (len > 0) {
-            lua_pushlstring (L, data, len);
-            free (data);
-        }
-        if (len == 0)
-            lua_pushnil (L);
-
-        if (lua_pcall (L, 2, 1, 0)) {
+    len = kz_get (kz, &data);
+    if (len > 0) {
+        lua_pushlstring (L, data, len);
+        free (data);
+    }
+    if (len == 0)
+        lua_pushnil (L);
+    if (len >= 0) {
+        if (lua_pcall (L, 2, 1, 0))
             fprintf (stderr, "kz_ready: %s\n",  lua_tostring (L, -1));
-            break;
-        }
-        if (len == 0)
-            break;
-        lua_pop (L, 1);
+        else
+            lua_pop (L, 1);
     }
 
     lua_settop (L, 0);
