@@ -346,6 +346,9 @@ static void lookup_continuation (flux_future_t *f, void *arg)
 
     assert (f == kz->lookup_f);
 
+    if (!kz->ready_cb)
+        return;
+
     if (kz->ready_cb)
         kz->ready_cb (kz, kz->ready_arg);
 
