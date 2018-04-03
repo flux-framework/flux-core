@@ -31,6 +31,8 @@ SYNOPSIS
 
  int flux_kvs_lookup_get_symlink (flux_future_t *f, const char **target);
 
+ const char *flux_kvs_lookup_get_key (flux_future_t *f);
+
 
 DESCRIPTION
 -----------
@@ -85,6 +87,9 @@ function should work on all.
 e.g. in response to a lookup with the FLUX_KVS_READLINK flag set.
 The result is parsed and symlink target is assigned to _target_.
 
+`flux_kvs_lookup_get_key()` accesses the key argument from the original
+lookup.
+
 These functions may be used asynchronously.  See `flux_future_then(3)` for
 details.
 
@@ -121,6 +126,9 @@ RETURN VALUE
 `flux_kvs_lookup_get_raw()`, `flux_kvs_lookup_get_dir()`,
 `flux_kvs_lookup_get_treeobj()`, and `flux_kvs_lookup_get_symlink()`
 return 0 on success, or -1 on failure with errno set appropriately.
+
+`flux_kvs_lookup_get_key()` returns key on success, or NULL with errno
+set to EINVAL if its future argument did not come from a KVS lookup.
 
 
 ERRORS

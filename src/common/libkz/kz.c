@@ -36,7 +36,7 @@
  * If the value contains an EOF flag, return 0.
  *
  * kz_put (only valid for kz_open KZ_FLAGS_WRITE):
- * If KZ_FLAGS_TRUNC, any existing contents are removed.
+ * Any existing contents are removed.
  * Writing begins at '000000'.  Each kz_put returns either -1 or
  * the number of bytes requested to be written (there are no short writes).
  * A kvs_commit is issued after every kz_put, unless disabled.
@@ -68,11 +68,11 @@
 
 struct kz_struct {
     int flags;
-    char *name;
-    char *stream;
+    char *key;
+    int key_sz;
+    int name_len;
     flux_t *h;
     int seq;
-    flux_kvsdir_t *dir;
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
@@ -80,73 +80,82 @@ struct kz_struct {
     char *grpname;
     int fencecount;
     bool watching;
+    flux_future_t *lookup_f; // kvs_lookup in progress for kz->seq
+    int last_dir_size;
 };
 
 static void kz_destroy (kz_t *kz)
 {
-    if (kz->name)
-        free (kz->name);
-    if (kz->dir)
-        flux_kvsdir_destroy (kz->dir);
-    if (kz->grpname)
+    if (kz) {
+        int saved_errno = errno;
+        free (kz->key);
         free (kz->grpname);
-    free (kz);
+        flux_future_destroy (kz->lookup_f);
+        free (kz);
+        errno = saved_errno;
+    }
 }
 
-static bool key_exists (flux_t *h, const char *key)
+/* Initialize kz->key, kz->key_sz, and kz->name_len.
+ * kz->key is allocated to fit a sequenced key written by format_key().
+ * The base 'name' is stored.
+ */
+static int init_key (kz_t *kz, const char *name)
 {
-    bool ret = false;
-    flux_future_t *f = NULL;
+    int n;
 
-    if (!(f = flux_kvs_lookup (h, 0, key)) || flux_future_get (f, NULL) < 0) {
-        if (errno == EISDIR)
-            ret = true;
-        goto done;
+    if (!name) {
+        errno = EINVAL;
+        return -1;
     }
-    ret = true;
-done:
-    flux_future_destroy (f);
-    return ret;
+    kz->name_len = strlen (name);
+    kz->key_sz = kz->name_len + 16; // name.XXXXXX (with \0) is name_len + 8
+    if (!(kz->key = malloc (kz->key_sz)))
+        return -1;
+    n = snprintf (kz->key, kz->key_sz, "%s", name);
+    assert (n < kz->key_sz);
+
+    return 0;
+}
+
+/* Update kz->key to contain name.<seq> and return it.
+ */
+static const char *format_key (kz_t *kz, int seq)
+{
+    int n;
+
+    n = snprintf (kz->key + kz->name_len,
+                  kz->key_sz - kz->name_len, ".%.6d", seq);
+    assert (n < kz->key_sz - kz->name_len);
+    return kz->key;
+}
+
+/* Update kz->key to contain just name (the directory) and return it.
+ */
+static char *clear_key (kz_t *kz)
+{
+    kz->key[kz->name_len] = '\0';
+    return kz->key;
 }
 
 kz_t *kz_open (flux_t *h, const char *name, int flags)
 {
-    kz_t *kz = xzmalloc (sizeof (*kz));
+    kz_t *kz;
+
+    if (!(kz = calloc (1, sizeof (*kz))))
+        return NULL;
+    if (init_key (kz, name) < 0)
+        goto error;
 
     kz->flags = flags;
-    kz->name = xstrdup (name);
-    if ((kz->stream = strchr (kz->name, '.')))
-        kz->stream++;
-    else
-        kz->stream = kz->name;
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
-        if (key_exists (h, name)) {
-            if (!(flags & KZ_FLAGS_TRUNC)) {
-                errno = EEXIST;
-                goto error;
-            } else if (flux_kvs_unlink (h, name) < 0)
-                goto error;
-        }
-        if (flux_kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
+        if (flux_kvs_mkdir (h, name) < 0) // overwrites existing
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
             if (flux_kvs_commit_anon (h, 0) < 0)
                 goto error;
-        }
-    } else if ((flags & KZ_FLAGS_READ)) {
-        if (!(flags & KZ_FLAGS_NOEXIST)) {
-            const flux_kvsdir_t *dir;
-            flux_future_t *f;
-
-            if (!(f = flux_kvs_lookup (h, FLUX_KVS_READDIR, name))
-                || flux_kvs_lookup_get_dir (f, &dir) < 0
-                || !(kz->dir = flux_kvsdir_copy (dir))) {
-                flux_future_destroy (f);
-                goto error;
-            }
-            flux_future_destroy (f);
         }
     }
     return kz;
@@ -191,26 +200,18 @@ error:
 
 static int putnext (kz_t *kz, const char *json_str)
 {
-    char *key = NULL;
-    int rc = -1;
-
     if (!(kz->flags & KZ_FLAGS_WRITE)) {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
-    if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
-        oom ();
+    const char *key = format_key (kz, kz->seq++);
     if (flux_kvs_put (kz->h, key, json_str) < 0)
-        goto done;
+        return -1;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
         if (flux_kvs_commit_anon (kz->h, 0) < 0)
-            goto done;
+            return -1;
     }
-    rc = 0;
-done:
-    if (key)
-        free (key);
-    return rc;
+    return 0;
 }
 
 int kz_put_json (kz_t *kz, const char *json_str)
@@ -244,67 +245,64 @@ done:
     return rc;
 }
 
+/* This function will not block if called once from a kz_ready_f handler since:
+ * 1) kvs_watch has already indicated kz->seq is availalbe
+ * 2) a kvs_lookup on it has been started
+ * 3) the kvs_lookup continuation is what called the kz_ready_f.
+ *
+ * This function WILL block if called prematurely:
+ * If called before step 3, it will block on the KVS response.
+ * If called before step 2, it will send the request and block on the response.
+ * If called before step 1, it will send the request, block on the response,
+ * and may possibly return EAGAIN if kz->seq does not exist yet.
+ */
 static char *getnext (kz_t *kz)
 {
-    const char *json_str;
-    char *key = NULL;
-    flux_future_t *f = NULL;
-    char *result = NULL;
+    const char *s;
+    const char *key = format_key (kz, kz->seq);
+    char *json_str = NULL;
 
-    if (!(kz->flags & KZ_FLAGS_READ)) {
-        errno = EINVAL;
-        goto done;
+    if (!kz->lookup_f) {
+        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key)))
+            return NULL;
     }
-    if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
-        oom ();
-    if (!(f = flux_kvs_lookup (kz->h, 0, key))
-                        || flux_kvs_lookup_get (f, &json_str) < 0) {
+    if (flux_kvs_lookup_get (kz->lookup_f, &s) < 0) {
         if (errno == ENOENT)
             errno = EAGAIN;
-        goto done;
+        flux_future_destroy (kz->lookup_f);
+        kz->lookup_f = NULL;
+        return NULL;
     }
-    if (!(result = strdup (json_str)))
-        goto done;
+    if (!(json_str = strdup (s)))
+        return NULL;
+    flux_future_destroy (kz->lookup_f);
+    kz->lookup_f = NULL;
     kz->seq++;
-done:
-    flux_future_destroy (f);
-    if (key)
-        free (key);
-    return result;
+    return json_str;
 }
 
 static char *getnext_blocking (kz_t *kz)
 {
+    const char *key = format_key (kz, kz->seq);
     char *json_str = NULL;
 
-    while (!(json_str = getnext (kz))) {
-        if (errno != EAGAIN)
-            break;
-        if (flux_kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
-            if (errno != ENOENT)
-                break;
-            if (kz->dir) {
-                flux_kvsdir_destroy (kz->dir);
-                kz->dir = NULL;
-            }
-        }
-    }
+    if (flux_kvs_watch_once (kz->h, key, &json_str) < 0)
+        return NULL;
+    kz->seq++;
     return json_str;
 }
 
 char *kz_get_json (kz_t *kz)
 {
-    char *json_str = NULL;
-
-    if (!(kz->flags & KZ_FLAGS_RAW)) {
+    char *json_str;
+    if (!(kz->flags & KZ_FLAGS_RAW) || !(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
-        goto done;
+        return NULL;
     }
     if ((kz->flags & KZ_FLAGS_NONBLOCK))
         json_str = getnext (kz);
     else
         json_str = getnext_blocking (kz);
-done:
     return json_str;
 }
 
@@ -314,7 +312,7 @@ int kz_get (kz_t *kz, char **datap)
     char *data;
     int len = -1;
 
-    if (!datap || (kz->flags & KZ_FLAGS_RAW)) {
+    if (!datap || (kz->flags & KZ_FLAGS_RAW) || !(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
         goto done;
     }
@@ -349,12 +347,10 @@ int kz_close (kz_t *kz)
 {
     int rc = -1;
     char *json_str = NULL;
-    char *key = NULL;
 
     if ((kz->flags & KZ_FLAGS_WRITE)) {
         if (!(kz->flags & KZ_FLAGS_RAW)) {
-            if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
-                oom ();
+            const char *key = format_key (kz, kz->seq++);
             if (!(json_str = zio_json_encode (NULL, 0, true))) { /* EOF */
                 errno = EPROTO;
                 goto done;
@@ -372,28 +368,77 @@ int kz_close (kz_t *kz)
         }
     }
     if (kz->watching) {
-        (void)flux_kvs_unwatch (kz->h, kz->name);
+        const char *key = clear_key (kz);
+        (void)flux_kvs_unwatch (kz->h, key);
         kz->watching = false;
     }
     rc = 0;
 done:
     if (json_str)
         free (json_str);
-    if (key)
-        free (key);
     kz_destroy (kz);
     return rc;
 }
 
-static int kvswatch_cb (const char *key, flux_kvsdir_t *dir,
+static void lookup_continuation (flux_future_t *f, void *arg)
+{
+    kz_t *kz = arg;
+
+    assert (f == kz->lookup_f);
+
+    flux_log (kz->h, LOG_DEBUG, "%s: got seq=%d", __FUNCTION__, kz->seq);
+
+    if (kz->ready_cb)
+        kz->ready_cb (kz, kz->ready_arg);
+
+    if (kz->lookup_f) {
+        flux_future_destroy (kz->lookup_f);
+        kz->lookup_f = NULL;
+    }
+
+    if (kz->seq < kz->last_dir_size) {
+        const char *key = format_key (kz, kz->seq);
+        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key))) {
+            flux_log_error (kz->h, "%s: flux_kvs_lookup", __FUNCTION__);
+            return;
+        }
+        if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
+            flux_log_error (kz->h, "%s: flux_future_then", __FUNCTION__);
+            flux_future_destroy (kz->lookup_f);
+            kz->lookup_f = NULL;
+            return;
+        }
+    }
+}
+
+static int kvswatch_cb (const char *dir_key, flux_kvsdir_t *dir,
                         void *arg, int errnum)
 {
     kz_t *kz = arg;
 
-    if (errnum != 0 && errnum != ENOENT)
+    if (errnum == ENOENT)
+        kz->last_dir_size = 0;
+    else if (errnum == 0)
+        kz->last_dir_size = flux_kvsdir_get_size (dir);
+    else {
+        flux_log (kz->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errnum));
         return -1;
-    else if (errnum == 0 && kz->ready_cb)
-        kz->ready_cb (kz, kz->ready_arg);
+    }
+
+    if (kz->lookup_f == NULL && kz->seq < kz->last_dir_size) {
+        const char *key = format_key (kz, kz->seq);
+        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key))) {
+            flux_log_error (kz->h, "%s: flux_kvs_lookup", __FUNCTION__);
+            return -1;
+        }
+        if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
+            flux_log_error (kz->h, "%s: flux_future_then", __FUNCTION__);
+            flux_future_destroy (kz->lookup_f);
+            kz->lookup_f = NULL;
+            return -1;
+        }
+        flux_log (kz->h, LOG_DEBUG, "%s: lookup seq=%d", __FUNCTION__, kz->seq);
+    }
     return 0;
 }
 
@@ -405,10 +450,16 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     }
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
-    if (!kz->watching) {
-        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", kz->name) < 0)
+    const char *key = clear_key (kz);
+    if (kz->ready_cb != NULL && !kz->watching) {
+        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
             return -1;
         kz->watching = true;
+    }
+    if (kz->ready_cb == NULL && kz->watching) {
+        if (flux_kvs_unwatch (kz->h, key) < 0)
+            return -1;
+        kz->watching = false;
     }
     return 0;
 }

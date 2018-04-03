@@ -57,8 +57,7 @@ def attach(flux_handle,
            stream,
            prefix=None,
            flags=(RAW.KZ_FLAGS_READ
-                  | RAW.KZ_FLAGS_NONBLOCK
-                  | RAW.KZ_FLAGS_NOEXIST)):
+                  | RAW.KZ_FLAGS_NONBLOCK)):
     handle = RAW.kz_open(flux_handle, key, flags)
     warg = (stream, prefix, handle)
     KZWATCHES[key] = warg
@@ -78,8 +77,7 @@ class KZStream(WrapperPimpl):
         def __init__(self,
                      flux_handle,
                      name,
-                     flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK |
-                            RAW.KZ_FLAGS_NOEXIST),
+                     flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
                      handle=None,
                      prefix=False):
             self.destroyer = RAW.kz_close
@@ -113,8 +111,7 @@ class KZStream(WrapperPimpl):
     def __init__(self,
                  flux_handle,
                  name,
-                 flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK |
-                        RAW.KZ_FLAGS_NOEXIST),
+                 flags=(RAW.KZ_FLAGS_READ | RAW.KZ_FLAGS_NONBLOCK),
                  handle=None,
                  prefix=False):
         super(KZStream, self).__init__()
