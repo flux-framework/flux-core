@@ -81,6 +81,8 @@ struct kz_struct {
     int last_dir_size;
 };
 
+static int lookup_next (kz_t *kz);
+
 static void kz_destroy (kz_t *kz)
 {
     if (kz) {
@@ -344,8 +346,6 @@ static void lookup_continuation (flux_future_t *f, void *arg)
 
     assert (f == kz->lookup_f);
 
-    flux_log (kz->h, LOG_DEBUG, "%s: got seq=%d", __FUNCTION__, kz->seq);
-
     if (kz->ready_cb)
         kz->ready_cb (kz, kz->ready_arg);
 
@@ -353,20 +353,27 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         flux_future_destroy (kz->lookup_f);
         kz->lookup_f = NULL;
     }
+    (void)lookup_next (kz);
+}
 
-    if (kz->seq < kz->last_dir_size) {
+static int lookup_next (kz_t *kz)
+{
+    if (kz->lookup_f == NULL && kz->seq < kz->last_dir_size) {
         const char *key = format_key (kz, kz->seq);
         if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key))) {
-            flux_log_error (kz->h, "%s: flux_kvs_lookup", __FUNCTION__);
-            return;
+            flux_log_error (kz->h, "%s: seq=%d flux_kvs_lookup",
+                            __FUNCTION__, kz->seq);
+            return -1;
         }
         if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
-            flux_log_error (kz->h, "%s: flux_future_then", __FUNCTION__);
+            flux_log_error (kz->h, "%s: seq=%d flux_future_then",
+                            __FUNCTION__, kz->seq);
             flux_future_destroy (kz->lookup_f);
             kz->lookup_f = NULL;
-            return;
+            return -1;
         }
     }
+    return 0;
 }
 
 static int kvswatch_cb (const char *dir_key, flux_kvsdir_t *dir,
@@ -382,21 +389,8 @@ static int kvswatch_cb (const char *dir_key, flux_kvsdir_t *dir,
         flux_log (kz->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errnum));
         return -1;
     }
-
-    if (kz->lookup_f == NULL && kz->seq < kz->last_dir_size) {
-        const char *key = format_key (kz, kz->seq);
-        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key))) {
-            flux_log_error (kz->h, "%s: flux_kvs_lookup", __FUNCTION__);
-            return -1;
-        }
-        if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
-            flux_log_error (kz->h, "%s: flux_future_then", __FUNCTION__);
-            flux_future_destroy (kz->lookup_f);
-            kz->lookup_f = NULL;
-            return -1;
-        }
-        flux_log (kz->h, LOG_DEBUG, "%s: lookup seq=%d", __FUNCTION__, kz->seq);
-    }
+    if (lookup_next (kz) < 0)
+        return -1;
     return 0;
 }
 
