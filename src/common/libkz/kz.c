@@ -341,25 +341,26 @@ done:
     return rc;
 }
 
+/* Handle response for lookup of next block (kz->seq).
+ * Notify user, who should call kz_get() or kz_get_json() to consume it.
+ */
 static void lookup_continuation (flux_future_t *f, void *arg)
 {
     kz_t *kz = arg;
 
     assert (f == kz->lookup_f);
 
-    if (!kz->ready_cb)
-        return;
-
     if (kz->ready_cb)
         kz->ready_cb (kz, kz->ready_arg);
-
-    if (kz->lookup_f) {
-        flux_future_destroy (kz->lookup_f);
-        kz->lookup_f = NULL;
+    if (kz->lookup_f != NULL) {
+        flux_log (kz->h, LOG_ERR, "%s: %s unclaimed data - fatal error",
+                  __FUNCTION__, flux_kvs_lookup_get_key (f));
+        errno = EINVAL;
+        flux_reactor_stop_error (flux_get_reactor (kz->h));
     }
     /* If last block of this stream has been handled,
-     * disable the KVS watcher and don't call lookup_next().
-     * Expect the user to call kz_close() soon.
+     * disable the KVS watcher (if any) as we're done.
+     * Otherwise, go get the next block.
      */
     if (kz->eof) {
         if (kz->watching) {
@@ -367,32 +368,13 @@ static void lookup_continuation (flux_future_t *f, void *arg)
             (void)flux_kvs_unwatch (kz->h, key);
             kz->watching = false;
         }
+        return;
     }
-    else {
-        (void)lookup_next (kz);
-    }
+    (void)lookup_next (kz);
 }
 
-static int lookup_next (kz_t *kz)
-{
-    if (kz->lookup_f == NULL && kz->seq < kz->last_dir_size) {
-        const char *key = format_key (kz, kz->seq);
-        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key))) {
-            flux_log_error (kz->h, "%s: seq=%d flux_kvs_lookup",
-                            __FUNCTION__, kz->seq);
-            return -1;
-        }
-        if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
-            flux_log_error (kz->h, "%s: seq=%d flux_future_then",
-                            __FUNCTION__, kz->seq);
-            flux_future_destroy (kz->lookup_f);
-            kz->lookup_f = NULL;
-            return -1;
-        }
-    }
-    return 0;
-}
-
+/* Notification of change in stream directory.
+ */
 static int kvswatch_cb (const char *dir_key, flux_kvsdir_t *dir,
                         void *arg, int errnum)
 {
@@ -411,6 +393,89 @@ static int kvswatch_cb (const char *dir_key, flux_kvsdir_t *dir,
     return 0;
 }
 
+/* Send request to lookup the next block (kz->seq).
+ * If kz->last_dir_size blocks have already been consumed,
+ * install a KVS watch to notify us when more blocks are available
+ * (unless already at EOF).
+ */
+static int lookup_next (kz_t *kz)
+{
+    if (kz->lookup_f != NULL)
+        return 0;
+
+    if (kz->seq < kz->last_dir_size) {
+        const char *key = format_key (kz, kz->seq);
+        if (!(kz->lookup_f = flux_kvs_lookup (kz->h, 0, key))) {
+            flux_log_error (kz->h, "%s: seq=%d flux_kvs_lookup",
+                            __FUNCTION__, kz->seq);
+            return -1;
+        }
+        if (flux_future_then (kz->lookup_f, -1., lookup_continuation, kz) < 0) {
+            flux_log_error (kz->h, "%s: seq=%d flux_future_then",
+                            __FUNCTION__, kz->seq);
+            flux_future_destroy (kz->lookup_f);
+            kz->lookup_f = NULL;
+            return -1;
+        }
+    }
+    /* EOF not yet reached, but all known blocks have been consumed.
+     * Time to KVS watch the stream directory for more entries.
+     */
+    else if (!kz->eof) {
+        if (!kz->watching) {
+            kz->watching = true; // N.B. careful to avoid infinite loop here!
+            const char *key = clear_key (kz);
+            flux_log (kz->h, LOG_DEBUG, "%s: watch %s", __FUNCTION__, key);
+            if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
+                return -1;
+        }
+    }
+    return 0;
+}
+
+/* Handle response containing kz->last_dir_size.
+ * Initiate next request (or install a KVS watcher) in lookup_next().
+ */
+static void lookup_dir_continuation (flux_future_t *f, void *arg)
+{
+    kz_t *kz = arg;
+    const flux_kvsdir_t *dir;
+
+    assert (f == kz->lookup_f);
+
+    if (flux_kvs_lookup_get_dir (f, &dir) < 0)
+        kz->last_dir_size = 0;
+    else
+        kz->last_dir_size = flux_kvsdir_get_size (dir);
+
+    flux_future_destroy (kz->lookup_f);
+    kz->lookup_f = NULL;
+
+    (void)lookup_next (kz);
+}
+
+/* Send request to lookup kz->last_dir_size.
+ */
+static int lookup_dir (kz_t *kz)
+{
+    if (kz->lookup_f != NULL)
+        return 0;
+
+    const char *key = clear_key (kz);
+    if (!(kz->lookup_f = flux_kvs_lookup (kz->h, FLUX_KVS_READDIR, key))) {
+        flux_log_error (kz->h, "%s: flux_kvs_lookup", __FUNCTION__);
+        return -1;
+    }
+    if (flux_future_then (kz->lookup_f, -1.,
+                          lookup_dir_continuation, kz) < 0) {
+        flux_log_error (kz->h, "%s: flux_future_then", __FUNCTION__);
+        flux_future_destroy (kz->lookup_f);
+        kz->lookup_f = NULL;
+        return -1;
+    }
+    return 0;
+}
+
 int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
 {
     if (!(kz->flags & KZ_FLAGS_READ)) {
@@ -419,13 +484,19 @@ int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
     }
     kz->ready_cb = ready_cb;
     kz->ready_arg = arg;
-    const char *key = clear_key (kz);
-    if (kz->ready_cb != NULL && !kz->watching) {
-        if (flux_kvs_watch_dir (kz->h, kvswatch_cb, kz, "%s", key) < 0)
+
+    /* Callback registration.
+     * Begin looking up stream directory, continued in lookup_continuation().
+     */
+    if (kz->ready_cb != NULL) {
+        if (lookup_dir (kz) < 0)
             return -1;
-        kz->watching = true;
     }
-    if (kz->ready_cb == NULL && kz->watching) {
+    /* Callback de-registration.
+     * Unwire KVS watcher, if any.
+     */
+    else if (kz->ready_cb == NULL && kz->watching) {
+        const char *key = clear_key (kz);
         if (flux_kvs_unwatch (kz->h, key) < 0)
             return -1;
         kz->watching = false;
