@@ -267,6 +267,7 @@ char *kz_get_json (kz_t *kz)
         json_str = getnext (kz);
     else
         json_str = getnext_blocking (kz);
+    (void)zio_json_decode (json_str, NULL, &kz->eof); // update kz->eof
     return json_str;
 }
 
