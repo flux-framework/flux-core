@@ -357,7 +357,20 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         flux_future_destroy (kz->lookup_f);
         kz->lookup_f = NULL;
     }
-    (void)lookup_next (kz);
+    /* If last block of this stream has been handled,
+     * disable the KVS watcher and don't call lookup_next().
+     * Expect the user to call kz_close() soon.
+     */
+    if (kz->eof) {
+        if (kz->watching) {
+            const char *key = clear_key (kz);
+            (void)flux_kvs_unwatch (kz->h, key);
+            kz->watching = false;
+        }
+    }
+    else {
+        (void)lookup_next (kz);
+    }
 }
 
 static int lookup_next (kz_t *kz)
