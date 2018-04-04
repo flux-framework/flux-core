@@ -159,6 +159,10 @@ kz_t *kz_open (flux_t *h, const char *name, int flags)
 {
     kz_t *kz;
 
+    if (!h || !name) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(kz = calloc (1, sizeof (*kz))))
         return NULL;
     if (init_key (kz, name) < 0)
@@ -199,7 +203,7 @@ static int putnext (kz_t *kz, const char *json_str)
 
 int kz_put_json (kz_t *kz, const char *json_str)
 {
-    if (!(kz->flags & KZ_FLAGS_RAW)) {
+    if (!kz || !json_str || !(kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         return -1;
     }
@@ -211,7 +215,7 @@ int kz_put (kz_t *kz, char *data, int len)
     char *json_str = NULL;
     int rc = -1;
 
-    if (len == 0 || data == NULL || (kz->flags & KZ_FLAGS_RAW)) {
+    if (!kz || len == 0 || data == NULL || (kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         goto done;
     }
@@ -280,7 +284,7 @@ char *kz_get_json (kz_t *kz)
     char *json_str;
     int saved_errno;
 
-    if (!(kz->flags & KZ_FLAGS_RAW) || !(kz->flags & KZ_FLAGS_READ)) {
+    if (!kz || !(kz->flags & KZ_FLAGS_RAW) || !(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
         return NULL;
     }
@@ -311,7 +315,8 @@ int kz_get (kz_t *kz, char **datap)
     int len;
     int saved_errno;
 
-    if (!datap || (kz->flags & KZ_FLAGS_RAW) || !(kz->flags & KZ_FLAGS_READ)) {
+    if (!kz || !datap || (kz->flags & KZ_FLAGS_RAW)
+                      || !(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
         return -1;
     }
@@ -340,16 +345,20 @@ error:
 
 int kz_flush (kz_t *kz)
 {
-    int rc = 0;
-    if ((kz->flags & KZ_FLAGS_WRITE))
-        rc = flux_kvs_commit_anon (kz->h, 0);
-    return rc;
+    if (!kz || !(kz->flags & KZ_FLAGS_WRITE)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return flux_kvs_commit_anon (kz->h, 0);
 }
 
 int kz_close (kz_t *kz)
 {
     char *json_str = NULL;
     int saved_errno;
+
+    if (!kz)
+        return 0;
 
     if ((kz->flags & KZ_FLAGS_WRITE)) {
         if (!(kz->flags & KZ_FLAGS_RAW)) {
@@ -533,7 +542,7 @@ static int lookup_dir (kz_t *kz)
 
 int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
 {
-    if (!(kz->flags & KZ_FLAGS_READ)) {
+    if (!kz || !(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
         return -1;
     }
