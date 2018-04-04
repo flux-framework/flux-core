@@ -259,6 +259,8 @@ static char *getnext_blocking (kz_t *kz)
 char *kz_get_json (kz_t *kz)
 {
     char *json_str;
+    int saved_errno;
+
     if (!(kz->flags & KZ_FLAGS_RAW) || !(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
         return NULL;
@@ -267,8 +269,18 @@ char *kz_get_json (kz_t *kz)
         json_str = getnext (kz);
     else
         json_str = getnext_blocking (kz);
-    (void)zio_json_decode (json_str, NULL, &kz->eof); // update kz->eof
+    if (!json_str)
+        return NULL;
+    if (zio_json_decode (json_str, NULL, &kz->eof) < 0) { // update kz->eof
+        errno = EPROTO;
+        goto error;
+    }
     return json_str;
+error:
+    saved_errno = errno;
+    free (json_str);
+    errno = saved_errno;
+    return NULL;
 }
 
 int kz_get (kz_t *kz, char **datap)
