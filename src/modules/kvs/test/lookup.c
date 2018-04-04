@@ -3057,7 +3057,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
@@ -3155,7 +3155,7 @@ void lookup_stall_namespace_removed (void) {
         "lookup_create stalltest dirref.valref");
     check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3");
 
-    cache_insert (cache, valref_ref, create_cache_entry_treeobj (valref));
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
 
     ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
         "kvsroot_mgr_remove_root removed root successfully");
