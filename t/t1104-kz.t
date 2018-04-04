@@ -41,4 +41,19 @@ test_expect_success 'kz: KZ_FLAGS_DELAYCOMMIT content gets committed' '
 	test_cmp kztest.5.in kztest.5.out
 '
 
+test_expect_success 'kz: KZ_FLAGS_NONBLOCK works for reading' '
+	dd if=/dev/urandom bs=4096 count=32 2>/dev/null >kztest.6.in &&
+	${KZCOPY} - kztest.6 <kztest.6.in &&
+	${KZCOPY} --non-blocking kztest.6 - >kztest.6.out &&
+	test_cmp kztest.6.in kztest.6.out
+'
+
+test_expect_success 'kz: KZ_FLAGS_NONBLOCK works for kz to kz copy' '
+	dd if=/dev/urandom bs=4096 count=32 2>/dev/null >kztest.7.in &&
+	${KZCOPY} - kztest.7 <kztest.7.in &&
+	${KZCOPY} --non-blocking kztest.7 kztest.7-cpy &&
+	${KZCOPY} --non-blocking kztest.7-cpy - >kztest.7.out &&
+	test_cmp kztest.7.in kztest.7.out
+'
+
 test_done
