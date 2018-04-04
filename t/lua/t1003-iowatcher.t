@@ -43,7 +43,7 @@ type_ok (iow, 'userdata', "succesfully create iowatcher")
 is (err, nil, "error is nil")
 type_ok (iow.kz, 'userdata', "iowatcher kz available as index")
 
-os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzutil --copy - iowatcher.test.stdout')
+os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzcopy - iowatcher.test.stdout')
 
 f:timer {
     timeout = 250,

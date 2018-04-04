@@ -183,7 +183,7 @@ check_PROGRAMS = \
 	rpc/rpc.t \
 	rpc/mrpc.t \
 	rolemask/loop.t \
-	kz/kzutil \
+	kz/kzcopy \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
@@ -292,9 +292,9 @@ mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
 mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
 
-kz_kzutil_SOURCES = kz/kzutil.c
-kz_kzutil_CPPFLAGS = $(test_cppflags)
-kz_kzutil_LDADD = $(test_ldadd) $(LIBDL) $(LIBUTIL)
+kz_kzcopy_SOURCES = kz/kzcopy.c
+kz_kzcopy_CPPFLAGS = $(test_cppflags)
+kz_kzcopy_LDADD = $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
