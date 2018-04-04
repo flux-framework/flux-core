@@ -1312,6 +1312,23 @@ void lookup_security (void) {
         "lookup_create on val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on val with rolemask user and invalid owner");
 
+    /* if root_ref is set, namespace checks won't occur */
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "val",
+                             FLUX_ROLE_USER,
+                             6,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create on val with rolemask user and invalid owner w/ root_ref");
+    test = treeobj_create_val ("foo", 3);
+    check_value (lh, test, "lookup val with rolemask user and valid owner");
+    json_decref (test);
+
     ok ((lh = lookup_create (cache,
                              krm,
                              1,
@@ -2940,6 +2957,7 @@ void lookup_stall_namespace_removed (void) {
     json_t *root;
     json_t *valref;
     json_t *dirref;
+    json_t *test;
     struct cache *cache;
     kvsroot_mgr_t *krm;
     lookup_t *lh;
@@ -3168,6 +3186,102 @@ void lookup_stall_namespace_removed (void) {
 
     /* reset test */
     kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    /*
+     * Now, similar tests to above, but we pass in a root_ref.  So the
+     * checks on namespaces before is now no longer necessary and we
+     * should eventually read the end value.
+     */
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "dirref.valref",
+                             FLUX_ROLE_OWNER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref w/ root_ref");
+
+    /* Now remove namespace */
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    /* Check for stalls, insert refs until should all succeed */
+
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1 w/ root_ref");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2 w/ root_ref");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref");
+
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+
+    test = treeobj_create_val ("abcd", 4);
+    check_value (lh, test, "lookup_create dirref.valref w/ root_ref");
+    json_decref (test);
+
+    /* reset test */
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
+
+    ok ((lh = lookup_create (cache,
+                             krm,
+                             1,
+                             KVS_PRIMARY_NAMESPACE,
+                             root_ref,
+                             "dirref.valref",
+                             FLUX_ROLE_USER,
+                             0,
+                             0,
+                             NULL,
+                             NULL)) != NULL,
+        "lookup_create stalltest dirref.valref w/ root_ref & role user ");
+
+    /* Now remove namespace and re-insert with different owner */
+
+    ok (!kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE),
+        "kvsroot_mgr_remove_root removed root successfully");
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 2);
+
+    /* Check for stalls, insert refs until should all succeed */
+
+    check_stall (lh, EAGAIN, 1, root_ref, "dirref.valref stall #1 w/ root_ref & role user");
+
+    cache_insert (cache, root_ref, create_cache_entry_treeobj (root));
+
+    check_stall (lh, EAGAIN, 1, dirref_ref, "dirref.valref stall #2 w/ root_ref & role user");
+
+    cache_insert (cache, dirref_ref, create_cache_entry_treeobj (dirref));
+
+    check_stall (lh, EAGAIN, 1, valref_ref, "dirref.valref stall #3 w/ root_ref & role user");
+
+    cache_insert (cache, valref_ref, create_cache_entry_raw (strdup ("abcd"), 4));
+
+    test = treeobj_create_val ("abcd", 4);
+    check_value (lh, test, "lookup_create dirref.valref w/ root_ref & role user");
+    json_decref (test);
+
+    /* reset test */
+    kvsroot_mgr_remove_root (krm, KVS_PRIMARY_NAMESPACE);
+    cache_remove_entry (cache, root_ref);
+    cache_remove_entry (cache, dirref_ref);
+    cache_remove_entry (cache, valref_ref);
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
     cache_destroy (cache);
