@@ -1286,6 +1286,7 @@ static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
     char *data;
     struct l_flux_ref *iow = arg;
     lua_State *L = iow->L;
+    const char *errmsg = NULL;
 
     assert (L != NULL);
 
@@ -1300,19 +1301,27 @@ static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
-    len = kz_get (kz, &data);
+    if ((len = kz_get (kz, &data)) < 0)
+        errmsg = strerror (errno);
+    // 1st arg is iow object
+    // 2nd arg is data (or nil)
     if (len > 0) {
-        lua_pushlstring (L, data, len);
+        lua_pushlstring (L, data, len); // 2nd arg
         free (data);
     }
-    if (len == 0)
+    else
         lua_pushnil (L);
-    if (len >= 0) {
-        if (lua_pcall (L, 2, 1, 0))
-            fprintf (stderr, "kz_ready: %s\n",  lua_tostring (L, -1));
-        else
-            lua_pop (L, 1);
-    }
+    // 3rd arg is errmsg (or nil)
+    if (errmsg)
+        lua_pushstring (L, errmsg);
+    else
+        lua_pushnil (L);
+
+    // lua_pcall (lua_State *L, int nargs, int nresults, int errfunc)
+    if (lua_pcall (L, 3, 1, 0))
+        fprintf (stderr, "kz_ready: %s\n",  lua_tostring (L, -1));
+    else
+        lua_pop (L, 1);
 
     lua_settop (L, 0);
 }
