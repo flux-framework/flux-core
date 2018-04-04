@@ -17,9 +17,13 @@ dir['simpleval'] = "xxx"
 dir:commit()
 local iow, err = f:iowatcher {
     key = "simpleval",
-    handler = function (iow, lines) end
+    handler = function (iow, lines, err)
+        if err then f:reactor_stop_error () end
+    end
 }
-is (iow, nil, "iowatcher returns error correctly")
+local r, err = f:reactor()
+is (r, nil, "reactor returned error")
+is (err, "Not a directory", "error is ENOTDIR")
 
 dir['iowatcher'] = nil
 dir:commit()
