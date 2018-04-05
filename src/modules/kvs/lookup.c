@@ -230,6 +230,58 @@ static walk_level_t *walk_levels_push (lookup_t *lh,
     return wl;
 }
 
+/* If recursing, wlp will be set to new walk level pointer
+ */
+static lookup_process_t walk_symlink (lookup_t *lh,
+                                      walk_level_t *wl,
+                                      char *current_pathcomp,
+                                      walk_level_t **wlp)
+{
+    walk_level_t *wltmp;
+    const char *linkstr;
+
+    if (!(linkstr = treeobj_get_symlink (wl->dirent))) {
+        lh->errnum = errno;
+        return LOOKUP_PROCESS_ERROR;
+    }
+
+    /* Follow link if in middle of path or if end of path,
+     * flags say we can follow it
+     */
+    if (!last_pathcomp (wl->pathcomps, current_pathcomp)
+        || (!(lh->flags & FLUX_KVS_READLINK)
+            && !(lh->flags & FLUX_KVS_TREEOBJ))) {
+
+        if (wl->depth == SYMLINK_CYCLE_LIMIT) {
+            lh->errnum = ELOOP;
+            return LOOKUP_PROCESS_ERROR;
+        }
+
+        /* if symlink is root, no need to recurse, just get
+         * root_dirent and continue on.
+         */
+        if (!strcmp (linkstr, ".")) {
+            wl->dirent = wl->root_dirent;
+        }
+        else {
+            /* "recursively" determine link dirent */
+            if (!(wltmp = walk_levels_push (lh,
+                                            wl->root_ref,
+                                            linkstr,
+                                            wl->depth + 1))) {
+                lh->errnum = errno;
+                return LOOKUP_PROCESS_ERROR;
+            }
+
+            (*wlp) = wltmp;
+            return LOOKUP_PROCESS_FINISHED;
+        }
+    }
+
+    (*wlp) = NULL;
+    return LOOKUP_PROCESS_FINISHED;
+}
+
 /* Get dirent of the requested path starting at the given root.
  *
  * Return true on success or error, error code is returned in ep and
@@ -336,42 +388,17 @@ static lookup_process_t walk (lookup_t *lh)
         /* Resolve dirent if it is a link */
 
         if (treeobj_is_symlink (wl->dirent)) {
-            const char *linkstr;
+            walk_level_t *wltmp = NULL;
+            lookup_process_t sret;
 
-            if (!(linkstr = treeobj_get_symlink (wl->dirent))) {
-                lh->errnum = errno;
+            sret = walk_symlink (lh, wl, pathcomp, &wltmp);
+            if (sret == LOOKUP_PROCESS_ERROR)
                 goto error;
-            }
+            /* else sret == LOOKUP_PROCESS_FINISHED */
 
-            /* Follow link if in middle of path or if end of path,
-             * flags say we can follow it
-             */
-            if (!last_pathcomp (wl->pathcomps, pathcomp)
-                || (!(lh->flags & FLUX_KVS_READLINK)
-                    && !(lh->flags & FLUX_KVS_TREEOBJ))) {
-                if (wl->depth == SYMLINK_CYCLE_LIMIT) {
-                    lh->errnum = ELOOP;
-                    goto error;
-                }
-
-                /* if symlink is root, no need to recurse, just get
-                 * root_dirent and continue on.
-                 */
-                if (!strcmp (linkstr, ".")) {
-                    wl->dirent = wl->root_dirent;
-                }
-                else {
-                    /* "recursively" determine link dirent */
-                    if (!(wl = walk_levels_push (lh,
-                                                 wl->root_ref,
-                                                 linkstr,
-                                                 wl->depth + 1))) {
-                        lh->errnum = errno;
-                        goto error;
-                    }
-
-                    continue;
-                }
+            if (wltmp) {
+                wl = wltmp;
+                continue;
             }
         }
 
