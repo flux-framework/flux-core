@@ -264,7 +264,7 @@ static lookup_process_t walk (lookup_t *lh)
             if (!(entry = cache_lookup (lh->cache, refstr, lh->current_epoch))
                 || !cache_entry_get_valid (entry)) {
                 lh->missing_ref = refstr;
-                goto stall;
+                return LOOKUP_PROCESS_LOAD_MISSING_REFS;
             }
             if (!(dir = cache_entry_get_treeobj (entry))) {
                 /* dirref pointed to non treeobj error, special case when
@@ -396,9 +396,6 @@ done:
 error:
     lh->wdirent = NULL;
     return LOOKUP_PROCESS_ERROR;
-
-stall:
-    return LOOKUP_PROCESS_LOAD_MISSING_REFS;
 }
 
 lookup_t *lookup_create (struct cache *cache,
