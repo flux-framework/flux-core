@@ -1929,6 +1929,7 @@ int exec_commands (struct prog_ctx *ctx)
     prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);
     prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->rankinfo.nodeid);
     prog_ctx_setenvf (ctx, "FLUX_JOB_SIZE",  1, "%d", ctx->total_ntasks);
+    prog_ctx_setenvf (ctx, "FLUX_JOB_KVSPATH", 1, "%s", ctx->kvspath);
     gtid_list_create (ctx, buf, sizeof (buf));
     prog_ctx_setenvf (ctx, "FLUX_LOCAL_RANKS",  1, "%s", buf);
 
