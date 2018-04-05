@@ -551,11 +551,27 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
     json_t *dir = rootdir;
     json_t *subdir = NULL, *dir_entry;
     int saved_errno, rc = -1;
+    char *ns_prefix = NULL, *key_suffix = NULL;
+    int pret;
 
-    if (!(cpy = kvs_util_normalize_key (key, NULL))) {
+    if ((pret = kvs_namespace_prefix (key, &ns_prefix, &key_suffix)) < 0) {
         saved_errno = errno;
         goto done;
     }
+
+    if (pret) {
+        /* Cannot cross namespaces */
+        if (strcmp (ns_prefix, kt->ktm->namespace)) {
+            saved_errno = EINVAL;
+            goto done;
+        }
+    }
+
+    if (!(cpy = kvs_util_normalize_key (key_suffix ? key_suffix : key, NULL))) {
+        saved_errno = errno;
+        goto done;
+    }
+
     name = cpy;
 
     /* Special case root
@@ -715,6 +731,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
  success:
     rc = 0;
  done:
+    free (ns_prefix);
+    free (key_suffix);
     free (cpy);
     if (rc < 0)
         errno = saved_errno;
