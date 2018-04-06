@@ -33,6 +33,15 @@ states. If '-n, --max' option is provided, then display at most 'COUNT'
 jobs (default: 25). If an optional list of 'JOBIDS' is provided on the
 command line, then display only those jobs.
 
+*uri* [-n, --max=COUNT] [-b, --bare] [JOBIDS...]::
+Display a list of wreck jobs currently in kvs, with abbreviated job info,
+and a URI that can be used to contact the rank 0 broker if the job is a
+Flux instance.  The field is blank for other types of jobs.
+If '-n, --max' option is provided, then display at most 'COUNT'
+jobs (default: 25). If '-b, --bare' option is provided, display only the
+URI for a single job so that it can be parsed by scripts.  If an optional
+list of 'JOBIDS' is provided on the command line, then display only those jobs.
+
 *attach* [--status] [--label-io] 'jobid'::
 Attach to output of a running or completed job. If input was not previously
 connected, also attach to stdin. With '--status', also report job status
