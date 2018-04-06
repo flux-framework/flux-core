@@ -28,13 +28,6 @@ enum kz_flags {
  */
 kz_t *kz_open (flux_t *h, const char *name, int flags);
 
-/* Prepare to write to one KVS stream that is a part of a group.
- * The kvs_commit()s normally issued at open and close are replaced with
- * a kvs_fence().
- */
-kz_t *kz_gopen (flux_t *h, const char *grpname, int nprocs,
-               const char *name, int flags);
-
 /* Write one block of data to a KVS stream.  Unless kz was opened with
  * KZ_FLAGS_DELAYCOMMIT, data will committed to the KVS.
  * Returns len (no short writes) or -1 on error with errno set.

@@ -7,12 +7,12 @@ SUBDIRS = libtap \
 	  libutil \
 	  libflux \
 	  libkvs \
-	  libkz \
 	  libjsc \
 	  libsubprocess \
 	  libcompat \
 	  liboptparse \
-	  libtomlc99
+	  libtomlc99 \
+	  libkz
 
 if ENABLE_JOBSPEC
 SUBDIRS += libjobspec
