@@ -71,6 +71,7 @@ struct lookup {
 
     char *namespace;
     char *root_ref;
+    bool root_ref_set_by_user;  /* if root_ref passed in by user */
 
     char *path;
 
@@ -608,6 +609,7 @@ lookup_t *lookup_create (struct cache *cache,
             saved_errno = ENOMEM;
             goto cleanup;
         }
+        lh->root_ref_set_by_user = true;
     }
 
     lh->h = h;
@@ -791,6 +793,10 @@ int lookup_set_current_epoch (lookup_t *lh, int epoch)
 static int namespace_still_valid (lookup_t *lh)
 {
     struct kvsroot *root;
+
+    /* If user set root_ref, no need to do this check */
+    if (lh->root_ref_set_by_user)
+        return 0;
 
     if (!(root = kvsroot_mgr_lookup_root_safe (lh->krm, lh->namespace))) {
         lh->errnum = ENOTSUP;
