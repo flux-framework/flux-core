@@ -1347,6 +1347,21 @@ static int sort_cmp (void *item1, void *item2)
     return strcmp (item1, item2);
 }
 
+static void contains_namespace_prefix (const char *key, char **key_suffix)
+{
+    char *ptr;
+
+    if (!strncmp (key, "ns:", 3)
+        && (ptr = strchr (key, '/'))) {
+
+        /* No key suffix */
+        if (*(ptr + 1) == '\0')
+            log_err_exit ("%s: %s\n", key, flux_strerror (EINVAL));
+
+        (*key_suffix) = ptr + 1;
+    }
+}
+
 /* Put key in 'dirs' or 'singles' list, depending on whether
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
@@ -1360,16 +1375,21 @@ static int categorize_key (optparse_t *p, const char *key,
     char *nkey;
     json_t *treeobj = NULL;
     bool require_directory = false;
+    char *key_ptr;
 
     if (!(nkey = malloc (strlen (key) + 2))) // room for decoration char + null
         log_err_exit ("malloc");
     strcpy (nkey, key);
 
+    key_ptr = nkey;
+
+    contains_namespace_prefix (nkey, &key_ptr);
+
     /* If the key has a "." suffix, strip it off, but require
      * that the key be a directory type.
      */
-    while (strlen (nkey) > 1 && nkey[strlen (nkey) - 1] == '.') {
-        nkey[strlen (nkey) - 1] = '\0';
+    while (strlen (key_ptr) > 1 && key_ptr[strlen (key_ptr) - 1] == '.') {
+        key_ptr[strlen (key_ptr) - 1] = '\0';
         require_directory = true;
     }
     if (!(f = flux_kvs_lookup (h, FLUX_KVS_TREEOBJ, nkey)))

@@ -40,8 +40,9 @@ their parent in the overlay network.
 Different KVS namespaces can be created in which kvs values can be
 read from/written to.  By default, all KVS operations operate on the
 default KVS namespace "primary".  An alternate namespace can be
-specified via the '--namespace' option or the environment variable
-FLUX_KVS_NAMESPACE.
+prefixing the name to a key using the format 'ns:<NAMESPACE>/<KEY>',
+specifying the namespace via the '--namespace' option, or by setting
+the namespace in the environment variable FLUX_KVS_NAMESPACE.
 
 flux-kvs(1) runs a KVS 'COMMAND'.  The possible commands and their
 arguments are described below.
@@ -51,7 +52,8 @@ COMMON OPTIONS
 *-N, --namespace*='name'::
 Specify a namespace to be used in all KVS commands.  A namespace
 specified via this option overrides a namespace set in the environment
-variable FLUX_KVS_NAMESPACE.
+variable FLUX_KVS_NAMESPACE.  This does not override the namespace
+specified via a prefix to a key.
 
 COMMANDS
 --------

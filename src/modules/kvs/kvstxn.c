@@ -539,6 +539,31 @@ static int kvstxn_append (kvstxn_t *kt, int current_epoch, json_t *dirent,
     return 0;
 }
 
+static int check_cross_namespace (kvstxn_t *kt,
+                                  const char *key,
+                                  char **key_suffixp)
+{
+    char *ns_prefix = NULL, *key_suffix = NULL;
+    int pret;
+
+    if ((pret = kvs_namespace_prefix (key, &ns_prefix, &key_suffix)) < 0)
+        return -1;
+
+    if (pret) {
+        /* Cannot cross namespaces */
+        if (strcmp (ns_prefix, kt->ktm->namespace)) {
+            free (ns_prefix);
+            free (key_suffix);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+
+    free (ns_prefix);
+    (*key_suffixp) = key_suffix;
+    return 0;
+}
+
 /* link (key, dirent) into directory 'dir'.
  */
 static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
@@ -551,20 +576,11 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
     json_t *dir = rootdir;
     json_t *subdir = NULL, *dir_entry;
     int saved_errno, rc = -1;
-    char *ns_prefix = NULL, *key_suffix = NULL;
-    int pret;
+    char *key_suffix = NULL;
 
-    if ((pret = kvs_namespace_prefix (key, &ns_prefix, &key_suffix)) < 0) {
+    if (check_cross_namespace (kt, key, &key_suffix) < 0) {
         saved_errno = errno;
         goto done;
-    }
-
-    if (pret) {
-        /* Cannot cross namespaces */
-        if (strcmp (ns_prefix, kt->ktm->namespace)) {
-            saved_errno = EINVAL;
-            goto done;
-        }
     }
 
     if (!(cpy = kvs_util_normalize_key (key_suffix ? key_suffix : key, NULL))) {
@@ -658,6 +674,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
             json_t *symlink = treeobj_get_data (dir_entry);
             const char *symlinkstr;
             char *nkey = NULL;
+            char *sym_suffix = NULL;
 
             if (!symlink) {
                 saved_errno = errno;
@@ -667,8 +684,18 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
             assert (json_is_string (symlink));
 
             symlinkstr = json_string_value (symlink);
+
+            if (check_cross_namespace (kt, symlinkstr, &sym_suffix) < 0) {
+                saved_errno = errno;
+                goto done;
+            }
+
+            if (sym_suffix)
+                symlinkstr = sym_suffix;
+
             if (asprintf (&nkey, "%s.%s", symlinkstr, next) < 0) {
                 saved_errno = ENOMEM;
+                free (sym_suffix);
                 goto done;
             }
             if (kvstxn_link_dirent (kt,
@@ -679,9 +706,11 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                                     flags,
                                     missing_ref) < 0) {
                 saved_errno = errno;
+                free (sym_suffix);
                 free (nkey);
                 goto done;
             }
+            free (sym_suffix);
             free (nkey);
             goto success;
         } else {
@@ -731,7 +760,6 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
  success:
     rc = 0;
  done:
-    free (ns_prefix);
     free (key_suffix);
     free (cpy);
     if (rc < 0)
