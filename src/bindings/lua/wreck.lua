@@ -43,6 +43,7 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['gpus']  = { char = 'g', arg = "g" },
     ['cores-per-task']  = { char = 'c', arg = "N" },
     ['nnodes']  = { char = 'N', arg = "N" },
     ['tasks-per-node']  =
@@ -272,10 +273,14 @@ function wreck:parse_cmdline (arg)
 
     self.nnodes = self.opts.N and tonumber (self.opts.N)
 
+    if not self.opts.t then
+        self.opts.t = 1
+    end
+
     -- If nnodes was provided but -n, --ntasks not set, then
     --  set ntasks to nnodes.
     if self.opts.N and not self.opts.n then
-        self.ntasks = self.nnodes
+        self.ntasks = self.nnodes * self.opts.t
     else
         self.ntasks = self.opts.n and tonumber (self.opts.n) or 1
     end
@@ -283,6 +288,11 @@ function wreck:parse_cmdline (arg)
         self.ncores = self.opts.c * self.ntasks
     else
         self.ncores = self.ntasks
+    end
+
+    self.gpus = 0
+    if self.opts.g then
+        self.gpus = self.opts.g
     end
 
     self.tasks_per_node = self.opts.t
@@ -350,12 +360,14 @@ function wreck:jobreq ()
         cmdline = self.cmdline,
         environ = self.opts.S and {} or get_job_env { flux = self.flux },
         cwd =     posix.getcwd (),
-        walltime =self.walltime or 0,
+        walltime = self.walltime or 0,
+        gpus = self.gpus or 0,
 
         ["opts.nnodes"] = self.opts.N,
         ["opts.ntasks"]  = self.opts.n,
         ["opts.cores-per-task"] = self.opts.c,
         ["opts.tasks-per-node"] = self.opts.t,
+        ["options.stdio-delay-commit"] = 1,
     }
     if self.opts.o then
         for opt in self.opts.o:gmatch ('[^,]+') do

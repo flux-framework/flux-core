@@ -335,6 +335,24 @@ static char * lwj_key (flux_t *h, int64_t id, const char *fmt, ...)
     return (key);
 }
 
+static int extract_raw_gpus (flux_t *h, int64_t j, int64_t *gpus)
+{
+    int rc = 0;
+    char *key = lwj_key (h, j, ".gpus");
+    flux_future_t *f = NULL;
+
+    if (!key || !(f = flux_kvs_lookup (h, 0, key))
+             || flux_kvs_lookup_get_unpack (f, "I", gpus) < 0) {
+        flux_log_error (h, "extract %s", key);
+        rc = -1;
+    }
+    else
+        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *gpus);
+    free (key);
+    flux_future_destroy (f);
+    return rc;
+}
+
 static int extract_raw_nnodes (flux_t *h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
@@ -606,11 +624,13 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     int64_t ntasks = -1;
     int64_t ncores = -1;
     int64_t walltime = -1;
+    int64_t gpus = -1;
 
     if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
     if (extract_raw_ncores (h, j, &ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
+    if (extract_raw_gpus (h, j, &gpus) < 0) return -1;
 
     *jcb = Jnew ();
     o = Jnew ();
@@ -618,16 +638,19 @@ static int query_rdesc (flux_t *h, int64_t j, json_object **jcb)
     Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
     Jadd_int64 (o, JSC_RDESC_NCORES, ncores);
     Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
+    Jadd_int64 (o, "gpus", gpus);
     json_object_object_add (*jcb, JSC_RDESC, o);
     return 0;
 }
 
-int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes, int64_t *ntasks, int64_t *ncores, int64_t *walltime)
+int jsc_query_rdesc_efficiently (flux_t *h, int64_t j, int64_t *nnodes,
+        int64_t *ntasks, int64_t *ncores, int64_t *walltime, int64_t *gpus)
 {
     if (extract_raw_nnodes (h, j, nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, ntasks) < 0) return -1;
     if (extract_raw_ncores (h, j, ncores) < 0) return -1;
     if (extract_raw_walltime (h, j, walltime) < 0) return -1;
+    if (extract_raw_gpus (h, j, gpus) < 0) return -1;
 
     return 0;
 }
