@@ -275,12 +275,15 @@ end
 function LWJ:exit_string ()
     local flux = require 'flux'
     local state = self.state
-    local max = self.lwj.exit_status.max
-    if max then
-        local s, code, core = flux.exitstatus (max)
-        state = s
-        if s == "exited" and code > 0 then
-            state = "failed"
+    local exit_status = self.lwj.exit_status
+    if exit_status then
+        local max = exit_status.max
+        if max then
+            local s, code, core = flux.exitstatus (max)
+            state = s
+            if s == "exited" and code > 0 then
+                state = "failed"
+            end
         end
     end
     return state
